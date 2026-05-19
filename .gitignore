@@ -1,0 +1,11 @@
+# Environments
+evenv/
+
+# Database and Cache
+*.db3
+__pycache__/
+*.pyc
+
+# Logs
+**/logs/*
+!**/logs/README.md
