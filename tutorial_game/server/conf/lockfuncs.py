@@ -28,3 +28,10 @@ lock functions from evennia.locks.lockfuncs.
 #    """
 #    print "%s tried to access %s. Access denied." % (accessing_obj, accessed_obj)
 #    return False
+
+def sitsonthis(accessing_obj, accessed_obj, *args, **kwargs):
+    """
+    True if accessing_obj is sitting on/in accessed_obj.
+    """
+
+    return accessed_obj.obj.db.sitter == accessing_obj

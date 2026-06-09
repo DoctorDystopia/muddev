@@ -15,6 +15,9 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 """
 
 from evennia import default_cmds
+from . import mycommands
+from commands import sittables
+
 
 
 class CharacterCmdSet(default_cmds.CharacterCmdSet):
@@ -34,6 +37,11 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         #
         # any commands you add below will overload the default ones.
         #
+
+        self.add(mycommands.MyCommandSet())
+        self.add(mycommands.MyCommandGet())
+        self.add(sittables.CmdSetSit2())
+        # self.add(sittables.CmdNoSitStand())
 
 
 class AccountCmdSet(default_cmds.AccountCmdSet):

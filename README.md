@@ -68,3 +68,6 @@ cd ..
 git add evennia
 git commit -m "build: bump evennia submodule hash"
 ```
+
+## Ref
+- https://www.evennia.com/docs/latest/api/evennia.objects.objects.html

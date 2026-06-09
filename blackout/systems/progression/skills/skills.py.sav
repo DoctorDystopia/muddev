@@ -1,0 +1,439 @@
+"""
+systems/progression/skills.py
+
+The skills module defines the Skill class, which represents a skill that a character can have in the game.
+Skills can be used to perform various actions, such as combat, crafting, or social interactions.
+Each skill has a name, a level, and a description.
+
+Use the Skill class to create new skills and assign them to characters as needed.
+
+Defines the core Skill Registry, categories, and the SkillHandler utility.
+The SkillHandler attaches dynamically to Character typeclasses to manage
+persistent database states using Evennia's AttributeHandler.
+"""
+
+
+
+from evennia.utils import logger
+
+
+
+# Public constant definitions
+BASE_XP_MULTIPLIER = 100
+XP_EXPONENT = 1.5
+DEFAULT_START_LEVEL = 0
+DEFAULT_START_XP = 0
+MINIMUM_BASE_LEVEL = 1
+
+
+
+# Static configuration mapping for skills in Blackout
+SKILL_REGISTRY = {
+    # --- GATHERING SKILLS ---
+    "cutting": {"name": "Cutting",
+                "category": "Gathering",
+                "desc": "Proficiency with cutting tools and techniques. Can cut synthetic crystalline structures, old metal scavenged loot/world objects and If you can still find one, trees."},
+
+    "mining": {"name": "Mining",
+               "category": "Gathering",
+               "desc": "Proficiency with mining tools and techniques. Can mine ore/mineral deposits and old earthen scavenged loot/world objects."},
+
+    "brain_farming": {"name": "Brain Farming",
+                      "category": "Gathering",
+                      "desc": "Proficiency with harvesting conscious energy from living creatures. Can be used in various crafting recipes."},
+
+    # --- COMBAT SKILLS ---
+    "melee": {
+        "name": "Melee Combat",
+        "category": "Combat - Basic",
+        "desc": "Handling of close-quarters physical weaponry.",
+    },
+
+    "techno_cult": {
+        "name": "Techno Cult Magic",
+        "category": "Combat - Cult Magic",
+        "desc": "Manifesting combat abilities derived from techno-religious augmentations.",
+    },
+
+    # --- PROCESSING & PRODUCTION SKILLS ---
+    "processing": {
+        "name": "Processing",
+        "category": "Processing",
+        "desc": "Refining raw elements into stable crafting components.",
+    },
+
+    "production": {
+        "name": "Production",
+        "category": "Production",
+        "desc": "Forging and assembling completed gear, items, and consumables.",
+    }
+
+    # - Cutting
+    #     - synthetic crystalline structures, old metal scavenged loot/world objects and If you can still find one, trees
+    # - Mining
+    #     - ore/mineral deposits, old earthen scavenged loot/world objects
+    # - Brain farming
+    #     - Can use a specific TBD reward to learn how to harvest living creature conscious energy.
+    #     - Can be used in various crafting recipes
+
+    # EXAMPLES
+    # "farming": {"name": "Farming", "desc": "Soil analysis, planting, and oasis reclamation."},
+    # "engineering": {"name": "Engineering", "desc": "Clearing structural blocks, parsing data blocks, and mechanical repair."},
+    # "survival": {"name": "Survival", "desc": "Scavenging the Desolate wastes and metabolic management."},
+    # "scrappy_combat": {"name": "Scrappy Combat", "desc": "Improvised weapon use and dirty fighting tricks."},
+}
+
+
+
+class SkillHandler:
+    """
+    Handles progression state management on a specific character proxy.
+    Saves automatically to the character's `db.skills` attribute dictionary.
+    """
+
+    def __init__(self, obj: object) -> None:
+        """
+        Purpose: Initializes the handler linked to a specific Evennia Typeclass instance.
+        
+        Entry:
+            obj is a valid Evennia object
+        
+        Exit/Returns:
+            No conditions
+        
+        Module Globals:
+            None
+            
+        Methodology:
+            Sets the internal object reference. Checks if the persistent 
+            skills attribute exists. If not, initializes it as an empty dictionary.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        self.obj = obj
+        
+        skills_attr = self.obj.db.skills
+        has_skills = bool(skills_attr)
+        
+        if not has_skills:
+            self.obj.db.skills = {}
+
+
+    def _ensure_skill(self, skill_key: str) -> None:
+        """
+        Purpose: Internal safety check ensuring the skill key is valid and tracked.
+        
+        Entry:
+            skill_key is a string identifier
+            
+        Exit/Returns:
+            No conditions
+            
+        Module Globals:
+            SKILL_REGISTRY read
+            DEFAULT_START_LEVEL read
+            DEFAULT_START_XP read
+            
+        Methodology:
+            Validates the key against the registry, raising an error if missing.
+            If the valid key is untracked on the character, injects it with default values.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        is_valid_skill = skill_key in SKILL_REGISTRY
+        
+        if not is_valid_skill:
+            error_msg = f"Skill '{skill_key}' does not exist in the master catalog."
+            raise ValueError(error_msg)
+        
+        skills_dict = self.obj.db.skills
+        is_tracked = skill_key in skills_dict
+        
+        if not is_tracked:
+            skills_dict[skill_key] = {"level": DEFAULT_START_LEVEL, "xp": DEFAULT_START_XP}
+
+
+    def get_level(self, skill_key: str) -> int:
+        """
+        Purpose: Returns the current level of a skill.
+        
+        Entry:
+            skill_key is a valid string matching a key in SKILL_REGISTRY
+            
+        Exit/Returns:
+            Returns the integer level of the requested skill.
+            
+        Module Globals:
+            None
+            
+        Methodology:
+            Validates the skill exists via _ensure_skill. Retrieves and 
+            returns the level integer from the database attribute.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        self._ensure_skill(skill_key)
+        
+        skills_dict = self.obj.db.skills
+        skill_data = skills_dict[skill_key]
+        current_level = skill_data["level"]
+        
+        return current_level
+
+
+    def get_xp(self, skill_key: str) -> int:
+        """
+        Purpose: Returns the total cumulative XP earned for a skill across all levels.
+        
+        Entry:
+            skill_key is a valid string matching a key in SKILL_REGISTRY
+            
+        Exit/Returns:
+            Returns the integer sum of all XP earned.
+            
+        Module Globals:
+            None
+            
+        Methodology:
+            Calculates the total XP by summing the XP required for all 
+            previously cleared levels and adding the current level's progress.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        self._ensure_skill(skill_key)
+        
+        skills_dict = self.obj.db.skills
+        skill_data = skills_dict[skill_key]
+        current_lvl = skill_data["level"]
+        level_progress_xp = skill_data["xp"]
+        
+        total_xp = level_progress_xp
+        
+        for level_index in range(current_lvl):
+            xp_for_level = self.calculate_xp_needed(level_index)
+            total_xp += xp_for_level
+
+        log_message = f"Total XP for {skill_key}: {total_xp} (Level: {current_lvl})"
+        logger.log_info(log_message)
+        print(log_message)
+        
+        return total_xp
+
+
+    def get_xp_level(self, skill_key: str) -> tuple[int, int, int]:
+        """
+        Purpose: Returns the progress into the current level and requirements for the next.
+        
+        Entry:
+            skill_key is a valid string matching a key in SKILL_REGISTRY
+            
+        Exit/Returns:
+            Returns a tuple of integers: (current_progress_xp, total_xp_needed, remaining_xp).
+            
+        Module Globals:
+            None
+            
+        Methodology:
+            Retrieves the current progress from the database. Calculates the total
+            XP required for the next level. Subtracts the progress from the total
+            to determine the remaining XP required to level up.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        self._ensure_skill(skill_key)
+        
+        skills_dict = self.obj.db.skills
+        skill_data = skills_dict[skill_key]
+        current_lvl = skill_data["level"]
+        current_progress_xp = skill_data["xp"]
+        
+        total_xp_needed = self.calculate_xp_needed(current_lvl)
+        remaining_xp = total_xp_needed - current_progress_xp
+
+        log_message = f"Current XP level for {skill_key}: {current_progress_xp}/{total_xp_needed} (Remaining: {remaining_xp})"
+        logger.log_info(log_message)
+        print(log_message)
+        
+        return current_progress_xp, total_xp_needed, remaining_xp
+
+
+    def calculate_xp_needed(self, current_level: int) -> int:
+        """
+        Purpose: Calculates the XP required to clear the current level.
+        
+        Entry:
+            current_level >= 0
+            
+        Exit/Returns:
+            Returns the integer amount of XP needed to reach the next level.
+            
+        Module Globals:
+            MINIMUM_BASE_LEVEL read
+            BASE_XP_MULTIPLIER read
+            XP_EXPONENT read
+            
+        Methodology:
+            Applies an exponential curve using the base multiplier. Enforces
+            a minimum base level to avoid multiplying by zero.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        if current_level < MINIMUM_BASE_LEVEL:
+            base_level = MINIMUM_BASE_LEVEL
+        else:
+            base_level = current_level
+            
+        calculated_xp = BASE_XP_MULTIPLIER * (base_level ** XP_EXPONENT)
+        rounded_xp = int(calculated_xp)
+        
+        return rounded_xp
+
+
+    def add_xp(self, skill_key: str, amount: int) -> None:
+        """
+        Purpose: Adds XP to a skill and processes potential multi-level upgrades.
+        
+        Entry:
+            skill_key is a valid string matching a key in SKILL_REGISTRY
+            amount is an integer value
+            
+        Exit/Returns:
+            No conditions
+            
+        Module Globals:
+            SKILL_REGISTRY read
+            
+        Methodology:
+            Adds XP to the local copy of the skill state. Evaluates level ups
+            in a loop until remaining XP is lower than the threshold. Re-saves
+            data explicitly to ensure database serialization, sending a message
+            if a level increased.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        self._ensure_skill(skill_key)
+        
+        skills_dict = self.obj.db.skills
+        skill_data_ref = skills_dict[skill_key]
+        skill_data = dict(skill_data_ref)
+        
+        if amount < 0:
+            amount_to_add = 0
+        else:
+            amount_to_add = amount
+            
+        skill_data["xp"] += amount_to_add
+        
+        current_lvl = skill_data["level"]
+        xp_needed = self.calculate_xp_needed(current_lvl)
+        leveled_up = False
+        
+        while skill_data["xp"] >= xp_needed:
+            skill_data["xp"] -= xp_needed
+            skill_data["level"] += 1
+            
+            new_lvl = skill_data["level"]
+            xp_needed = self.calculate_xp_needed(new_lvl)
+            leveled_up = True
+            
+        self.obj.db.skills[skill_key] = skill_data
+        
+        if leveled_up:
+            skill_info = SKILL_REGISTRY[skill_key]
+            skill_name = skill_info["name"]
+            msg_string = f"|g[PROG_UP] Your {skill_name} skill increased to level {skill_data['level']}!|n"
+            self.obj.msg(msg_string)
+
+    def meets_prerequisite(self, skill_key: str, required_level: int) -> bool:
+        """
+        Purpose: Verifies if a player meets a target level for a specific skill.
+        
+        Entry:
+            skill_key is a valid string matching a key in SKILL_REGISTRY
+            required_level >= 0
+            
+        Exit/Returns:
+            Returns True if the current level meets or exceeds the required level, False otherwise.
+            
+        Module Globals:
+            None
+            
+        Methodology:
+            Fetches the current level integer and compares it against the threshold.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        current_lvl = self.get_level(skill_key)
+        meets_req = current_lvl >= required_level
+        
+        return meets_req
+    
+
+    def check_synergy(self, 
+                      skill_a: str, 
+                      level_a: int, 
+                      skill_b: str, 
+                      level_b: int) -> bool:
+        """
+        Purpose: Evaluates dual-skill synergy conditions.
+        
+        Entry:
+            skill_a and skill_b are valid string identifiers
+            level_a and level_b are non-negative integers
+            
+        Exit/Returns:
+            Returns True if both skill thresholds are satisfied, False otherwise.
+            
+        Module Globals:
+            None
+            
+        Methodology:
+            Checks the independent levels of both skills and returns the 
+            logical AND result of their comparisons.
+            
+        Notes/References:
+            None
+            
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        current_lvl_a = self.get_level(skill_a)
+        current_lvl_b = self.get_level(skill_b)
+        
+        a_meets = current_lvl_a >= level_a
+        b_meets = current_lvl_b >= level_b
+        synergy_met = a_meets and b_meets
+        
+        return synergy_met

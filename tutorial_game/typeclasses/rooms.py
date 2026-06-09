@@ -21,4 +21,18 @@ class Room(ObjectParent, DefaultRoom):
     properties and methods available on all Objects.
     """
 
+    def at_object_creation(self):
+        # super().at_object_creation()
+        
+        self.db.is_dark = False
+
+    def get_room_stats(self):
+        """
+        Get the main stats of this room.
+        """
+
+        is_dark = self.db.is_dark
+
+        return print(f"Is Dark: {is_dark}")
+
     pass

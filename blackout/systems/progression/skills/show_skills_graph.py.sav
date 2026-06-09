@@ -1,0 +1,26 @@
+import matplotlib.pyplot as plt
+
+# Import the actual calculation logic from your codebase
+from logic import calculate_xp_needed
+
+levels = list(range(128))
+total_xps = []
+
+current_total = 0
+for lvl in levels:
+    total_xps.append(current_total)
+    current_total += calculate_xp_needed(lvl)
+
+plt.figure(figsize=(10, 6))
+plt.plot(levels, total_xps, color='blue', linewidth=2)
+plt.title('Total XP vs. Level (0 to 127)')
+plt.xlabel('Level')
+plt.ylabel('Total Cumulative XP')
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.tight_layout()
+
+# Save the graph to a file
+# plt.savefig('total_xp_vs_level.png')
+
+# Renders the graph in a pop-up window
+plt.show()
