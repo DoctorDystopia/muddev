@@ -41,6 +41,7 @@ Enjoy!
 
 # BLACKOUT
 
+## Character stuff
 ### Update all characters in a loop
 `from typeclasses.characters import Character; [char.at_object_creation() for char in Character.objects.all()]`
 
@@ -52,6 +53,7 @@ Enjoy!
 OR
 `py self.search("testchar2").db.has_cutting_reward = True`
 
+## Environment stuff
 ### Update maps
 
 Use this standard loop whenever you expand a grid, shrink a grid, change room coordinates, or alter the layout of an ASCII map.
@@ -93,8 +95,6 @@ Because the game state was physically mutated independent of the portal process,
 ```bash
 evennia reload
 ```
-
----
 
 ### The Troubleshooting Procedure (The Nuclear Option)
 
