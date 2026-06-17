@@ -34,6 +34,10 @@ from evennia.settings_default import *
 # This is the name of your game. Make it catchy!
 SERVERNAME = "blackout"
 
+# Add the XYZGrid command to the launcher
+EXTRA_LAUNCHER_COMMANDS['xyzgrid'] = 'evennia.contrib.grid.xyzgrid.launchcmd.xyzcommand'
+PROTOTYPE_MODULES += ['evennia.contrib.grid.xyzgrid.prototypes']
+
 
 ######################################################################
 # Settings given in secret_settings.py override those in this file.

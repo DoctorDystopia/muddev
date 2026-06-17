@@ -16,6 +16,7 @@ from evennia.utils.utils import lazy_property
 
 from .objects import ObjectParent
 from systems.progression.skills.handler import SkillHandler
+from items.equipment.handler import EquipmentHandler
 from systems.quests.quests import QuestHandler
 
 
@@ -74,9 +75,20 @@ class Character(ObjectParent, DefaultCharacter):
         logger.log_info(log_message)
         print(log_message)
         
-        new_handler = SkillHandler(self)
+        new_skill_handler = SkillHandler(self)
         
-        return new_handler
+        return new_skill_handler
+    
+
+    @lazy_property
+    def equipment(self):
+        log_message = f"Accessing equipment for character: {self.key}"
+        logger.log_info(log_message)
+        print(log_message)
+        
+        new_equipment_handler = EquipmentHandler(self)
+        
+        return new_equipment_handler
 
 
     @lazy_property
@@ -108,9 +120,9 @@ class Character(ObjectParent, DefaultCharacter):
         logger.log_info(log_message)
         print(log_message)
         
-        new_handler = QuestHandler(self)
+        new_quest_handler = QuestHandler(self)
         
-        return new_handler
+        return new_quest_handler
 
 
     def at_object_creation(self) -> None:
@@ -153,9 +165,12 @@ class Character(ObjectParent, DefaultCharacter):
         self.db.skills = empty_skills_dict
         self.db.active_quests = empty_active_quests_dict
         self.db.completed_quests = empty_completed_quests_list
+
+        self.skills.init_all_skills()
         
         skills_prop = self.skills
         quests_prop = self.quests
+        equipment_prop = self.equipment
         
-        _ = skills_prop
-        _ = quests_prop
+        # _ = skills_prop
+        # _ = quests_prop

@@ -11,7 +11,7 @@ from commands.gathering_cmds import NodeCmdSet
 
 
 # Public constant definitions
-RUSTY_POLE_REQ_LEVEL = 1
+RUSTY_POLE_REQ_LEVEL = 0
 RUSTY_POLE_XP_REWARD = 10
 
 

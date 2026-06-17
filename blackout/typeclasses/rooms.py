@@ -6,7 +6,8 @@ Rooms are simple containers that has no location of their own.
 """
 
 from evennia.objects.objects import DefaultRoom
-
+from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
+from evennia.contrib.grid.xyzgrid.xyzgrid import get_xyzgrid
 from .objects import ObjectParent
 
 
@@ -22,3 +23,10 @@ class Room(ObjectParent, DefaultRoom):
     """
 
     pass
+
+
+class GridTile(ObjectParent, XYZRoom):
+    """
+    The baseline 1x1 coordinate tile for the physical world of Blackout.
+    """
+    map_visual_range = None  # None = full map; default is 2 tiles in each direction

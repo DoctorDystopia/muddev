@@ -18,6 +18,7 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 
 from evennia import default_cmds
 from commands.progression_cmds import ProgressionCmdSet
+from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
 
 
@@ -40,6 +41,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         # any commands you add below will overload the default ones.
         #
         self.add(ProgressionCmdSet())
+        self.add(XYZGridCmdSet())
 
 
 class AccountCmdSet(default_cmds.AccountCmdSet):

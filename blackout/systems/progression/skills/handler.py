@@ -5,7 +5,14 @@ Creation date: 06/02/2026
 Description: Dynamic handler wrapper that attaches to Character typeclasses.
 """
 
+
+
 from . import logic
+
+from .registry import SKILL_REGISTRY
+from .constants import DEFAULT_START_LEVEL, DEFAULT_START_XP
+
+
 
 class SkillHandler:
     """
@@ -43,6 +50,22 @@ class SkillHandler:
         
         if not has_skills:
             self.obj.db.skills = {}
+
+
+    def init_all_skills(self) -> None:
+        """
+        Inject all registered skills at level 0/xp 0 if not already tracked.
+        """
+
+        if not self.obj.db.skills:
+            self.obj.db.skills = {}
+        
+        for skill_key, skill_class in SKILL_REGISTRY.items():
+            if skill_key not in self.obj.db.skills:
+                self.obj.db.skills[skill_key] = {
+                    "level": DEFAULT_START_LEVEL,
+                    "xp": DEFAULT_START_XP,
+                }
 
 
     def get_level(self, skill_key: str) -> int:
