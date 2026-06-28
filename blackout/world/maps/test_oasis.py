@@ -1,4 +1,4 @@
-# mygame/world/maps/test_neo_cairo.py
+﻿# mygame/world/maps/test_oasis.py
 
 from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
 
@@ -24,29 +24,42 @@ MAPSTR = r'''
        \    | |  \ /
     3   #-#-#-#   #   #
             | |  / \ /
-    2       #-#-#---#
+    2       #-#-#-#-#
             |       |
-    1       #-#     #
-            |
-    0 #-#---#
+    1       #-#-#-#-#-#-P-#
+            | | | | | | | |
+    0 #-#-#-#-#-#-P-#-#-#-#
 
     + 0 1 2 3 4 5 6 7 8 9 1
                           0
 
 '''
 
-class TradeTownNode(MapNode):
+
+class RustyPoleNode(MapNode):
     """
-    Custom MapNode for Trade Town.
+    Custom MapNode for Rusty Poles.
+    Uses a distinct 'P' symbol on the map so rooms at these
+    coordinates actually get spawned (prototype must be set).
+    """
+    display_symbol = "P"
+    prototype = "xyz_room"
+
+
+class OasisOutskirtsNode(MapNode):
+    """
+    Custom MapNode for Oasis Outskirts.
     Overrides the display symbol to 'X' with a strict visual length of 1.
     """
     display_symbol = "x"
 
-# Map the default '#' string symbol to our custom TradeTownNode
+# Map the default '#' string symbol to our custom OasisOutskirtsNode
 # LEGEND = {
-#     "#": TradeTownNode
+#     "#": OasisOutskirtsNode
 # }
-LEGEND = {}
+LEGEND = {
+    "P": RustyPoleNode
+}
 
 # The PROTOTYPES dictionary allows for map-wide defaults and exact coordinate overrides.
 # The '*' characters act as wildcards for (X, Y) nodes and (X, Y, direction) links.
@@ -54,26 +67,38 @@ PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
     ('*', '*'): {
         "typeclass": "typeclasses.rooms.GridTile",
-        "key": "Trade Town Sector 1",
-        "desc": "A bustling sector of the trade town.",
+        "key": "Oasis Outskirts",
+        "desc": "sand...everywhere.",
     },
     # Default Exit Prototype (applies to all undefined links)
     ('*', '*', '*'): {
         "prototype_parent": "xyz_exit",
-        "desc": "A path through the trade town.",
+        "desc": "A path through the oasis.",
     },
     # Example Override: Customize a specific coordinate (e.g., the SW corner)
     (0, 0): {
         "prototype_parent": "xyz_room",
         "typeclass": "typeclasses.rooms.GridTile",
-        "key": "Sector 1 Entrance",
-        "desc": "The main gates of Trade Town Sector 1. The city sprawls to the north and east.",
+        "key": "Oasis Entrance",
+        "desc": "The main entryway of Oasis Outskirts. The desert sprawls to the north and east.",
+    },
+    (6, 0): {
+        "prototype_parent": "xyz_room",
+        "typeclass": "typeclasses.rooms.GridTile",
+        "key": "Pole clearing",
+        "desc": "A rusted pole. Maybe I can cut it down?",
+    },
+    (9, 1): {
+        "prototype_parent": "xyz_room",
+        "typeclass": "typeclasses.rooms.GridTile",
+        "key": "Pole clearing",
+        "desc": "A rusted pole. Maybe I can cut it down?",
     }
 }
 
 # Aggregate all configuration data for the parser
 XYMAP_DATA = {
-    "zcoord": "trade town sector 1",
+    "zcoord": "oasis",
     "map": MAPSTR,
     "legend": LEGEND,
     "prototypes": PROTOTYPES,

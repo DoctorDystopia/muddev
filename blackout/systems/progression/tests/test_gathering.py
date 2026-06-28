@@ -32,7 +32,6 @@ class TestCuttingProgression(EvenniaCommandTest):
         char_obj = getattr(self, "char1", self.char1)
         room_obj = getattr(self, "room1", self.room1)
         
-        char_obj.db.has_cutting_reward = True
         self.handler = SkillHandler(char_obj)
         
         axe_obj = create_object(DefaultObject, key="axe", location=char_obj)

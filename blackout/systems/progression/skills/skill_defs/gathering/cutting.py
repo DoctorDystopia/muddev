@@ -30,31 +30,9 @@ class Cutting(BaseSkill):
 
     def get_unlock_requirements(self, character: object) -> bool:
         """
-        Purpose: Checks if the character has the necessary reward to unlock Cutting.
-        
-        Entry:
-            character is a valid Evennia Character object
-        
-        Exit/Returns:
-            Returns True if the character possesses the unlock reward, False otherwise.
-        
-        Module Globals:
-            None
-            
-        Methodology:
-            Retrieves the 'has_cutting_reward' attribute from the character's 
-            database. Evaluates the boolean state of the retrieved value.
-            
-        Notes/References:
-            None
-            
-        Author: Nick Hobar
-        Creation date: 06/02/2026
+        Purpose: Cutting is always unlocked for all players.
         """
-        has_reward_attr = character.db.has_cutting_reward
-        has_unlocked = bool(has_reward_attr)
-        
-        return has_unlocked
+        return True
 
 
     def _get_loot_info(self, target: object) -> tuple[str | None, int]:
