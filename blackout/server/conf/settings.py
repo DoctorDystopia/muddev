@@ -38,6 +38,10 @@ SERVERNAME = "blackout"
 EXTRA_LAUNCHER_COMMANDS['xyzgrid'] = 'evennia.contrib.grid.xyzgrid.launchcmd.xyzcommand'
 PROTOTYPE_MODULES += ['evennia.contrib.grid.xyzgrid.prototypes']
 
+# Godot web socket
+PORTAL_SERVICES_PLUGIN_MODULES.append('evennia.contrib.base_systems.godotwebsocket.webclient')
+GODOT_CLIENT_WEBSOCKET_PORT = 4008
+GODOT_CLIENT_WEBSOCKET_CLIENT_INTERFACE = "127.0.0.1"
 
 ######################################################################
 # Settings given in secret_settings.py override those in this file.

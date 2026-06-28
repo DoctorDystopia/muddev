@@ -2,20 +2,9 @@
 
 from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
 
-# + 0 1 2 3
-
-# 3 #-#-#-#
-#   | | | |
-# 2 #-#-#-#
-#      / /
-# 1 #-#-#-#
-#   |  \ \
-# 0 #---#-#
-
-# + 0 1 2 3
-
 # The topological layout for the sector
 MAPSTR = r"""
+
 
 + 0 1 2
 
@@ -35,7 +24,7 @@ class TradeTownNode(MapNode):
     Custom MapNode for Trade Town.
     Overrides the display symbol to 'X' with a strict visual length of 1.
     """
-    display_symbol = "x"
+    display_symbol = "X"
 
 # Map the default '#' string symbol to our custom TradeTownNode
 # LEGEND = {

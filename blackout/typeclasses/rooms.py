@@ -29,4 +29,4 @@ class GridTile(ObjectParent, XYZRoom):
     """
     The baseline 1x1 coordinate tile for the physical world of Blackout.
     """
-    map_visual_range = None  # None = full map; default is 2 tiles in each direction
+    # map_visual_range = 10  # None = full map; default is 2 tiles in each direction
