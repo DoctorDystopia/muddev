@@ -16,6 +16,7 @@ from evennia.utils.utils import lazy_property
 
 from .objects import ObjectParent
 from systems.progression.skills.handler import SkillHandler
+from systems.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from systems.quests.quests import QuestHandler
 
@@ -89,6 +90,17 @@ class Character(ObjectParent, DefaultCharacter):
         new_equipment_handler = EquipmentHandler(self)
         
         return new_equipment_handler
+
+
+    @lazy_property
+    def bank(self) -> BankHandler:
+        log_message = f"Accessing bank for character: {self.key}"
+        logger.log_info(log_message)
+        print(log_message)
+
+        new_bank_handler = BankHandler(self)
+
+        return new_bank_handler
 
 
     @lazy_property

@@ -9,6 +9,7 @@ Description: Custom commands for players to interact with the progression system
 
 from commands.command import Command
 from evennia import CmdSet
+from evennia.utils.evmenu import EvMenu
 from systems.progression.skills.registry import SKILL_REGISTRY
 
 
@@ -24,30 +25,32 @@ class CmdSkills(Command):
     help_category = "Progression"
 
 
+    SKILLS_MENU_PATH = "systems.menus.skills_menu"
+
+
     def func(self) -> None:
         """
-        Purpose: Executes the skills command, formatting and sending the output to the player.
-        
+        Purpose: Executes the skills command, launching the skills menu.
+
         Entry:
             self.caller is a valid Evennia Character object
             self.args is a string (potentially empty)
-        
+
         Exit/Returns:
             No conditions
-        
+
         Module Globals:
             SKILL_REGISTRY read
-            
+            SKILLS_MENU_PATH read
+
         Methodology:
-            Checks if arguments were provided. If so, searches for a target 
-            character. Otherwise, defaults to the caller. Retrieves the skills 
-            dictionary from the target's database. Iterates through the tracked 
-            skills, matches them to the master registry, and formats a display 
-            list for the player.
-            
+            If arguments are provided, shows another player's skills
+            as a text summary. Otherwise, opens the interactive
+            skills panel menu for self-view.
+
         Notes/References:
             None
-            
+
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
@@ -55,53 +58,51 @@ class CmdSkills(Command):
         raw_args = self.args
         clean_args = raw_args.strip()
         has_args = bool(clean_args)
-        
+
         if has_args:
+            # Show another player's skills as text
             target = caller.search(clean_args, global_search=True)
             target_not_found = target is None
-            
+
             if target_not_found:
-                # caller.search automatically handles the "not found" error message
                 return
-        else:
-            target = caller
-            
-        skills_dict = target.db.skills
-        has_no_skills = not skills_dict
-        
-        if has_no_skills:
-            is_caller = target == caller
-            
-            if is_caller:
-                caller.msg("You have not acquired any skills yet.")
-            else:
-                target_name = target.name
+
+            target_name = target.name
+            output_lines = [f"|c--- {target_name}'s Skills ---|n"]
+
+            skills_dict = target.db.skills
+
+            if not skills_dict:
                 caller.msg(f"{target_name} has not acquired any skills yet.")
-                
-            return
-            
-        target_name = target.name
-        output_lines = [f"|c--- {target_name}'s Skills ---|n"]
-        
-        for skill_key, skill_data in skills_dict.items():
-            is_valid_skill = skill_key in SKILL_REGISTRY
-            
-            if is_valid_skill:
-                skill_class = SKILL_REGISTRY[skill_key]
-                skill_name = skill_class.name
-                current_lvl = skill_data["level"]
-                
-                handler_prop = target.skills
-                xp_tuple = handler_prop.get_xp_level(skill_key)
-                
-                current_xp = xp_tuple[0]
-                total_xp_needed = xp_tuple[1]
-                
-                line_string = f"|w{skill_name}:|n Level {current_lvl} ({current_xp}/{total_xp_needed} XP until next level)"
-                output_lines.append(line_string)
-                
-        final_output = "\n".join(output_lines)
-        caller.msg(final_output)
+                return
+
+            for skill_key, skill_data in skills_dict.items():
+                is_valid_skill = skill_key in SKILL_REGISTRY
+
+                if is_valid_skill:
+                    skill_class = SKILL_REGISTRY[skill_key]
+                    skill_name = skill_class.name
+                    current_lvl = skill_data["level"]
+
+                    xp_tuple = target.skills.get_xp_level(skill_key)
+                    current_xp = xp_tuple[0]
+                    total_xp_needed = xp_tuple[1]
+
+                    line_string = (
+                        f"|w{skill_name}:|n Level {current_lvl} "
+                        f"({current_xp}/{total_xp_needed} XP until next level)"
+                    )
+                    output_lines.append(line_string)
+
+            final_output = "\n".join(output_lines)
+            caller.msg(final_output)
+        else:
+            # Open interactive skills panel menu for self
+            EvMenu(
+                caller,
+                self.SKILLS_MENU_PATH,
+                startnode="start",
+            )
 
 
 

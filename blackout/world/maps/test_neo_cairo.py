@@ -2,6 +2,8 @@
 
 from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
 
+# from .legend import BLACKOUT_LEGEND
+
 
 # The topological layout for the sector
 MAPSTR = r'''
@@ -42,9 +44,8 @@ class TradeTownNode(MapNode):
     """
     display_symbol = "x"
 
-# Map the default '#' string symbol to our custom TradeTownNode
 # LEGEND = {
-#     "#": TradeTownNode
+#     **BLACKOUT_LEGEND,
 # }
 LEGEND = {}
 

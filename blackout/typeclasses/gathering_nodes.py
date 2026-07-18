@@ -5,8 +5,10 @@ Creation date: 06/05/2026
 Description: Typeclasses for gatherable resource nodes in the world.
 """
 
+from evennia import create_object
 from typeclasses.objects import DefaultObject
 from commands.gathering_cmds import NodeCmdSet
+from .spawners import register_spawner
 
 
 
@@ -18,7 +20,7 @@ RUSTY_POLE_XP_REWARD = 10
 
 class RustyPole(DefaultObject):
     """
-    Purpose: Represents a level 1 gathering node for the Cutting skill.
+    Purpose: Represents a level 0 gathering node for the Cutting skill.
     
     Entry:
         No conditions
@@ -77,3 +79,16 @@ class RustyPole(DefaultObject):
         is_node = True
         
         return is_node
+
+
+@register_spawner("Pole clearing")
+def spawn_rusty_pole(room):
+    if not any(
+        obj.is_typeclass("typeclasses.gathering_nodes.RustyPole", exact=True)
+        for obj in room.contents
+    ):
+        create_object(
+            "typeclasses.gathering_nodes.RustyPole",
+            key="rusty pole",
+            location=room,
+        )

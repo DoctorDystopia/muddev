@@ -14,4 +14,6 @@ class WieldLocation(Enum):
 
 
 
+# Max number of unequipped items a character can carry in their Evennia inventory (contents).
+# Equipped items (tracked by the handler) do not count against this limit.
 MAX_INVENTORY_SLOTS = 32

@@ -26,11 +26,11 @@ MAPSTR = r'''
     4 #-----+-# #---#-#-#-A
        \    | |  \ / \| | |
     3   #-#-#-#   #   #-#-P
-        | | | |  / \ /| | |
-    2 #-#-#-F-#-#-#-#-#-#-#
-      | | | | | | | | | | |
-    1 #-#-#-#-P-#-#-#-#-P-#
-      | | | | | | | | | | |
+            | |  / \ /| | |
+    2       F-#-#-#-#-#-#-#
+            |       | | | |
+    1       #-P-#-#-#-#-P-#
+            | | | | | | | |
     0 #-#-#-#-#-#-P-#-#-#-B
 
     + 0 1 2 3 4 5 6 7 8 9 1
@@ -52,7 +52,7 @@ class RustyPoleNode(MapNode):
     Uses a distinct 'P' symbol on the map so rooms at these
     coordinates actually get spawned (prototype must be set).
     """
-    display_symbol = "|300P|n"
+    display_symbol = "P"
     prototype = "xyz_room"
 
 
@@ -68,7 +68,7 @@ class FurnaceFacilityNode(MapNode):
     """
     Custom MapNode for foundry furnaces.
     """
-    display_symbol = "|520F|n"
+    display_symbol = "F"
     prototype = "xyz_room"
 
 
@@ -76,15 +76,15 @@ class AnvilFacilityNode(MapNode):
     """
     Custom MapNode for blacksmith anvils.
     """
-    display_symbol = "|wA|n"
+    display_symbol = "A"
     prototype = "xyz_room"
 
 
 LEGEND = {
     "P": RustyPoleNode,
     "B": BankNode,
-    "F": FurnaceFacilityNode,
-    "A": AnvilFacilityNode,
+    "F": skill_facilities.FurnaceFacility,
+    "A": skill_facilities.AnvilFacility,
 }
 
 # The PROTOTYPES dictionary allows for map-wide defaults and exact coordinate overrides.
@@ -103,18 +103,18 @@ _bank = {
     "desc": "A secure banking facility with rows of storage terminals.",
 }
 
-_furnace = {
+_foundry = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
-    "key": "Foundry Furnace Facility",
+    "key": "Foundry Station",
     "desc": "A hot foundry filled with furnaces and smelting equipment.",
 }
 
 _anvil = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
-    "key": "Metalsmith Anvil Facility",
-    "desc": "A Metalsmith's heavy steel anvil.",
+    "key": "Blacksmith Anvil",
+    "desc": "A blacksmith's workshop centered around a heavy steel anvil.",
 }
 
 PROTOTYPES = {
@@ -143,7 +143,7 @@ PROTOTYPES = {
     (10, 3): _rusty_pole,
     # Skill node overrides
     (10, 0): _bank,
-    (3, 2): _furnace,
+    (3, 2): _foundry,
     (10, 4): _anvil,
 }
 

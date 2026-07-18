@@ -1,0 +1,24 @@
+"""
+Blackout-specific xyzgrid legend overrides.
+
+Provides custom MapNode/MapLink classes and a shared BLACKOUT_LEGEND dict
+that individual maps can import and extend.
+
+All standard symbols from the Evennia DEFAULT_LEGEND are automatically merged
+at parse time, so only blackout-specific overrides need to be listed here.
+"""
+
+from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
+
+
+class WalkableTile(MapNode):
+    """Generic walkable outdoor tile a player can occupy."""
+
+    symbol = "·"
+    display_symbol = "·"
+    prototype = "xyz_room"
+
+
+BLACKOUT_LEGEND = {
+    "#": WalkableTile,
+}

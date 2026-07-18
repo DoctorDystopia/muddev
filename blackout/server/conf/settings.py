@@ -34,9 +34,18 @@ from evennia.settings_default import *
 # This is the name of your game. Make it catchy!
 SERVERNAME = "blackout"
 
+# Use the custom ServerSession class for Blackout
+# SERVER_SESSION_CLASS = "server.conf.serversession.ServerSession"
+
 # Add the XYZGrid command to the launcher
 EXTRA_LAUNCHER_COMMANDS['xyzgrid'] = 'evennia.contrib.grid.xyzgrid.launchcmd.xyzcommand'
 PROTOTYPE_MODULES += ['evennia.contrib.grid.xyzgrid.prototypes']
+
+# Crafting recipe modules for the Evennia crafting contrib
+CRAFT_RECIPE_MODULES = [
+    "systems.crafting.recipes.foundry_recipes",
+    "systems.crafting.recipes.metalsmith_recipes",
+]
 
 # Godot web socket
 PORTAL_SERVICES_PLUGIN_MODULES.append('evennia.contrib.base_systems.godotwebsocket.webclient')

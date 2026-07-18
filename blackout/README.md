@@ -53,6 +53,9 @@ Enjoy!
 OR
 `py self.search("testchar2").db.has_cutting_reward = True`
 
+### Set echo back player input
+option localecho = true
+
 ## Environment stuff
 ### Update maps
 

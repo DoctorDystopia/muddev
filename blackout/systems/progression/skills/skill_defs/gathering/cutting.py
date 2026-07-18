@@ -10,7 +10,7 @@ Description: Implementation of the Cutting gathering skill.
 import time
 
 from systems.progression.skills.skill_defs.base_skill import BaseSkill
-from evennia import create_object
+from world.item_database import ITEM_DB
 
 
 
@@ -66,28 +66,15 @@ class Cutting(BaseSkill):
 
     def _has_tool(self, character: object) -> bool:
         """
-        Purpose: Checks if the character has an axe in inventory.
-        
-        Entry:
-            character is a valid Evennia Character object
-        
-        Exit/Returns:
-            Returns True if any inventory item's key matches 'axe' (case-insensitive).
-        
-        Module Globals:
-            None
-            
-        Methodology:
-            Iterates over character.contents checking if any item.key is 'axe'.
-            
-        Notes/References:
-            None
-            
-        Author: Nick Hobar
-        Creation date: 06/09/2026
+        Purpose: Checks if the character has an axe in inventory or equipped.
         """
-        has_axe = any(item.key.lower() == "axe" for item in character.contents)
-        
+        def _is_axe(item):
+            return "axe" in item.tags.get(category="crafting_tool", return_list=True)
+
+        has_axe = any(_is_axe(item) for item in character.contents)
+        if not has_axe:
+            has_axe = any(_is_axe(item) for item in character.equipment.all())
+
         return has_axe
 
 
@@ -120,11 +107,9 @@ class Cutting(BaseSkill):
         Author: Nick Hobar
         Creation date: 06/09/2026
         """
-        create_object(
-            "typeclasses.objects.Object",
-            key=item_name,
+        ITEM_DB["rusty_metal_chunk"].create(
             location=character,
-            home=character
+            home=character,
         )
         
         character.ndb.last_harvest_time = current_time
@@ -185,7 +170,7 @@ class Cutting(BaseSkill):
         if not self.get_unlock_requirements(character):
             missing_reqs.append("the 'Cutting Reward' unlock")
             
-        req_level = target.db.required_level or 1
+        req_level = target.db.required_level if target.db.required_level is not None else 1
         if not character.skills.meets_prerequisite(self.key, req_level):
             missing_reqs.append(f"Cutting level {req_level}")
 

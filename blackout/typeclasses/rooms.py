@@ -7,9 +7,8 @@ Rooms are simple containers that has no location of their own.
 
 from evennia.objects.objects import DefaultRoom
 from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
-from evennia.contrib.grid.xyzgrid.xyzgrid import get_xyzgrid
-from evennia import create_object
 from .objects import ObjectParent
+from .spawners import SPAWNER_REGISTRY, load_all_spawners
 
 
 class Room(ObjectParent, DefaultRoom):
@@ -35,22 +34,13 @@ class GridTile(ObjectParent, XYZRoom):
     def at_object_post_spawn(self, prototype=None):
         """
         Called after this room is created/updated via a prototype
-        during xyzgrid building. Spawns a RustyPole object inside
-        rooms whose prototype key is "Pole clearing".
+        during xyzgrid building. Looks up the prototype's room key
+        in SPAWNER_REGISTRY and dispatches to the matching spawner, if any.
         """
         if prototype is None:
             return
-        if prototype.get("key") != "Pole clearing":
-            return
-
-        from typeclasses.gathering_nodes import RustyPole
-
-        if not any(
-            obj.is_typeclass("typeclasses.gathering_nodes.RustyPole", exact=True)
-            for obj in self.contents
-        ):
-            create_object(
-                RustyPole,
-                key="rusty pole",
-                location=self,
-            )
+        load_all_spawners()
+        key = prototype.get("key")
+        spawner = SPAWNER_REGISTRY.get(key)
+        if spawner:
+            spawner(self)

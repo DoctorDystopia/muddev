@@ -34,4 +34,6 @@ class ServerSession(BaseServerSession):
     through their session(s).
     """
 
-    pass
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.protocol_flags["LOCALECHO"] = True

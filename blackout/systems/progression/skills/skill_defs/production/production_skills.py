@@ -8,9 +8,9 @@ Creation date: 06/02/2026
 Description: Container module mapping all production skill classes.
 """
 
-# from .[production_skill] import [production_skill_class]
+from .metalsmith import Metalsmith
 
 # Container dictionary bundling all production skill classes
 PRODUCTION_SKILLS = {
-    # [ProductionSkillClass.key]: [ProductionSkillClass],
+    Metalsmith.key: Metalsmith,
 }
