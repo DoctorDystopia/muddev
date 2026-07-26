@@ -19,19 +19,19 @@ MAPSTR = r'''
         |     |           |
     7   #-#---#-#-#-#-#   |
         |         | | |   |
-    6   #-#-#-#   #-#-#-#-#
+    6   #-#-#-A   #-#-#-#-#
            \      | | |
     5   #---#-#---#-#-#
        /    |
-    4 #-----+-# #---#-#-#-A
+    4 #-----+-#-#---#-#-#-S
        \    | |  \ / \| | |
-    3   #-#-#-#   #   #-#-P
+    3   #-#-#-#   F   #-#-P
         | | | |  / \ /| | |
-    2 #-#-#-F-#-#-#-#-#-#-#
+    2 #-#-#-#-#-#-#-#-#-#-#
       | | | | | | | | | | |
     1 #-#-#-#-P-#-#-#-#-P-#
       | | | | | | | | | | |
-    0 #-#-#-#-#-#-P-#-#-#-B
+    0 #-#-!-#-#-#-P-#-#-#-B
 
     + 0 1 2 3 4 5 6 7 8 9 1
                           0
@@ -60,7 +60,7 @@ class BankNode(MapNode):
     """
     Custom MapNode for banking facilities.
     """
-    display_symbol = "B"
+    display_symbol = "|#4488FFB|n"
     prototype = "xyz_room"
 
 
@@ -80,12 +80,31 @@ class AnvilFacilityNode(MapNode):
     prototype = "xyz_room"
 
 
+class NPCNode(MapNode):
+    """
+    Custom MapNode for NPC characters.
+    """
+    display_symbol = "|y!|n"
+    prototype = "xyz_room"
+
+
+class ShopNPCNode(MapNode):
+    """
+    Custom MapNode for Shop NPC characters.
+    """
+    display_symbol = "|YS|n"
+    prototype = "xyz_room"
+
+
 LEGEND = {
     "P": RustyPoleNode,
     "B": BankNode,
     "F": FurnaceFacilityNode,
     "A": AnvilFacilityNode,
+    "!": NPCNode,
+    "S": ShopNPCNode,
 }
+
 
 # The PROTOTYPES dictionary allows for map-wide defaults and exact coordinate overrides.
 # The '*' characters act as wildcards for (X, Y) nodes and (X, Y, direction) links.
@@ -107,7 +126,7 @@ _furnace = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Foundry Furnace Facility",
-    "desc": "A hot foundry filled with furnaces and smelting equipment.",
+    "desc": "A roaring hot foundry.",
 }
 
 _anvil = {
@@ -115,6 +134,20 @@ _anvil = {
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Metalsmith Anvil Facility",
     "desc": "A Metalsmith's heavy steel anvil.",
+}
+
+_npc_lone_android = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Lone Android",
+    "desc": "An lonely looking android who lives in the wastes of the Sahara.",
+}
+
+_npc_shopkeeper = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Shopkeeper",
+    "desc": "A market stall shaded by a tattered awning, its wares displayed on a cloth.",
 }
 
 PROTOTYPES = {
@@ -143,8 +176,10 @@ PROTOTYPES = {
     (10, 3): _rusty_pole,
     # Skill node overrides
     (10, 0): _bank,
-    (3, 2): _furnace,
-    (10, 4): _anvil,
+    (6, 3): _furnace,
+    (4, 6): _anvil,
+    (2, 0): _npc_lone_android,
+    (10, 4): _npc_shopkeeper,
 }
 
 # Aggregate all configuration data for the parser

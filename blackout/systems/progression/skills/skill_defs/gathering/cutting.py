@@ -69,7 +69,7 @@ class Cutting(BaseSkill):
         Purpose: Checks if the character has an axe in inventory or equipped.
         """
         def _is_axe(item):
-            return "axe" in item.tags.get(category="crafting_tool", return_list=True)
+            return getattr(item.db, "tool_type", None) == "axe"
 
         has_axe = any(_is_axe(item) for item in character.contents)
         if not has_axe:

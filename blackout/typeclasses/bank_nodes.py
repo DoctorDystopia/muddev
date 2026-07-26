@@ -2,11 +2,18 @@ from evennia import Command, CmdSet
 from evennia import create_object
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner
+from systems.menus.base_menu import start_blackout_menu
 
 
 class CmdDeposit(Command):
     """
     Deposit an item from your inventory into the bank for safe keeping.
+
+    Usage:
+        deposit <item>
+        deposit <item> <quantity>
+
+    If the item is currently equipped, it will be unequipped first.
     """
     key = "deposit"
     locks = "cmd:all()"
@@ -14,22 +21,31 @@ class CmdDeposit(Command):
 
     def func(self):
         caller = self.caller
-        args = self.args.strip()
+        args = self.args.strip().split()
 
         if not args:
             caller.msg("What do you want to deposit?")
             return
 
-        target = caller.search(args)
+        item_name = args[0]
+        count = None
+        if len(args) > 1 and args[1].isdigit():
+            count = int(args[1])
+
+        target = caller.search(item_name)
         if not target:
             return
 
-        caller.bank.deposit(target)
+        caller.bank.deposit(target, count)
 
 
 class CmdWithdraw(Command):
     """
     Withdraw an item from the bank into your inventory.
+
+    Usage:
+        withdraw <item>
+        withdraw <item> <quantity>
     """
     key = "withdraw"
     locks = "cmd:all()"
@@ -40,15 +56,28 @@ class CmdWithdraw(Command):
         args = self.args.strip()
 
         if not args:
-            caller.msg("What do you want to withdraw?")
+            stored = caller.bank.list_items()
+            if not stored:
+                caller.msg("Your bank account is empty. Nothing to withdraw.")
+                return
+            item_list = ", ".join(obj.key for obj in stored)
+            caller.msg(f"Your bank contains: {item_list}")
+            caller.msg("Use |ywithdraw <item>|n to retrieve something.")
             return
 
-        caller.bank.withdraw(args)
+        parts = args.split()
+        item_key = parts[0]
+        count = int(parts[1]) if len(parts) > 1 else 1
+
+        caller.bank.withdraw(item_key, count)
 
 
 class CmdBalance(Command):
     """
     List all items stored in your bank account.
+
+    Usage:
+        balance
     """
     key = "balance"
     locks = "cmd:all()"
@@ -62,8 +91,35 @@ class CmdBalance(Command):
             caller.msg("Your bank account is empty.")
             return
 
-        item_list = ", ".join(items)
-        caller.msg(f"Your bank contains: {item_list}")
+        count = caller.bank.count_items()
+        lines = [f"Your bank contains {count} item{'s' if count != 1 else ''}:"]
+        for item in items:
+            weight = getattr(item.db, "weight", None)
+            value = getattr(item.db, "value", None)
+            details = []
+            if weight is not None:
+                details.append(f"{weight}kg")
+            if value is not None:
+                details.append(f"{value}g")
+            suffix = f" ({', '.join(details)})" if details else ""
+            lines.append(f"  {item.key}{suffix}")
+        caller.msg("\n".join(lines))
+
+
+class CmdBank(Command):
+    """
+    Open the banking menu to deposit, withdraw, and browse items.
+
+    Usage:
+        bank
+    """
+    key = "bank"
+    locks = "cmd:all()"
+    help_category = "Banking"
+
+    def func(self):
+        caller = self.caller
+        start_blackout_menu(caller, "systems.menus.banking_menu", startnode="start")
 
 
 class BankCmdSet(CmdSet):
@@ -78,6 +134,7 @@ class BankCmdSet(CmdSet):
         self.add(CmdDeposit())
         self.add(CmdWithdraw())
         self.add(CmdBalance())
+        self.add(CmdBank())
 
 
 class BankNode(ObjectParent, DefaultObject):
@@ -91,7 +148,7 @@ class BankNode(ObjectParent, DefaultObject):
         self.cmdset.add(BankCmdSet, persistent=True)
         self.locks.add("get:false()")
 
-        self.db.desc = "A bank terminal for secure item storage. Try |ydeposit|n, |ywithdraw|n, or |ybalance|n."
+        self.db.desc = "A bank terminal for secure item storage. Try |ybank|n for the menu, or |ydeposit|n, |ywithdraw|n, |ybalance|n."
 
 
 @register_spawner("Bank")

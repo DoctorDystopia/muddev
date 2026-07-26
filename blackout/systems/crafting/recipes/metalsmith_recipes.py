@@ -40,4 +40,25 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
 
     output_item_keys = ["rusty_scrap_axe"]
 
-    success_message = "You hammer the rusty scrap metal into a rough but serviceable axe head and attach a handle."
+    success_message = "You hammer the rusty scrap metal into a rough but serviceable axe."
+
+
+class RustyScrapSwordRecipe(BlackoutRecipe):
+    "Hammer rusty scrap metal into a crude sword at an anvil."
+
+    name = "rusty scrap sword"
+    category = "Metalsmithing"
+    required_skill = "metalsmith"
+    required_level = 2
+    xp_reward = 50
+    skill_category = "production"
+
+    consumable_tags = ["rusty_scrap_metal"]
+    consumable_names = ["Rusty Scrap Metal"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["Hammer", "Anvil"]
+
+    output_item_keys = ["rusty_scrap_sword"]
+
+    success_message = "You hammer the rusty scrap metal into a rough but serviceable sword."

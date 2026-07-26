@@ -73,9 +73,13 @@ class EquipmentHandler:
     def validate_inventory_space(self):
         """
         Ensures the character has room in their inventory.
-        Raises EquipmentError if at MAX_INVENTORY_SLOTS.
+        Uses the InventoryHandler if available (accounts for stackable items as 1 slot).
+        Falls back to counting contents directly.
         """
-        if self.count_inventory() >= MAX_INVENTORY_SLOTS:
+        if hasattr(self.obj, "inventory"):
+            if not self.obj.inventory.has_free_slots(1):
+                raise EquipmentError("Your inventory is completely full.")
+        elif self.count_inventory() >= MAX_INVENTORY_SLOTS:
             raise EquipmentError("Your inventory is completely full.")
         return True
 
@@ -133,8 +137,10 @@ class EquipmentHandler:
         if displaced_count - 1 > available:
             raise EquipmentError("Your inventory is too full to swap equipment.")
 
-        # Remove from inventory
+        # Remove from inventory and free its slot
         obj.location = None
+        if hasattr(self.obj, "inventory"):
+            self.obj.inventory.remove_item(obj)
 
         if use_slot == WieldLocation.TWO_HANDS:
             self.slots[WieldLocation.MAIN_HAND] = None

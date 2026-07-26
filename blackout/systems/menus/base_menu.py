@@ -12,6 +12,7 @@ HIGHLIGHT_COLOR = "|y"
 ERROR_COLOR = "|r"
 SUCCESS_COLOR = "|g"
 RESET_COLOR = "|n"
+SPEECH_COLOR = "|c"
 
 
 
@@ -139,13 +140,17 @@ class BlackoutEvMenu(EvMenu):
         Author: Nick Hobar
         Creation date: 07/13/2026
         """
+        if not optionlist:
+            return ""
+
         table = evtable.EvTable()
-        table.reformat_column(0, align="l")
-        table.reformat_column(1, align="l")
 
         for key, desc in optionlist:
             styled_key = f"{HIGHLIGHT_COLOR}{key}{RESET_COLOR}"
             table.add_row(styled_key, desc)
+
+        table.reformat_column(0, align="l")
+        table.reformat_column(1, align="l")
 
         formatted_table = str(table)
 
@@ -168,8 +173,9 @@ class BlackoutEvMenu(EvMenu):
             RESET_COLOR read
 
         Methodology:
-            Joins the node text and options with a separator line.
-            Appends a prompt hint at the bottom.
+            If optionstext is empty, returns just the nodetext.
+            Otherwise joins the node text and options with a separator
+            line and appends a prompt hint at the bottom.
 
         Notes/References:
             None
@@ -177,6 +183,9 @@ class BlackoutEvMenu(EvMenu):
         Author: Nick Hobar
         Creation date: 07/13/2026
         """
+        if not optionstext:
+            return nodetext
+
         separator = f"{RESET_COLOR}{SEPARATOR_LINE_CHAR * 60}"
         prompt_hint = f"{HIGHLIGHT_COLOR}Enter an option number or command:{RESET_COLOR}"
 

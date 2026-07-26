@@ -90,8 +90,18 @@ def calculate_xp_needed(current_level: int) -> int:
     # rounded_xp = int(calculated_xp)
 
     # Old School RuneScape XP Difference Formula
-    inner_calc = math.floor(base_level + 300 * (2 ** (base_level / 10.0)))
-    rounded_xp = math.floor(0.25 * inner_calc)
+    # inner_calc = math.floor(base_level + 300 * (2 ** (base_level / 10.0)))
+    # rounded_xp = math.floor(0.25 * inner_calc)
+
+    # Constants for XP calculation
+    BASE_CURVE_MULTIPLIER = 300
+    EXPONENTIAL_BASE = 2
+    LEVELS_PER_DOUBLING = 10.0  # Tweaked from OSRS's default of 7
+    XP_SCALING_FACTOR = 0.25    # Equivalent to dividing by 4
+
+    # XP Difference Formula
+    inner_calc = math.floor(base_level + BASE_CURVE_MULTIPLIER * (EXPONENTIAL_BASE ** (base_level / LEVELS_PER_DOUBLING)))
+    rounded_xp = math.floor(XP_SCALING_FACTOR * inner_calc)
 
     return rounded_xp
 

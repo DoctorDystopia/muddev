@@ -115,52 +115,65 @@ def _get_categories(caller: object) -> dict:
 
 
 def start(caller: object, **kwargs) -> tuple:
-    """
-    Purpose: Entry node for the skills overview menu.
-
-    Entry:
-        caller is a valid Evennia Character object
-
-    Exit/Returns:
-        Returns a tuple of (text, options) for the EvMenu node.
-
-    Module Globals:
-        TITLE_COLOR read
-        RESET_COLOR read
-
-    Methodology:
-        Groups skills by category and generates an option for
-        each category. Selecting a category navigates to the
-        category detail node.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 07/13/2026
-    """
     categories_dict = _get_categories(caller)
 
-    text = f"{TITLE_COLOR}--- Skills Overview ---{RESET_COLOR}\nSelect a category to view skill details."
+    text_parts = [f"{TITLE_COLOR}--- Skills Overview ---{RESET_COLOR}"]
+
+    for category_name in sorted(categories_dict.keys()):
+        skill_list = categories_dict[category_name]
+        text_parts.append(f"\n{HIGHLIGHT_COLOR}{category_name}:{RESET_COLOR}")
+
+        for skill_key, skill_data, skill_class in skill_list:
+            if skill_data is None:
+                continue
+
+            current_level = skill_data["level"]
+            current_xp = skill_data["xp"]
+
+            total_xp = caller.skills.get_total_xp(skill_key)
+
+            xp_tuple = caller.skills.get_xp_level(skill_key)
+            total_needed = xp_tuple[1]
+            remaining = xp_tuple[2]
+
+            next_level_at = total_xp + remaining
+
+            xp_bar = _build_xp_bar(current_xp, total_needed)
+
+            skill_instance = skill_class()
+            is_unlocked = skill_instance.get_unlock_requirements(caller)
+
+            unlock_status = (
+                f"{SUCCESS_COLOR}Unlocked{RESET_COLOR}"
+                if is_unlocked
+                else f"{HIGHLIGHT_COLOR}Locked{RESET_COLOR}"
+            )
+
+            text_parts.append(
+                f"  {SKILL_COLOR}{skill_class.name}{RESET_COLOR} "
+                f"(Level {TITLE_COLOR}{current_level}{RESET_COLOR}) - {unlock_status}"
+            )
+            text_parts.append(f"    XP: {total_xp}")
+            text_parts.append(f"    Next level at: {next_level_at}")
+            text_parts.append(f"    Remaining: {remaining}")
+            text_parts.append(f"    {xp_bar}")
+
+    text = "\n".join(text_parts)
 
     options_list = []
 
     for category_name in sorted(categories_dict.keys()):
-        skill_list = categories_dict[category_name]
-        skill_count = len(skill_list)
-        desc_string = f"{category_name} ({skill_count} skills)"
-
-        option_dict = {
-            "desc": desc_string,
-            "goto": ("node_category_detail", {"category": category_name}),
-        }
-        options_list.append(option_dict)
+        for skill_key, skill_data, skill_class in categories_dict[category_name]:
+            if skill_data is None:
+                continue
+            options_list.append({
+                "desc": f"{skill_class.name} details",
+                "goto": ("node_skill_detail", {"skill_key": skill_key}),
+            })
 
     options_list.append({"desc": "Exit skills panel", "goto": "node_exit"})
 
-    options_tuple = tuple(options_list)
-
-    return text, options_tuple
+    return text, tuple(options_list)
 
 
 
@@ -259,8 +272,13 @@ def node_skill_detail(caller: object, **kwargs) -> tuple:
     current_level = skill_data["level"]
     current_xp = skill_data["xp"]
 
+    total_xp = caller.skills.get_total_xp(skill_key)
+
     xp_tuple = caller.skills.get_xp_level(skill_key)
     total_needed = xp_tuple[1]
+    remaining = xp_tuple[2]
+
+    next_level_at = total_xp + remaining
 
     xp_bar = _build_xp_bar(current_xp, total_needed)
 
@@ -276,7 +294,10 @@ def node_skill_detail(caller: object, **kwargs) -> tuple:
         f"{SKILL_COLOR}{skill_class.name}{RESET_COLOR}\n"
         f"Category: {skill_class.category}\n"
         f"Level: {TITLE_COLOR}{current_level}{RESET_COLOR}\n"
-        f"XP: {xp_bar}\n"
+        f"XP: {total_xp}\n"
+        f"Next level at: {next_level_at}\n"
+        f"Remaining: {remaining}\n"
+        f"Progress: {xp_bar}\n"
         f"Status: {unlock_status}\n\n"
         f"{skill_class.description}"
     )

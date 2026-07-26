@@ -1,9 +1,11 @@
 
-from evennia import Command, CmdSet
+from evennia import Command, CmdSet, create_object
 from evennia import DefaultObject
 from evennia.utils.evmenu import EvMenu
 
 from typeclasses.objects import ObjectParent
+from .spawners import register_spawner
+from systems.menus.base_menu import start_blackout_menu
 
 
 # Public constant definitions
@@ -11,6 +13,9 @@ TALK_COMMAND_KEY = "talk"
 TALK_COMMAND_LOCKS = "cmd:all()"
 TALK_CMD_SET_KEY = "npc_talk_cmdset"
 TALK_CMD_SET_PRIORITY = 10
+
+SHOPKEEP_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_shopkeep"
+SHOPKEEP_CLEANUP_SCRIPT = "scripts.shopkeep_inventory_cleanup.ShopkeepCleanup"
 
 
 
@@ -77,18 +82,24 @@ class CmdTalk(Command):
 
         if not menu_module_is_valid:
             caller.msg(f"{npc.key} has nothing to say right now.")
-            return_value = None
-
-            return_value
+            return
 
         caller.msg(f"(You walk up and talk to {npc.key}.)")
 
-        EvMenu(
-            caller,
-            menu_module_path,
-            startnode="start",
-            npc=npc,
-        )
+        if menu_module_path == SHOPKEEP_DIALOGUE_MODULE:
+            start_blackout_menu(
+                caller,
+                menu_module_path,
+                startnode="start",
+                npc=npc,
+            )
+        else:
+            EvMenu(
+                caller,
+                menu_module_path,
+                startnode="start",
+                npc=npc,
+            )
 
 
 
@@ -204,3 +215,33 @@ class TalkativeNPC(ObjectParent, DefaultObject):
 
         self.db.desc = "A mysterious figure in the wastes."
         self.db.menu_module = None
+
+
+class ShopkeepNPC(TalkativeNPC):
+    """
+    An NPC that buys and sells items. Extends TalkativeNPC with
+    shop-specific attributes and auto-attaches the cleanup script.
+    """
+
+    def at_object_creation(self) -> None:
+        super().at_object_creation()
+        self.db.menu_module = SHOPKEEP_DIALOGUE_MODULE
+        self.db.shopdef_key = "oasis_shop"
+        self.db.desc = "A shopkeeper attending a stall of salvaged goods."
+        self.db.max_held_items = 20
+        self.scripts.add(SHOPKEEP_CLEANUP_SCRIPT)
+
+
+@register_spawner("Shopkeeper")
+def spawn_shopkeep(room):
+    if not any(
+        obj.is_typeclass("typeclasses.npcs.ShopkeepNPC", exact=True)
+        for obj in room.contents
+    ):
+        shopkeep = create_object(
+            "typeclasses.npcs.ShopkeepNPC",
+            key="Shopkeeper",
+            location=room,
+        )
+        shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
+        shopkeep.db.shopdef_key = "oasis_shop"

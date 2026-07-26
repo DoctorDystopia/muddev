@@ -69,9 +69,9 @@ def start(caller: object, **kwargs) -> tuple:
             text_lines.append(slot_line)
 
     text_lines.append("")
-    inventory_count = eq_handler.count_inventory()
+    inv_count = caller.inventory.count_used()
     text_lines.append(
-        f"{HIGHLIGHT_COLOR}Carrying {inventory_count}/{MAX_INVENTORY_SLOTS} items{RESET_COLOR}"
+        f"{HIGHLIGHT_COLOR}Carrying {inv_count}/{MAX_INVENTORY_SLOTS} slots{RESET_COLOR}"
     )
     text = "\n".join(text_lines)
 
@@ -87,12 +87,20 @@ def start(caller: object, **kwargs) -> tuple:
 
 
 def node_inventory(caller: object, **kwargs) -> tuple:
+    from items.inventory.display import render_grid
+
     eq_handler = caller.equipment
-    inventory_items = list(caller.contents)
+    handler = caller.inventory
+    handler.sync()
 
-    text_lines = [f"{TITLE_COLOR}--- Inventory ---{RESET_COLOR}"]
+    title, grid_str = render_grid(handler)
+    text_lines = [
+        f"{TITLE_COLOR}--- Inventory ---{RESET_COLOR}",
+        grid_str,
+    ]
 
-    if not inventory_items:
+    items = handler.all_items()
+    if not items:
         text_lines.append(f"{HIGHLIGHT_COLOR}You are not carrying anything.{RESET_COLOR}")
         text = "\n".join(text_lines)
         options = ({"desc": "Back to equipment overview", "goto": "start"},)
@@ -100,22 +108,26 @@ def node_inventory(caller: object, **kwargs) -> tuple:
 
     options_list = []
 
-    for item_obj in inventory_items:
+    for slot_idx, item_obj in items:
         item_key = item_obj.key
         use_slot = getattr(item_obj, "inventory_use_slot", None)
+        qty = getattr(item_obj, "quantity", 1)
+        qty_str = f" (x{qty})" if qty > 1 and getattr(item_obj, "is_stackable", False) else ""
 
         if use_slot is not None:
             slot_label = _get_slot_label(use_slot)
-            desc_string = f"Equip {item_key} to {slot_label}"
-            text_lines.append(f"  {HIGHLIGHT_COLOR}{item_key}{RESET_COLOR} -> {slot_label}")
-
-            option_dict = {
+            desc_string = f"Equip {item_key}{qty_str} to {slot_label}"
+            text_lines.append(f"  [{slot_idx+1}] {HIGHLIGHT_COLOR}{item_key}{RESET_COLOR}{qty_str} -> {slot_label}")
+            options_list.append({
                 "desc": desc_string,
                 "goto": ("node_equip_item", {"item_id": item_obj.id}),
-            }
-            options_list.append(option_dict)
+            })
         else:
-            text_lines.append(f"  {item_key}")
+            text_lines.append(f"  [{slot_idx+1}] {item_key}{qty_str}")
+            options_list.append({
+                "desc": f"Select {item_key}{qty_str}",
+                "goto": ("node_item_detail_inv", {"item_id": item_obj.id}),
+            })
 
     text = "\n".join(text_lines)
     options_list.append({"desc": "Back to equipment overview", "goto": "start"})
@@ -217,6 +229,46 @@ def node_item_detail(caller: object, **kwargs) -> tuple:
     options = ({"desc": "Back to equipment overview", "goto": "start"},)
     return text, options
 
+
+
+def node_item_detail_inv(caller: object, **kwargs) -> tuple:
+    item_id = kwargs.get("item_id")
+
+    target_item = None
+    for obj in caller.contents:
+        if obj.id == item_id:
+            target_item = obj
+            break
+
+    if target_item is None:
+        text = f"{ERROR_COLOR}That item is no longer in your inventory.{RESET_COLOR}"
+        options = ({"desc": "Back to inventory", "goto": "node_inventory"},)
+        return text, options
+
+    slot_idx = caller.inventory.find_slot(target_item)
+    item_desc = target_item.db.desc or "No description available."
+    qty = getattr(target_item, "quantity", 1)
+    stackable = getattr(target_item, "is_stackable", False)
+
+    lines = [
+        f"{TITLE_COLOR}--- {target_item.key} ---{RESET_COLOR}",
+        f"Slot: {slot_idx + 1 if slot_idx >= 0 else 'N/A'}",
+        f"Description: {item_desc}",
+    ]
+    if stackable:
+        lines.append(f"Quantity: {qty}")
+    if target_item.attributes.get("value", 0):
+        lines.append(f"Value: {target_item.attributes.get('value', 0)} credits")
+
+    tool_type = target_item.db.tool_type
+    if tool_type:
+        tier_value = target_item.db.tier or 0
+        req_level = target_item.db.req_level or 0
+        lines.append(f"Tool: {tool_type} (Tier {tier_value}, Req. Level {req_level})")
+
+    text = "\n".join(lines)
+    options = ({"desc": "Back to inventory", "goto": "node_inventory"},)
+    return text, options
 
 
 def node_exit(caller: object, **kwargs) -> tuple:

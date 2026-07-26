@@ -17,6 +17,7 @@ _SPAWNER_MODULES = [
     "typeclasses.gathering_nodes",
     "typeclasses.skill_facilities",
     "typeclasses.bank_nodes",
+    "typeclasses.npcs",
 ]
 
 _LOADED = False

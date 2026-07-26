@@ -43,6 +43,20 @@ class BaseItem(Object):
     def is_stackable(self):
         return self.attributes.get("stackable", default=False)
 
+    @property
+    def quantity(self):
+        if not self.is_stackable:
+            return 1
+        return self.attributes.get("quantity", default=1)
+
+    @quantity.setter
+    def quantity(self, value):
+        if not self.is_stackable:
+            return
+        if value < 0:
+            value = 0
+        self.attributes.add("quantity", int(value))
+
 
 
 class EquippableItem(BaseItem):
@@ -64,8 +78,35 @@ class ToolItem(EquippableItem):
     
     def at_object_creation(self):
         super().at_object_creation()
-        # Ensure tools default to being wielded in the main hand
         self.db.use_slot = WieldLocation.MAIN_HAND
         self.db.tool_type = "generic"
+        self.db.tier = 0
+        self.db.req_level = 0
+
+
+class CreditsItem(BaseItem):
+    """
+    Stackable currency item representing Blackout credits (chips).
+    Only one stack of CreditsItem should exist in a character's inventory.
+    """
+
+    def at_object_creation(self):
+        super().at_object_creation()
+        self.db.stackable = True
+        self.db.tradeable = True
+        self.db.value = 1
+        self.db.quantity = 0
+
+
+class WeaponItem(EquippableItem):
+    """
+    Tiered weapons like swords and spears.
+    Relies on prototype attributes: 'weapon_type', 'tier', and 'req_level'.
+    """
+    
+    def at_object_creation(self):
+        super().at_object_creation()
+        self.db.use_slot = WieldLocation.MAIN_HAND
+        self.db.weapon_type = "generic"
         self.db.tier = 0
         self.db.req_level = 0
