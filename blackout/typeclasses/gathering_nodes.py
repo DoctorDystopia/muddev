@@ -7,10 +7,10 @@ Description: Typeclasses for gatherable resource nodes in the world.
 
 from evennia import create_object
 from typeclasses.objects import DefaultObject
-from commands.gathering_cmds import NodeCmdSet
+from commands.gathering_cmds import GatheringNodeCmdSet
 from .spawners import register_spawner
 
-
+    
 
 # Public constant definitions
 RUSTY_POLE_REQ_LEVEL = 0
@@ -33,7 +33,7 @@ class RustyPole(DefaultObject):
     
     Methodology:
         Initializes the database attributes required for gathering,
-        sets the required level, and injects the generic NodeCmdSet 
+        sets the required level, and injects the generic GatheringNodeCmdSet 
         to expose interactions.
     
     Notes/References:
@@ -47,7 +47,7 @@ class RustyPole(DefaultObject):
         parent_class = super()
         parent_class.at_object_creation()
         
-        self.cmdset.add(NodeCmdSet, persistent=True)
+        self.cmdset.add(GatheringNodeCmdSet, persistent=True)
         self.locks.add("get:false()")
         
         self.db.required_level = RUSTY_POLE_REQ_LEVEL

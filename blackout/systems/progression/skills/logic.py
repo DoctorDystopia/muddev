@@ -7,13 +7,8 @@ Description: Decoupled helper functions for skill state evaluation and mutation.
 
 import math
 from evennia.utils import logger
-from .constants import (
-    BASE_XP_MULTIPLIER, 
-    XP_EXPONENT, 
-    DEFAULT_START_LEVEL, 
-    DEFAULT_START_XP, 
-    MINIMUM_BASE_LEVEL
-)
+from . import constants as skill_constants
+from systems.combat import constants as combat_constants
 from .registry import SKILL_REGISTRY
 
 
@@ -30,8 +25,8 @@ def ensure_skill(obj: object, skill_key: str) -> None:
         
     Module Globals:
         SKILL_REGISTRY read
-        DEFAULT_START_LEVEL read
-        DEFAULT_START_XP read
+        skill_constants.DEFAULT_START_LEVEL read
+        skill_constants.DEFAULT_START_XP read
         
     Methodology:
         Validates the key against the registry, raising an error if missing.
@@ -53,7 +48,7 @@ def ensure_skill(obj: object, skill_key: str) -> None:
     is_tracked = skill_key in skills_dict
     
     if not is_tracked:
-        skills_dict[skill_key] = {"level": DEFAULT_START_LEVEL, "xp": DEFAULT_START_XP}
+        skills_dict[skill_key] = {"level": skill_constants.DEFAULT_START_LEVEL, "xp": skill_constants.DEFAULT_START_XP}
 
 
 def calculate_xp_needed(current_level: int) -> int:
@@ -67,9 +62,11 @@ def calculate_xp_needed(current_level: int) -> int:
         Returns the integer amount of XP needed to reach the next level.
         
     Module Globals:
-        MINIMUM_BASE_LEVEL read
-        BASE_XP_MULTIPLIER read
-        XP_EXPONENT read
+        MIN_BASE_SKILL_LEVEL read
+        BASE_CURVE_MULTIPLIER read
+        EXPONENTIAL_BASE read
+        LEVELS_PER_DOUBLING read
+        XP_SCALING_FACTOR read
         
     Methodology:
         Applies an exponential curve using the base multiplier. Enforces
@@ -81,8 +78,8 @@ def calculate_xp_needed(current_level: int) -> int:
     Author: Nick Hobar
     Creation date: 06/02/2026
     """
-    if current_level < MINIMUM_BASE_LEVEL:
-        base_level = MINIMUM_BASE_LEVEL
+    if current_level < skill_constants.MIN_BASE_SKILL_LEVEL:
+        base_level = skill_constants.MIN_BASE_SKILL_LEVEL
     else:
         base_level = current_level
         
@@ -94,14 +91,14 @@ def calculate_xp_needed(current_level: int) -> int:
     # rounded_xp = math.floor(0.25 * inner_calc)
 
     # Constants for XP calculation
-    BASE_CURVE_MULTIPLIER = 300
-    EXPONENTIAL_BASE = 2
-    LEVELS_PER_DOUBLING = 10.0  # Tweaked from OSRS's default of 7
-    XP_SCALING_FACTOR = 0.25    # Equivalent to dividing by 4
+    # BASE_CURVE_MULTIPLIER = 300
+    # EXPONENTIAL_BASE = 2
+    # LEVELS_PER_DOUBLING = 10.0  # Tweaked from OSRS's default of 7
+    # XP_SCALING_FACTOR = 0.25    # Equivalent to dividing by 4
 
     # XP Difference Formula
-    inner_calc = math.floor(base_level + BASE_CURVE_MULTIPLIER * (EXPONENTIAL_BASE ** (base_level / LEVELS_PER_DOUBLING)))
-    rounded_xp = math.floor(XP_SCALING_FACTOR * inner_calc)
+    inner_calc = math.floor(base_level + skill_constants.BASE_CURVE_MULTIPLIER * (skill_constants.EXPONENTIAL_BASE ** (base_level / skill_constants.LEVELS_PER_DOUBLING)))
+    rounded_xp = math.floor(skill_constants.XP_SCALING_FACTOR * inner_calc)
 
     return rounded_xp
 
@@ -282,7 +279,7 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
     if leveled_up:
         skill_class = SKILL_REGISTRY[skill_key]
         skill_name = skill_class.name
-        msg_string = f"|g[PROG_UP] Your {skill_name} skill increased to level {skill_data['level']}!|n"
+        msg_string = f"|g[LEVEL_UP] Your {skill_name} skill increased to level {skill_data['level']}!|n"
         obj.msg(msg_string)
 
 
@@ -353,3 +350,88 @@ def check_synergy(obj: object,
     synergy_met = a_meets and b_meets
     
     return synergy_met
+
+
+def seed_fortitude_on_creation(obj: object) -> None:
+    """
+    Purpose: Stamp Fortitude (Blackout's HP skill) at level 10 with the
+    OSRS-equivalent cumulative XP for level 10. Run from Character.
+    at_object_creation AFTER init_all_skills() has placed fortitude at
+    the DEFAULT_START_LEVEL/XP.
+
+    Entry:
+        obj is a valid Evennia Character object whose db.skills dict
+        already contains the 'fortitude' key (i.e. init_all_skills has
+        already run).
+
+    Exit/Returns:
+        No conditions. After this call, obj.db.skills['fortitude'] == 
+        {'level': 10, 'xp': 1154} and obj.db.max_hp == 10. If the CombatEntity
+        mixin is on the typeclass, obj.db.hp == 10 too.
+
+    Module Globals:
+        combat_constants.FORTITUDE_START_LEVEL read.
+        combat_constants.FORTITUDE_START_XP read.
+
+    Methodology:
+        1. ensure_skill(obj, 'fortitude') normalizes the slot.
+        2. Snapshot current level / max_hp.
+        3. Overwrite level / XP with the seed values.
+        4. If the object exposes CombatEntity attrs (db.max_hp), set max_hp
+           to FORTITUDE_START_LEVEL and HP to match (full heal on creation).
+        5. If CombatEntity is NOT on this typeclass (e.g. a non-Character), the
+           skill seed still lands but the combative side-effect is silently 
+           skipped — so this helper is safe to call on any Evennia object with
+           db.skills, including NPCs that opt into the skills system.
+
+    Notes/References:
+        Per design dialogue: only Fortitude diverges from DEFAULT_START_LEVEL.
+        All other combat skills start at 0 just like gathering / processing.
+
+    Author: Nick Hobar
+    Creation date: 07/26/2026
+    """
+    ensure_skill(obj, "fortitude")
+    
+    skills_dict = obj.db.skills
+    skills_dict["fortitude"] = {
+        "level": combat_constants.FORTITUDE_START_LEVEL,
+        "xp": combat_constants.FORTITUDE_START_XP,
+    }
+    
+    if hasattr(obj, "db"):
+        obj.db.max_hp = combat_constants.FORTITUDE_START_LEVEL
+        obj.db.hp = combat_constants.FORTITUDE_START_LEVEL
+
+
+def sync_max_hp_from_fortitude(obj: object) -> None:
+    """
+    Purpose: Refresh max_hp from the fortitude skill level. Called by the
+    combat handler after awarding XP that triggers a fortitude level-up,
+    so the entity's HP cap tracks the skill.
+
+    Entry:
+        obj is a valid Evennia Character (or other CombatEntity host).
+
+    Exit/Returns:
+        No conditions. obj.db.max_hp is updated; obj.db.hp is NOT modified
+        (this is an upper-bounds update only — current HP cap may rise
+        without instantly topping the entity off).
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read the current fortitude level; set db.max_hp. Defensive against
+        missing fortitude (raises KeyError → caller decides).
+
+    Notes/References:
+        Per design dialogue: max_hp == fortitude_level. OSRS Constitution
+        analog. Stubbed in batch 2; per-hit XP integration is the live
+        caller in batch 2's combat handler.
+
+    Author: Nick Hobar
+    Creation date: 07/26/2026
+    """
+    new_cap = get_level(obj, "fortitude")
+    obj.db.max_hp = new_cap

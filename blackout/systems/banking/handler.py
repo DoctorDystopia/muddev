@@ -1,6 +1,7 @@
 from evennia import create_object
 
 from items.equipment.handler import EquipmentError
+from items.inventory.handler import InventoryError
 
 # NOTE: Banking currently uses a DefaultRoom as a hidden container.
 # Future plan: transition to Evennia's contrib/game_systems/storage
@@ -13,6 +14,15 @@ BANK_ROOM_ATTR = "_bank_room"
 BANK_TAG = "bank_vault"
 BANK_TAG_CATEGORY = "banking"
 BANK_MAX_UNIQUE_KEYS = 100
+
+
+class BankError(Exception):
+    """Raised when a banking operation cannot be completed.
+
+    Mirrors EquipmentError / InventoryError so every handler in the project
+    signals failure the same way.
+    """
+    pass
 
 
 class BankHandler:
@@ -71,18 +81,34 @@ class BankHandler:
         """
         Create a new stack object with copied attributes from the original item.
 
-        Uses create_object() to avoid the batch_add-on-unsaved bug in
-        Evennia's DefaultObject.copy(). Copies all attributes from the
-        source item, then sets quantity to the split amount.
+        The copy is built DETACHED (location=None) and only moved to its
+        destination once it is fully populated. That ordering is load-bearing:
+        creating it directly at the destination fires at_object_receive, and
+        InventoryHandler.add_item merges same-key stackables by calling
+        obj.delete() on the incoming object. The half-built copy was therefore
+        deleted mid-construction, and the next attribute write failed with
+        "needs to have a value for field id".
+
+        Evennia's own DefaultObject.copy() / copy_object() hit the same wall
+        for this reason -- they batch_add attributes after placing the object
+        -- so this stays hand-rolled deliberately.
         """
         new_obj = create_object(
             item.typeclass_path,
             key=item.key,
-            location=location,
+            location=None,
         )
+
         for attr in item.attributes.all():
             new_obj.attributes.add(attr.key, attr.value, category=attr.category)
+
         new_obj.attributes.add("quantity", count)
+
+        # Move only after the object is complete, so any merge logic on the
+        # receiving side sees a fully-formed stack.
+        if location is not None:
+            new_obj.move_to(location, quiet=True)
+
         return new_obj
 
     def _copy_item_to(self, item, location):
@@ -159,14 +185,20 @@ class BankHandler:
         self.obj.msg(f"You deposit {item.key} into the bank.")
         return item
 
-    def withdraw(self, item_id, count=1):
+    def withdraw(self, item_id, count=None):
         """
         Retrieve a specific quantity of an item from the bank to the character's inventory.
 
         Checks inventory space before moving. Returns the item object
         on success or None if not found or inventory is full.
 
-        If count exceeds available quantity, withdraws all available.
+        Args:
+            item_id: dbid of the stored object. Callers holding a name should
+                     resolve it through find_item_by_name first.
+            count: Quantity to withdraw. None or >= available = withdraw all.
+                   Mirrors deposit(), which has always treated None as "the
+                   whole stack" -- withdraw defaulting to 1 instead made the
+                   two halves of the same operation behave differently.
         """
         room = self._get_bank_room()
 
@@ -176,16 +208,21 @@ class BankHandler:
                 is_stackable = getattr(obj, "is_stackable", False)
                 current_quantity = getattr(obj, "quantity", 1)
 
-                # If requested count exceeds available, withdraw all available
-                if count > current_quantity:
+                # None means the whole stack; anything above it clamps down.
+                if count is None or count > current_quantity:
                     count = current_quantity
+
+                # A stack occupies ONE inventory slot regardless of how many
+                # units it holds, so reserving `count` slots for it wrongly
+                # refused any large withdrawal.
+                slots_needed = 1 if is_stackable else count
 
                 try:
                     if hasattr(self.obj, "inventory"):
-                        self.obj.inventory.validate_space(count)
+                        self.obj.inventory.validate_space(slots_needed)
                     else:
-                        self.obj.equipment.validate_inventory_space()
-                except (EquipmentError, Exception) as err:
+                        self.obj.equipment.validate_inventory_space(slots_needed)
+                except (EquipmentError, InventoryError) as err:
                     self.obj.msg(str(err))
                     return None
 
@@ -225,10 +262,34 @@ class BankHandler:
                 return obj
         return None
 
+    def find_item_by_name(self, item_key):
+        """
+        Find a stored item by name. Returns the object or None.
+
+        Matches the full key case-insensitively first, then falls back to a
+        prefix match so `withdraw rusty` reaches "Rusty Scrap Metal". Callers
+        that hold a name (commands) use this to obtain the id that withdraw
+        expects -- withdraw itself matches on obj.id only, and passing it a
+        name silently never matched anything.
+        """
+        room = self._get_bank_room()
+        needle = item_key.lower().strip()
+
+        for obj in room.contents:
+            if obj.key.lower() == needle:
+                return obj
+
+        for obj in room.contents:
+            if obj.key.lower().startswith(needle):
+                return obj
+
+        return None
+
+
     def has_item(self, item_key):
         """Check if an item with the given key exists in the bank."""
-        room = self._get_bank_room()
-        return any(obj.key.lower() == item_key.lower() for obj in room.contents)
+        match = self.find_item_by_name(item_key)
+        return match is not None
 
     def delete_bank_room(self):
         """Delete the hidden bank room and all items in it, then clear the stored reference."""

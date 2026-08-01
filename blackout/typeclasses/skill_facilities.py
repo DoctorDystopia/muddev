@@ -1,4 +1,5 @@
 from evennia import create_object
+from systems.crafting.constants import CATEGORY_FOUNDRY, CATEGORY_METALSMITHING
 from typeclasses.crafting_facilities import CraftingFacility
 from .spawners import register_spawner
 
@@ -12,7 +13,7 @@ class FoundryBaseFacility(CraftingFacility):
     Specific facility types (FurnaceFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = ["Foundry"]
+    allowed_categories = [CATEGORY_FOUNDRY]
 
     def at_object_creation(self):
         parent_class = super()
@@ -43,7 +44,7 @@ class MetalsmithBaseFacility(CraftingFacility):
     Specific facility types (AnvilFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = ["Metalsmith"]
+    allowed_categories = [CATEGORY_METALSMITHING]
 
     def at_object_creation(self):
         parent_class = super()

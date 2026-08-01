@@ -14,16 +14,14 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 
 """
 
-
-
 from evennia import default_cmds
-from commands.progression_cmds import ProgressionCmdSet
-from commands.equipment_cmds import EquipmentCmdSet
-from commands.inventory_cmds import InventoryCmdSet
-from commands.cleanup_cmds import CleanupCmdSet
 from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
-
+from commands.cleanup_cmds import CleanupCmdSet
+from commands.combat_cmds import CombatCmdSet
+from commands.equipment_cmds import EquipmentCmdSet
+from commands.inventory_cmds import InventoryCmdSet
+from commands.progression_cmds import ProgressionCmdSet
 
 
 class CharacterCmdSet(default_cmds.CharacterCmdSet):
@@ -48,6 +46,8 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(InventoryCmdSet())
         self.add(XYZGridCmdSet())
         self.add(CleanupCmdSet())
+
+        self.add(CombatCmdSet())
 
 
 class AccountCmdSet(default_cmds.AccountCmdSet):

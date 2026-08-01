@@ -65,11 +65,25 @@ class CmdWithdraw(Command):
             caller.msg("Use |ywithdraw <item>|n to retrieve something.")
             return
 
+        # Trailing integer (if any) is the quantity; everything before it is
+        # the name, so multi-word keys like "Rusty Scrap Metal" survive.
+        # No quantity given means the whole stack, matching deposit.
         parts = args.split()
-        item_key = parts[0]
-        count = int(parts[1]) if len(parts) > 1 else 1
+        count = None
+        if len(parts) > 1 and parts[-1].isdigit():
+            count = int(parts[-1])
+            parts = parts[:-1]
 
-        caller.bank.withdraw(item_key, count)
+        item_key = " ".join(parts)
+
+        # withdraw() matches on obj.id, so resolve the name here. Passing the
+        # raw string made this command incapable of ever withdrawing anything.
+        item = caller.bank.find_item_by_name(item_key)
+        if item is None:
+            caller.msg("You don't have that item stored in the bank.")
+            return
+
+        caller.bank.withdraw(item.id, count)
 
 
 class CmdBalance(Command):

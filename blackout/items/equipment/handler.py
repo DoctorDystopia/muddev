@@ -1,4 +1,7 @@
+from evennia.utils import logger
+
 from .constants import WieldLocation, MAX_INVENTORY_SLOTS
+from .skill_requirements import WEAPON_SKILL_MAP
 
 
 
@@ -66,20 +69,35 @@ class EquipmentHandler:
 
 
     def count_inventory(self):
-        """Returns the number of unequipped items in the character's inventory."""
+        """
+        Returns the number of inventory SLOTS currently occupied.
+
+        Prefers the InventoryHandler's slot map, which counts a whole stack as
+        one slot. Falls back to a raw contents count only when no handler is
+        attached. Previously this always returned len(contents) while
+        validate_inventory_space consulted the slot map, so the two disagreed
+        for any character holding a stack -- equip() could refuse a swap the
+        capacity check had just approved.
+        """
+        inventory = getattr(self.obj, "inventory", None)
+        if inventory is not None:
+            return inventory.count_used()
         return len(self.obj.contents)
 
 
-    def validate_inventory_space(self):
+    def free_inventory_slots(self):
+        """Returns how many inventory slots remain open."""
+        used = self.count_inventory()
+        return MAX_INVENTORY_SLOTS - used
+
+
+    def validate_inventory_space(self, count=1):
         """
-        Ensures the character has room in their inventory.
-        Uses the InventoryHandler if available (accounts for stackable items as 1 slot).
-        Falls back to counting contents directly.
+        Ensures the character has room for `count` more inventory slots.
+        Raises EquipmentError when they do not.
         """
-        if hasattr(self.obj, "inventory"):
-            if not self.obj.inventory.has_free_slots(1):
-                raise EquipmentError("Your inventory is completely full.")
-        elif self.count_inventory() >= MAX_INVENTORY_SLOTS:
+        free = self.free_inventory_slots()
+        if free < count:
             raise EquipmentError("Your inventory is completely full.")
         return True
 
@@ -116,11 +134,32 @@ class EquipmentHandler:
         if use_slot is None:
             raise EquipmentError("That item cannot be equipped.")
 
-        # Tool Tier Requirement Check
-        if hasattr(obj, "db") and obj.db.tool_type == "axe":
-            req_level = obj.db.req_level or 0
-            if not self.obj.skills.meets_prerequisite("cutting", req_level):
-                raise EquipmentError(f"You need a Cutting level of {req_level} to wield this.")
+        # Tool Tier Requirement Check — dispatched through WEAPON_SKILL_MAP
+        # so new weapon/tool categories can register their required skill
+        # without re-touching this branch block (data-driven tool-tier gate).
+        if hasattr(obj, "db"):
+            tool_type_value = obj.db.tool_type
+            if tool_type_value:
+                # An UNREGISTERED tool_type fails closed; a tool_type mapped to
+                # None is explicitly exempt. Distinguishing the two is what
+                # keeps a renamed weapon category from silently losing its
+                # level check on objects already spawned in the DB.
+                if tool_type_value not in WEAPON_SKILL_MAP:
+                    logger.log_err(
+                        f"EquipmentHandler.equip: {obj} has unregistered "
+                        f"tool_type {tool_type_value!r}; add it to WEAPON_SKILL_MAP."
+                    )
+                    raise EquipmentError("You don't know how to use that.")
+
+                required_skill = WEAPON_SKILL_MAP[tool_type_value]
+                if required_skill is not None:
+                    req_level = obj.db.req_level or 0
+                    meets_req = self.obj.skills.meets_prerequisite(required_skill, req_level)
+                    if not meets_req:
+                        skill_label = required_skill.capitalize()
+                        raise EquipmentError(
+                            f"You need a {skill_label} level of {req_level} to wield this."
+                        )
 
         # Determine which items will be displaced
         to_unequip = []

@@ -1,11 +1,12 @@
 from ..blackout_recipe import BlackoutRecipe
+from ..constants import CATEGORY_FOUNDRY
 
 
 class RustyScrapMetalRecipe(BlackoutRecipe):
     "Smelt a rusty metal chunk into usable scrap metal in a foundry furnace."
 
     name = "rusty scrap metal"
-    category = "Foundry"
+    category = CATEGORY_FOUNDRY
     required_skill = "foundry"
     required_level = 0
     xp_reward = 10

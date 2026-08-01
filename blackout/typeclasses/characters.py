@@ -14,6 +14,7 @@ from evennia import DefaultCharacter
 from evennia.utils import logger
 from evennia.utils.utils import lazy_property
 
+from .mixins import CombatEntity
 from .objects import ObjectParent
 from systems.progression.skills.handler import SkillHandler
 from systems.banking.handler import BankHandler
@@ -37,7 +38,7 @@ from systems.quests.quests import QuestHandler
 
 
 
-class Character(ObjectParent, DefaultCharacter):
+class Character(CombatEntity, ObjectParent, DefaultCharacter):
     """
     The Character just re-implements some of the Object's methods and hooks
     to represent a Character entity in-game.
@@ -191,10 +192,51 @@ class Character(ObjectParent, DefaultCharacter):
 
         self.skills.init_all_skills()
 
+        # Fortitude is the one skill that does NOT start at DEFAULT_START_LEVEL (0).
+        # init_combat_attrs then sets max_hp=hp=10.
+        self.skills.seed_fortitude_on_creation()
+        self.init_combat_attrs(max_hp=self.db.max_hp or 10)
+
         skills_prop = self.skills
         quests_prop = self.quests
         equipment_prop = self.equipment
         inventory_prop = self.inventory
+
+
+    def at_post_unpuppet(self, account, session=None, **kwargs) -> None:
+        """
+        Purpose: Cleanup hook fired when a player disconnects. Relays to the
+        CombatEntity mixin to release the player from any active combat.
+
+        Entry:
+            account is the Evennia Account that was puppeting this character.
+            session is the optional session that closed.
+
+        Exit/Returns:
+            No conditions. Calls the parent hook so default cleanup still runs.
+
+        Module Globals:
+            None
+
+        Methodology:
+            Defensive relay to at_disconnect_combat_cleanup before super().
+            Per research doc §"Architecting the Combat Handler": players
+            disconnecting mid-combat must not be allowed to "combat-log"
+            without resolving an escape mechanic.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        try:
+            self.at_disconnect_combat_cleanup()
+        except Exception as exc:
+            logger.log_err(f"Character.at_post_unpuppet combat cleanup failed: {exc!r}")
+
+        parent_class = super()
+        parent_class.at_post_unpuppet(account, session=session, **kwargs)
 
 
     def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
@@ -205,6 +247,7 @@ class Character(ObjectParent, DefaultCharacter):
                 pass
         super().at_object_receive(moved_obj, source_location, move_type=move_type, **kwargs)
 
+
     def at_object_leave(self, moved_obj, target_location, move_type="move", **kwargs):
         if hasattr(moved_obj, "is_stackable"):
             try:
@@ -212,6 +255,7 @@ class Character(ObjectParent, DefaultCharacter):
             except Exception:
                 pass
         super().at_object_leave(moved_obj, target_location, move_type=move_type, **kwargs)
+
 
     def at_object_delete(self) -> None:
         """

@@ -60,7 +60,7 @@ class SkillHandler:
         if not self.obj.db.skills:
             self.obj.db.skills = {}
         
-        for skill_key, skill_class in SKILL_REGISTRY.items():
+        for skill_key in SKILL_REGISTRY:
             if skill_key not in self.obj.db.skills:
                 self.obj.db.skills[skill_key] = {
                     "level": DEFAULT_START_LEVEL,
@@ -101,3 +101,13 @@ class SkillHandler:
         """ Passes execution to logic.check_synergy """
         result = logic.check_synergy(self.obj, skill_a, level_a, skill_b, level_b)
         return result
+
+
+    def seed_fortitude_on_creation(self) -> None:
+        """ Passes execution to logic.seed_fortitude_on_creation """
+        logic.seed_fortitude_on_creation(self.obj)
+
+
+    def sync_max_hp_from_fortitude(self) -> None:
+        """ Passes execution to logic.sync_max_hp_from_fortitude """
+        logic.sync_max_hp_from_fortitude(self.obj)

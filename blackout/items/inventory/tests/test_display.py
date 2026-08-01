@@ -9,6 +9,7 @@ when long item names are present.
 """
 
 from evennia import create_object
+from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaCommandTest
 
 from items.inventory import display
@@ -89,8 +90,13 @@ class TestRenderGridLayout(EvenniaCommandTest):
         self._fill_slots([_MEDIUM_KEY] * 4)
         title, table = display.render_grid(self.handler, maxwidth=100)
         # Every line of the rendered table must not exceed the maxwidth.
+        # Measure VISIBLE width: EvTable emits ANSI reset codes around every
+        # cell, and raw len() counts each of those four escape chars as
+        # content, so a correctly-sized 100-column row measures ~144 and this
+        # assertion could never pass.
         for line in table.split("\n"):
-            assert len(line) <= 100, f"line too wide ({len(line)}): {line!r}"
+            visible = len(strip_ansi(line))
+            assert visible <= 100, f"line too wide ({visible}): {line!r}"
 
     def test_render_grid_stays_compact_with_long_names(self):
         # The bug case: four cells filled, three with a name long enough to

@@ -10,8 +10,10 @@ def _resolve_use_slot(value):
     """
     if value is None:
         return None
+    
     if isinstance(value, WieldLocation):
         return value
+    
     if isinstance(value, str):
         try:
             return WieldLocation[value]
@@ -20,6 +22,7 @@ def _resolve_use_slot(value):
                 return WieldLocation(value)
             except ValueError:
                 return None
+            
     return None
 
 

@@ -25,48 +25,71 @@ from evennia.contrib.game_systems.crafting.crafting import (
     craft as contrib_craft,
 )
 
-_CONSUMABLE_TAG_CATEGORY = "crafting_material"
-_TOOL_TAG_CATEGORY = "crafting_tool"
-
-
+from .constants import CONSUMABLE_TAG_CATEGORY, TOOL_TAG_CATEGORY
 
 def _ensure_recipes_loaded():
     _load_recipes()
 
 
+def _iter_candidate_items(caller, include_location):
+    """
+    Purpose: Yield every object that may satisfy a recipe requirement.
+
+    Entry:
+        caller is an Evennia Object. It need not have an equipment handler.
+        include_location is True to also scan the room (tools only).
+
+    Exit/Returns:
+        Yields Evennia Objects. May yield the same object twice only if it
+        genuinely occupies two scanned collections.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Materials must be carried, so they scan carried + equipped only.
+        Tools may be furniture (a furnace, an anvil), so they additionally
+        scan the room. This is the single definition of "where crafting
+        looks" -- it was previously open-coded in three places that had
+        already drifted apart.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 07/30/2026
+    """
+    yield from caller.contents
+
+    equipment = getattr(caller, "equipment", None)
+    if equipment is not None:
+        yield from equipment.all()
+
+    if include_location and caller.location:
+        yield from caller.location.contents
+
+
+def _has_tag(item, tag_value, tag_category):
+    """Return True if item carries tag_value under tag_category."""
+    tags = item.tags.get(category=tag_category, return_list=True)
+    return tag_value in tags
+
+
 def _count_tagged_items(caller, tag_value, tag_category):
-    count = 0
-
-    for item in caller.contents:
-        tags = item.tags.get(category=tag_category, return_list=True)
-        if tag_value in tags:
-            count += 1
-
-    for item in caller.equipment.all():
-        tags = item.tags.get(category=tag_category, return_list=True)
-        if tag_value in tags:
-            count += 1
-
-    return count
+    """Count carried/equipped items carrying tag_value under tag_category."""
+    candidates = _iter_candidate_items(caller, include_location=False)
+    matches = [item for item in candidates if _has_tag(item, tag_value, tag_category)]
+    return len(matches)
 
 
 def _has_tool_available(caller, tag_value):
-    for item in caller.contents:
-        tags = item.tags.get(category=_TOOL_TAG_CATEGORY, return_list=True)
-        if tag_value in tags:
+    """Return True if a matching tool is carried, equipped, or in the room."""
+    candidates = _iter_candidate_items(caller, include_location=True)
+    for item in candidates:
+        is_match = _has_tag(item, tag_value, TOOL_TAG_CATEGORY)
+        if is_match:
             return True
-        
-    for item in caller.equipment.all():
-        tags = item.tags.get(category=_TOOL_TAG_CATEGORY, return_list=True)
-        if tag_value in tags:
-            return True
-        
-    if caller.location:
-        for item in caller.location.contents:
-            tags = item.tags.get(category=_TOOL_TAG_CATEGORY, return_list=True)
-            if tag_value in tags:
-                return True
-            
+
     return False
 
 
@@ -142,7 +165,7 @@ def check_craftable(caller, recipe_key):
             )
 
     for mat_tag in recipe_cls.consumable_tags:
-        owned = _count_tagged_items(caller, mat_tag, _CONSUMABLE_TAG_CATEGORY)
+        owned = _count_tagged_items(caller, mat_tag, CONSUMABLE_TAG_CATEGORY)
         required = recipe_cls.consumable_tags.count(mat_tag)
         if owned < required:
             mat_name = (
@@ -187,7 +210,7 @@ def get_recipe_display_data(caller, recipe_key):
             if recipe_cls.consumable_names
             else mat_tag
         )
-        owned = _count_tagged_items(caller, mat_tag, _CONSUMABLE_TAG_CATEGORY)
+        owned = _count_tagged_items(caller, mat_tag, CONSUMABLE_TAG_CATEGORY)
         required = recipe_cls.consumable_tags.count(mat_tag)
         material_details.append(
             {
@@ -264,22 +287,15 @@ def perform_craft(caller, recipe_key):
     consumables = [
         obj
         for obj in caller.contents
-        if obj.tags.get(category=_CONSUMABLE_TAG_CATEGORY, return_list=True)
+        if obj.tags.get(category=CONSUMABLE_TAG_CATEGORY, return_list=True)
     ]
 
-    tools = []
-    for obj in caller.contents:
-        if obj.tags.get(category=_TOOL_TAG_CATEGORY, return_list=True):
-            tools.append(obj)
-
-    for obj in caller.equipment.all():
-        if obj.tags.get(category=_TOOL_TAG_CATEGORY, return_list=True):
-            tools.append(obj)
-            
-    if caller.location:
-        for obj in caller.location.contents:
-            if obj.tags.get(category=_TOOL_TAG_CATEGORY, return_list=True):
-                tools.append(obj)
+    tool_candidates = _iter_candidate_items(caller, include_location=True)
+    tools = [
+        obj
+        for obj in tool_candidates
+        if obj.tags.get(category=TOOL_TAG_CATEGORY, return_list=True)
+    ]
 
     result = contrib_craft(
         caller, recipe_key, *(tools + consumables), raise_exception=False

@@ -1,0 +1,484 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/26/2026
+Description: CombatEntity mixin —_HP, death, and disconnect hooks for any combatant.
+"""
+
+from evennia.utils import logger, lazy_property
+
+from systems.combat import constants as combat_constants
+from systems.combat import combat_msg
+
+
+class CombatEntity:
+    """
+    Purpose: Generic combat-state mixin. Adds HP, alive-state, damage, and
+    death hooks to any Evennia Typeclass that inherits it.
+
+    Methodology:
+        Lives entirely off `self.db` attribute access — matches the
+        existing Blackout convention (`self.db.skills`, `self.db.active_quests`)
+        rather than introducing AttributeProperty only for combat stats, so
+        the codebase only has ONE attribute-access pattern.
+
+        The mixin is typeclass-agnostic: it works equally for a player
+        Character or a HostileNPC. Any combatant-specific divergence
+        (quest updates, respawn location) is gated by `getattr(..., None)`
+        probes, not by isinstance checks.
+
+    Notes/References:
+        Research doc §"Translating Game State to Evennia: Data Persistence".
+        Style guide §7.0 module layout (imports → constants → public class).
+
+    Author: Nick Hobar
+    Creation date: 07/26/2026
+    """
+
+    # ─── HP lifecycle ───────────────────────────────────────────────────────
+
+    def init_combat_attrs(self, max_hp: int = None) -> None:
+        """
+        Purpose: Sets the combat-related db attributes on this entity. Called
+        from the host typeclass's at_object_creation once fortitude seeding
+        has happened (for players) or combat_stats are loaded (for NPCs).
+
+        Entry:
+            self.db is available (CombatEntity lives on an Evennia Typeclass).
+            max_hp - optional override; if None, defers to db.max_hp if set
+                     or falls back to FORTITUDE_START_LEVEL (10).
+
+        Exit/Returns:
+            No conditions. After this call, self.db.hp, self.db.max_hp, and
+            self.db.in_combat are all guaranteed to exist.
+
+        Module Globals:
+            combat_constants.FORTITUDE_START_LEVEL read as the default floor.
+
+        Methodology:
+            We do NOT stamp CombatEntity attributes at import time; the host
+            typeclass must call this explicitly so that both Player seeding
+            (post-init_all_skills) and NPC seeding (from combat_stats) share
+            the one well-defined entry point.
+
+        Notes/References:
+            db.* access is the codebase convention per characters.py:188.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        if max_hp is None:
+            max_hp = self.db.max_hp or combat_constants.FORTITUDE_START_LEVEL
+
+        self.db.max_hp = max_hp
+        self.db.hp = max_hp
+        self.db.in_combat = False
+
+
+    @property
+    def hp(self) -> int:
+        """
+        Purpose: Read-only-ish accessor for current HP. Hides the raw db
+        access so combat code can read combatant.hp without knowing the
+        storage key.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            Integer HP. Defaults to 0 if attributes uninitialized (rare;
+            defensive).
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Prefer an explicit @property over a db-style attribute so the
+            combat handler can call `attacker.hp` without leaking the
+            implementation detail that the attribute is named "hp".
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        return self.db.hp or 0
+
+
+    @hp.setter
+    def hp(self, value: int) -> None:
+        """
+        Purpose: Setter enforcing 0 <= value <= max_hp.
+
+        Entry:
+            value - integer HP to set. Negative is clamped to 0; over max_hp
+                    clamps to max_hp.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Clamp + assign. If max_hp is None (defensive — uninitialized
+            entity), treat as no upper bound.
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        if value < 0:
+            value = 0
+        max_hp = self.db.max_hp
+        if max_hp is not None and value > max_hp:
+            value = max_hp
+        self.db.hp = value
+
+
+    @property
+    def max_hp(self) -> int:
+        """
+        Purpose: Accessor for maximum HP.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            Integer max_hp or 0 if uninitialized.
+
+        Module Globals:
+            combat_constants.FORTITUDE_START_LEVEL is NOT read here; the
+            caller is expected to have called init_combat_attrs first.
+
+        Methodology:
+            Plain db read.
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        return self.db.max_hp or 0
+
+
+    def is_alive(self) -> bool:
+        """
+        Purpose: Generic alive check used by combat handlers, AI, etc.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            True iff hp > 0.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Avoid `isinstance(killer, Character)`. A living entity is one
+            with positive HP. The mixin's storage is db.hp, so the check is
+            one db read.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        return self.hp > 0
+
+    # ─── Damage & death hooks ──────────────────────────────────────────────
+
+    def at_damage(self, amount: int, attacker=None) -> int:
+        """
+        Purpose: Apply incoming damage to this entity, returning the actual
+        amount of HP lost (post-clamp). Triggers death handling when HP
+        crosses zero.
+
+        Entry:
+            amount   - integer damage dealt. Must be >= 0.
+            attacker - optional CombatEntity that caused the damage. Used
+                       for death broadcast and killer-side XP / quest hooks.
+
+        Exit/Returns:
+            Integer HP actually removed. Always >= 0; never exceeds the
+            entity's pre-damage HP (no over-kill).
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. Snapshot old HP.
+            2. Clamp amount down to old HP (no negative HP stored).
+            3. Assign new HP via self.hp = old_hp - amount (also clamps high).
+            4. If new HP is 0 and old HP was > 0, call at_death(attacker).
+            5. Return the delta.
+
+        Notes/References:
+            Per design dialogue: research doc §"Translating Game State".
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        if amount < 0:
+            amount = 0
+        old_hp = self.hp
+        delta = min(amount, old_hp)
+        new_hp = old_hp - delta
+        self.hp = new_hp
+
+        if old_hp > 0 and new_hp == 0:
+            self.at_death(killer=attacker)
+
+        return delta
+
+
+    def at_death(self, killer=None) -> None:
+        """
+        Purpose: Handle this entity's HP hitting zero. Sets hp=0 explicitly,
+        broadcasts the death line to the room, runs killer-side hooks if
+        the killer is a Character, and finally callls respawn().
+
+        Entry:
+            killer - optional CombatEntity responsible. May be None for
+                     environmental deaths (currently out of scope).
+
+        Exit/Returns:
+            No conditions. After return, self.hp == 0 and self.is_alive()
+            is False; killer-side XP/quest hooks have fired if applicable.
+
+        Module Globals:
+            combat_msg.format_death read.
+
+        Methodology:
+            1. Force hp = 0 even if somehow out of band.
+            2. Build and broadcast the death line to the room.
+            3. If killer has `skills` (i.e. is a Player-side handler-bearer),
+               award combat XP. We do NOT gate on isinstance(killer, Character)
+               here; the optional API surface (skills, quests) gates itself.
+            4. If killer has `quests`, fire the wildcard kill-progress update.
+            5. call self.respawn() to permit subclass divergence (player
+               respawn vs NPC despawn).
+
+        Notes/References:
+            Research doc §"Translating Game State to Evennia" —
+            "if a player unexpectedly disconnects mid-combat..."
+            (handled separately in at_disconnect, not here).
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        self.hp = 0
+
+        location = self.location
+        if location is not None:
+            try:
+                death_line = combat_msg.format_death(self, killer)
+                location.msg_contents(death_line, from_obj=self)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.at_death broadcast failed: {exc!r}")
+
+        skills = getattr(killer, "skills", None)
+        if skills is not None:
+            try:
+                self._award_killer_xp(killer)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.at_death killer XP award failed: {exc!r}")
+
+        quests = getattr(killer, "quests", None)
+        if quests is not None:
+            try:
+                quests.update_progress("*", "kill", self.key)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.at_death quest update failed: {exc!r}")
+
+        # Tear combat down BEFORE respawn. respawn() restores HP to max, so
+        # running it first made the corpse read as alive again and the fight
+        # simply continued -- check_stop_combat's "you lost" branch was
+        # unreachable for players.
+        self.leave_combat()
+
+        self.respawn()
+
+
+    def _award_killer_xp(self, killer) -> None:
+        """
+        Purpose: Internal XP award for landing a killing blow. Subclass /
+        batch-extension hook; default behavior in this batch is a one-line
+        defense-XP bonus so the kill pipeline has a demonstrable trace.
+
+        Entry:
+            killer - the CombatEntity that landed the killing blow. Must
+                     expose .skills (validated by caller, not this body).
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Defensive getattr around skills.add_xp; combat handler already
+            awarded per-hit XP via let-flow XP calls (per constants), so the
+            killing-blow bonus here is intentionally small. Real per-hit XP
+            is granted by the combat handler in batch 2.
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        pass
+
+
+    def respawn(self) -> None:
+        """
+        Purpose: Subclass-overridable respawn hook. Default behavior in this
+        batch is a no-op FOR NPCs (NPCs despawn via session/disconnect logic)
+        and a stub for Players (Blackout has no respawn location policy yet).
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            combat_constants.FORTITUDE_START_LEVEL read for default restore.
+
+        Methodology:
+            For an NPC, this is usually overridden to delete() the object
+            or move to a corpse-replacement handler. For a Player, the
+            Player subclass overrides this to move the character to a
+            respawn room and restore HP to max_hp.
+
+        Notes/References:
+            Author design dialogue: stub respawn; no per-NPC spawn table
+            behavior implemented in this batch.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        restore_to = self.db.max_hp or combat_constants.FORTITUDE_START_LEVEL
+        self.db.hp = restore_to
+
+    # ─── Disconnect cleanup ─────────────────────────────────────────────────
+
+    def leave_combat(self) -> None:
+        """
+        Purpose: Cancel this entity's participation in any active combat.
+        The single teardown path, shared by death and by disconnect.
+
+        Entry:
+            None. self.db must exist.
+
+        Exit/Returns:
+            No conditions. Safe to call when not in combat.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. Mark self.db.in_combat = False (the canonical combat state).
+            2. Query self.combat (CombatEntity's lazy accessor) and if the
+               accessor returned a non-None handler, call its drop_combatant
+               so the per-combatant Script can release the entity cleanly.
+            3. Drop the lazy_property cache.
+
+        Notes/References:
+            Research doc §"Architecting the Combat Handler".
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        self.db.in_combat = False
+
+        try:
+            handler = self.combat
+        except Exception:
+            handler = None
+
+        if handler is not None:
+            try:
+                handler.drop_combatant(self)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.leave_combat drop_combatant failed: {exc!r}")
+
+        # Drop the lazy_property cache so a later reconnect re-resolves the
+        # accessor instead of handing back the handler we just dropped. Note
+        # lazy_property caches in __dict__, not on ndb, and refuses `del`.
+        self.__dict__.pop("combat", None)
+
+
+    def at_disconnect_combat_cleanup(self) -> None:
+        """
+        Purpose: Prevent "combat logging" — the research doc's term for a
+        player disconnecting mid-swing to escape a fight without resolving
+        an escape mechanic. Called from the host Character's
+        at_post_unpuppet and from any NPC despawn pathway.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Delegates to leave_combat, which death also uses.
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        self.leave_combat()
+
+    # ─── CombatHandler lazy accessor (filled in by combat.py in batch 2) ────
+
+    @lazy_property
+    def combat(self):
+        """
+        Purpose: Cached property returning the per-combatant
+        BlackoutCombatHandler attached to this entity, or None if no
+        handler is active. Follows the @lazy_property pattern used by
+        Character.skills, Character.equipment, Character.inventory,
+        Character.quests.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            BlackoutCombatHandler instance or None.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The combat handler is implemented as a per-combatant
+            DefaultScript that, when running, lives in self.scripts under
+            the key 'blackout_combat_handler'. We scan scripts.get() and
+            return the first matching one. This keeps the property pure and
+            side-effect-free; the combat handler is added by the attack
+            command (batch 2), not by this accessor.
+
+        Notes/References:
+            Per user design dialogue: one-handler-per-combatant is the
+            chosen Evennia-native architecture, NOT a global room script.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        from systems.combat.combat import get_handler_for  # local import to avoid circularity
+
+        try:
+            return get_handler_for(self)
+        except Exception:
+            logger.log_trace("CombatEntity.combat accessor: no handler attached.")
+            return None

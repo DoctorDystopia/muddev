@@ -127,5 +127,5 @@ class EquipmentCmdSet(CmdSet):
         Author: Nick Hobar
         Creation date: 07/13/2026
         """
-        equip_command = CmdEquipment()
-        self.add(equip_command)
+        equip_cmd = CmdEquipment()
+        self.add(equip_cmd)

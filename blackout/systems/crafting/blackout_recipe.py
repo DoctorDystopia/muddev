@@ -3,13 +3,16 @@ from evennia.contrib.game_systems.crafting.crafting import (
     CraftingValidationError,
 )
 
-_CONSUMABLE_TAG_CATEGORY = "crafting_material"
-_TOOL_TAG_CATEGORY = "crafting_tool"
+from .constants import (
+    CONSUMABLE_TAG_CATEGORY,
+    CRAFTING_CATEGORIES,
+    TOOL_TAG_CATEGORY,
+)
 
 
 class BlackoutRecipe(CraftingRecipe):
-    consumable_tag_category = _CONSUMABLE_TAG_CATEGORY
-    tool_tag_category = _TOOL_TAG_CATEGORY
+    consumable_tag_category = CONSUMABLE_TAG_CATEGORY
+    tool_tag_category = TOOL_TAG_CATEGORY
 
     exact_tools = False
     exact_consumables = False
@@ -25,8 +28,20 @@ class BlackoutRecipe(CraftingRecipe):
 
     output_item_keys: list[str] = []
 
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+
+        # Fail at import time on an unknown category. Facilities match
+        # allowed_categories against this string exactly, so a typo silently
+        # hides every recipe in the category from the craft menu instead of
+        # raising anything.
+        if cls.category and cls.category not in CRAFTING_CATEGORIES:
+            raise ValueError(
+                f"{cls.__name__}: category {cls.category!r} is not one of "
+                f"{CRAFTING_CATEGORIES}. Add it to systems/crafting/constants.py."
+            )
+
         if cls.output_item_keys:
             from world.item_database import ITEM_DB
             missing = [k for k in cls.output_item_keys if k not in ITEM_DB]
@@ -42,8 +57,10 @@ class BlackoutRecipe(CraftingRecipe):
     error_locked = "You have not yet learned this recipe."
     success_xp_message = "You gain {xp} {skill} XP."
 
+
     def unlock_requirement_check(self, crafter):
         return self.unlocked
+
 
     def pre_craft(self, **kwargs):
         super().pre_craft(**kwargs)
@@ -65,6 +82,7 @@ class BlackoutRecipe(CraftingRecipe):
                     )
                 )
                 raise CraftingValidationError
+
 
     def post_craft(self, craft_result, **kwargs):
         result = super().post_craft(craft_result, **kwargs)

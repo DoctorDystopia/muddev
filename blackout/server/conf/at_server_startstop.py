@@ -30,7 +30,11 @@ def at_server_start():
     This is called every time the server starts up, regardless of
     how it was shut down.
     """
-    pass
+    from systems.combat.tick_engine import bootstrap_combat
+    from systems.spawning.respawn import bootstrap_respawns
+
+    bootstrap_combat()
+    bootstrap_respawns()
 
 
 def at_server_stop():

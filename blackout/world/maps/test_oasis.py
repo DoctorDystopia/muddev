@@ -25,7 +25,7 @@ MAPSTR = r'''
        /    |
     4 #-----+-#-#---#-#-#-S
        \    | |  \ / \| | |
-    3   #-#-#-#   F   #-#-P
+    3   #-M-#-#   F   #-#-P
         | | | |  / \ /| | |
     2 #-#-#-#-#-#-#-#-#-#-#
       | | | | | | | | | | |
@@ -96,6 +96,14 @@ class ShopNPCNode(MapNode):
     prototype = "xyz_room"
 
 
+class MutantRaiderNPCNode(MapNode):
+    """
+    Custom MapNode for Mutant Raider characters.
+    """
+    display_symbol = "|RM|n"
+    prototype = "xyz_room"
+
+
 LEGEND = {
     "P": RustyPoleNode,
     "B": BankNode,
@@ -103,6 +111,7 @@ LEGEND = {
     "A": AnvilFacilityNode,
     "!": NPCNode,
     "S": ShopNPCNode,
+    "M": MutantRaiderNPCNode,
 }
 
 
@@ -150,6 +159,13 @@ _npc_shopkeeper = {
     "desc": "A market stall shaded by a tattered awning, its wares displayed on a cloth.",
 }
 
+_npc_mutant_raider = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Mutant Raider Tile",
+    "desc": "A mutant raider with a crude weapon.",
+}
+
 PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
     ('*', '*'): {
@@ -180,6 +196,7 @@ PROTOTYPES = {
     (4, 6): _anvil,
     (2, 0): _npc_lone_android,
     (10, 4): _npc_shopkeeper,
+    (2, 3): _npc_mutant_raider,
 }
 
 # Aggregate all configuration data for the parser

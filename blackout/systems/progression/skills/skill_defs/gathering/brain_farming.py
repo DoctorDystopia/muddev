@@ -65,8 +65,9 @@ class BrainFarming(BaseSkill):
             None
             
         Methodology:
-            Checks if the target is currently alive. If so, sends a message 
-            to the character initiating the harvest sequence.
+            Placeholder until the brain farming loop is wired. The intent is
+            to gate harvest on CombatEntity.is_alive() (provided by the
+            combat mixin) and begin a conscious-energy harvest sequence.
             
         Notes/References:
             None
@@ -74,7 +75,4 @@ class BrainFarming(BaseSkill):
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
-        target_is_alive = target.is_alive()
-        
-        if target_is_alive:
-            character.msg("You begin harvesting conscious energy...")
+        pass  # Placeholder for the actual logic, which would be implemented here.

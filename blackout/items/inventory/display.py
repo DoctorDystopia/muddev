@@ -13,6 +13,7 @@ Empty slots (``[empty]``) are never truncated.
 """
 
 from evennia.utils import evtable
+from evennia.utils.ansi import ANSIString
 
 from .handler import SLOTS_TOTAL, GRID_COLS, GRID_ROWS
 
@@ -44,18 +45,27 @@ def _truncate_line(line, width):
 
     Args:
         line (str): The cell line to truncate (e.g. ``"3: Rusty Metal Chunk"``).
-        width (int): Maximum number of characters the line may occupy.
+        width (int): Maximum number of *visible* characters the line may
+            occupy.
 
     Returns:
-        str: The (possibly truncated) line, never longer than ``width``.
+        str: The (possibly truncated) line, never wider than ``width``.
 
     Notes:
-        Lines that already fit are returned unchanged. The function is
-        generic enough to also handle the secondary ``"  (x{qty})"`` line
-        and the empty-slot line, both of which are short enough that they
-        normally pass through unchanged.
+        Lines that already fit are returned unchanged -- EvTable pads cells
+        itself, so padding here as well double-counted the width and pushed
+        the rendered grid past its maxwidth.
+
+        Widths are measured through ANSIString so colour markup costs zero
+        columns. Plain ``len()`` counted a ``|y`` tag as two characters,
+        which mis-sized every cell holding a coloured item name and
+        re-triggered the EvTable column-collapse this module exists to
+        prevent. Note that ``evennia.utils.utils.crop`` is NOT usable here:
+        it measures with plain ``len()`` too.
     """
-    if len(line) <= width:
+    ansi_line = ANSIString(line)
+
+    if len(ansi_line) <= width:
         return line
 
     if width <= 0:
@@ -68,17 +78,17 @@ def _truncate_line(line, width):
     # Try to keep a leading "NN: " slot prefix intact when present so the
     # slot number stays readable. Only the trailing portion (the item key)
     # is shortened.
-    prefix_end = 0
     if ": " in line:
-        prefix_end = line.index(": ") + 2
-        prefix = line[:prefix_end]
+        prefix_end = ANSIString(line.split(": ")[0]).__len__() + 2
+        prefix = ansi_line[:prefix_end]
         if len(prefix) < width:
             available = width - len(prefix) - 1  # -1 for the ellipsis
             if available > 0:
-                return prefix + line[prefix_end : prefix_end + available] + _TRUNCATION_MARKER
-            return prefix[: width - 1] + _TRUNCATION_MARKER
+                kept = ansi_line[prefix_end : prefix_end + available]
+                return str(prefix) + str(kept) + _TRUNCATION_MARKER
+            return str(prefix[: width - 1]) + _TRUNCATION_MARKER
 
-    return line[: width - 1] + _TRUNCATION_MARKER
+    return str(ansi_line[: width - 1]) + _TRUNCATION_MARKER
 
 
 def _truncate_cell(cell_text, width):
@@ -146,10 +156,11 @@ def build_grid(handler):
 def render_grid(handler, maxwidth=INVENTORY_MAX_WIDTH):
     """Render the inventory as a fixed-width 4x8 grid table.
 
-    Each cell is pre-truncated to the per-column content width and the table
-    width is locked explicitly. This keeps ``EvTable`` from collapsing
-    columns into a per-character wrapping layout, so the grid always renders
-    as a compact one-row-per-grid-row table regardless of item name lengths.
+    Each cell is pre-truncated to the per-column content width AND the table
+    width is locked explicitly. Both halves are required: pre-truncation
+    alone still let EvTable size columns to their natural content and
+    overflow maxwidth, while locking the width alone lets EvTable collapse
+    columns into per-character wrapping when a name is too long.
 
     Args:
         handler (InventoryHandler): The inventory handler to render.

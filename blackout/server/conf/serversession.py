@@ -21,19 +21,13 @@ settings file:
 
 """
 
-from evennia.server.serversession import ServerSession as BaseServerSession
 
+from evennia.server.session import Session
 
-class ServerSession(BaseServerSession):
-    """
-    This class represents a player's session and is a template for
-    individual protocols to communicate with Evennia.
-
-    Each account gets one or more sessions assigned to them whenever they connect
-    to the game server. All communication between game and account goes
-    through their session(s).
-    """
-
-    # def __init__(self, *args, **kwargs):
-    #     super().__init__(*args, **kwargs)
-    #     self.protocol_flags["LOCALECHO"] = True
+class ServerSession(Session):
+    def init_session(self, *args, **kwargs):
+        """Called when the session is first created."""
+        super().init_session(*args, **kwargs)
+        
+        # Force server-side echoing for the Godot client
+        self.protocol_flags["LOCALECHO"] = True

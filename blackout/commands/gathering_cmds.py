@@ -20,7 +20,7 @@ CUTTING_SKILL_KEY = "cutting"
 
 
 
-class CmdCutNode(Command):
+class CmdCutGatheringNode(Command):
     """
     Purpose: Generic command to harvest materials from a cutting node.
     """
@@ -51,14 +51,13 @@ class CmdCutNode(Command):
 
 
 
-class NodeCmdSet(CmdSet):
+class GatheringNodeCmdSet(CmdSet):
     """
     Purpose: CmdSet to inject gathering commands to nearby players.
     """
-    key = "NodeCmdSet"
+    key = "GatheringNodeCmdSet"
     priority = 10
     duplicates = True
 
     def at_cmdset_creation(self) -> None:
-        cmd = CmdCutNode()
-        self.add(cmd)
+        self.add(CmdCutGatheringNode())

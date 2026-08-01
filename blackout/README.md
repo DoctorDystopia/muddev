@@ -307,7 +307,7 @@ requirements, and craft with optional confirmation.
 
 ```python
 > py from systems.crafting.crafting_service import get_categories; get_categories()
-{'Foundry': ['rusty_scrap_metal_recipe'], 'Metalsmithing': ['rusty_metal_dust_recipe', 'rusty_scrap_axe_recipe']}
+{'Foundry': ['rusty_scrap_metal_recipe'], 'Metalsmith': ['rusty_metal_dust_recipe', 'rusty_scrap_axe_recipe']}
 
 > py from systems.crafting.crafting_service import get_recipe_display_data; data = get_recipe_display_data(self, "rusty_scrap_metal_recipe"); data["name"], data["can_craft"]
 ('Smelt Rusty Scrap Metal', True)
