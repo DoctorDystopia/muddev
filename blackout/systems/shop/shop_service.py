@@ -1,6 +1,12 @@
-from dataclasses import dataclass, field
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Shop service layer: pricing, stock lookup, and the buy/sell
+             transactions behind the shopkeeper menu.
+"""
 
-from evennia import create_object
+from dataclasses import dataclass, field
 
 from world.item_database import ITEM_DB
 from world.shop_defs import SHOP_DB, ShopDef
@@ -8,7 +14,9 @@ from world.shop_defs import SHOP_DB, ShopDef
 _ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 
 CREDITS_TYPECLASS = "typeclasses.items.CreditsItem"
-CREDITS_KEY = "Credits"
+
+# ITEM_DB key for the currency item. The display name lives on the ItemDef.
+CREDITS_ITEM_KEY = "credits"
 
 
 @dataclass
@@ -105,8 +113,10 @@ def credits_add(caller, amount: int) -> None:
         if item.is_typeclass(CREDITS_TYPECLASS, exact=False):
             item.quantity += amount
             return
-    credits = create_object(CREDITS_TYPECLASS, key=CREDITS_KEY, location=caller)
-    credits.quantity = amount
+    # Route through ITEM_DB rather than create_object: the raw call skipped
+    # the ("credits", "currency") tag, the desc and the value attribute, so
+    # shop-issued credits were a different object from every other kind.
+    ITEM_DB[CREDITS_ITEM_KEY].create(location=caller, quantity=amount)
 
 
 def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:

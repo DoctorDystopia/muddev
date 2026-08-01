@@ -1,3 +1,10 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Dialogue nodes for the oasis guide NPC, including its quest
+             offer and progress branches.
+"""
 
 from systems.quests.loader import GLOBAL_QUEST_REGISTRY
 
@@ -9,100 +16,17 @@ NPC_DESC = (
     "impossibly green oasis. Its photoreceptors gleam faintly as it watches "
     "you approach, one mechanical hand resting on a rusted irrigation pipe."
 )
-GREETING_TITLE_COLOR = "|w"
-SPEECH_COLOR = "|c"
-HIGHLIGHT_COLOR = "|y"
-SUCCESS_COLOR = "|g"
-ERROR_COLOR = "|r"
-RESET_COLOR = "|n"
 OASIS_QUEST_KEY = "oasis"
 
+from systems.ui.colors import (
+    HIGHLIGHT_COLOR,
+    RESET_COLOR,
+    SUCCESS_COLOR,
+    dialog as _dialog,
+    highlight as _hl,
+    title as _line,
+)
 
-
-def _dialog(text: str) -> str:
-    """
-    Purpose: Wraps dialogue text in speech color for NPC lines.
-
-    Entry:
-        text is a raw dialogue string
-
-    Exit/Returns:
-        Returns the text wrapped in SPEECH_COLOR and RESET_COLOR tags.
-
-    Module Globals:
-        SPEECH_COLOR read
-        RESET_COLOR read
-
-    Methodology:
-        Prepends SpeechColor markup and appends a reset.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 07/13/2026
-    """
-    wrapped = f"{SPEECH_COLOR}{text}{RESET_COLOR}"
-
-    return wrapped
-
-
-
-def _line(line: str) -> str:
-    """
-    Purpose: Wraps a line in bold title color for NPC names.
-
-    Entry:
-        line is a raw text string
-
-    Exit/Returns:
-        Returns the text wrapped in GREETING_TITLE_COLOR and RESET_COLOR.
-
-    Module Globals:
-        GREETING_TITLE_COLOR read
-        RESET_COLOR read
-
-    Methodology:
-        Prepends TitleColor markup and appends a reset.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 07/13/2026
-    """
-    wrapped = f"{GREETING_TITLE_COLOR}{line}{RESET_COLOR}"
-
-    return wrapped
-
-
-
-def _hl(text: str) -> str:
-    """
-    Purpose: Wraps text in highlight color for emphasis.
-
-    Entry:
-        text is a raw text string
-
-    Exit/Returns:
-        Returns the text wrapped in HIGHLIGHT_COLOR and RESET_COLOR.
-
-    Module Globals:
-        HIGHLIGHT_COLOR read
-        RESET_COLOR read
-
-    Methodology:
-        Prepends HighlightColor markup and appends a reset.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 07/13/2026
-    """
-    wrapped = f"{HIGHLIGHT_COLOR}{text}{RESET_COLOR}"
-
-    return wrapped
 
 
 

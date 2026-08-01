@@ -17,6 +17,7 @@ concrete defect found in the 07/30 combat audit.
 from unittest import mock
 
 from evennia.scripts.models import ScriptDB
+from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.combat import constants as const
@@ -146,9 +147,9 @@ class TestSwingCadence(EvenniaTest):
 
         handler.queue_action({"kind": "attack", "target": target})
 
-        weapon_data = dict(handler.db.active_weapon_data)
+        weapon_data = dict(handler.ndb.active_weapon_data)
         weapon_data["attack_speed"] = attack_speed
-        handler.db.active_weapon_data = weapon_data
+        handler.ndb.active_weapon_data = weapon_data
 
         # Never miss, never kill — we are counting cadence, not resolving combat.
         swing_result = {"hit": True, "damage": 0, "hit_prob": 1.0}
@@ -233,12 +234,12 @@ class TestNpcSeeding(EvenniaTest):
 
         # _refresh_weapon stamps the resolved style as 'active_combat_style'
         # (key shared by _unarmed_weapon_data and the wielded-weapon branch).
-        style = handler.db.active_weapon_data["active_combat_style"]
+        style = handler.ndb.active_weapon_data["active_combat_style"]
 
         self.assertTrue(style, "NPC resolved to an empty style dict")
         # Goblin attack style per the wiki is Crush.
         self.assertEqual(style["attack_type"], "crush")
-        self.assertEqual(handler.db.active_weapon_data["attack_speed"], 4)
+        self.assertEqual(handler.ndb.active_weapon_data["attack_speed"], 4)
 
     def test_raider_skill_levels_reach_the_shim(self):
         # OSRS Goblin L2: Attack 1, Strength 1, Defence 1, Hitpoints 5.
@@ -339,3 +340,189 @@ class TestDefenderBonuses(EvenniaTest):
         bonuses = get_defense_bonuses(self.char1)
 
         self.assertEqual(bonuses, const.UNARMED_DEFAULT_COMBAT_STATS)
+
+
+class TestRuntimeStateIsNotPersisted(EvenniaTest):
+    """Per-tick handler state belongs on ndb, not db.
+
+    The handler is `persistent = False` and rebuilds this state whenever
+    combat starts, so writing it to db bought nothing and cost an Attribute
+    read AND write every 0.6s per combatant. `pending_action` also pickled a
+    live _Action instance into the database, which would have left unloadable
+    rows behind after any rename of an action class.
+    """
+
+    _RUNTIME_FIELDS = (
+        "target_id",
+        "pending_action",
+        "cooldown_ticks",
+        "active_weapon_data",
+    )
+
+    def test_runtime_fields_live_on_ndb(self):
+        handler = ensure_combat_handler(self.char1)
+
+        self.assertIsNotNone(handler.ndb.active_weapon_data)
+        self.assertEqual(handler.ndb.cooldown_ticks, 0)
+
+    def test_no_runtime_field_is_written_to_the_attribute_table(self):
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room1)
+        ensure_combat_handler(target)
+
+        # Drive a full action cycle so every field has been assigned.
+        handler.queue_action({"kind": "attack", "target": target})
+        handler.tick()
+
+        stored_keys = {attr.key for attr in handler.attributes.all()}
+        for field in self._RUNTIME_FIELDS:
+            self.assertNotIn(
+                field,
+                stored_keys,
+                f"{field} is being persisted to the Attribute table",
+            )
+
+    def test_init_runtime_state_reseeds_after_an_ndb_wipe(self):
+        """A reload clears ndb; tick() must not then read None."""
+        handler = ensure_combat_handler(self.char1)
+
+        # Simulate what a reload does to in-memory-only state.
+        handler.ndb.cooldown_ticks = None
+        handler.ndb.active_weapon_data = None
+
+        handler.init_runtime_state()
+
+        self.assertEqual(handler.ndb.cooldown_ticks, 0)
+        self.assertIsNotNone(handler.ndb.active_weapon_data)
+
+    def test_tick_survives_a_wiped_ndb(self):
+        handler = ensure_combat_handler(self.char1)
+        handler.ndb.cooldown_ticks = None
+        handler.ndb.active_weapon_data = None
+
+        handler.tick()  # must not raise
+
+
+class TestSwingReporting(EvenniaTest):
+    """What a swing actually tells the attacker.
+
+    Combat used to report only "You hit X for N": the XP the swing earned was
+    granted silently, and nothing showed how much of the target was left.
+    """
+
+    def _sent_lines(self, mocked_msg) -> list:
+        """Flatten a mocked .msg into plain strings, in send order.
+
+        Direct sends arrive as a positional string; room broadcasts arrive as
+        `text=(message, {})` via msg_contents, so both shapes are unpacked.
+        """
+        lines = []
+
+        for call in mocked_msg.call_args_list:
+            if call.args:
+                payload = call.args[0]
+            else:
+                payload = call.kwargs.get("text", "")
+
+            if isinstance(payload, (tuple, list)):
+                payload = payload[0]
+
+            lines.append(strip_ansi(str(payload)))
+
+        return lines
+
+    def _swing_for(self, damage):
+        """Land exactly one swing of `damage` and return what char1 was sent."""
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room1)
+        ensure_combat_handler(target)
+        handler.queue_action({"kind": "attack", "target": target})
+
+        swing_result = {"hit": True, "damage": damage, "hit_prob": 1.0}
+
+        with mock.patch(
+            "systems.combat.combat.combat_calc.resolve_melee_swing",
+            return_value=swing_result,
+        ):
+            with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+                handler.tick()
+
+        return self._sent_lines(mocked_msg)
+
+    def _index_of(self, lines, fragment) -> int:
+        for index, line in enumerate(lines):
+            if fragment in line:
+                return index
+
+        self.fail(f"no line containing {fragment!r} in {lines!r}")
+
+    def test_hit_line_states_the_xp_earned(self):
+        """An unarmed punch is an accurate style: Strike at 4.0/damage and
+        Fortitude at its own 1.33/damage, both named on the hit line."""
+        lines = self._swing_for(damage=3)
+
+        hit_line = lines[self._index_of(lines, "You hit")]
+
+        self.assertIn("+12 Strike", hit_line)
+        self.assertIn("+4 Fortitude", hit_line)
+
+    def test_xp_named_on_the_line_is_the_xp_actually_granted(self):
+        """The readout must not drift from the award it describes."""
+        handler = ensure_combat_handler(self.char1)
+        before = self.char1.skills.get_total_xp("strike")
+
+        lines = self._swing_for(damage=3)
+        gained = self.char1.skills.get_total_xp("strike") - before
+
+        self.assertIn(f"+{gained} Strike", lines[self._index_of(lines, "You hit")])
+
+    def test_attacker_sees_the_target_hp_bar_after_the_hit(self):
+        """OSRS goblin L2 hitpoints = 5, so a 2-damage hit leaves 3."""
+        lines = self._swing_for(damage=2)
+
+        bar_line = lines[self._index_of(lines, "3 / 5")]
+
+        self.assertIn("Mutant Raider", bar_line)
+
+    def test_hp_bar_follows_the_hit_line(self):
+        lines = self._swing_for(damage=2)
+
+        self.assertLess(
+            self._index_of(lines, "You hit"),
+            self._index_of(lines, "3 / 5"),
+        )
+
+    def test_a_lethal_hit_is_announced_before_the_death_line(self):
+        """Regression: at_damage broadcast the death first, so the log read
+        'Mutant Raider collapses' ABOVE the hit that killed it."""
+        lines = self._swing_for(damage=5)
+
+        self.assertLess(
+            self._index_of(lines, "You hit"),
+            self._index_of(lines, "collapses"),
+        )
+
+    def test_a_lethal_hit_still_shows_an_empty_bar(self):
+        lines = self._swing_for(damage=5)
+
+        self.assertIn("0 / 5", lines[self._index_of(lines, "0 / 5")])
+
+    def test_a_miss_reports_no_xp(self):
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room1)
+        ensure_combat_handler(target)
+        handler.queue_action({"kind": "attack", "target": target})
+
+        swing_result = {"hit": False, "damage": 0, "hit_prob": 0.0}
+
+        with mock.patch(
+            "systems.combat.combat.combat_calc.resolve_melee_swing",
+            return_value=swing_result,
+        ):
+            with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+                handler.tick()
+
+        lines = self._sent_lines(mocked_msg)
+        miss_line = lines[self._index_of(lines, "miss")]
+
+        self.assertNotIn("xp", miss_line)

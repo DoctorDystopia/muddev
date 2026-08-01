@@ -8,15 +8,21 @@ display formatting and navigation flow.
 """
 
 
+from dataclasses import dataclass
+from typing import Callable
+
 from items.equipment.handler import EquipmentError
 from items.equipment.constants import MAX_INVENTORY_SLOTS
+from systems.menus.base_menu import parse_quantity
+from systems.ui.colors import (
+    ERROR_COLOR,
+    HIGHLIGHT_COLOR,
+    RESET_COLOR,
+    SUCCESS_COLOR,
+    TITLE_COLOR,
+)
 
 
-TITLE_COLOR = "|w"
-HIGHLIGHT_COLOR = "|y"
-SUCCESS_COLOR = "|g"
-ERROR_COLOR = "|r"
-RESET_COLOR = "|n"
 SEPARATOR = "-" * 60
 
 
@@ -140,160 +146,136 @@ def node_item_detail(caller, **kwargs):
     return text, options
 
 
-def node_deposit_select(caller, **kwargs):
+# ─── Transfer flows ────────────────────────────────────────────────────────
+# Deposit and withdraw are the same four-node flow -- select an item, choose a
+# quantity, optionally type a custom quantity, execute -- running in opposite
+# directions. They were previously written out twice, ~150 near-identical
+# lines that had to be kept in step by hand. The direction-specific parts are
+# gathered into a _TransferFlow below and the shared machinery takes one as a
+# parameter.
+#
+# The public node_* functions remain thin module-level wrappers because EvMenu
+# resolves a "goto" string by looking up that name in this module.
+
+
+@dataclass
+class _TransferFlow:
+    """One direction of a bank transfer (deposit or withdraw).
+
+    verb         — lowercase action word used in prompts ("deposit")
+    title        — heading for the select node ("Deposit Items")
+    stock_label  — how the available count is phrased ("You have")
+    empty_text   — shown when the source side holds nothing
+    gone_text    — shown when the chosen item vanished mid-flow
+    *_node       — node names, for navigation and for re-entry
+    find_item    — (caller, item_id) -> object or None
+    list_items   — (caller) -> list of selectable objects
+    execute      — (caller, item_obj, quantity) -> None; raises
+                   EquipmentError if the destination cannot accept the items
+    decorate     — (caller, item) -> extra label suffix, e.g. "[equipped]"
+    execute_goto — filled in by _make_execute_goto after construction, which
+                   needs the finished flow to close over
+    """
+
+    verb: str
+    title: str
+    stock_label: str
+    empty_text: str
+    gone_text: str
+    select_node: str
+    quantity_node: str
+    custom_node: str
+    find_item: Callable
+    list_items: Callable
+    execute: Callable
+    decorate: Callable | None = None
+    execute_goto: Callable | None = None
+
+
+def _find_carried(caller, item_id):
+    """Locate a carried object by dbid."""
+    for obj in caller.contents:
+        if obj.id == item_id:
+            return obj
+    return None
+
+
+def _list_carried(caller):
+    """Selectable items on the character, with the slot map resynced first."""
     caller.inventory.sync()
-    inventory = list(caller.contents)
-
-    if not inventory:
-        text = f"{HIGHLIGHT_COLOR}You are not carrying anything.{RESET_COLOR}"
-        options = (
-            {"desc": "Back to menu", "goto": "start"},
-        )
-
-        return text, options
-
-    text = f"{TITLE_COLOR}--- Deposit Items ---{RESET_COLOR}\nSelect an item to deposit."
-    options = []
-
-    for item in inventory:
-        equipped = caller.equipment.is_equipped(item)
-        suffix = _format_item_line(item)
-        equipped_str = f" {SUCCESS_COLOR}[equipped]{RESET_COLOR}" if equipped else ""
-        options.append(
-            {
-                "desc": f"{item.key}{suffix}{equipped_str}",
-                "goto": ("node_deposit_quantity", {"item_id": item.id}),
-            }
-        )
-
-    options.append({"desc": "Back to menu", "goto": "start"})
-
-    return text, options
+    return list(caller.contents)
 
 
-def node_deposit_quantity(caller, **kwargs):
-    item_id = kwargs.get("item_id")
-    item_obj = None
-
-    for obj in caller.contents:
-        if obj.id == item_id:
-            item_obj = obj
-            break
-
-    if item_obj is None:
-        text = f"{ERROR_COLOR}That item is no longer in your inventory.{RESET_COLOR}"
-        options = (
-            {"desc": "Back to deposit list", "goto": "node_deposit_select"},
-            {"desc": "Back to menu", "goto": "start"},
-        )
-        return text, options
-
-    is_stackable = getattr(item_obj, "is_stackable", False)
-    max_qty = getattr(item_obj, "quantity", 1)
-
-    if not is_stackable or max_qty <= 1:
-        return _execute_deposit(caller, **{"item_id": item_id, "count": 1})
-
-    text = (
-        f"{TITLE_COLOR}--- Deposit {item_obj.key} ---{RESET_COLOR}\n"
-        f"You have {max_qty}.\n\n"
-        "How many to deposit?"
-    )
-    options = [
-        {"desc": "1", "goto": (_execute_deposit, {"item_id": item_id, "count": 1})},
-        {"desc": "X (custom)", "goto": ("node_deposit_custom_qty", {"item_id": item_id, "max_qty": max_qty})},
-        {"desc": f"All ({max_qty})", "goto": (_execute_deposit, {"item_id": item_id, "count": "all"})},
-        {"desc": "Cancel", "goto": "node_deposit_select"},
-    ]
-
-    return text, options
+def _equipped_marker(caller, item):
+    """Label suffix marking an item as currently equipped."""
+    if caller.equipment.is_equipped(item):
+        return f" {SUCCESS_COLOR}[equipped]{RESET_COLOR}"
+    return ""
 
 
-def node_deposit_custom_qty(caller, raw_string, **kwargs):
-    item_id = kwargs.get("item_id")
-    max_qty = kwargs.get("max_qty", 1)
-
-    item_obj = None
-    for obj in caller.contents:
-        if obj.id == item_id:
-            item_obj = obj
-            break
-
-    if item_obj is None:
-        caller.msg(f"{ERROR_COLOR}That item is no longer in your inventory.{RESET_COLOR}")
-        return "node_deposit_select"
-
-    text = (
-        f"{TITLE_COLOR}--- Deposit {item_obj.key} ---{RESET_COLOR}\n"
-        f"You have {max_qty}.\n\n"
-        f"{HIGHLIGHT_COLOR}How many to deposit?{RESET_COLOR}"
-    )
-    custom_options = (
-        {"key": "_default", "goto": ("node_deposit_custom_qty", {"item_id": item_id, "max_qty": max_qty, "custom_qty_state": "awaiting"})},
-    )
-
-    if kwargs.get("custom_qty_state") != "awaiting":
-        return text, custom_options
-
-    try:
-        count = int(raw_string.strip())
-    except ValueError:
-        caller.msg(f"{ERROR_COLOR}Invalid number. Enter a quantity between 1 and {max_qty}.{RESET_COLOR}")
-        return text, custom_options
-
-    if count < 1:
-        caller.msg(f"{ERROR_COLOR}Quantity must be at least 1.{RESET_COLOR}")
-        return text, custom_options
-
-    count = min(count, max_qty)
-    return _execute_deposit(caller, **{"item_id": item_id, "count": count})
+def _do_deposit(caller, item_obj, quantity):
+    """Move `quantity` of item_obj into the bank."""
+    caller.bank.deposit(item_obj, quantity)
 
 
-def _execute_deposit(caller, **kwargs):
-    item_id = kwargs.get("item_id")
-    count = kwargs.get("count", 1)
+def _do_withdraw(caller, item_obj, quantity):
+    """Move `quantity` of item_obj out of the bank, space permitting."""
     caller.inventory.sync()
-
-    item_obj = None
-    for obj in caller.contents:
-        if obj.id == item_id:
-            item_obj = obj
-            break
-
-    if item_obj is None:
-        caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
-        return "node_deposit_select"
-
-    item_qty = getattr(item_obj, "quantity", 1)
-    deposit_qty = item_qty if count == "all" else min(count, item_qty)
-
-    result = caller.bank.deposit(item_obj, deposit_qty)
-    if result is None:
-        return "node_deposit_select"
-
-    return "node_deposit_select"
+    caller.equipment.validate_inventory_space()
+    caller.bank.withdraw(item_obj.id, quantity)
 
 
-def node_withdraw_select(caller, **kwargs):
-    items = caller.bank.list_items()
+DEPOSIT_FLOW = _TransferFlow(
+    verb="deposit",
+    title="Deposit Items",
+    stock_label="You have",
+    empty_text="You are not carrying anything.",
+    gone_text="That item is no longer in your inventory.",
+    select_node="node_deposit_select",
+    quantity_node="node_deposit_quantity",
+    custom_node="node_deposit_custom_qty",
+    find_item=_find_carried,
+    list_items=_list_carried,
+    execute=_do_deposit,
+    decorate=_equipped_marker,
+)
+
+WITHDRAW_FLOW = _TransferFlow(
+    verb="withdraw",
+    title="Withdraw Items",
+    stock_label="Bank has",
+    empty_text="Your bank vault is empty.",
+    gone_text="That item is no longer in your bank.",
+    select_node="node_withdraw_select",
+    quantity_node="node_withdraw_quantity",
+    custom_node="node_withdraw_custom_qty",
+    find_item=lambda caller, item_id: caller.bank.get_item_by_id(item_id),
+    list_items=lambda caller: caller.bank.list_items(),
+    execute=_do_withdraw,
+)
+
+
+def _select_node(caller, flow):
+    """Render the item-picker for one transfer direction."""
+    items = flow.list_items(caller)
 
     if not items:
-        text = f"{HIGHLIGHT_COLOR}Your bank vault is empty.{RESET_COLOR}"
-        options = (
-            {"desc": "Back to menu", "goto": "start"},
-        )
+        text = f"{HIGHLIGHT_COLOR}{flow.empty_text}{RESET_COLOR}"
+        return text, ({"desc": "Back to menu", "goto": "start"},)
 
-        return text, options
-
-    text = f"{TITLE_COLOR}--- Withdraw Items ---{RESET_COLOR}\nSelect an item to withdraw."
+    text = (
+        f"{TITLE_COLOR}--- {flow.title} ---{RESET_COLOR}\n"
+        f"Select an item to {flow.verb}."
+    )
     options = []
 
     for item in items:
         suffix = _format_item_line(item)
+        extra = flow.decorate(caller, item) if flow.decorate else ""
         options.append(
             {
-                "desc": f"{item.key}{suffix}",
-                "goto": ("node_withdraw_quantity", {"item_id": item.id}),
+                "desc": f"{item.key}{suffix}{extra}",
+                "goto": (flow.quantity_node, {"item_id": item.id}),
             }
         )
 
@@ -302,14 +284,28 @@ def node_withdraw_select(caller, **kwargs):
     return text, options
 
 
-def node_withdraw_quantity(caller, **kwargs):
+def _quantity_prompt(flow, item_obj, max_qty, highlight=False):
+    """Build the shared 'how many?' prompt text."""
+    question = f"How many to {flow.verb}?"
+    if highlight:
+        question = f"{HIGHLIGHT_COLOR}{question}{RESET_COLOR}"
+
+    return (
+        f"{TITLE_COLOR}--- {flow.verb.capitalize()} {item_obj.key} ---{RESET_COLOR}\n"
+        f"{flow.stock_label} {max_qty}.\n\n"
+        f"{question}"
+    )
+
+
+def _quantity_node(caller, flow, **kwargs):
+    """Offer 1 / custom / all for a stackable, or execute immediately."""
     item_id = kwargs.get("item_id")
-    item_obj = caller.bank.get_item_by_id(item_id)
+    item_obj = flow.find_item(caller, item_id)
 
     if item_obj is None:
-        text = f"{ERROR_COLOR}That item is no longer in your bank.{RESET_COLOR}"
+        text = f"{ERROR_COLOR}{flow.gone_text}{RESET_COLOR}"
         options = (
-            {"desc": "Back to withdraw list", "goto": "node_withdraw_select"},
+            {"desc": f"Back to {flow.verb} list", "goto": flow.select_node},
             {"desc": "Back to menu", "goto": "start"},
         )
         return text, options
@@ -318,80 +314,149 @@ def node_withdraw_quantity(caller, **kwargs):
     max_qty = getattr(item_obj, "quantity", 1)
 
     if not is_stackable or max_qty <= 1:
-        return _execute_withdraw(caller, **{"item_id": item_id, "count": 1})
+        # Nothing to ask: transfer immediately and re-render the picker.
+        # NOTE we must return a rendered (text, options) here, not a node
+        # NAME -- EvMenu._execute_node treats a node's non-tuple return as
+        # display text, so the old `return _execute_deposit(...)` printed the
+        # literal string "node_deposit_select" at the player instead of
+        # navigating anywhere.
+        _perform_transfer(caller, flow, item_id, 1)
+        return _select_node(caller, flow)
 
-    text = (
-        f"{TITLE_COLOR}--- Withdraw {item_obj.key} ---{RESET_COLOR}\n"
-        f"Bank has {max_qty}.\n\n"
-        "How many to withdraw?"
-    )
+    text = _quantity_prompt(flow, item_obj, max_qty)
     options = [
-        {"desc": "1", "goto": (_execute_withdraw, {"item_id": item_id, "count": 1})},
-        {"desc": "X (custom)", "goto": ("node_withdraw_custom_qty", {"item_id": item_id, "max_qty": max_qty})},
-        {"desc": f"All ({max_qty})", "goto": (_execute_withdraw, {"item_id": item_id, "count": "all"})},
-        {"desc": "Cancel", "goto": "node_withdraw_select"},
+        {"desc": "1", "goto": (flow.execute_goto, {"item_id": item_id, "count": 1})},
+        {"desc": "X (custom)", "goto": (flow.custom_node, {"item_id": item_id, "max_qty": max_qty})},
+        {"desc": f"All ({max_qty})", "goto": (flow.execute_goto, {"item_id": item_id, "count": "all"})},
+        {"desc": "Cancel", "goto": flow.select_node},
     ]
 
     return text, options
 
 
-def node_withdraw_custom_qty(caller, raw_string, **kwargs):
+def _custom_qty_node(caller, flow, raw_string, **kwargs):
+    """Read a typed quantity via EvMenu's _default option, then execute.
+
+    Two-pass: the first visit renders the prompt and arms a _default option
+    that re-enters this node with custom_qty_state='awaiting'; the second
+    visit parses raw_string.
+    """
     item_id = kwargs.get("item_id")
     max_qty = kwargs.get("max_qty", 1)
 
-    item_obj = caller.bank.get_item_by_id(item_id)
+    item_obj = flow.find_item(caller, item_id)
     if item_obj is None:
-        caller.msg(f"{ERROR_COLOR}That item is no longer in your bank.{RESET_COLOR}")
-        return "node_withdraw_select"
+        caller.msg(f"{ERROR_COLOR}{flow.gone_text}{RESET_COLOR}")
+        return _select_node(caller, flow)
 
-    text = (
-        f"{TITLE_COLOR}--- Withdraw {item_obj.key} ---{RESET_COLOR}\n"
-        f"Bank has {max_qty}.\n\n"
-        f"{HIGHLIGHT_COLOR}How many to withdraw?{RESET_COLOR}"
-    )
+    text = _quantity_prompt(flow, item_obj, max_qty, highlight=True)
     custom_options = (
-        {"key": "_default", "goto": ("node_withdraw_custom_qty", {"item_id": item_id, "max_qty": max_qty, "custom_qty_state": "awaiting"})},
+        {
+            "key": "_default",
+            "goto": (
+                flow.custom_node,
+                {"item_id": item_id, "max_qty": max_qty, "custom_qty_state": "awaiting"},
+            ),
+        },
     )
 
     if kwargs.get("custom_qty_state") != "awaiting":
         return text, custom_options
 
-    try:
-        count = int(raw_string.strip())
-    except ValueError:
-        caller.msg(f"{ERROR_COLOR}Invalid number. Enter a quantity between 1 and {max_qty}.{RESET_COLOR}")
+    count, parse_error = parse_quantity(raw_string, max_qty)
+
+    if parse_error is not None:
+        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
         return text, custom_options
 
-    if count < 1:
-        caller.msg(f"{ERROR_COLOR}Quantity must be at least 1.{RESET_COLOR}")
-        return text, custom_options
-
-    count = min(count, max_qty)
-    return _execute_withdraw(caller, **{"item_id": item_id, "count": count})
+    _perform_transfer(caller, flow, item_id, count)
+    return _select_node(caller, flow)
 
 
-def _execute_withdraw(caller, **kwargs):
-    item_id = kwargs.get("item_id")
-    count = kwargs.get("count", 1)
-    item_obj = caller.bank.get_item_by_id(item_id)
+def _perform_transfer(caller, flow, item_id, count):
+    """
+    Purpose: Move `count` of an item in this flow's direction.
+
+    Entry:
+        item_id is a dbid resolvable by flow.find_item.
+        count is a positive int, or the string "all".
+
+    Exit/Returns:
+        None. Messages the caller on every failure path.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Re-resolve the item (it may have moved since the option was drawn),
+        clamp the count to what is actually there, then delegate to the
+        flow's execute callable.
+
+    Notes/References:
+        Returns nothing on purpose. Callers differ in what they must hand
+        back to EvMenu -- a node needs rendered (text, options), a goto
+        callable needs a node name -- so neither is decided here.
+
+    Author: Nick Hobar
+    Creation date: 07/31/2026
+    """
+    item_obj = flow.find_item(caller, item_id)
 
     if item_obj is None:
         caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
-        return "node_withdraw_select"
+        return
 
     max_qty = getattr(item_obj, "quantity", 1)
-    withdraw_qty = max_qty if count == "all" else min(count, max_qty)
+    quantity = max_qty if count == "all" else min(count, max_qty)
 
-    caller.inventory.sync()
     try:
-        caller.equipment.validate_inventory_space()
+        flow.execute(caller, item_obj, quantity)
     except EquipmentError as err:
         caller.msg(f"{ERROR_COLOR}{err}{RESET_COLOR}")
-        return "node_withdraw_select"
 
-    result = caller.bank.withdraw(item_obj.id, withdraw_qty)
 
-    return "node_withdraw_select"
+def _make_execute_goto(flow):
+    """Build the EvMenu goto-callable that performs `flow` then returns its
+    select node's NAME. Goto callables (unlike nodes) are expected to return
+    a node name, so this is the one context where returning the string is
+    correct."""
+    def _goto(caller, raw_string, **kwargs):
+        _perform_transfer(caller, flow, kwargs.get("item_id"), kwargs.get("count", 1))
+        return flow.select_node
+
+    return _goto
+
+
+# ─── EvMenu node entry points ──────────────────────────────────────────────
+# Named wrappers so EvMenu's string-based "goto" can resolve them.
+
+
+DEPOSIT_FLOW.execute_goto = _make_execute_goto(DEPOSIT_FLOW)
+WITHDRAW_FLOW.execute_goto = _make_execute_goto(WITHDRAW_FLOW)
+
+
+def node_deposit_select(caller, **kwargs):
+    return _select_node(caller, DEPOSIT_FLOW)
+
+
+def node_deposit_quantity(caller, **kwargs):
+    return _quantity_node(caller, DEPOSIT_FLOW, **kwargs)
+
+
+def node_deposit_custom_qty(caller, raw_string, **kwargs):
+    return _custom_qty_node(caller, DEPOSIT_FLOW, raw_string, **kwargs)
+
+
+def node_withdraw_select(caller, **kwargs):
+    return _select_node(caller, WITHDRAW_FLOW)
+
+
+def node_withdraw_quantity(caller, **kwargs):
+    return _quantity_node(caller, WITHDRAW_FLOW, **kwargs)
+
+
+def node_withdraw_custom_qty(caller, raw_string, **kwargs):
+    return _custom_qty_node(caller, WITHDRAW_FLOW, raw_string, **kwargs)
 
 
 def node_exit(caller, **kwargs):

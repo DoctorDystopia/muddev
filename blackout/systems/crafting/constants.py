@@ -18,13 +18,11 @@ TOOL_TAG_CATEGORY = "crafting_tool"
 # Canonical recipe category names. A recipe's `category` and a facility's
 # `allowed_categories` are matched by exact string equality in
 # crafting_service.get_categories, so both sides MUST import from here.
-# Declaring the literal in either place is what caused the Metalsmith/
-# Metalsmithing mismatch that hid every anvil recipe.
 CATEGORY_FOUNDRY = "Foundry"
-CATEGORY_METALSMITHING = "Metalsmithing"
+CATEGORY_METALSMITH = "Metalsmith"
 
 # Every category the game knows about, for validation and UI ordering.
 CRAFTING_CATEGORIES = (
     CATEGORY_FOUNDRY,
-    CATEGORY_METALSMITHING,
+    CATEGORY_METALSMITH,
 )

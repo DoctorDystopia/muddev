@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: EquipmentHandler — per-character wield-slot state and the
+             skill gate applied at equip time.
+"""
+
 from evennia.utils import logger
 
 from .constants import WieldLocation, MAX_INVENTORY_SLOTS

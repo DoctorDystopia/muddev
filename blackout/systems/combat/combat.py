@@ -42,12 +42,17 @@ def _normalize_xp_skills(xp_skill) -> tuple:
     return tuple(xp_skill)
 
 
-def _award_style_xp(attacker, style: dict, damage: int) -> None:
-    """Post-swing XP award driven by the active attack style entry.
+def _plan_style_xp(attacker, style: dict, damage: int) -> list:
+    """Work out what XP a swing earns, WITHOUT granting any of it.
 
     attacker — a CombatEntity that exposes .skills (Character / HostileNPC).
     style    — one entry from the entity's combat_styles table.
     damage   — the integer damage returned by combat_calc.resolve_melee_swing.
+
+    Returns a list of (skill_key, amount) pairs, already filtered to the awards
+    worth granting. Planning is split from granting so the swing message can
+    name the XP on the same line as the damage: the player is told what the hit
+    earned, instead of having to reopen the skills panel to find out.
 
     Every skill the style names receives the style's full per-skill rate. The
     rates in constants.py are already per-skill shares, so this must NOT
@@ -57,28 +62,77 @@ def _award_style_xp(attacker, style: dict, damage: int) -> None:
     xp_per_damage = _WEAPON_STYLE_XP_MAP.get(style_name)
     if xp_per_damage is None:
         logger.log_err(
-            f"_award_style_xp: unknown weapon_style {style_name!r} on {attacker}; no XP awarded."
+            f"_plan_style_xp: unknown weapon_style {style_name!r} on {attacker}; no XP awarded."
         )
-        return
+        return []
 
-    skills = getattr(attacker, "skills", None)
-    if skills is None:
-        return
+    if getattr(attacker, "skills", None) is None:
+        return []
 
     # "weapon_style_xp_skill" is the current key. Weapons spawned before that
     # rename still carry "xp_skill" in their stored style dicts, so fall back
     # to it rather than silently awarding those swings nothing.
     raw_targets = style.get("weapon_style_xp_skill", style.get("xp_skill"))
     skill_targets = _normalize_xp_skills(raw_targets)
-    if not skill_targets:
-        return
 
-    award = int(round(xp_per_damage * damage))
-    if award <= 0:
-        return
+    awards = []
 
     for skill_key in skill_targets:
-        skills.add_xp(skill_key, award)
+        # A skill may earn at its own rate rather than the style's -- Fortitude
+        # earns 1.33/damage from every style, not the style's 4.0.
+        rate = const.XP_PER_DAMAGE_BY_SKILL.get(skill_key, xp_per_damage)
+        award = int(round(rate * damage))
+
+        if award <= 0:
+            continue
+
+        awards.append((skill_key, award))
+
+    return awards
+
+
+def _apply_xp_awards(attacker, awards) -> None:
+    """Grant a plan built by _plan_style_xp. Safe to call with an empty plan."""
+    skills = getattr(attacker, "skills", None)
+    if skills is None:
+        return
+
+    for skill_key, amount in awards:
+        skills.add_xp(skill_key, amount)
+
+
+def _award_style_xp(attacker, style: dict, damage: int) -> list:
+    """Plan and immediately grant a swing's XP. Returns the granted plan.
+
+    The combat swing path calls the two halves separately so it can print the
+    award before it lands; this wrapper exists for every other caller, which
+    only wants the XP to happen.
+    """
+    awards = _plan_style_xp(attacker, style, damage)
+    _apply_xp_awards(attacker, awards)
+
+    return awards
+
+
+def _labelled_awards(awards) -> list:
+    """Map an XP plan's skill keys to their player-facing display names.
+
+    SKILL_REGISTRY owns skill names, so combat must not title-case keys itself
+    ("brain_farming" is displayed "Brain Farming", not "Brain_Farming"). The
+    import is deferred for the same reason as ObjectDB above: this module is
+    pulled in from typeclass modules during startup, and the registry walks the
+    whole skill_defs package on first import.
+    """
+    from systems.progression.skills.registry import SKILL_REGISTRY
+
+    labelled = []
+
+    for skill_key, amount in awards:
+        skill_class = SKILL_REGISTRY.get(skill_key)
+        display_name = getattr(skill_class, "name", skill_key)
+        labelled.append((display_name, amount))
+
+    return labelled
 
 
 # ─── Helper-tool functions (encapsulate repetitive dict accesses) ─────────
@@ -122,7 +176,7 @@ def _stored_combat_styles(entity) -> dict:
 
     return {}
 
-
+# TODO: combat_style_bonus() rename
 def _stance_bonus(boost_profile: dict, skill_key: str) -> int:
     """Pull the integer stance boost for one combat axis (strike|brawn|defense)."""
     return boost_profile.get(skill_key, 0)
@@ -168,42 +222,78 @@ def _held_weapon(entity):
         return None
 
     slots = equipment.slots
+
     return slots.get(WieldLocation.TWO_HANDS) or slots.get(WieldLocation.MAIN_HAND)
+
+
+def _combat_stat_source(entity):
+    """Return the object carrying `entity`'s combat stats, or None.
+
+    A HostileNPC has no equipment handler and carries its spawner-stamped
+    stat block on itself. A Character carries it on the weapon it is
+    wielding. None means "nothing equipped" -- fall back to unarmed.
+
+    This single choice is what lets the profile below read one uniform set of
+    db fields regardless of who is fighting.
+    """
+    if entity is None:
+        return None
+
+    if not hasattr(entity, "equipment"):
+        return entity
+
+    return _held_weapon(entity)
+
+
+def combat_profile(entity) -> dict:
+    """Build the full active_weapon_data snapshot for `entity`.
+
+    Returns the same shape as _unarmed_weapon_data:
+        combat_stat_bonuses / active_combat_style / attack_speed
+
+    This is the ONE place that resolves where combat stats come from.
+
+    It is also the seam that multi-slot armour aggregation will extend: today
+    only the wielded item contributes to defence.
+    """
+    source = _combat_stat_source(entity)
+
+    if source is None:
+        return _unarmed_weapon_data()
+
+    unarmed = _unarmed_weapon_data()
+
+    stats = getattr(source.db, "combat_stat_bonuses", None) or unarmed["combat_stat_bonuses"]
+
+    styles = _stored_combat_styles(source)
+
+    default_key = getattr(source.db, "default_combat_style", None) or next(
+        iter(styles), const.UNARMED_DEFAULT_COMBAT_STYLE
+    )
+
+    active_combat_style = styles.get(default_key) or unarmed["active_combat_style"]
+
+    speed = getattr(source.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
+
+    return {
+        "combat_stat_bonuses": dict(stats),
+        "active_combat_style": dict(active_combat_style),
+        "attack_speed": speed,
+    }
 
 
 def get_defense_bonuses(entity) -> dict:
     """Return the combat_stat_bonuses dict to use for `entity`'s DEFENSE.
 
-    Mirrors _refresh_weapon's source selection:
-        HostileNPC (no equipment handler) -> db.combat_stat_bonuses
-        Character                          -> wielded weapon's bonuses
-        neither available                  -> UNARMED defaults
-
-    This exists because the defender's armour must never be read out of the
-    *attacker's* stat block. It is also the single seam that full multi-slot
-    armour aggregation will extend — today only the wielded item contributes.
+    The defender's armour must never be read out of the *attacker's* stat
+    block, which is why this takes the defender explicitly.
     """
-    if entity is None:
-        return const.UNARMED_DEFAULT_COMBAT_STATS.copy()
-
-    if not hasattr(entity, "equipment"):
-        stats = getattr(entity.db, "combat_stat_bonuses", None)
-        if stats:
-            return dict(stats)
-        return const.UNARMED_DEFAULT_COMBAT_STATS.copy()
-
-    weapon = _held_weapon(entity)
-    if weapon is None:
-        return const.UNARMED_DEFAULT_COMBAT_STATS.copy()
-
-    stats = getattr(weapon.db, "combat_stat_bonuses", None)
-    if stats:
-        return dict(stats)
-    return const.UNARMED_DEFAULT_COMBAT_STATS.copy()
+    profile = combat_profile(entity)
+    
+    return profile["combat_stat_bonuses"]
 
 
 # ─── Action classes ──────────────────────────────────────────────────────
-
 
 class _Action:
     """Abstract twitch-combat action — one swing, hold, flee, or wield.
@@ -256,6 +346,54 @@ class ActionAttack(_Action):
         return target
 
 
+    def _land_hit(self, attacker, target, style: dict, dmg: int) -> bool:
+        """Announce, damage, and pay out one connecting swing.
+
+        Returns True if the hit was lethal.
+
+        Everything the players see is sent BEFORE at_damage runs, because
+        at_damage broadcasts the death line and a killed NPC then deletes
+        itself: announcing afterwards printed "X collapses" above the very hit
+        that killed it, and dropped the room broadcast for the killing blow
+        entirely once .location had gone None.
+
+        That inversion is also why the HP bar works off arithmetic rather than
+        re-reading target.hp — the bar has to show the post-hit total while the
+        hit has not been applied yet.
+        """
+        room = getattr(target, "location", None)
+
+        # Decide lethality from the pre-damage HP rather than polling
+        # is_alive() afterwards. A player's at_death runs respawn(), which
+        # restores full HP synchronously, so the post-hoc poll always reported
+        # the victim alive and the fight never ended.
+        hp_before = getattr(target, "hp", 0)
+        hp_after = max(0, hp_before - dmg)
+        max_hp = getattr(target, "max_hp", 0)
+        killed = (dmg >= hp_before)
+
+        awards = _plan_style_xp(attacker, style, dmg)
+        xp_text = combat_msg.format_xp_gain(_labelled_awards(awards))
+
+        attacker.msg(combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text))
+        attacker.msg(combat_msg.format_hp_status(target.key, hp_after, max_hp))
+
+        target.msg(combat_msg.format_incoming_hit(attacker, target, dmg))
+        target.msg(combat_msg.format_hp_status(combat_msg.SELF_HP_LABEL, hp_after, max_hp))
+
+        if room is not None:
+            third_party = combat_msg.format_third_party_hit(attacker, target, dmg)
+            room.msg_contents(third_party, exclude=(attacker, target))
+
+        # Pay the XP before the damage so a level-up line reads next to the
+        # award that caused it, rather than below the target's death.
+        _apply_xp_awards(attacker, awards)
+
+        target.at_damage(dmg, attacker=attacker)
+
+        return killed
+
+
     def resolve(self, handler) -> bool:
         attacker = handler.obj
         target = self._get_target()
@@ -271,7 +409,7 @@ class ActionAttack(_Action):
             return True
 
         # ── gather weapon data ───────────────────────────────────────────
-        weapon = handler.db.active_weapon_data or _unarmed_weapon_data()
+        weapon = handler.ndb.active_weapon_data or _unarmed_weapon_data()
         style = weapon.get("active_combat_style")
         if not style:
             # A malformed/missing style dict would otherwise KeyError below and
@@ -323,31 +461,7 @@ class ActionAttack(_Action):
 
         # ── broadcast & damage application ───────────────────────────────
         if hit and dmg > 0:
-            # Build every message and capture the room BEFORE applying damage.
-            # at_damage can kill the target, and a killed NPC deletes itself,
-            # after which .location reads None and the room broadcast for the
-            # killing blow was silently skipped -- the one hit that most
-            # needs announcing.
-            room = getattr(target, "location", None)
-            outgoing = combat_msg.format_outgoing_hit(attacker, target, dmg)
-            incoming = combat_msg.format_incoming_hit(attacker, target, dmg)
-            third_party = combat_msg.format_third_party_hit(attacker, target, dmg)
-
-            # Decide lethality from the pre-damage HP rather than polling
-            # is_alive() afterwards. A player's at_death runs respawn(),
-            # which restores full HP synchronously, so the post-hoc poll
-            # always reported the victim alive and the fight never ended.
-            hp_before = getattr(target, "hp", 0)
-            killed = (dmg >= hp_before)
-
-            target.at_damage(dmg, attacker=attacker)
-
-            attacker.msg(outgoing)
-            target.msg(incoming)
-            if room is not None:
-                room.msg_contents(third_party, exclude=(attacker, target))
-
-            _award_style_xp(attacker, style, dmg)
+            killed = self._land_hit(attacker, target, style, dmg)
 
             if killed:
                 handler.end_combat()
@@ -445,7 +559,7 @@ class ActionWield(_Action):
         Without this the wield stayed queued and re-resolved every 0.6s
         forever, and the attack the player had running was silently dropped.
         """
-        target_id = handler.db.target_id
+        target_id = handler.ndb.target_id
 
         if target_id is None:
             return None
@@ -471,7 +585,7 @@ class BlackoutCombatHandler(DefaultScript):
     """
 
     def at_script_creation(self) -> None:
-        """Set up the persistent attributes the handler reads every tick."""
+        """Set up the in-memory state the handler reads every tick."""
         self.key = COMBAT_HANDLER_KEY
         self.desc = "Per‑combatant combat state"
 
@@ -484,78 +598,45 @@ class BlackoutCombatHandler(DefaultScript):
         # at server start, and a fresh handler is created on the next attack.
         self.persistent = False
 
-        self.db.target_id = None  # dbref (int) of the current target
-        self.db.pending_action = None  # instance of _Action subclass, or None
-        self.db.cooldown_ticks = 0  # ticks until the next swing fires
-        self.db.active_weapon_data = _unarmed_weapon_data()
+        self.init_runtime_state()
+
+    # ── per-tick runtime state ───────────────────────────────────────────
+    #
+    # All four fields below live on ndb, NOT db. They are rebuilt from scratch
+    # every time combat starts and are meaningless afterwards, so persisting
+    # them bought nothing and cost an Attribute-table read AND write every
+    # 0.6s per combatant. `pending_action` was the worse half: storing it on
+    # db pickled a live _Action instance into the database, so renaming any
+    # action class would have left unloadable rows behind.
+
+    def init_runtime_state(self) -> None:
+        """(Re)initialise the ndb fields tick() depends on.
+
+        ndb does not survive a reload, and a non-persistent script can still
+        be reached once before the engine sweeps it, so every entry point
+        that reads this state calls this first rather than trusting
+        at_script_creation to have run in this process.
+        """
+        if self.ndb.cooldown_ticks is None:
+            self.ndb.cooldown_ticks = 0  # ticks until the next swing fires
+
+        if self.ndb.active_weapon_data is None:
+            self.ndb.active_weapon_data = _unarmed_weapon_data()
+
+        # target_id (dbref int) and pending_action (an _Action subclass
+        # instance) are legitimately None when idle, so they need no seeding.
 
     # ── weapon refresh ───────────────────────────────────────────────────
 
     def _refresh_weapon(self) -> None:
-        """Rebuild the combat stat dict from the combatant's current mainhand weapon.
+        """Rebuild this combatant's active_weapon_data from its current source.
 
-        Falls back to UNARMED defaults when no weapon is equipped or the
-        combatant has no `equipment` handler (e.g. HostileNPC, which carries
-        its combat stats in `db.combat_stats` rather than a wielded slot).
-        For NPCs, we additionally prefer their spawner-stamped `combat_stats`
-        over the unarmed baseline so their OSRS swing math uses intended values.
+        Delegates the source selection (NPC stat block vs wielded weapon vs
+        unarmed) to combat_profile, which the defender-side
+        get_defense_bonuses also uses -- so attacker and defender can no
+        longer disagree about where stats come from.
         """
-        obj = self.obj
-
-        # NPCs (HostileNPC) have no EquipmentHandler; they carry their
-        # combat stat block in db.combat_stats (set by the spawner).
-        if not hasattr(obj, "equipment"):
-            stats = getattr(obj.db, "combat_stat_bonuses", None) or (
-                const.UNARMED_DEFAULT_COMBAT_STATS.copy()
-            )
-
-            styles = _stored_combat_styles(obj)
-
-            default_key = getattr(obj.db, "default_combat_style", None) or next(
-                iter(styles), const.UNARMED_DEFAULT_COMBAT_STYLE
-            )
-
-            active_combat_style = styles.get(default_key) or _unarmed_weapon_data()["active_combat_style"]
-
-            speed = getattr(obj.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
-            self.db.active_weapon_data = {
-                "combat_stat_bonuses": dict(stats),
-                "active_combat_style": dict(active_combat_style),
-                "attack_speed": speed,
-            }
-
-            return
-
-        # Two-handed weapons live in TWO_HANDS, never MAIN_HAND — checking only
-        # the main hand reduced every two-hander to unarmed stats.
-        held = _held_weapon(obj)
-
-        if held is None:
-            self.db.active_weapon_data = _unarmed_weapon_data()
-            return
-
-        speed = (
-            getattr(held.db, "attack_speed", const.UNARMED_ATTACK_SPEED_TICKS)
-            or const.UNARMED_ATTACK_SPEED_TICKS
-        )
-
-        stats = (
-            getattr(held.db, "combat_stat_bonuses", None) or const.UNARMED_DEFAULT_COMBAT_STATS
-        )
-
-        styles = _stored_combat_styles(held)
-
-        default_key = getattr(held.db, "default_combat_style", None) or next(
-            iter(styles), const.UNARMED_DEFAULT_COMBAT_STYLE
-        )
-
-        active_combat_style = styles.get(default_key) or _unarmed_weapon_data()["active_combat_style"]
-
-        self.db.active_weapon_data = {
-            "combat_stat_bonuses": dict(stats),
-            "active_combat_style": dict(active_combat_style),
-            "attack_speed": speed,
-        }
+        self.ndb.active_weapon_data = combat_profile(self.obj)
 
     # ── combat lifecycle ─────────────────────────────────────────────
 
@@ -598,7 +679,7 @@ class BlackoutCombatHandler(DefaultScript):
         if location is None:
             return [obj], []
 
-        my_target_id = self.db.target_id
+        my_target_id = self.ndb.target_id
         enemies = []
 
         for comb in location.contents:
@@ -607,7 +688,7 @@ class BlackoutCombatHandler(DefaultScript):
             their_handler = get_handler_for(comb)
             if their_handler is None:
                 continue
-            if comb.id == my_target_id or their_handler.db.target_id == obj.id:
+            if comb.id == my_target_id or their_handler.ndb.target_id == obj.id:
                 enemies.append(comb)
 
         return [obj], enemies
@@ -680,6 +761,9 @@ class BlackoutCombatHandler(DefaultScript):
             self.end_combat()
             return
 
+        # ndb is wiped by a reload; reseed before any read below.
+        self.init_runtime_state()
+
         if not hasattr(obj, "is_alive") or not obj.is_alive():
             self.end_combat()
             return
@@ -689,11 +773,11 @@ class BlackoutCombatHandler(DefaultScript):
         if self.check_stop_combat():
             return
 
-        if self.db.cooldown_ticks > 0:
-            self.db.cooldown_ticks -= 1
+        if self.ndb.cooldown_ticks > 0:
+            self.ndb.cooldown_ticks -= 1
             return
 
-        action = self.db.pending_action
+        action = self.ndb.pending_action
         if action is None:
             return
 
@@ -706,17 +790,17 @@ class BlackoutCombatHandler(DefaultScript):
         # None idles the combatant instead of re-resolving every tick --
         # ActionWield used to re-fire forever because nothing cleared it.
         follow_up = action.next_action(self)
-        self.db.pending_action = follow_up
+        self.ndb.pending_action = follow_up
 
         if follow_up is not None and follow_up.consumes_cooldown:
             # attack_speed is the number of ticks BETWEEN swings, so a speed-4
             # weapon swings on tick 0, 4, 8... The swing itself consumes one
             # tick, hence the -1; assigning the full value produced a
             # speed+1 cadence (3.0s instead of 2.4s for a speed-4 weapon).
-            speed = (self.db.active_weapon_data or _unarmed_weapon_data())["attack_speed"]
-            self.db.cooldown_ticks = max(0, speed - 1)
+            speed = (self.ndb.active_weapon_data or _unarmed_weapon_data())["attack_speed"]
+            self.ndb.cooldown_ticks = max(0, speed - 1)
 
-        target = _object_by_id(self.db.target_id)
+        target = _object_by_id(self.ndb.target_id)
 
         if target is not None and hasattr(target, "is_alive") and not target.is_alive():
             self.end_combat()
@@ -759,22 +843,22 @@ class BlackoutCombatHandler(DefaultScript):
             # `examine me` and `examine mutant raider` both reported in_combat=False
             # even mid-swing.
             self.start_combat_state(target=target)
-            self.db.pending_action = ActionAttack(target.id)
-            self.db.target_id = target.id
+            self.ndb.pending_action = ActionAttack(target.id)
+            self.ndb.target_id = target.id
 
         elif kind == "hold":
-            self.db.pending_action = ActionHold()
+            self.ndb.pending_action = ActionHold()
 
         elif kind == "flee":
-            self.db.pending_action = ActionFlee()
-            self.db.cooldown_ticks = 0
+            self.ndb.pending_action = ActionFlee()
+            self.ndb.cooldown_ticks = 0
 
         elif kind == "wield":
             weapon_obj = action_dict.get("weapon")
 
             if weapon_obj is not None:
-                self.db.pending_action = ActionWield(weapon_obj.id)
-                self.db.cooldown_ticks = 0
+                self.ndb.pending_action = ActionWield(weapon_obj.id)
+                self.ndb.cooldown_ticks = 0
 
         else:
             logger.log_err(f"CombatHandler.queue_action got unrecognized kind: {kind!r}")
@@ -931,6 +1015,10 @@ def ensure_combat_handler(combatant) -> BlackoutCombatHandler:
 
     # Evennia will not flag a zero-interval script active, so we own liveness.
     existing.mark_running()
+
+    # A reused handler may have had its ndb wiped by a reload since it was
+    # created, so re-seed before anything reads the per-tick fields.
+    existing.init_runtime_state()
 
     # Seed active_weapon_data from the combatant's current equipment (player)
     # or spawner-stamped combat_stats (NPC), so the very first swing uses the

@@ -6,8 +6,11 @@ Description: Decoupled helper functions for skill state evaluation and mutation.
 """
 
 import math
+
 from evennia.utils import logger
+
 from . import constants as skill_constants
+from .constants import FORTITUDE_SKILL_KEY
 from systems.combat import constants as combat_constants
 from .registry import SKILL_REGISTRY
 
@@ -173,10 +176,6 @@ def get_total_xp(obj: object, skill_key: str) -> int:
         xp_for_level = calculate_xp_needed(level_index)
         total_xp += xp_for_level
 
-    log_message = f"Total XP for {skill_key}: {total_xp} (Level: {current_lvl})"
-    logger.log_info(log_message)
-    print(log_message)
-    
     return total_xp
 
 
@@ -215,10 +214,6 @@ def get_xp_level(obj: object, skill_key: str) -> tuple[int, int, int]:
     total_xp_needed = calculate_xp_needed(current_lvl)
     remaining_xp = total_xp_needed - current_progress_xp
 
-    log_message = f"Current XP level for {skill_key}: {current_progress_xp}/{total_xp_needed} (Remaining: {remaining_xp})"
-    logger.log_info(log_message)
-    print(log_message)
-    
     return current_progress_xp, total_xp_needed, remaining_xp
 
 
@@ -275,12 +270,15 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         leveled_up = True
         
     obj.db.skills[skill_key] = skill_data
-    
+
     if leveled_up:
         skill_class = SKILL_REGISTRY[skill_key]
         skill_name = skill_class.name
         msg_string = f"|g[LEVEL_UP] Your {skill_name} skill increased to level {skill_data['level']}!|n"
         obj.msg(msg_string)
+
+        # Refresh any state derived from this skill (Fortitude -> max_hp).
+        apply_level_up_side_effects(obj, skill_key)
 
 
 def meets_prerequisite(obj: object, skill_key: str, required_level: int) -> bool:
@@ -354,10 +352,9 @@ def check_synergy(obj: object,
 
 def seed_fortitude_on_creation(obj: object) -> None:
     """
-    Purpose: Stamp Fortitude (Blackout's HP skill) at level 10 with the
-    OSRS-equivalent cumulative XP for level 10. Run from Character.
-    at_object_creation AFTER init_all_skills() has placed fortitude at
-    the DEFAULT_START_LEVEL/XP.
+    Purpose: Stamp Fortitude (Blackout's HP skill) at its seed level, exactly
+    on that level's threshold. Run from Character.at_object_creation AFTER
+    init_all_skills() has placed fortitude at the DEFAULT_START_LEVEL/XP.
 
     Entry:
         obj is a valid Evennia Character object whose db.skills dict
@@ -365,43 +362,59 @@ def seed_fortitude_on_creation(obj: object) -> None:
         already run).
 
     Exit/Returns:
-        No conditions. After this call, obj.db.skills['fortitude'] == 
-        {'level': 10, 'xp': 1154} and obj.db.max_hp == 10. If the CombatEntity
-        mixin is on the typeclass, obj.db.hp == 10 too.
+        No conditions. After this call, obj.db.skills['fortitude'] ==
+        {'level': 10, 'xp': 0} and obj.db.max_hp == 10. If the CombatEntity
+        mixin is on the typeclass, obj.db.hp == 10 too. get_total_xp then
+        reports 1052 — the cumulative cost of levels 0-9 on Blackout's curve,
+        derived rather than stored.
 
     Module Globals:
         combat_constants.FORTITUDE_START_LEVEL read.
-        combat_constants.FORTITUDE_START_XP read.
+        skill_constants.DEFAULT_START_XP read.
 
     Methodology:
         1. ensure_skill(obj, 'fortitude') normalizes the slot.
-        2. Snapshot current level / max_hp.
-        3. Overwrite level / XP with the seed values.
-        4. If the object exposes CombatEntity attrs (db.max_hp), set max_hp
+        2. Overwrite level with the seed level and progress with zero.
+        3. If the object exposes CombatEntity attrs (db.max_hp), set max_hp
            to FORTITUDE_START_LEVEL and HP to match (full heal on creation).
-        5. If CombatEntity is NOT on this typeclass (e.g. a non-Character), the
-           skill seed still lands but the combative side-effect is silently 
+        4. If CombatEntity is NOT on this typeclass (e.g. a non-Character), the
+           skill seed still lands but the combative side-effect is silently
            skipped — so this helper is safe to call on any Evennia object with
            db.skills, including NPCs that opt into the skills system.
+
+        The "xp" field means progress INTO the current level, not a cumulative
+        total — add_xp subtracts calculate_xp_needed from it, get_xp_level
+        compares it against that threshold, and get_total_xp adds the cleared
+        levels back on. Seeding it with a cumulative figure is what produced a
+        "1154 / 152" progress bar, a negative remaining, and a first-XP-award
+        cascade from Fortitude 10 straight to 16.
 
     Notes/References:
         Per design dialogue: only Fortitude diverges from DEFAULT_START_LEVEL.
         All other combat skills start at 0 just like gathering / processing.
+        Vault 02_Player/Player_Overview.md §"Health": players spawn "at exactly
+        level 10", i.e. on the threshold, with nothing banked toward level 11.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    ensure_skill(obj, "fortitude")
-    
+    ensure_skill(obj, FORTITUDE_SKILL_KEY)
+
     skills_dict = obj.db.skills
-    skills_dict["fortitude"] = {
+    skills_dict[FORTITUDE_SKILL_KEY] = {
         "level": combat_constants.FORTITUDE_START_LEVEL,
-        "xp": combat_constants.FORTITUDE_START_XP,
+        "xp": skill_constants.DEFAULT_START_XP,
     }
-    
+
     if hasattr(obj, "db"):
-        obj.db.max_hp = combat_constants.FORTITUDE_START_LEVEL
-        obj.db.hp = combat_constants.FORTITUDE_START_LEVEL
+        # Derive the starting cap through the same scaling every later
+        # level-up uses, rather than assuming level == hp at creation only.
+        starting_hp = (
+            combat_constants.FORTITUDE_START_LEVEL
+            * combat_constants.HP_PER_FORTITUDE_LEVEL
+        )
+        obj.db.max_hp = starting_hp
+        obj.db.hp = starting_hp
 
 
 def sync_max_hp_from_fortitude(obj: object) -> None:
@@ -433,5 +446,56 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    new_cap = get_level(obj, "fortitude")
+    fortitude_level = get_level(obj, FORTITUDE_SKILL_KEY)
+    new_cap = fortitude_level * combat_constants.HP_PER_FORTITUDE_LEVEL
     obj.db.max_hp = new_cap
+
+
+# ─── Level-up side effects ──────────────────────────────────────────────────
+# Some skills change derived state when they level. Registering them as data
+# keeps add_xp free of per-skill branches, and makes the coupling greppable:
+# anything that must react to a level-up appears here.
+#
+# Fortitude drives max_hp. Without this entry sync_max_hp_from_fortitude had
+# no callers at all, so every character's max HP stayed pinned at its creation
+# value forever no matter how much Fortitude XP they earned.
+_LEVEL_UP_SIDE_EFFECTS = {
+    FORTITUDE_SKILL_KEY: sync_max_hp_from_fortitude,
+}
+
+
+def apply_level_up_side_effects(obj: object, skill_key: str) -> None:
+    """
+    Purpose: Run any derived-state refresh a skill declares on level-up.
+
+    Entry:
+        obj is a valid Evennia Character object.
+        skill_key is a registered skill key.
+
+    Exit/Returns:
+        No conditions. Silent no-op for skills with no registered effect.
+
+    Module Globals:
+        _LEVEL_UP_SIDE_EFFECTS read.
+
+    Methodology:
+        Dict lookup, then call. Failures are logged rather than raised so a
+        broken side effect cannot swallow the level-up itself.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/01/2026
+    """
+    side_effect = _LEVEL_UP_SIDE_EFFECTS.get(skill_key)
+
+    if side_effect is None:
+        return
+
+    try:
+        side_effect(obj)
+    except Exception as exc:
+        logger.log_err(
+            f"apply_level_up_side_effects: {skill_key} handler failed on {obj}: {exc!r}"
+        )

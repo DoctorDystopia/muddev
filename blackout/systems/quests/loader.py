@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: QuestRegistry — auto-discovers quest blueprints from the
+             content package.
+"""
+
 # systems/quests/loader.py
 
 

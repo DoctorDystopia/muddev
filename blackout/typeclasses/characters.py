@@ -11,6 +11,7 @@ creation commands.
 
 
 from evennia import DefaultCharacter
+from evennia.contrib.game_systems.cooldowns import CooldownHandler
 from evennia.utils import logger
 from evennia.utils.utils import lazy_property
 
@@ -24,18 +25,47 @@ from systems.quests.quests import QuestHandler
 
 
 
-# class Character(ObjectParent, DefaultCharacter):
-#     """
-#     The Character just re-implements some of the Object's methods and hooks
-#     to represent a Character entity in-game.
+def _handler_property(handler_class: type, attr_name: str):
+    """
+    Purpose: Build a lazy, cached accessor that attaches `handler_class` to
+    the character on first use.
 
-#     See mygame/typeclasses/objects.py for a list of
-#     properties and methods available on all Object child classes like this.
+    Entry:
+        handler_class is a handler taking the character as its only argument.
+        attr_name is the attribute name the accessor is bound to.
 
-#     """
+    Exit/Returns:
+        Returns a lazy_property descriptor.
 
-#     pass
+    Module Globals:
+        None
 
+    Methodology:
+        The five handler accessors were five identical copies of "log, then
+        construct". `name=attr_name` is passed explicitly because
+        lazy_property caches into obj.__dict__ under its __name__ -- letting
+        it default would key every accessor built here as the inner
+        function's name and make them collide. Combat also pops that cache
+        entry by name (see systems/combat/combat.py), so the key must stay
+        exactly the attribute name.
+
+    Notes/References:
+        A plain @property would rebuild the handler on every access; in a
+        combat loop reading a skill many times per second that is a lot of
+        short-lived objects.
+
+    Author: Nick Hobar
+    Creation date: 06/02/2026
+    """
+    def accessor(self):
+        logger.log_info(f"Accessing {attr_name} for character: {self.key}")
+        return handler_class(self)
+
+    return lazy_property(
+        accessor,
+        name=attr_name,
+        doc=f"Cached {handler_class.__name__} for this character.",
+    )
 
 
 class Character(CombatEntity, ObjectParent, DefaultCharacter):
@@ -46,107 +76,21 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     The baseline character representation for project Blackout.
     """
     
-    # If we used a standard @property, Python would execute that instantiation every single time a script, combat loop, or command checked a skill.
-    # If a player is in a fight and the system checks their melee skill 10 times a second, a standard property would create 10 brand-new SkillHandler
-    # objects in memory every second, forcing Python's garbage collector to work overtime to clean them up.
-    @lazy_property
-    def skills(self) -> SkillHandler:
-        """
-        Purpose: Cached property accessor for decoupled skill handling operations.
-        
-        Entry:
-            No conditions
-            
-        Exit/Returns:
-            Returns an instantiated SkillHandler mapped to this character.
-            
-        Module Globals:
-            None
-            
-        Methodology:
-            Logs the access event to the server logs. Instantiates the external 
-            SkillHandler, wrapping the current instance to allow lazy-loaded 
-            database lookups.
-            
-        Notes/References:
-            None
-            
-        Author: Nick Hobar
-        Creation date: 06/02/2026
-        """
-        log_message = f"Accessing skills for character: {self.key}"
-        logger.log_info(log_message)
-        print(log_message)
-        
-        new_skill_handler = SkillHandler(self)
-        
-        return new_skill_handler
-    
+    # Cached handler accessors. Built by _handler_property so the five share
+    # one definition; see that function for why the cache name is explicit.
+    # A standard @property would rebuild the handler on every access -- in a
+    # combat loop reading a skill many times per second that is a lot of
+    # short-lived objects for the collector to reap.
+    skills = _handler_property(SkillHandler, "skills")
+    equipment = _handler_property(EquipmentHandler, "equipment")
+    inventory = _handler_property(InventoryHandler, "inventory")
+    bank = _handler_property(BankHandler, "bank")
+    quests = _handler_property(QuestHandler, "quests")
 
-    @lazy_property
-    def equipment(self):
-        log_message = f"Accessing equipment for character: {self.key}"
-        logger.log_info(log_message)
-        print(log_message)
-        
-        new_equipment_handler = EquipmentHandler(self)
-        
-        return new_equipment_handler
-
-
-    @lazy_property
-    def inventory(self) -> InventoryHandler:
-        log_message = f"Accessing inventory for character: {self.key}"
-        logger.log_info(log_message)
-        print(log_message)
-
-        new_inventory_handler = InventoryHandler(self)
-
-        return new_inventory_handler
-
-    @lazy_property
-    def bank(self) -> BankHandler:
-        log_message = f"Accessing bank for character: {self.key}"
-        logger.log_info(log_message)
-        print(log_message)
-
-        new_bank_handler = BankHandler(self)
-
-        return new_bank_handler
-
-
-    @lazy_property
-    def quests(self) -> QuestHandler:
-        """
-        Purpose: Cached property accessor for decoupled quest handling operations.
-        
-        Entry:
-            No conditions
-            
-        Exit/Returns:
-            Returns an instantiated QuestHandler mapped to this character.
-            
-        Module Globals:
-            None
-            
-        Methodology:
-            Logs the access event to the server logs. Instantiates the external 
-            QuestHandler, wrapping the current instance to allow lazy-loaded 
-            database lookups.
-            
-        Notes/References:
-            None
-            
-        Author: Nick Hobar
-        Creation date: 06/02/2026
-        """
-        log_message = f"Accessing quests for character: {self.key}"
-        logger.log_info(log_message)
-        print(log_message)
-        
-        new_quest_handler = QuestHandler(self)
-        
-        return new_quest_handler
+    # Evennia's contrib cooldown handler. Stores absolute expiry timestamps in
+    # a persistent Attribute, so unlike the ndb timestamp it replaces, a
+    # cooldown survives @reload. Poll-based -- nothing ticks.
+    cooldowns = _handler_property(CooldownHandler, "cooldowns")
 
 
     def at_object_creation(self) -> None:
@@ -175,10 +119,8 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
-        log_message = f"Creating character: {self.key}"
-        logger.log_info(log_message)
-        print(log_message)
-        
+        logger.log_info(f"Creating character: {self.key}")
+
         parent_class = super()
         parent_class.at_object_creation()
         
@@ -197,10 +139,14 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         self.skills.seed_fortitude_on_creation()
         self.init_combat_attrs(max_hp=self.db.max_hp or 10)
 
-        skills_prop = self.skills
-        quests_prop = self.quests
-        equipment_prop = self.equipment
-        inventory_prop = self.inventory
+        # Touch each lazy handler once so its backing db attributes are
+        # written at creation rather than on first in-game use. The return
+        # values are deliberately unused.
+        self.skills
+        self.quests
+        self.equipment
+        self.inventory
+        self.cooldowns
 
 
     def at_post_unpuppet(self, account, session=None, **kwargs) -> None:

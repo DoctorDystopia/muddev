@@ -9,3 +9,12 @@ __pycache__/
 # Logs
 **/logs/*
 !**/logs/README.md
+
+# Test runner cache. The project runs `evennia test`, not pytest --
+# see blackout/README.md "Tests".
+.pytest_cache/
+
+# Manual editor backups. Git is the backup; ten of these were committed
+# before being cleaned out in the 08/01 audit.
+*.sav
+*.sav[0-9]

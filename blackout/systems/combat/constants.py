@@ -26,11 +26,40 @@ MIN_BASE_SKILL_LEVEL: int = 0
 MAX_BASE_SKILL_LEVEL: int = 127
 
 # ─── Fortitude (HP) seed values ──────────────────────────────────────────────
-# Player characters enter the world with Fortitude forced to level XX and the
-# XP that level implies their max_hp is therefore equivalent at XX.
+# Player characters enter the world with Fortitude forced to this level, and
+# max_hp therefore equal to it.
+#
+# There is deliberately NO companion start-XP constant. The level IS the seed:
+# a character spawns exactly on the level-10 threshold with no progress into
+# level 11, and logic.calculate_xp_needed already owns what that threshold
+# costs. The constant that used to live here held 1154 -- OSRS's cumulative
+# Hitpoints XP for level 10 -- and was wrong twice over. It was written into
+# the skills dict's "xp" field, which every reader treats as progress WITHIN
+# the current level, not a cumulative total; and Blackout's curve is not OSRS's
+# (LEVELS_PER_DOUBLING is retuned to 10), so level 10 sits at 1052 cumulative
+# here, not 1154. The visible symptom was a Fortitude bar reading "1154 / 152".
 FORTITUDE_START_LEVEL: int = 10
-FORTITUDE_START_XP: int = 1154
 MAX_FORTITUDE_LEVEL: int = MAX_BASE_SKILL_LEVEL
+
+# ─── Fortitude → max HP scaling ──────────────────────────────────────────────
+# Hitpoints are DIRECTLY linked to the Fortitude skill: max_hp scales one-to-one
+# with Fortitude level, so a fresh character at FORTITUDE_START_LEVEL has
+# exactly that many hitpoints and the cap rises by one per level to
+# MAX_FORTITUDE_LEVEL.
+#
+# Design reference: 02_Player/Player_Overview.md §"Health" —
+#   "Hitpoints ... is directly linked to the Fortitude skill", and Hitpoints is
+#   the only skill players start with experience in, "placing them at exactly
+#   level 10 when first spawning".
+#
+# This constant is the single knob if that relationship is ever retuned (e.g. a
+# 10-HP-per-level scale); nothing should multiply a Fortitude level by a bare
+# literal.
+HP_PER_FORTITUDE_LEVEL: int = 1
+
+# Absolute HP ceiling implied by the scaling above. Exists so UI/cap-check code
+# has one place to read instead of recomputing the product.
+MAX_HP_CAP: int = MAX_FORTITUDE_LEVEL * HP_PER_FORTITUDE_LEVEL
 
 # ─── Effective-level formula constants ─────────────────────────
 # L_eff = floor( floor( (base + potion) * augmentation ) * set ) + stance + 8
@@ -82,13 +111,24 @@ XP_PER_DAMAGE_CONTROLLED_EACH: float = 4.0 / 3.0  # three stats split 4 XP
 XP_PER_DAMAGE_DEFENSIVE: float = 4.0
 # XP_PER_DAMAGE_TAKEN_DEFENSE: float = 1.33  # Defense XP on being hit
 
-# A style's "xp_skill" may name one skill (a plain string) or several (any
+# Fortitude does NOT earn at the style rate. Per 02_Player/Player_Overview.md
+# §"Health": "for every point of damage dealt, 1.33 experience points are given
+# to the player's Hitpoints" — regardless of which combat style landed the hit.
+XP_PER_DAMAGE_FORTITUDE: float = 4.0 / 3.0
+
+# Per-skill rate overrides consulted by _award_style_xp. A skill absent here
+# earns the active style's rate; a skill present earns its own, whichever style
+# named it. Keeps the "Fortitude is special" rule as data rather than a branch.
+XP_PER_DAMAGE_BY_SKILL: dict = {
+    "fortitude": XP_PER_DAMAGE_FORTITUDE,
+}
+
+# A style's "weapon_style_xp_skill" may name one skill (a plain string) or several (any
 # iterable of skill keys), in which case every named skill receives the full
-# per-skill rate above. This is the extension seam for future multi-skill
-# stances -- adding one requires no change to the award code.
+# per-skill rate above.
 ACCURATE_XP_SKILLS: tuple = ("strike", "fortitude")
 AGGRESSIVE_XP_SKILLS: tuple = ("brawn", "fortitude")
-CONTROLLED_XP_SKILLS: tuple = ("strike", "brawn", "defense")
+CONTROLLED_XP_SKILLS: tuple = ("strike", "brawn", "defense", "fortitude")
 DEFENSIVE_XP_SKILLS: tuple = ("defense", "fortitude")
 
 # Weapons spawned before multi-skill styles existed stored the bare string

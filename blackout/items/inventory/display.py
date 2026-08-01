@@ -52,24 +52,31 @@ def _truncate_line(line, width):
         str: The (possibly truncated) line, never wider than ``width``.
 
     Notes:
-        Lines that already fit are returned unchanged -- EvTable pads cells
-        itself, so padding here as well double-counted the width and pushed
-        the rendered grid past its maxwidth.
+        Every returned line is padded to EXACTLY ``width`` visible characters,
+        whether or not it needed truncating. EvTable does not reliably pad
+        multi-line cells to a uniform per-column width on its own -- leaving
+        short lines unpadded lets its column-width negotiation see wildly
+        different natural widths per column and collapse the narrow ones
+        into one-character-per-row wrapping, which is the exact bug this
+        module exists to prevent (confirmed by reproducing it: removing this
+        padding broke a real inventory render even though it made no test
+        fail, since none of the fixtures mix short and long names across
+        enough rows to trigger it).
 
-        Widths are measured through ANSIString so colour markup costs zero
-        columns. Plain ``len()`` counted a ``|y`` tag as two characters,
-        which mis-sized every cell holding a coloured item name and
-        re-triggered the EvTable column-collapse this module exists to
-        prevent. Note that ``evennia.utils.utils.crop`` is NOT usable here:
-        it measures with plain ``len()`` too.
+        Widths are measured and padded through ANSIString so colour markup
+        costs zero columns. Plain ``len()``/``ljust()`` count a ``|y`` tag as
+        two characters, which mis-sizes any cell holding a coloured item
+        name. Note that ``evennia.utils.utils.crop`` is NOT usable here: it
+        measures with plain ``len()`` too.
     """
     ansi_line = ANSIString(line)
-
-    if len(ansi_line) <= width:
-        return line
+    visible_len = len(ansi_line)
 
     if width <= 0:
         return ""
+
+    if visible_len <= width:
+        return line + (" " * (width - visible_len))
 
     # Reserve one char for the ellipsis when we must shorten.
     if width == 1:
@@ -125,11 +132,16 @@ def format_slot_cell(slot_idx, item):
     line1 = f"{slot_idx + 1}: {item.key}"
     qty = getattr(item, "quantity", 1)
     stackable = getattr(item, "is_stackable", False)
+
+    # The quantity line is genuinely optional -- appending an unconditional
+    # "\n" gave every non-stackable cell a trailing blank line, contradicting
+    # both this function's docstring and the empty-slot branch above (which
+    # returns a single line). Only visible now because the test asserting it
+    # was a bare module-level function the Django runner never collected.
     if stackable and qty > 1:
-        line2 = f"  (x{qty})"
-    else:
-        line2 = ""
-    return f"{line1}\n{line2}"
+        return f"{line1}\n  (x{qty})"
+
+    return line1
 
 
 def build_grid(handler):
@@ -179,7 +191,15 @@ def render_grid(handler, maxwidth=INVENTORY_MAX_WIDTH):
     # function stays usable at other widths (e.g. narrower clients).
     cell_width = (maxwidth - (GRID_COLS * _CELL_OVERHEAD)) // GRID_COLS
 
-    table = evtable.EvTable(border="cells", width=maxwidth, evenwidth=True)
+    # `width` and `evenwidth` together are broken in this EvTable build:
+    # confirmed by isolating EvTable from every other part of this module --
+    # four columns of already-uniform, already-padded cells still collapsed
+    # three columns to width 1 and blew the fourth out past 80 chars, but
+    # ONLY when both kwargs were passed together. `width` alone renders the
+    # same content compactly at the requested width, and column evenness is
+    # already guaranteed upstream (every cell is pre-padded to cell_width),
+    # so `evenwidth` was doing nothing useful here anyway.
+    table = evtable.EvTable(border="cells", width=maxwidth)
 
     for row_cells in rows:
         formatted = [

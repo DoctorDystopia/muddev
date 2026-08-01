@@ -1,6 +1,19 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/02/2026
+Description: The single source of truth for every item in Blackout. An ItemDef
+             is rendered into exactly one Evennia prototype, which both the
+             direct-creation and crafting paths spawn from.
+"""
+
+
+
 from dataclasses import dataclass, field
+
+from evennia.prototypes.spawner import spawn
+
 from items.equipment.constants import WieldLocation
-from evennia import create_object
 
 
 @dataclass
@@ -42,21 +55,51 @@ class ItemDef:
     combat_styles: dict = field(default_factory=dict)
     default_combat_style: str | None = None
 
-    def _get_attrs(self) -> dict:
+    def _get_attrs(self, quantity: int = 1) -> dict:
+        """
+        Purpose: Build the complete attribute set for one spawned item.
+
+        Entry:
+            quantity is the stack size to stamp on a stackable item. Ignored
+            for non-stackable items.
+
+        Exit/Returns:
+            Returns a dict of attribute name -> value.
+
+        Module Globals:
+            None
+
+        Methodology:
+            This is the ONE place an ItemDef field becomes an object
+            attribute. create() and to_prototype() both route through here.
+
+        Notes/References:
+            create() used to restate this list inline, and the two had already
+            drifted: create() wrote tier/req_level unconditionally and a
+            quantity that to_prototype() never emitted, while to_prototype()
+            dropped tier/req_level when they were zero. The same item was a
+            different database row depending on whether it was gathered or
+            crafted.
+
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
         attrs = {}
         attrs["value"] = self.value
         attrs["weight"] = self.weight
         attrs["tradeable"] = self.tradeable
         attrs["stackable"] = self.stackable
+        attrs["tier"] = self.tier
+        attrs["req_level"] = self.req_level
 
+        if self.stackable:
+            attrs["quantity"] = quantity
+        if self.desc:
+            attrs["desc"] = self.desc
         if self.use_slot is not None:
             attrs["use_slot"] = self.use_slot
         if self.tool_type is not None:
             attrs["tool_type"] = self.tool_type
-        if self.tier:
-            attrs["tier"] = self.tier
-        if self.req_level:
-            attrs["req_level"] = self.req_level
         # Combat fields — only emitted when populated; non-combat ItemDefs
         # stay clean.
         if self.attack_speed is not None:
@@ -70,60 +113,90 @@ class ItemDef:
 
         return attrs
 
-    def to_prototype(self) -> dict:
+    def to_prototype(self, quantity: int = 1) -> dict:
+        """
+        Purpose: Render this definition as an Evennia prototype dict.
+
+        Entry:
+            quantity is the stack size for a stackable item.
+
+        Exit/Returns:
+            Returns a prototype dict suitable for evennia.prototypes.spawner.
+
+        Module Globals:
+            None
+
+        Methodology:
+            prototype_key is set from this def's key so every spawned object
+            carries the prototype tag and can be found by origin later.
+
+        Notes/References:
+            Evennia's prototype system expects `attrs` as a list of
+            (key, value, ...) tuples, not a dict -- passing a dict iterates
+            keys only and silently drops every value.
+
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        attrs = self._get_attrs(quantity=quantity)
         proto = {
+            "prototype_key": self.key,
             "key": self.name,
             "typeclass": self.typeclass,
             "tags": list(self.tags),
+            "attrs": list(attrs.items()),
         }
-
-        if self.desc:
-            proto["desc"] = self.desc
-        attrs = self._get_attrs()
-        if attrs:
-            # NOTE: Evennia's prototype system expects attrs as a list of (key, value, ...) tuples,
-            # not a dict. Dict iteration yields only keys, silently dropping all attribute values.
-            # Keep the old dict form commented in case a custom spawner later handles it.
-            # proto["attrs"] = attrs
-            proto["attrs"] = list(attrs.items())
 
         return proto
 
     def create(self, location=None, home=None, quantity=1, **kwargs):
-        obj = create_object(
-            self.typeclass,
-            key=self.name,
-            location=location,
-            home=home or location,
-            tags=list(self.tags),
-        )
-        update = obj.attributes.add
-        update("value", self.value)
-        update("weight", self.weight)
-        update("tradeable", self.tradeable)
-        update("stackable", self.stackable)
-        if self.stackable:
-            update("quantity", quantity)
+        """
+        Purpose: Spawn one instance of this item and place it.
 
-        if self.desc:
-            update("desc", self.desc)
-        if self.use_slot is not None:
-            update("use_slot", self.use_slot)
-        if self.tool_type is not None:
-            update("tool_type", self.tool_type)
+        Entry:
+            location is the Object to place the item in, or None to leave it
+            detached.
+            home is the item's home location; defaults to location.
+            quantity is the stack size for a stackable item.
 
-        update("tier", self.tier)
-        update("req_level", self.req_level)
+        Exit/Returns:
+            Returns the spawned Object. The return may be a deleted row: if
+            the destination merged the item into an existing stack, that
+            merge deletes the incoming object. Callers that only want the
+            item delivered can ignore the return, as all current ones do.
 
-        # Combat attributes
-        if self.attack_speed is not None:
-            update("attack_speed", self.attack_speed)
-        if self.combat_stat_bonuses:
-            update("combat_stat_bonuses", dict(self.combat_stat_bonuses))
-        if self.combat_styles:
-            update("combat_styles", dict(self.combat_styles))
-        if self.default_combat_style is not None:
-            update("default_combat_style", self.default_combat_style)
+        Module Globals:
+            None
+
+        Methodology:
+            Spawn detached, then move. The prototype deliberately carries no
+            `location`, because spawning straight into a container runs the
+            destination's at_object_receive before the attributes exist --
+            and the inventory stack-merge reads `stackable` and `quantity` to
+            decide what to do.
+
+        Notes/References:
+            This replaces a hand-rolled create_object plus a dozen
+            attributes.add calls that restated _get_attrs from memory.
+
+            Behaviour change worth knowing: create_object assigns
+            db_location directly and never fires at_object_receive, so items
+            made this way used to land in a character's contents without ever
+            being registered in an inventory slot or merged into an existing
+            stack -- a later inventory.sync() had to repair it. move_to runs
+            the hook, so registration and stacking now happen up front.
+
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        prototype = self.to_prototype(quantity=quantity)
+        spawned = spawn(prototype)
+        obj = spawned[0]
+
+        obj.home = home or location
+
+        if location is not None:
+            obj.move_to(location, quiet=True)
 
         return obj
 

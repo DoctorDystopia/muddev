@@ -11,11 +11,20 @@ from systems.progression.skills.skill_defs.base_skill import BaseSkill
 class Defense(BaseSkill):
     """
     Purpose: Defines the Defense skill. Feeds combat_calc.effective_level
-    on the defense axis. Defense XP is granted when the character takes
-    damage, NOT when they deal it (the OSRS convention).
+    on the defense axis.
+
+    Passive skill: no standalone `execute` action and no unlock gate, so
+    BaseSkill's defaults are inherited rather than restated. The combat
+    handler reads the DEFENDER's defense level when computing
+    defender_eff_def.
 
     Notes/References:
-        Effective Level math wired in batch 2's BlackoutCombatHandler.
+        The OSRS convention is that Defense XP is granted when a character
+        TAKES damage rather than deals it. Blackout does not implement that
+        yet: XP_PER_DAMAGE_TAKEN_DEFENSE is commented out in
+        systems/combat/constants.py and CombatEntity.at_damage awards
+        nothing, so today defense XP arrives only via the defensive stance's
+        weapon_style_xp_skill on the attacker's own swing.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
@@ -25,56 +34,3 @@ class Defense(BaseSkill):
     name = "Defense"
     category = "Combat"
     description = "Proficiency at avoiding and absorbing melee hits."
-
-    def get_unlock_requirements(self, character: object) -> bool:
-        """
-        Purpose: Defense is always unlocked for all characters.
-
-        Entry:
-            character is a valid Evennia Character object
-
-        Exit/Returns:
-            Returns True unconditionally.
-
-        Module Globals:
-            None
-
-        Methodology:
-            Pure-True base implementation.
-
-        Notes/References:
-            None
-
-        Author: Nick Hobar
-        Creation date: 07/26/2026
-        """
-        return True
-
-    def execute(self, character: object, target: object) -> None:
-        """
-        Purpose: Defense has no standalone `execute` action; it is a
-        passive stat consumed when an attacker's swing resolves against
-        this character. Satisfies BaseSkill's contract.
-
-        Entry:
-            character is a valid Evennia Character object
-            target is unused
-
-        Exit/Returns:
-            No conditions
-
-        Module Globals:
-            None
-
-        Methodology:
-            No-op. Combat handler reads character.skills.get_level
-            ('defense') when computing defender_eff_def. XP gains flow
-            from the handler's per-hit XP award, not from this method.
-
-        Notes/References:
-            None
-
-        Author: Nick Hobar
-        Creation date: 07/26/2026
-        """
-        pass

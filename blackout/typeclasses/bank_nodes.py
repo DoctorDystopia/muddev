@@ -1,7 +1,13 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: BankNode typeclass and the banking commands attached to it.
+"""
+
 from evennia import Command, CmdSet
-from evennia import create_object
 from typeclasses.objects import ObjectParent, DefaultObject
-from .spawners import register_spawner
+from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
 
 
@@ -167,12 +173,8 @@ class BankNode(ObjectParent, DefaultObject):
 
 @register_spawner("Bank")
 def spawn_bank(room):
-    if not any(
-        obj.is_typeclass("typeclasses.bank_nodes.BankNode", exact=True)
-        for obj in room.contents
-    ):
-        create_object(
-            "typeclasses.bank_nodes.BankNode",
-            key="bank terminal",
-            location=room,
-        )
+    spawn_once(
+        room,
+        "typeclasses.bank_nodes.BankNode",
+        key="bank terminal",
+    )

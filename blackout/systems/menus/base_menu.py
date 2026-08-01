@@ -1,18 +1,31 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: BlackoutEvMenu — the styled EvMenu subclass every game menu
+             should be launched through, plus start_blackout_menu.
+"""
 
 from evennia.utils.evmenu import EvMenu
 from evennia.utils import evtable
+from systems.ui.colors import (
+    HIGHLIGHT_COLOR,
+    RESET_COLOR,
+)
 
 
 # Public constant definitions
 NODE_BORDER_CHAR = "="
 SEPARATOR_LINE_CHAR = "-"
-SKILL_COLOR = "|c"
-TITLE_COLOR = "|w"
-HIGHLIGHT_COLOR = "|y"
-ERROR_COLOR = "|r"
-SUCCESS_COLOR = "|g"
-RESET_COLOR = "|n"
-SPEECH_COLOR = "|c"
+
+# Typed input meaning "as many as are available". Shopkeep already exposes this
+# as a menu option key; banking's custom-quantity node arms only _default, so
+# without this the word is rejected there.
+QUANTITY_ALL_KEYWORD = "all"
+
+# Smallest quantity a player may enter. Zero and negatives are refused rather
+# than silently clamped -- buying 1 of something after typing 0 is surprising.
+MIN_QUANTITY = 1
 
 
 
@@ -226,3 +239,66 @@ def start_blackout_menu(caller: object,
     menu_instance = BlackoutEvMenu(caller, menudata, startnode=startnode, **kwargs)
 
     return menu_instance
+
+
+
+def parse_quantity(raw_string: str, max_qty: int) -> tuple:
+    """
+    Purpose: Turn a player-typed quantity into a validated, clamped integer.
+
+    Entry:
+        raw_string is whatever the player typed. May be None or blank.
+        max_qty is the largest quantity currently available, an integer.
+
+    Exit/Returns:
+        Returns a (count, error_message) tuple. Exactly one is non-None:
+        a valid entry yields (int, None), a rejected one yields (None, str).
+        The error message carries no colour markup -- callers apply their own.
+
+    Module Globals:
+        QUANTITY_ALL_KEYWORD read.
+        MIN_QUANTITY read.
+
+    Methodology:
+        Accept the "all" keyword first, then parse an integer, then refuse
+        anything below MIN_QUANTITY, then clamp down to max_qty. Clamping the
+        top silently is deliberate: asking for more than is in stock is a
+        reasonable way to say "all of it", whereas asking for zero is not a
+        quantity at all.
+
+    Notes/References:
+        The repo had two divergent implementations of this: banking's two-pass
+        _default node, which refused counts below 1, and shopkeep's one-pass
+        parser callables, which silently clamped them up to 1. Both now route
+        here, so shopkeep gains the refusal and banking gains the "all"
+        keyword. Only the parse is shared -- each menu keeps its own node
+        shape, because banking's two-pass form and shopkeep's goto-callable
+        form are both correct EvMenu idioms and unifying them would fight the
+        framework.
+
+    Author: Nick Hobar
+    Creation date: 08/01/2026
+    """
+    cleaned = (raw_string or "").strip().lower()
+
+    if cleaned == QUANTITY_ALL_KEYWORD:
+        return max_qty, None
+
+    try:
+        count = int(cleaned)
+    except (ValueError, TypeError):
+        parse_error = (
+            f"Invalid number. Enter a quantity between {MIN_QUANTITY} and "
+            f"{max_qty}, or '{QUANTITY_ALL_KEYWORD}'."
+        )
+
+        return None, parse_error
+
+    if count < MIN_QUANTITY:
+        range_error = f"Quantity must be at least {MIN_QUANTITY}."
+
+        return None, range_error
+
+    clamped = min(count, max_qty)
+
+    return clamped, None

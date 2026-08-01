@@ -1,3 +1,10 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: ItemDef entries for currency items.
+"""
+
 from world.item_database import ItemDef
 
 ITEMS = {

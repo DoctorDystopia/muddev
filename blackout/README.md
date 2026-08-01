@@ -54,6 +54,7 @@ Enjoy!
 - [Item Database — Bulk Creation & Management](#item-database-bulk-creation--management)
 - [Character & Progression](#character--progression)
 - [Equipment System](#equipment-system)
+- [Combat System](#combat-system)
 - [Banking System](#banking-system)
 - [Crafting System](#crafting-system)
 - [Admin Commands](#admin-commands)
@@ -159,8 +160,26 @@ adding new handler properties to the Character typeclass.
 Successfully granted 500 XP to testchar's cutting skill.
 ```
 
-The skill key must match a key in `systems/progression/skills/registry.py`:
-`cutting`, `brain_farming`, `foundry`, `metalsmith`.
+The skill key must match a key in `SKILL_REGISTRY`:
+
+| Category | Keys |
+|---|---|
+| Gathering | `cutting`, `brain_farming` |
+| Processing | `foundry` |
+| Production | `metalsmith` |
+| Combat | `strike`, `brawn`, `defense`, `fortitude` |
+
+`systems/progression/skills/registry.py` **discovers these automatically** by
+walking `skill_defs/`. To add a skill, drop one module in the right category
+directory with a `BaseSkill` subclass carrying a unique `key` — there is no
+registry list to edit. A passive skill needs nothing but its four class
+attributes; `get_unlock_requirements` and `execute` already default correctly on
+`BaseSkill`.
+
+```python
+> py from systems.progression.skills.registry import SKILL_REGISTRY; sorted(SKILL_REGISTRY)
+['brain_farming', 'brawn', 'cutting', 'defense', 'fortitude', 'foundry', 'metalsmith', 'strike']
+```
 
 ### Check skill levels (in-game command)
 
@@ -185,8 +204,8 @@ Metalsmith: Level 1 (0/83 XP until next level)
 > py self.skills.get_level("cutting")
 7
 
-> py {s: self.skills.get_level(s) for s in ["cutting", "brain_farming", "foundry", "metalsmith"]}
-{'cutting': 7, 'brain_farming': 0, 'foundry': 3, 'metalsmith': 1}
+> py from systems.progression.skills.registry import SKILL_REGISTRY; {s: self.skills.get_level(s) for s in sorted(SKILL_REGISTRY)}
+{'brain_farming': 0, 'brawn': 0, 'cutting': 7, 'defense': 0, 'fortitude': 10, 'foundry': 3, 'metalsmith': 1, 'strike': 0}
 ```
 
 ### Set a character attribute
@@ -238,6 +257,103 @@ equip/unequip items.
 > py self.equipment.slots.get(WieldLocation.MAIN_HAND)
 <ToolItem: Rusty Scrap Axe>
 ```
+
+### Skill-gated equipping
+
+An item carrying a `tool_type` is gated on a skill level before it can be
+equipped. The mapping lives in `items/equipment/skill_requirements.py`:
+
+| `tool_type` | Required skill |
+|---|---|
+| `axe` | `cutting` |
+| `shortsword`, `spear`, `sword` | `strike` |
+| `hammer`, `generic` | *(none — explicitly exempt)* |
+
+The item's own `db.req_level` sets the level needed. **Every `tool_type` the
+game emits must appear in that map.** An unregistered one **fails closed** —
+the equip is refused and logged — because treating "unknown" as "ungated" is
+what let a renamed weapon category silently lose its level check on every
+object already in the DB. A `None` value means *deliberately* unrestricted, so
+the two cases stay distinguishable.
+
+---
+
+## Combat System
+
+Twitch melee on a **0.6 s tick**, with OSRS-derived accuracy and damage maths
+rescaled from OSRS's 1–99 to Blackout's 0–127.
+
+### In-game commands
+
+```bash
+> attack <target>     # begin swinging at a target
+> hold                # stop attacking, stay in combat
+> wield <weapon>      # swap weapons mid-fight, then resume attacking
+> flee                # leave combat
+```
+
+### How a swing resolves
+
+Each combatant runs one `BlackoutCombatHandler` script. Every 0.6 s tick it
+decrements that combatant's personal cooldown; at zero the pending action
+fires. A weapon's `attack_speed` is the number of ticks **between** swings, so
+a speed-4 weapon swings every 2.4 s.
+
+The global `BlackoutTickEngine` owns a single twisted `LoopingCall` and calls
+every registered handler. It cannot use `Script.interval` or `TickerHandler`:
+`ScriptDB.db_interval` is a Django `IntegerField` (0.6 truncates to 0) and
+`TickerHandler` rejects sub-second intervals.
+
+### Hitpoints and Fortitude
+
+Max HP scales **one-to-one with the Fortitude level**. Characters start at
+Fortitude 10, so at 10 HP, and the cap rises by one per level to 127. The
+scaling knob is `HP_PER_FORTITUDE_LEVEL` in `systems/combat/constants.py` —
+nothing multiplies a Fortitude level by a bare literal.
+
+```python
+> py self.skills.get_level("fortitude"), self.db.max_hp, self.db.hp
+(10, 10, 10)
+```
+
+### Combat XP
+
+Each weapon defines four styles. A style names the skill(s) it feeds via
+`weapon_style_xp_skill`, and every named skill earns that style's per-skill
+rate — 4.0 XP per point of damage, except **Fortitude, which always earns
+1.33/damage regardless of style** (`XP_PER_DAMAGE_BY_SKILL`).
+
+| Stance | Invisible bonus | Feeds |
+|---|---|---|
+| accurate | +3 strike | strike, fortitude |
+| aggressive | +3 brawn | brawn, fortitude |
+| defensive | +3 defense | defense, fortitude |
+| controlled | +1 to all three | strike, brawn, defense |
+
+### Inspect combat state (Python)
+
+```python
+> py self.db.in_combat
+True
+
+> py self.combat.ndb.active_weapon_data["attack_speed"]
+4
+```
+
+Per-tick handler state (`target_id`, `pending_action`, `cooldown_ticks`,
+`active_weapon_data`) lives on **`ndb`, not `db`** — it is rebuilt whenever
+combat starts, so persisting it only cost an Attribute write every 0.6 s per
+combatant.
+
+### Known gaps
+
+- Nothing awards Defense XP on *taking* damage
+  (`XP_PER_DAMAGE_TAKEN_DEFENSE` is commented out in `constants.py`).
+- `CONTROLLED_XP_SKILLS` omits `fortitude`, so controlled-stance weapons
+  (the spear) grant no Hitpoints XP — this contradicts
+  `02_Player/Player_Overview.md`, which says any style grants it.
+- Passive HP regeneration (1 HP/minute per the design doc) is not implemented.
+- NPCs never retaliate; nothing queues actions for them.
 
 ---
 
@@ -307,7 +423,8 @@ requirements, and craft with optional confirmation.
 
 ```python
 > py from systems.crafting.crafting_service import get_categories; get_categories()
-{'Foundry': ['rusty_scrap_metal_recipe'], 'Metalsmith': ['rusty_metal_dust_recipe', 'rusty_scrap_axe_recipe']}
+{'Foundry': ['rusty scrap metal'],
+ 'Metalsmith': ['rusty metal dust', 'rusty scrap axe', 'rusty scrap shortsword', 'rusty scrap spear']}
 
 > py from systems.crafting.crafting_service import get_recipe_display_data; data = get_recipe_display_data(self, "rusty_scrap_metal_recipe"); data["name"], data["can_craft"]
 ('Smelt Rusty Scrap Metal', True)
@@ -322,10 +439,11 @@ requirements, and craft with optional confirmation.
 ```python
 # systems/crafting/recipes/my_recipes.py
 from systems.crafting.blackout_recipe import BlackoutRecipe
+from systems.crafting.constants import CATEGORY_FOUNDRY
 
 class MyNewRecipe(BlackoutRecipe):
     name = "My New Recipe"
-    category = "Foundry"
+    category = CATEGORY_FOUNDRY
     consumable_tags = ["rusty_metal_chunk"]
     tool_tags = ["hammer"]
     output_item_keys = ["rusty_scrap_metal"]
@@ -333,6 +451,12 @@ class MyNewRecipe(BlackoutRecipe):
     required_level = 1
     xp_reward = 25
 ```
+
+**Import `category` from `systems/crafting/constants.py` — never type the
+literal.** A facility's `allowed_categories` is matched against it by exact
+string equality, so `"Metalsmithing"` vs `"Metalsmith"` silently hides every
+recipe in the category from the craft menu. `BlackoutRecipe.__init_subclass__`
+now raises at import on an unregistered category to make that impossible.
 
 ---
 
@@ -411,6 +535,13 @@ Stops Evennia, runs `xyz_cleanup.py`, adds all maps, spawns, and reloads.
 
 Evennia uses `|`-prefixed markup to color terminal text. Tags compose inline — wrap any character or string.
 
+**In game code, do not type these tags directly.** Import the named palette
+from `systems/ui/colors.py` (`TITLE_COLOR`, `HIGHLIGHT_COLOR`, `SUCCESS_COLOR`,
+`ERROR_COLOR`, `RESET_COLOR`, …) plus the `dialog()` / `highlight()` / `title()`
+wrappers. The table below is for reading existing markup and picking new
+palette entries. Nine modules once carried their own copy of these literals, so
+a retheme meant finding all nine.
+
 | Category | Tags | Description |
 |----------|------|-------------|
 | **ANSI fg bright** | `\|r` `\|g` `\|y` `\|b` `\|m` `\|c` `\|w` | Red, Green, Yellow, Blue, Magenta, Cyan, White |
@@ -460,22 +591,46 @@ evennia reload
 | Script | Purpose | How to run |
 |---|---|---|
 | `scripts/reload_characters.py` | Re-runs `at_object_creation()` on all Character objects | `py -3 scripts/reload_characters.py` (from `blackout/`) |
-| `xyz_cleanup.py` | Deletes all rooms tagged with configured z-coordinates | `py -3 xyz_cleanup.py` (from `blackout/`) |
+| `scripts/xyz_cleanup.py` | Deletes all rooms tagged with configured z-coordinates | `../evenv/Scripts/python.exe scripts/xyz_cleanup.py` (from `blackout/`) |
 | `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → cleanup → add → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1` |
 
 ---
 
 ## Running Tests
 
-```bash
-# Run a specific test module
-evennia test systems.banking.tests
+**One command runs the whole suite.** From `blackout/`:
 
-# Run with verbose output
-evennia test --verbose systems.banking.tests
+```bash
+../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
 ```
 
-Test files live alongside the code they test (e.g., `systems/banking/tests.py`).
+The three roots that actually hold tests are `items`, `systems`, and `world`;
+`typeclasses` and `commands` are listed so any test added there is picked up
+too. **Omitting a root silently runs fewer tests rather than erroring** — that
+is how `world/tests/` went unnoticed. Plain `evennia test .` is *not*
+equivalent: it collects fewer tests, because `world/maps/test_oasis.py` and
+`test_neo_cairo.py` are map definitions whose names happen to match the
+discovery pattern.
+
+```bash
+# A single module, while iterating
+../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
+```
+
+### Writing tests
+
+Every test module must be a `unittest.TestCase` subclass. **Do not write bare
+module-level `def test_*()` functions** — Django's unittest discovery skips
+them silently, and ~27 tests (one of them genuinely failing) sat un-run that
+way until they were converted.
+
+`pytest` is installed but **`pytest-django` is not**, so pytest cannot
+bootstrap the DB the Evennia suites need. It is not the runner for this
+project.
+
+Test files live alongside the code they test, in a `tests/` package
+(`systems/banking/tests.py` is the one legacy exception). **A `tests/`
+directory needs an `__init__.py`** or nothing inside it is collected.
 
 ---
 

@@ -1,39 +1,27 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: EvMenu nodes for the equipment screen: view slots, equip from
+             inventory, unequip, inspect.
+"""
 
-from items.equipment.constants import WieldLocation, MAX_INVENTORY_SLOTS
+from items.equipment.constants import (
+    MAX_INVENTORY_SLOTS,
+    SLOT_DISPLAY_ORDER,
+    WieldLocation,
+)
 from items.equipment.handler import EquipmentError
+from systems.ui.colors import (
+    ERROR_COLOR,
+    HIGHLIGHT_COLOR,
+    RESET_COLOR,
+    SUCCESS_COLOR,
+    TITLE_COLOR,
+)
 
 
-TITLE_COLOR = "|w"
-HIGHLIGHT_COLOR = "|y"
-SUCCESS_COLOR = "|g"
-ERROR_COLOR = "|r"
-RESET_COLOR = "|n"
 EQUIPPED_MARKER = "(equipped)"
-SLOT_DISPLAY_ORDER = [
-    WieldLocation.MAIN_HAND,
-    WieldLocation.OFF_HAND,
-    WieldLocation.TWO_HANDS,
-    WieldLocation.HEAD,
-    WieldLocation.BODY,
-    WieldLocation.LEGS,
-    WieldLocation.FEET,
-    WieldLocation.BACK,
-]
-
-
-
-def _get_slot_label(slot: WieldLocation) -> str:
-    label_map = {
-        WieldLocation.MAIN_HAND: "Main Hand",
-        WieldLocation.OFF_HAND: "Off Hand",
-        WieldLocation.TWO_HANDS: "Two Hands",
-        WieldLocation.HEAD: "Head",
-        WieldLocation.BODY: "Body",
-        WieldLocation.LEGS: "Legs",
-        WieldLocation.FEET: "Feet",
-        WieldLocation.BACK: "Back",
-    }
-    return label_map.get(slot, slot.value)
 
 
 
@@ -45,7 +33,7 @@ def start(caller: object, **kwargs) -> tuple:
     options_list = []
 
     for slot_key in SLOT_DISPLAY_ORDER:
-        slot_label = _get_slot_label(slot_key)
+        slot_label = slot_key.label
         slot_item = slots_data.get(slot_key)
 
         if slot_item is not None:
@@ -89,7 +77,6 @@ def start(caller: object, **kwargs) -> tuple:
 def node_inventory(caller: object, **kwargs) -> tuple:
     from items.inventory.display import render_grid
 
-    eq_handler = caller.equipment
     handler = caller.inventory
     handler.sync()
 
@@ -115,7 +102,7 @@ def node_inventory(caller: object, **kwargs) -> tuple:
         qty_str = f" (x{qty})" if qty > 1 and getattr(item_obj, "is_stackable", False) else ""
 
         if use_slot is not None:
-            slot_label = _get_slot_label(use_slot)
+            slot_label = use_slot.label
             desc_string = f"Equip {item_key}{qty_str} to {slot_label}"
             text_lines.append(f"  [{slot_idx+1}] {HIGHLIGHT_COLOR}{item_key}{RESET_COLOR}{qty_str} -> {slot_label}")
             options_list.append({
@@ -210,7 +197,7 @@ def node_item_detail(caller: object, **kwargs) -> tuple:
         options = ({"desc": "Back to equipment overview", "goto": "start"},)
         return text, options
 
-    slot_label = _get_slot_label(slot_key)
+    slot_label = slot_key.label
     item_desc = item_obj.db.desc or "No description available."
 
     text_lines = [

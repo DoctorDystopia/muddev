@@ -1,3 +1,10 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Foundry-category recipe definitions (smelting).
+"""
+
 from ..blackout_recipe import BlackoutRecipe
 from ..constants import CATEGORY_FOUNDRY
 

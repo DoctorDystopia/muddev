@@ -11,6 +11,7 @@ from commands.command import Command
 from evennia import CmdSet
 from evennia.utils.evmenu import EvMenu
 from systems.progression.skills.registry import SKILL_REGISTRY
+from systems.ui.meters import build_xp_meter
 
 
 
@@ -88,9 +89,9 @@ class CmdSkills(Command):
                     current_xp = xp_tuple[0]
                     total_xp_needed = xp_tuple[1]
 
+                    xp_meter = build_xp_meter(current_xp, total_xp_needed)
                     line_string = (
-                        f"|w{skill_name}:|n Level {current_lvl} "
-                        f"({current_xp}/{total_xp_needed} XP until next level)"
+                        f"|w{skill_name}:|n Level {current_lvl} {xp_meter}"
                     )
                     output_lines.append(line_string)
 

@@ -2,7 +2,7 @@ from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest, EvenniaCommandTest
 
 from typeclasses.characters import Character as BlackoutCharacter
-from typeclasses.items import BaseItem, EquippableItem
+from typeclasses.items import BaseItem
 from typeclasses.bank_nodes import CmdDeposit, CmdWithdraw, CmdBalance, BankNode
 from systems.banking.handler import BankHandler
 
@@ -228,10 +228,14 @@ class TestBankHandler(EvenniaTest):
         self.assertEqual(bank_credits, 9)
 
     def test_creditsitem_deposit_withdraw(self):
-        """CreditsItem specifically works through deposit/withdraw cycle."""
-        from typeclasses.items import CreditsItem
-        credits = create_object(CreditsItem, key="Credits", location=self.char1)
-        credits.attributes.add("quantity", 50)
+        """CreditsItem specifically works through deposit/withdraw cycle.
+
+        Spawned through ITEM_DB rather than create_object: the typeclass no
+        longer carries its own stackable/value defaults, because they only
+        restated the ItemDef that overwrote them a moment later.
+        """
+        from world.item_database import ITEM_DB
+        credits = ITEM_DB["credits"].create(location=self.char1, quantity=50)
 
         # Deposit 20
         self.handler.deposit(credits, count=20)

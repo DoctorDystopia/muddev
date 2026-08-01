@@ -1,71 +1,20 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: EvMenu nodes for the skills panel: category list, per-skill
+             detail, and XP meters.
+"""
 
 from systems.progression.skills.registry import SKILL_REGISTRY
-
-
-# Public constant definitions
-SKILL_COLOR = "|c"
-TITLE_COLOR = "|w"
-HIGHLIGHT_COLOR = "|y"
-SUCCESS_COLOR = "|g"
-RESET_COLOR = "|n"
-PROGRESS_BAR_WIDTH = 20
-PROGRESS_FILL_CHAR = "#"
-PROGRESS_EMPTY_CHAR = "."
-
-
-
-def _build_xp_bar(current_xp: int, total_needed: int) -> str:
-    """
-    Purpose: Builds a text-based progress bar for XP display.
-
-    Entry:
-        current_xp is a non-negative integer
-        total_needed is a positive integer
-
-    Exit/Returns:
-        Returns a string like "[#####.......] 50/100".
-
-    Module Globals:
-        PROGRESS_BAR_WIDTH read
-        PROGRESS_FILL_CHAR read
-        PROGRESS_EMPTY_CHAR read
-        HIGHLIGHT_COLOR read
-        SUCCESS_COLOR read
-        RESET_COLOR read
-
-    Methodology:
-        Calculates fill ratio clamped to [0, 1]. Builds a bar
-        string with colored fill and remainder characters.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 07/13/2026
-    """
-    if total_needed <= 0:
-        progress_string = f"{SUCCESS_COLOR}[MAX LEVEL]{RESET_COLOR}"
-
-        return progress_string
-
-    fill_ratio = current_xp / total_needed
-
-    if fill_ratio > 1.0:
-        fill_ratio = 1.0
-
-    fill_count = int(fill_ratio * PROGRESS_BAR_WIDTH)
-    empty_count = PROGRESS_BAR_WIDTH - fill_count
-
-    fill_part = PROGRESS_FILL_CHAR * fill_count
-    empty_part = PROGRESS_EMPTY_CHAR * empty_count
-
-    progress_string = (
-        f"[{HIGHLIGHT_COLOR}{fill_part}{RESET_COLOR}"
-        f"{empty_part}] "
-        f"{current_xp}/{total_needed}"
-    )
-
-    return progress_string
+from systems.ui.colors import (
+    HIGHLIGHT_COLOR,
+    RESET_COLOR,
+    SKILL_COLOR,
+    SUCCESS_COLOR,
+    TITLE_COLOR,
+)
+from systems.ui.meters import build_xp_meter
 
 
 
@@ -138,7 +87,7 @@ def start(caller: object, **kwargs) -> tuple:
 
             next_level_at = total_xp + remaining
 
-            xp_bar = _build_xp_bar(current_xp, total_needed)
+            xp_bar = build_xp_meter(current_xp, total_needed)
 
             skill_instance = skill_class()
             is_unlocked = skill_instance.get_unlock_requirements(caller)
@@ -280,7 +229,7 @@ def node_skill_detail(caller: object, **kwargs) -> tuple:
 
     next_level_at = total_xp + remaining
 
-    xp_bar = _build_xp_bar(current_xp, total_needed)
+    xp_bar = build_xp_meter(current_xp, total_needed)
 
     skill_instance = skill_class()
     is_unlocked = skill_instance.get_unlock_requirements(caller)

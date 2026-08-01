@@ -10,7 +10,7 @@ Write-Host "=== Stopping Evennia ==="
 & $Evennia stop
 
 Write-Host "=== Cleaning up old map data ==="
-& $Python $GameDir\xyz_cleanup.py
+& $Python $ScriptDir\xyz_cleanup.py
 if (-not $?) { Write-Error "Cleanup failed"; exit 1 }
 
 Write-Host "=== Adding maps ==="

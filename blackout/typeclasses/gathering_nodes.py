@@ -5,10 +5,9 @@ Creation date: 06/05/2026
 Description: Typeclasses for gatherable resource nodes in the world.
 """
 
-from evennia import create_object
 from typeclasses.objects import DefaultObject
 from commands.gathering_cmds import GatheringNodeCmdSet
-from .spawners import register_spawner
+from .spawners import register_spawner, spawn_once
 
     
 
@@ -83,12 +82,8 @@ class RustyPole(DefaultObject):
 
 @register_spawner("Pole clearing")
 def spawn_rusty_pole(room):
-    if not any(
-        obj.is_typeclass("typeclasses.gathering_nodes.RustyPole", exact=True)
-        for obj in room.contents
-    ):
-        create_object(
-            "typeclasses.gathering_nodes.RustyPole",
-            key="rusty pole",
-            location=room,
-        )
+    spawn_once(
+        room,
+        "typeclasses.gathering_nodes.RustyPole",
+        key="rusty pole",
+    )

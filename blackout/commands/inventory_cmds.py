@@ -1,11 +1,19 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: Command for rendering the 32-slot inventory grid.
+"""
+
 from commands.command import Command
 from evennia.commands.cmdset import CmdSet
 from items.inventory.display import render_grid
+from systems.ui.colors import (
+    ERROR_COLOR,
+    RESET_COLOR,
+    TITLE_COLOR,
+)
 
-HIGHLIGHT_COLOR = "|y"
-TITLE_COLOR = "|w"
-RESET_COLOR = "|n"
-ERROR_COLOR = "|r"
 
 
 class CmdInventory(Command):

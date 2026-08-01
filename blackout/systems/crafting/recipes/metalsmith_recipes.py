@@ -1,12 +1,19 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Metalsmith-category recipe definitions (forging).
+"""
+
 from ..blackout_recipe import BlackoutRecipe
-from ..constants import CATEGORY_METALSMITHING
+from ..constants import CATEGORY_METALSMITH
 
 
 class RustyMetalDustRecipe(BlackoutRecipe):
     "Grind a rusty metal chunk into fine dust using a hammer."
 
     name = "rusty metal dust"
-    category = CATEGORY_METALSMITHING
+    category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
     required_level = 0
     xp_reward = 10
@@ -27,7 +34,7 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude axe at an anvil."
 
     name = "rusty scrap axe"
-    category = CATEGORY_METALSMITHING
+    category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
     required_level = 0
     xp_reward = 30
@@ -48,7 +55,7 @@ class RustyScrapShortswordRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude shortsword at an anvil."
 
     name = "rusty scrap shortsword"
-    category = CATEGORY_METALSMITHING
+    category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
     required_level = 2
     xp_reward = 50
@@ -69,7 +76,7 @@ class RustyScrapSpearRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude spear at an anvil."
 
     name = "rusty scrap spear"
-    category = CATEGORY_METALSMITHING
+    category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
     required_level = 3
     xp_reward = 60

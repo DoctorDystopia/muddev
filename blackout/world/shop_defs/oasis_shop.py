@@ -1,3 +1,10 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: ShopDef entry for the oasis shopkeeper's stock and pricing.
+"""
+
 from world.shop_defs import ShopDef
 
 ITEMS = {

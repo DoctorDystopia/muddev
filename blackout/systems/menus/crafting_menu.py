@@ -10,14 +10,16 @@ manages display formatting and navigation flow.
 
 
 import systems.crafting.crafting_service as crafting_service
+from systems.ui.colors import (
+    ERROR_COLOR,
+    HIGHLIGHT_COLOR,
+    RESET_COLOR,
+    SUCCESS_COLOR,
+    TITLE_COLOR,
+)
 
 
 
-TITLE_COLOR = "|w"
-HIGHLIGHT_COLOR = "|y"
-SUCCESS_COLOR = "|g"
-ERROR_COLOR = "|r"
-RESET_COLOR = "|n"
 RECIPE_SEPARATOR = "-" * 60
 
 

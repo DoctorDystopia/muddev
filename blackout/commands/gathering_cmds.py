@@ -5,12 +5,11 @@ Creation date: 06/05/2026
 Description: Generic gathering commands injected via node CmdSets.
 """
 
-import time
 from evennia import Command
 from evennia import CmdSet
+from evennia.utils import logger
 
-from systems.progression.skills.handler import SkillHandler
-from systems.progression.skills.skill_defs.gathering.cutting import Cutting
+from systems.progression.skills.registry import SKILL_REGISTRY
 
 
 
@@ -20,34 +19,77 @@ CUTTING_SKILL_KEY = "cutting"
 
 
 
-class CmdCutGatheringNode(Command):
+class CmdGatherFromNode(Command):
     """
-    Purpose: Generic command to harvest materials from a cutting node.
+    Purpose: Base command for harvesting a resource node with a skill.
+
+    Subclasses supply `key`/`aliases` and a `skill_key` naming the skill to
+    run. The skill class itself is resolved through SKILL_REGISTRY at call
+    time, so adding a gathering skill means adding its skill module and a
+    four-line subclass -- no edits here, and no import of the concrete skill
+    class.
     """
-    key = "cut"
-    aliases = ["chop"]
+    skill_key = None
     locks = "cmd:all()"
 
     def func(self) -> None:
+        """
+        Purpose: Resolve the target and hand it to the configured skill.
+
+        Entry:
+            self.caller is a valid Evennia Character.
+            self.args may name an object in the room or inventory.
+
+        Exit/Returns:
+            No conditions. Messages the caller on every failure path.
+
+        Module Globals:
+            SKILL_REGISTRY read.
+
+        Methodology:
+            1. Reject an empty argument.
+            2. caller.search reports its own "Could not find" error.
+            3. Look the skill up by key and execute it against the target.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 06/05/2026
+        """
         caller = self.caller
         args = self.args.strip()
-        
-        # 1. Check if they typed a target at all
+
         if not args:
-            caller.msg("What do you want to cut?")
+            caller.msg(f"What do you want to {self.cmdstring}?")
             return
 
-        # 2. Use Evennia's robust search to find the object in the room or inventory
+        # Evennia's search prints its own standard failure message.
         target = caller.search(args)
-        
-        # If search() doesn't find anything, it automatically prints a standard
-        # "Could not find 'X'." error to the caller, so we can just return.
         if not target:
             return
-            
-        # 3. Hand off the found object to the Skill logic
-        cutting_skill = Cutting()
-        cutting_skill.execute(caller, target)
+
+        skill_class = SKILL_REGISTRY.get(self.skill_key)
+        if skill_class is None:
+            logger.log_err(
+                f"{type(self).__name__}: skill_key {self.skill_key!r} is not in "
+                f"SKILL_REGISTRY."
+            )
+            caller.msg("You don't know how to do that.")
+            return
+
+        skill = skill_class()
+        skill.execute(caller, target)
+
+
+
+class CmdCutGatheringNode(CmdGatherFromNode):
+    """
+    Purpose: Harvest materials from a cutting node.
+    """
+    key = "cut"
+    aliases = ["chop"]
+    skill_key = CUTTING_SKILL_KEY
 
 
 

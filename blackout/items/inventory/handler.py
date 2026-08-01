@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: InventoryHandler — the 32-slot grid backing a character's
+             carried items, including stack merging.
+"""
+
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 
 SLOTS_TOTAL = MAX_INVENTORY_SLOTS

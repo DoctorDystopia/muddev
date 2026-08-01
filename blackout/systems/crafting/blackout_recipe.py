@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: BlackoutRecipe — the project's CraftingRecipe subclass, adding
+             a skill gate and an XP award on top of the Evennia contrib.
+"""
+
 from evennia.contrib.game_systems.crafting.crafting import (
     CraftingRecipe,
     CraftingValidationError,

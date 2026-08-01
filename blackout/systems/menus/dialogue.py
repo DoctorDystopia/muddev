@@ -1,8 +1,15 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Generic NPC dialogue nodes, shared by simple talking NPCs.
+"""
 
+from systems.ui.colors import (
+    RESET_COLOR,
+    TITLE_COLOR,
+)
 # Public constant definitions
-TITLE_COLOR = "|w"
-HIGHLIGHT_COLOR = "|y"
-RESET_COLOR = "|n"
 
 
 

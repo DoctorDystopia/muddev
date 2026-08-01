@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/30/2026
+Description: NpcDef dataclass and the NPC_DB registry, mirroring ItemDef /
+             ITEM_DB for combatant NPCs.
+"""
+
 from dataclasses import dataclass, field
 
 from evennia import create_object

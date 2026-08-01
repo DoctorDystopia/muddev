@@ -1,3 +1,10 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: CraftingFacility base typeclass and the craft command attached
+             to facilities.
+"""
 
 from evennia import Command, CmdSet
 from evennia import DefaultObject

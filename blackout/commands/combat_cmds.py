@@ -7,6 +7,7 @@ Description: Twitch combat commands — attack, hold, flee, wield.
 
 from evennia import CmdSet, Command
 
+from systems.combat import combat_msg
 from systems.combat.combat import ensure_combat_handler
 
 
@@ -42,6 +43,14 @@ class CmdAttack(Command):
 
         handler.queue_action({"kind": "attack", "target": target})
         caller.msg(f"|gYou begin attacking |w{target.key}|g.|n")
+
+        # Opening HP readout. Without it the first bar the player sees is the
+        # one AFTER a hit has already landed, so there is nothing to read the
+        # drop against.
+        opening_hp = combat_msg.format_hp_status(
+            target.key, target.hp, target.max_hp
+        )
+        caller.msg(opening_hp)
 
 
 class CmdHold(Command):

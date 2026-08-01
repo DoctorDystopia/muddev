@@ -1,3 +1,10 @@
+> **Scope note (added 2026-08-01):** this describes the **stock Evennia
+> `mygame/` layout**, and is kept as general Evennia reference. It is *not* a
+> description of Blackout's game dir — it predates `systems/` and `items/`,
+> which is where most Blackout code now lives. For the actual layout see
+> [CLAUDE.md](../CLAUDE.md); for operator recipes see
+> [blackout/README.md](../blackout/README.md).
+
 - mygame/
     - commands/ - This holds all your custom commands (user-input handlers). You both add your own and override Evennia’s defaults from here.
     - server/ - The structure of this folder should not change since Evennia expects it.

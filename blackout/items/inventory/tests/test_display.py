@@ -8,6 +8,9 @@ remains a compact, one-text-line-per-grid-row table with bounded width even
 when long item names are present.
 """
 
+import re
+from unittest import TestCase
+
 from evennia import create_object
 from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaCommandTest
@@ -22,56 +25,72 @@ _MEDIUM_KEY = "Rusty Metal Chunk"
 _SHORT_KEY = "Hammer"
 
 
-def test_truncate_line_short_line_unchanged():
-    line = "3: Rusty Metal Chunk"
-    assert len(line) == 20
-    assert display._truncate_line(line, 21) == line
+class TestDisplayHelpers(TestCase):
+    """Pure formatting helpers. Wrapped in a TestCase so `evennia test`
+    collects them -- as bare functions they were silently skipped by the
+    Django/unittest runner that runs every other suite."""
+
+    def test_truncate_line_short_line_is_padded_to_width(self):
+        # Short lines are PADDED, not left as-is: every cell in a table column
+        # must report the same visible width, or EvTable's column-width
+        # negotiation collapses the narrower columns into one-character-per-row
+        # wrapping. See display._truncate_line's docstring.
+        line = "3: Rusty Metal Chunk"
+        assert len(line) == 20
+        result = display._truncate_line(line, 21)
+        assert result == line + " "
+        assert len(result) == 21
 
 
-def test_truncate_line_long_line_uses_ellipsis():
-    # width=21, prefix "NN: " preserved, item key shortened by 1 for ellipsis
-    line = "2: " + "A" * 25  # 28 chars total
-    result = display._truncate_line(line, 21)
-    assert len(result) == 21
-    assert result.startswith("2: ")
-    assert result.endswith("\u2026")
+    def test_truncate_line_long_line_uses_ellipsis(self):
+        # width=21, prefix "NN: " preserved, item key shortened by 1 for ellipsis
+        line = "2: " + "A" * 25  # 28 chars total
+        result = display._truncate_line(line, 21)
+        assert len(result) == 21
+        assert result.startswith("2: ")
+        assert result.endswith("\u2026")
 
 
-def test_truncate_line_keeps_length_within_width():
-    for width in (1, 5, 10, 21):
-        line = "x" * 50
-        result = display._truncate_line(line, width)
-        assert len(result) == width
+    def test_truncate_line_keeps_length_within_width(self):
+        for width in (1, 5, 10, 21):
+            line = "x" * 50
+            result = display._truncate_line(line, width)
+            assert len(result) == width
 
 
-def test_truncate_cell_preserves_newline_structure():
-    cell = "3: Hammer\n  (x40)"
-    result = display._truncate_cell(cell, 50)
-    assert result.split("\n") == ["3: Hammer", "  (x40)"]
+    def test_truncate_cell_preserves_newline_structure(self):
+        cell = "3: Hammer\n  (x40)"
+        result = display._truncate_cell(cell, 50)
+        lines = result.split("\n")
+        # Content is preserved but every line is padded out to the full width.
+        assert lines[0].rstrip() == "3: Hammer"
+        assert lines[1].rstrip() == "  (x40)"
+        assert len(lines[0]) == 50
+        assert len(lines[1]) == 50
 
 
-def test_format_slot_cell_empty():
-    assert display.format_slot_cell(0, None) == "1: [empty]"
+    def test_format_slot_cell_empty(self):
+        assert display.format_slot_cell(0, None) == "1: [empty]"
 
 
-def test_format_slot_cell_non_stackable():
-    class _FakeItem:
-        key = "Hammer"
-        quantity = 1
-        is_stackable = False
+    def test_format_slot_cell_non_stackable(self):
+        class _FakeItem:
+            key = "Hammer"
+            quantity = 1
+            is_stackable = False
 
-    text = display.format_slot_cell(0, _FakeItem())
-    assert text == "1: Hammer"
+        text = display.format_slot_cell(0, _FakeItem())
+        assert text == "1: Hammer"
 
 
-def test_format_slot_cell_stackable_with_qty():
-    class _FakeItem:
-        key = "Credits"
-        quantity = 40
-        is_stackable = True
+    def test_format_slot_cell_stackable_with_qty(self):
+        class _FakeItem:
+            key = "Credits"
+            quantity = 40
+            is_stackable = True
 
-    text = display.format_slot_cell(1, _FakeItem())
-    assert text == "2: Credits\n  (x40)"
+        text = display.format_slot_cell(1, _FakeItem())
+        assert text == "2: Credits\n  (x40)"
 
 
 class TestRenderGridLayout(EvenniaCommandTest):
@@ -122,11 +141,16 @@ class TestRenderGridLayout(EvenniaCommandTest):
     def test_render_grid_truncates_long_item_names(self):
         self._fill_slots([_LONG_KEY])
         title, table = display.render_grid(self.handler, maxwidth=100)
+        plain = strip_ansi(table)
         # The long name must be truncated (ellipsis marker present) and the
         # [empty] cell must be intact in the same row.
-        assert "\u2026" in table, "long item name was not truncated"
-        assert "1: [empty]" not in table  # slot 1 holds the long item now
-        assert "2: [empty]" in table  # remaining slots are empty and intact
+        assert "\u2026" in plain, "long item name was not truncated"
+        # Anchored on a cell boundary ("|" then spaces then the slot number):
+        # a bare substring check for "1: [empty]" also matches inside
+        # "21: [empty]", "31: [empty]", etc. once the grid renders compactly
+        # rather than character-wrapped.
+        assert not re.search(r"\|\s*1: \[empty\]", plain)  # slot 1 holds the long item now
+        assert re.search(r"\|\s*2: \[empty\]", plain)  # remaining slots are empty and intact
 
     def test_render_grid_title_reports_used_count(self):
         self._fill_slots([_SHORT_KEY, _MEDIUM_KEY, _SHORT_KEY])

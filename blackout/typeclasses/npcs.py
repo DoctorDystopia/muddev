@@ -1,10 +1,16 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Talkative and shopkeeper NPC typeclasses, plus the talk command.
+"""
 
-from evennia import Command, CmdSet, create_object
+from evennia import Command, CmdSet
 from evennia import DefaultObject
 from evennia.utils.evmenu import EvMenu
 
 from typeclasses.objects import ObjectParent
-from .spawners import register_spawner
+from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
 
 
@@ -234,14 +240,14 @@ class ShopkeepNPC(TalkativeNPC):
 
 @register_spawner("Shopkeeper")
 def spawn_shopkeep(room):
-    if not any(
-        obj.is_typeclass("typeclasses.npcs.ShopkeepNPC", exact=True)
-        for obj in room.contents
-    ):
-        shopkeep = create_object(
-            "typeclasses.npcs.ShopkeepNPC",
-            key="Shopkeeper",
-            location=room,
-        )
-        shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
-        shopkeep.db.shopdef_key = "oasis_shop"
+    shopkeep = spawn_once(
+        room,
+        "typeclasses.npcs.ShopkeepNPC",
+        key="Shopkeeper",
+    )
+
+    # Stamped unconditionally, not just on first creation: spawn_once returns
+    # the pre-existing shopkeep on a map rebuild, and re-applying the def keeps
+    # an already-placed NPC in step with edits to these values.
+    shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
+    shopkeep.db.shopdef_key = "oasis_shop"

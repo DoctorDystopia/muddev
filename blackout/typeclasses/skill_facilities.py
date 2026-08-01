@@ -1,7 +1,14 @@
-from evennia import create_object
-from systems.crafting.constants import CATEGORY_FOUNDRY, CATEGORY_METALSMITHING
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Per-skill crafting facility typeclasses (furnace, anvil) and
+             their room spawners.
+"""
+
+from systems.crafting.constants import CATEGORY_FOUNDRY, CATEGORY_METALSMITH
 from typeclasses.crafting_facilities import CraftingFacility
-from .spawners import register_spawner
+from .spawners import register_spawner, spawn_once
 
 
 # ------------------------------------
@@ -44,7 +51,7 @@ class MetalsmithBaseFacility(CraftingFacility):
     Specific facility types (AnvilFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = [CATEGORY_METALSMITHING]
+    allowed_categories = [CATEGORY_METALSMITH]
 
     def at_object_creation(self):
         parent_class = super()
@@ -71,25 +78,17 @@ class AnvilFacility(MetalsmithBaseFacility):
 # -------------------------
 @register_spawner("Foundry Furnace Facility")
 def spawn_foundry_facility(room):
-    if not any(
-        obj.is_typeclass("typeclasses.skill_facilities.FurnaceFacility", exact=True)
-        for obj in room.contents
-    ):
-        create_object(
-            "typeclasses.skill_facilities.FurnaceFacility",
-            key="Foundry Furnace",
-            location=room,
-        )
+    spawn_once(
+        room,
+        "typeclasses.skill_facilities.FurnaceFacility",
+        key="Foundry Furnace",
+    )
 
 
 @register_spawner("Metalsmith Anvil Facility")
 def spawn_anvil_facility(room):
-    if not any(
-        obj.is_typeclass("typeclasses.skill_facilities.AnvilFacility", exact=True)
-        for obj in room.contents
-    ):
-        create_object(
-            "typeclasses.skill_facilities.AnvilFacility",
-            key="Metalsmith Anvil",
-            location=room,
-        )
+    spawn_once(
+        room,
+        "typeclasses.skill_facilities.AnvilFacility",
+        key="Metalsmith Anvil",
+    )

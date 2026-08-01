@@ -1,7 +1,9 @@
 ﻿# mygame/world/maps/test_oasis.py
 
 from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
-import typeclasses.skill_facilities as skill_facilities
+# Imported for its side effect: the module's @register_spawner decorators must
+# have run before this map spawns tiles that reference those spawner keys.
+import typeclasses.skill_facilities as skill_facilities  # noqa: F401
 
 # from .legend import BLACKOUT_LEGEND
 

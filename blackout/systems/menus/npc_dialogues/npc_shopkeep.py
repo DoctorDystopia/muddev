@@ -1,12 +1,21 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 07/13/2026
+Description: Dialogue nodes for shopkeeper NPCs: the buy and sell flows.
+"""
+
 from evennia.utils.evmenu import list_node
 
-from systems.menus.base_menu import (
-    TITLE_COLOR,
-    SPEECH_COLOR,
-    HIGHLIGHT_COLOR,
-    SUCCESS_COLOR,
+from systems.menus.base_menu import parse_quantity
+
+from systems.ui.colors import (
     ERROR_COLOR,
     RESET_COLOR,
+    SUCCESS_COLOR,
+    dialog as _dialog,
+    highlight as _hl,
+    title as _line,
 )
 from systems.shop.shop_service import (
     get_buy_items,
@@ -20,20 +29,45 @@ from systems.shop.shop_service import (
 )
 
 
-def _dialog(text: str) -> str:
-    return f"{SPEECH_COLOR}{text}{RESET_COLOR}"
-
-
-def _hl(text: str) -> str:
-    return f"{HIGHLIGHT_COLOR}{text}{RESET_COLOR}"
-
-
-def _line(text: str) -> str:
-    return f"{TITLE_COLOR}{text}{RESET_COLOR}"
-
-
 def _get_npc(caller):
     return caller.ndb._evmenu.npc if caller.ndb._evmenu else None
+
+
+# -------------------------------------------------------------
+# Ware listing
+# -------------------------------------------------------------
+# The listed label and the string matched on selection MUST be produced by the
+# same code. list_node hands the chosen label back verbatim, so if a generator
+# and its matcher ever drift apart -- and there were four copies across buy and
+# sell, in two formats -- selection silently stops matching and every item
+# reports "no longer available". _ware_label is now the single producer.
+
+BUY_PRICE_ATTR = "buy_price"
+SELL_PRICE_ATTR = "unit_price"
+
+
+def _ware_label(entry, price_attr):
+    """Render one shop entry's selectable label."""
+    price = getattr(entry, price_attr)
+
+    if entry.count > 1:
+        return f"|w{entry.name}|n (x{entry.count}) [|y{price}|n each]"
+
+    return f"|w{entry.name}|n [|y{price}|n]"
+
+
+def _ware_labels(entries, price_attr):
+    """Render labels for a whole ware list, in order."""
+    return [_ware_label(entry, price_attr) for entry in entries]
+
+
+def _find_entry_by_display(entries, selection, price_attr):
+    """Reverse _ware_label: map a chosen label back to its entry."""
+    for entry in entries:
+        if _ware_label(entry, price_attr) == selection:
+            return entry
+
+    return None
 
 
 # -------------------------------------------------------------
@@ -44,32 +78,20 @@ def _get_npc(caller):
 def _buy_option_generator(caller):
     npc = _get_npc(caller)
     entries = get_buy_items(npc, caller)
-    result = []
-    for entry in entries:
-        if entry.count > 1:
-            result.append(
-                f"|w{entry.name}|n (x{entry.count}) [|y{entry.buy_price}|n each]"
-            )
-        else:
-            result.append(
-                f"|w{entry.name}|n [|y{entry.buy_price}|n]"
-            )
-    return result
+    return _ware_labels(entries, BUY_PRICE_ATTR)
 
 
 def _select_ware_to_buy(caller, selection, **kwargs):
     npc = kwargs.get("npc", _get_npc(caller))
     entries = get_buy_items(npc, caller)
-    for entry in entries:
-        display_single = f"|w{entry.name}|n [|y{entry.buy_price}|n]"
-        display_multi = (
-            f"|w{entry.name}|n (x{entry.count}) [|y{entry.buy_price}|n each]"
-        )
-        if display_single == selection or display_multi == selection:
-            kwargs["buy_entry"] = entry
-            return ("node_buy_quantity", kwargs)
-    caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
-    return (None, kwargs)
+    entry = _find_entry_by_display(entries, selection, BUY_PRICE_ATTR)
+
+    if entry is None:
+        caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
+        return (None, kwargs)
+
+    kwargs["buy_entry"] = entry
+    return ("node_buy_quantity", kwargs)
 
 
 @list_node(_buy_option_generator, select=_select_ware_to_buy, pagesize=20)
@@ -93,13 +115,12 @@ def _parse_custom_buy_quantity(caller, raw_string, **kwargs):
     max_affordable = credits // entry.buy_price if entry.buy_price > 0 else 0
     total_available = min(entry.count, max_affordable)
 
-    try:
-        qty = int(raw_string.strip())
-    except (ValueError, TypeError):
-        caller.msg(f"{ERROR_COLOR}Enter a number 1-{total_available}, or 'all'.{RESET_COLOR}")
+    qty, parse_error = parse_quantity(raw_string, total_available)
+
+    if parse_error is not None:
+        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
         return (None, kwargs)
 
-    qty = max(1, min(qty, total_available))
     kwargs["buy_count"] = qty
     return ("node_confirm_buy", kwargs)
 
@@ -168,7 +189,6 @@ def _pick_buy_quantity(caller, raw_string, **kwargs) -> str:
 
 
 def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
-    npc = kwargs.get("npc", _get_npc(caller))
     entry = kwargs.get("buy_entry")
     buy_count = kwargs.get("buy_count", 1)
 
@@ -206,18 +226,26 @@ def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
     return text, options
 
 
+def _report_trade(caller, result, verb, count):
+    """Message the caller with the outcome of a completed trade."""
+    if result.success:
+        caller.msg(
+            f"{SUCCESS_COLOR}You {verb} {count} {result.item_name} "
+            f"for {result.total_price} credits.{RESET_COLOR}"
+        )
+        return
+
+    caller.msg(f"{ERROR_COLOR}Transaction failed — {result.error}{RESET_COLOR}")
+
+
 def _confirm_buy(caller, raw_string, **kwargs) -> str:
     npc = kwargs.get("npc", _get_npc(caller))
     entry = kwargs.get("buy_entry")
     buy_count = kwargs.get("buy_count", 1)
+
     result = execute_buy(caller, npc, entry, buy_count)
-    if result.success:
-        caller.msg(
-            f"{SUCCESS_COLOR}You bought {result.bought_count} {result.item_name} "
-            f"for {result.total_price} credits.{RESET_COLOR}"
-        )
-    else:
-        caller.msg(f"{ERROR_COLOR}Transaction failed — {result.error}{RESET_COLOR}")
+    _report_trade(caller, result, "bought", result.bought_count)
+
     return "node_buy"
 
 
@@ -229,34 +257,13 @@ def _confirm_buy(caller, raw_string, **kwargs) -> str:
 def _sell_option_generator(caller):
     npc = _get_npc(caller)
     entries = get_sell_items(caller, npc)
-    result = []
-    for entry in entries:
-        if entry.count > 1:
-            result.append(
-                f"|w{entry.name}|n (x{entry.count}) [|y{entry.unit_price}|n each]"
-            )
-        else:
-            result.append(
-                f"|w{entry.name}|n [|y{entry.unit_price}|n]"
-            )
-    return result
-
-
-def _find_entry_by_display(entries, selection):
-    for entry in entries:
-        display_single = f"|w{entry.name}|n [|y{entry.unit_price}|n]"
-        display_multi = (
-            f"|w{entry.name}|n (x{entry.count}) [|y{entry.unit_price}|n each]"
-        )
-        if display_single == selection or display_multi == selection:
-            return entry
-    return None
+    return _ware_labels(entries, SELL_PRICE_ATTR)
 
 
 def _select_ware_to_sell(caller, selection, **kwargs):
     npc = kwargs.get("npc", _get_npc(caller))
     entries = get_sell_items(caller, npc)
-    entry = _find_entry_by_display(entries, selection)
+    entry = _find_entry_by_display(entries, selection, SELL_PRICE_ATTR)
     if entry is None:
         caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
         return (None, kwargs)
@@ -286,13 +293,12 @@ def _parse_custom_sell_quantity(caller, raw_string, **kwargs):
         caller.msg(f"{ERROR_COLOR}No more of that item available.{RESET_COLOR}")
         return ("node_sell", kwargs)
 
-    try:
-        qty = int(raw_string.strip())
-    except (ValueError, TypeError):
-        caller.msg(f"{ERROR_COLOR}Enter a number 1-{available}, or 'all'.{RESET_COLOR}")
+    qty, parse_error = parse_quantity(raw_string, available)
+
+    if parse_error is not None:
+        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
         return (None, kwargs)
 
-    qty = max(1, min(qty, available))
     kwargs["sell_count"] = qty
     kwargs["actual_count"] = qty
     return ("node_confirm_sell", kwargs)
@@ -356,7 +362,6 @@ def _pick_sell_quantity(caller, raw_string, **kwargs) -> str:
 
 def node_confirm_sell(caller, raw_string, **kwargs) -> tuple:
     entry = kwargs.get("sell_group")
-    sell_count = kwargs.get("sell_count", 1)
     actual_count = kwargs.get("actual_count", 1)
 
     if not entry:
@@ -398,14 +403,10 @@ def _confirm_sell(caller, raw_string, **kwargs) -> str:
     npc = kwargs.get("npc", _get_npc(caller))
     entry = kwargs.get("sell_group")
     sell_count = kwargs.get("sell_count", 1)
+
     result = execute_sell(caller, npc, entry, sell_count)
-    if result.success:
-        caller.msg(
-            f"{SUCCESS_COLOR}You sold {result.sold_count} {result.item_name} "
-            f"for {result.total_price} credits.{RESET_COLOR}"
-        )
-    else:
-        caller.msg(f"{ERROR_COLOR}Transaction failed — {result.error}{RESET_COLOR}")
+    _report_trade(caller, result, "sold", result.sold_count)
+
     return "node_sell"
 
 

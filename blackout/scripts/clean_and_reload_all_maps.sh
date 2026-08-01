@@ -23,7 +23,7 @@ echo "=== Stopping Evennia ==="
 "$EVENNIA" stop
 
 echo "=== Cleaning up old map data ==="
-if ! "$PYTHON" "$GAME_DIR/xyz_cleanup.py"; then
+if ! "$PYTHON" "$SCRIPT_DIR/xyz_cleanup.py"; then
     echo "Error: Cleanup failed" >&2
     exit 1
 fi

@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: BankHandler — per-character storage, implemented as a hidden
+             room used as a container.
+"""
+
 from evennia import create_object
 
 from items.equipment.handler import EquipmentError

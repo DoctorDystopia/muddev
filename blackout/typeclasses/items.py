@@ -1,3 +1,11 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: Item typeclasses. Stats come from ITEM_DB definitions; these
+             classes carry only behaviour and derived properties.
+"""
+
 from typeclasses.objects import Object
 from items.equipment.constants import WieldLocation
 
@@ -76,40 +84,32 @@ class EquippableItem(BaseItem):
 class ToolItem(EquippableItem):
     """
     Tiered tools like axes and pickaxes.
-    Relies on prototype attributes: 'tool_type', 'tier', and 'req_level'.
+
+    Carries no attribute defaults of its own. Every value it relies on --
+    'use_slot', 'tool_type', 'tier', 'req_level' -- comes from the spawning
+    ItemDef in world/item_database.py, which is the single source of truth.
+    Hardcoding them here restated the ItemDef and had already drifted: the
+    literal tier of 0 contradicted rusty_scrap_axe's tier of 1, and every
+    write was immediately overwritten on the ItemDef path anyway.
     """
-    
-    def at_object_creation(self):
-        super().at_object_creation()
-        self.db.use_slot = WieldLocation.MAIN_HAND
-        self.db.tool_type = "generic"
-        self.db.tier = 0
-        self.db.req_level = 0
 
 
 class CreditsItem(BaseItem):
     """
     Stackable currency item representing Blackout credits (chips).
     Only one stack of CreditsItem should exist in a character's inventory.
-    """
 
-    def at_object_creation(self):
-        super().at_object_creation()
-        self.db.stackable = True
-        self.db.tradeable = True
-        self.db.value = 1
-        self.db.quantity = 0
+    Spawn via ITEM_DB["credits"], which supplies stackable, tradeable, value
+    and the ("credits", "currency") tag.
+    """
 
 
 class WeaponItem(EquippableItem):
     """
     Tiered weapons like swords and spears.
-    Relies on prototype attributes: 'weapon_type', 'tier', and 'req_level'.
+
+    As with ToolItem, all attributes come from the spawning ItemDef. Note the
+    weapon kind is stored under 'tool_type', not 'weapon_type' -- the removed
+    default wrote a 'weapon_type' of "generic" that no consumer ever read,
+    leaving a stale phantom attribute on every weapon in the game.
     """
-    
-    def at_object_creation(self):
-        super().at_object_creation()
-        self.db.use_slot = WieldLocation.MAIN_HAND
-        self.db.weapon_type = "generic"
-        self.db.tier = 0
-        self.db.req_level = 0

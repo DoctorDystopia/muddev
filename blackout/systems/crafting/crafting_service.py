@@ -19,16 +19,8 @@ Usage:
 
 
 
-from evennia.contrib.game_systems.crafting.crafting import (
-    _load_recipes,
-    _RECIPE_CLASSES,
-    craft as contrib_craft,
-)
-
 from .constants import CONSUMABLE_TAG_CATEGORY, TOOL_TAG_CATEGORY
-
-def _ensure_recipes_loaded():
-    _load_recipes()
+from .registry import RECIPE_REGISTRY
 
 
 def _iter_candidate_items(caller, include_location):
@@ -102,10 +94,9 @@ def get_categories(facility=None):
     Returns:
         dict mapping category name to list of recipe keys.
     """
-    _ensure_recipes_loaded()
     categories = {}
 
-    for recipe_key, recipe_cls in _RECIPE_CLASSES.items():
+    for recipe_key, recipe_cls in RECIPE_REGISTRY.items():
         cat = getattr(recipe_cls, "category", "Uncategorized")
         if facility is not None:
             allowed = getattr(facility, "allowed_categories", None)
@@ -124,20 +115,16 @@ def get_recipes_in_category(category):
     Returns:
         list of (recipe_key, recipe_cls) tuples.
     """
-    _ensure_recipes_loaded()
-
     return [
         (key, cls)
-        for key, cls in _RECIPE_CLASSES.items()
+        for key, cls in RECIPE_REGISTRY.items()
         if getattr(cls, "category", "Uncategorized") == category
     ]
 
 
 def get_recipe_class(recipe_key):
     """Get the recipe class for a given recipe key, or None if not found."""
-    _ensure_recipes_loaded()
-
-    return _RECIPE_CLASSES.get(recipe_key)
+    return RECIPE_REGISTRY.get(recipe_key)
 
 
 def check_craftable(caller, recipe_key):
@@ -272,6 +259,13 @@ def perform_craft(caller, recipe_key):
     contrib. The contrib's recipe handles all validation, consumption,
     spawning, and messaging internally.
 
+    The recipe class is instantiated and crafted directly rather than going
+    through the contrib's craft() helper. craft() exists only to resolve a
+    name to a class, and it does so by fuzzy prefix/substring matching -- with
+    the registry we already hold the exact class, and the fuzzy path could
+    silently resolve to a different recipe. CraftingRecipeBase.craft() is the
+    public API craft() itself calls.
+
     Args:
         caller: The character performing the craft.
         recipe_key: Name of the recipe to execute.
@@ -297,9 +291,9 @@ def perform_craft(caller, recipe_key):
         if obj.tags.get(category=TOOL_TAG_CATEGORY, return_list=True)
     ]
 
-    result = contrib_craft(
-        caller, recipe_key, *(tools + consumables), raise_exception=False
-    )
+    recipe_inputs = tools + consumables
+    recipe = recipe_cls(caller, *recipe_inputs)
+    result = recipe.craft(raise_exception=False)
 
     if result:
         for obj in result:
