@@ -18,6 +18,9 @@ class WieldLocation(Enum):
     HEAD = "head"
     BACK = "back"
     FEET = "feet"
+    NECK = "neck"
+    MAIN_HAND_FINGER = "main_hand_finger"
+    OFF_HAND_FINGER = "off_hand_finger"
 
     @property
     def label(self) -> str:
@@ -66,6 +69,9 @@ SLOT_DISPLAY_ORDER = (
     WieldLocation.LEGS,
     WieldLocation.FEET,
     WieldLocation.BACK,
+    WieldLocation.NECK,
+    WieldLocation.MAIN_HAND_FINGER,
+    WieldLocation.OFF_HAND_FINGER,
 )
 
 # Max number of unequipped items a character can carry in their Evennia inventory (contents).

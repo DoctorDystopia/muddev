@@ -16,11 +16,11 @@ class RustyMetalDustRecipe(BlackoutRecipe):
     category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
     required_level = 0
-    xp_reward = 10
+    xp_reward = 15
     skill_category = "production"
 
     consumable_tags = ["rusty_metal_chunk"]
-    consumable_names = ["Rusty Metal Chunk"]
+    consumable_names = ["Rusty metal chunk"]
 
     tool_tags = ["hammer"]
     tool_names = ["Hammer"]
@@ -41,7 +41,7 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
     skill_category = "production"
 
     consumable_tags = ["rusty_scrap_metal"]
-    consumable_names = ["Rusty Scrap Metal"]
+    consumable_names = ["Rusty scrap metal"]
 
     tool_tags = ["hammer", "anvil"]
     tool_names = ["Hammer", "Anvil"]
@@ -52,17 +52,17 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
 
 
 class RustyScrapShortswordRecipe(BlackoutRecipe):
-    "Hammer rusty scrap metal into a crude shortsword at an anvil."
+    "Hammer two rusty scrap metal sheets into a crude shortsword at an anvil."
 
     name = "rusty scrap shortsword"
     category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
     required_level = 2
-    xp_reward = 50
+    xp_reward = 60
     skill_category = "production"
 
-    consumable_tags = ["rusty_scrap_metal"]
-    consumable_names = ["Rusty Scrap Metal"]
+    consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
+    consumable_names = ["Rusty scrap metal", "Rusty scrap metal"]
 
     tool_tags = ["hammer", "anvil"]
     tool_names = ["Hammer", "Anvil"]
@@ -82,8 +82,8 @@ class RustyScrapSpearRecipe(BlackoutRecipe):
     xp_reward = 60
     skill_category = "production"
 
-    consumable_tags = ["rusty_scrap_metal"]
-    consumable_names = ["Rusty Scrap Metal"]
+    consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
+    consumable_names = ["Rusty scrap metal", "Rusty scrap metal"]
 
     tool_tags = ["hammer", "anvil"]
     tool_names = ["Hammer", "Anvil"]

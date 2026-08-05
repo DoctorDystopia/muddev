@@ -21,7 +21,8 @@ import sys
 # Public constant definitions
 ZCOORDS_TO_CLEAN = [
     "oasis",
-    # "trade town sector 1",
+    "oasis_outskirts",
+    "trade town sector 1",
 ]
 
 # The game dir (blackout/), one level up from this file in scripts/. Running

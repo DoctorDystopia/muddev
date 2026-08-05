@@ -24,10 +24,12 @@ from systems.combat import constants as const
 from systems.combat.combat import (
     COMBAT_HANDLER_KEY,
     HANDLER_NO_TIMER_INTERVAL,
+    combat_profile,
     ensure_combat_handler,
     get_defense_bonuses,
     get_handler_for,
 )
+from systems.combat.rules.context import ActionResult
 from systems.combat.tick_engine import (
     TICK_ENGINE_KEY,
     bootstrap_combat,
@@ -35,6 +37,7 @@ from systems.combat.tick_engine import (
     purge_stale_combat_handlers,
 )
 from typeclasses.npc_combat import spawn_mutant_raider
+from world.item_database import ITEM_DB
 
 
 class TestCombatHandlerWiring(EvenniaTest):
@@ -152,9 +155,9 @@ class TestSwingCadence(EvenniaTest):
         handler.ndb.active_weapon_data = weapon_data
 
         # Never miss, never kill — we are counting cadence, not resolving combat.
-        swing_result = {"hit": True, "damage": 0, "hit_prob": 1.0}
+        swing_result = ActionResult(hit=True, damage=0, hit_prob=1.0)
         with mock.patch(
-            "systems.combat.combat.combat_calc.resolve_melee_swing",
+            "systems.combat.combat.resolve_action",
             return_value=swing_result,
         ) as mocked:
             for _ in range(ticks):
@@ -342,6 +345,61 @@ class TestDefenderBonuses(EvenniaTest):
         self.assertEqual(bonuses, const.UNARMED_DEFAULT_COMBAT_STATS)
 
 
+class TestMultiSlotStatAggregation(EvenniaTest):
+    """combat_profile must sum bonuses across every equipped slot, not just
+    the wielded weapon -- the "multi-slot armour aggregation" seam that used
+    to be reserved but unimplemented.
+
+    No armour ItemDef with combat_stat_bonuses exists yet, so a second slot's
+    contribution is simulated by stamping combat_stat_bonuses directly onto a
+    non-hand item (an amulet), the same technique
+    test_npc_defense_bonuses_come_from_the_npc uses.
+    """
+
+    def _equip(self, item_key: str, extra_bonuses: dict = None):
+        item = ITEM_DB[item_key].create(location=self.char1)
+        if extra_bonuses is not None:
+            item.db.combat_stat_bonuses = extra_bonuses
+        self.char1.equipment.equip(item)
+
+        return item
+
+    def test_defense_bonus_sums_weapon_and_a_second_slot(self):
+        self._equip("rusty_scrap_shortsword")  # slash_defense_bonus: 2
+        self._equip("glass_cannon_amulet", {"slash_defense_bonus": 10})
+
+        bonuses = get_defense_bonuses(self.char1)
+
+        self.assertEqual(bonuses["slash_defense_bonus"], 12)
+
+    def test_attacker_stat_bonuses_sum_across_slots(self):
+        self._equip("rusty_scrap_shortsword")  # melee_strength_bonus: 5
+        self._equip("glass_cannon_amulet", {"melee_strength_bonus": 3})
+
+        profile = combat_profile(self.char1)
+
+        self.assertEqual(profile["combat_stat_bonuses"]["melee_strength_bonus"], 8)
+
+    def test_style_and_speed_still_come_from_the_wielded_weapon_only(self):
+        """Stacking a second slot's bonuses must not change which combat
+        style or attack speed is active -- those are not summable."""
+        self._equip("rusty_scrap_shortsword")  # attack_speed: 4, style "irimi"
+        self._equip("glass_cannon_amulet", {"melee_strength_bonus": 3})
+
+        profile = combat_profile(self.char1)
+
+        self.assertEqual(profile["attack_speed"], 4)
+        self.assertEqual(profile["active_combat_style"]["attack_type"], "stab")
+
+    def test_an_item_with_no_bonuses_does_not_zero_out_another_slots_bonus(self):
+        self._equip("rusty_scrap_shortsword")  # slash_defense_bonus: 2
+        self._equip("glass_cannon_amulet")  # no combat_stat_bonuses attribute
+
+        bonuses = get_defense_bonuses(self.char1)
+
+        self.assertEqual(bonuses["slash_defense_bonus"], 2)
+
+
 class TestRuntimeStateIsNotPersisted(EvenniaTest):
     """Per-tick handler state belongs on ndb, not db.
 
@@ -438,10 +496,10 @@ class TestSwingReporting(EvenniaTest):
         ensure_combat_handler(target)
         handler.queue_action({"kind": "attack", "target": target})
 
-        swing_result = {"hit": True, "damage": damage, "hit_prob": 1.0}
+        swing_result = ActionResult(hit=True, damage=damage, hit_prob=1.0)
 
         with mock.patch(
-            "systems.combat.combat.combat_calc.resolve_melee_swing",
+            "systems.combat.combat.resolve_action",
             return_value=swing_result,
         ):
             with mock.patch.object(type(self.char1), "msg") as mocked_msg:
@@ -513,10 +571,10 @@ class TestSwingReporting(EvenniaTest):
         ensure_combat_handler(target)
         handler.queue_action({"kind": "attack", "target": target})
 
-        swing_result = {"hit": False, "damage": 0, "hit_prob": 0.0}
+        swing_result = ActionResult(hit=False, damage=0, hit_prob=0.0)
 
         with mock.patch(
-            "systems.combat.combat.combat_calc.resolve_melee_swing",
+            "systems.combat.combat.resolve_action",
             return_value=swing_result,
         ):
             with mock.patch.object(type(self.char1), "msg") as mocked_msg:

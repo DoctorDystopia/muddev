@@ -130,3 +130,44 @@ class TestHpStatusFormatting(unittest.TestCase):
 
         self.assertIn("0", empty)
         self.assertNotEqual(empty, full)
+
+
+
+class TestCombatStatBonusFormatting(unittest.TestCase):
+    """Player-facing rendering of a combat_stat_bonuses dict."""
+
+    def test_empty_dict_renders_no_lines(self):
+        self.assertEqual(combat_msg.format_combat_stat_bonuses({}), [])
+
+    def test_all_zero_dict_renders_no_lines(self):
+        bonuses = {"stab_attack_bonus": 0, "melee_strength_bonus": 0}
+
+        self.assertEqual(combat_msg.format_combat_stat_bonuses(bonuses), [])
+
+    def test_key_is_derived_into_a_title_cased_label(self):
+        visible = strip_ansi(
+            combat_msg.format_combat_stat_bonuses({"stab_attack_bonus": 4})[0]
+        )
+
+        self.assertEqual(visible, "Stab Attack: +4")
+
+    def test_negative_value_has_no_plus_sign(self):
+        visible = strip_ansi(
+            combat_msg.format_combat_stat_bonuses({"crush_attack_bonus": -2})[0]
+        )
+
+        self.assertEqual(visible, "Crush Attack: -2")
+
+    def test_zero_entries_are_skipped_among_nonzero_ones(self):
+        bonuses = {"stab_attack_bonus": 4, "slash_attack_bonus": 0}
+
+        lines = [strip_ansi(line) for line in combat_msg.format_combat_stat_bonuses(bonuses)]
+
+        self.assertEqual(lines, ["Stab Attack: +4"])
+
+    def test_positive_and_negative_use_different_colours(self):
+        positive = combat_msg.format_combat_stat_bonuses({"stab_attack_bonus": 4})[0]
+        negative = combat_msg.format_combat_stat_bonuses({"stab_attack_bonus": -4})[0]
+
+        self.assertNotEqual(positive, negative)
+        self.assertNotEqual(strip_ansi(positive), positive)

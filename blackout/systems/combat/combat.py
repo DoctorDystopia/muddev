@@ -12,8 +12,11 @@ from evennia.utils import logger
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
 
-from . import combat_calc, combat_msg
+from . import combat_msg
 from . import constants as const
+from .rules.context import ActionContext, read_skill_levels
+from .rules.contributors import collect_contributors
+from .rules.pipeline import resolve_action
 
 # ─── Weapon-style => XP award table ───────────────────────────────────────
 
@@ -60,6 +63,7 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
     """
     style_name = style.get("weapon_style")
     xp_per_damage = _WEAPON_STYLE_XP_MAP.get(style_name)
+
     if xp_per_damage is None:
         logger.log_err(
             f"_plan_style_xp: unknown weapon_style {style_name!r} on {attacker}; no XP awarded."
@@ -137,7 +141,6 @@ def _labelled_awards(awards) -> list:
 
 # ─── Helper-tool functions (encapsulate repetitive dict accesses) ─────────
 
-
 def _object_by_id(obj_id):
     """Resolve a dbid to a live Evennia Object, or None if it is gone.
 
@@ -176,26 +179,6 @@ def _stored_combat_styles(entity) -> dict:
 
     return {}
 
-# TODO: combat_style_bonus() rename
-def _stance_bonus(boost_profile: dict, skill_key: str) -> int:
-    """Pull the integer stance boost for one combat axis (strike|brawn|defense)."""
-    return boost_profile.get(skill_key, 0)
-
-
-def _attack_equip(combat_stats: dict, damage_type: str) -> int:
-    """Grab the equip attack bonus for the given type (stab/slash/crush)."""
-    return combat_stats.get(f"{damage_type}_attack_bonus", 0)
-
-
-def _defense_equip(combat_stats: dict, damage_type: str) -> int:
-    """Grab the equip defense bonus for the given type."""
-    return combat_stats.get(f"{damage_type}_defense_bonus", 0)
-
-
-def _strength_equip(combat_stats: dict) -> int:
-    """Grab the melee strength bonus."""
-    return combat_stats.get("melee_strength_bonus", 0)
-
 
 def _unarmed_weapon_data() -> dict:
     """Build the active_weapon_data snapshot when no weapon is wielded.
@@ -210,7 +193,7 @@ def _unarmed_weapon_data() -> dict:
     }
 
 
-def _held_weapon(entity):
+def held_weapon(entity):
     """Return the entity's wielded weapon (two-handed first), or None.
 
     A two-handed weapon lives in WieldLocation.TWO_HANDS, never MAIN_HAND, so
@@ -226,15 +209,18 @@ def _held_weapon(entity):
     return slots.get(WieldLocation.TWO_HANDS) or slots.get(WieldLocation.MAIN_HAND)
 
 
-def _combat_stat_source(entity):
-    """Return the object carrying `entity`'s combat stats, or None.
+def _combat_style_source(entity):
+    """Return the object carrying `entity`'s combat STYLE and attack speed, or None.
 
     A HostileNPC has no equipment handler and carries its spawner-stamped
-    stat block on itself. A Character carries it on the weapon it is
-    wielding. None means "nothing equipped" -- fall back to unarmed.
+    style/speed on itself. A Character reads them off the weapon it is
+    wielding -- style and attack speed are inherently weapon-specific and,
+    unlike stat bonuses, are never summed across equipped slots. None means
+    "no weapon wielded"; the caller falls back to the unarmed style
+    regardless of what armour (if any) is equipped.
 
     This single choice is what lets the profile below read one uniform set of
-    db fields regardless of who is fighting.
+    db fields for style/speed, regardless of who is fighting.
     """
     if entity is None:
         return None
@@ -242,7 +228,96 @@ def _combat_stat_source(entity):
     if not hasattr(entity, "equipment"):
         return entity
 
-    return _held_weapon(entity)
+    return held_weapon(entity)
+
+
+def available_combat_styles(weapon) -> dict:
+    """Return the style-key -> style-dict table stored on `weapon`.
+
+    Thin public wrapper around _stored_combat_styles so callers outside this
+    module (the combat-options menu) don't reach past the legacy attack_type
+    fallback it also handles.
+    """
+    return _stored_combat_styles(weapon)
+
+
+def active_combat_style_key(weapon):
+    """Return the style key currently active on `weapon`, or None if it has
+    no styles registered. Mirrors the default-key resolution
+    _resolve_style_and_speed uses, without needing the unarmed fallback dict.
+    """
+    styles = _stored_combat_styles(weapon)
+    stored = getattr(weapon.db, "default_combat_style", None)
+
+    if stored and stored in styles:
+        return stored
+
+    return next(iter(styles), None)
+
+
+def set_combat_style(weapon, style_key: str, combatant=None) -> bool:
+    """Set `weapon`'s active combat style. Returns False if style_key names
+    no style on this weapon, leaving the current style untouched.
+
+    If `combatant` is mid-fight, refreshes its cached active_weapon_data the
+    same way ActionWield.resolve does after a weapon swap -- otherwise the
+    new style would not take effect until the next wield or combat entry.
+    """
+    styles = _stored_combat_styles(weapon)
+    if style_key not in styles:
+        return False
+
+    weapon.db.default_combat_style = style_key
+
+    if combatant is not None and combatant.combat is not None:
+        combatant.combat._refresh_weapon()
+
+    return True
+
+
+def _resolve_style_and_speed(style_source, unarmed: dict) -> tuple:
+    """Return (active_combat_style, attack_speed) for one style source.
+
+    style_source is the wielded weapon, an NPC carrying its own block, or
+    None -- which falls back to the unarmed profile untouched.
+    """
+    if style_source is None:
+        return unarmed["active_combat_style"], unarmed["attack_speed"]
+
+    styles = _stored_combat_styles(style_source)
+
+    default_key = getattr(style_source.db, "default_combat_style", None) or next(
+        iter(styles), const.UNARMED_DEFAULT_COMBAT_STYLE
+    )
+
+    active_combat_style = styles.get(default_key) or unarmed["active_combat_style"]
+    speed = getattr(style_source.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
+
+    return active_combat_style, speed
+
+
+def _resolve_stat_bonuses(entity, style_source, unarmed: dict) -> dict:
+    """Return the combat_stat_bonuses dict `entity` fights with.
+
+    A Character's total is the SUM across every equipped slot (weapon,
+    off-hand, armour, jewellery), via
+    EquipmentHandler.total_combat_stat_bonuses -- this is the seam the
+    "multi-slot armour aggregation" comment used to point at. An NPC has no
+    equipment handler and keeps its single spawner-stamped stat block, read
+    off `style_source` (only consulted for this branch, since a Character's
+    total does not depend on which weapon, if any, is held).
+    """
+    equipment = getattr(entity, "equipment", None)
+
+    if equipment is not None:
+        merged = dict(unarmed["combat_stat_bonuses"])
+        for stat_key, stat_value in equipment.total_combat_stat_bonuses().items():
+            merged[stat_key] = merged.get(stat_key, 0) + stat_value
+        return merged
+
+    stats = getattr(style_source.db, "combat_stat_bonuses", None) if style_source else None
+
+    return dict(stats) if stats else dict(unarmed["combat_stat_bonuses"])
 
 
 def combat_profile(entity) -> dict:
@@ -253,30 +328,23 @@ def combat_profile(entity) -> dict:
 
     This is the ONE place that resolves where combat stats come from.
 
-    It is also the seam that multi-slot armour aggregation will extend: today
-    only the wielded item contributes to defence.
+    combat_stat_bonuses is the SUM across every equipped slot for a Character
+    (see _resolve_stat_bonuses); active_combat_style and attack_speed stay
+    sourced from the single wielded weapon, since those are not summable the
+    way flat stat bonuses are -- wearing two attack-speed items does not
+    average their speeds.
     """
-    source = _combat_stat_source(entity)
-
-    if source is None:
+    if entity is None:
         return _unarmed_weapon_data()
 
     unarmed = _unarmed_weapon_data()
+    style_source = _combat_style_source(entity)
 
-    stats = getattr(source.db, "combat_stat_bonuses", None) or unarmed["combat_stat_bonuses"]
-
-    styles = _stored_combat_styles(source)
-
-    default_key = getattr(source.db, "default_combat_style", None) or next(
-        iter(styles), const.UNARMED_DEFAULT_COMBAT_STYLE
-    )
-
-    active_combat_style = styles.get(default_key) or unarmed["active_combat_style"]
-
-    speed = getattr(source.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
+    active_combat_style, speed = _resolve_style_and_speed(style_source, unarmed)
+    stats = _resolve_stat_bonuses(entity, style_source, unarmed)
 
     return {
-        "combat_stat_bonuses": dict(stats),
+        "combat_stat_bonuses": stats,
         "active_combat_style": dict(active_combat_style),
         "attack_speed": speed,
     }
@@ -346,10 +414,15 @@ class ActionAttack(_Action):
         return target
 
 
-    def _land_hit(self, attacker, target, style: dict, dmg: int) -> bool:
+    def _land_hit(self, context, result) -> bool:
         """Announce, damage, and pay out one connecting swing.
 
         Returns True if the hit was lethal.
+
+        Takes the ActionContext and ActionResult rather than loose arguments so
+        the damage SOURCE and TYPE reach at_damage: a gadget that discharges
+        for 5 and a sword that rolls 5 have to be distinguishable to the death
+        broadcast even though the number is identical.
 
         Everything the players see is sent BEFORE at_damage runs, because
         at_damage broadcasts the death line and a killed NPC then deletes
@@ -361,6 +434,10 @@ class ActionAttack(_Action):
         re-reading target.hp — the bar has to show the post-hit total while the
         hit has not been applied yet.
         """
+        attacker = context.attacker
+        target = context.defender
+        style = context.style
+        dmg = result.damage
         room = getattr(target, "location", None)
 
         # Decide lethality from the pre-damage HP rather than polling
@@ -389,10 +466,101 @@ class ActionAttack(_Action):
         # award that caused it, rather than below the target's death.
         _apply_xp_awards(attacker, awards)
 
-        target.at_damage(dmg, attacker=attacker)
+        target.at_damage(
+            dmg,
+            attacker=attacker,
+            source=context.weapon,
+            damage_type=result.damage_type,
+        )
 
         return killed
 
+
+    def _build_context(self, handler, attacker, target) -> ActionContext:
+        """Snapshot everything one swing needs into an ActionContext.
+
+        This is the seam that replaced a block of loose local variables. The
+        swing's inputs now travel as one object, which is what lets a rules
+        definition reach the wielder's own stats -- an amulet that keys off
+        Brawn-over-Fortitude cannot be expressed against six bare integers.
+
+        Contributors come from handler.ndb.active_rules, cached beside
+        active_weapon_data: collecting them is an Attribute read per equipped
+        item and this runs on the 0.6s tick.
+        """
+        weapon_data = handler.ndb.active_weapon_data or _unarmed_weapon_data()
+        style = weapon_data.get("active_combat_style")
+
+        if not style:
+            # A malformed/missing style dict would otherwise KeyError below and
+            # kill the swing.
+            logger.log_err(
+                f"ActionAttack: {attacker} has no usable attack style; falling back to unarmed."
+            )
+            style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
+
+        attacker_stats = (
+            weapon_data.get("combat_stat_bonuses") or const.UNARMED_DEFAULT_COMBAT_STATS
+        )
+
+        return ActionContext(
+            attacker=attacker,
+            defender=target,
+            weapon=held_weapon(attacker),
+            weapon_data=weapon_data,
+            style=style,
+            attack_type=style["attack_type"],
+            attacker_stats=attacker_stats,
+            defender_stats=get_defense_bonuses(target),
+            attacker_levels=read_skill_levels(attacker),
+            defender_levels=read_skill_levels(target),
+            stance_boost=style.get("weapon_style_level_boost") or {},
+            attacker_rules=handler.active_rules(),
+            defender_rules=collect_contributors(target),
+        )
+
+    def _land_backfire(self, context, result) -> bool:
+        """Apply a swing's self-damage to the attacker. True if it killed them.
+
+        Same message-before-damage ordering as _land_hit, and for the same
+        reason: at_damage can end in at_death, which broadcasts and then
+        respawns. Announcing afterwards would print the backfire line below
+        the death it caused.
+
+        The attacker is passed as their own `attacker` truthfully; at_death
+        normalises a self-kill so the victim is not credited with their own
+        kill.
+
+        damage_type is carried through from the rule's result verbatim, NOT
+        hard-coded here: self-damage is typed by whatever caused it (a
+        malfunctioning energy gizmo backfires as DAMAGE_TYPE_ENERGY, not a
+        dedicated "backfire" type), the same as it would be typed if it had
+        landed on a target instead of the wielder. "Backfire" is a delivery
+        mechanism, not a damage type; at_death's self-inflicted check is what
+        picks the death line, independent of this.
+        """
+        attacker = context.attacker
+        hurt = result.self_damage
+        hp_before = getattr(attacker, "hp", 0)
+        killed = (hurt >= hp_before)
+
+        attacker.msg(combat_msg.format_backfire(attacker, context.weapon, hurt))
+        attacker.msg(
+            combat_msg.format_hp_status(
+                combat_msg.SELF_HP_LABEL,
+                max(0, hp_before - hurt),
+                getattr(attacker, "max_hp", 0),
+            )
+        )
+
+        attacker.at_damage(
+            hurt,
+            attacker=attacker,
+            source=context.weapon,
+            damage_type=result.damage_type,
+        )
+
+        return killed
 
     def resolve(self, handler) -> bool:
         attacker = handler.obj
@@ -408,67 +576,36 @@ class ActionAttack(_Action):
             handler.end_combat()
             return True
 
-        # ── gather weapon data ───────────────────────────────────────────
-        weapon = handler.ndb.active_weapon_data or _unarmed_weapon_data()
-        style = weapon.get("active_combat_style")
-        if not style:
-            # A malformed/missing style dict would otherwise KeyError below and
-            # kill the swing.
-            logger.log_err(
-                f"ActionAttack: {attacker} has no usable attack style; falling back to unarmed."
-            )
-            style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
-
-        combat_stats = weapon.get("combat_stat_bonuses") or const.UNARMED_DEFAULT_COMBAT_STATS
-        damage_type = style["attack_type"]
-        boost = style.get("weapon_style_level_boost") or {}
-
-        equip_atk = _attack_equip(combat_stats, damage_type)
-        equip_str = _strength_equip(combat_stats)
-
-        a_strike_eff = _stance_bonus(boost, "strike")
-        a_brawn_eff = _stance_bonus(boost, "brawn")
-
-        # ── effective levels ─────────────────────────────────────────────
-        a_strike_lvl = handler.obj.skills.get_level("strike")
-        a_brawn_lvl = handler.obj.skills.get_level("brawn")
-        d_defense_lvl = target.skills.get_level("defense") if hasattr(target, "skills") else 1
-
-        a_eff_atk = combat_calc.effective_level(
-            a_strike_lvl,
-            stance_bonus=a_strike_eff,
-        )
-        a_eff_str = combat_calc.effective_level(
-            a_brawn_lvl,
-            stance_bonus=a_brawn_eff,
-        )
-        d_eff_def = combat_calc.effective_level(d_defense_lvl)
-
-        # The defender's armour must come from the DEFENDER's stat block.
-        defend_equip = _defense_equip(get_defense_bonuses(target), damage_type)
-
         # ── swing resolution ─────────────────────────────────────────────
-        result = combat_calc.resolve_melee_swing(
-            attacker_eff_atk=a_eff_atk,
-            attacker_equip_atk=equip_atk,
-            attacker_eff_str=a_eff_str,
-            attacker_equip_str=equip_str,
-            defender_eff_def=d_eff_def,
-            defender_equip_def=defend_equip,
-        )
-        dmg = result["damage"]
-        hit = result["hit"]
+        context = self._build_context(handler, attacker, target)
+        result = resolve_action(context)
 
         # ── broadcast & damage application ───────────────────────────────
-        if hit and dmg > 0:
-            killed = self._land_hit(attacker, target, style, dmg)
+        if result.hit and result.damage > 0:
+            killed = self._land_hit(context, result)
 
             if killed:
                 handler.end_combat()
                 return True
-        else:
+        elif result.damage <= 0 and not result.self_damage:
             attacker.msg(combat_msg.format_outgoing_miss(attacker, target))
             target.msg(combat_msg.format_incoming_miss(attacker, target))
+
+        # Self-damage lands AFTER the target's, so a swing that both kills and
+        # backfires still reads in cause-then-consequence order.
+        if result.self_damage > 0:
+            self_killed = self._land_backfire(context, result)
+
+            if self_killed:
+                # The attacker's own at_death already ran leave_combat, which
+                # calls drop_combatant on THIS handler and deletes the row.
+                # Unlike the target-death path above -- where the dying entity
+                # owns a different handler -- ending combat again here would
+                # log four swallowed errors on every backfire death.
+                if handler.pk is not None:
+                    handler.end_combat()
+
+                return True
 
         # A slain NPC deletes itself inside at_damage, so confirm the row
         # still exists before touching db-backed state on it.
@@ -601,7 +738,6 @@ class BlackoutCombatHandler(DefaultScript):
         self.init_runtime_state()
 
     # ── per-tick runtime state ───────────────────────────────────────────
-    #
     # All four fields below live on ndb, NOT db. They are rebuilt from scratch
     # every time combat starts and are meaningless afterwards, so persisting
     # them bought nothing and cost an Attribute-table read AND write every
@@ -635,8 +771,32 @@ class BlackoutCombatHandler(DefaultScript):
         unarmed) to combat_profile, which the defender-side
         get_defense_bonuses also uses -- so attacker and defender can no
         longer disagree about where stats come from.
+
+        Also drops the cached rules contributors. Equipment is the only thing
+        that decides them, and this method already runs on every path that can
+        change equipment, so invalidating here rather than adding a second
+        refresh hook keeps the two caches impossible to desynchronise.
         """
         self.ndb.active_weapon_data = combat_profile(self.obj)
+        self.ndb.active_rules = None
+
+    def active_rules(self) -> tuple:
+        """Return this combatant's rules contributors, collecting on first use.
+
+        Cached on ndb because collecting is an Attribute read per equipped
+        item and this is consulted every 0.6s tick per combatant. Invalidated
+        by _refresh_weapon, which runs on wield and on entering combat --
+        equipment cannot change mid-fight by any other path.
+        """
+        cached = self.ndb.active_rules
+
+        if cached is not None:
+            return cached
+
+        collected = collect_contributors(self.obj)
+        self.ndb.active_rules = collected
+
+        return collected
 
     # ── combat lifecycle ─────────────────────────────────────────────
 

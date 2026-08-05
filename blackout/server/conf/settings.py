@@ -35,7 +35,7 @@ from evennia.settings_default import *
 SERVERNAME = "blackout"
 
 # Use the custom ServerSession class for Blackout
-# SERVER_SESSION_CLASS = "server.conf.serversession.ServerSession"
+SERVER_SESSION_CLASS = "server.conf.serversession.ServerSession"
 
 # Add the XYZGrid command to the launcher
 EXTRA_LAUNCHER_COMMANDS['xyzgrid'] = 'evennia.contrib.grid.xyzgrid.launchcmd.xyzcommand'

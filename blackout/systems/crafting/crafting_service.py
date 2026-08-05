@@ -10,8 +10,10 @@ Usage:
     from systems.crafting.crafting_service import (
         get_categories,
         get_recipes_in_category,
+        get_recipes_for_facility,
         get_recipe_class,
         check_craftable,
+        get_max_craftable,
         get_recipe_display_data,
         perform_craft,
     )
@@ -19,7 +21,11 @@ Usage:
 
 
 
-from .constants import CONSUMABLE_TAG_CATEGORY, TOOL_TAG_CATEGORY
+from .constants import (
+    CONSUMABLE_TAG_CATEGORY,
+    MAX_CRAFT_BATCH_SIZE,
+    TOOL_TAG_CATEGORY,
+)
 from .registry import RECIPE_REGISTRY
 
 
@@ -68,10 +74,11 @@ def _has_tag(item, tag_value, tag_category):
 
 
 def _count_tagged_items(caller, tag_value, tag_category):
-    """Count carried/equipped items carrying tag_value under tag_category."""
+    """Count units of carried/equipped items carrying tag_value under
+    tag_category. A stackable object contributes its quantity, not 1."""
     candidates = _iter_candidate_items(caller, include_location=False)
     matches = [item for item in candidates if _has_tag(item, tag_value, tag_category)]
-    return len(matches)
+    return sum(getattr(item, "quantity", 1) for item in matches)
 
 
 def _has_tool_available(caller, tag_value):
@@ -109,16 +116,46 @@ def get_categories(facility=None):
     return categories
 
 
-def get_recipes_in_category(category):
-    """Get all recipes belonging to a category.
+def get_recipes_in_category(category, facility=None):
+    """Get all recipes belonging to a category, optionally filtered by facility.
+
+    Args:
+        category: Category name to match.
+        facility: Optional CraftingFacility object with allowed_categories.
 
     Returns:
         list of (recipe_key, recipe_cls) tuples.
     """
+    allowed = getattr(facility, "allowed_categories", None) if facility is not None else None
+
     return [
         (key, cls)
         for key, cls in RECIPE_REGISTRY.items()
         if getattr(cls, "category", "Uncategorized") == category
+        and (allowed is None or category in allowed)
+    ]
+
+
+def get_recipes_for_facility(facility):
+    """Get every recipe available at a facility, across all its categories.
+
+    Args:
+        facility: CraftingFacility object with allowed_categories. If it has
+            no allowed_categories (None), every registered recipe is
+            returned.
+
+    Returns:
+        list of (recipe_key, recipe_cls) tuples.
+    """
+    allowed = getattr(facility, "allowed_categories", None)
+
+    if allowed is None:
+        return list(RECIPE_REGISTRY.items())
+
+    return [
+        (key, cls)
+        for key, cls in RECIPE_REGISTRY.items()
+        if getattr(cls, "category", "Uncategorized") in allowed
     ]
 
 
@@ -151,7 +188,7 @@ def check_craftable(caller, recipe_key):
                 f"Requires {recipe_cls.required_skill} Lv.{recipe_cls.required_level}"
             )
 
-    for mat_tag in recipe_cls.consumable_tags:
+    for mat_tag in set(recipe_cls.consumable_tags):
         owned = _count_tagged_items(caller, mat_tag, CONSUMABLE_TAG_CATEGORY)
         required = recipe_cls.consumable_tags.count(mat_tag)
         if owned < required:
@@ -176,6 +213,51 @@ def check_craftable(caller, recipe_key):
     return can_craft, reasons
 
 
+def get_max_craftable(caller, recipe_key):
+    """Determine how many copies of recipe_key caller could craft back to
+    back right now, given current materials, tools, and skill.
+
+    Args:
+        caller: The would-be crafter.
+        recipe_key: Name of the recipe to evaluate.
+
+    Returns:
+        int: 0 if the recipe is unknown, the skill requirement isn't met, or
+        a required tool is entirely unavailable (tools aren't consumed, so
+        once one is present it never limits the count). Otherwise the
+        largest N for which N crafts would not run out of any consumable
+        material, capped at MAX_CRAFT_BATCH_SIZE.
+    """
+    recipe_cls = get_recipe_class(recipe_key)
+
+    if not recipe_cls:
+        return 0
+
+    if recipe_cls.required_skill:
+        meets_skill = caller.skills.meets_prerequisite(
+            recipe_cls.required_skill, recipe_cls.required_level
+        )
+        if not meets_skill:
+            return 0
+
+    for tool_tag in recipe_cls.tool_tags:
+        if not _has_tool_available(caller, tool_tag):
+            return 0
+
+    if not recipe_cls.consumable_tags:
+        return MAX_CRAFT_BATCH_SIZE
+
+    per_craft_counts = []
+    for mat_tag in set(recipe_cls.consumable_tags):
+        required = recipe_cls.consumable_tags.count(mat_tag)
+        owned = _count_tagged_items(caller, mat_tag, CONSUMABLE_TAG_CATEGORY)
+        per_craft_counts.append(owned // required)
+
+    max_craftable = min(per_craft_counts)
+
+    return max(0, min(max_craftable, MAX_CRAFT_BATCH_SIZE))
+
+
 def get_recipe_display_data(caller, recipe_key):
     """Get all data needed to render a recipe detail view.
 
@@ -191,7 +273,7 @@ def get_recipe_display_data(caller, recipe_key):
         return None
 
     material_details = []
-    for mat_tag in recipe_cls.consumable_tags:
+    for mat_tag in set(recipe_cls.consumable_tags):
         mat_name = (
             recipe_cls.consumable_names[recipe_cls.consumable_tags.index(mat_tag)]
             if recipe_cls.consumable_names

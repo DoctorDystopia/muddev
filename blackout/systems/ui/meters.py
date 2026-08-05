@@ -40,7 +40,7 @@ NO_HP_TEXT = "[NO HP DATA]"
 # through directly, so the letters are named here instead.
 _XP_FILL_LETTER = "y"
 _XP_EMPTY_LETTER = "x"
-_XP_TEXT_LETTER = "w"
+_XP_TEXT_LETTER = "000"
 
 # The contrib picks a fill colour by percentage from this list. Its default is
 # a red/yellow/green health gradient, which reads as "danger" on an XP track.
@@ -58,7 +58,7 @@ _XP_FILL_COLORS = [_XP_FILL_LETTER]
 # fight is going your way and turns red only when it is not.
 _HP_FILL_COLORS = ["r", "r", "y", "y", "g", "g", "g", "g"]
 _HP_EMPTY_LETTER = "x"
-_HP_TEXT_LETTER = "w"
+_HP_TEXT_LETTER = "000"
 
 
 

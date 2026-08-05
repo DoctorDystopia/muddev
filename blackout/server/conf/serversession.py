@@ -22,12 +22,25 @@ settings file:
 """
 
 
-from evennia.server.session import Session
+from evennia.server.serversession import ServerSession as BaseServerSession
+from evennia import EVENNIA_SERVER_SERVICE
 
-class ServerSession(Session):
-    def init_session(self, *args, **kwargs):
-        """Called when the session is first created."""
-        super().init_session(*args, **kwargs)
-        
-        # Force server-side echoing for the Godot client
+
+class ServerSession(BaseServerSession):
+    def at_sync(self):
+        """Called whenever the session is (re)synced with the Portal,
+        both on first connect and after every server reload/restart."""
+        super().at_sync()
+
+        # Force server-side echoing for the Godot client. init_session()
+        # only runs on the Portal side, so protocol_flags must be forced
+        # here and pushed back down to the Portal's copy of the session,
+        # which is what actually decides whether to echo typed input.
         self.protocol_flags["LOCALECHO"] = True
+
+        # The test runner never connects the AMP protocol to a Portal, so
+        # there is nothing to push back down to -- skip the sync there.
+        if EVENNIA_SERVER_SERVICE is not None and EVENNIA_SERVER_SERVICE.amp_protocol is not None:
+            self.sessionhandler.session_portal_partial_sync(
+                {self.sessid: {"protocol_flags": {"LOCALECHO": True}}}
+            )

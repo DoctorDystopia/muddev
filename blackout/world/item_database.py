@@ -50,10 +50,17 @@ class ItemDef:
     #     type. Matches NpcDef.combat_styles.
     # default_combat_style — the key into combat_styles used when no
     #     /attackstyle command has selected another.
+    # combat_rules — list of keys into systems/combat/rules/RULES_REGISTRY.
+    #     Each names a rules definition that changes how an action is resolved
+    #     while this item is EQUIPPED, in any slot: a die replacement, a
+    #     conditional stat modifier, or a whole-action override.
+    #     A LIST, not one key, so behaviours combine without a bespoke class
+    #     per combination. Unknown keys are logged and skipped, not raised.
     attack_speed: int | None = None
     combat_stat_bonuses: dict = field(default_factory=dict)
     combat_styles: dict = field(default_factory=dict)
     default_combat_style: str | None = None
+    combat_rules: list = field(default_factory=list)
 
     def _get_attrs(self, quantity: int = 1) -> dict:
         """
@@ -110,6 +117,8 @@ class ItemDef:
             attrs["combat_styles"] = dict(self.combat_styles)
         if self.default_combat_style is not None:
             attrs["default_combat_style"] = self.default_combat_style
+        if self.combat_rules:
+            attrs["combat_rules"] = list(self.combat_rules)
 
         return attrs
 
@@ -205,7 +214,12 @@ from .item_defs.materials import ITEMS as _MATERIALS
 from .item_defs.tools import ITEMS as _TOOLS
 from .item_defs.currencies import ITEMS as _CURRENCIES
 from .item_defs.weapons import ITEMS as _WEAPONS
+from .item_defs.gadgets import ITEMS as _GADGETS
+from .item_defs.jewellery import ITEMS as _JEWELLERY
 
+# Every def module must appear in BOTH lists below. A module imported but left
+# out of the loop contributes nothing and raises nothing -- its items simply
+# do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY]:
     ITEM_DB.update(_d)

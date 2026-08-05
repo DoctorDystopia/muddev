@@ -6,6 +6,7 @@ Description: Command for rendering the 32-slot inventory grid.
 """
 
 from commands.command import Command
+from commands.constants import HELP_CATEGORY_GENERAL
 from evennia.commands.cmdset import CmdSet
 from items.inventory.display import render_grid
 from systems.ui.colors import (
@@ -20,7 +21,7 @@ class CmdInventory(Command):
     key = "inventory"
     aliases = ["inv", "i"]
     locks = "cmd:all()"
-    help_category = "General"
+    help_category = HELP_CATEGORY_GENERAL
 
     def func(self):
         caller = self.caller

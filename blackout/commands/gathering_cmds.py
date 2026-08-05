@@ -9,6 +9,7 @@ from evennia import Command
 from evennia import CmdSet
 from evennia.utils import logger
 
+from commands.constants import HELP_CATEGORY_GATHERING
 from systems.progression.skills.registry import SKILL_REGISTRY
 
 
@@ -31,6 +32,7 @@ class CmdGatherFromNode(Command):
     """
     skill_key = None
     locks = "cmd:all()"
+    help_category = HELP_CATEGORY_GATHERING
 
     def func(self) -> None:
         """

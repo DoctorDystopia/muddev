@@ -42,6 +42,9 @@ class EquipmentHandler:
                 WieldLocation.BACK: None,
                 WieldLocation.LEGS: None,
                 WieldLocation.FEET: None,
+                WieldLocation.NECK: None,
+                WieldLocation.MAIN_HAND_FINGER: None,
+                WieldLocation.OFF_HAND_FINGER: None,
             },
         )
         needs_save = False
@@ -127,6 +130,52 @@ class EquipmentHandler:
     def all(self):
         """Returns a list of all equipped items across all slots."""
         return [slot_obj for slot_obj in self.slots.values() if slot_obj is not None]
+
+
+    def total_combat_stat_bonuses(self) -> dict:
+        """
+        Purpose: Sum the combat_stat_bonuses dict carried by every currently
+        equipped item, across every slot.
+
+        Entry:
+            No conditions. An item with no combat_stat_bonuses attribute (a
+            gathering tool, a trinket) is skipped rather than treated as
+            all-zero, so it cannot zero out a key another equipped item set.
+
+        Exit/Returns:
+            dict[str, int]. A key absent from every equipped item's stat
+            block is simply absent here too -- callers that need a fixed key
+            set (e.g. the unarmed baseline) merge this on top of their own
+            default dict rather than relying on this method to supply one.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Plain per-key accumulation over self.all(). This handler carries
+            no knowledge of what the keys mean (that vocabulary belongs to
+            systems/combat/constants.py) -- it only knows how to add two
+            equipped items' numbers together, which is what keeps this
+            module free of a systems/combat import.
+
+        Notes/References:
+            This is the seam combat.combat_profile() reads to let armour and
+            an off-hand weapon contribute alongside the main weapon, instead
+            of only the single held weapon.
+
+        Author: Nick Hobar
+        Creation date: 08/04/2026
+        """
+        totals = {}
+        for equipped_obj in self.all():
+            item_bonuses = getattr(equipped_obj.db, "combat_stat_bonuses", None)
+            if not item_bonuses:
+                continue
+
+            for stat_key, stat_value in item_bonuses.items():
+                totals[stat_key] = totals.get(stat_key, 0) + stat_value
+
+        return totals
 
 
     def equip(self, obj):

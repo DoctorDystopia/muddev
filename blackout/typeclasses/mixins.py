@@ -191,16 +191,25 @@ class CombatEntity:
 
     # ─── Damage & death hooks ──────────────────────────────────────────────
 
-    def at_damage(self, amount: int, attacker=None) -> int:
+    def at_damage(self, amount: int, attacker=None, source=None,
+                  damage_type=None) -> int:
         """
         Purpose: Apply incoming damage to this entity, returning the actual
         amount of HP lost (post-clamp). Triggers death handling when HP
         crosses zero.
 
         Entry:
-            amount   - integer damage dealt. Must be >= 0.
-            attacker - optional CombatEntity that caused the damage. Used
-                       for death broadcast and killer-side XP / quest hooks.
+            amount      - integer damage dealt. Must be >= 0.
+            attacker    - optional CombatEntity that caused the damage. Used
+                          for death broadcast and killer-side XP / quest
+                          hooks. Pass the TRUTH here, including `self` for
+                          self-inflicted damage; at_death normalises it.
+            source      - optional object responsible: the weapon, the gadget,
+                          the aura instance. Distinct from `attacker`, which
+                          is always an entity.
+            damage_type - optional DAMAGE_TYPE_* constant. None is treated as
+                          untyped, not as melee, so a caller that forgets is
+                          visible rather than silently mislabelled.
 
         Exit/Returns:
             Integer HP actually removed. Always >= 0; never exceeds the
@@ -213,8 +222,12 @@ class CombatEntity:
             1. Snapshot old HP.
             2. Clamp amount down to old HP (no negative HP stored).
             3. Assign new HP via self.hp = old_hp - amount (also clamps high).
-            4. If new HP is 0 and old HP was > 0, call at_death(attacker).
+            4. If new HP is 0 and old HP was > 0, call at_death.
             5. Return the delta.
+
+            `source` and `damage_type` are keyword-only in practice and both
+            default to None, so every pre-existing two-argument call site
+            keeps working unchanged.
 
         Notes/References:
             Per design dialogue: research doc §"Translating Game State".
@@ -230,20 +243,27 @@ class CombatEntity:
         self.hp = new_hp
 
         if old_hp > 0 and new_hp == 0:
-            self.at_death(killer=attacker)
+            self.at_death(killer=attacker, source=source,
+                          damage_type=damage_type)
 
         return delta
 
 
-    def at_death(self, killer=None) -> None:
+    def at_death(self, killer=None, source=None, damage_type=None) -> None:
         """
         Purpose: Handle this entity's HP hitting zero. Sets hp=0 explicitly,
         broadcasts the death line to the room, runs killer-side hooks if
         the killer is a Character, and finally callls respawn().
 
         Entry:
-            killer - optional CombatEntity responsible. May be None for
-                     environmental deaths (currently out of scope).
+            killer      - optional CombatEntity responsible. May be None for
+                          environmental deaths, and may legitimately be `self`
+                          for a self-inflicted one.
+            source      - optional object responsible (weapon, gadget, aura).
+            damage_type - optional DAMAGE_TYPE_* constant naming the killing
+                          blow. Purely attribution/flavour today (which weapon
+                          or aura did it); it does not decide who gets blamed
+                          for a self-inflicted death -- that is `killer is self`.
 
         Exit/Returns:
             No conditions. After return, self.hp == 0 and self.is_alive()
@@ -254,12 +274,16 @@ class CombatEntity:
 
         Methodology:
             1. Force hp = 0 even if somehow out of band.
-            2. Build and broadcast the death line to the room.
-            3. If killer has `skills` (i.e. is a Player-side handler-bearer),
+            2. Capture the self-inflicted check, THEN normalise a self-kill
+               to no killer at all -- format_death needs the former to pick
+               the death line, and the killer-side hooks below need the
+               latter so a victim cannot award themselves their own kill.
+            3. Build and broadcast the death line to the room.
+            4. If killer has `skills` (i.e. is a Player-side handler-bearer),
                award combat XP. We do NOT gate on isinstance(killer, Character)
                here; the optional API surface (skills, quests) gates itself.
-            4. If killer has `quests`, fire the wildcard kill-progress update.
-            5. call self.respawn() to permit subclass divergence (player
+            5. If killer has `quests`, fire the wildcard kill-progress update.
+            6. call self.respawn() to permit subclass divergence (player
                respawn vs NPC despawn).
 
         Notes/References:
@@ -272,10 +296,23 @@ class CombatEntity:
         """
         self.hp = 0
 
+        # A self-inflicted death has no killer. Callers pass the truthful
+        # attacker so a future "who hit me last" tracker can use it, which
+        # means a backfiring gadget arrives here with killer IS self -- and
+        # both hooks below would then fire on the victim, awarding them the
+        # kill XP for their own death and recording a wildcard quest kill of
+        # their own key. Captured before the normalisation below erases the
+        # identity check -- this is the only place that still knows.
+        self_inflicted = killer is self
+        if killer is self:
+            killer = None
+
         location = self.location
         if location is not None:
             try:
-                death_line = combat_msg.format_death(self, killer)
+                death_line = combat_msg.format_death(self, killer,
+                                                     damage_type=damage_type,
+                                                     self_inflicted=self_inflicted)
                 location.msg_contents(death_line, from_obj=self)
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death broadcast failed: {exc!r}")
@@ -481,4 +518,48 @@ class CombatEntity:
             return get_handler_for(self)
         except Exception:
             logger.log_trace("CombatEntity.combat accessor: no handler attached.")
+            return None
+
+    # ─── AuraHandler lazy accessor ─────────────────────────────────────────
+
+    @lazy_property
+    def aura(self):
+        """
+        Purpose: Cached property returning the BlackoutAuraHandler attached to
+        this entity while a damage aura is burning, or None.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            BlackoutAuraHandler instance or None.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Mirrors the `combat` accessor above exactly, including the pure,
+            side-effect-free contract: the handler is created by the `aura`
+            command, never by reading this property.
+
+            Both this cache and `combat`'s are cleared with
+            `obj.__dict__.pop("aura", None)` rather than `del`, because
+            lazy_property stores into obj.__dict__ under its own name and its
+            deleter raises — a swallowed `del` is what once left the combat
+            accessor handing out a deleted script for a whole session.
+
+        Notes/References:
+            systems/combat/auras/aura_handler.py owns the handler itself.
+
+        Author: Nick Hobar
+        Creation date: 08/03/2026
+        """
+        from systems.combat.auras.aura_handler import (  # local import to avoid circularity
+            get_aura_handler_for,
+        )
+
+        try:
+            return get_aura_handler_for(self)
+        except Exception:
+            logger.log_trace("CombatEntity.aura accessor: no handler attached.")
             return None

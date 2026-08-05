@@ -24,3 +24,20 @@ MAX_BASE_SKILL_LEVEL = 127
 # literals -- Fortitude in particular is read by the combat layer, the
 # level-up side-effect table, and character creation.
 FORTITUDE_SKILL_KEY = "fortitude"
+
+# The three combat axes a melee swing resolves against. These are read by the
+# swing pipeline, by the weapon-style level-boost dicts in the combat
+# constants, and by any rules definition that reads a wearer's own stats.
+STRIKE_SKILL_KEY = "strike"
+BRAWN_SKILL_KEY = "brawn"
+DEFENSE_SKILL_KEY = "defense"
+
+# Every skill axis an ActionContext snapshots before resolution. Fortitude is in
+# the list because rules definitions read it (the glass cannon amulet keys off
+# the Brawn-over-Fortitude surplus), not because a swing resolves against it.
+COMBAT_SKILL_KEYS = (
+    STRIKE_SKILL_KEY,
+    BRAWN_SKILL_KEY,
+    DEFENSE_SKILL_KEY,
+    FORTITUDE_SKILL_KEY,
+)

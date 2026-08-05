@@ -89,6 +89,9 @@ hammer: Hammer
 ```python
 > py ITEM_DB["rusty_metal_chunk"].create(location=self)
 
+# import in same line
+> py from world.item_database import ITEM_DB; ITEM_DB["malfunctioning_gizmo"].create(location=self)
+
 You see a Rusty Metal Chunk appear in your inventory.
 ```
 

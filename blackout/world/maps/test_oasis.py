@@ -25,15 +25,15 @@ MAPSTR = r'''
            \      | | |
     5   #---#-#---#-#-#
        /    |
-    4 #-----+-#-#---#-#-#-S
+    4 #-----+-#-#---#-#-#-§
        \    | |  \ / \| | |
-    3   #-M-#-#   F   #-#-P
+    3   #-M-#-#   F   #-#-†
         | | | |  / \ /| | |
     2 #-#-#-#-#-#-#-#-#-#-#
       | | | | | | | | | | |
-    1 #-#-#-#-P-#-#-#-#-P-#
+    1 #-#-#-#-†-#-#-#-#-†-#
       | | | | | | | | | | |
-    0 #-#-!-#-#-#-P-#-#-#-B
+    0 #-#-!-#-#-#-†-#-#-#-ß
 
     + 0 1 2 3 4 5 6 7 8 9 1
                           0
@@ -41,12 +41,13 @@ MAPSTR = r'''
 '''
 
 
-class OasisOutskirtsNode(MapNode):
-    """
-    Custom MapNode for Oasis Outskirts.
-    Overrides the display symbol to 'X' with a strict visual length of 1.
-    """
-    display_symbol = "x"
+# class OasisMapTileNode(MapNode):
+#     """
+#     Custom MapNode for Oasis map.
+#     Overrides the display symbol to 'X' with a strict visual length of 1.
+#     """
+#     display_symbol = "x"
+
 
 class RustyPoleNode(MapNode):
     """
@@ -54,7 +55,7 @@ class RustyPoleNode(MapNode):
     Uses a distinct 'P' symbol on the map so rooms at these
     coordinates actually get spawned (prototype must be set).
     """
-    display_symbol = "|300P|n"
+    display_symbol = "|300†|n"
     prototype = "xyz_room"
 
 
@@ -62,7 +63,7 @@ class BankNode(MapNode):
     """
     Custom MapNode for banking facilities.
     """
-    display_symbol = "|#4488FFB|n"
+    display_symbol = "|#4488FFß|n"
     prototype = "xyz_room"
 
 
@@ -94,7 +95,7 @@ class ShopNPCNode(MapNode):
     """
     Custom MapNode for Shop NPC characters.
     """
-    display_symbol = "|YS|n"
+    display_symbol = "|Y§|n"
     prototype = "xyz_room"
 
 
@@ -102,17 +103,17 @@ class MutantRaiderNPCNode(MapNode):
     """
     Custom MapNode for Mutant Raider characters.
     """
-    display_symbol = "|RM|n"
+    display_symbol = "|#afff00M|n"
     prototype = "xyz_room"
 
 
 LEGEND = {
-    "P": RustyPoleNode,
-    "B": BankNode,
+    "†": RustyPoleNode,
+    "ß": BankNode,
     "F": FurnaceFacilityNode,
     "A": AnvilFacilityNode,
     "!": NPCNode,
-    "S": ShopNPCNode,
+    "§": ShopNPCNode,
     "M": MutantRaiderNPCNode,
 }
 
@@ -130,14 +131,14 @@ _bank = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Bank",
-    "desc": "A secure banking facility with rows of storage terminals.",
+    "desc": "A Hegemony secure banking facility with a row of storage terminals.",
 }
 
 _furnace = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Foundry Furnace Facility",
-    "desc": "A roaring hot foundry.",
+    "desc": "A roaring hot Foundry.",
 }
 
 _anvil = {
@@ -158,7 +159,7 @@ _npc_shopkeeper = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Shopkeeper",
-    "desc": "A market stall shaded by a tattered awning, its wares displayed on a cloth.",
+    "desc": "A makeshift market stall shaded by a tattered awning.",
 }
 
 _npc_mutant_raider = {
@@ -172,7 +173,7 @@ PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
     ('*', '*'): {
         "typeclass": "typeclasses.rooms.GridTile",
-        "key": "Oasis Outskirts",
+        "key": "Oasis",
         "desc": "sand...everywhere.",
     },
     # Default Exit Prototype (applies to all undefined links)
@@ -185,13 +186,15 @@ PROTOTYPES = {
         "prototype_parent": "xyz_room",
         "typeclass": "typeclasses.rooms.GridTile",
         "key": "Oasis Entrance",
-        "desc": "The main entryway of Oasis Outskirts. The desert sprawls to the north and east.",
+        "desc": "The main entryway of the Oasis. The desert sprawls to the north and east.",
     },
+
     # Gathering node overrides for Rusty Poles
     (6, 0): _rusty_pole,
     (9, 1): _rusty_pole,
     (4, 1): _rusty_pole,
     (10, 3): _rusty_pole,
+
     # Skill node overrides
     (10, 0): _bank,
     (6, 3): _furnace,

@@ -40,7 +40,6 @@ TICK_ENGINE_KEY = "blackout_tick_engine"
 
 # ─── the engine ────────────────────────────────────────────────────────────
 
-
 class BlackoutTickEngine(DefaultScript):
     """Global script owning the 0.6s combat LoopingCall.
 
@@ -56,6 +55,7 @@ class BlackoutTickEngine(DefaultScript):
         # Integer watchdog only — the real tick is the LoopingCall below.
         self.interval = const.TICK_ENGINE_WATCHDOG_SECONDS
         self.persistent = True
+
 
     # ── LoopingCall lifecycle ────────────────────────────────────────────
 
@@ -73,6 +73,7 @@ class BlackoutTickEngine(DefaultScript):
         self.ndb._tick_loop = LoopingCall(self._tick)
         self.ndb._tick_loop.start(const.COMBAT_TICK_SECONDS, now=False)
 
+
     def _stop_loop(self) -> None:
         loop = self.ndb._tick_loop
         if loop is not None and loop.running:
@@ -82,8 +83,10 @@ class BlackoutTickEngine(DefaultScript):
                 logger.log_err(f"BlackoutTickEngine._stop_loop failed: {exc!r}")
         self.ndb._tick_loop = None
 
+
     def at_start(self, **kwargs) -> None:
         self._ensure_loop()
+
 
     def at_server_start(self) -> None:
         """Reliable post-reload hook.
@@ -95,12 +98,15 @@ class BlackoutTickEngine(DefaultScript):
         purge_stale_combat_handlers()
         self._ensure_loop()
 
+
     def at_repeat(self, **kwargs) -> None:
         """Watchdog. Re-arms the LoopingCall if something killed it."""
         self._ensure_loop()
 
+
     def at_stop(self, **kwargs) -> None:
         self._stop_loop()
+
 
     # ── registry ─────────────────────────────────────────────────────────
 
@@ -109,18 +115,24 @@ class BlackoutTickEngine(DefaultScript):
 
         Lives on ndb, so it is empty after a reload — seed it from the active
         handler scripts, which are the source of truth.
-        """
-        from .combat import COMBAT_HANDLER_KEY
 
+        Seeded from EVERY tickable handler key, not just combat's. _tick itself
+        is key-agnostic — it only needs a `tick()` method — but this reseed is
+        not, so a key missing from the list here would tick fine until the first
+        reload and then silently stop forever.
+        """
         registry = self.ndb._handler_ids
+
         if registry is None:
             registry = set(
                 ScriptDB.objects.filter(
-                    db_key=COMBAT_HANDLER_KEY, db_is_active=True
+                    db_key__in=_tickable_handler_keys(), db_is_active=True
                 ).values_list("id", flat=True)
             )
             self.ndb._handler_ids = registry
+
         return registry
+
 
     def register(self, handler) -> None:
         """Add a combat handler to the tick rotation."""
@@ -129,11 +141,13 @@ class BlackoutTickEngine(DefaultScript):
         self._registry().add(handler.id)
         self._ensure_loop()
 
+
     def unregister(self, handler) -> None:
         """Remove a combat handler from the tick rotation."""
         if handler is None:
             return
         self._registry().discard(handler.id)
+
 
     # ── the tick ─────────────────────────────────────────────────────────
 
@@ -164,6 +178,23 @@ class BlackoutTickEngine(DefaultScript):
 
 
 # ─── module helpers ────────────────────────────────────────────────────────
+
+def _tickable_handler_keys() -> tuple:
+    """Return every script key the engine is allowed to drive.
+
+    Imported lazily and rebuilt per call rather than held in a module constant:
+    both handler modules import from this one, so resolving their keys at import
+    time would close the cycle.
+
+    Any new tickable handler must be added HERE as well as registering itself,
+    or it will work until the first reload and then vanish — the reseed in
+    _registry and the boot sweep in purge_stale_combat_handlers are both
+    key-driven, and only _tick is key-agnostic.
+    """
+    from .auras.aura_handler import AURA_HANDLER_KEY
+    from .combat import COMBAT_HANDLER_KEY
+
+    return (COMBAT_HANDLER_KEY, AURA_HANDLER_KEY)
 
 
 def get_tick_engine() -> BlackoutTickEngine:
@@ -207,17 +238,20 @@ def purge_stale_combat_handlers() -> int:
     means a handler that was persisted in a broken state (e.g. the historical
     ``db_interval=0`` rows) can no longer wedge combat permanently.
 
+    Aura handlers are swept by the same rule and for the same reason: an aura
+    left running across a restart would have lost the ndb state it ticks on, so
+    the player re-toggles instead.
+
     Returns the number of handlers deleted.
     """
-    from .combat import COMBAT_HANDLER_KEY
-
     count = 0
-    for handler in ScriptDB.objects.filter(db_key=COMBAT_HANDLER_KEY):
+    for handler in ScriptDB.objects.filter(db_key__in=_tickable_handler_keys()):
         owner = handler.obj
         if owner is not None:
             try:
                 owner.db.in_combat = False
                 owner.__dict__.pop("combat", None)
+                owner.__dict__.pop("aura", None)
             except Exception:
                 logger.log_trace()
         try:
@@ -228,4 +262,5 @@ def purge_stale_combat_handlers() -> int:
 
     if count:
         logger.log_info(f"BlackoutTickEngine: purged {count} stale combat handler(s).")
+
     return count

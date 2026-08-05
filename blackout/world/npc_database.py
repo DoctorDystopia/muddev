@@ -66,6 +66,13 @@ class NpcDef:
     combat_styles: dict = field(default_factory=dict)
     default_combat_style: str | None = None
 
+    # combat_rules — list of keys into systems/combat/rules/RULES_REGISTRY,
+    #     naming rules definitions that change how this NPC's actions resolve.
+    #     An NPC has no equipment handler and carries its stat block on
+    #     itself, so this is where a monster with unusual math declares it --
+    #     the same field name an ItemDef uses, read by the same collector.
+    combat_rules: list = field(default_factory=list)
+
     # ─── Respawn ─────────────────────────────────────────────────────
     # None  -> despawn permanently on death (the historical behavior; every
     #          NPC type is opt-in).
@@ -99,6 +106,7 @@ class NpcDef:
                 if self.default_combat_style is not None
                 else combat_constants.UNARMED_DEFAULT_COMBAT_STYLE
             ),
+            "combat_rules": list(self.combat_rules),
         }
 
 

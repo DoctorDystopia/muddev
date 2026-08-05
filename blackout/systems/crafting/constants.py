@@ -26,3 +26,20 @@ CRAFTING_CATEGORIES = (
     CATEGORY_FOUNDRY,
     CATEGORY_METALSMITH,
 )
+
+# Seconds a single craft takes by default. A recipe overrides via its own
+# craft_seconds class attribute (see BlackoutRecipe); this is the fallback,
+# not a tunable every recipe must set.
+DEFAULT_CRAFT_SECONDS = 2.0
+
+# Hard ceiling on a single "craft all" batch, independent of materials on
+# hand. Recipes with no consumable_tags have nothing to run out of, so
+# without this cap "craft all" on a toolless-material recipe would have no
+# natural stopping point.
+MAX_CRAFT_BATCH_SIZE = 99
+
+# Cooldown name the paced batch loop arms on the crafter between items. One
+# key shared by every recipe (not namespaced per-recipe like skills'
+# "skill_<key>") because only one craft batch can run on a character at a
+# time -- see systems/crafting/craft_batch.py.
+CRAFTING_BUSY_COOLDOWN_KEY = "crafting_batch"

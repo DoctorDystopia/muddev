@@ -24,6 +24,7 @@ class InventoryHandler:
         self.obj = obj
         self._load()
 
+
     def _load(self):
         self.slots = self.obj.attributes.get(
             self.save_attribute,
@@ -48,8 +49,10 @@ class InventoryHandler:
         if needs_save:
             self._save()
 
+
     def _save(self):
         self.obj.attributes.add(self.save_attribute, self.slots, category="inventory")
+
 
     def _get_item_by_id(self, item_id):
         if item_id is None:
@@ -59,6 +62,7 @@ class InventoryHandler:
                 return obj
         return None
 
+
     def get_slot_content(self, slot_idx):
         if slot_idx < 0 or slot_idx >= SLOTS_TOTAL:
             return None
@@ -67,28 +71,34 @@ class InventoryHandler:
             return None
         return self._get_item_by_id(item_id)
 
+
     def find_slot(self, obj):
         for i in range(SLOTS_TOTAL):
             if self.slots.get(i) is not None and obj is not None and self.slots[i] == obj.id:
                 return i
         return -1
 
+
     def count_used(self):
         return sum(1 for i in range(SLOTS_TOTAL) if self.get_slot_content(i) is not None)
 
+
     def has_free_slots(self, count=1):
         return SLOTS_TOTAL - self.count_used() >= count
+
 
     def validate_space(self, count=1):
         if not self.has_free_slots(count):
             raise InventoryError("Your inventory is completely full.")
         return True
 
+
     def _find_first_free(self):
         for i in range(SLOTS_TOTAL):
             if self.slots.get(i) is None:
                 return i
         return -1
+
 
     def _find_existing_stack(self, obj):
         if not getattr(obj, "is_stackable", False):
@@ -98,6 +108,7 @@ class InventoryHandler:
             if existing is not None and existing.key == obj.key and getattr(existing, "is_stackable", False):
                 return i
         return None
+
 
     def add_item(self, obj):
         if obj is None:
@@ -125,6 +136,7 @@ class InventoryHandler:
         self.slots[free] = obj.id
         self._save()
         return free
+
 
     def remove_item(self, obj_or_slot, count=None):
         if isinstance(obj_or_slot, int):
@@ -155,6 +167,7 @@ class InventoryHandler:
             self._save()
             return obj
 
+
     def all_items(self):
         result = []
         for i in range(SLOTS_TOTAL):
@@ -162,6 +175,7 @@ class InventoryHandler:
             if obj is not None:
                 result.append((i, obj))
         return result
+
 
     def sync(self):
         needs_save = False

@@ -176,9 +176,42 @@ def node_buy_quantity(caller, raw_string, **kwargs) -> tuple:
 
     options = [
         {"key": "1", "desc": "Buy 1", "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": 1})},
-        {"key": ("a", "all"), "desc": f"Buy {total_available} for {_hl(str(total_available * entry.buy_price))} credits", "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": total_available})},
-        {"key": "_default", "goto": (_parse_custom_buy_quantity, {"buy_entry": entry})},
+        {"key": ("x", "buy x"), "desc": "Buy X (custom)", "goto": ("node_buy_custom_qty", {"buy_entry": entry})},
+        {"key": ("a", "all"), "desc": f"Buy all {total_available} for {_hl(str(total_available * entry.buy_price))} credits", "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": total_available})},
         {"desc": "Cancel", "goto": "node_buy"},
+    ]
+
+    return text, options
+
+
+def node_buy_custom_qty(caller, raw_string, **kwargs) -> tuple:
+    """Prompt for a typed quantity, reached via the "Buy X (custom)" option.
+
+    Mirrors banking_menu's custom-quantity nodes: this node only renders the
+    prompt and arms a hidden _default option; typing a number fires the
+    _parse_custom_buy_quantity goto callable, which parses raw_string and
+    hands off to node_confirm_buy.
+    """
+    entry = kwargs.get("buy_entry")
+    if not entry:
+        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_buy"}]
+
+    credits = credits_count(caller)
+    max_affordable = credits // entry.buy_price if entry.buy_price > 0 else 0
+    total_available = min(entry.count, max_affordable)
+
+    text_parts = [
+        _line(entry.name),
+        _hl(f"Price: {entry.buy_price} credits each"),
+        _hl(f"Can afford: {total_available}"),
+        "",
+        _hl("How many would you like to buy?"),
+    ]
+    text = "\n".join(text_parts)
+
+    options = [
+        {"key": "_default", "goto": (_parse_custom_buy_quantity, {"buy_entry": entry})},
+        {"desc": "Cancel", "goto": ("node_buy_quantity", {"buy_entry": entry})},
     ]
 
     return text, options
@@ -220,7 +253,7 @@ def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
         text = "\n".join(text_parts)
 
     if entry.count > 1 or entry.is_prototype:
-        options.append({"desc": "Change quantity", "goto": "node_buy_quantity"})
+        options.append({"desc": "Change quantity", "goto": ("node_buy_quantity", {"buy_entry": entry})})
     options.append({"desc": "Cancel", "goto": "node_buy"})
 
     return text, options
@@ -344,9 +377,42 @@ def node_sell_quantity(caller, raw_string, **kwargs) -> tuple:
 
     options = [
         {"key": "1", "desc": "Sell 1", "goto": (_pick_sell_quantity, {"sell_group": entry, "sell_count": 1})},
+        {"key": ("x", "sell x"), "desc": "Sell X (custom)", "goto": ("node_sell_custom_qty", {"sell_group": entry})},
         {"key": ("a", "all"), "desc": f"Sell all {available} for {_hl(str(available * entry.unit_price))} credits", "goto": (_pick_sell_quantity, {"sell_group": entry, "sell_count": available})},
-        {"key": "_default", "goto": (_parse_custom_sell_quantity, {"sell_group": entry})},
         {"desc": "Cancel", "goto": "node_sell"},
+    ]
+
+    return text, options
+
+
+def node_sell_custom_qty(caller, raw_string, **kwargs) -> tuple:
+    """Prompt for a typed quantity, reached via the "Sell X (custom)" option.
+
+    Mirrors banking_menu's custom-quantity nodes: this node only renders the
+    prompt and arms a hidden _default option; typing a number fires the
+    _parse_custom_sell_quantity goto callable, which parses raw_string and
+    hands off to node_confirm_sell.
+    """
+    entry = kwargs.get("sell_group")
+    if not entry:
+        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_sell"}]
+
+    available = max(0, count_available(entry))
+    if available <= 0:
+        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_sell"}]
+
+    text_parts = [
+        _line(entry.name),
+        _hl(f"Unit price: {entry.unit_price} credits each"),
+        _hl(f"You have: {available}"),
+        "",
+        _hl("How many would you like to sell?"),
+    ]
+    text = "\n".join(text_parts)
+
+    options = [
+        {"key": "_default", "goto": (_parse_custom_sell_quantity, {"sell_group": entry})},
+        {"desc": "Cancel", "goto": ("node_sell_quantity", {"sell_group": entry})},
     ]
 
     return text, options
@@ -393,7 +459,7 @@ def node_confirm_sell(caller, raw_string, **kwargs) -> tuple:
     ]
 
     if entry.count > 1:
-        options.append({"desc": "Change quantity", "goto": "node_sell_quantity"})
+        options.append({"desc": "Change quantity", "goto": ("node_sell_quantity", {"sell_group": entry})})
     options.append({"desc": "Cancel", "goto": "node_sell"})
 
     return text, options

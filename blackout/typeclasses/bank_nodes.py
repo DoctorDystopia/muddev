@@ -6,6 +6,8 @@ Description: BankNode typeclass and the banking commands attached to it.
 """
 
 from evennia import Command, CmdSet
+
+from commands.constants import HELP_CATEGORY_BANKING
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
@@ -23,7 +25,7 @@ class CmdDeposit(Command):
     """
     key = "deposit"
     locks = "cmd:all()"
-    help_category = "Banking"
+    help_category = HELP_CATEGORY_BANKING
 
     def func(self):
         caller = self.caller
@@ -55,7 +57,7 @@ class CmdWithdraw(Command):
     """
     key = "withdraw"
     locks = "cmd:all()"
-    help_category = "Banking"
+    help_category = HELP_CATEGORY_BANKING
 
     def func(self):
         caller = self.caller
@@ -101,7 +103,7 @@ class CmdBalance(Command):
     """
     key = "balance"
     locks = "cmd:all()"
-    help_category = "Banking"
+    help_category = HELP_CATEGORY_BANKING
 
     def func(self):
         caller = self.caller
@@ -135,7 +137,7 @@ class CmdBank(Command):
     """
     key = "bank"
     locks = "cmd:all()"
-    help_category = "Banking"
+    help_category = HELP_CATEGORY_BANKING
 
     def func(self):
         caller = self.caller

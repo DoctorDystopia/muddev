@@ -54,10 +54,6 @@ def effective_level(
         Each nested floor matches the OSRS sequence: the engine floors
         before applying the next multiplier, never accumulating float error.
 
-    Notes/References:
-        Research doc Eq. 1. Blackout renames OSRS "Prayer" to "Augmentation"
-        across the parameter surface; the math is unchanged.
-
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
@@ -94,9 +90,6 @@ def max_hit(eff_str: int, equip_str_bonus: int) -> int:
         Constants match OSRS verbatim; the +64 zero-floor and /640
         compression are structural anchors of the OSRS damage economy.
 
-    Notes/References:
-        Research doc Eq. 2.
-
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
@@ -104,7 +97,7 @@ def max_hit(eff_str: int, equip_str_bonus: int) -> int:
     return math.floor(combat_constants.MAX_HIT_OFFSET + inner / combat_constants.MAX_HIT_DIVISOR)
 
 
-# ─── Attack & defense rolls ──────────────────────────────
+# ─── Attack and defense rolls ──────────────────────────────
 
 def attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
     """
@@ -203,6 +196,7 @@ def hit_chance(r_atk: int, r_def: int) -> float:
     denom_atk = combat_constants.HIT_CHANCE_DENOMINATOR_MULTIPLIER * (
         r_atk + combat_constants.HIT_CHANCE_ATK_NUMERATOR_OFFSET
     )
+
     if r_atk > r_def:
         return 1.0 - (r_def + combat_constants.HIT_CHANCE_DEF_NUMERATOR_OFFSET) / denom_atk
     
@@ -231,9 +225,6 @@ def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None)
         Single randint call. Rolls damage uniformly across the full
         range, so 0 is as likely as max_hit, and the average DPS converges
         to max_hit * hit_chance / 2.
-
-    Notes/References:
-        Research doc §"The Max Hit Formula and Linear Scaling".
 
     Author: Nick Hobar
     Creation date: 07/26/2026

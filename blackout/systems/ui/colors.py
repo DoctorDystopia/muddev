@@ -36,6 +36,12 @@ TAG_DEATH = DANGER_COLOR
 TAG_XP = HIGHLIGHT_COLOR    # per-hit experience gained, on the same line
 TAG_RESET = RESET_COLOR
 
+# Tiles covered by the caller's active damage aura, tinted on the grid map.
+# Deliberately NOT the same tag as TAG_INCOMING: the overlay marks ground the
+# caller is burning, which is good news for them, and reusing the damage-taken
+# red would read as a threat indicator.
+TAG_AURA_TILE = HIGHLIGHT_COLOR
+
 
 
 def dialog(text: str) -> str:

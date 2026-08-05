@@ -12,6 +12,7 @@ from items.equipment.constants import (
     WieldLocation,
 )
 from items.equipment.handler import EquipmentError
+from systems.combat.combat_msg import format_combat_stat_bonuses
 from systems.ui.colors import (
     ERROR_COLOR,
     HIGHLIGHT_COLOR,
@@ -55,6 +56,16 @@ def start(caller: object, **kwargs) -> tuple:
         else:
             slot_line = f"  {slot_label}: {HIGHLIGHT_COLOR}(empty){RESET_COLOR}"
             text_lines.append(slot_line)
+
+    text_lines.append("")
+    text_lines.append(f"{TITLE_COLOR}Total Combat Bonuses{RESET_COLOR}")
+    total_bonuses = eq_handler.total_combat_stat_bonuses()
+    bonus_lines = format_combat_stat_bonuses(total_bonuses)
+    if bonus_lines:
+        for bonus_line in bonus_lines:
+            text_lines.append(f"  {bonus_line}")
+    else:
+        text_lines.append(f"  {HIGHLIGHT_COLOR}(none){RESET_COLOR}")
 
     text_lines.append("")
     inv_count = caller.inventory.count_used()
@@ -212,6 +223,14 @@ def node_item_detail(caller: object, **kwargs) -> tuple:
         req_level = item_obj.db.req_level or 0
         text_lines.append(f"Tool: {tool_type} (Tier {tier_value}, Req. Level {req_level})")
 
+    item_bonuses = item_obj.db.combat_stat_bonuses
+    if item_bonuses:
+        bonus_lines = format_combat_stat_bonuses(item_bonuses)
+        if bonus_lines:
+            text_lines.append(f"{TITLE_COLOR}Combat Bonuses:{RESET_COLOR}")
+            for bonus_line in bonus_lines:
+                text_lines.append(f"  {bonus_line}")
+
     text = "\n".join(text_lines)
     options = ({"desc": "Back to equipment overview", "goto": "start"},)
     return text, options
@@ -252,6 +271,14 @@ def node_item_detail_inv(caller: object, **kwargs) -> tuple:
         tier_value = target_item.db.tier or 0
         req_level = target_item.db.req_level or 0
         lines.append(f"Tool: {tool_type} (Tier {tier_value}, Req. Level {req_level})")
+
+    item_bonuses = target_item.db.combat_stat_bonuses
+    if item_bonuses:
+        bonus_lines = format_combat_stat_bonuses(item_bonuses)
+        if bonus_lines:
+            lines.append(f"{TITLE_COLOR}Combat Bonuses:{RESET_COLOR}")
+            for bonus_line in bonus_lines:
+                lines.append(f"  {bonus_line}")
 
     text = "\n".join(lines)
     options = ({"desc": "Back to inventory", "goto": "node_inventory"},)

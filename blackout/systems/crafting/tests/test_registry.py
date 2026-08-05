@@ -41,11 +41,11 @@ class TestRecipeDiscovery(unittest.TestCase):
         self.assertEqual(
             sorted(RECIPE_REGISTRY),
             [
-                "rusty metal dust",
-                "rusty scrap axe",
-                "rusty scrap metal",
-                "rusty scrap shortsword",
-                "rusty scrap spear",
+                "Rusty metal dust",
+                "Rusty scrap axe",
+                "Rusty scrap metal",
+                "Rusty scrap shortsword",
+                "Rusty scrap spear",
             ],
         )
 
@@ -100,16 +100,16 @@ class TestServiceUsesRegistry(unittest.TestCase):
         )
 
     def test_get_recipe_class_resolves_exactly(self):
-        recipe_cls = crafting_service.get_recipe_class("rusty metal dust")
+        recipe_cls = crafting_service.get_recipe_class("Rusty metal dust")
 
         self.assertIsNotNone(recipe_cls)
-        self.assertEqual(recipe_cls.name, "rusty metal dust")
+        self.assertEqual(recipe_cls.name, "Rusty metal dust")
 
     def test_get_recipe_class_does_not_fuzzy_match(self):
         """The contrib's craft() resolves names by prefix/substring. The
         registry is an exact dict lookup, so a partial name must miss rather
         than silently pick a recipe the player did not ask for."""
-        self.assertIsNone(crafting_service.get_recipe_class("rusty"))
+        self.assertIsNone(crafting_service.get_recipe_class("Rusty"))
         self.assertIsNone(crafting_service.get_recipe_class("unknown recipe"))
 
     def test_recipes_in_category_match_the_registry(self):
@@ -122,3 +122,63 @@ class TestServiceUsesRegistry(unittest.TestCase):
             if cls.category == CATEGORY_METALSMITH
         ]
         self.assertEqual(sorted(found_names), sorted(expected))
+
+    def test_recipes_in_category_respects_facility_restriction(self):
+        """A facility whose allowed_categories excludes the requested
+        category must not leak that category's recipes, even if some
+        recipe happens to carry it (a Furnace asking for Metalsmith)."""
+
+        class _FakeFacility:
+            allowed_categories = [CATEGORY_FOUNDRY]
+
+        found = crafting_service.get_recipes_in_category(
+            CATEGORY_METALSMITH, facility=_FakeFacility()
+        )
+
+        self.assertEqual(found, [])
+
+    def test_recipes_in_category_facility_allows_matching_category(self):
+        class _FakeFacility:
+            allowed_categories = [CATEGORY_METALSMITH]
+
+        found = crafting_service.get_recipes_in_category(
+            CATEGORY_METALSMITH, facility=_FakeFacility()
+        )
+        found_names = [key for key, _cls in found]
+
+        expected = [
+            name
+            for name, cls in RECIPE_REGISTRY.items()
+            if cls.category == CATEGORY_METALSMITH
+        ]
+        self.assertEqual(sorted(found_names), sorted(expected))
+
+    def test_recipes_for_facility_matches_only_allowed_categories(self):
+        """A single-category facility (e.g. a Furnace) sees only its own
+        category's recipes, never the other skill's."""
+
+        class _FakeFurnace:
+            allowed_categories = [CATEGORY_FOUNDRY]
+
+        found = crafting_service.get_recipes_for_facility(_FakeFurnace())
+        found_categories = {cls.category for _key, cls in found}
+
+        self.assertEqual(found_categories, {CATEGORY_FOUNDRY})
+
+    def test_recipes_for_facility_spans_multiple_allowed_categories(self):
+        class _FakeMultiTool:
+            allowed_categories = [CATEGORY_FOUNDRY, CATEGORY_METALSMITH]
+
+        found = crafting_service.get_recipes_for_facility(_FakeMultiTool())
+        found_names = [key for key, _cls in found]
+
+        self.assertEqual(sorted(found_names), sorted(RECIPE_REGISTRY))
+
+    def test_recipes_for_facility_with_no_allowed_categories_returns_everything(self):
+        class _FakeOpenFacility:
+            allowed_categories = None
+
+        found = crafting_service.get_recipes_for_facility(_FakeOpenFacility())
+        found_names = [key for key, _cls in found]
+
+        self.assertEqual(sorted(found_names), sorted(RECIPE_REGISTRY))

@@ -146,6 +146,10 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
         self.db.default_combat_style = raw_stats.get(
             "default_combat_style", combat_constants.UNARMED_DEFAULT_COMBAT_STYLE
         )
+        # An NPC has no equipment handler, so collect_contributors reads its
+        # rules off the NPC itself -- under the same attribute name an item
+        # uses, which is what lets one collector serve both.
+        self.db.combat_rules = raw_stats.get(combat_constants.COMBAT_RULES_ATTR, [])
 
 
     def respawn(self) -> None:

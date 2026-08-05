@@ -30,7 +30,8 @@ fi
 
 echo "=== Adding maps ==="
 "$EVENNIA" xyzgrid add world.maps.test_neo_cairo
-# "$EVENNIA" xyzgrid add world.maps.test_oasis
+"$EVENNIA" xyzgrid add world.maps.test_oasis
+"$EVENNIA" xyzgrid add world.maps.test_oasis_outskirts
 
 echo "=== Spawning maps ==="
 "$EVENNIA" xyzgrid spawn

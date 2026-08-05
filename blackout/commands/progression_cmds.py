@@ -8,6 +8,7 @@ Description: Custom commands for players to interact with the progression system
 
 
 from commands.command import Command
+from commands.constants import HELP_CATEGORY_ADMIN, HELP_CATEGORY_PROGRESSION
 from evennia import CmdSet
 from evennia.utils.evmenu import EvMenu
 from systems.progression.skills.registry import SKILL_REGISTRY
@@ -23,7 +24,7 @@ class CmdSkills(Command):
     key = "skills"
     aliases = ["skill", "sk"]
     locks = "cmd:all()"
-    help_category = "Progression"
+    help_category = HELP_CATEGORY_PROGRESSION
 
 
     SKILLS_MENU_PATH = "systems.menus.skills_menu"
@@ -114,7 +115,7 @@ class CmdAddXP(Command):
     key = "addxp"
     aliases = ["grantxp"]
     locks = "cmd:perm(Admin)"
-    help_category = "Admin"
+    help_category = HELP_CATEGORY_ADMIN
 
 
     def func(self) -> None:

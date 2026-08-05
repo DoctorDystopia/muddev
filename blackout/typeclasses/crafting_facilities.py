@@ -10,6 +10,7 @@ from evennia import Command, CmdSet
 from evennia import DefaultObject
 from evennia.utils.evmenu import EvMenu
 
+from commands.constants import HELP_CATEGORY_CRAFTING
 from typeclasses.objects import ObjectParent
 
 
@@ -46,7 +47,7 @@ class CmdCraft(Command):
     """
     key = CRAFT_COMMAND_KEY
     locks = CRAFT_COMMAND_LOCKS
-    help_category = "General"
+    help_category = HELP_CATEGORY_CRAFTING
 
 
     def func(self) -> None:
@@ -65,7 +66,9 @@ class CmdCraft(Command):
 
         Methodology:
             Starts EvMenu using the shared crafting menu module.
-            Passes facility=self.obj for facility-specific features.
+            Passes facility=self.obj to the start node via startnode_input --
+            EvMenu's own **kwargs only become attributes on the menu
+            instance, they are not forwarded to the start node.
 
         Notes/References:
             None
@@ -82,7 +85,7 @@ class CmdCraft(Command):
             caller,
             CRAFT_MENU_MODULE_PATH,
             startnode="start",
-            facility=facility,
+            startnode_input=("", {"facility": facility}),
         )
 
 
@@ -100,7 +103,7 @@ class CmdToggleCraftConfirm(Command):
 
     key = "toggle craft confirm"
     locks = "cmd:all()"
-    help_category = "General"
+    help_category = HELP_CATEGORY_CRAFTING
 
 
     def func(self) -> None:

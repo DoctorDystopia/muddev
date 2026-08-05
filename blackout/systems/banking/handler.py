@@ -48,6 +48,7 @@ class BankHandler:
     def __init__(self, obj):
         self.obj = obj
 
+
     def _find_existing_stack_in_bank(self, item_key):
         """
         Find or create a stack of the same item key in the bank room.
@@ -65,8 +66,10 @@ class BankHandler:
         
         return None
 
+
     def _get_bank_room(self):
         room = self.obj.db._bank_room
+
         if room is not None:
             try:
                 _ = room.id
@@ -79,10 +82,12 @@ class BankHandler:
             key=f"{self.obj.key}'s Bank Vault",
             location=None,
         )
+
         room.tags.add(BANK_TAG, category=BANK_TAG_CATEGORY)
         room.locks.add("get:false()")
         room.db.desc = "A secure bank vault."
         self.obj.db._bank_room = room
+
         return room
 
     def _split_stack(self, item, count, location=None):
@@ -119,14 +124,18 @@ class BankHandler:
 
         return new_obj
 
+
     def _copy_item_to(self, item, location):
         """Create a full-stack copy of an item at the given location."""
         return self._split_stack(item, getattr(item, "quantity", 1), location=location)
 
+
     def _has_existing_stack(self, item_key):
         """Check if bank already has a stack of this item key."""
         room = self._get_bank_room()
+
         return any(obj.key.lower() == item_key.lower() for obj in room.contents)
+
 
     def deposit(self, item, count=None):
         """
@@ -151,6 +160,7 @@ class BankHandler:
             if deposit_qty >= item_qty:
                 # Deposit entire stack
                 existing_stack = self._find_existing_stack_in_bank(item.key)
+
                 if existing_stack:
                     existing_stack.quantity += item_qty
                     item.delete()
@@ -162,26 +172,33 @@ class BankHandler:
                     if len(room.contents) >= BANK_MAX_UNIQUE_KEYS:
                         self.obj.msg("Your bank vault is full (100 item types max).")
                         return None
+                    
                     item.move_to(room, quiet=True)
                     self.obj.msg(f"You deposit {item.key} (x{item_qty}) into the bank.")
+
                     return item
             else:
                 # Split stack - deposit partial amount
                 room = self._get_bank_room()
                 existing_stack = self._find_existing_stack_in_bank(item.key)
+
                 if existing_stack:
                     existing_stack.quantity += deposit_qty
                     deposited_obj = existing_stack
                 else:
                     if len(room.contents) >= BANK_MAX_UNIQUE_KEYS:
                         self.obj.msg("Your bank vault is full (100 item types max).")
+
                         return None
+                    
                     deposited_obj = self._split_stack(item, deposit_qty, location=room)
 
                 item.quantity -= deposit_qty
                 if item.quantity <= 0:
                     item.delete()
+
                 self.obj.msg(f"You deposit {item.key} (x{deposit_qty}) into the bank.")
+
                 return deposited_obj
 
         # Non-stackable item - store normally
@@ -189,9 +206,12 @@ class BankHandler:
         if len(room.contents) >= BANK_MAX_UNIQUE_KEYS and not self._has_existing_stack(item.key):
             self.obj.msg("Your bank vault is full (100 item types max).")
             return None
+        
         item.move_to(room, quiet=True)
         self.obj.msg(f"You deposit {item.key} into the bank.")
+
         return item
+
 
     def withdraw(self, item_id, count=None):
         """
@@ -250,25 +270,34 @@ class BankHandler:
                     return obj
 
         self.obj.msg("You don't have that item stored in the bank.")
+
         return None
+
 
     def list_items(self):
         """Return a list of all item objects currently stored in the bank."""
         room = self._get_bank_room()
+
         return list(room.contents)
+
 
     def count_items(self):
         """Return the number of items currently stored in the bank."""
         room = self._get_bank_room()
+
         return len(room.contents)
+
 
     def get_item_by_id(self, item_id):
         """Find a stored item by its database id. Returns the object or None."""
         room = self._get_bank_room()
+
         for obj in room.contents:
             if obj.id == item_id:
                 return obj
+            
         return None
+
 
     def find_item_by_name(self, item_key):
         """
@@ -299,9 +328,11 @@ class BankHandler:
         match = self.find_item_by_name(item_key)
         return match is not None
 
+
     def delete_bank_room(self):
         """Delete the hidden bank room and all items in it, then clear the stored reference."""
         room = self.obj.db._bank_room
+
         if room is not None:
             try:
                 for item in list(room.contents):
@@ -309,4 +340,5 @@ class BankHandler:
                 room.delete()
             except Exception:
                 pass
+            
             self.obj.db._bank_room = None

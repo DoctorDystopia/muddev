@@ -8,6 +8,7 @@ Description: Item typeclasses. Stats come from ITEM_DB definitions; these
 
 from typeclasses.objects import Object
 from items.equipment.constants import WieldLocation
+from systems.combat.combat_msg import format_combat_stat_bonuses
 
 
 
@@ -72,12 +73,56 @@ class BaseItem(Object):
 
 class EquippableItem(BaseItem):
     """Items that can be worn or wielded."""
-    
+
     @property
     def inventory_use_slot(self):
         """Returns the slot this item occupies when equipped, or None if not equippable."""
         raw = self.attributes.get("use_slot", category=None, default=None)
         return _resolve_use_slot(raw)
+
+    def get_display_desc(self, looker, **kwargs):
+        """
+        Purpose: Append this item's combat stat bonuses (if any) to the desc
+        shown by 'look', so a player can read what an item does without
+        opening the equipment menu.
+
+        Entry:
+            looker - the Object doing the looking (Evennia's return_appearance
+                     contract; unused here beyond the super() call).
+
+        Exit/Returns:
+            The base desc string, unchanged, when the item has no non-zero
+            combat_stat_bonuses (every non-combat item, and any gadget whose
+            bonuses are all zero). Otherwise the base desc plus a
+            "Combat Bonuses:" block.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Delegates the base text to super().get_display_desc so a future
+            change to Evennia's default/desc fallback is inherited rather
+            than duplicated, then reuses
+            systems.combat.combat_msg.format_combat_stat_bonuses -- the same
+            formatter the equipment menu uses -- so the two screens can never
+            disagree on how a bonus is labelled or coloured.
+
+        Author: Nick Hobar
+        Creation date: 08/04/2026
+        """
+        base_desc = super().get_display_desc(looker, **kwargs)
+
+        item_bonuses = self.db.combat_stat_bonuses
+        if not item_bonuses:
+            return base_desc
+
+        bonus_lines = format_combat_stat_bonuses(item_bonuses)
+        if not bonus_lines:
+            return base_desc
+
+        bonus_block = "\n".join(bonus_lines)
+
+        return f"{base_desc}\n\nCombat Bonuses:\n{bonus_block}"
 
 
 

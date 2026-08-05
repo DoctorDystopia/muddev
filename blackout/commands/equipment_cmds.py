@@ -9,6 +9,7 @@ Description: Commands for equipment and inventory management via EvMenu.
 
 
 from commands.command import Command
+from commands.constants import HELP_CATEGORY_GENERAL
 from evennia import CmdSet
 
 
@@ -43,7 +44,7 @@ class CmdEquipment(Command):
     key = "equip"
     aliases = ["equipment"]
     locks = "cmd:all()"
-    help_category = "General"
+    help_category = HELP_CATEGORY_GENERAL
 
 
     def func(self) -> None:

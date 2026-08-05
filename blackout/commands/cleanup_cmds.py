@@ -6,6 +6,7 @@ Description: Admin cleanup commands for bulk item destruction.
 """
 
 from commands.command import Command
+from commands.constants import HELP_CATEGORY_ADMIN
 from evennia import CmdSet
 
 
@@ -38,7 +39,7 @@ class CmdDestroyItems(Command):
     """
     key = "purge"
     locks = "cmd:perm(Builder)"
-    help_category = "Admin"
+    help_category = HELP_CATEGORY_ADMIN
 
 
     def func(self) -> None:

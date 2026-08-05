@@ -9,6 +9,7 @@ from evennia import Command, CmdSet
 from evennia import DefaultObject
 from evennia.utils.evmenu import EvMenu
 
+from commands.constants import HELP_CATEGORY_GENERAL
 from typeclasses.objects import ObjectParent
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
@@ -53,7 +54,7 @@ class CmdTalk(Command):
     """
     key = TALK_COMMAND_KEY
     locks = TALK_COMMAND_LOCKS
-    help_category = "General"
+    help_category = HELP_CATEGORY_GENERAL
 
 
     def func(self) -> None:
