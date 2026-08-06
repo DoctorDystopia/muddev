@@ -21,8 +21,8 @@ from systems.crafting.constants import CRAFTING_BUSY_COOLDOWN_KEY, MAX_CRAFT_BAT
 from world.item_database import ITEM_DB
 
 
-RECIPE_KEY = "Rusty metal dust"
-SWORD_RECIPE_KEY = "Rusty scrap shortsword"
+RECIPE_KEY = "rusty metal dust"
+SWORD_RECIPE_KEY = "rusty scrap shortsword"
 
 
 class _CraftBatchTestCase(EvenniaCommandTest):
@@ -197,7 +197,7 @@ class TestMultiMaterialRecipes(_SwordRecipeTestCase):
         can_craft, reasons = crafting_service.check_craftable(self.char1, SWORD_RECIPE_KEY)
 
         self.assertFalse(can_craft)
-        self.assertEqual(reasons.count("Missing Rusty Scrap Metal (1/2)"), 1)
+        self.assertEqual(reasons.count("Missing rusty scrap metal (1/2)"), 1)
 
     def test_display_data_shows_required_two(self):
         self._give_sheets(5)
@@ -218,6 +218,6 @@ class TestMultiMaterialRecipes(_SwordRecipeTestCase):
         self.assertTrue(started)
         craft_batch._craft_one(self.char1, SWORD_RECIPE_KEY)
 
-        sheets_left = [obj for obj in self.char1.contents if obj.key == "Rusty Scrap Metal"]
+        sheets_left = [obj for obj in self.char1.contents if obj.key == "rusty scrap metal"]
         self.assertEqual(len(sheets_left), 1)
         self.assertIsNone(craft_batch.get_active_batch(self.char1))

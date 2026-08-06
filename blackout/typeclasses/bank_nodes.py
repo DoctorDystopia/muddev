@@ -74,7 +74,7 @@ class CmdWithdraw(Command):
             return
 
         # Trailing integer (if any) is the quantity; everything before it is
-        # the name, so multi-word keys like "Rusty Scrap Metal" survive.
+        # the name, so multi-word keys like "rusty scrap metal" survive.
         # No quantity given means the whole stack, matching deposit.
         parts = args.split()
         count = None

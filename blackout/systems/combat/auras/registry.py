@@ -18,7 +18,7 @@ import pkgutil
 from evennia.utils import logger
 
 from . import aura_defs as aura_defs_package
-from .aura_defs.base_aura import BaseAura
+from .aura_defs.base_aura import BaseAura, NO_UNLOCK_REQUIREMENT
 
 
 
@@ -185,6 +185,47 @@ def find_aura(name: str):
         return prefix_matches[0]
 
     return None
+
+
+def get_auras_for_skill(skill_key: str) -> list:
+    """
+    Purpose: Get every aura that unlocks under a given skill.
+
+    Entry:
+        skill_key is a skill key string to match against an aura's
+        scaling_skill.
+
+    Exit/Returns:
+        Returns a list of aura instances, sorted by (unlock_level, name).
+        An aura with NO_UNLOCK_REQUIREMENT is excluded -- it imposes no
+        skill gate, so it is not an "unlock" of anything.
+
+    Module Globals:
+        AURA_REGISTRY read.
+        NO_UNLOCK_REQUIREMENT read.
+
+    Methodology:
+        Filters the registry by scaling_skill, the same attribute
+        BaseAura.can_activate() checks the level threshold against.
+        Mirrors get_recipes_for_skill (crafting), get_gatherables_for_skill
+        (gathering), and get_equippables_for_skill (equipment) -- the four
+        together feed the skills menu's "Unlocks" listing.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/05/2026
+    """
+    matches = [
+        aura
+        for aura in AURA_REGISTRY.values()
+        if aura.scaling_skill == skill_key and aura.unlock_level > NO_UNLOCK_REQUIREMENT
+    ]
+
+    matches.sort(key=lambda entry: (entry.unlock_level, entry.name))
+
+    return matches
 
 
 AURA_REGISTRY: dict = _discover_auras()

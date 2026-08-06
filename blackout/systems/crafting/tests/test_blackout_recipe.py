@@ -33,7 +33,7 @@ class DustConsumingRecipe(BlackoutRecipe):
     category = CATEGORY_METALSMITH
 
     consumable_tags = ["rusty_metal_dust", "rusty_metal_dust"]
-    consumable_names = ["Rusty metal dust", "Rusty metal dust"]
+    consumable_names = ["rusty metal dust", "rusty metal dust"]
 
     output_item_keys = ["rusty_metal_chunk"]
 
@@ -62,7 +62,7 @@ class TestStackableConsumption(EvenniaCommandTest):
 
         self.assertTrue(result)
         self.assertNotIn(dust, self.char1.contents)
-        leftovers = [obj for obj in self.char1.contents if obj.key == "Rusty Metal Dust"]
+        leftovers = [obj for obj in self.char1.contents if obj.key == "rusty metal dust"]
         self.assertEqual(leftovers, [])
 
     def test_insufficient_stack_fails_without_consuming(self):
@@ -110,7 +110,7 @@ class TestNonStackableMultiInput(EvenniaCommandTest):
 
         self.assertTrue(result)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0].key, "Rusty scrap shortsword")
+        self.assertEqual(result[0].key, "rusty scrap shortsword")
         self.assertNotIn(sheets[0], self.char1.contents)
         self.assertNotIn(sheets[1], self.char1.contents)
 

@@ -10,7 +10,7 @@ from world.item_database import ItemDef
 ITEMS = {
     "rusty_metal_chunk": ItemDef(
         key="rusty_metal_chunk",
-        name="Rusty Metal Chunk",
+        name="rusty metal chunk",
         desc="A chunk of metal corroded by rust and age.",
         value=1,
         weight=2.0,
@@ -20,7 +20,7 @@ ITEMS = {
     ),
     "rusty_metal_dust": ItemDef(
         key="rusty_metal_dust",
-        name="Rusty Metal Dust",
+        name="rusty metal dust",
         desc="A fine, reddish-brown dust ground from rusty metal.",
         value=2,
         weight=0.2,
@@ -30,7 +30,7 @@ ITEMS = {
     ),
     "rusty_scrap_metal": ItemDef(
         key="rusty_scrap_metal",
-        name="Rusty Scrap Metal",
+        name="rusty scrap metal",
         desc="A rough piece of scrap metal, smelted down from a rusty chunk.",
         value=5,
         weight=1.0,

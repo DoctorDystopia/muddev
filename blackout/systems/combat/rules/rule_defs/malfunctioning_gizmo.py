@@ -69,7 +69,7 @@ class MalfunctioningGizmoRules(BaseActionRules):
     """
 
     key = "malfunctioning_gizmo"
-    name = "Malfunctioning Gizmo"
+    name = "malfunctioning gizmo"
     description = "Spits wailing electric arcs. Surely this thing won't zap you. Feeling lucky?"
     priority = const.RULES_PRIORITY_OVERRIDE
 

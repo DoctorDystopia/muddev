@@ -15,6 +15,7 @@ and back out again. Every link in that chain is a place it can be dropped.
 from evennia.utils.test_resources import EvenniaTest
 
 from items.equipment.constants import WieldLocation
+from items.equipment.handler import EquipmentError
 from systems.combat import constants as const
 from systems.combat.rules.contributors import collect_contributors
 from systems.combat.rules.rule_defs.glass_cannon_amulet import (
@@ -37,7 +38,12 @@ class TestItemDefPlumbing(EvenniaTest):
     def test_the_demo_items_are_in_the_database(self):
         # A def module imported but left out of the ITEM_DB build loop
         # contributes nothing and raises nothing.
-        for key in ("malfunctioning_gizmo", "toy_sword", "glass_cannon_amulet"):
+        for key in (
+            "malfunctioning_gizmo",
+            "toy_sword",
+            "glass_cannon_amulet",
+            "rusty_scrap_chainbody",
+        ):
             self.assertIn(key, ITEM_DB)
 
     def test_an_items_rules_reach_the_spawned_object(self):
@@ -264,3 +270,24 @@ class TestEquippingTheDemoItems(EvenniaTest):
 
         self.assertTrue(self.char1.equipment.is_equipped(gizmo))
         self.assertTrue(self.char1.equipment.is_equipped(amulet))
+
+    def test_the_chainbody_lands_in_the_body_slot(self):
+        # The crafted rusty chainbody must be equippable; ARMOR_SKILL_MAP
+        # registers "chainbody" the way WEAPON_SKILL_MAP registers weapons.
+        item = ITEM_DB["rusty_scrap_chainbody"].create(location=self.char1)
+
+        self.char1.equipment.equip(item)
+
+        slot = self.char1.equipment.get_current_slot(item)
+        self.assertEqual(slot, WieldLocation.BODY)
+
+    def test_the_armor_gate_checks_defense(self):
+        # ARMOR_SKILL_MAP wires chainbody -> Defense; a req_level above the
+        # character's level must refuse the equip and name the skill.
+        item = ITEM_DB["rusty_scrap_chainbody"].create(location=self.char1)
+        item.db.req_level = 99
+
+        with self.assertRaises(EquipmentError) as ctx:
+            self.char1.equipment.equip(item)
+
+        self.assertIn("Defense", str(ctx.exception))

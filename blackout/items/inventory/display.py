@@ -44,7 +44,7 @@ def _truncate_line(line, width):
     is shortened, with an ellipsis appended when truncation occurs.
 
     Args:
-        line (str): The cell line to truncate (e.g. ``"3: Rusty Metal Chunk"``).
+        line (str): The cell line to truncate (e.g. ``"3: rusty metal chunk"``).
         width (int): Maximum number of *visible* characters the line may
             occupy.
 

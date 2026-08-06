@@ -158,3 +158,14 @@ class WeaponItem(EquippableItem):
     default wrote a 'weapon_type' of "generic" that no consumer ever read,
     leaving a stale phantom attribute on every weapon in the game.
     """
+
+
+class ArmorItem(EquippableItem):
+    """
+    Tiered armor like chest pieces and shields.
+
+    As with ToolItem, all attributes come from the spawning ItemDef. Note the
+    armor kind is stored under 'tool_type', not 'armor_type' -- the removed
+    default wrote a 'armor_type' of "generic" that no consumer ever read,
+    leaving a stale phantom attribute on every armor piece in the game.
+    """

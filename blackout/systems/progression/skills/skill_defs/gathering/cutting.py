@@ -7,7 +7,10 @@ Description: Implementation of the Cutting gathering skill.
 
 
 
+from evennia.utils import logger
+
 from systems.progression.skills.skill_defs.base_skill import BaseSkill
+from systems.progression.skills.gatherables import GATHERABLE_REGISTRY
 from world.item_database import ITEM_DB
 
 
@@ -34,33 +37,50 @@ class Cutting(BaseSkill):
         return True
 
 
-    def _get_loot_info(self, target: object) -> tuple[str | None, int]:
+    def _get_loot_info(self, target: object) -> tuple[str | None, str | None, int]:
         """
         Purpose: Determines what loot to generate from a cutting target.
-        
+
         Entry:
             target is a valid Evennia object with db attributes
-        
+
         Exit/Returns:
-            Tuple of (item_name, xp_reward). item_name is None if invalid.
-        
+            Tuple of (item_key, item_name, xp_reward). item_key and
+            item_name are None if target's gatherable_key is missing or
+            unregistered.
+
         Module Globals:
-            None
-            
+            GATHERABLE_REGISTRY read
+
         Methodology:
-            Retrieves xp_reward from the target's database. If no xp_reward 
-            exists defaults to 0. Returns a hardcoded item name string and 
-            the calculated xp reward as a tuple.
-            
+            Looks up target.db.gatherable_key in GATHERABLE_REGISTRY to find
+            the item this node yields, then resolves that item's display
+            name from ITEM_DB. xp_reward still comes off the node instance
+            so a per-spawn override remains possible. Fails closed (logs and
+            returns None item_key/item_name) on an unregistered key rather
+            than guessing an item.
+
         Notes/References:
             None
-            
+
         Author: Nick Hobar
         Creation date: 06/09/2026
         """
         xp_reward = target.db.xp_reward or 0
-        
-        return "Rusty Metal Chunk", xp_reward
+        gatherable_key = target.db.gatherable_key
+        gatherable_def = GATHERABLE_REGISTRY.get(gatherable_key)
+
+        if gatherable_def is None:
+            logger.log_err(
+                f"Cutting._get_loot_info: {target} has unregistered "
+                f"gatherable_key {gatherable_key!r}."
+            )
+            return None, None, xp_reward
+
+        item_key = gatherable_def.item_key
+        item_name = ITEM_DB[item_key].name
+
+        return item_key, item_name, xp_reward
 
 
     def _has_tool(self, character: object) -> bool:
@@ -77,13 +97,14 @@ class Cutting(BaseSkill):
         return has_axe
 
 
-    def _execute_gathering(self, character: object, target: object, item_name: str, xp_reward: int) -> None:
+    def _execute_gathering(self, character: object, target: object, item_key: str, item_name: str, xp_reward: int) -> None:
         """
         Purpose: Performs the gathering action after all validations have passed.
 
         Entry:
             character is a valid Evennia Character object
             target is a valid Evennia object with a .key attribute
+            item_key is a valid key in ITEM_DB
             item_name is a non-empty string for the created item
             xp_reward is a non-negative integer
 
@@ -105,7 +126,7 @@ class Cutting(BaseSkill):
         Author: Nick Hobar
         Creation date: 06/09/2026
         """
-        ITEM_DB["rusty_metal_chunk"].create(
+        ITEM_DB[item_key].create(
             location=character,
             home=character,
         )
@@ -183,6 +204,10 @@ class Cutting(BaseSkill):
             return
 
         # 4. Proceed with Gathering
-        item_name, xp_reward = self._get_loot_info(target)
-        self._execute_gathering(character, target, item_name, xp_reward)
+        item_key, item_name, xp_reward = self._get_loot_info(target)
+        if item_key is None:
+            character.msg(f"Something is wrong with the {target.key}. Tell a builder.")
+            return
+
+        self._execute_gathering(character, target, item_key, item_name, xp_reward)
 

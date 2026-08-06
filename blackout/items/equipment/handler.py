@@ -9,7 +9,7 @@ Description: EquipmentHandler — per-character wield-slot state and the
 from evennia.utils import logger
 
 from .constants import WieldLocation, MAX_INVENTORY_SLOTS
-from .skill_requirements import WEAPON_SKILL_MAP
+from .skill_requirements import ARMOR_SKILL_MAP, WEAPON_SKILL_MAP
 
 
 
@@ -191,9 +191,10 @@ class EquipmentHandler:
         if use_slot is None:
             raise EquipmentError("That item cannot be equipped.")
 
-        # Tool Tier Requirement Check — dispatched through WEAPON_SKILL_MAP
-        # so new weapon/tool categories can register their required skill
-        # without re-touching this branch block (data-driven tool-tier gate).
+        # Tool Tier Requirement Check — dispatched through WEAPON_SKILL_MAP and
+        # ARMOR_SKILL_MAP so new weapon/tool/armor categories can register
+        # their required skill without re-touching this branch block
+        # (data-driven tool-tier gate).
         if hasattr(obj, "db"):
             tool_type_value = obj.db.tool_type
             if tool_type_value:
@@ -201,21 +202,25 @@ class EquipmentHandler:
                 # None is explicitly exempt. Distinguishing the two is what
                 # keeps a renamed weapon category from silently losing its
                 # level check on objects already spawned in the DB.
-                if tool_type_value not in WEAPON_SKILL_MAP:
+                if tool_type_value in WEAPON_SKILL_MAP:
+                    required_skill = WEAPON_SKILL_MAP[tool_type_value]
+                elif tool_type_value in ARMOR_SKILL_MAP:
+                    required_skill = ARMOR_SKILL_MAP[tool_type_value]
+                else:
                     logger.log_err(
                         f"EquipmentHandler.equip: {obj} has unregistered "
-                        f"tool_type {tool_type_value!r}; add it to WEAPON_SKILL_MAP."
+                        f"tool_type {tool_type_value!r}; add it to "
+                        f"WEAPON_SKILL_MAP or ARMOR_SKILL_MAP."
                     )
                     raise EquipmentError("You don't know how to use that.")
 
-                required_skill = WEAPON_SKILL_MAP[tool_type_value]
                 if required_skill is not None:
                     req_level = obj.db.req_level or 0
                     meets_req = self.obj.skills.meets_prerequisite(required_skill, req_level)
                     if not meets_req:
                         skill_label = required_skill.capitalize()
                         raise EquipmentError(
-                            f"You need a {skill_label} level of {req_level} to wield this."
+                            f"You need a {skill_label} level of {req_level} to equip this."
                         )
 
         # Determine which items will be displaced

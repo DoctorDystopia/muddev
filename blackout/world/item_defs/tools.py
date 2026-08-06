@@ -11,7 +11,7 @@ from items.equipment.constants import WieldLocation
 ITEMS = {
     "rusty_scrap_axe": ItemDef(
         key="rusty_scrap_axe",
-        name="Rusty Scrap Axe",
+        name="rusty scrap axe",
         typeclass="typeclasses.items.ToolItem",
         desc="A crude axe hammered together from scrap metal.",
         value=10,
@@ -26,7 +26,7 @@ ITEMS = {
     ),
     "hammer": ItemDef(
         key="hammer",
-        name="Hammer",
+        name="hammer",
         typeclass="typeclasses.crafting_tools.Hammer",
         desc="A heavy hammer used for hitting things.",
         value=15,

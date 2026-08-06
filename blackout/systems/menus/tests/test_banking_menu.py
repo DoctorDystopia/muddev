@@ -25,7 +25,7 @@ class _BankingMenuTest(EvenniaTest):
 
     character_typeclass = BlackoutCharacter
 
-    def _make_item(self, key="Rusty Metal Chunk", quantity=None):
+    def _make_item(self, key="rusty metal chunk", quantity=None):
         obj = create_object(BaseItem, key=key, location=self.char1)
         if quantity is not None:
             obj.attributes.add("stackable", True)
@@ -100,7 +100,7 @@ class TestNodesReturnRenderedOutput(_BankingMenuTest):
 class TestQuantityPrompting(_BankingMenuTest):
 
     def test_stackable_offers_quantity_choices(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
 
         text, options = banking_menu.node_deposit_quantity(self.char1, item_id=item.id)
 
@@ -110,7 +110,7 @@ class TestQuantityPrompting(_BankingMenuTest):
         self.assertIn("You have 10.", text)
 
     def test_withdraw_prompt_uses_bank_stock_label(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
         self.char1.bank.deposit(item)
         banked = self.char1.bank.list_items()[0]
 
@@ -121,7 +121,7 @@ class TestQuantityPrompting(_BankingMenuTest):
         self.assertIn("Bank has 10.", text)
 
     def test_custom_qty_rejects_non_numeric(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
 
         text, options = banking_menu.node_deposit_custom_qty(
             self.char1, "abc", item_id=item.id, max_qty=10, custom_qty_state="awaiting"
@@ -132,7 +132,7 @@ class TestQuantityPrompting(_BankingMenuTest):
         self.assertEqual(self.char1.bank.count_items(), 0)
 
     def test_custom_qty_transfers_requested_amount(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
 
         banking_menu.node_deposit_custom_qty(
             self.char1, "4", item_id=item.id, max_qty=10, custom_qty_state="awaiting"
@@ -143,7 +143,7 @@ class TestQuantityPrompting(_BankingMenuTest):
         self.assertEqual(stored[0].quantity, 4)
 
     def test_custom_qty_clamps_to_available(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
 
         banking_menu.node_deposit_custom_qty(
             self.char1, "999", item_id=item.id, max_qty=10, custom_qty_state="awaiting"
@@ -157,7 +157,7 @@ class TestExecuteGoto(_BankingMenuTest):
     """The goto-callable half of the flow DOES return a node name."""
 
     def test_deposit_goto_returns_select_node_name(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
 
         result = banking_menu.DEPOSIT_FLOW.execute_goto(
             self.char1, "", item_id=item.id, count="all"
@@ -167,7 +167,7 @@ class TestExecuteGoto(_BankingMenuTest):
         self.assertEqual(self.char1.bank.count_items(), 1)
 
     def test_withdraw_goto_returns_select_node_name(self):
-        item = self._make_item(key="Credits", quantity=10)
+        item = self._make_item(key="credits", quantity=10)
         self.char1.bank.deposit(item)
         banked = self.char1.bank.list_items()[0]
 

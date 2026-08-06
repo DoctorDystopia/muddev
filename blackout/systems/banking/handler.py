@@ -304,7 +304,7 @@ class BankHandler:
         Find a stored item by name. Returns the object or None.
 
         Matches the full key case-insensitively first, then falls back to a
-        prefix match so `withdraw rusty` reaches "Rusty Scrap Metal". Callers
+        prefix match so `withdraw rusty` reaches "rusty scrap metal". Callers
         that hold a name (commands) use this to obtain the id that withdraw
         expects -- withdraw itself matches on obj.id only, and passing it a
         name silently never matched anything.

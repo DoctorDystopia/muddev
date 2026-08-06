@@ -77,11 +77,11 @@ items in the world.
 ```python
 > py from world.item_database import ITEM_DB; [f"{k}: {v.name}" for k, v in ITEM_DB.items()]
 
-rusty_metal_chunk: Rusty Metal Chunk
-rusty_metal_dust: Rusty Metal Dust
-rusty_scrap_metal: Rusty Scrap Metal
-rusty_scrap_axe: Rusty Scrap Axe
-hammer: Hammer
+rusty_metal_chunk: rusty metal chunk
+rusty_metal_dust: rusty metal dust
+rusty_scrap_metal: rusty scrap metal
+rusty_scrap_axe: rusty scrap axe
+hammer: hammer
 ```
 
 ### Create a single item in your inventory
@@ -92,7 +92,7 @@ hammer: Hammer
 # import in same line
 > py from world.item_database import ITEM_DB; ITEM_DB["malfunctioning_gizmo"].create(location=self)
 
-You see a Rusty Metal Chunk appear in your inventory.
+You see a rusty metal chunk appear in your inventory.
 ```
 
 ### Create N items at once
@@ -100,7 +100,7 @@ You see a Rusty Metal Chunk appear in your inventory.
 ```python
 > py [ITEM_DB["rusty_metal_chunk"].create(location=self) for _ in range(15)]
 
-Creates 15 Rusty Metal Chunks in your inventory.
+Creates 15 rusty metal chunks in your inventory.
 ```
 
 ### Create items at a specific room or on another character
@@ -242,7 +242,7 @@ equip/unequip items.
 
 ```python
 > py self.equipment.all()
-[<ToolItem: Rusty Scrap Axe>]
+[<ToolItem: rusty scrap axe>]
 
 > py self.equipment.count_inventory()
 3
@@ -258,7 +258,7 @@ equip/unequip items.
 
 ```python
 > py self.equipment.slots.get(WieldLocation.MAIN_HAND)
-<ToolItem: Rusty Scrap Axe>
+<ToolItem: rusty scrap axe>
 ```
 
 ### Skill-gated equipping
@@ -365,18 +365,18 @@ combatant.
 ### In-game commands
 
 ```bash
-> deposit Rusty Metal Chunk
+> deposit rusty metal chunk
 
 Item deposited.
 
 > balance
 
 --- Storage ---
-1. Rusty Metal Chunk [2.0kg, 1 credits]
+1. rusty metal chunk [2.0kg, 1 credits]
 
-> withdraw Rusty Metal Chunk
+> withdraw rusty metal chunk
 
-You withdraw Rusty Metal Chunk from the bank.
+You withdraw rusty metal chunk from the bank.
 ```
 
 Opens the full banking menu:
@@ -389,7 +389,7 @@ Opens the full banking menu:
 
 ```python
 > py [item.key for item in self.bank.list_items()]
-['Rusty Metal Chunk', 'Hammer']
+['rusty metal chunk', 'hammer']
 
 > py self.bank.count_items()
 2
@@ -398,7 +398,7 @@ Opens the full banking menu:
 ### Bulk deposit all items of a type
 
 ```python
-> py [self.bank.deposit(obj) for obj in self.contents if obj.key == "Rusty Metal Chunk"]
+> py [self.bank.deposit(obj) for obj in self.contents if obj.key == "rusty metal chunk"]
 ```
 
 ---
@@ -429,8 +429,8 @@ requirements, and craft with optional confirmation.
 {'Foundry': ['rusty scrap metal'],
  'Metalsmith': ['rusty metal dust', 'rusty scrap axe', 'rusty scrap shortsword', 'rusty scrap spear']}
 
-> py from systems.crafting.crafting_service import get_recipe_display_data; data = get_recipe_display_data(self, "rusty_scrap_metal_recipe"); data["name"], data["can_craft"]
-('Smelt Rusty Scrap Metal', True)
+> py from systems.crafting.crafting_service import get_recipe_display_data; data = get_recipe_display_data(self, "rusty scrap metal"); data["name"], data["can_craft"]
+('Smelt rusty scrap metal', True)
 ```
 
 ### Adding a new recipe
@@ -468,8 +468,8 @@ now raises at import on an unregistered category to make that impossible.
 ### Purge items from the world
 
 ```bash
-> purge all Rusty Metal Chunk           # deletes from your inventory
-> purge all global Rusty Metal Chunk    # deletes from ALL characters
+> purge all rusty metal chunk           # deletes from your inventory
+> purge all global rusty metal chunk    # deletes from ALL characters
 ```
 
 Requires Builder permission. Searches both inventory and equipment slots.

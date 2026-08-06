@@ -17,7 +17,7 @@ from world.item_database import ItemDef
 ITEMS = {
     "glass_cannon_amulet": ItemDef(
         key="glass_cannon_amulet",
-        name="Glass Cannon Amulet",
+        name="Glass Cannon amulet",
         typeclass="typeclasses.items.EquippableItem",
         desc=(
             "A blown-glass pendant, gray cloudy fog hides something powerful. It "

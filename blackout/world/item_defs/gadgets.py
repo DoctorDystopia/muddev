@@ -58,7 +58,7 @@ _NO_COMBAT_BONUSES = {
 ITEMS = {
     "malfunctioning_gizmo": ItemDef(
         key="malfunctioning_gizmo",
-        name="Malfunctioning Gizmo",
+        name="malfunctioning gizmo",
         typeclass="typeclasses.items.WeaponItem",
         desc=("A club-sized tangle of salvage that hums when held. Four times in five it discharges at whatever you happen to be hitting at the time."),
         value=40,

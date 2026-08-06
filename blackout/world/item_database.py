@@ -216,10 +216,11 @@ from .item_defs.currencies import ITEMS as _CURRENCIES
 from .item_defs.weapons import ITEMS as _WEAPONS
 from .item_defs.gadgets import ITEMS as _GADGETS
 from .item_defs.jewellery import ITEMS as _JEWELLERY
+from .item_defs.armor_body import ITEMS as _ARMOR_BODY
 
 # Every def module must appear in BOTH lists below. A module imported but left
 # out of the loop contributes nothing and raises nothing -- its items simply
 # do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY, _ARMOR_BODY]:
     ITEM_DB.update(_d)

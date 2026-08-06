@@ -21,8 +21,8 @@ from items.inventory.handler import InventoryHandler, SLOTS_TOTAL
 from typeclasses.objects import DefaultObject
 
 _LONG_KEY = "Some Very Long Item Name That Needs Truncation"
-_MEDIUM_KEY = "Rusty Metal Chunk"
-_SHORT_KEY = "Hammer"
+_MEDIUM_KEY = "rusty metal chunk"
+_SHORT_KEY = "hammer"
 
 
 class TestDisplayHelpers(TestCase):
@@ -35,7 +35,7 @@ class TestDisplayHelpers(TestCase):
         # must report the same visible width, or EvTable's column-width
         # negotiation collapses the narrower columns into one-character-per-row
         # wrapping. See display._truncate_line's docstring.
-        line = "3: Rusty Metal Chunk"
+        line = "3: rusty metal chunk"
         assert len(line) == 20
         result = display._truncate_line(line, 21)
         assert result == line + " "
@@ -59,11 +59,11 @@ class TestDisplayHelpers(TestCase):
 
 
     def test_truncate_cell_preserves_newline_structure(self):
-        cell = "3: Hammer\n  (x40)"
+        cell = "3: hammer\n  (x40)"
         result = display._truncate_cell(cell, 50)
         lines = result.split("\n")
         # Content is preserved but every line is padded out to the full width.
-        assert lines[0].rstrip() == "3: Hammer"
+        assert lines[0].rstrip() == "3: hammer"
         assert lines[1].rstrip() == "  (x40)"
         assert len(lines[0]) == 50
         assert len(lines[1]) == 50
@@ -75,22 +75,22 @@ class TestDisplayHelpers(TestCase):
 
     def test_format_slot_cell_non_stackable(self):
         class _FakeItem:
-            key = "Hammer"
+            key = "hammer"
             quantity = 1
             is_stackable = False
 
         text = display.format_slot_cell(0, _FakeItem())
-        assert text == "1: Hammer"
+        assert text == "1: hammer"
 
 
     def test_format_slot_cell_stackable_with_qty(self):
         class _FakeItem:
-            key = "Credits"
+            key = "credits"
             quantity = 40
             is_stackable = True
 
         text = display.format_slot_cell(1, _FakeItem())
-        assert text == "2: Credits\n  (x40)"
+        assert text == "2: credits\n  (x40)"
 
 
 class TestRenderGridLayout(EvenniaCommandTest):

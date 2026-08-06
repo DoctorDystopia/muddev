@@ -7,50 +7,53 @@ Description: Typeclasses for gatherable resource nodes in the world.
 
 from typeclasses.objects import DefaultObject
 from commands.gathering_cmds import GatheringNodeCmdSet
+from systems.progression.skills.gatherables import GATHERABLE_REGISTRY
 from .spawners import register_spawner, spawn_once
-
-    
-
-# Public constant definitions
-RUSTY_POLE_REQ_LEVEL = 0
-RUSTY_POLE_XP_REWARD = 10
 
 
 
 class RustyPole(DefaultObject):
     """
     Purpose: Represents a level 0 gathering node for the Cutting skill.
-    
+
     Entry:
         No conditions
-    
+
     Exit/Returns:
         No conditions
-    
+
     Module variables:
         None
-    
+
     Methodology:
-        Initializes the database attributes required for gathering,
-        sets the required level, and injects the generic GatheringNodeCmdSet 
+        Initializes the database attributes required for gathering by
+        reading its required level, XP reward, and gatherable_key from
+        GATHERABLE_REGISTRY, and injects the generic GatheringNodeCmdSet
         to expose interactions.
-    
+
     Notes/References:
-        None
-    
+        GATHERABLE_REGISTRY is this node's single owner for required level
+        and XP reward -- see systems/progression/skills/gatherables.py.
+
     Author: Nick Hobar
     Creation date: 06/05/2026
     """
-    
+    # Key into GATHERABLE_REGISTRY. Every gathering node typeclass sets its
+    # own gatherable_key the same way a skill def sets its own `key`.
+    gatherable_key = "rusty_pole"
+
+
     def at_object_creation(self) -> None:
         parent_class = super()
         parent_class.at_object_creation()
-        
+
         self.cmdset.add(GatheringNodeCmdSet, persistent=True)
         self.locks.add("get:false()")
-        
-        self.db.required_level = RUSTY_POLE_REQ_LEVEL
-        self.db.xp_reward = RUSTY_POLE_XP_REWARD
+
+        gatherable_def = GATHERABLE_REGISTRY[self.gatherable_key]
+        self.db.gatherable_key = self.gatherable_key
+        self.db.required_level = gatherable_def.required_level
+        self.db.xp_reward = gatherable_def.xp_reward
 
 
     def is_cutting_node(self) -> bool:

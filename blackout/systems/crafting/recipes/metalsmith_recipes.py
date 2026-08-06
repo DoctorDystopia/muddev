@@ -20,10 +20,10 @@ class RustyMetalDustRecipe(BlackoutRecipe):
     skill_category = "production"
 
     consumable_tags = ["rusty_metal_chunk"]
-    consumable_names = ["Rusty metal chunk"]
+    consumable_names = ["rusty metal chunk"]
 
     tool_tags = ["hammer"]
-    tool_names = ["Hammer"]
+    tool_names = ["hammer"]
 
     output_item_keys = ["rusty_metal_dust"]
 
@@ -41,10 +41,10 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
     skill_category = "production"
 
     consumable_tags = ["rusty_scrap_metal"]
-    consumable_names = ["Rusty scrap metal"]
+    consumable_names = ["rusty scrap metal"]
 
     tool_tags = ["hammer", "anvil"]
-    tool_names = ["Hammer", "Anvil"]
+    tool_names = ["hammer", "anvil"]
 
     output_item_keys = ["rusty_scrap_axe"]
 
@@ -57,15 +57,15 @@ class RustyScrapShortswordRecipe(BlackoutRecipe):
     name = "rusty scrap shortsword"
     category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
-    required_level = 2
+    required_level = 4
     xp_reward = 60
     skill_category = "production"
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
-    consumable_names = ["Rusty scrap metal", "Rusty scrap metal"]
+    consumable_names = ["rusty scrap metal", "rusty scrap metal"]
 
     tool_tags = ["hammer", "anvil"]
-    tool_names = ["Hammer", "Anvil"]
+    tool_names = ["hammer", "anvil"]
 
     output_item_keys = ["rusty_scrap_shortsword"]
 
@@ -78,16 +78,37 @@ class RustyScrapSpearRecipe(BlackoutRecipe):
     name = "rusty scrap spear"
     category = CATEGORY_METALSMITH
     required_skill = "metalsmith"
-    required_level = 3
+    required_level = 5
     xp_reward = 60
     skill_category = "production"
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
-    consumable_names = ["Rusty scrap metal", "Rusty scrap metal"]
+    consumable_names = ["rusty scrap metal", "rusty scrap metal"]
 
     tool_tags = ["hammer", "anvil"]
-    tool_names = ["Hammer", "Anvil"]
+    tool_names = ["hammer", "anvil"]
 
     output_item_keys = ["rusty_scrap_spear"]
 
     success_message = "You hammer the rusty scrap metal into a rough but serviceable spear."
+
+
+class RustyScrapChainbodyRecipe(BlackoutRecipe):
+    "Hammer rusty scrap metal into a crude chainbody at an anvil."
+
+    name = "rusty scrap chainbody"
+    category = CATEGORY_METALSMITH
+    required_skill = "metalsmith"
+    required_level = 11
+    xp_reward = 90
+    skill_category = "production"
+
+    consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal", "rusty_scrap_metal"]
+    consumable_names = ["rusty scrap metal", "rusty scrap metal", "rusty scrap metal"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["rusty_scrap_chainbody"]
+
+    success_message = "You hammer the rusty scrap metal into a rough but serviceable chainbody."

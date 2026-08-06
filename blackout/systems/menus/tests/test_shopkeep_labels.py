@@ -38,17 +38,17 @@ class TestWareLabels(TestCase):
     """Label producer and matcher must agree exactly."""
 
     def test_single_item_label_has_no_count(self):
-        entry = _Entry("Hammer", count=1, buy_price=25)
+        entry = _Entry("hammer", count=1, buy_price=25)
 
         label = _ware_label(entry, BUY_PRICE_ATTR)
 
         assert "(x" not in label
-        assert "Hammer" in label
+        assert "hammer" in label
         assert "25" in label
 
 
     def test_multi_item_label_shows_count_and_each(self):
-        entry = _Entry("Credits", count=7, buy_price=3)
+        entry = _Entry("credits", count=7, buy_price=3)
 
         label = _ware_label(entry, BUY_PRICE_ATTR)
 
@@ -58,8 +58,8 @@ class TestWareLabels(TestCase):
 
     def test_buy_label_round_trips_through_matcher(self):
         entries = [
-            _Entry("Hammer", count=1, buy_price=25),
-            _Entry("Credits", count=7, buy_price=3),
+            _Entry("hammer", count=1, buy_price=25),
+            _Entry("credits", count=7, buy_price=3),
         ]
 
         for label, expected in zip(_ware_labels(entries, BUY_PRICE_ATTR), entries):
@@ -86,6 +86,6 @@ class TestWareLabels(TestCase):
 
 
     def test_unknown_selection_returns_none(self):
-        entries = [_Entry("Hammer", count=1, buy_price=25)]
+        entries = [_Entry("hammer", count=1, buy_price=25)]
 
         assert _find_entry_by_display(entries, "not a real label", BUY_PRICE_ATTR) is None

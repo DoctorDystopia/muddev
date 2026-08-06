@@ -20,10 +20,10 @@ class RustyScrapMetalRecipe(BlackoutRecipe):
     skill_category = "processing"
 
     consumable_tags = ["rusty_metal_chunk"]
-    consumable_names = ["Rusty Metal Chunk"]
+    consumable_names = ["rusty metal chunk"]
 
     tool_tags = ["furnace"]
-    tool_names = ["Furnace"]
+    tool_names = ["furnace"]
 
     output_item_keys = ["rusty_scrap_metal"]
 

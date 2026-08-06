@@ -118,7 +118,7 @@ class TestBankHandler(EvenniaTest):
 
     # --- Stackable item tests ---
 
-    def _make_stackable(self, key="Credits", quantity=10):
+    def _make_stackable(self, key="credits", quantity=10):
         """Create a stackable BaseItem with the given quantity."""
         obj = create_object(BaseItem, key=key, location=self.char1)
         obj.attributes.add("stackable", True)
@@ -137,8 +137,8 @@ class TestBankHandler(EvenniaTest):
 
     def test_deposit_full_stack_existing(self):
         """Depositing a stackable item merges with existing bank stack."""
-        item1 = self._make_stackable(key="Credits", quantity=10)
-        item2 = self._make_stackable(key="Credits", quantity=5)
+        item1 = self._make_stackable(key="credits", quantity=10)
+        item2 = self._make_stackable(key="credits", quantity=5)
         self.handler.deposit(item1)
         result = self.handler.deposit(item2)
         self.assertEqual(self.handler.count_items(), 1)
@@ -160,8 +160,8 @@ class TestBankHandler(EvenniaTest):
 
     def test_deposit_partial_stack_existing(self):
         """Partial deposit merges into existing bank stack."""
-        item1 = self._make_stackable(key="Credits", quantity=10)
-        item2 = self._make_stackable(key="Credits", quantity=10)
+        item1 = self._make_stackable(key="credits", quantity=10)
+        item2 = self._make_stackable(key="credits", quantity=10)
         self.handler.deposit(item1)
         result = self.handler.deposit(item2, count=3)
         self.assertEqual(self.handler.count_items(), 1)

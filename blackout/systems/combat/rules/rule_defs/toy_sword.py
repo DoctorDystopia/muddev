@@ -67,7 +67,7 @@ class ToySwordRules(BaseActionRules):
     """
 
     key = "toy_sword"
-    name = "Toy sword"
+    name = "Toy Sword"
     description = "Rolls a d20 for damage. A one finds the wielder instead."
     priority = const.RULES_PRIORITY_WEAPON
 

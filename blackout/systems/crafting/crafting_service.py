@@ -15,11 +15,15 @@ Usage:
         check_craftable,
         get_max_craftable,
         get_recipe_display_data,
+        get_recipes_for_skill,
+        get_material_summary,
         perform_craft,
     )
 """
 
 
+
+from collections import Counter
 
 from .constants import (
     CONSUMABLE_TAG_CATEGORY,
@@ -162,6 +166,54 @@ def get_recipes_for_facility(facility):
 def get_recipe_class(recipe_key):
     """Get the recipe class for a given recipe key, or None if not found."""
     return RECIPE_REGISTRY.get(recipe_key)
+
+
+def get_recipes_for_skill(skill_key):
+    """Get every recipe that unlocks under a given skill.
+
+    Args:
+        skill_key: Skill key to match against required_skill.
+
+    Returns:
+        list of (recipe_key, recipe_cls) tuples, sorted by
+        (required_level, name).
+    """
+    matches = [
+        (key, cls)
+        for key, cls in RECIPE_REGISTRY.items()
+        if cls.required_skill == skill_key
+    ]
+
+    matches.sort(key=lambda pair: (pair[1].required_level, pair[1].name))
+
+    return matches
+
+
+def get_material_summary(recipe_cls):
+    """Summarize a recipe's consumable requirements, e.g. "2x rusty scrap metal".
+
+    Args:
+        recipe_cls: A BlackoutRecipe subclass.
+
+    Returns:
+        str. Comma-separated, order preserved from consumable_names, with
+        repeated names collapsed into a "Nx" count. Empty string if the
+        recipe declares no consumable_names.
+    """
+    if not recipe_cls.consumable_names:
+        return ""
+
+    counts = Counter(recipe_cls.consumable_names)
+    seen = set()
+    parts = []
+    for mat_name in recipe_cls.consumable_names:
+        if mat_name in seen:
+            continue
+        seen.add(mat_name)
+        count = counts[mat_name]
+        parts.append(f"{count}x {mat_name}" if count > 1 else mat_name)
+
+    return ", ".join(parts)
 
 
 def check_craftable(caller, recipe_key):

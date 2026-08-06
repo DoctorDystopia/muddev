@@ -82,7 +82,7 @@ _SPEAR_COMBAT_STYLES = {
 ITEMS = {
     "rusty_scrap_shortsword": ItemDef(
         key="rusty_scrap_shortsword",
-        name="Rusty Scrap Shortsword",
+        name="rusty scrap shortsword",
         typeclass="typeclasses.items.WeaponItem",
         desc="Rusty scrap shortsword. Infection not included.",
         value=25,
@@ -112,7 +112,7 @@ ITEMS = {
     ),
     "rusty_scrap_spear": ItemDef(
         key="rusty_scrap_spear",
-        name="Rusty Scrap Spear",
+        name="rusty scrap spear",
         typeclass="typeclasses.items.WeaponItem",
         desc="Rusty scrap spear. Infection not included.",
         value=25,

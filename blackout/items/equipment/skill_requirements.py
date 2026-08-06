@@ -43,3 +43,65 @@ WEAPON_SKILL_MAP: dict[str, str | None] = {
     "generic":    None,
     # Future categories land here — pickaxes map to "mining", etc.
 }
+
+ARMOR_SKILL_MAP: dict[str, str | None] = {
+    # Armor categories, gated via the Defense skill. Every armor category the game emits must appear here. A value of None means "deliberately ungated"
+    "chainbody": "defense",
+
+}
+
+
+def get_equippables_for_skill(skill_key: str) -> list:
+    """
+    Purpose: Get every equippable item that unlocks under a given skill.
+
+    Entry:
+        skill_key is a skill key string to match against the skill a
+        registered tool_type resolves to.
+
+    Exit/Returns:
+        Returns a list of ItemDef, sorted by (req_level, name). An item
+        whose tool_type is unregistered or explicitly ungated (mapped to
+        None) is excluded.
+
+    Module Globals:
+        WEAPON_SKILL_MAP read.
+        ARMOR_SKILL_MAP read.
+
+    Methodology:
+        Scans ITEM_DB for items carrying a tool_type, resolves each through
+        WEAPON_SKILL_MAP then ARMOR_SKILL_MAP -- the same two maps
+        EquipmentHandler.equip() checks at wield time -- and keeps the ones
+        that resolve to skill_key. Deriving this from ITEM_DB and the
+        existing maps keeps req_level and tool_type single-owned on ItemDef
+        rather than duplicated into a third table.
+
+    Notes/References:
+        Mirrors systems.crafting.crafting_service.get_recipes_for_skill and
+        systems.progression.skills.gatherables.get_gatherables_for_skill --
+        the three functions together are what feed the skills menu's
+        "Unlocks" listing.
+
+    Author: Nick Hobar
+    Creation date: 08/05/2026
+    """
+    from world.item_database import ITEM_DB
+
+    matches = []
+    for item_def in ITEM_DB.values():
+        tool_type = item_def.tool_type
+        if tool_type is None:
+            continue
+
+        required_skill = WEAPON_SKILL_MAP.get(tool_type)
+        if required_skill is None:
+            required_skill = ARMOR_SKILL_MAP.get(tool_type)
+
+        if required_skill != skill_key:
+            continue
+
+        matches.append(item_def)
+
+    matches.sort(key=lambda entry: (entry.req_level, entry.name))
+
+    return matches

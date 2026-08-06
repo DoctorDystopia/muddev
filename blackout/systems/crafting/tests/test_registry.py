@@ -36,16 +36,17 @@ class TestRecipeDiscovery(unittest.TestCase):
             self.assertTrue(issubclass(recipe_cls, BlackoutRecipe))
             self.assertEqual(recipe_cls.name, recipe_name)
 
-    def test_all_five_recipes_are_registered(self):
-        """The five recipes defined across the two configured modules."""
+    def test_all_six_recipes_are_registered(self):
+        """The six recipes defined across the two configured modules."""
         self.assertEqual(
             sorted(RECIPE_REGISTRY),
             [
-                "Rusty metal dust",
-                "Rusty scrap axe",
-                "Rusty scrap metal",
-                "Rusty scrap shortsword",
-                "Rusty scrap spear",
+                "rusty metal dust",
+                "rusty scrap axe",
+                "rusty scrap chainbody",
+                "rusty scrap metal",
+                "rusty scrap shortsword",
+                "rusty scrap spear",
             ],
         )
 
@@ -100,16 +101,16 @@ class TestServiceUsesRegistry(unittest.TestCase):
         )
 
     def test_get_recipe_class_resolves_exactly(self):
-        recipe_cls = crafting_service.get_recipe_class("Rusty metal dust")
+        recipe_cls = crafting_service.get_recipe_class("rusty metal dust")
 
         self.assertIsNotNone(recipe_cls)
-        self.assertEqual(recipe_cls.name, "Rusty metal dust")
+        self.assertEqual(recipe_cls.name, "rusty metal dust")
 
     def test_get_recipe_class_does_not_fuzzy_match(self):
         """The contrib's craft() resolves names by prefix/substring. The
         registry is an exact dict lookup, so a partial name must miss rather
         than silently pick a recipe the player did not ask for."""
-        self.assertIsNone(crafting_service.get_recipe_class("Rusty"))
+        self.assertIsNone(crafting_service.get_recipe_class("rusty"))
         self.assertIsNone(crafting_service.get_recipe_class("unknown recipe"))
 
     def test_recipes_in_category_match_the_registry(self):
