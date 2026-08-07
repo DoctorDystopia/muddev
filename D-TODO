@@ -1,0 +1,18 @@
+- Create Mutant Raiders with hp 20, 30, 40, 50, 75, 100
+- Command to find current Maxhit
+    - print maxhit brawn table
+-command to find enemy stats
+- test 
+
+Alt: damage = floor((rand(0,max) + rand(0,max)) / 2)
+--- with "floor", 0 is more likely than a max hit
+------ could, per weapon type, decide how many are averaged e.g. floor((rand(0,max) + rand(0,max) + rand(0,max)) / 3)
+------ rnd-round(0, max): 
+            50% chance to apply floor(0, max)
+            50% chance to apply ciel(0, max)
+
+
+
+
+weapon ideas:
+- sword that gets X Strike each time it misses. On Hit strike bonus resets to 0

@@ -65,7 +65,7 @@ NPCS = {
         strike_level=1,
         brawn_level=1,
         defense_level=1,
-        max_hp=5,
+        max_hp=20,
         attack_speed=4,
         combat_stat_bonuses={
             # Attack bonuses (per-damage-type; goblin is crush-only but the
@@ -81,6 +81,36 @@ NPCS = {
             "crush_defense_bonus": -15,
             # Other bonuses
             "melee_strength_bonus": -15,
+        },
+        combat_styles=_headbutt_crush_aggressive_combat_style(),
+        default_combat_style="headbutt",
+        # 30s timed respawn on the raider's spawn tile, driven by
+        # BlackoutRespawnManager (systems/spawning/respawn.py).
+        respawn_seconds=30,
+    ),
+        "big_mutant": NpcDef(
+        key="big_mutant",
+        name="Big Mutant",
+        desc="A large mutant who raids.",
+        strike_level=1,
+        brawn_level=1,
+        defense_level=1,
+        max_hp=20000000,
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Attack bonuses (per-damage-type; goblin is crush-only but the
+            # math reads whichever *_attack_bonus the active style names, so
+            # we stamp the same bonus on stab/slash to match the wiki's
+            # "Monster attack bonus" of -21 across the board).
+            "stab_attack_bonus": -21,
+            "slash_attack_bonus": -21,
+            "crush_attack_bonus": -21,
+            # Defense bonuses
+            "stab_defense_bonus": -150,
+            "slash_defense_bonus": -150,
+            "crush_defense_bonus": -150,
+            # Other bonuses
+            "melee_strength_bonus": -150,
         },
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",

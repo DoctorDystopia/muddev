@@ -1,5 +1,6 @@
 # Environments
 evenv/
+.venv/
 
 # Database and Cache
 *.db3
