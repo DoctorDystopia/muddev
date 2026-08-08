@@ -224,3 +224,39 @@ def spawn_mutant_raider(room):
         return None
     
     return NPC_DB["mutant_raider"].create(location=room)
+
+@register_spawner("Big Mutant Tile")
+def spawn_big_mutant(room):
+    """Spawner entry for the Big Mutant.
+
+    Stat block lives in world/npc_defs/hostile.py (NpcDef "big_mutant") and
+    is looked up via NPC_DB — the same data-driven shape ItemDef / ITEM_DB
+    gives items and ShopDef / SHOP_DB gives shops. Keeping this function lets
+    the existing "Big Mutant Tile" room prototype keep dispatching through
+    SPAWNER_REGISTRY unchanged; only its body is now a one-line registry lookup.
+
+    The presence guard mirrors spawn_bank (bank_nodes.py) and spawn_shopkeep
+    (npcs.py), which this spawner was the only one missing — so re-running
+    `xyzgrid spawn` stacked a fresh raider on the tile every time. It keys on
+    db.npc_key rather than is_typeclass because every hostile shares the
+    HostileNPC typeclass. Paired with the same guard inside the respawn
+    manager, it also closes the grid-rebuild-during-a-dead-window race in both
+    interleavings.
+
+    Entry: room (Evennia Room).
+    Exit: the created NPC, or None if one was already standing here.
+    Module Globals: None.
+    """
+    from systems.spawning.respawn import npc_present
+    from world.npc_database import NPC_DB  # local import: avoids a world<->
+    # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
+    # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
+    # systems.combat.constants + world.npc_defs.hostile, both of which are
+    # themselves leaf), so a module-level import is also safe, but matching the
+    # existing local-import style in this module's namespace keeps the module
+    # importable in isolation (e.g. by the test suite) without forcing world/
+    # to be loaded first.
+    if npc_present("big_mutant", room):
+        return None
+    
+    return NPC_DB["big_mutant"].create(location=room)

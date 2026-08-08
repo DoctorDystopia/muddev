@@ -28,3 +28,24 @@ class RustyScrapMetalRecipe(BlackoutRecipe):
     output_item_keys = ["rusty_scrap_metal"]
 
     success_message = "You smelt the rusty metal chunk into a piece of scrap metal."
+
+
+class RustyMetalDustRecipe(BlackoutRecipe):
+    "Grind a rusty metal chunk into fine dust using a hammer."
+
+    name = "rusty metal dust"
+    category = CATEGORY_FOUNDRY
+    required_skill = "foundry"
+    required_level = 0
+    xp_reward = 15
+    skill_category = "processing"
+
+    consumable_tags = ["rusty_metal_chunk"]
+    consumable_names = ["rusty metal chunk"]
+
+    tool_tags = ["hammer"]
+    tool_names = ["hammer"]
+
+    output_item_keys = ["rusty_metal_dust"]
+
+    success_message = "You grind the rusty metal chunk into a fine dust."

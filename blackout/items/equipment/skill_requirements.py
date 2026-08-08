@@ -13,7 +13,7 @@ Description: Weapon-type → skill-key map. Lets the EquipmentHandler dispatch
 # checked at wield time. Flat dict: O(1) lookup, no per-category branch
 # block. Uses skills.meets_prerequisite (skill_key, req_level) per the
 # existing handler.py pattern.
-#
+
 # EVERY tool_type the game emits must appear here. A value of None means
 # "deliberately ungated" -- distinct from an absent key, which means "nobody
 # registered this" and is treated as a misconfiguration. Making that
@@ -33,9 +33,7 @@ WEAPON_SKILL_MAP: dict[str, str | None] = {
     "sword":      "strike",
     # Gadgets are salvage anyone can point at anything. Their behaviour comes
     # from an action rules definition rather than from the wielder's accuracy,
-    # so gating them on Strike would be gating the wrong skill. Ungated on
-    # purpose, not by omission -- an absent key fails closed and the item
-    # would be unequippable.
+    # so gating them on Strike would be gating the wrong skill.
     "gadget":     None,
     # Crafting tools carry no wield requirement. Declared explicitly so they
     # read as an intentional exemption rather than an oversight.

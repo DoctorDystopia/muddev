@@ -14,6 +14,9 @@ __pycache__/
 # see blackout/README.md "Tests".
 .pytest_cache/
 
+# Dead map-parser cache artifacts; regenerable, nothing reads them.
+blackout/server/.cache/
+
 # Manual editor backups. Git is the backup; ten of these were committed
 # before being cleaned out in the 08/01 audit.
 *.sav

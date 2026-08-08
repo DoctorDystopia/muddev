@@ -9,26 +9,6 @@ from ..blackout_recipe import BlackoutRecipe
 from ..constants import CATEGORY_METALSMITH
 
 
-class RustyMetalDustRecipe(BlackoutRecipe):
-    "Grind a rusty metal chunk into fine dust using a hammer."
-
-    name = "rusty metal dust"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
-    required_level = 0
-    xp_reward = 15
-    skill_category = "production"
-
-    consumable_tags = ["rusty_metal_chunk"]
-    consumable_names = ["rusty metal chunk"]
-
-    tool_tags = ["hammer"]
-    tool_names = ["hammer"]
-
-    output_item_keys = ["rusty_metal_dust"]
-
-    success_message = "You grind the rusty metal chunk into a fine dust."
-
 
 class RustyScrapAxeRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude axe at an anvil."
