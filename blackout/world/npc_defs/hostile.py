@@ -111,7 +111,35 @@ NPCS = {
         },
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",
-        # 30s timed respawn on the raider's spawn tile, driven by
+        # 30s timed respawn on the big mutant's spawn tile, driven by
+        # BlackoutRespawnManager (systems/spawning/respawn.py).
+        respawn_seconds=30,
+    ),
+    "floating_eye": NpcDef(
+        key="floating_eye",
+        name="Floating Eye",
+        desc="Terrified of needles.",
+        strike_level=1,
+        brawn_level=1,
+        defense_level=1,
+        max_hp=20,
+        attack_speed=4,
+        combat_stat_bonuses={
+            # stats based on OSRS chaos druid, defenses lowered for flavor
+            # https://oldschool.runescape.wiki/w/Chaos_druid
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+            # Defense bonuses
+            "stab_defense_bonus": -42, # based on OSRS gnome child
+            "slash_defense_bonus": -15,
+            "crush_defense_bonus": 0,
+            # Other bonuses
+            "melee_strength_bonus": 8,
+        },
+        combat_styles=_headbutt_crush_aggressive_combat_style(),
+        default_combat_style="headbutt",
+        # 30s timed respawn on the Floating eye's spawn tile, driven by
         # BlackoutRespawnManager (systems/spawning/respawn.py).
         respawn_seconds=30,
     ),
