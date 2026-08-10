@@ -65,7 +65,7 @@ NPCS = {
         strike_level=1,
         brawn_level=1,
         defense_level=1,
-        max_hp=20,
+        max_hp=5,
         attack_speed=4,
         combat_stat_bonuses={
             # Attack bonuses (per-damage-type; goblin is crush-only but the
