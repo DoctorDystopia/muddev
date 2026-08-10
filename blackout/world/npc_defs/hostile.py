@@ -88,29 +88,26 @@ NPCS = {
         # BlackoutRespawnManager (systems/spawning/respawn.py).
         respawn_seconds=30,
     ),
-        "big_mutant": NpcDef(
+    "big_mutant": NpcDef(
         key="big_mutant",
         name="Big Mutant",
-        desc="A large mutant who raids.",
+        desc="Bigger than you'd expect.",
         strike_level=1,
         brawn_level=1,
         defense_level=1,
-        max_hp=20000000,
+        max_hp=87,
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses (per-damage-type; goblin is crush-only but the
-            # math reads whichever *_attack_bonus the active style names, so
-            # we stamp the same bonus on stab/slash to match the wiki's
-            # "Monster attack bonus" of -21 across the board).
-            "stab_attack_bonus": -21,
-            "slash_attack_bonus": -21,
-            "crush_attack_bonus": -21,
+            # stats based on OSRS Greater Demon
+            "stab_attack_bonus": 76,
+            "slash_attack_bonus": 76,
+            "crush_attack_bonus": 76,
             # Defense bonuses
-            "stab_defense_bonus": -150,
-            "slash_defense_bonus": -150,
-            "crush_defense_bonus": -150,
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
             # Other bonuses
-            "melee_strength_bonus": -150,
+            "melee_strength_bonus": 78,
         },
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",
