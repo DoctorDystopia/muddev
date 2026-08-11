@@ -452,11 +452,30 @@ class ActionAttack(_Action):
         awards = _plan_style_xp(attacker, style, dmg)
         xp_text = combat_msg.format_xp_gain(_labelled_awards(awards))
 
-        attacker.msg(combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text))
-        attacker.msg(combat_msg.format_hp_status(target.key, hp_after, max_hp))
+        attacker.msg(
+            (combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text),
+             {"type": "testing"},
+            )
+        )
+        attacker.msg(
+            (
+                combat_msg.format_hp_status(target.key, hp_after, max_hp),
+                {"type": "target_health"},
+            )
+        )
 
-        target.msg(combat_msg.format_incoming_hit(attacker, target, dmg))
-        target.msg(combat_msg.format_hp_status(combat_msg.SELF_HP_LABEL, hp_after, max_hp))
+        target.msg(
+            (
+                combat_msg.format_incoming_hit(attacker, target, dmg),
+                {"type": "testing"},
+            )
+        )
+        target.msg(
+            (
+                combat_msg.format_hp_status(combat_msg.SELF_HP_LABEL, hp_after, max_hp),
+                {"type": "player_health"},
+            )
+        )
 
         if room is not None:
             third_party = combat_msg.format_third_party_hit(attacker, target, dmg)
@@ -588,8 +607,8 @@ class ActionAttack(_Action):
                 handler.end_combat()
                 return True
         elif result.damage <= 0 and not result.self_damage:
-            attacker.msg(combat_msg.format_outgoing_miss(attacker, target))
-            target.msg(combat_msg.format_incoming_miss(attacker, target))
+            attacker.msg((combat_msg.format_outgoing_miss(attacker, target), {"type": "testing"}))
+            target.msg((combat_msg.format_incoming_miss(attacker, target), {"type": "testing"}))
 
         # Self-damage lands AFTER the target's, so a swing that both kills and
         # backfires still reads in cause-then-consequence order.
