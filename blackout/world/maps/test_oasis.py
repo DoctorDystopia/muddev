@@ -41,14 +41,6 @@ MAPSTR = r'''
 '''
 
 
-# class OasisMapTileNode(MapNode):
-#     """
-#     Custom MapNode for Oasis map.
-#     Overrides the display symbol to 'X' with a strict visual length of 1.
-#     """
-#     display_symbol = "x"
-
-
 class RustyPoleNode(MapNode):
     """
     Custom MapNode for Rusty Poles.

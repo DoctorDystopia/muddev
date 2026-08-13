@@ -40,13 +40,6 @@ MAPSTR = r'''
 
 '''
 
-# class OasisOutskirtsMapTileNode(MapNode):
-#     """
-#     Custom MapNode for Oasis Outskirts map.
-#     Overrides the display symbol to 'X' with a strict visual length of 1.
-#     """
-#     display_symbol = "x"
-
 
 class RustyPoleNode(MapNode):
     """
@@ -56,46 +49,6 @@ class RustyPoleNode(MapNode):
     """
     display_symbol = "|300†|n"
     prototype = "xyz_room"
-
-
-# class BankNode(MapNode):
-#     """
-#     Custom MapNode for banking facilities.
-#     """
-#     display_symbol = "|#4488FFß|n"
-#     prototype = "xyz_room"
-
-
-# class FurnaceFacilityNode(MapNode):
-#     """
-#     Custom MapNode for foundry furnaces.
-#     """
-#     display_symbol = "|520F|n"
-#     prototype = "xyz_room"
-
-
-# class AnvilFacilityNode(MapNode):
-#     """
-#     Custom MapNode for blacksmith anvils.
-#     """
-#     display_symbol = "|wA|n"
-#     prototype = "xyz_room"
-
-
-# class NPCNode(MapNode):
-#     """
-#     Custom MapNode for NPC characters.
-#     """
-#     display_symbol = "|y!|n"
-#     prototype = "xyz_room"
-
-
-# class ShopNPCNode(MapNode):
-#     """
-#     Custom MapNode for Shop NPC characters.
-#     """
-#     display_symbol = "|Y§|n"
-#     prototype = "xyz_room"
 
 
 class MutantRaiderNPCNode(MapNode):
@@ -109,7 +62,7 @@ class BigMutantNPCNode(MapNode):
     """
     Custom MapNode for Big Mutant characters.
     """
-    display_symbol = "|#138808H|n"
+    display_symbol = "|#73804FH|n"
     prototype = "xyz_room"
 
 class FloatingEyeNPCNode(MapNode):
@@ -122,14 +75,9 @@ class FloatingEyeNPCNode(MapNode):
 
 LEGEND = {
     "†": RustyPoleNode,
-    # "ß": BankNode,
-    # "F": FurnaceFacilityNode,
-    # "A": AnvilFacilityNode,
-    # "!": NPCNode,
-    # "§": ShopNPCNode,
-    "M": MutantRaiderNPCNode, # mutant raider
-    "H": BigMutantNPCNode, # big mutant
-    "e": FloatingEyeNPCNode, # floating eye
+    "M": MutantRaiderNPCNode,
+    "H": BigMutantNPCNode,
+    "e": FloatingEyeNPCNode,
 }
 
 
@@ -141,41 +89,6 @@ _rusty_pole = {
     "key": "Pole clearing",
     "desc": "A rusted pole. Maybe I can cut it down?",
 }
-
-# _bank = {
-#     "prototype_parent": "xyz_room",
-#     "typeclass": "typeclasses.rooms.GridTile",
-#     "key": "Bank",
-#     "desc": "A Hegemony secure banking facility with a row of storage terminals.",
-# }
-
-# _furnace = {
-#     "prototype_parent": "xyz_room",
-#     "typeclass": "typeclasses.rooms.GridTile",
-#     "key": "Foundry Furnace Facility",
-#     "desc": "A roaring hot Foundry.",
-# }
-
-# _anvil = {
-#     "prototype_parent": "xyz_room",
-#     "typeclass": "typeclasses.rooms.GridTile",
-#     "key": "Metalsmith Anvil Facility",
-#     "desc": "A Metalsmith's heavy steel anvil.",
-# }
-
-# _npc_lone_android = {
-#     "prototype_parent": "xyz_room",
-#     "typeclass": "typeclasses.rooms.GridTile",
-#     "key": "Lone Android",
-#     "desc": "An lonely looking android who lives in the wastes of the Sahara.",
-# }
-
-# _npc_shopkeeper = {
-#     "prototype_parent": "xyz_room",
-#     "typeclass": "typeclasses.rooms.GridTile",
-#     "key": "Shopkeeper",
-#     "desc": "A makeshift market stall shaded by a tattered awning.",
-# }
 
 _npc_mutant_raider = {
     "prototype_parent": "xyz_room",
@@ -197,6 +110,7 @@ _npc_floating_eye = {
     "key": "Floating Eye Tile",
     "desc": "Terrified of needles.",
 }
+
 
 PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
@@ -224,7 +138,7 @@ PROTOTYPES = {
     (4, 1): _rusty_pole,
     (10, 3): _rusty_pole,
 
-    # Skill node overrides
+    # Hostile NPC node overrides
     (2, 0): _npc_mutant_raider,
     (10, 0): _npc_mutant_raider,
     (6, 2): _npc_mutant_raider,
