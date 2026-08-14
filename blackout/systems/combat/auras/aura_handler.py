@@ -18,6 +18,9 @@ not the caster is swinging at anything.
 from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 
+from systems.statefeed import events as feed
+from systems.statefeed import serializers as feed_serializers
+
 from .. import combat_msg
 from ..combat import HANDLER_NO_TIMER_INTERVAL
 from .registry import AURA_REGISTRY
@@ -94,6 +97,11 @@ class BlackoutAuraHandler(DefaultScript):
         # Force a radius rebuild on the first pulse.
         self.ndb.ring_rooms = None
         self.ndb.ring_origin_id = None
+
+        # The ring is persistent state between activate and deactivate, so a
+        # graphical client draws it from these two events rather than from the
+        # pulses -- which would leave the ring flickering on the pulse cadence.
+        feed.emit_aura(self.obj, feed.AURA_EVENT_ACTIVATE, aura.key, aura.radius)
 
     def get_aura(self):
         """Resolve this handler's active aura, or None if it has none."""
@@ -194,6 +202,10 @@ class BlackoutAuraHandler(DefaultScript):
         damage = aura.damage_for(caster)
         total_dealt = 0
 
+        # Captured before the pulse: at_damage can delete a target's row, and
+        # with it the location the footprint is read from.
+        tiles = self._pulse_tiles(targets)
+
         for target in targets:
             try:
                 total_dealt += self._apply_pulse(caster, aura, target, damage)
@@ -201,7 +213,39 @@ class BlackoutAuraHandler(DefaultScript):
                 # One bad target must not cost the caster the rest of the pulse.
                 logger.log_trace()
 
+        feed.emit_aura(
+            caster,
+            feed.AURA_EVENT_PULSE,
+            aura.key,
+            aura.radius,
+            tiles=tiles,
+            damage=total_dealt,
+        )
+
         self._award_xp(caster, aura, total_dealt)
+
+    def _pulse_tiles(self, targets) -> list:
+        """Return the distinct world (x, y) tiles this pulse will land on.
+
+        Only tiles that actually contain a target, not the whole radius. The
+        ring itself is already known to the client from the activate event, so
+        repeating it every pulse would be pure noise; what a renderer wants per
+        pulse is where to put the burn effect.
+        """
+        tiles = []
+
+        for target in targets:
+            coords = feed_serializers.room_coords(target.location)
+
+            if not coords:
+                continue
+
+            tile = (coords[0], coords[1])
+
+            if tile not in tiles:
+                tiles.append(tile)
+
+        return tiles
 
     def _award_xp(self, caster, aura, total_dealt: int) -> None:
         """Grant the pulse's experience to the aura's XP skill.
@@ -288,6 +332,10 @@ class BlackoutAuraHandler(DefaultScript):
         caster = self.obj
 
         if caster is not None:
+            # Announced before the accessor cache is popped and the script is
+            # deleted, while get_aura() can still name what is being switched
+            # off. Afterwards there is nothing left to report.
+            self._announce_deactivate(caster)
             caster.__dict__.pop("aura", None)
 
         try:
@@ -306,6 +354,25 @@ class BlackoutAuraHandler(DefaultScript):
             self.delete()
         except Exception as exc:
             logger.log_err(f"AuraHandler.stop_aura failed delete: {exc!r}")
+
+    def _announce_deactivate(self, caster) -> None:
+        """Tell graphical clients the ring is gone.
+
+        Guarded on its own rather than folded into stop_aura's existing try
+        blocks: those each log a specific failure, and a cosmetic feed has no
+        business producing an "aura failed to stop" line.
+        """
+        try:
+            aura = self.get_aura()
+
+            if aura is None:
+                return
+
+            feed.emit_aura(
+                caster, feed.AURA_EVENT_DEACTIVATE, aura.key, aura.radius
+            )
+        except Exception:
+            logger.log_trace()
 
 
 # ─── module helpers ────────────────────────────────────────────────────────

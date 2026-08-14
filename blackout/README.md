@@ -146,6 +146,100 @@ ITEMS = {
 
 ## Character & Progression
 
+### Player summary screen (`score`)
+
+```bash
+> score
+```
+
+Aliases: `sc`, `dossier`, `char`. Opens the dossier — one screen holding
+combat level, hitpoints, the whole skill roster, combat readiness, holdings
+and world state, with numbered jumps into the panel that owns each number.
+
+```
+============================================================
+DOSSIER -- Vex                                      STANDARD
+------------------------------------------------------------
+VITALS
+   Hitpoints     [========22 / 32=======]
+   Combat Level  36            Total Level   215
+   Total XP      81,552        Regen         +1 HP / 60s
+   Status        Out of combat
+------------------------------------------------------------
+COMBAT READINESS
+   Wielding      bare hands (speed 4t)
+   Style         Accurate / Crush
+   Earns XP      Strike, Fortitude
+   Attack        crush +0      Strength      +0
+   Defence       stab +0  slash +0  crush +0
+------------------------------------------------------------
+SKILLS
+   Combat        Brawn 36  Defense 27  Fortitude 32
+                 Strike 32
+   Gathering     Brain Farming 0  Cutting 52
+   ...
+```
+
+**Adding a band is one file.** Drop a `BasePanel` subclass into
+`systems/summary/panel_defs/` — the registry walks the package, so there is no
+import to add and no dispatch chain to edit. Each panel implements
+`render(character)` for the text screen and `data(character)` for the (phase 2)
+`char_summary` state-feed channel; both are built from the same handler reads so
+they cannot drift.
+
+| Owns | Lives in |
+|---|---|
+| Screen assembly, per-panel failure containment | `systems/summary/service.py` |
+| Fixed-width rows, rules, wrapping | `systems/summary/layout.py` |
+| Panel discovery and ordering | `systems/summary/registry.py` |
+| The menu and its drill-down handoff | `systems/menus/summary_menu.py` |
+
+Panels are **read-only**. Nothing on this screen is persisted — every value is
+fetched live from the handler that owns it, which is why the screen can never
+go stale. Combat Level used to live on the equipment menu; it moved here,
+because no equipped item affects it.
+
+Opening the dossier also publishes it on the `char_summary` state-feed channel
+(GMCP `Char.Summary`), so a graphical client renders the same data the text
+screen shows. It is also part of the full resync snapshot. The channel is
+uncapped — it is request-driven, so a cap would mean pressing `score` twice in
+a second and getting no answer the second time.
+
+> **Adding a state-feed channel used to break the webclient.** A client that
+> subscribed with `channels: "all"` would start receiving a channel its plugin
+> had no listener for, and Evennia's `default_out.js` claims every unhandled
+> outputfunc and prints the raw JSON at the player as
+> `Error or Unhandled event`. `blackout3d.js` now binds its listeners from the
+> server's own `blackout_subscribed` acknowledgement, so it claims (and
+> silently drops) any channel it has no use for. Its hardcoded `CHANNELS` list
+> is only a seed for the handshake. **A browser hard-refresh is needed to pick
+> up plugin changes** — `evennia reload` does not touch static JS.
+
+### Public profile (`profile`)
+
+```bash
+> profile          # your own, i.e. what others see
+> profile testchar
+```
+
+Aliases: `whois`, `honours`. Renders only panels flagged `public`, each through
+its `render_public`. Two gates rather than one, because "may strangers see this
+band" and "how much of it" are different questions:
+
+| Panel | Public? | Shown to others |
+|---|---|---|
+| Identity | yes | name, path, hardcore flag |
+| Vitals → "Standing" | yes | combat level, total level, total XP — **not** current HP, combat state or active aura |
+| Combat Readiness | **no** | — your loadout is tactical information |
+| Skills | yes | everything, same as your own view |
+| Holdings | **no** | — |
+| World | yes | quests completed, playtime, created — **not** your location or active quests |
+
+`public` defaults to **False**, so a newly added panel is private until its
+author says otherwise. The location omission is the load-bearing one: a profile
+command that reported grid coordinates would be a player-tracking tool usable
+from anywhere in the world.
+
 ### Refresh all characters
 
 Re-runs `at_object_creation()` on every character in the database. Useful after
@@ -293,6 +387,7 @@ rescaled from OSRS's 1–99 to Blackout's 0–127.
 > hold                # stop attacking, stay in combat
 > wield <weapon>      # swap weapons mid-fight, then resume attacking
 > flee                # leave combat
+> tickdebug           # watch the tick that drives all of the above
 ```
 
 ### How a swing resolves
@@ -347,6 +442,43 @@ Per-tick handler state (`target_id`, `pending_action`, `cooldown_ticks`,
 `active_weapon_data`) lives on **`ndb`, not `db`** — it is rebuilt whenever
 combat starts, so persisting it only cost an Attribute write every 0.6 s per
 combatant.
+
+### Watch the tick (`tickdebug`)
+
+Everything that feels like timing — when a swing lands, when an aura pulses,
+why a fight seems to stutter — is a counter on the tick that nothing printed.
+`tickdebug` prints it.
+
+```bash
+> tickdebug           # toggle the stream (defaults to quiet)
+> tickdebug quiet     # only ticks where something happens
+> tickdebug all       # every tick, ~100 lines a minute
+> tickdebug status    # one-shot health report, no stream
+> tickdebug off       # stop
+```
+
+A streamed line:
+
+```
+[t 01432] 0.601s eng 2h | SWING cd 3/4 attack -> mutant raider | rf 2/4
+```
+
+tick number, the **measured** interval against the 0.6 s nominal, how many
+handlers the engine is driving, then your own weapon cooldown and aura cadence
+as `remaining/total`. `SWING`/`PULSE` mark the tick an action resolved.
+
+Two failures it is built to expose, both of which are otherwise silent:
+
+- **`UNREGISTERED`** — `BlackoutTickEngine._tick` drops a handler from the
+  rotation on any exception it raises. The only other symptom is combat
+  quietly stopping.
+- **`LATE`** — the measured gap exceeded `TICK_DEBUG_LATE_TICK_FACTOR` × 0.6 s.
+  `tickdebug status` reports mean/max/late over a rolling window, so a stall
+  that has already passed is still visible.
+
+The stream expires after `TICK_DEBUG_AUTO_EXPIRE_TICKS` (5 minutes) and stops
+on disconnect. It costs nothing when nobody is watching: both engine hooks
+return on a dictionary truth test before reading any handler state.
 
 ### Known gaps
 
@@ -532,6 +664,13 @@ evennia xyzgrid delete "trade town sector 1"
 
 Stops Evennia, runs `xyz_cleanup.py`, adds all maps, spawns, and reloads.
 
+**Which maps are rebuilt is controlled by `scripts/map_manifest.json`** —
+each entry carries the map module and its z-coordinate, and is the single
+source of truth for both `clean_and_reload_all_maps.ps1`,
+`clean_and_reload_all_maps.sh`, and `xyz_cleanup.py`. To include or drop a
+map from a rebuild, edit that one file (a z-coordinate is deleted only if
+its map remains listed).
+
 ---
 
 ## Color Reference
@@ -601,7 +740,21 @@ evennia reload
 
 ## Running Tests
 
-**One command runs the whole suite.** From `blackout/`:
+### Quick testing (most common)
+
+While developing, run **only the module(s) you changed** — this avoids waiting 10 minutes on the full suite:
+
+```bash
+# Single module
+../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
+
+# Multiple modules
+../evenv/Scripts/evennia.exe test --settings settings.py systems.combat.tests systems.crafting.tests
+```
+
+### Full test suite (only when necessary)
+
+The full suite has ballooned to **500+ tests taking ~10 minutes**. Only run it when you need complete verification (e.g., before merging, or if a change affects multiple systems):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
@@ -614,11 +767,6 @@ is how `world/tests/` went unnoticed. Plain `evennia test .` is *not*
 equivalent: it collects fewer tests, because `world/maps/test_oasis.py` and
 `test_neo_cairo.py` are map definitions whose names happen to match the
 discovery pattern.
-
-```bash
-# A single module, while iterating
-../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
-```
 
 ### Writing tests
 

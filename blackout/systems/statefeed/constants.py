@@ -1,0 +1,171 @@
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 08/07/2026
+Description: Tunables and channel names for the structured state feed.
+
+             Channel names follow the GMCP vocabulary on purpose. Evennia's OOB
+             layer maps an outputfunc named `foo_bar` to GMCP `Foo.Bar` on
+             telnet and `FOO_BAR` on MSDP, while the websocket protocol passes
+             it through as raw JSON. Naming channels the way Achaea/IRE and
+             Aardwolf already name them therefore buys Mudlet / MUSHclient /
+             TinTin++ support for the same data, from one implementation, at no
+             cost. Game-specific channels with no GMCP standard equivalent are
+             namespaced under `blackout_` (-> `Blackout.*`), which is the
+             mudstandards convention for vendor extensions.
+"""
+
+
+# ─── Channel names (outputfunc names) ────────────────────────────────────────
+
+# Standard GMCP vocabulary. These have equivalents in published MUD specs.
+CHANNEL_ROOM_INFO: str = "room_info"                  # -> Room.Info
+CHANNEL_ROOM_PLAYERS: str = "room_players"            # -> Room.Players
+CHANNEL_ROOM_PLAYER_ADD: str = "room_add_player"      # -> Room.AddPlayer
+CHANNEL_ROOM_PLAYER_REMOVE: str = "room_remove_player"  # -> Room.RemovePlayer
+CHANNEL_CHAR_VITALS: str = "char_vitals"              # -> Char.Vitals
+CHANNEL_CHAR_STATUS: str = "char_status"              # -> Char.Status
+
+# The whole player summary screen, panel by panel. GMCP has no standard name
+# for this; Char.Summary follows the vocabulary of the two above rather than
+# being namespaced under blackout_, because "everything about my character" is
+# exactly what a Char.* channel is for and a client that understands
+# Char.Vitals will look for it there.
+CHANNEL_CHAR_SUMMARY: str = "char_summary"            # -> Char.Summary
+
+# Blackout-specific extensions.
+CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
+CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
+CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
+
+# Every channel a client may subscribe to. A name absent from here is rejected
+# by the subscribe inputfunc rather than silently accepted, so a typo in a
+# client shows up immediately instead of as a channel that never fires.
+SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
+    CHANNEL_ROOM_INFO,
+    CHANNEL_ROOM_PLAYERS,
+    CHANNEL_ROOM_PLAYER_ADD,
+    CHANNEL_ROOM_PLAYER_REMOVE,
+    CHANNEL_CHAR_VITALS,
+    CHANNEL_CHAR_STATUS,
+    CHANNEL_CHAR_SUMMARY,
+    CHANNEL_MAP,
+    CHANNEL_COMBAT,
+    CHANNEL_AURA,
+))
+
+# Evennia's websocket `send_default` silently DROPS an outputfunc with this
+# name, and `clean_senddata` injects a key of the same name into every
+# outputfunc's kwargs. Named here so the guard in emit.py is not a bare string.
+RESERVED_CHANNEL_NAME: str = "options"
+
+
+# ─── Subscription ────────────────────────────────────────────────────────────
+
+# The ndb attribute on a Session holding its subscribed channel set. ndb, not
+# db: a subscription is meaningless across a disconnect, and Session ndb is
+# wiped by a server reload anyway -- which is precisely why the client
+# re-subscribes on reconnect and why at_sync pushes a resync.
+SUBSCRIPTION_ATTR: str = "statefeed_channels"
+
+# Sent by the subscribe inputfunc to mean "every channel". Spelling this as a
+# constant keeps the client-facing wire vocabulary in one place.
+SUBSCRIBE_ALL: str = "all"
+
+# The outputfunc carrying the answer to "what am I subscribed to". Not in
+# SUBSCRIBABLE_CHANNELS on purpose: a client cannot subscribe to it, it is
+# always sent, and it is the one channel name a client must know before the
+# server has told it anything.
+#
+# An EMPTY set on this channel is a real answer meaning "I have forgotten you,
+# ask again". at_sync sends exactly that, which is what lets a client survive
+# both a reload (ndb wiped) and a subscribe that raced the Portal-to-Server
+# sync and was dropped.
+CHANNEL_SUBSCRIBED_ACK: str = "blackout_subscribed"
+
+
+# ─── Visibility ──────────────────────────────────────────────────────────────
+
+# How many tiles beyond the observer's own room may have their CONTENTS fed to
+# a client. Zero means the feed shows exactly what the text channel shows.
+#
+# Raising this is a BALANCE CHANGE, not a rendering change: a graphical client
+# would see NPCs through walls that a telnet player cannot. The knob exists so
+# that decision can be made deliberately later without a protocol change.
+# systems/combat/auras/targeting.rooms_within_radius is the tool to implement
+# it with if it is ever raised.
+STATEFEED_ENTITY_RADIUS: int = 10
+
+
+# ─── Rate limiting ───────────────────────────────────────────────────────────
+
+# Minimum seconds between two sends on the same channel to the same session.
+# Aardwolf hard-caps its group channel at one send per second for exactly this
+# reason.
+#
+# ONLY cap channels that report a CONTINUOUS VALUE, where a dropped message is
+# superseded by the next one and costs the client nothing but latency. Vitals
+# and status qualify: miss an HP reading and the following one still tells the
+# whole truth.
+#
+# Never cap a channel that reports a STATE TRANSITION. Those do not supersede
+# one another -- dropping one leaves the client permanently wrong, with nothing
+# scheduled that would correct it:
+#
+#   - CHANNEL_ROOM_PLAYERS was capped at 1.0s here and it was a bug. Walking
+#     two rooms inside a second published the second room_info with no matching
+#     contents, so the client kept rendering the previous room's occupants
+#     until the player happened to move again slowly enough.
+#   - CHANNEL_COMBAT is uncapped for the same reason. At a 0.6s tick and a
+#     4-tick weapon cycle it is self-limiting anyway, and dropping a swing
+#     would desync the HP readout from the text log.
+#   - CHANNEL_CHAR_SUMMARY is uncapped despite carrying continuous values,
+#     because it is REQUEST-DRIVEN rather than event-driven: it fires when the
+#     player opens their dossier and on resync, nowhere else. Nothing is
+#     scheduled behind a dropped one, so a cap here would mean a player pressing
+#     `score` twice in a second and getting no answer the second time.
+CHANNEL_MIN_INTERVAL_SECONDS: dict = {
+    CHANNEL_CHAR_VITALS: 0.5,
+    CHANNEL_CHAR_STATUS: 1.0,
+}
+
+# Fallback when a channel has no entry above.
+DEFAULT_MIN_INTERVAL_SECONDS: float = 0.0
+
+# The ndb attribute holding {channel: last_send_monotonic} per session.
+RATE_STATE_ATTR: str = "statefeed_last_send"
+
+
+# ─── Payload sizing ──────────────────────────────────────────────────────────
+
+# Map nodes per `blackout_map` message. Godot's WebSocketPeer defaults to a
+# 65535-byte inbound buffer and historically TRUNCATED oversized JSON silently
+# rather than erroring (fixed for Godot >= 4.4). A full Blackout map is ~95
+# nodes and would fit in one frame today, but chunking now costs nothing and
+# removes a failure mode that only appears once a map grows.
+MAP_NODES_PER_CHUNK: int = 40
+
+
+# ─── Asset keys ──────────────────────────────────────────────────────────────
+
+# What a client renders when it has no asset for an entity's key. The server
+# always names an asset; the client always has a fallback. This pair is what
+# stops a graphical client from blocking content work -- a new item added to
+# ITEM_DB renders as a generic mesh with its real name, immediately, with no
+# art request.
+ASSET_KIND_ITEM: str = "item"
+ASSET_KIND_NPC: str = "npc"
+ASSET_KIND_CHARACTER: str = "character"
+ASSET_KIND_ROOM: str = "room"
+
+# A gathering node. Distinct from an item because the two afford opposite
+# things: an item is picked up, a node is harvested where it stands and carries
+# `get:false()` precisely so it cannot be pocketed. A client told only "item"
+# offers the one interaction the object refuses.
+ASSET_KIND_GATHERABLE: str = "gatherable"
+
+ASSET_KEY_GENERIC: str = "generic"
+
+# Room prototype key used when a room carries none. Matches the wildcard
+# behaviour of the ('*', '*') entry in a map's PROTOTYPES table.
+ROOM_KIND_DEFAULT: str = "default"

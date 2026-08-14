@@ -9,6 +9,8 @@ from evennia.utils import logger, lazy_property
 
 from systems.combat import constants as combat_constants
 from systems.combat import combat_msg
+from systems.combat.combat_level.logic import get_combat_level
+from systems.statefeed import events as feed
 
 
 class CombatEntity:
@@ -125,6 +127,18 @@ class CombatEntity:
             Clamp + assign. If max_hp is None (defensive — uninitialized
             entity), treat as no upper bound.
 
+            The state-feed publish rides here rather than in at_damage because
+            this setter is the single choke point every HP change passes
+            through -- damage, healing, and respawn alike. Publishing from
+            at_damage would leave a graphical client's health bar stale through
+            a heal. The feed's own per-channel rate cap is what makes it safe
+            to publish this liberally.
+
+            Passive regen registration rides here for the same reason: it is
+            the one place that sees every HP-reducing event, combat or
+            otherwise, and regen runs ALL the time (not gated on in_combat) --
+            see hp_regen.py.
+
         Notes/References:
             None.
 
@@ -137,6 +151,16 @@ class CombatEntity:
         if max_hp is not None and value > max_hp:
             value = max_hp
         self.db.hp = value
+
+        feed.emit_vitals(self)
+
+        if max_hp is not None and value < max_hp:
+            try:
+                from systems.combat.hp_regen import register_for_regen
+
+                register_for_regen(self)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.hp setter regen registration failed: {exc!r}")
 
 
     @property
@@ -164,6 +188,39 @@ class CombatEntity:
         Creation date: 07/26/2026
         """
         return self.db.max_hp or 0
+
+
+    @property
+    def combat_level(self) -> int:
+        """
+        Purpose: Accessor for this combatant's derived combat level.
+
+        Entry:
+            self exposes a `skills` handler (Character's SkillHandler, or
+            HostileNPC's _NpcSkillsShim) -- true for every CombatEntity host
+            today.
+
+        Exit/Returns:
+            Integer combat level.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Delegates to systems.combat.combat_level.logic.get_combat_level,
+            which is a pure function of skill levels rather than persisted
+            state -- there is no db.combat_level to keep in sync, so this
+            property is always current, the same tradeoff hp/max_hp make in
+            the other direction (persisted because damage must survive a
+            reload; combat level is cheap enough to recompute every read).
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 08/08/2026
+        """
+        return get_combat_level(self)
 
 
     def is_alive(self) -> bool:
@@ -467,15 +524,28 @@ class CombatEntity:
             None.
 
         Methodology:
-            Delegates to leave_combat, which death also uses.
+            Delegates to leave_combat, which death also uses, then switches
+            off any tick monitor this entity had running.
 
         Notes/References:
-            None.
+            The monitor is dropped HERE rather than in leave_combat because
+            death also routes through leave_combat, and a player who just died
+            wants to watch the ticks that follow. Disconnecting is the only
+            event that means "stop printing to me".
 
         Author: Nick Hobar
         Creation date: 07/26/2026
         """
         self.leave_combat()
+
+        # Deferred and guarded: a diagnostic must never be able to break the
+        # anti-combat-log path it is riding on.
+        try:
+            from systems.combat import tick_debug
+
+            tick_debug.detach(self)
+        except Exception as exc:
+            logger.log_err(f"at_disconnect_combat_cleanup tick_debug detach failed: {exc!r}")
 
     # ─── CombatHandler lazy accessor (filled in by combat.py in batch 2) ────
 

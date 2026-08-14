@@ -8,15 +8,19 @@ Description: Shop service layer: pricing, stock lookup, and the buy/sell
 
 from dataclasses import dataclass, field
 
+from typeclasses.items import CurrencyItem
 from world.item_database import ITEM_DB
 from world.shop_defs import SHOP_DB, ShopDef
 
 _ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 
-CREDITS_TYPECLASS = "typeclasses.items.CreditsItem"
-
-# ITEM_DB key for the currency item. The display name lives on the ItemDef.
+# ITEM_DB key -- and matching currency tag key -- for the shop's currency.
+# The display name lives on the ItemDef.
 CREDITS_ITEM_KEY = "credits"
+
+
+def _is_currency(item, currency_key: str = CREDITS_ITEM_KEY) -> bool:
+    return item.is_typeclass(CurrencyItem, exact=False) and item.currency_key == currency_key
 
 
 @dataclass
@@ -89,16 +93,31 @@ def get_farewell(shopkeep) -> str:
     return shop_def.farewell if shop_def else '"Farewell."'
 
 
+def credits_in(items) -> int:
+    """Total currency held across an arbitrary iterable of item objects.
+
+    Split out of credits_count so that a container which is not the buyer can
+    be counted too -- the bank room's contents, for the summary screen's
+    holdings panel. Every currency stack found is summed rather than the first
+    one returned: a caller's own inventory merges credits into one stack, but
+    nothing guarantees that for a container the shop never touches.
+    """
+    total = 0
+
+    for item in items:
+        if _is_currency(item):
+            total += max(0, item.quantity)
+
+    return total
+
+
 def credits_count(caller) -> int:
-    for item in caller.contents:
-        if item.is_typeclass(CREDITS_TYPECLASS, exact=False):
-            return max(0, item.quantity)
-    return 0
+    return credits_in(caller.contents)
 
 
 def credits_deduct(caller, amount: int) -> bool:
     for item in caller.contents:
-        if item.is_typeclass(CREDITS_TYPECLASS, exact=False):
+        if _is_currency(item):
             if item.quantity >= amount:
                 item.quantity -= amount
                 if item.quantity <= 0:
@@ -110,7 +129,7 @@ def credits_deduct(caller, amount: int) -> bool:
 
 def credits_add(caller, amount: int) -> None:
     for item in caller.contents:
-        if item.is_typeclass(CREDITS_TYPECLASS, exact=False):
+        if _is_currency(item):
             item.quantity += amount
             return
     # Route through ITEM_DB rather than create_object: the raw call skipped
@@ -146,7 +165,7 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
         groups[key].count += count
 
     for obj in list(shopkeep.contents):
-        if obj.is_typeclass(CREDITS_TYPECLASS, exact=False):
+        if obj.is_typeclass(CurrencyItem, exact=False):
             continue
         value = obj.attributes.get("value", default=0)
         buy_price = max(1, int(value * upsell))
@@ -177,7 +196,7 @@ def get_sell_items(caller, npc=None) -> list[SellEntry]:
     group_order = []
 
     for obj in list(caller.contents):
-        if obj.is_typeclass(CREDITS_TYPECLASS, exact=False):
+        if obj.is_typeclass(CurrencyItem, exact=False):
             continue
         tradeable = obj.attributes.get("tradeable", default=True)
         if not tradeable:

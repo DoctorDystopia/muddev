@@ -18,6 +18,28 @@ COMBAT_TICK_SECONDS: float = 0.6
 # LoopingCall above is still alive. Must be a whole number of seconds.
 TICK_ENGINE_WATCHDOG_SECONDS: int = 60
 
+# ─── Tick diagnostics ────────────────────────────────────────────────────────
+# Knobs for the player-toggleable tick monitor in tick_debug.py. Diagnostics
+# only: nothing here changes what the engine DOES, only what it reports.
+
+# How many ticks a streaming observer is served before the monitor switches
+# itself off. At COMBAT_TICK_SECONDS that is five minutes. Left on, a stream
+# emits ~100 lines a minute forever, and the player who forgot about it is the
+# last person who will notice.
+TICK_DEBUG_AUTO_EXPIRE_TICKS: int = 500
+
+# A tick is reported LATE when the measured gap since the previous one exceeds
+# this multiple of COMBAT_TICK_SECONDS. LoopingCall schedules on a fixed
+# cadence and absorbs small overruns on its own, so a factor rather than a flat
+# margin is what distinguishes a real stall from ordinary scheduler noise.
+TICK_DEBUG_LATE_TICK_FACTOR: float = 1.5
+
+# How many measured intervals the engine keeps for the `tickdebug status`
+# mean/max/late report. Recorded unconditionally -- one deque append per tick
+# costs nothing, and it is what makes status a health check over a window
+# rather than a single instantaneous reading.
+TICK_DEBUG_SAMPLE_WINDOW: int = 50
+
 # ─── Skill scaling bounds ────────────────────────────────────────────────────
 # Blackout scales all skills 0..127 (inclusive). OSRS uses 1..99; the formulas
 # are scale-agnostic, so this constant exists purely as documentation and for
@@ -47,6 +69,18 @@ HP_PER_FORTITUDE_LEVEL: int = 1
 # Absolute HP ceiling implied by the scaling above. Exists so UI/cap-check code
 # has one place to read instead of recomputing the product.
 MAX_HP_CAP: int = MAX_FORTITUDE_LEVEL * HP_PER_FORTITUDE_LEVEL
+
+# ─── Passive HP regeneration ──────────────────────────────────────────────────
+# Player_Overview.md: "Players regenerate 1 Hitpoint per minute." Per the
+# 08/08 design dialogue this applies to every CombatEntity (players and NPCs
+# alike), not just the player character, and runs ALL the time -- including
+# mid-combat, not just while out of a fight.
+#
+# Rides on hp_regen.py's plain Evennia Script interval, NOT the twisted
+# LoopingCall in tick_engine.py -- 60 is a whole number of seconds, so
+# ScriptDB.db_interval (a Django IntegerField) holds it natively.
+HP_REGEN_INTERVAL_SECONDS: int = 60
+HP_REGEN_AMOUNT: int = 1
 
 # ─── Effective-level formula constants ─────────────────────────
 # L_eff = floor( floor( (base + potion) * augmentation ) * set ) + stance + 8
@@ -195,6 +229,36 @@ AURA_DEFAULT_TICK_INTERVAL: int = 4
 # differs, so this is a pure retune knob.
 AURA_DISTANCE_METRIC: str = "euclidean"
 
+
+# ─── Combat level ────────────────────────────────────────────────────────────
+# Blackout's derived "how tough is this combatant" number, ported from OSRS:
+#   Base    = COMBAT_LEVEL_BASE_WEIGHT * (Fortitude + Defense + floor(Augmentation / COMBAT_LEVEL_AUGMENTATION_DIVISOR))
+#   Branch  = COMBAT_LEVEL_BRANCH_WEIGHT * (paired skills summed raw, or a
+#             lone skill scaled by COMBAT_LEVEL_SOLO_SKILL_MULTIPLIER first)
+#   Combat level = floor(Base + max(every registered branch's score))
+#
+# Coefficients are OSRS's literal values -- preserved verbatim per the same
+# scale-agnostic precedent as EFFECTIVE_LEVEL_FLOOR_8 / MAX_HIT_* above.
+# Blackout's 0-127 skill range therefore pushes the ceiling past OSRS's
+# familiar 126 (a melee-maxed level-127 character lands around 162). That is
+# accepted as a new number, not corrected for.
+COMBAT_LEVEL_BASE_WEIGHT: float = 0.25
+COMBAT_LEVEL_BRANCH_WEIGHT: float = 0.325
+COMBAT_LEVEL_SOLO_SKILL_MULTIPLIER: float = 1.5
+COMBAT_LEVEL_AUGMENTATION_DIVISOR: int = 2
+
+# Skills summed into the flat base every combatant gets regardless of build --
+# OSRS's Defence + Hitpoints. Augmentation (Blackout's Prayer analog: universal,
+# buff-only, not tied to a style) is handled as its own constant below since
+# it is halved before joining the sum and these two are not.
+COMBAT_LEVEL_BASE_SKILLS: tuple = ("fortitude", "defense")
+
+# Augmentation does not exist as a built skill yet (03_Systems/Skills/Combat
+# Skills/Augmentation_Skill.md is still a stub) -- combat_level's skill-level
+# lookup treats any key absent from SKILL_REGISTRY as a 0 contribution rather
+# than raising, so this is safe to reference today and starts contributing
+# the moment the skill ships under this key.
+COMBAT_LEVEL_AUGMENTATION_SKILL: str = "augmentation"
 
 # ─── Damage types ────────────────────────────────────────────────────────────
 # What KIND of damage landed, threaded through CombatEntity.at_damage so death

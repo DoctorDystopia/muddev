@@ -57,6 +57,11 @@ def start(caller: object, **kwargs) -> tuple:
             slot_line = f"  {slot_label}: {HIGHLIGHT_COLOR}(empty){RESET_COLOR}"
             text_lines.append(slot_line)
 
+    # Combat Level is NOT shown here. It is computed from skill levels alone --
+    # no equipped item moves it -- so filing it on the equipment screen told
+    # the player the opposite of the truth about what raises it. It lives on
+    # the summary screen (`score`) now; this screen keeps the equipment
+    # bonuses, which are genuinely equipment's to report.
     text_lines.append("")
     text_lines.append(f"{TITLE_COLOR}Total Combat Bonuses{RESET_COLOR}")
     total_bonuses = eq_handler.total_combat_stat_bonuses()

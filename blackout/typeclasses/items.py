@@ -139,10 +139,28 @@ class ToolItem(EquippableItem):
     """
 
 
-class CreditsItem(BaseItem):
+class CurrencyItem(BaseItem):
     """
-    Stackable currency item representing Blackout credits (chips).
-    Only one stack of CreditsItem should exist in a character's inventory.
+    Base typeclass for currency items. Currency-generic code (banking, shop
+    pricing) should check against this class rather than a specific
+    currency's subclass, so a second currency can be added later without
+    touching that code.
+
+    Every ItemDef for a currency must carry a ("<key>", "currency") tag --
+    that tag key is the single source of truth for which currency an
+    instance is, read back via currency_key.
+    """
+
+    @property
+    def currency_key(self):
+        return self.tags.get(category="currency")
+
+
+class CreditsItem(CurrencyItem):
+    """
+    Stackable currency item representing Blackout credits (chips), the
+    game's primary currency. Only one stack of CreditsItem should
+    exist in a character's inventory.
 
     Spawn via ITEM_DB["credits"], which supplies stackable, tradeable, value
     and the ("credits", "currency") tag.

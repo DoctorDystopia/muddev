@@ -111,3 +111,21 @@ class SkillHandler:
     def sync_max_hp_from_fortitude(self) -> None:
         """ Passes execution to logic.sync_max_hp_from_fortitude """
         logic.sync_max_hp_from_fortitude(self.obj)
+
+
+    def total_level(self) -> int:
+        """ Passes execution to logic.get_total_level """
+        result = logic.get_total_level(self.obj)
+        return result
+
+
+    def combined_xp(self) -> int:
+        """ Passes execution to logic.get_combined_xp """
+        result = logic.get_combined_xp(self.obj)
+        return result
+
+
+    def closest_to_level_up(self) -> dict:
+        """ Passes execution to logic.get_closest_to_level_up """
+        result = logic.get_closest_to_level_up(self.obj)
+        return result
