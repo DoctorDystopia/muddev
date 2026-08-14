@@ -1,0 +1,89 @@
+extends Control
+## The client shell: the text game on the left, the 3D world on the right.
+##
+## Owns the connection and the subscription handshake, and nothing else. The
+## world pane reads the feed straight off Evennia's signals -- routing every
+## payload through here first would make this the file everyone has to edit to
+## add a channel, which is the dispatch chain the whole ack-driven design
+## exists to avoid.
+
+## Ask for everything. The server answers with the set it actually accepted and
+## THAT is what gets bound -- a hardcoded channel list here would be a second
+## copy of blackout/systems/statefeed/constants.py, free to drift.
+const _SUBSCRIBE_ALL := "all"
+
+## The subscribe handshake's ack. The only channel name the client has to know
+## before the server has told it anything.
+const _CH_SUBSCRIBED := "blackout_subscribed"
+
+@onready var _output: RichTextLabel = %Output
+@onready var _input: LineEdit = %Input
+
+var _channels := PackedStringArray()
+
+
+func _ready() -> void:
+	Evennia.opened.connect(_on_opened)
+	Evennia.closed.connect(_on_closed)
+	Evennia.text_received.connect(_on_text)
+	Evennia.channel_received.connect(_on_channel)
+	_input.text_submitted.connect(_on_submitted)
+	_input.grab_focus()
+
+	var err := Evennia.open()
+
+	if err != OK:
+		_note("could not open socket: error %d" % err)
+
+
+func _on_opened() -> void:
+	_note("connected to %s:%d" % [Evennia.DEFAULT_HOST, Evennia.DEFAULT_PORT])
+
+	# Deliberately does NOT subscribe here. The socket is accepted by the
+	# Portal, which is up whenever the game is reachable at all -- but an
+	# inputfunc is handled by the Server, which may still be starting. A
+	# subscribe sent now is dropped without a word. The server tells us when it
+	# is ready by announcing an empty subscription set; see _on_channel.
+
+
+func _on_closed(code: int, reason: String) -> void:
+	_note("disconnected (%d) %s" % [code, reason])
+
+
+func _on_text(bbcode: String) -> void:
+	# Evennia sends one message per line without a trailing newline.
+	_output.append_text(bbcode + "\n")
+
+
+func _on_submitted(line: String) -> void:
+	_input.clear()
+
+	if not line.is_empty():
+		Evennia.command(line)
+
+
+func _on_channel(channel: String, _payload: Dictionary) -> void:
+	if channel != _CH_SUBSCRIBED:
+		if not _channels.has(channel):
+			# Printed rather than shown: an outputfunc nobody handles is a
+			# developer's problem, and the left pane belongs to the player.
+			print("unbound channel: %s" % channel)
+
+		return
+
+	_channels = PackedStringArray(_payload.get("channels", []))
+
+	# An empty set means the server has forgotten us: either it has just
+	# finished syncing this session and never saw a subscribe, or a reload
+	# wiped the ndb the set lives on. Either way the answer is to ask again,
+	# and this is the only signal that we need to.
+	if _channels.is_empty():
+		_note("server has no subscription for us; subscribing")
+		Evennia.send("blackout_subscribe", [], {"channels": _SUBSCRIBE_ALL})
+		return
+
+	_note("subscribed: %d channels" % _channels.size())
+
+
+func _note(message: String) -> void:
+	_output.append_text("[i][color=gray]-- %s[/color][/i]\n" % message)

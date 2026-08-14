@@ -1,0 +1,61 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://world/world_view.gd" id="1_world"]
+[ext_resource type="Script" path="res://world/orbit_camera.gd" id="2_camera"]
+[ext_resource type="Script" path="res://world/entity_pool.gd" id="3_entities"]
+
+[sub_resource type="Environment" id="Environment_world"]
+background_mode = 1
+background_color = Color(0.043, 0.059, 0.078, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.35, 0.42, 0.5, 1)
+ambient_light_energy = 0.6
+
+[sub_resource type="BoxMesh" id="BoxMesh_marker"]
+size = Vector3(0.34, 0.55, 0.34)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_marker"]
+albedo_color = Color(0.208, 0.878, 0.753, 1)
+emission_enabled = true
+emission = Color(0.208, 0.878, 0.753, 1)
+emission_energy_multiplier = 1.6
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_aura"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.549, 0.259, 0.55)
+
+[node name="World" type="Node3D"]
+script = ExtResource("1_world")
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_world")
+
+; Rotated -60 degrees about X so it points down and slightly forward. Written
+; as a basis rather than a rotation because that is what a .tscn stores.
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, 10, 0)
+light_energy = 0.9
+
+[node name="Islands" type="Node3D" parent="."]
+
+[node name="Entities" type="Node3D" parent="."]
+script = ExtResource("3_entities")
+
+[node name="Marker" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_marker")
+material_override = SubResource("StandardMaterial3D_marker")
+
+; The mesh is assigned at runtime -- its radius comes from the aura, so it
+; cannot be authored here. Only the material is constant.
+[node name="Aura" type="MeshInstance3D" parent="."]
+visible = false
+material_override = SubResource("StandardMaterial3D_aura")
+
+[node name="Camera" type="Node3D" parent="." node_paths=PackedStringArray("target")]
+script = ExtResource("2_camera")
+target = NodePath("../Marker")
+
+[node name="SpringArm3D" type="SpringArm3D" parent="Camera"]
+
+[node name="Camera3D" type="Camera3D" parent="Camera/SpringArm3D"]

@@ -1,0 +1,57 @@
+{% extends "webclient/base.html" %}
+
+{% comment %}
+Blackout's webclient page.
+
+This is a copy of Evennia's own webclient/webclient.html with ONE change: the
+`scripts` block at the bottom is filled in, to load the 3D world pane.
+
+base.html is deliberately NOT overridden. Django's template loader finds this
+file first because blackout/web/templates/ precedes Evennia's on the search
+path, but the `{% extends %}` above still resolves to Evennia's base.html — so
+everything else about the page, including the whole default plugin set, keeps
+tracking upstream.
+
+Note for iterating on blackout3d.js: static files are COPIED to STATIC_ROOT by
+collectstatic, which `evennia start` and `evennia reload` run automatically. A
+browser refresh alone will not pick up a JS edit — reload the server.
+
+Author: Nick Hobar
+Creation date: 08/07/2026
+{% endcomment %}
+
+{% block client %}
+
+<!-- Basic toolbar -->
+<div id="toolbar"></div>
+
+<!-- "Main" Content -->
+<div id="main"  class="split split-vertical" data-role-default>
+  <div id="main-sub" class="split-sub">
+    <div id="messagewindow"></div>
+  </div>
+</div>
+<!-- "Input" Pane -->
+<div id="input" class="split split-vertical" data-role-input data-update-append>
+  <div id="inputform" class="wrapper">
+    <div id="prompt" class="prompt">
+    </div>
+    <div id="inputcontrol" class="input-group">
+      <textarea id="inputfield" type="text" class="form-control"></textarea>
+      <span class="input-group-btn">
+        <button class="btn btn-large btn-outline-primary" id="inputsend" type="button" value="">&gt;</button>
+      </span>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+    {% load static %}
+    <!-- three.js. See web/static/webclient/js/vendor/README.md for how this
+         file gets here and why it is vendored rather than pulled from a CDN.
+         blackout3d.js degrades to a message in the pane if THREE is missing;
+         the text client is unaffected either way. -->
+    <script src={% static "webclient/js/vendor/three.min.js" %} type="text/javascript"></script>
+    <script src={% static "webclient/js/plugins/blackout3d.js" %} type="text/javascript"></script>
+{% endblock %}

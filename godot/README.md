@@ -1,0 +1,120 @@
+# Blackout — Godot client
+
+Graphical client for the Blackout MUD. Talks to Evennia's `godotwebsocket`
+contrib port (`4008`, set in `blackout/server/conf/settings.py`).
+
+Plan, phases and design decisions:
+[docs/2026-08-08-ENG-0005-godot-client-plan.md](../docs/2026-08-08-ENG-0005-godot-client-plan.md).
+
+**Status: Phase 3 — control.** Text game on the left, the 3D world on the
+right: tile grids per map, the links between them, room-kind colours, a marker
+on the room you are standing in, the NPCs and items in it, a white flash on
+anything you land a hit on, and your aura ring.
+
+| Input | Does |
+|---|---|
+| **Left-click a tile** | Walks there, if it is adjacent and has an exit |
+| **Left-click an NPC** | `attack <name>` |
+| **Left-click an item** | `get <name>` |
+| **Left-click a gathering node** | `cut <name>` — harvested where it stands, never pocketed |
+| **Left-click a player** | Nothing, deliberately — see rule 3 below |
+| **Right-drag** | Orbit the camera |
+| **Wheel** | Zoom |
+
+## Running
+
+Start the game server first — the client connects on load and reports the
+failure in the feed pane if nothing is listening.
+
+```bash
+cd blackout && ../evenv/Scripts/evennia.exe start
+```
+
+Then open `godot/` in Godot 4.7 and press F5, or run it headless. Godot is not
+on PATH on this machine; the 4.7.1 build lives in an extracted folder that is
+itself named `...exe`, so the binary path repeats:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --path godot
+```
+
+Log in by typing into the input field, the same as telnet:
+
+```
+connect <name> <password>
+```
+
+The client does **not** subscribe when the socket opens — that is a race it
+loses whenever the Server is still starting. It waits for the server to
+announce an empty subscription set at `ServerSession.at_sync`, and answers
+that. The same message is what lets it recover from an `evennia reload`, which
+wipes the Session ndb subscriptions live on without dropping the socket.
+
+The world snapshot arrives when you puppet a character, pushed by
+`Character.at_post_puppet`.
+
+To see the recovery for yourself: with the client connected, run
+`evennia reload`, and the feed pane logs `server has no subscription for us;
+subscribing` followed by a fresh `subscribed: ...`.
+
+## Tests
+
+Both are headless and exit non-zero on failure.
+
+> **After adding a `class_name`, run `--headless --path godot --import` once
+> before running anything headless.** Global class names live in
+> `.godot/global_script_class_cache.cfg`, which is rebuilt by an editor scan and
+> is gitignored. A plain `--headless` run does not rebuild it, so a brand-new
+> `class_name` fails as `Identifier "..." not declared in the current scope` —
+> which reads like a typo and is not one. A fresh clone needs this too.
+
+`test_world_state.tscn` needs **nothing running** — its payloads are hand-built
+in the shape Godot's JSON parser produces:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_state.tscn
+```
+
+`smoke_handshake.tscn` needs a running Evennia but no account —
+`blackout_subscribe` is answered on an unauthenticated session:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/smoke_handshake.tscn
+```
+
+## Layout
+
+| File | Owns |
+|---|---|
+| `autoload/evennia.gd` | The socket. The only place that knows the `[name, args, kwargs]` wire format. |
+| `scenes/console.tscn` `.gd` | The shell: output, input, and the subscription handshake. |
+| `scenes/world.tscn` | The 3D scene: environment, light, islands, marker, camera rig. |
+| `world/world_state.gd` | The model. Chunk reassembly and the float boundary. |
+| `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
+| `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |
+| `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
+
+Four rules worth not rediscovering:
+
+1. **Decode with `get_string_from_utf8()`.** The contrib's own README example
+   uses `get_string_from_ascii()`, which mangles the box-drawing that the
+   dossier and every section rule in the game are built from.
+2. **Every number in a parsed payload is a float.** `JSON.parse_string` returns
+   `{"x": 3.0, "num": 19863.0}` — always. A dictionary keyed on that will not
+   match a key written as `3`, and nothing raises. `WorldState` converts at the
+   point of use; do the same rather than coercing whole payloads, because the
+   first genuinely fractional field the server grows would be corrupted
+   silently.
+3. **The client acts only through `Evennia.command()`**, which sends the same
+   `text` a telnet player types. Clicking a tile sends `north` — never a
+   position. There is no privileged client channel, so every lock, cooldown and
+   permission keeps working with nothing to re-audit. Clicking another player
+   is wired to do nothing on purpose: every other misclick is recoverable, and
+   opening combat on a person is not.
+4. **The output pane's monospace font is load-bearing**, not cosmetic. Godot's
+   default theme font is proportional and the game draws ASCII art constantly.
+5. **Anything both panes draw must match.** The two get put side by side on the
+   same character, so a difference has to mean a bug. That is why
+   `WorldView.stable_hash` reimplements the JS string hash instead of calling
+   Godot's, and why the HSL-to-HSV conversion beside it is closed-form rather
+   than matched by eye. Both have test vectors computed from the JS directly.
