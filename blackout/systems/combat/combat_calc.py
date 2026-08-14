@@ -205,33 +205,59 @@ def hit_chance(r_atk: int, r_def: int) -> float:
 
 # ─── Damage roll ────────────────────────────────────────────────────────────
 
+# def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None) -> int:
+#     """
+#     Purpose: Uniform integer damage on [0, max_hit] inclusive.
+
+#     Entry:
+#         max_hit_value - cap from max_hit(eff_str, equip_str_bonus).
+#         rng           - optional random.Random instance for deterministic tests.
+#                         If None, uses the module-level random.
+
+#     Exit/Returns:
+#         Integer damage in [0, max_hit_value]. A 0 is a successful accuracy
+#         check followed by a 0 damage roll (an OSRS "splash" with a connect).
+
+#     Module Globals:
+#         None.
+
+#     Methodology:
+#         Single randint call. Rolls damage uniformly across the full
+#         range, so 0 is as likely as max_hit, and the average DPS converges
+#         to max_hit * hit_chance / 2.
+
+#     Author: Nick Hobar
+#     Creation date: 07/26/2026
+#     """
+#     source = rng if rng is not None else _random_module
+
+#     return source.randint(0, max_hit_value)
+
+
 def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None) -> int:
     """
-    Purpose: Uniform integer damage on [0, max_hit] inclusive.
-
-    Entry:
-        max_hit_value - cap from max_hit(eff_str, equip_str_bonus).
-        rng           - optional random.Random instance for deterministic tests.
-                        If None, uses the module-level random.
-
-    Exit/Returns:
-        Integer damage in [0, max_hit_value]. A 0 is a successful accuracy
-        check followed by a 0 damage roll (an OSRS "splash" with a connect).
-
-    Module Globals:
-        None.
+    Purpose: Roughly bell curved distribution of integer damage on [0, max_hit] inclusive.
 
     Methodology:
-        Single randint call. Rolls damage uniformly across the full
-        range, so 0 is as likely as max_hit, and the average DPS converges
-        to max_hit * hit_chance / 2.
+        Average of two randint calls, rounded up or down randomly to avoid bias towards 0 or max_hit. 
+        0 is still as likely as max_hit, but both are less likely than the mid-range values.
+        The distribution is not a bell curve, it is a triangular distribution that peaks at max_hit/2. 
 
-    Author: Nick Hobar
-    Creation date: 07/26/2026
+    Author: Danny
+    Creation date: 08/08/2026
     """
     source = rng if rng is not None else _random_module
 
-    return source.randint(0, max_hit_value)
+    r = source.randint(0, 1)
+    a = source.randint(0, max_hit_value)
+    b = source.randint(0, max_hit_value)
+
+    if r == 0:
+        damage = math.floor((a + b) / 2.0)
+    else:
+        damage = math.ceil((a + b) / 2.0)
+
+    return damage
 
 
 # ─── Swing resolution (top-level pipeline) ────────────────────────────────

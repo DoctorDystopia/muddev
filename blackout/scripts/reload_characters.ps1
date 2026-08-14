@@ -7,7 +7,7 @@ param(
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $GameDir = Split-Path -Parent $ScriptDir
-$EvenvDir = Resolve-Path (Join-Path $GameDir "..\evenv")
+$EvenvDir = Resolve-Path (Join-Path $GameDir "..\.venv")
 $Python = Join-Path $EvenvDir "Scripts\python.exe"
 
 Set-Location -LiteralPath $GameDir

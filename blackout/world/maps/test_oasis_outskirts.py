@@ -29,7 +29,7 @@ MAPSTR = r'''
        \|   | |  \ / \| | |
     3 #-#-M-#-#-M-#-#-#-#-†
       | | | | | | | | | | |
-    2 #-#-#-H-#-#-M-#-#-#-#
+    2 #-#-#-H-e-#-M-#-#-#-#
       | | | | | | | | | | |
     1 #-#-#-#-†-#-#-#-#-†-#
       | | | | | | | | | | |
@@ -65,11 +65,19 @@ class BigMutantNPCNode(MapNode):
     display_symbol = "|#73804FH|n"
     prototype = "xyz_room"
 
+class FloatingEyeNPCNode(MapNode):
+    """
+    Custom MapNode for Floating Eye characters.
+    """
+    display_symbol = "|#f88379e|n"
+    prototype = "xyz_room"
+
 
 LEGEND = {
     "†": RustyPoleNode,
     "M": MutantRaiderNPCNode,
     "H": BigMutantNPCNode,
+    "e": FloatingEyeNPCNode,
 }
 
 
@@ -95,6 +103,14 @@ _npc_big_mutant = {
     "key": "Big Mutant Tile",
     "desc": "A large mutant with a crude weapon.",
 }
+
+_npc_floating_eye = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Floating Eye Tile",
+    "desc": "Terrified of needles.",
+}
+
 
 PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
@@ -130,6 +146,7 @@ PROTOTYPES = {
     (5, 3): _npc_mutant_raider,
     (10, 4): _npc_mutant_raider,
     (3, 2): _npc_big_mutant,
+    (4, 2): _npc_floating_eye,
 }
 
 # Aggregate all configuration data for the parser
