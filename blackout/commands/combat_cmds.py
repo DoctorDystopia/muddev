@@ -11,8 +11,10 @@ from commands.constants import HELP_CATEGORY_COMBAT
 from systems.combat import combat_msg, constants as const
 from systems.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.combat.auras.registry import AURA_REGISTRY, find_aura
+from systems.combat import tick_debug
 from systems.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
 from systems.combat.rules.introspect import describe_action_rules, describe_registry
+from systems.ui import colors
 
 
 # Argument that switches the active aura off rather than naming one to light.
@@ -291,6 +293,113 @@ class CmdCombatOptions(Command):
         )
 
 
+class CmdTickDebug(Command):
+    """Command tickdebug [all|quiet|status|off] — watch the engine's 0.6s tick.
+
+    Blackout resolves combat on one server-wide 0.6s tick, and everything that
+    feels like timing — when a swing lands, when an aura pulses, why a fight
+    seems to stutter — is a counter on that tick you otherwise cannot see.
+    This prints it.
+
+    A streamed line reads:
+
+        [t 01432] 0.601s eng 2h | SWING cd 3/4 attack -> raider | rf 2/4
+
+    the tick number, how long the tick actually took against the 0.6s nominal,
+    how many handlers the engine is driving, then your own weapon cooldown and
+    aura cadence as remaining/total.
+
+    Usage:
+        tickdebug          toggle the stream on or off
+        tickdebug quiet    only ticks where something happens (the default)
+        tickdebug all      every tick, ~100 lines a minute
+        tickdebug status   one-shot health report, no stream
+        tickdebug off      stop streaming
+
+    The stream stops itself after five minutes so a forgotten toggle cannot
+    fill your screen indefinitely.
+    """
+
+    key = "tickdebug"
+    aliases = ["tickdiag"]
+    locks = "cmd:all()"
+    help_category = HELP_CATEGORY_COMBAT
+
+    def func(self) -> None:
+        caller = self.caller
+        argument = self.args.strip().lower()
+
+        if argument == tick_debug.MODE_STATUS:
+            report = tick_debug.snapshot(caller)
+            caller.msg(report)
+            return
+
+        if argument == tick_debug.MODE_OFF:
+            self._stop()
+            return
+
+        if not argument:
+            self._toggle()
+            return
+
+        if argument not in tick_debug.STREAM_MODES:
+            self._usage()
+            return
+
+        self._start(argument)
+
+    def _toggle(self) -> None:
+        """Bare `tickdebug` — turn the stream on at the default mode, or off."""
+        caller = self.caller
+        watching = tick_debug.is_watching(caller)
+
+        if watching:
+            self._stop()
+            return
+
+        self._start(tick_debug.DEFAULT_MODE)
+
+    def _start(self, mode: str) -> None:
+        """Begin (or re-aim) the caller's stream, and show a status report first.
+
+        The report goes out before the first line so the stream has something
+        to be read against: a bare cooldown counter means little without the
+        weapon speed and rotation size the report names.
+        """
+        caller = self.caller
+
+        report = tick_debug.snapshot(caller)
+        caller.msg(report)
+
+        tick_debug.attach(caller, mode)
+        caller.msg(
+            f"{colors.SUCCESS_COLOR}Tick monitor on ({mode}). "
+            f"'tickdebug off' to stop.{colors.RESET_COLOR}"
+        )
+
+    def _stop(self) -> None:
+        """End the caller's stream, saying so only if one was running."""
+        caller = self.caller
+        was_watching = tick_debug.detach(caller)
+
+        if not was_watching:
+            caller.msg("The tick monitor isn't running.")
+            return
+
+        caller.msg(f"{colors.DIM_COLOR}Tick monitor off.{colors.RESET_COLOR}")
+
+    def _usage(self) -> None:
+        """Report the accepted arguments, built from the module's own vocabulary."""
+        caller = self.caller
+        modes = list(tick_debug.STREAM_MODES)
+
+        modes.append(tick_debug.MODE_STATUS)
+        modes.append(tick_debug.MODE_OFF)
+
+        choices = "|".join(modes)
+        caller.msg(f"Usage: tickdebug [{choices}]")
+
+
 class CombatCmdSet(CmdSet):
     """
     Purpose: CmdSet containing combat management commands.
@@ -345,6 +454,7 @@ class CombatCmdSet(CmdSet):
         aura_cmd = CmdAura()
         combat_rules_cmd = CmdCombatRules()
         combat_options_cmd = CmdCombatOptions()
+        tick_debug_cmd = CmdTickDebug()
 
         self.add(attack_cmd)
         self.add(hold_cmd)
@@ -353,3 +463,4 @@ class CombatCmdSet(CmdSet):
         self.add(aura_cmd)
         self.add(combat_rules_cmd)
         self.add(combat_options_cmd)
+        self.add(tick_debug_cmd)

@@ -2,8 +2,9 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 06/17/2026
-Description: Operator script. Deletes every object tagged with the configured
-             XYZGrid z-coordinates so the maps can be respawned from source.
+Description: Operator script. Deletes every object tagged with the z-coordinates
+             listed in scripts/map_manifest.json so the maps can be respawned
+             from source.
 
              DESTRUCTIVE. Run deliberately, never import. Everything is behind
              a __main__ guard: this module previously did its deleting at
@@ -15,15 +16,9 @@ Usage:
     ../evenv/Scripts/python.exe scripts/xyz_cleanup.py
 """
 
+import json
 import os
 import sys
-
-# Public constant definitions
-ZCOORDS_TO_CLEAN = [
-    "oasis",
-    "oasis_outskirts",
-    "trade town sector 1",
-]
 
 # The game dir (blackout/), one level up from this file in scripts/. Running
 # `python scripts/xyz_cleanup.py` puts THIS file's directory on sys.path[0],
@@ -32,6 +27,39 @@ ZCOORDS_TO_CLEAN = [
 # lived directly in blackout/ and stopped being true the moment it moved into
 # scripts/. Inserting it explicitly makes the script launchable from anywhere.
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Single source of truth for which maps a clean-and-reload run applies to.
+# Also read by clean_and_reload_all_maps.ps1 and clean_and_reload_all_maps.sh.
+_MANIFEST_PATH = os.path.join(_GAME_DIR, "scripts", "map_manifest.json")
+
+
+def _load_zcoords_from_manifest():
+    """
+    Purpose: Read the z-coordinates of every map in map_manifest.json.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        Returns a list of z-coordinate strings, one per manifest map.
+
+    Module Globals:
+        _MANIFEST_PATH
+
+    Methodology:
+        Parse the JSON manifest and collect each entry's "zcoord" field.
+
+    Notes/References:
+        Deleting the manifest map list here would orphan rooms for maps that
+        are still in the database but no longer respawned.
+
+    Author: Nick Hobar
+    Creation date: 08/11/2026
+    """
+    with open(_MANIFEST_PATH, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+
+    return [entry["zcoord"] for entry in data["maps"]]
 
 
 def _bootstrap_evennia():
@@ -68,8 +96,10 @@ def purge_zcoords(zcoords):
         match, reporting failures without aborting the run.
 
     Notes/References:
-        Called by scripts/clean_and_reload_all_maps.ps1 between `evennia
-        stop` and `evennia xyzgrid spawn`.
+        Called by scripts/clean_and_reload_all_maps.ps1 and
+        scripts/clean_and_reload_all_maps.sh between `evennia stop` and
+        `evennia xyzgrid spawn`. Z-coordinates come from
+        scripts/map_manifest.json, not from this function's caller.
 
     Author: Nick Hobar
     Creation date: 06/17/2026
@@ -98,9 +128,16 @@ def purge_zcoords(zcoords):
 
 
 def main():
-    """Entry point. Bootstraps Evennia, then purges ZCOORDS_TO_CLEAN."""
+    """Entry point. Bootstraps Evennia, then purges the manifest z-coords."""
     _bootstrap_evennia()
-    total = purge_zcoords(ZCOORDS_TO_CLEAN)
+
+    try:
+        zcoords = _load_zcoords_from_manifest()
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"Aborting: could not read map manifest: {exc}")
+        sys.exit(1)
+
+    total = purge_zcoords(zcoords)
     print(f"\nDone. Deleted {total} objects.")
 
 

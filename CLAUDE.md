@@ -49,12 +49,19 @@ there.
 
 ## Testing
 
-One command, run from `blackout/`:
+**During development:** run only the modules you changed (takes seconds to ~1 min):
+
+```bash
+../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
+```
+
+**Before merging or major changes:** run the full suite (500+ tests, ~10 minutes):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
 ```
 
+Details:
 - **Omitting a root silently runs fewer tests** rather than erroring. `items`,
   `systems`, and `world` are the roots that hold tests.
 - `evennia test .` is **not** equivalent — it collects fewer tests, because

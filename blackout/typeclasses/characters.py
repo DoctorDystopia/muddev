@@ -10,6 +10,8 @@ creation commands.
 
 
 
+import time
+
 from evennia import DefaultCharacter
 from evennia.contrib.game_systems.cooldowns import CooldownHandler
 from evennia.utils import logger
@@ -22,7 +24,31 @@ from systems.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
 from systems.quests.quests import QuestHandler
+from systems.statefeed import resync
 
+
+
+# ─── Playtime accounting ────────────────────────────────────────────────────
+# Evennia keeps no CUMULATIVE playtime figure, so the Character owns one. The
+# summary screen reads it; nothing else writes it.
+#
+# ServerSession.conn_time is not the thing being reimplemented here. It is the
+# current connection's start time, reset by at_login on every reconnect and
+# belonging to a session rather than to a character -- it can answer "how long
+# has this session been up", never "how long has this character been played".
+
+# Persistent total, in seconds, of every COMPLETED puppet session.
+PLAYTIME_TOTAL_ATTR = "total_playtime"
+
+# Unix timestamp stamped at puppet, cleared at unpuppet. A db attribute rather
+# than ndb, and the reason is specific: @reload does NOT unpuppet anyone.
+# ServerSession.at_sync re-attaches the puppet from session.puid explicitly
+# "without any hooks", so neither at_post_unpuppet nor at_post_puppet fires
+# across a reload. A db stamp therefore survives untouched and the session
+# keeps accumulating; an ndb stamp would be wiped, and every reload -- which on
+# this project is many per hour -- would silently discard the time since the
+# last one.
+PLAYTIME_SESSION_START_ATTR = "_playtime_session_start"
 
 
 def _handler_property(handler_class: type, attr_name: str):
@@ -149,6 +175,146 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         self.cooldowns
 
 
+    # ─── Playtime ───────────────────────────────────────────────────────────
+
+    @property
+    def playtime_seconds(self) -> int:
+        """
+        Purpose: Total seconds this character has been played, including the
+        session currently in progress.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            Returns an integer number of seconds. A character that has never
+            been puppeted returns 0.
+
+        Module Globals:
+            PLAYTIME_TOTAL_ATTR, PLAYTIME_SESSION_START_ATTR read.
+
+        Methodology:
+            Banked total plus the elapsed time since the current puppet stamp,
+            if there is one. Computing the live portion on READ rather than
+            ticking it into the database means no timer, no Script, and no
+            write on any path other than unpuppet.
+
+            A stale start stamp -- left behind by a hard crash that skipped
+            at_post_unpuppet -- would inflate this reading until the next clean
+            unpuppet banks it. at_post_puppet overwrites the stamp rather than
+            adding to it, so the error cannot compound across sessions.
+
+        Notes/References:
+            The cost of a crash is therefore at most one session's worth of
+            playtime, misreported until the next login. Accepted rather than
+            defended against with a periodic flush.
+
+        Author: Nick Hobar
+        Creation date: 08/08/2026
+        """
+        banked = self.attributes.get(PLAYTIME_TOTAL_ATTR, default=0) or 0
+        started_at = self.attributes.get(PLAYTIME_SESSION_START_ATTR, default=None)
+
+        if started_at is None:
+            return int(banked)
+
+        elapsed = time.time() - started_at
+
+        if elapsed < 0:
+            elapsed = 0
+
+        total = int(banked + elapsed)
+
+        return total
+
+
+    def at_post_puppet(self, **kwargs) -> None:
+        """
+        Purpose: Stamp the start of a play session, push the world to any
+        graphical client, then run default puppet behaviour.
+
+        Entry:
+            Called by Evennia when an Account takes control of this character.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            PLAYTIME_SESSION_START_ATTR written.
+
+        Methodology:
+            Overwrite rather than preserve any existing stamp -- see the note
+            on stale stamps in playtime_seconds. Guarded so that a failure here
+            can never block a player from logging in.
+
+            The state-feed snapshot is pushed HERE because this is the only
+            moment the server knows a session has taken control of a character.
+            A graphical client subscribes as soon as its socket opens, which is
+            before it has logged in -- at that point ServerSession.at_sync has
+            already run and send_full_state had no puppet to describe. Without
+            this call the client sits subscribed to a world it will not be sent
+            until it happens to walk somewhere.
+
+        Notes/References:
+            send_full_state swallows and logs its own failures and is a no-op
+            for a session with no subscriptions, so this costs a telnet player
+            one function call.
+
+        Author: Nick Hobar
+        Creation date: 08/08/2026
+        """
+        try:
+            self.attributes.add(PLAYTIME_SESSION_START_ATTR, time.time())
+        except Exception as exc:
+            logger.log_err(f"Character.at_post_puppet playtime stamp failed: {exc!r}")
+
+        resync.send_full_state(self)
+
+        parent_class = super()
+        parent_class.at_post_puppet(**kwargs)
+
+
+    def _bank_playtime(self) -> None:
+        """
+        Purpose: Fold the in-progress session into the persistent total.
+
+        Entry:
+            None. Safe to call when no session stamp is present.
+
+        Exit/Returns:
+            No conditions. After this call the session stamp is cleared, so a
+            second call cannot double-count the same session.
+
+        Module Globals:
+            PLAYTIME_TOTAL_ATTR, PLAYTIME_SESSION_START_ATTR read and written.
+
+        Methodology:
+            Read the stamp, add the elapsed time, remove the stamp. Clearing
+            the stamp is what makes this idempotent -- at_post_unpuppet fires
+            once per session normally, but a disconnect racing a manual
+            unpuppet would otherwise bank the same interval twice.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 08/08/2026
+        """
+        started_at = self.attributes.get(PLAYTIME_SESSION_START_ATTR, default=None)
+
+        if started_at is None:
+            return
+
+        elapsed = time.time() - started_at
+
+        if elapsed < 0:
+            elapsed = 0
+
+        banked = self.attributes.get(PLAYTIME_TOTAL_ATTR, default=0) or 0
+        self.attributes.add(PLAYTIME_TOTAL_ATTR, int(banked + elapsed))
+        self.attributes.remove(PLAYTIME_SESSION_START_ATTR)
+
+
     def at_post_unpuppet(self, account, session=None, **kwargs) -> None:
         """
         Purpose: Cleanup hook fired when a player disconnects. Relays to the
@@ -170,6 +336,11 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             disconnecting mid-combat must not be allowed to "combat-log"
             without resolving an escape mechanic.
 
+            The playtime bank rides here for the same reason the combat
+            cleanup does: this is the one hook that fires on every way a
+            session ends. Both are guarded independently so a failure in
+            either cannot swallow the other or the parent hook.
+
         Notes/References:
             None
 
@@ -180,6 +351,11 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             self.at_disconnect_combat_cleanup()
         except Exception as exc:
             logger.log_err(f"Character.at_post_unpuppet combat cleanup failed: {exc!r}")
+
+        try:
+            self._bank_playtime()
+        except Exception as exc:
+            logger.log_err(f"Character.at_post_unpuppet playtime bank failed: {exc!r}")
 
         parent_class = super()
         parent_class.at_post_unpuppet(account, session=session, **kwargs)

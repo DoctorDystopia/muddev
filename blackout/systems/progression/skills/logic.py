@@ -499,3 +499,138 @@ def apply_level_up_side_effects(obj: object, skill_key: str) -> None:
         logger.log_err(
             f"apply_level_up_side_effects: {skill_key} handler failed on {obj}: {exc!r}"
         )
+
+
+# ─── Whole-character rollups ────────────────────────────────────────────────
+# The three routines below are the only ones here that answer a question about
+# EVERY skill at once rather than about one named skill. They exist because the
+# player summary screen is the first caller that needs a number no single skill
+# can produce -- and because deriving "total level" inside a display module
+# would put a rule about skills somewhere other than the skills package.
+
+
+def get_total_level(obj: object) -> int:
+    """
+    Purpose: Sum the character's level across every registered skill.
+
+    Entry:
+        obj is a valid Evennia Character object.
+
+    Exit/Returns:
+        Returns the integer total. A character with no skills yet returns 0.
+
+    Module Globals:
+        SKILL_REGISTRY read.
+
+    Methodology:
+        Iterate the REGISTRY rather than obj.db.skills, so a skill that shipped
+        after this character was created counts as level 0 instead of being
+        omitted -- get_level's ensure_skill call backfills the slot on the way
+        past.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/08/2026
+    """
+    total = 0
+
+    for skill_key in SKILL_REGISTRY:
+        level = get_level(obj, skill_key)
+        total += level
+
+    return total
+
+
+def get_combined_xp(obj: object) -> int:
+    """
+    Purpose: Sum the character's cumulative XP across every registered skill.
+
+    Entry:
+        obj is a valid Evennia Character object.
+
+    Exit/Returns:
+        Returns the integer total.
+
+    Module Globals:
+        SKILL_REGISTRY read.
+
+    Methodology:
+        Delegates per skill to get_total_xp, which reconstructs the cleared
+        levels from the XP curve. Named `combined` rather than `total` because
+        get_total_xp already means "the total for ONE skill" and two functions
+        called total_xp differing only in scope is how a caller picks the wrong
+        one.
+
+    Notes/References:
+        Cost is O(skills x level) since get_total_xp walks the curve per skill.
+        At eight skills and a 127 cap that is trivial, but it is a per-read
+        cost -- do not call this inside a combat tick.
+
+    Author: Nick Hobar
+    Creation date: 08/08/2026
+    """
+    total = 0
+
+    for skill_key in SKILL_REGISTRY:
+        skill_xp = get_total_xp(obj, skill_key)
+        total += skill_xp
+
+    return total
+
+
+def get_closest_to_level_up(obj: object) -> dict:
+    """
+    Purpose: Find the skill that needs the least XP to gain its next level.
+
+    Entry:
+        obj is a valid Evennia Character object.
+
+    Exit/Returns:
+        Returns a dict with keys skill_key, level, current_xp, needed_xp and
+        remaining_xp; or None when every skill is capped.
+
+    Module Globals:
+        SKILL_REGISTRY read.
+        skill_constants.MAX_BASE_SKILL_LEVEL read.
+
+    Methodology:
+        Linear scan for the smallest `remaining`. Capped skills are excluded
+        outright -- calculate_xp_needed keeps returning a finite threshold past
+        the cap, so a maxed skill would otherwise sit at the top of this list
+        forever and the answer would be advice the player cannot act on.
+
+        Ties break on the first key the registry yields. Arbitrary, but stable
+        for a given skill roster, which is what stops the readout flickering
+        between two equal skills on consecutive reads.
+
+    Notes/References:
+        This is the one fact on the summary screen that no per-skill panel can
+        produce, since it needs the whole roster to compare.
+
+    Author: Nick Hobar
+    Creation date: 08/08/2026
+    """
+    best = None
+
+    for skill_key in SKILL_REGISTRY:
+        current_level = get_level(obj, skill_key)
+
+        if current_level >= skill_constants.MAX_BASE_SKILL_LEVEL:
+            continue
+
+        current_xp, needed_xp, remaining_xp = get_xp_level(obj, skill_key)
+
+        if best is not None and remaining_xp >= best["remaining_xp"]:
+            continue
+
+        best = {
+            "skill_key": skill_key,
+            "level": current_level,
+            "current_xp": current_xp,
+            "needed_xp": needed_xp,
+            "remaining_xp": remaining_xp,
+        }
+
+    return best

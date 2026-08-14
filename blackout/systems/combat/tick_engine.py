@@ -26,12 +26,16 @@ actually does, and it is the prerequisite for augmentation-flicking (see
 state at the exact tick it lands.
 """
 
+import time
+from collections import deque
+
 from evennia.scripts.models import ScriptDB
 from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 from twisted.internet.task import LoopingCall
 
 from . import constants as const
+from . import tick_debug
 
 # ─── module constants ──────────────────────────────────────────────────────
 
@@ -149,13 +153,85 @@ class BlackoutTickEngine(DefaultScript):
         self._registry().discard(handler.id)
 
 
+    def is_registered(self, handler) -> bool:
+        """Return True if `handler` is currently in the tick rotation.
+
+        Public because _tick discards a handler from the rotation on ANY
+        exception it raises, and the only symptom of that is combat quietly
+        stopping. The diagnostics in tick_debug read this to tell a stalled
+        fight apart from a handler that has silently fallen out of the loop.
+        """
+        if handler is None or handler.pk is None:
+            return False
+
+        registry = self._registry()
+
+        return handler.id in registry
+
+
+    def registered_count(self) -> int:
+        """Return how many handlers are in the tick rotation."""
+        registry = self._registry()
+
+        return len(registry)
+
+
     # ── the tick ─────────────────────────────────────────────────────────
 
+    def _record_tick_timing(self, started_at: float) -> None:
+        """Advance the tick counter and measure the gap since the last tick.
+
+        The engine had no notion of "now" at all before this: nothing counted
+        ticks and nothing looked at the clock, so there was no fact for a
+        diagnostic to report. All of it lives on ndb, per-process and reset by
+        a reload, exactly like the handler counters it is measuring.
+
+        Cheap enough to run unconditionally — two monotonic reads and a deque
+        append — which is what makes `tickdebug status` a health check over a
+        window rather than a single instantaneous reading.
+        """
+        last_at = self.ndb.last_tick_at
+
+        if last_at is None:
+            interval = const.COMBAT_TICK_SECONDS
+        else:
+            interval = started_at - last_at
+
+        recorded = self.ndb.tick_intervals
+
+        if recorded is None:
+            recorded = deque(maxlen=const.TICK_DEBUG_SAMPLE_WINDOW)
+            self.ndb.tick_intervals = recorded
+
+        recorded.append(interval)
+
+        number = self.ndb.tick_number or 0
+
+        self.ndb.tick_number = number + 1
+        self.ndb.tick_interval = interval
+        self.ndb.last_tick_at = started_at
+
+
     def _tick(self) -> None:
-        """Advance every registered combat handler by one tick."""
+        """Advance every registered combat handler by one tick.
+
+        The old "return early if the registry is empty" guard is gone. An empty
+        registry makes the loop below a no-op anyway, so it bought nothing, and
+        it also skipped the tick counter and the diagnostic hooks — meaning a
+        player watching the tick saw nothing at all until someone attacked, and
+        the interval window went stale exactly when a stalled server is most
+        worth measuring.
+        """
+        started_at = time.monotonic()
+
+        self._record_tick_timing(started_at)
+
+        # Both hooks swallow their own exceptions; see tick_debug's header for
+        # why that guarantee has to hold — anything raised here would errback
+        # the LoopingCall and stop the tick for the whole server.
+        tick_debug.before_tick(self)
+
         registry = self._registry()
-        if not registry:
-            return
 
         for handler_id in list(registry):
             try:
@@ -175,6 +251,10 @@ class BlackoutTickEngine(DefaultScript):
                 # One bad combatant must never stop the server-wide tick.
                 logger.log_trace()
                 registry.discard(handler_id)
+
+        self.ndb.tick_duration = time.monotonic() - started_at
+
+        tick_debug.after_tick(self)
 
 
 # ─── module helpers ────────────────────────────────────────────────────────

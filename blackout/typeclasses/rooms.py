@@ -8,6 +8,8 @@ Rooms are simple containers that has no location of their own.
 from evennia.objects.objects import DefaultRoom
 from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
+from systems.statefeed import events as feed
+from systems.statefeed import subscriptions
 from .objects import ObjectParent
 from .spawners import SPAWNER_REGISTRY, load_all_spawners
 
@@ -161,6 +163,94 @@ class GridTile(ObjectParent, XYZRoom):
         framed = f"{separator}|n\n{map_display}\n{separator}"
 
         looker.msg(text=(framed, {"type": "xymap"}), options=None)
+
+    def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
+        """
+        Purpose: Mirror an arrival into the structured state feed.
+
+        Entry:
+            moved_obj       - the object that just arrived. Already in
+                              self.contents by the time this runs.
+            source_location - where it came from, or None.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Two different messages, because two different audiences need
+            different things. The arriving entity needs to know where it now is
+            -- a whole room, with coordinates and exits. Everyone already
+            standing here needs only a one-entity delta.
+
+            Wrapped, and super() is called FIRST. This hook is on the movement
+            path; a cosmetic feed must never be able to strand a player between
+            rooms, and the base implementation must run even if the feed fails.
+
+            The observer-side sends are gated on the arriving object actually
+            having a subscriber. This hook fires for every item dropped and
+            every NPC that wanders in, and building a room snapshot means
+            walking the room's contents with a tag read apiece -- work that
+            would otherwise be done and thrown away on every dropped rock.
+
+        Notes/References:
+            create_object(location=...) does NOT fire this hook -- only move_to
+            does (see CLAUDE.md). Rooms populated by the xyzgrid spawner
+            therefore produce no arrival events, which is why a subscribing
+            client is sent a full room snapshot rather than being expected to
+            accumulate one from deltas.
+
+        Author: Nick Hobar
+        Creation date: 08/07/2026
+        """
+        super().at_object_receive(moved_obj, source_location, move_type=move_type, **kwargs)
+
+        try:
+            if subscriptions.has_subscribers(moved_obj):
+                feed.emit_room_info(moved_obj)
+                feed.emit_room_contents(moved_obj)
+
+            feed.emit_entity_arrived(self, moved_obj)
+        except Exception:
+            logger.log_trace()
+
+    def at_object_leave(self, moved_obj, target_location, move_type="move", **kwargs):
+        """
+        Purpose: Mirror a departure into the structured state feed.
+
+        Entry:
+            moved_obj       - the object about to leave. Still in self.contents.
+            target_location - where it is going, or None.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The id is read BEFORE super() runs and passed as a bare int. The
+            departing object is excluded from the broadcast because it has not
+            actually moved yet -- Evennia fires this hook at step 4 of move_to,
+            before the location changes -- and it will receive its own new
+            room's snapshot a moment later anyway.
+
+        Notes/References:
+            evennia/objects/objects.py:1224 documents the move_to hook order
+            this depends on.
+
+        Author: Nick Hobar
+        Creation date: 08/07/2026
+        """
+        super().at_object_leave(moved_obj, target_location, move_type=move_type, **kwargs)
+
+        try:
+            departing_id = moved_obj.id
+            feed.emit_entity_left(self, departing_id, exclude=(moved_obj,))
+        except Exception:
+            logger.log_trace()
 
     def at_object_post_spawn(self, prototype=None):
         """

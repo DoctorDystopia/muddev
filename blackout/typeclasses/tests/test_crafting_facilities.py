@@ -35,10 +35,10 @@ class TestCraftMenuFacilityFiltering(EvenniaCommandTest):
         descs = " ".join(opt["desc"] for opt in options)
 
         self.assertIn("rusty scrap metal", descs)
+        self.assertIn("rusty metal dust", descs)
         self.assertNotIn("rusty scrap axe", descs)
         self.assertNotIn("rusty scrap shortsword", descs)
         self.assertNotIn("rusty scrap spear", descs)
-        self.assertNotIn("rusty metal dust", descs)
 
     def test_anvil_menu_shows_only_metalsmith_recipes(self):
         anvil = create_object(AnvilFacility, key="Metalsmith Anvil", location=self.room1)
@@ -51,5 +51,5 @@ class TestCraftMenuFacilityFiltering(EvenniaCommandTest):
         self.assertIn("rusty scrap axe", descs)
         self.assertIn("rusty scrap shortsword", descs)
         self.assertIn("rusty scrap spear", descs)
-        self.assertIn("rusty metal dust", descs)
         self.assertNotIn("rusty scrap metal [", descs)
+        self.assertNotIn("rusty metal dust", descs)
