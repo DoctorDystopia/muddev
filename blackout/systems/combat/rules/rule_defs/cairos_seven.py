@@ -2,10 +2,29 @@
 GNU License or generic module header.
 Author: Danny Hered
 Creation date: 08/14/2026
-Description: Cairo's Seven — a gadget dagger with maxhit 6, 
+Description: Cairo's Seven — a gadget dagger (or relevant egyptian weapon) with maxhit 6, 
              If you hit a 6
              one of several things can happen, 
-             ideally they all have separate rolls and can all happen at once, 
+             flavored for each of the 7 districts of Cairo ideally
+
+             ai summary of districts, official docs in Blackout/01_World/Zones_and_Topology.md: {
+            - North Road — Hegemony HQ, official, imposing, watched.
+            - Trade Town — the commercial heart. Dense, loud, transactional. Legit market is
+            Hegemony-run; the unofficial half (black market) is still undefined but implied
+            to exist right alongside it.
+            - Farsong — old money and Hegemony loyalists. Clean, guarded, affluent.
+            - Thievesgate — the slums. 40 million people in space built for 10 million,
+            9-in-10 unemployed. Overcrowded, desperate, but described as "alive." Enclave's
+            strongest foothold.
+            - Iron Pole — industrial, near-empty of people, drone-patrolled.
+            - Red Square — toxic runoff zone, likely tied to the Mutant Path.
+            - Ghostwalk — mass graveyard, eerie, largely ungoverned.
+            }
+
+             all have separate rolls and can all happen at once?
+             i.e. if you roll a 6, you are guaranteed to get one
+                - then another hidden die roll happens, if that is a 6 you get another
+                - repeats until you roll a non-6, then the action ends
              list of outcomes:
              0) a piece of junk falls off the dagger onto the ground and you lose 10 credits
              1) you get 100 credits
