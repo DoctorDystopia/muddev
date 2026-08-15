@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+#
+# Full map rebuild, driven entirely by scripts/map_manifest.json:
+# stop -> sync grid to manifest -> spawn -> reload.
+#
+# Pass --dry-run to report what a rebuild would add and remove without
+# touching the database or the running server.
+
+set -u
 
 # Resolve the directory of this script, then the game directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
@@ -19,35 +27,29 @@ fi
 # Change to the game directory
 cd "$GAME_DIR" || exit 1
 
-MANIFEST="$SCRIPT_DIR/map_manifest.json"
+MAP_SYNC="$SCRIPT_DIR/map_sync.py"
 
-echo "=== Reading map manifest ==="
-if ! MAPS=$("$PYTHON" -c 'import json, sys; print("\n".join(m["module"] for m in json.load(open(sys.argv[1]))["maps"]))' "$MANIFEST"); then
-    echo "Error: failed to parse $MANIFEST" >&2
-    exit 1
-fi
-if [ -z "$MAPS" ]; then
-    echo "Error: map manifest $MANIFEST contains no maps" >&2
-    exit 1
+DRY_RUN=0
+for ARG in "$@"; do
+    if [ "$ARG" = "--dry-run" ]; then
+        DRY_RUN=1
+    fi
+done
+
+# A dry run only reads, so it neither stops the server nor spawns afterwards.
+if [ "$DRY_RUN" -eq 1 ]; then
+    "$PYTHON" "$MAP_SYNC" --dry-run
+    exit $?
 fi
 
 echo "=== Stopping Evennia ==="
 "$EVENNIA" stop
 
-echo "=== Cleaning up old map data ==="
-if ! "$PYTHON" "$SCRIPT_DIR/xyz_cleanup.py"; then
-    echo "Error: Cleanup failed" >&2
+echo "=== Syncing grid to map manifest ==="
+if ! "$PYTHON" "$MAP_SYNC"; then
+    echo "Error: map sync failed; grid not spawned" >&2
     exit 1
 fi
-
-echo "=== Adding maps ==="
-while IFS= read -r MODULE; do
-    echo "  Adding $MODULE"
-    if ! "$EVENNIA" xyzgrid add "$MODULE"; then
-        echo "Error: failed to add $MODULE" >&2
-        exit 1
-    fi
-done <<< "$MAPS"
 
 echo "=== Spawning maps ==="
 "$EVENNIA" xyzgrid spawn

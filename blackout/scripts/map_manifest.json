@@ -1,6 +1,5 @@
 {
   "maps": [
-    { "module": "world.maps.test_neo_cairo", "zcoord": "trade town sector 1" },
     { "module": "world.maps.test_oasis", "zcoord": "oasis" },
     { "module": "world.maps.test_oasis_outskirts", "zcoord": "oasis_outskirts" }
   ]
