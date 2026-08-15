@@ -27,7 +27,7 @@ MAPSTR = r'''
        /    |
     4 #-----+-#-#---#-#-#-§
        \    | |  \ / \| | |
-    3   #-M-#-#   F   #-#-†
+    3   #-m-#-#   F   #-#-†
         | | | |  / \ /| | |
     2 #-#-#-#-#-#-#-#-#-#-#
       | | | | | | | | | | |
@@ -95,7 +95,7 @@ class MutantRaiderNPCNode(MapNode):
     """
     Custom MapNode for Mutant Raider characters.
     """
-    display_symbol = "|#afff00M|n"
+    display_symbol = "|#afff00m|n"
     prototype = "xyz_room"
 
 
@@ -106,7 +106,7 @@ LEGEND = {
     "A": AnvilFacilityNode,
     "!": NPCNode,
     "§": ShopNPCNode,
-    "M": MutantRaiderNPCNode,
+    "m": MutantRaiderNPCNode,
 }
 
 
