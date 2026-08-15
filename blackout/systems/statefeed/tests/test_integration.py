@@ -135,10 +135,15 @@ class TestEntitySerialisation(EvenniaTest):
     def test_the_body_is_json_safe_throughout(self):
         npc = spawn_mutant_raider(self.room1)
 
-        body = serializers.serialize_entity(npc)
+        body = serializers.serialize_entity(npc, coords=[1, 2, "oasis"])
 
         for key, value in body.items():
-            self.assertIsInstance(value, (int, str, bool), msg=key)
+            self.assertIsInstance(value, (int, str, bool, list), msg=key)
+
+        # A list is only json-safe if what is in it is. `coords` is the one
+        # list field, and it carries two ints and the map NAME.
+        for member in body["coords"]:
+            self.assertIsInstance(member, (int, str))
 
 
 class TestRoomSerialisation(EvenniaTest):

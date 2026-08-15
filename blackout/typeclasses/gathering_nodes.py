@@ -42,6 +42,16 @@ class RustyPole(DefaultObject):
     # own gatherable_key the same way a skill def sets its own `key`.
     gatherable_key = "rusty_pole"
 
+    # What a graphical client may send to work this node, read by
+    # systems/statefeed/serializers.py through getattr. Bare, because
+    # GatheringNodeCmdSet hangs on this object.
+    #
+    # This lives here rather than in the client precisely because every
+    # gathering node in the game today is a CUTTING node, and the next one
+    # will not be. A renderer holding its own verb table would keep sending
+    # `cut` at a mining node until someone remembered to edit it.
+    interact_verb = "cut"
+
 
     def at_object_creation(self) -> None:
         parent_class = super()

@@ -146,7 +146,7 @@ def rooms_within_radius(origin, radius: int) -> list:
 
     Notes/References:
         Rooms can be deleted out from under a cached result by
-        scripts/xyz_cleanup.py, so callers must re-resolve rather than hold
+        scripts/map_sync.py, so callers must re-resolve rather than hold
         these objects indefinitely.
 
     Author: Nick Hobar

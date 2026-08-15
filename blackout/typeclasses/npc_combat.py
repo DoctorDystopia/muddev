@@ -152,6 +152,29 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
         self.db.combat_rules = raw_stats.get(combat_constants.COMBAT_RULES_ATTR, [])
 
 
+    def drop_loot(self, killer=None) -> None:
+        """Roll this NPC's loot table onto the floor of the room it died in.
+
+        The table is named by its NpcDef's `loot_table` field and resolved live
+        through db.npc_key, so an NPC with no table simply drops nothing --
+        every NPC type is opt-in, exactly as respawn_seconds is.
+
+        Wrapped the way at_death wraps its own XP and quest hooks: a broken
+        loot table must never block the death itself, because a skipped
+        respawn() would leave a 0-hp corpse standing and hang the fight (see
+        respawn() below for the full version of that failure).
+        """
+        try:
+            # Local import: systems.loot pulls in world.item_database, and
+            # this module is loaded by SPAWNER_MODULES at load_all_spawners()
+            # time. Matches the local-import style used throughout this module.
+            from systems.loot.drops import award_drops
+
+            award_drops(self, killer)
+        except Exception:
+            logger.log_trace()
+
+
     def respawn(self) -> None:
         """Despawn, and queue a timed comeback if this NpcDef asked for one.
 
@@ -162,8 +185,8 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
         which is why this is the last possible moment (it is the final call in
         CombatEntity.at_death).
 
-        No corpse object is left behind; that, drops, and kill XP are separate
-        work.
+        No corpse object is left behind; that and kill XP are separate work.
+        Drops are handled by drop_loot() above, which at_death runs before this.
         """
         npc_key = self.db.npc_key
         respawn_seconds = self.db.respawn_seconds

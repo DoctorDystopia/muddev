@@ -11,6 +11,7 @@ from evennia import DefaultObject
 from evennia.utils.evmenu import EvMenu
 
 from commands.constants import HELP_CATEGORY_CRAFTING
+from systems.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent
 
 
@@ -197,6 +198,19 @@ class CraftingFacility(ObjectParent, DefaultObject):
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
+
+    # How a graphical client should draw this and what it may send to use it.
+    # Read by systems/statefeed/serializers.py through getattr, so the feed
+    # never imports the typeclass layer. Without these a facility is
+    # indistinguishable from a dropped item and a client offers to pick it up
+    # -- which is exactly what happened to the Foundry Furnace.
+    #
+    # The verb is bare because CraftCmdSet hangs on THIS object: `craft` needs
+    # no target, the cmdset's owner is the target. Subclasses name their own
+    # asset_key so a renderer can tell a furnace from an anvil.
+    asset_kind = ASSET_KIND_STATION
+    asset_key = "crafting_facility"
+    interact_verb = CRAFT_COMMAND_KEY
 
 
     def at_object_creation(self) -> None:

@@ -81,6 +81,19 @@ class NpcDef:
     #          re-creates the NPC on its spawn tile once the deadline passes.
     respawn_seconds: int | None = None
 
+    # ─── Loot ────────────────────────────────────────────────────────
+    # loot_table — key into world/loot_database.LOOT_DB, or None for an NPC
+    #     that drops nothing. Several NpcDefs may name the SAME table; that is
+    #     how a shared rare table works without duplicating data.
+    #
+    #     Deliberately NOT stamped onto the object by create(), unlike
+    #     respawn_seconds. Respawn has to survive the row being deleted, so it
+    #     must be stamped; loot rolls while the NPC still exists, so
+    #     systems/loot/drops.py resolves it live through db.npc_key -> NPC_DB.
+    #     That keeps one owner for the fact and means editing a table plus
+    #     `evennia reload` affects NPCs already standing on the grid.
+    loot_table: str | None = None
+
 
     def to_combat_block(self) -> dict:
         """Assemble the dict shape HostileNPC.apply_combat_stats expects.

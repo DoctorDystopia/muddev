@@ -35,17 +35,24 @@ Inside `blackout/`:
 ## Danger: `blackout/scripts/`
 
 These act on the **live** development database, not a test DB. One of them
-(`xyz_cleanup.py`) deletes map rooms.
+(`map_sync.py`, formerly `xyz_cleanup.py`) deletes map rooms.
 
 **Never write a loop that bulk-imports modules under `blackout/`** — for an
-import check, a linter, a doc pass. Doing so once executed `xyz_cleanup.py` and
-deleted 347 grid rooms. It now has an `if __name__ == "__main__"` guard, but
-treat everything in `scripts/` as import-unsafe and exclude the directory
-explicitly.
+import check, a linter, a doc pass. Doing so once executed the map cleanup
+script and deleted 347 grid rooms. Everything in `scripts/` is now behind an
+`if __name__ == "__main__"` guard, but treat the directory as import-unsafe and
+exclude it explicitly.
 
 Maps are regenerable from `world/maps/*.py` via
 `scripts/clean_and_reload_all_maps.ps1`; accounts and characters are not stored
 there.
+
+**`scripts/map_manifest.json` is the one file that decides which maps exist.**
+Adding a row adds a map; deleting a row removes that map and its rooms on the
+next rebuild. The manifest is parsed by `world/maps/manifest.py` (importable,
+tested) and applied by `scripts/map_sync.py`; the `.ps1`/`.sh` rebuild scripts
+are thin wrappers around it. `scripts/clean_and_reload_all_maps.ps1 -DryRun`
+(`--dry-run` for the `.sh`) reports the diff without touching anything.
 
 ## Testing
 

@@ -89,11 +89,23 @@ CHANNEL_SUBSCRIBED_ACK: str = "blackout_subscribed"
 # How many tiles beyond the observer's own room may have their CONTENTS fed to
 # a client. Zero means the feed shows exactly what the text channel shows.
 #
-# Raising this is a BALANCE CHANGE, not a rendering change: a graphical client
-# would see NPCs through walls that a telnet player cannot. The knob exists so
-# that decision can be made deliberately later without a protocol change.
-# systems/combat/auras/targeting.rooms_within_radius is the tool to implement
-# it with if it is ever raised.
+# This is a BALANCE knob, not a rendering one: above zero, a graphical client
+# is told about NPCs through walls that a telnet player would have to walk to.
+# It is read in exactly one place -- events._visible_rooms -- so the contents
+# list and the add/remove deltas can never be widened out of step with each
+# other.
+#
+# COST. It is (2r+1)^2 rooms per contents emit: 9 at r=1, 49 at r=3, 441 at
+# r=10, which on Blackout's ~95-node maps is the entire map. The room lookup
+# and the contents lookup are one query each regardless of r, so the cost is
+# in the SIZE of the message rather than the number of queries -- but a
+# message naming every entity on the map, rebuilt on every room change, is
+# still the wrong shape. Keep this small; 2-3 tiles is a diorama, 10 is a
+# broadcast.
+#
+# Zero is not a dead setting: rooms_within_radius short-circuits to [origin]
+# without a query, so setting it back costs nothing and restores exactly the
+# text channel's visibility.
 STATEFEED_ENTITY_RADIUS: int = 10
 
 
@@ -158,6 +170,14 @@ ASSET_KIND_NPC: str = "npc"
 ASSET_KIND_CHARACTER: str = "character"
 ASSET_KIND_ROOM: str = "room"
 
+# A fixed installation you use where it stands: a crafting facility, a bank
+# terminal. Distinct from an item for the same reason a gathering node is --
+# it carries `get:false()`, and a client told "item" offers to pocket the one
+# thing that cannot be pocketed. That is not hypothetical: the Foundry Furnace
+# fell through to "item", the 3D pane offered `get Foundry Furnace`, and a
+# superuser test account was allowed to walk off with the furnace.
+ASSET_KIND_STATION: str = "station"
+
 # A gathering node. Distinct from an item because the two afford opposite
 # things: an item is picked up, a node is harvested where it stands and carries
 # `get:false()` precisely so it cannot be pocketed. A client told only "item"
@@ -165,6 +185,23 @@ ASSET_KIND_ROOM: str = "room"
 ASSET_KIND_GATHERABLE: str = "gatherable"
 
 ASSET_KEY_GENERIC: str = "generic"
+
+# The command a client sends to act on an entity, when there is one.
+#
+# These two are the CHARACTER's commands, so they need a target appended:
+# `attack mutant raider`, `get rusty scrap spear`. Everything else that affords
+# anything carries its own cmdset -- a furnace has `craft`, a bank terminal has
+# `bank`, a talkative NPC has `talk` -- and those take no target because the
+# object the cmdset hangs on IS the target. A typeclass declares its own verb
+# in `interact_verb`; see serializers.interact_command.
+#
+# A CHARACTER is absent on purpose, and its absence is the policy: everything
+# else a misclick can do is recoverable, and opening combat on another player
+# is not.
+TARGETED_VERB_BY_KIND: dict = {
+    ASSET_KIND_NPC: "attack",
+    ASSET_KIND_ITEM: "get",
+}
 
 # Room prototype key used when a room carries none. Matches the wildcard
 # behaviour of the ('*', '*') entry in a map's PROTOTYPES table.

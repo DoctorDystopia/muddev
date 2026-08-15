@@ -87,6 +87,9 @@ NPCS = {
         # 30s timed respawn on the raider's spawn tile, driven by
         # BlackoutRespawnManager (systems/spawning/respawn.py).
         respawn_seconds=30,
+        # Drop table in world/loot_defs/hostile.py, resolved at death through
+        # db.npc_key -> NPC_DB -> LOOT_DB by systems/loot/drops.py.
+        loot_table="mutant_raider_drops",
     ),
     "big_mutant": NpcDef(
         key="big_mutant",
@@ -114,6 +117,9 @@ NPCS = {
         # 30s timed respawn on the big mutant's spawn tile, driven by
         # BlackoutRespawnManager (systems/spawning/respawn.py).
         respawn_seconds=30,
+        # Two main-table rolls plus the 1/128 Glass Cannon amulet; see
+        # world/loot_defs/hostile.py.
+        loot_table="big_mutant_drops",
     ),
     "floating_eye": NpcDef(
         key="floating_eye",
@@ -142,5 +148,7 @@ NPCS = {
         # 30s timed respawn on the Floating eye's spawn tile, driven by
         # BlackoutRespawnManager (systems/spawning/respawn.py).
         respawn_seconds=30,
+        # Drop table in world/loot_defs/hostile.py.
+        loot_table="floating_eye_drops",
     ),
 }

@@ -25,15 +25,15 @@ MAPSTR = r'''
            \  | | | | | | |
     5   #---#-#-#-#-#-#-#-#
        /    | | |   | | | |
-    4 #-#---+-#-#---#-#-#-M
+    4 #-#---+-#-#---#-#-#-m
        \|   | |  \ / \| | |
-    3 #-#-M-#-#-M-#-#-#-#-†
+    3 #-#-m-#-#-m-#-#-#-#-†
       | | | | | | | | | | |
-    2 #-#-#-H-e-#-M-#-#-#-#
+    2 #-#-#-M-e-#-m-#-#-#-#
       | | | | | | | | | | |
     1 #-#-#-#-†-#-#-#-#-†-#
       | | | | | | | | | | |
-    0 #-#-M-#-#-#-†-#-#-#-M
+    0 #-#-m-#-#-#-†-#-#-#-m
 
     + 0 1 2 3 4 5 6 7 8 9 1
                           0
@@ -55,14 +55,14 @@ class MutantRaiderNPCNode(MapNode):
     """
     Custom MapNode for Mutant Raider characters.
     """
-    display_symbol = "|#afff00M|n"
+    display_symbol = "|#afff00m|n"
     prototype = "xyz_room"
 
 class BigMutantNPCNode(MapNode):
     """
     Custom MapNode for Big Mutant characters.
     """
-    display_symbol = "|#73804FH|n"
+    display_symbol = "|#73804FM|n"
     prototype = "xyz_room"
 
 class FloatingEyeNPCNode(MapNode):
@@ -75,8 +75,8 @@ class FloatingEyeNPCNode(MapNode):
 
 LEGEND = {
     "†": RustyPoleNode,
-    "M": MutantRaiderNPCNode,
-    "H": BigMutantNPCNode,
+    "m": MutantRaiderNPCNode,
+    "M": BigMutantNPCNode,
     "e": FloatingEyeNPCNode,
 }
 

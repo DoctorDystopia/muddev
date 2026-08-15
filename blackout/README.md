@@ -492,6 +492,92 @@ return on a dictionary truth test before reading any handler state.
 
 ---
 
+## Loot Tables
+
+Kill an NPC and its drops land **on the floor of the room it died in**. Pick
+them up with the stock `get` command.
+
+### How a drop is resolved
+
+`CombatEntity.at_death` → `drop_loot()` → `systems/loot/drops.py`, which reads
+`db.npc_key` → `NPC_DB[key].loot_table` → `LOOT_DB[table_key]` and rolls it.
+Resolution is **live**, not stamped at spawn, so editing a table and running
+`evennia reload` affects NPCs already standing on the grid.
+
+An NPC whose `NpcDef` sets no `loot_table` drops nothing — every NPC is opt-in,
+the same way `respawn_seconds` is.
+
+### The three stages of a table
+
+| Stage | Behaviour |
+|---|---|
+| `always` | Every entry drops on every kill. |
+| `main` | `rolls` weighted picks. `nothing_weight` is the no-drop share of the same pool. |
+| `tertiary` | Independent 1/N rolls; can land alongside a main-table drop. |
+
+Weights are relative integers. The shipped tables are all denominated in 128ths
+so an OSRS wiki drop rate copies across without arithmetic.
+
+### Registering a new table
+
+```python
+# world/loot_defs/hostile.py — example entry
+"scav_drops": LootTableDef(
+    key="scav_drops",
+    always=[LootEntry(item_key="rusty_metal_chunk")],
+    main=[
+        LootEntry(item_key="credits", min_quantity=5, max_quantity=15,
+                  weight=40),
+    ],
+    nothing_weight=88,
+    tertiary=[
+        TertiaryDrop(entry=LootEntry(item_key="glass_cannon_amulet"),
+                     chance_denominator=128),
+    ],
+),
+```
+
+Then name it from the NPC:
+
+```python
+# world/npc_defs/hostile.py
+"scav": NpcDef(key="scav", ..., loot_table="scav_drops"),
+```
+
+Two NpcDefs may name the same table; that is how a shared rare table works
+without duplicating data.
+
+### Check a table without killing anything
+
+```bash
+> py from world.loot_database import LOOT_DB; print(LOOT_DB["mutant_raider_drops"].roll())
+```
+
+### Validate every table
+
+Catches unknown `item_key`s, inverted quantity ranges, unrollable pools, and a
+table registered under a key its def disagrees with:
+
+```bash
+> py from world.loot_database import validate_loot_tables; print(validate_loot_tables() or "clean")
+```
+
+An empty list means clean. This also runs as a test
+(`world.tests.test_loot_database`); at runtime a bad key is logged and skipped
+rather than raised, so a typo never blocks a death.
+
+### Known gaps
+
+- No corpse object and no loot ownership — drops are free for anyone in the
+  room to `get`.
+- No auto-loot. `award_drops` takes `killer` but does not read it yet.
+- Player death drops nothing; `CombatEntity.drop_loot` is a no-op stub for
+  anything that is not a `HostileNPC`.
+- Drops are not published to the state feed, so a graphical client sees the
+  items appear only via the room contents.
+
+---
+
 ## Banking System
 
 ### In-game commands
@@ -499,23 +585,32 @@ return on a dictionary truth test before reading any handler state.
 ```bash
 > deposit rusty metal chunk
 
-Item deposited.
+You deposit rusty metal chunk (x11) into the bank.
 
 > balance
 
 --- Storage ---
-1. rusty metal chunk [2.0kg, 1 credits]
+1. rusty metal chunk (2.0kg, 1g) x11
 
-> withdraw rusty metal chunk
+> withdraw rusty metal chunk 4
 
-You withdraw rusty metal chunk from the bank.
+You withdraw rusty metal chunk (x4) from the bank.
 ```
+
+A quantity is optional and may be a number or `all`. **Omitting it moves
+everything that matches** — the whole stack for a stackable item, and every
+copy of it otherwise. Items that do not stack are separate objects, so a pile
+of eleven scrap plates is eleven bank entries, but one command moves them all.
 
 Opens the full banking menu:
 
 ```bash
 > bank
 ```
+
+The menu's deposit and withdraw lists collapse identical items into one row
+with a total (`rusty scrap metal (x11)`) and then prompt for a quantity, so
+bulk transfers do not need the command form.
 
 ### Python inspection
 
@@ -530,7 +625,7 @@ Opens the full banking menu:
 ### Bulk deposit all items of a type
 
 ```python
-> py [self.bank.deposit(obj) for obj in self.contents if obj.key == "rusty metal chunk"]
+> py self.bank.deposit_many([obj for obj in self.contents if obj.key == "rusty metal chunk"])
 ```
 
 ---
@@ -662,14 +757,39 @@ evennia xyzgrid delete "trade town sector 1"
 .\scripts\clean_and_reload_all_maps.ps1
 ```
 
-Stops Evennia, runs `xyz_cleanup.py`, adds all maps, spawns, and reloads.
+Stops Evennia, runs `map_sync.py`, spawns, and reloads.
 
-**Which maps are rebuilt is controlled by `scripts/map_manifest.json`** —
-each entry carries the map module and its z-coordinate, and is the single
-source of truth for both `clean_and_reload_all_maps.ps1`,
-`clean_and_reload_all_maps.sh`, and `xyz_cleanup.py`. To include or drop a
-map from a rebuild, edit that one file (a z-coordinate is deleted only if
-its map remains listed).
+**`scripts/map_manifest.json` is the only file you edit to add or remove a
+map.** Each row carries a map module and the z-coordinate that module
+declares:
+
+```json
+{
+  "maps": [
+    { "module": "world.maps.test_oasis", "zcoord": "oasis" }
+  ]
+}
+```
+
+- **Add a row** → the module is loaded, its map registered, its rooms spawned.
+- **Delete a row** → that map is removed from the grid and its rooms and exits
+  are deleted on the next rebuild. Anyone standing in a deleted room is sent
+  home rather than deleted.
+
+`map_sync.py` validates before it deletes anything: every listed module must
+import, yield exactly one map, and declare the z-coordinate its row claims.
+It also reads the grid back after registering, so a map that fails to load
+aborts the rebuild instead of quietly vanishing from it.
+
+Preview a rebuild without changing anything (safe while the server is up):
+
+```powershell
+.\scripts\clean_and_reload_all_maps.ps1 -DryRun
+```
+
+```bash
+./scripts/clean_and_reload_all_maps.sh --dry-run
+```
 
 ---
 
@@ -733,8 +853,9 @@ evennia reload
 | Script | Purpose | How to run |
 |---|---|---|
 | `scripts/reload_characters.py` | Re-runs `at_object_creation()` on all Character objects | `py -3 scripts/reload_characters.py` (from `blackout/`) |
-| `scripts/xyz_cleanup.py` | Deletes all rooms tagged with configured z-coordinates | `../evenv/Scripts/python.exe scripts/xyz_cleanup.py` (from `blackout/`) |
-| `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → cleanup → add → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1` |
+| `scripts/map_sync.py` | Reconciles the grid with `map_manifest.json`: removes unlisted maps, purges and re-registers listed ones | `../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run]` (from `blackout/`) |
+| `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → sync → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1 [-DryRun]` |
+| `scripts/clean_and_reload_all_maps.sh` | Same rebuild from Git Bash | `./scripts/clean_and_reload_all_maps.sh [--dry-run]` |
 
 ---
 

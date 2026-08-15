@@ -11,12 +11,15 @@ from evennia.utils import logger
 
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
+from systems.statefeed import events as feed
 
 from . import combat_msg
 from . import constants as const
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
 from .rules.pipeline import resolve_action
+
+
 
 # ─── Weapon-style => XP award table ───────────────────────────────────────
 
@@ -26,6 +29,8 @@ _WEAPON_STYLE_XP_MAP: dict[str, float] = {
     "controlled": const.XP_PER_DAMAGE_CONTROLLED_EACH,
     "defensive": const.XP_PER_DAMAGE_DEFENSIVE,
 }
+
+
 
 def _normalize_xp_skills(xp_skill) -> tuple:
     """Resolve a style's `xp_skill` entry to a tuple of skill keys.
@@ -485,6 +490,13 @@ class ActionAttack(_Action):
         # award that caused it, rather than below the target's death.
         _apply_xp_awards(attacker, awards)
 
+        # Publish the structured mirror of everything announced above, while
+        # the target still exists. This has to sit on the same side of
+        # at_damage as the text for the same reason the text does: a killed NPC
+        # deletes itself in there, and a client resolving target_id afterwards
+        # would have nothing to attach a death animation to.
+        feed.emit_swing(context, result, hp_after, max_hp, killed)
+
         target.at_damage(
             dmg,
             attacker=attacker,
@@ -561,16 +573,20 @@ class ActionAttack(_Action):
         attacker = context.attacker
         hurt = result.self_damage
         hp_before = getattr(attacker, "hp", 0)
+        hp_after = max(0, hp_before - hurt)
+        max_hp = getattr(attacker, "max_hp", 0)
         killed = (hurt >= hp_before)
 
         attacker.msg(combat_msg.format_backfire(attacker, context.weapon, hurt))
         attacker.msg(
             combat_msg.format_hp_status(
                 combat_msg.SELF_HP_LABEL,
-                max(0, hp_before - hurt),
-                getattr(attacker, "max_hp", 0),
+                hp_after,
+                max_hp,
             )
         )
+
+        feed.emit_swing(context, result, hp_after, max_hp, killed, backfire=True)
 
         attacker.at_damage(
             hurt,
@@ -609,6 +625,7 @@ class ActionAttack(_Action):
         elif result.damage <= 0 and not result.self_damage:
             attacker.msg((combat_msg.format_outgoing_miss(attacker, target), {"type": "testing"}))
             target.msg((combat_msg.format_incoming_miss(attacker, target), {"type": "testing"}))
+            feed.emit_miss(context)
 
         # Self-damage lands AFTER the target's, so a swing that both kills and
         # backfires still reads in cause-then-consequence order.
