@@ -3,6 +3,14 @@ GNU License or generic module header.
 Author: Danny Hered
 Creation date: 08/14/2026
 Description: Cairo's Seven — a gadget dagger (or relevant egyptian weapon) with maxhit 6, 
+
+            1 dagger per district
+            combine all daggers for cairo's seven
+            - tied to OSRS equivalent achievement diary, each region has a different set
+
+
+            ---- 
+            separate into different item
              If you hit a 6
              one of several things can happen, 
              flavored for each of the 7 districts of Cairo ideally
