@@ -372,19 +372,22 @@ class TestGlassCannonAmulet(unittest.TestCase):
     def test_the_bonus_raises_the_damage_ceiling(self):
         # End to end: more effective Brawn must mean a bigger max hit.
         wearing = _levels(brawn=60, fortitude=10)
-        rng = ScriptedRandom(randints=[999], randoms=[_ALWAYS_HITS])
+        # roll_damage's first draw is a round-direction coin flip on [0, 1],
+        # not the max-hit ceiling; the ceiling shows up on the second draw.
+        rng = ScriptedRandom(randints=[999, 999, 999], randoms=[_ALWAYS_HITS])
         with_amulet = _context(rng, attacker_rules=(self.rules,),
                                attacker_levels=wearing)
-        without = _context(ScriptedRandom(randints=[999], randoms=[_ALWAYS_HITS]),
-                           attacker_levels=wearing)
+        without = _context(
+            ScriptedRandom(randints=[999, 999, 999], randoms=[_ALWAYS_HITS]),
+            attacker_levels=wearing)
 
         resolve_action(with_amulet)
         resolve_action(without)
 
         # ScriptedRandom ignores the bounds it is given but records them, so
         # the requested max hit is readable straight off the call log.
-        self.assertGreater(with_amulet.rng.randint_calls[0][1],
-                           without.rng.randint_calls[0][1])
+        self.assertGreater(with_amulet.rng.randint_calls[1][1],
+                           without.rng.randint_calls[1][1])
 
     def test_it_composes_with_a_seam_override(self):
         # The point of separating modifiers from seams: a d20 sword owning
