@@ -10,6 +10,7 @@ from evennia import DefaultObject
 from evennia.utils.evmenu import EvMenu
 
 from commands.constants import HELP_CATEGORY_GENERAL
+from systems.statefeed.constants import ASSET_KIND_NPC
 from typeclasses.objects import ObjectParent
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
@@ -189,6 +190,22 @@ class TalkativeNPC(ObjectParent, DefaultObject):
     Creation date: 07/13/2026
     """
 
+    # How a graphical client draws this and what it may send to use it. Read
+    # by systems/statefeed/serializers.py through getattr.
+    #
+    # `asset_kind` has to be declared because nothing else identifies this as
+    # an NPC: it is not an Evennia character, and `db.npc_key` belongs to the
+    # hostile NPC_DB stat blocks, which a shopkeeper has no business carrying.
+    # Without it a shopkeeper served as a generic item, and the 3D pane offered
+    # to pick one up.
+    #
+    # `talk` rather than `attack` is the whole point of declaring the verb here
+    # instead of letting a client infer one from the kind: both are NPCs, and
+    # only one of them is a fight.
+    asset_kind = ASSET_KIND_NPC
+    asset_key = "talkative_npc"
+    interact_verb = TALK_COMMAND_KEY
+
 
     def at_object_creation(self) -> None:
         """
@@ -229,6 +246,8 @@ class ShopkeepNPC(TalkativeNPC):
     An NPC that buys and sells items. Extends TalkativeNPC with
     shop-specific attributes and auto-attaches the cleanup script.
     """
+
+    asset_key = "shopkeeper"
 
     def at_object_creation(self) -> None:
         super().at_object_creation()

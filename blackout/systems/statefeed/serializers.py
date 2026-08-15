@@ -138,6 +138,17 @@ def _classify(entity) -> tuple:
     if gatherable_key:
         return const.ASSET_KIND_GATHERABLE, str(gatherable_key)
 
+    # A typeclass that describes itself wins over anything inferred below.
+    # This is what a Foundry Furnace, a bank terminal and a shopkeeper have in
+    # common: nothing about their storage distinguishes them from a dropped
+    # sword, so they say what they are rather than being guessed at.
+    declared_kind = getattr(entity, "asset_kind", "")
+
+    if declared_kind:
+        declared_key = getattr(entity, "asset_key", "")
+
+        return str(declared_kind), str(declared_key or const.ASSET_KEY_GENERIC)
+
     content_types = getattr(entity, "_content_types", ())
 
     if _CHARACTER_CONTENT_TYPE in content_types:
@@ -153,18 +164,87 @@ def _classify(entity) -> tuple:
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
-def serialize_entity(entity) -> dict:
+def interact_command(entity, kind: str) -> str:
+    """
+    Purpose: Name the command a client should send to act on this entity.
+
+    Entry:
+        entity - a live object.
+        kind   - the entity's ASSET_KIND_*, as decided by _classify.
+
+    Exit/Returns:
+        Returns a complete command string ("craft", "attack mutant raider"), or
+        "" when the entity affords nothing.
+
+    Module Globals:
+        const.TARGETED_VERB_BY_KIND read.
+
+    Methodology:
+        The SERVER names the verb, not the renderer. That is the standing
+        instruction from the gathering-node fix: a client that keeps its own
+        kind-to-verb table has to be edited every time the game grows a new
+        kind of thing, and until it is edited it offers the wrong interaction
+        confidently. The Foundry Furnace is what that looks like in practice --
+        it was offered as `get Foundry Furnace`, and it worked.
+
+        Two sources, in order:
+
+        1. `interact_verb` declared on the typeclass. A verb declared there
+           means the object carries its OWN cmdset -- CraftingFacility has
+           `craft`, BankNode has `bank`, TalkativeNPC has `talk` -- and such a
+           command takes no target, because the object the cmdset hangs on is
+           already the target.
+        2. Otherwise TARGETED_VERB_BY_KIND, whose commands live on the
+           CHARACTER and therefore need the entity named.
+
+        Read with getattr rather than through an import, so this module stays
+        out of the typeclass layer. A class attribute rather than a db
+        attribute is deliberate too: the verb is a fact about the typeclass,
+        not about the instance, so every furnace already in the database gains
+        it without being respawned or migrated.
+
+    Notes/References:
+        The returned string is exactly what a telnet player would type. A
+        graphical client sending it can therefore do nothing a text player
+        cannot, which is what keeps every lock and cooldown honest.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    own_verb = getattr(entity, "interact_verb", "")
+
+    if own_verb:
+        return str(own_verb)
+
+    targeted_verb = const.TARGETED_VERB_BY_KIND.get(kind, "")
+
+    if not targeted_verb:
+        return ""
+
+    return targeted_verb + " " + str(entity.key)
+
+
+def serialize_entity(entity, coords=()) -> dict:
     """
     Purpose: Render one visible entity as a plain dict for a graphical client.
 
     Entry:
         entity - a live, non-deleted object.
+        coords - the [x, y, z] of the room it is standing in, or () when the
+                 caller has not resolved one.
 
     Exit/Returns:
-        Returns a dict of JSON-safe primitives. Always carries id, name, kind
-        and asset. Carries hp / max_hp only when the entity actually has them,
-        so a client can tell "full health" from "not a combatant" -- an item
-        reported at 0/0 would render a health bar on a rock.
+        Returns a dict of JSON-safe primitives. Always carries id, name, kind,
+        asset, interact and coords -- `interact` being "" for anything that
+        affords nothing, which a client reads as "not clickable". Carries
+        hp / max_hp only when the entity actually has them, so a client can
+        tell "full health" from "not a combatant" -- an item reported at 0/0
+        would render a health bar on a rock.
+
+        `coords` became load-bearing when STATEFEED_ENTITY_RADIUS stopped
+        being 0: once the feed reports entities the observer is not standing
+        with, a client has no way to place them without being told where they
+        are, and would stack the whole neighbourhood onto the player's tile.
 
     Module Globals:
         None.
@@ -187,6 +267,8 @@ def serialize_entity(entity) -> dict:
         "name": str(entity.key),
         "kind": kind,
         "asset": asset_key,
+        "interact": interact_command(entity, kind),
+        "coords": list(coords),
     }
 
     max_hp = getattr(entity, "max_hp", None)
@@ -196,6 +278,71 @@ def serialize_entity(entity) -> dict:
         body["max_hp"] = max_hp
 
     return body
+
+
+def serialize_area(rooms, exclude=()) -> list:
+    """
+    Purpose: Render everything visible across a group of rooms.
+
+    Entry:
+        rooms   - room objects, typically from targeting.rooms_within_radius.
+        exclude - objects to leave out (typically the observer themself).
+
+    Exit/Returns:
+        Returns a flat list of entity dicts, each carrying the coords of the
+        room it is standing in. Empty list when `rooms` is empty.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        ONE database query for the contents of every room, not one per room.
+        A radius of 3 is 49 rooms and a radius of 10 is 441; asking each of
+        them for `.contents` in turn is the shape of query storm that
+        targeting.rooms_within_radius went out of its way to avoid on the room
+        lookup itself, and it would be undone here.
+
+        Exits are skipped for the same reason serialize_contents skips them:
+        an exit is a real object sitting in room.contents, but it is topology
+        rather than an occupant.
+
+        Coordinates are resolved per ROOM and shared by everything standing in
+        it, rather than read per entity. An entity's own location lookup would
+        be a query each, which is the storm again by another route.
+
+    Notes/References:
+        A room that is off-grid contributes an empty coords list, which is the
+        same thing room_coords returns and which a client already has to
+        handle for its own room.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    from evennia.objects.models import ObjectDB
+
+    coords_by_room = {}
+
+    for room in rooms:
+        coords_by_room[room.id] = room_coords(room)
+
+    if not coords_by_room:
+        return []
+
+    contents = ObjectDB.objects.filter(db_location__id__in=list(coords_by_room))
+    entities = []
+
+    for obj in contents:
+        if obj in exclude:
+            continue
+
+        if obj.destination is not None:
+            continue
+
+        coords = coords_by_room.get(obj.location.id, [])
+        entry = serialize_entity(obj, coords=coords)
+        entities.append(entry)
+
+    return entities
 
 
 def serialize_contents(room, exclude=()) -> list:
@@ -219,8 +366,9 @@ def serialize_contents(room, exclude=()) -> list:
         client drawing a mesh for every doorway.
 
     Notes/References:
-        Only ever called with the observer's OWN room while
-        STATEFEED_ENTITY_RADIUS is 0. See that constant before widening this.
+        Single-room rendering. serialize_area is what the radius-aware feed
+        calls; this one remains for the callers that genuinely mean one room,
+        and it stamps that room's coords so both produce the same entity shape.
 
     Author: Nick Hobar
     Creation date: 08/07/2026
@@ -228,6 +376,7 @@ def serialize_contents(room, exclude=()) -> list:
     if room is None:
         return []
 
+    coords = room_coords(room)
     entities = []
 
     for obj in room.contents:
@@ -237,7 +386,7 @@ def serialize_contents(room, exclude=()) -> list:
         if obj.destination is not None:
             continue
 
-        entry = serialize_entity(obj)
+        entry = serialize_entity(obj, coords=coords)
         entities.append(entry)
 
     return entities

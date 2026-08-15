@@ -388,6 +388,10 @@ class CombatEntity:
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death quest update failed: {exc!r}")
 
+        # Drops must roll BEFORE respawn. HostileNPC.respawn() deletes the row,
+        # and the loot table is resolved off db.npc_key while it still exists.
+        self.drop_loot(killer)
+
         # Tear combat down BEFORE respawn. respawn() restores HP to max, so
         # running it first made the corpse read as alive again and the fight
         # simply continued -- check_stop_combat's "you lost" branch was
@@ -424,6 +428,43 @@ class CombatEntity:
 
         Author: Nick Hobar
         Creation date: 07/26/2026
+        """
+        pass
+
+
+    def drop_loot(self, killer=None) -> None:
+        """
+        Purpose: Subclass-overridable hook for leaving loot behind on death.
+        Default behaviour is to drop nothing.
+
+        Entry:
+            killer - the entity that landed the killing blow, or None for an
+                     environmental or self-inflicted death (at_death has
+                     already normalised a self-kill to None by this point).
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A no-op stub for the same reason respawn() is: what death leaves
+            behind differs completely between an NPC (a drop table) and a
+            Player (a death penalty Blackout has no policy for yet), and the
+            base class should assert neither. HostileNPC overrides this to roll
+            its NpcDef's loot_table.
+
+        Notes/References:
+            Called from at_death BEFORE leave_combat/respawn, because
+            HostileNPC.respawn() deletes the database row this reads
+            db.npc_key off.
+
+            A Player override is where inventory-drop-on-death would land; the
+            hook exists now so that work needs no change to at_death.
+
+        Author: Nick Hobar
+        Creation date: 08/14/2026
         """
         pass
 

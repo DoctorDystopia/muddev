@@ -492,6 +492,92 @@ return on a dictionary truth test before reading any handler state.
 
 ---
 
+## Loot Tables
+
+Kill an NPC and its drops land **on the floor of the room it died in**. Pick
+them up with the stock `get` command.
+
+### How a drop is resolved
+
+`CombatEntity.at_death` → `drop_loot()` → `systems/loot/drops.py`, which reads
+`db.npc_key` → `NPC_DB[key].loot_table` → `LOOT_DB[table_key]` and rolls it.
+Resolution is **live**, not stamped at spawn, so editing a table and running
+`evennia reload` affects NPCs already standing on the grid.
+
+An NPC whose `NpcDef` sets no `loot_table` drops nothing — every NPC is opt-in,
+the same way `respawn_seconds` is.
+
+### The three stages of a table
+
+| Stage | Behaviour |
+|---|---|
+| `always` | Every entry drops on every kill. |
+| `main` | `rolls` weighted picks. `nothing_weight` is the no-drop share of the same pool. |
+| `tertiary` | Independent 1/N rolls; can land alongside a main-table drop. |
+
+Weights are relative integers. The shipped tables are all denominated in 128ths
+so an OSRS wiki drop rate copies across without arithmetic.
+
+### Registering a new table
+
+```python
+# world/loot_defs/hostile.py — example entry
+"scav_drops": LootTableDef(
+    key="scav_drops",
+    always=[LootEntry(item_key="rusty_metal_chunk")],
+    main=[
+        LootEntry(item_key="credits", min_quantity=5, max_quantity=15,
+                  weight=40),
+    ],
+    nothing_weight=88,
+    tertiary=[
+        TertiaryDrop(entry=LootEntry(item_key="glass_cannon_amulet"),
+                     chance_denominator=128),
+    ],
+),
+```
+
+Then name it from the NPC:
+
+```python
+# world/npc_defs/hostile.py
+"scav": NpcDef(key="scav", ..., loot_table="scav_drops"),
+```
+
+Two NpcDefs may name the same table; that is how a shared rare table works
+without duplicating data.
+
+### Check a table without killing anything
+
+```bash
+> py from world.loot_database import LOOT_DB; print(LOOT_DB["mutant_raider_drops"].roll())
+```
+
+### Validate every table
+
+Catches unknown `item_key`s, inverted quantity ranges, unrollable pools, and a
+table registered under a key its def disagrees with:
+
+```bash
+> py from world.loot_database import validate_loot_tables; print(validate_loot_tables() or "clean")
+```
+
+An empty list means clean. This also runs as a test
+(`world.tests.test_loot_database`); at runtime a bad key is logged and skipped
+rather than raised, so a typo never blocks a death.
+
+### Known gaps
+
+- No corpse object and no loot ownership — drops are free for anyone in the
+  room to `get`.
+- No auto-loot. `award_drops` takes `killer` but does not read it yet.
+- Player death drops nothing; `CombatEntity.drop_loot` is a no-op stub for
+  anything that is not a `HostileNPC`.
+- Drops are not published to the state feed, so a graphical client sees the
+  items appear only via the room contents.
+
+---
+
 ## Banking System
 
 ### In-game commands

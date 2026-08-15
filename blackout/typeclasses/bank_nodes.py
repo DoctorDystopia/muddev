@@ -8,6 +8,7 @@ Description: BankNode typeclass and the banking commands attached to it.
 from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_BANKING
+from systems.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
@@ -163,6 +164,16 @@ class BankNode(ObjectParent, DefaultObject):
     """
     A bank terminal where players can securely store and retrieve items.
     """
+
+    # How a graphical client draws this and what it may send to use it. Read
+    # by systems/statefeed/serializers.py through getattr. `bank` is bare
+    # because BankCmdSet hangs on this object -- the cmdset's owner is already
+    # the target. Without these the terminal is served as a generic item and a
+    # client offers `get`, on a thing that carries `get:false()`.
+    asset_kind = ASSET_KIND_STATION
+    asset_key = "bank_terminal"
+    interact_verb = CmdBank.key
+
     def at_object_creation(self):
         parent_class = super()
         parent_class.at_object_creation()

@@ -70,6 +70,33 @@ class BaseItem(Object):
         self.attributes.add("quantity", int(value))
 
 
+    def get_display_name(self, looker=None, **kwargs):
+        """
+        Purpose: Suffix a stackable item's name with its stack size, so
+        a stack reads "credits (x85)" wherever Evennia renders this
+        object's name -- room look, get/drop announcements, examine.
+
+        Entry:
+            looker is the Object doing the looking, or None.
+
+        Exit/Returns:
+            Returns the base display name unchanged for a non-stackable
+            item or a stack of one. Otherwise returns
+            "{name} (x{quantity})", matching the "(xN)" convention
+            already used by the inventory grid and drop messages.
+
+        Notes/References: keeps quantity formatting in one place
+        (BaseItem) rather than duplicating it per display surface.
+
+        Author: Nick Hobar
+        Creation date: 08/14/2026
+        """
+        name = super().get_display_name(looker, **kwargs)
+        if self.is_stackable and self.quantity > 1:
+            return f"{name} (x{self.quantity})"
+        return name
+
+
 
 class EquippableItem(BaseItem):
     """Items that can be worn or wielded."""

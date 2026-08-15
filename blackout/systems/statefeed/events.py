@@ -18,8 +18,9 @@ Description: The adapter layer — game events in, payloads out, emitted.
              Nothing here raises; emit() swallows and logs.
 """
 
+from . import constants as const
 from . import serializers, subscriptions
-from .emit import emit, emit_to_room
+from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
     CharSummaryPayload,
@@ -40,6 +41,52 @@ AURA_EVENT_PULSE: str = "pulse"
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
+
+def _visible_rooms(room) -> list:
+    """
+    Purpose: The rooms whose contents an observer standing in `room` may see.
+
+    Entry:
+        room - a room object, or None.
+
+    Exit/Returns:
+        Returns a list of rooms, always including `room` itself. Returns []
+        for a None room.
+
+    Module Globals:
+        const.STATEFEED_ENTITY_RADIUS read.
+
+    Methodology:
+        The single place STATEFEED_ENTITY_RADIUS is read, so raising or
+        lowering it moves both the contents list and the deltas together.
+        Until this existed the constant was set to 10 and consulted nowhere:
+        the docstring beside it described a behaviour the code did not have.
+
+        rooms_within_radius short-circuits to [origin] for a radius of 0 and
+        for an off-grid room, so the zero case costs no query and the
+        hand-built-area case degrades to exactly the old behaviour.
+
+        Imported inside the routine. systems.combat.auras.targeting reaches
+        the xyzgrid contrib's models, and this module is imported by
+        typeclasses/mixins.py, which every Character and NPC pulls in at
+        startup -- a module-scope import would drag those models into
+        typeclass import time and couple the two systems' import order.
+
+    Notes/References:
+        Raising the radius is a BALANCE change, not a rendering one: a
+        graphical client is told about NPCs a telnet player would have to walk
+        to. See the constant's own comment.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    if room is None:
+        return []
+
+    from systems.combat.auras.targeting import rooms_within_radius
+
+    return rooms_within_radius(room, const.STATEFEED_ENTITY_RADIUS)
+
 
 def _style_name(context) -> str:
     """Name the active combat style as a player would recognise it.
@@ -282,30 +329,42 @@ def emit_room_info(observer, force: bool = False) -> int:
 
 
 def emit_room_contents(observer, force: bool = False) -> int:
-    """Publish the full list of what the observer can see in their room.
+    """Publish the full list of what the observer can see around them.
 
     The "list" half of list-then-delta: sent on arrival and on resync, with
     emit_entity_arrived / emit_entity_left carrying the changes in between.
     The observer is excluded from their own list -- a client already knows
     where it put the camera.
+
+    "Around them" is STATEFEED_ENTITY_RADIUS tiles, not one room. Every entity
+    carries the coords of the room it is in, because a client given a
+    neighbourhood and no positions would stack all of it on the player's tile.
     """
     room = getattr(observer, "location", None)
 
     if room is None:
         return 0
 
-    entities = serializers.serialize_contents(room, exclude=(observer,))
+    rooms = _visible_rooms(room)
+    entities = serializers.serialize_area(rooms, exclude=(observer,))
     payload = RoomPlayersPayload(entities=entities)
 
     return emit(observer, payload, force=force)
 
 
 def emit_entity_arrived(room, entity) -> int:
-    """Tell everyone already in `room` that `entity` just appeared."""
-    body = serializers.serialize_entity(entity)
-    payload = RoomPlayerAddPayload(entity=body)
+    """Tell everyone who can see `room` that `entity` just appeared.
 
-    return emit_to_room(room, payload, exclude=(entity,))
+    Reaches the same radius emit_room_contents reports over. A narrower
+    broadcast would leave observers who were told about this room's contents
+    never hearing them change.
+    """
+    coords = serializers.room_coords(room)
+    body = serializers.serialize_entity(entity, coords=coords)
+    payload = RoomPlayerAddPayload(entity=body)
+    rooms = _visible_rooms(room)
+
+    return emit_to_area(rooms, payload, exclude=(entity,))
 
 
 def emit_entity_left(room, entity_id: int, exclude=()) -> int:
@@ -330,6 +389,11 @@ def emit_entity_left(room, entity_id: int, exclude=()) -> int:
         the object may already be deleted, and serialising it would either
         raise or produce a row of defaults.
 
+        Reaches the same radius emit_room_contents reports over. This is the
+        half that must not be missed: an observer told about a distant NPC and
+        never told it died renders it standing there indefinitely, since
+        nothing else is scheduled that would correct them.
+
     Notes/References:
         None.
 
@@ -337,8 +401,9 @@ def emit_entity_left(room, entity_id: int, exclude=()) -> int:
     Creation date: 08/07/2026
     """
     payload = RoomPlayerRemovePayload(entity_id=entity_id)
+    rooms = _visible_rooms(room)
 
-    return emit_to_room(room, payload, exclude=exclude)
+    return emit_to_area(rooms, payload, exclude=exclude)
 
 
 def emit_aura(owner, event: str, aura_key: str, radius: int,
