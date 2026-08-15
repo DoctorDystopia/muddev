@@ -43,6 +43,17 @@ _TOY_SWORD_COMBAT_STYLES = {
     },
 }
 
+_TOY_CAIROS_SEVEN = {
+    "bonk": {
+        "attack_type": combat_constants.ATTACK_TYPE_CRUSH,
+        "weapon_style": "aggressive",
+        "weapon_style_xp_skill": combat_constants.AGGRESSIVE_XP_SKILLS,
+        "weapon_style_level_boost": (
+            combat_constants.MELEE_WEAPON_STYLE_LEVEL_BOOST_AGGRESSIVE
+        ),
+    },
+}
+
 # A gadget carries no stat bonuses of its own.
 _NO_COMBAT_BONUSES = {
     "stab_attack_bonus": 0,
@@ -95,5 +106,25 @@ ITEMS = {
         combat_styles=_TOY_SWORD_COMBAT_STYLES,
         default_combat_style="bonk",
         combat_rules=["toy_sword"],
+    ),
+    "cairos_seven": ItemDef(
+        key="cairos_seven",
+        name="Cairo's Seven",
+        typeclass="typeclasses.items.WeaponItem",
+        desc=("A small dagger with an engraving that reads: `From Farsong to Thievesgate, try your luck`"),
+        value=1000,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="gadget",
+        tier=1,
+        req_level=0,
+        tags=[("cairos_seven", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses=dict(_NO_COMBAT_BONUSES),
+        combat_styles=_GADGET_COMBAT_STYLES,
+        default_combat_style="hope",
+        combat_rules=["cairos_seven"],
     ),
 }
