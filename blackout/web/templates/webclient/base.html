@@ -128,13 +128,28 @@ JQuery available.
         empty one, so a script tag put there is silently dropped and the pane
         never registers.
 
-        Order here is load-bearing twice over. three.js defines the global
-        `THREE` that blackout3d.js reads when its pane is built, and
-        blackout3d.js must come after default_out.js -- see the bindChannel
-        comment in that file for what claims the feed messages otherwise.
+        Order here is load-bearing three times over. three.js defines the
+        global `THREE` that both panes read when they are built;
+        blackout_meshes.js defines the global `blackoutMeshes` that
+        blackout_inventory.js resolves item meshes through, and needs THREE
+        itself at definition time; and both panes must come after
+        default_out.js -- see the bindChannel comment in blackout3d.js for what
+        claims the feed messages otherwise.
+
+        blackout_meshes.js and blackout_channels.js are NOT plugins. They
+        register nothing with plugin_handler and have no init(); they are plain
+        globals the panes call. The first is why the mesh drawn for an item in
+        the inventory and the mesh drawn for the same item on the ground can
+        never disagree. The second is why two panes cannot silently take a feed
+        channel off each other -- Evennia's emitter keeps ONE listener per
+        channel name, so binding the same name twice is a theft, not a second
+        subscription. Both must load before any plugin that calls them.
         -->
         <script src={% static "webclient/js/vendor/three.min.js" %} language="javascript" type="text/javascript" charset="utf-8"></script>
+        <script src={% static "webclient/js/blackout_channels.js" %} language="javascript" type="text/javascript" charset="utf-8"></script>
+        <script src={% static "webclient/js/blackout_meshes.js" %} language="javascript" type="text/javascript" charset="utf-8"></script>
         <script src={% static "webclient/js/plugins/blackout3d.js" %} language="javascript" type="text/javascript" charset="utf-8"></script>
+        <script src={% static "webclient/js/plugins/blackout_inventory.js" %} language="javascript" type="text/javascript" charset="utf-8"></script>
     {% endblock %}
 
     <script src="https://cdn.rawgit.com/ejci/favico.js/master/favico-0.3.10.min.js" language="javascript" type="text/javascript" charset="utf-8"></script>

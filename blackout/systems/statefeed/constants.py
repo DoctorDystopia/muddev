@@ -33,6 +33,17 @@ CHANNEL_CHAR_STATUS: str = "char_status"              # -> Char.Status
 # Char.Vitals will look for it there.
 CHANNEL_CHAR_SUMMARY: str = "char_summary"            # -> Char.Summary
 
+# The carried inventory grid and the equipment slots, together, as one
+# snapshot. IRE's published name for this is Char.Items.List, and Evennia's
+# GMCP encoder turns `char_items_list` into exactly that (it capitalises each
+# underscore-separated part), so a Mudlet user gets a channel their client
+# already understands.
+#
+# This is the one place the repo's "say inventory, never bag/items" rule loses,
+# and it loses only on the WIRE name. Everything Blackout owns inside the
+# payload says inventory -- see ITEM_LOCATION_INVENTORY below.
+CHANNEL_CHAR_ITEMS: str = "char_items_list"           # -> Char.Items.List
+
 # Blackout-specific extensions.
 CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
@@ -49,6 +60,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_VITALS,
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
+    CHANNEL_CHAR_ITEMS,
     CHANNEL_MAP,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
@@ -136,6 +148,18 @@ STATEFEED_ENTITY_RADIUS: int = 10
 #     player opens their dossier and on resync, nowhere else. Nothing is
 #     scheduled behind a dropped one, so a cap here would mean a player pressing
 #     `score` twice in a second and getting no answer the second time.
+#   - CHANNEL_CHAR_ITEMS is uncapped, and this is the one most likely to be
+#     "fixed" by someone reading only the first paragraph. It LOOKS like a
+#     continuous value -- a whole-grid snapshot, each superseding the last --
+#     but nothing is scheduled behind a dropped one. Pick an item up, lose that
+#     send to a cap, and the pane shows a grid missing the item until the
+#     player happens to act again. That is the room_players bug exactly.
+#
+#     It is self-limiting anyway: sends are driven by discrete player actions
+#     bounded by the 0.6s tick. If a gathering loop ever does make it chatty,
+#     the fix is a COALESCING cap -- schedule a trailing send -- not a dropping
+#     one. emit.py has no such mechanism today, and adding one is a bigger
+#     change than the entry in this dict would suggest.
 CHANNEL_MIN_INTERVAL_SECONDS: dict = {
     CHANNEL_CHAR_VITALS: 0.5,
     CHANNEL_CHAR_STATUS: 1.0,
@@ -206,3 +230,53 @@ TARGETED_VERB_BY_KIND: dict = {
 # Room prototype key used when a room carries none. Matches the wildcard
 # behaviour of the ('*', '*') entry in a map's PROTOTYPES table.
 ROOM_KIND_DEFAULT: str = "default"
+
+
+# ─── Inventory ───────────────────────────────────────────────────────────────
+
+# The second tier of the client's mesh lookup, after the per-item asset key.
+#
+# These are already the TAG CATEGORIES every ItemDef declares -- a spear is
+# tagged ("rusty_scrap_spear", "weapon") -- so this restates no fact the item
+# database does not already own. It exists as an explicit set because a live
+# object also carries Evennia's own from_prototype tag, and the family reader
+# has to be able to tell a family category from an engine one.
+#
+# A key absent here is not an error: the client falls through to a generic mesh
+# labelled with the item's real name, which is the same guarantee the world
+# pane already gives. Adding a family here without adding a mesh for it
+# client-side is therefore harmless.
+ITEM_FAMILY_WEAPON: str = "weapon"
+ITEM_FAMILY_ARMOR: str = "armor"
+ITEM_FAMILY_JEWELLERY: str = "jewellery"
+ITEM_FAMILY_MATERIAL: str = "crafting_material"
+ITEM_FAMILY_TOOL: str = "crafting_tool"
+ITEM_FAMILY_CURRENCY: str = "currency"
+
+ITEM_FAMILIES: frozenset = frozenset((
+    ITEM_FAMILY_WEAPON,
+    ITEM_FAMILY_ARMOR,
+    ITEM_FAMILY_JEWELLERY,
+    ITEM_FAMILY_MATERIAL,
+    ITEM_FAMILY_TOOL,
+    ITEM_FAMILY_CURRENCY,
+))
+
+ITEM_FAMILY_GENERIC: str = "generic"
+
+# The verbs an item in the inventory affords, as (label, command template).
+#
+# `{slot}` is substituted with the item's 1-BASED grid position and `{name}`
+# with its key. One-based because that is what the text grid prints
+# (display.py renders `slot_idx + 1`) and what the commands parse, so what the
+# pane sends is exactly what the player sees beside the item when they type
+# `inventory`. The 0-based index in the payload is an array position, and the
+# conversion happens here rather than in the client.
+INVENTORY_ACTION_EQUIP: tuple = ("Equip", "equip {slot}")
+INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {name}")
+INVENTORY_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
+
+# What an equipped item affords. Keyed by slot value rather than grid index,
+# because an equipped item has no grid position to name.
+EQUIPMENT_ACTION_UNEQUIP: tuple = ("Unequip", "unequip {equip_slot}")
+EQUIPMENT_ACTION_INSPECT: tuple = ("Inspect", "look {name}")

@@ -1366,8 +1366,21 @@ let blackout3d = (function () {
     // the scripts block below it.
     //
     // Binding by name sidesteps that ordering entirely.
+    // A CHANNEL HAS EXACTLY ONE LISTENER. DefaultEmitter.on does
+    // `listeners[cmdname] = listener` — it REPLACES rather than appends. That
+    // matters here more than anywhere else, because bindAcknowledged below
+    // deliberately claims channels this file has never heard of: without a
+    // check, this pane would take a channel that belongs to another one the
+    // moment the server started acknowledging it.
+    //
+    // It has already happened in the other direction — see blackout_channels.js
+    // for what a silently stolen channel looks like from the losing side.
     const bindChannel = function (channel) {
         if (!channel || boundChannels[channel]) {
+            return;
+        }
+        if (window.blackoutChannels &&
+                !window.blackoutChannels.claim(channel, "blackout3d")) {
             return;
         }
         boundChannels[channel] = true;

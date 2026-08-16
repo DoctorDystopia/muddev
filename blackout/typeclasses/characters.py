@@ -24,6 +24,7 @@ from systems.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
 from systems.quests.quests import QuestHandler
+from systems.statefeed import events as feed
 from systems.statefeed import resync
 
 
@@ -368,6 +369,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             except Exception:
                 pass
         super().at_object_receive(moved_obj, source_location, move_type=move_type, **kwargs)
+        self._publish_inventory()
 
 
     def at_object_leave(self, moved_obj, target_location, move_type="move", **kwargs):
@@ -377,6 +379,46 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             except Exception:
                 pass
         super().at_object_leave(moved_obj, target_location, move_type=move_type, **kwargs)
+        self._publish_inventory()
+
+
+    def _publish_inventory(self) -> None:
+        """
+        Purpose: Push a fresh inventory snapshot to this character's graphical
+        clients after an item has finished moving.
+
+        Entry:
+            Called from at_object_receive and at_object_leave, AFTER super().
+
+        Exit/Returns:
+            No return value. Never raises.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            After super(), not before, and not inside the try block above it.
+            add_item merges a stackable pickup by writing onto the surviving
+            stack and DELETING the incoming object; a snapshot taken mid-merge
+            would describe a grid holding an object that is about to stop
+            existing. Waiting until the move has completed is what makes the
+            snapshot true.
+
+            InventoryHandler deliberately does not publish from its own
+            mutators for that same reason -- see EquipmentHandler._publish,
+            which documents the other half of the asymmetry.
+
+        Notes/References:
+            emit_inventory pre-checks the subscription, so on a telnet-only
+            server this costs one getattr per item movement.
+
+        Author: Nick Hobar
+        Creation date: 08/15/2026
+        """
+        try:
+            feed.emit_inventory(self)
+        except Exception:
+            logger.log_trace()
 
 
     def at_object_delete(self) -> None:

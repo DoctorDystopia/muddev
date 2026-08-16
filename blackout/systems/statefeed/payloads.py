@@ -158,6 +158,52 @@ class CharSummaryPayload(_Payload):
 
 
 @dataclass
+class CharItemsPayload(_Payload):
+    """The whole carried inventory and every equipment slot. Char.Items.List.
+
+    A SNAPSHOT, deliberately, where RoomPlayersPayload is the list half of a
+    list-then-delta pair. The reasoning is inverted from that channel's and is
+    worth stating, because "be consistent with room_players" is the obvious
+    wrong answer here.
+
+    room_players uses deltas because with a radius of 10 the full list is large
+    and the mutation points are few and disciplined: an entity enters a room or
+    leaves it. The inventory is the other way round on both counts. The full
+    list is 32 slots plus 11 equipment slots -- a couple of kilobytes, well
+    inside the 65535-byte inbound buffer that forces MapChunkPayload to chunk --
+    while the mutation points are many and undisciplined. InventoryHandler
+    .add_item merges stacks with a bare `existing.quantity += additional` and
+    fires no hook at all; crafting consumes materials directly; banking moves
+    items in bulk; equipping displaces items back into the grid. A delta
+    protocol would need an emit at every one of those and would rot silently at
+    the first one anybody forgot.
+
+    A missed delta on an NPC three tiles away is a cosmetic ghost. A missed
+    delta on the player's own inventory is a phantom item they will try to
+    click. Sending the whole grid is cheap and cannot desync.
+
+    `items` and `equipped` ship together rather than as two messages because
+    equipping is a single transaction that changes both, and two messages could
+    be rendered half-applied.
+
+    `equip_slots` is the EMPTY FRAME list -- every wield location in display
+    order, whether or not something is in it. It ships because the alternative
+    is a client-side table restating SLOT_DISPLAY_ORDER, which is the exact
+    shape of duplication that made the client's old verb table wrong within a
+    week. Adding a slot to WieldLocation should light up a new frame in the 3D
+    pane with no client edit at all.
+    """
+
+    channel = const.CHANNEL_CHAR_ITEMS
+
+    slots_total: int = 0
+    slots_used: int = 0
+    items: list = field(default_factory=list)        # the carried grid
+    equipped: list = field(default_factory=list)     # what is worn
+    equip_slots: list = field(default_factory=list)  # every frame to draw
+
+
+@dataclass
 class MapChunkPayload(_Payload):
     """One slice of a Z-level's grid. Blackout.Map.
 

@@ -115,10 +115,11 @@ def send_full_state(observer) -> int:
         that receives room_info before it has the grid has nowhere to put the
         highlight, and would either buffer or draw a floating tile.
 
-        The dossier goes last, and is the only send here that can decline to
-        happen: emit_summary pre-checks the subscription because building a
-        summary reads every handler on the character. Everything above it is
-        cheap enough to build unconditionally.
+        The dossier and the inventory go last, and are the only sends here
+        that can decline to happen: both pre-check the subscription because
+        building them is expensive -- the summary reads every handler on the
+        character, and the inventory syncs the grid and walks every item's
+        tags. Everything above them is cheap enough to build unconditionally.
 
         Wrapped, like every other feed path. at_sync runs on every single
         session sync, including during server startup; a failure here must
@@ -138,6 +139,7 @@ def send_full_state(observer) -> int:
         sent += _send_room(observer)
         sent += _send_self(observer)
         sent += events.emit_summary(observer, force=True)
+        sent += events.emit_inventory(observer, force=True)
 
         return sent
     except Exception:

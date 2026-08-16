@@ -168,6 +168,46 @@ class InventoryHandler:
             return obj
 
 
+    def move_slot(self, from_idx, to_idx):
+        """
+        Move the item in `from_idx` to `to_idx`, swapping if the target is
+        occupied.
+
+        Swap rather than displace-and-repack: the grid is the player's to
+        arrange, and any rule that shuffles a third slot to make room would
+        undo an arrangement they chose deliberately.
+
+        Stacks are NOT merged when one is dropped onto another. add_item
+        already merges on pickup, so two slots holding the same stackable key
+        should not coexist in the first place -- and a merge here would delete
+        an object as a side effect of a cosmetic rearrange, which is a far
+        worse failure than a no-op if that invariant is ever broken.
+
+        Raises InventoryError on an out-of-range index. Returns True when
+        anything changed, False when the move was a no-op.
+        """
+        for idx in (from_idx, to_idx):
+            if idx < 0 or idx >= SLOTS_TOTAL:
+                raise InventoryError(
+                    f"Slot {idx + 1} is outside your inventory."
+                )
+
+        if from_idx == to_idx:
+            return False
+
+        source = self.slots.get(from_idx)
+        target = self.slots.get(to_idx)
+
+        if source is None and target is None:
+            return False
+
+        self.slots[from_idx] = target
+        self.slots[to_idx] = source
+        self._save()
+
+        return True
+
+
     def all_items(self):
         result = []
         for i in range(SLOTS_TOTAL):
