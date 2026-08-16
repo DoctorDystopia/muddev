@@ -74,6 +74,60 @@ class EquipmentHandler:
         self.obj.attributes.add(self.save_attribute, self.slots, category="inventory")
 
 
+    def _return_to_inventory(self, obj):
+        """
+        Put an item back in the character's contents AND in a grid slot.
+
+        Both halves are needed. Assigning `location` directly does not fire
+        at_object_receive -- see CLAUDE.md, "create_object(location=...) does
+        not fire at_object_receive; move_to does" -- so the hook that would
+        normally register the item in an InventoryHandler slot never runs. The
+        item lands in contents with no slot, and stays that way until
+        something happens to call sync().
+
+        That was invisible while the only reader was the text grid, which
+        syncs before it renders. It stops being invisible the moment a slot
+        NUMBER is addressable: `unequip main hand` followed by `swap 1 5`
+        would refer to an item the grid did not yet know it held.
+
+        equip() has always done the mirror of this explicitly for the outbound
+        direction (`inventory.remove_item`), so the missing inbound call was an
+        asymmetry rather than a decision.
+        """
+        obj.location = self.obj
+
+        inventory = getattr(self.obj, "inventory", None)
+
+        if inventory is not None:
+            inventory.add_item(obj)
+
+
+    def _publish(self):
+        """
+        Tell any graphical client that this character's gear changed.
+
+        Here rather than in the commands, because the EvMenu in
+        systems/menus/equipment_menu.py reaches equip() and unequip() without
+        passing through a command at all -- so a command-side emit would leave
+        the 3D inventory pane stale for anyone using the menu, which is the
+        path most players use.
+
+        Note the asymmetry with InventoryHandler, which deliberately does NOT
+        publish from its own mutators. Those run mid-move, inside
+        at_object_receive, at a point where a stack merge may be about to
+        delete the object being added -- a snapshot taken there would describe
+        a half-applied move. The character's move hooks publish instead, after
+        the move has completed.
+
+        Imported inside the method. This package is reached from typeclass
+        import time, and a module-scope import of the feed would couple the
+        two systems' import order for no benefit.
+        """
+        from systems.statefeed import events as feed
+
+        feed.emit_inventory(self.obj)
+
+
     def count_equipped(self):
         """Returns the number of items currently equipped in all slots."""
         return sum(1 for slot_obj in self.slots.values() if slot_obj is not None)
@@ -256,9 +310,10 @@ class EquipmentHandler:
         # Return displaced items to inventory
         for old_obj in to_unequip:
             if old_obj:
-                old_obj.location = self.obj
+                self._return_to_inventory(old_obj)
 
         self._save()
+        self._publish()
 
 
     def unequip(self, obj_or_slot):
@@ -281,8 +336,9 @@ class EquipmentHandler:
             raise EquipmentError("Your inventory is completely full—cannot unequip.")
 
         self.slots[slot_key] = None
-        obj.location = self.obj
+        self._return_to_inventory(obj)
         self._save()
+        self._publish()
         return obj
 
 
@@ -301,5 +357,6 @@ class EquipmentHandler:
         if slot_key is not None and obj is not None:
             self.slots[slot_key] = None
             self._save()
+            self._publish()
             return obj
         return None

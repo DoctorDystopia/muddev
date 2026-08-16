@@ -23,6 +23,7 @@ from . import serializers, subscriptions
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
+    CharItemsPayload,
     CharSummaryPayload,
     CharVitalsPayload,
     CombatPayload,
@@ -302,6 +303,75 @@ def emit_summary(observer, force: bool = False) -> int:
         return 0
 
     payload = CharSummaryPayload(panels=summary_data(observer))
+
+    return emit(observer, payload, force=force)
+
+
+def emit_inventory(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the observer's carried grid and equipment to themself.
+
+    Entry:
+        observer - the puppeted Character. An object with no inventory handler
+                   is a supported no-op.
+        force    - True to bypass rate caps. A formality today, since the
+                   channel is uncapped by design, kept so the resync call site
+                   looks like every other one.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the same reason emit_summary
+        does it: building this payload walks 32 slots, syncs the handler, and
+        reads the tag set on every item. That is far more than the cheap
+        payloads around it, and emit() would discard the result for free but
+        only after the work was already done.
+
+        The build is WRAPPED, which the other event routines are not. They are
+        called from a command or a combat tick; this one is also called from
+        at_object_receive and at_object_leave, which sit directly in the path
+        of every item movement in the game. A feed that could raise there could
+        lose an item mid-move, and typeclasses/characters.py already swallows
+        exceptions around the inventory call it makes -- so a raise here would
+        be silently absorbed into exactly the behaviour that loses things.
+
+        systems.statefeed.inventory is imported inside the routine. It reaches
+        items.equipment.constants and items.inventory.handler, and this module
+        is imported by typeclasses/mixins.py, which every Character and NPC
+        pulls in at startup.
+
+    Notes/References:
+        payloads.CharItemsPayload documents why this is a snapshot rather than
+        a delta, and constants.CHANNEL_MIN_INTERVAL_SECONDS documents why the
+        channel must not be rate-capped.
+
+    Author: Nick Hobar
+    Creation date: 08/15/2026
+    """
+    from evennia.utils import logger
+
+    from . import inventory as inventory_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharItemsPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    try:
+        payload = inventory_serializer.build_payload(observer)
+    except Exception:
+        logger.log_trace()
+        return 0
+
+    if payload is None:
+        return 0
 
     return emit(observer, payload, force=force)
 
