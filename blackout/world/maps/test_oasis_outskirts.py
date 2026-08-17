@@ -1,6 +1,6 @@
 ﻿# mygame/world/maps/test_oasis_outskirts.py
 
-from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
+from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode, MapTransitionNode
 # Imported for its side effect: the module's @register_spawner decorators must
 # have run before this map spawns tiles that reference those spawner keys.
 import typeclasses.skill_facilities as skill_facilities  # noqa: F401
@@ -13,7 +13,7 @@ MAPSTR = r'''
                           1
     + 0 1 2 3 4 5 6 7 8 9 0
 
-   10 #   # # #     #-#-#
+   10 #   # # #     #-#-T
        \  | | |     |
     9   #-#-#-#     |
         |\    |     |
@@ -72,12 +72,21 @@ class FloatingEyeNPCNode(MapNode):
     display_symbol = "|#f88379e|n"
     prototype = "xyz_room"
 
+class ToOasisNode(MapTransitionNode):
+    """
+    MapNode to teleport to the Oasis.
+    """
+    display_symbol = "|gT|n"
+    target_map_xyz = (1, 2, "oasis")
+    prototype = None
+
 
 LEGEND = {
     "†": RustyPoleNode,
     "m": MutantRaiderNPCNode,
     "M": BigMutantNPCNode,
     "e": FloatingEyeNPCNode,
+    "T": ToOasisNode,
 }
 
 
