@@ -24,5 +24,7 @@ blackout/server/.cache/
 *.sav[0-9]
 
 # notes
-.todo
-.note
+*.todo
+*.todo.md
+*.note
+*.note.md
