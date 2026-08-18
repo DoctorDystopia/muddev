@@ -24,7 +24,7 @@ class StatKind(Enum):
     """
     COUNTER = "counter"
     KEYED_COUNTER = "keyed_counter"
-    # milestone flags, e.g. has player found [secret]?
+    # milestone flags, e.g. has player found [secret]? completed X quest?
     # high water mark, e.g. highest hit
 
 
