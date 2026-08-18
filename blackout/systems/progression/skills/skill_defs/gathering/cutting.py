@@ -26,7 +26,7 @@ class Cutting(BaseSkill):
     key = "cutting"
     name = "Cutting"
     category = "Gathering"
-    description = "Proficiency with harvesting materials from trees and plants."
+    description = "Proficiency with harvesting materials from anything cuttable."
     cooldown_seconds = _MIN_HARVEST_COOLDOWN
 
 

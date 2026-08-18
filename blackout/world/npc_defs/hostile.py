@@ -39,6 +39,7 @@ def _headbutt_crush_aggressive_combat_style():
         },
     }
 
+# TODO: add optional equipped items to the NpcDef dataclass
 
 NPCS = {
     # ─── Mutant Raider ────────────────────────────────────────────────────

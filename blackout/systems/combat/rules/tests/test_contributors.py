@@ -236,6 +236,27 @@ class TestHandlerRulesCache(EvenniaTest):
         keys = [rules.key for rules in handler.active_rules()]
         self.assertEqual(keys, [MalfunctioningGizmoRules.key])
 
+    def test_plain_equip_alone_invalidates_the_cache(self):
+        """EquipmentHandler.equip() must invalidate the cache on its own.
+
+        Regression test for the `equip <item>` command leaving a fighter
+        swinging with a dead weapon's rules mid-combat: only the 'wield'
+        combat action called _refresh_weapon(), so equipping through the
+        general equip command (or the equipment EvMenu) left ndb.active_rules
+        stale until combat was broken and restarted. No manual
+        handler._refresh_weapon() call here -- that is the point.
+        """
+        from systems.combat.combat import ensure_combat_handler
+
+        handler = ensure_combat_handler(self.char1)
+        handler.active_rules()  # populate the cache with the unarmed baseline
+
+        item = ITEM_DB["malfunctioning_gizmo"].create(location=self.char1)
+        self.char1.equipment.equip(item)
+
+        keys = [rules.key for rules in handler.active_rules()]
+        self.assertEqual(keys, [MalfunctioningGizmoRules.key])
+
 
 class TestEquippingTheDemoItems(EvenniaTest):
     """A new tool_type fails closed unless it is registered."""

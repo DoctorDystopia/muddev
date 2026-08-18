@@ -93,6 +93,24 @@ class InventoryHandler:
         return True
 
 
+    def can_accept(self, obj):
+        """
+        Whether `obj` can enter this grid without exceeding SLOTS_TOTAL.
+
+        Mirrors add_item's own decision tree (already-slotted, then
+        mergeable stack, then free slot) so the two can never disagree
+        about whether a pickup fits. Meant to be checked from
+        at_pre_object_receive, before the object has moved -- add_item
+        itself runs after the move and has nowhere to put a rejected
+        object back.
+        """
+        if self.find_slot(obj) >= 0:
+            return True
+        if getattr(obj, "is_stackable", False) and self._find_existing_stack(obj) is not None:
+            return True
+        return self.has_free_slots()
+
+
     def _find_first_free(self):
         for i in range(SLOTS_TOTAL):
             if self.slots.get(i) is None:

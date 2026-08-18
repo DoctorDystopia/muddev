@@ -79,6 +79,58 @@ def _spawn_one_drop(item_def, quantity: int, room) -> list:
     return created
 
 
+def _merge_stackable_pairs(drops: list) -> list:
+    """
+    Purpose: Sum same-key pairs that name a stackable item, in first-seen
+    order, so `rolls > 1` landing on the same stackable entry twice produces
+    one combined pair instead of two.
+
+    Entry:
+        drops - list of (item_key, quantity) pairs from LootTableDef.roll().
+                May be empty. Unresolvable keys are left untouched here;
+                _deliver still logs-and-skips them.
+
+    Exit/Returns:
+        Returns a new list of (item_key, quantity) pairs, same length or
+        shorter. Non-stackable pairs, and pairs whose key does not resolve in
+        ITEM_DB, pass through unmerged and keep their original position.
+
+    Module Globals:
+        ITEM_DB read.
+
+    Methodology:
+        roll() cannot do this itself -- see this module's header -- because
+        merging requires knowing stackability, which only ITEM_DB answers.
+        Doing it once here, before delivery, means _spawn_one_drop and the
+        announcement both see the combined pair and never learn two separate
+        rolls produced it.
+
+    Notes/References:
+        Without this, a table with `rolls=2` whose pool favours one stackable
+        entry (e.g. credits) would spawn two separate stacks on the ground --
+        two objects a player must `get` one at a time instead of one.
+
+    Author: Nick Hobar
+    Creation date: 08/16/2026
+    """
+    merged = []
+    index_by_key = {}
+
+    for item_key, quantity in drops:
+        item_def = ITEM_DB.get(item_key)
+
+        if item_def is not None and item_def.stackable and item_key in index_by_key:
+            existing_index = index_by_key[item_key]
+            existing_key, existing_quantity = merged[existing_index]
+            merged[existing_index] = (existing_key, existing_quantity + quantity)
+            continue
+
+        index_by_key[item_key] = len(merged)
+        merged.append((item_key, quantity))
+
+    return merged
+
+
 def _deliver(drops: list, room) -> list:
     """
     Purpose: Spawn every rolled pair, skipping any that names a bad item.
@@ -96,10 +148,11 @@ def _deliver(drops: list, room) -> list:
         ITEM_DB read.
 
     Methodology:
-        Resolves each key against ITEM_DB and logs-and-skips an unknown one.
-        validate_loot_tables() is what catches this loudly in the test suite;
-        by the time a kill is being resolved the only useful behaviour is to
-        drop what is valid and leave a trace for the operator.
+        Merges same-key stackable pairs first (see _merge_stackable_pairs),
+        then resolves each key against ITEM_DB and logs-and-skips an unknown
+        one. validate_loot_tables() is what catches a bad key loudly in the
+        test suite; by the time a kill is being resolved the only useful
+        behaviour is to drop what is valid and leave a trace for the operator.
 
     Notes/References:
         None.
@@ -109,7 +162,7 @@ def _deliver(drops: list, room) -> list:
     """
     delivered = []
 
-    for item_key, quantity in drops:
+    for item_key, quantity in _merge_stackable_pairs(drops):
         item_def = ITEM_DB.get(item_key)
 
         if item_def is None:

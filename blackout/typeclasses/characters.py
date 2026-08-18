@@ -362,12 +362,63 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         parent_class.at_post_unpuppet(account, session=session, **kwargs)
 
 
+    def at_pre_object_receive(self, moved_obj, source_location, **kwargs):
+        """
+        Purpose: Refuse an incoming item once the 32-slot grid is full,
+        before the move happens.
+
+        Entry:
+            moved_obj is the object about to move into this Character.
+            source_location is where it is moving from.
+
+        Exit/Returns:
+            True to allow the move, False to cancel it and leave
+            moved_obj where it was.
+
+        Methodology:
+            Runs at move_to() step 3 (destination.at_pre_object_receive),
+            which is the one hook in the move sequence that can veto
+            before anything changes -- the object hasn't left
+            source_location yet, so there is no bounce-back to perform.
+            InventoryHandler.can_accept mirrors add_item's own stack/
+            free-slot logic, so a pickup that would merge into an
+            existing stack is still allowed at 32/32.
+
+            This is what makes the swallowed InventoryError in
+            at_object_receive (below) unreachable in the full-inventory
+            case: that hook now only ever sees objects this one already
+            approved. Before this hook existed, add_item's
+            InventoryError was raised *after* the object had already
+            been moved into contents (move_to's step 8) and caught by a
+            bare except-pass, so the item sat in contents with no slot
+            -- invisible to `inv`, uncounted against the 32-slot cap,
+            but still real and still tradeable/droppable. That is what
+            let Carrying 32/32 keep accepting `get`s.
+
+        Notes/References: CLAUDE.md gotcha table doesn't cover this one;
+            see evennia.objects.objects.DefaultObject.move_to docstring
+            for the full pre/post hook order.
+
+        Author: Nick Hobar
+        Creation date: 08/16/2026
+        """
+        if hasattr(moved_obj, "is_stackable") and not self.inventory.can_accept(moved_obj):
+            self.msg("Your inventory is completely full.")
+            return False
+        parent_class = super()
+        return parent_class.at_pre_object_receive(moved_obj, source_location, **kwargs)
+
+
     def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
         if hasattr(moved_obj, "is_stackable"):
             try:
                 self.inventory.add_item(moved_obj)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.log_err(
+                    f"Character.at_object_receive: add_item failed for "
+                    f"{moved_obj!r} on {self!r} despite at_pre_object_receive "
+                    f"approving the move: {exc!r}"
+                )
         super().at_object_receive(moved_obj, source_location, move_type=move_type, **kwargs)
         self._publish_inventory()
 

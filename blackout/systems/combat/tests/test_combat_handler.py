@@ -400,6 +400,57 @@ class TestMultiSlotStatAggregation(EvenniaTest):
         self.assertEqual(bonuses["slash_defense_bonus"], 2)
 
 
+class TestEquipMidCombatRefreshesTheWeapon(EvenniaTest):
+    """Regression test for equipping a new weapon mid-fight.
+
+    `wield` (the mid-combat action) has always called
+    handler._refresh_weapon() after swapping gear. The general `equip`
+    command and the equipment EvMenu go through EquipmentHandler.equip()
+    directly and never called it, so a fighter who typed `equip <item>`
+    mid-fight kept swinging with the old weapon's style, speed, and stat
+    bonuses in ndb.active_weapon_data until combat ended and restarted.
+    EquipmentHandler.equip()/unequip() now call the refresh themselves.
+    """
+
+    def test_equip_during_combat_updates_style_and_speed(self):
+        # rusty_scrap_spear's default style ("lunge") is a stab; the gizmo's
+        # ("discharge") is a crush -- distinct enough to prove the snapshot
+        # actually changed rather than being coincidentally equal.
+        spear = ITEM_DB["rusty_scrap_spear"].create(location=self.char1)
+        self.char1.equipment.equip(spear)
+
+        handler = ensure_combat_handler(self.char1)
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["attack_type"],
+            "stab",
+        )
+
+        gizmo = ITEM_DB["malfunctioning_gizmo"].create(location=self.char1)
+        self.char1.equipment.equip(gizmo)
+
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["attack_type"],
+            "crush",
+        )
+
+    def test_unequip_during_combat_falls_back_to_unarmed(self):
+        spear = ITEM_DB["rusty_scrap_spear"].create(location=self.char1)
+        self.char1.equipment.equip(spear)
+
+        handler = ensure_combat_handler(self.char1)
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["attack_type"],
+            "stab",
+        )
+
+        self.char1.equipment.unequip(spear)
+
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["weapon_style"],
+            "accurate",
+        )
+
+
 class TestRuntimeStateIsNotPersisted(EvenniaTest):
     """Per-tick handler state belongs on ndb, not db.
 

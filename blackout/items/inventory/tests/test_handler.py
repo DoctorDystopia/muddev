@@ -115,3 +115,35 @@ class TestMoveSlot(EvenniaTest):
         self.char1.inventory.sync()
 
         self.assertEqual(self.char1.inventory.find_slot(item), DISTANT_SLOT)
+
+
+class TestCanAccept(EvenniaTest):
+    """
+    can_accept is the pre-move check at_pre_object_receive relies on to
+    reject a pickup before it happens -- see typeclasses/characters.py.
+    It must agree with add_item's own merge-then-free-slot logic, or a
+    pickup could be approved here and then still raise inside add_item.
+    """
+
+    def _fill_all_slots(self):
+        for _ in range(SLOTS_TOTAL):
+            ITEM_DB["hammer"].create(location=self.char1)
+
+    def test_true_when_a_free_slot_exists(self):
+        candidate = ITEM_DB["hammer"].create(location=self.room1)
+
+        self.assertTrue(self.char1.inventory.can_accept(candidate))
+
+    def test_false_when_full_and_not_mergeable(self):
+        self._fill_all_slots()
+        candidate = ITEM_DB["hammer"].create(location=self.room1)
+
+        self.assertFalse(self.char1.inventory.can_accept(candidate))
+
+    def test_true_when_full_but_mergeable_into_an_existing_stack(self):
+        for _ in range(SLOTS_TOTAL - 1):
+            ITEM_DB["hammer"].create(location=self.char1)
+        ITEM_DB["credits"].create(location=self.char1, quantity=10)
+        candidate = ITEM_DB["credits"].create(location=self.room1, quantity=5)
+
+        self.assertTrue(self.char1.inventory.can_accept(candidate))

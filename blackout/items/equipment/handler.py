@@ -128,6 +128,30 @@ class EquipmentHandler:
         feed.emit_inventory(self.obj)
 
 
+    def _refresh_combat(self):
+        """
+        Tell an in-progress fight that this character's gear changed.
+
+        BlackoutCombatHandler snapshots weapon stats, active style, attack
+        speed, and rule contributors into ndb once and only rebuilds them
+        when _refresh_weapon() runs (systems/combat/combat.py). That method
+        is already called by the mid-combat 'wield' action and by
+        (re)entering combat, but equip()/unequip()/remove() are a second,
+        independent path onto the same slots -- so a mid-fight `equip 3`
+        left the combat handler swinging with the old weapon's style and
+        damage until combat was broken and restarted. Calling it here from
+        the single choke point every slot mutation passes through (the same
+        reasoning as _publish() above) closes that gap for every caller:
+        commands, the equipment EvMenu, and the 3D pane alike.
+
+        self.obj.combat is a lazy_property that returns None outside of
+        combat, so this is a no-op except mid-fight.
+        """
+        combat_handler = self.obj.combat
+        if combat_handler is not None:
+            combat_handler._refresh_weapon()
+
+
     def count_equipped(self):
         """Returns the number of items currently equipped in all slots."""
         return sum(1 for slot_obj in self.slots.values() if slot_obj is not None)
@@ -314,6 +338,7 @@ class EquipmentHandler:
 
         self._save()
         self._publish()
+        self._refresh_combat()
 
 
     def unequip(self, obj_or_slot):
@@ -339,6 +364,7 @@ class EquipmentHandler:
         self._return_to_inventory(obj)
         self._save()
         self._publish()
+        self._refresh_combat()
         return obj
 
 
@@ -358,5 +384,6 @@ class EquipmentHandler:
             self.slots[slot_key] = None
             self._save()
             self._publish()
+            self._refresh_combat()
             return obj
         return None

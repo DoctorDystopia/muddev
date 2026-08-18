@@ -14,6 +14,7 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 
 """
 
+# from blackout.commands.sittables import CmdSetSit2
 from evennia import default_cmds
 from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
@@ -54,6 +55,8 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(CleanupCmdSet())
 
         self.add(CombatCmdSet())
+
+        # self.add(CmdSetSit2())
 
 
 class AccountCmdSet(default_cmds.AccountCmdSet):
