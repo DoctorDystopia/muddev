@@ -14,6 +14,8 @@ from systems.combat.combat_level.logic import get_combat_level
 from systems.combat.protocols import XpEarner
 from systems.statefeed import events as feed
 
+from systems.stat_tracker import constants as stat_constants
+
 
 class CombatEntity:
     """
@@ -452,6 +454,14 @@ class CombatEntity:
                 quests.update_progress("*", "kill", self.key)
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death quest update failed: {exc!r}")
+
+        stats = getattr(killer, "stats", None)
+        npc_key = getattr(self.db, "npc_key", None)
+        if stats is not None and npc_key:
+            try:
+                stats.increment(stat_constants.KILLS_PER_HOSTILE_STAT_KEY, npc_key)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.at_death KILLS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
 
         # Drops must roll BEFORE respawn. HostileNPC.respawn() deletes the row,
         # and the loot table is resolved off db.npc_key while it still exists.

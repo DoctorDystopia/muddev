@@ -24,6 +24,7 @@ from systems.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
 from systems.quests.quests import QuestHandler
+from systems.stat_tracker.handler import StatHandler
 from systems.statefeed import events as feed
 from systems.statefeed import resync
 from world.respawn import get_respawn_room
@@ -114,6 +115,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     inventory = _handler_property(InventoryHandler, "inventory")
     bank = _handler_property(BankHandler, "bank")
     quests = _handler_property(QuestHandler, "quests")
+    stats = _handler_property(StatHandler, "stats")
 
     # Evennia's contrib cooldown handler. Stores absolute expiry timestamps in
     # a persistent Attribute, so unlike the ndb timestamp it replaces, a
@@ -155,10 +157,12 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         empty_skills_dict = {}
         empty_active_quests_dict = {}
         empty_completed_quests_list = []
+        empty_stats_dict = {}
         
         self.db.skills = empty_skills_dict
         self.db.active_quests = empty_active_quests_dict
         self.db.completed_quests = empty_completed_quests_list
+        self.db.stats = empty_stats_dict
 
         self.skills.init_all_skills()
 
@@ -175,6 +179,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         self.equipment
         self.inventory
         self.cooldowns
+        self.stats
 
 
     # ─── Playtime ───────────────────────────────────────────────────────────
