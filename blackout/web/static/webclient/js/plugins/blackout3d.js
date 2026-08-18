@@ -812,24 +812,42 @@ let blackout3d = (function () {
             return { command: CMD_LOOK };
         }
 
-        if (Math.abs(deltaX) <= 1 && Math.abs(deltaY) <= 1) {
-            const direction = DIRECTION_NAMES[deltaX + ":" + deltaY];
-            const exits = currentRoom.exits || {};
-
-            // A neighbouring TILE is not a neighbouring ROOM. Refusing here
-            // means the pane never sends a move the server could only answer
-            // "you cannot go that way" to — the wall is visible as a tile that
-            // does not light up.
-            if (!direction || !exits.hasOwnProperty(direction)) {
-                return null;
-            }
-            return { command: direction, steps: true };
-        }
-
-        return {
+        // The pathfinder answer, and the fallback for a neighbour no single
+        // step reaches.
+        const walk = {
             command: CMD_GOTO + " (" + tile.x + "," + tile.y + ")",
             walksTo: tile.x + ":" + tile.y
         };
+
+        if (Math.abs(deltaX) <= 1 && Math.abs(deltaY) <= 1) {
+            const direction = DIRECTION_NAMES[deltaX + ":" + deltaY];
+            const exits = currentRoom.exits || {};
+            const stepping = direction && exits.hasOwnProperty(direction);
+
+            if (stepping) {
+                return { command: direction, steps: true };
+            }
+
+            // A neighbouring TILE is not a neighbouring ROOM, and most maps
+            // are drawn with cardinal links only — so the eight tiles around
+            // the player are mostly NOT eight exits. A DIAGONAL neighbour with
+            // no diagonal link is the ordinary case, not a wall: it is two
+            // cardinal steps away and the pathfinder walks it. Refusing it
+            // left the tiles nearest the player the only ones in the pane that
+            // could not be clicked.
+            if (deltaX !== 0 && deltaY !== 0) {
+                return walk;
+            }
+
+            // A CARDINAL neighbour with no exit is a wall. Refusing here means
+            // the pane never sends a move the server could only answer "you
+            // cannot go that way" to — the wall is visible as a tile that
+            // does not light up, and a click on it does not send the player
+            // the long way around a barrier they can see.
+            return null;
+        }
+
+        return walk;
     };
 
     const entityAction = function (entity) {
