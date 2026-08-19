@@ -100,3 +100,15 @@ class StatHandler:
         Creation date: 08/17/2026
         """
         return dict(self.obj.db.stats)
+
+    def _hard_reset(self) -> None:
+        """
+        Purpose: Completely resets self.obj.db.stats, Irreversable
+
+        Exit/Returns:
+            None
+
+        Author: Danny Hered
+        Creation date: 08/18/2026
+        """
+        self.obj.db.stats = {}

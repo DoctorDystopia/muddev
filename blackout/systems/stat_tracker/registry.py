@@ -8,7 +8,8 @@ Description: Registry of stat definitions for the stat tracker.
 from dataclasses import dataclass
 from enum import Enum
 
-from systems.stat_tracker.constants import KILLS_PER_HOSTILE_STAT_KEY
+from systems.stat_tracker.constants import KILLS_PER_HOSTILE_STAT_KEY, CUTTING_TOTALS_STAT_KEY
+
 
 
 class StatKind(Enum):
@@ -54,5 +55,12 @@ STAT_REGISTRY: dict[str, StatDef] = {
         desc="Number of kills on every hostile.",
         kind=StatKind.KEYED_COUNTER,
         category="combat",
+    ),
+    CUTTING_TOTALS_STAT_KEY: StatDef(
+        key=CUTTING_TOTALS_STAT_KEY,
+        name="Cuttings per Gatherable Type",
+        desc="Number of successful cuts from every Gatherable.",
+        kind=StatKind.KEYED_COUNTER,
+        category="gatherable",
     ),
 }
