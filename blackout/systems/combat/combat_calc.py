@@ -66,7 +66,7 @@ def effective_level(
 
 # ─── Max hit ───────────────────────────────────────────────────
 
-def max_hit(eff_str: int, equip_str_bonus: int) -> int:
+def max_melee_hit(eff_str: int, equip_str_bonus: int) -> int:
     """
     Purpose: Compute the maximum melee damage for one swing.
 
@@ -99,7 +99,7 @@ def max_hit(eff_str: int, equip_str_bonus: int) -> int:
 
 # ─── Attack and defense rolls ──────────────────────────────
 
-def attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
+def melee_attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
     """
     Purpose: Compute the attacker's maximum attack roll for hit resolution.
 
@@ -120,16 +120,13 @@ def attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
         OSRS uses an identical structural shape for attack and defense rolls,
         hence the shared +64 constant.
 
-    Notes/References:
-        Research doc Eq. 3.
-
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
     return eff_atk * (equip_atk_bonus + combat_constants.MAX_HIT_K)
 
 
-def defense_roll(eff_def: int, equip_def_bonus: int) -> int:
+def melee_defense_roll(eff_def: int, equip_def_bonus: int) -> int:
     """
     Purpose: Compute the defender's maximum defense roll for hit resolution.
 
@@ -150,9 +147,6 @@ def defense_roll(eff_def: int, equip_def_bonus: int) -> int:
         R_def = eff_def * (equip_def_bonus + 64)
         Attack and defense rolls share the same structural formula; the
         only divergence is which equipment bonus feeds in.
-
-    Notes/References:
-        Research doc Eq. 4.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
@@ -183,12 +177,9 @@ def hit_chance(r_atk: int, r_def: int) -> float:
     Methodology:
         If R_atk > R_def:   P = 1 - (R_def + 2) / (2 * (R_atk + 1))
         If R_atk <= R_def:  P = R_atk / (2 * (R_def + 1))
-        The bifurcation guarantees the probability bounds; the diminishing-
+        The bifurcation guarantees the probability bounds. The diminishing-
         returns shape on the leading branch is what makes OSRS armor math
         cohere.
-
-    Notes/References:
-        Research doc Eq. 5 & 6.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
@@ -260,7 +251,7 @@ def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None)
 #     return damage
 
 
-# ─── Swing resolution (top-level pipeline) ────────────────────────────────
+# ─── Combat action resolution (top-level pipeline) ────────────────────────────────
 
 def resolve_melee_swing(
     attacker_eff_atk: int,
@@ -272,7 +263,7 @@ def resolve_melee_swing(
     rng: Optional[_random_module.Random] = None,
 ) -> dict:
     """
-    Purpose: Resolve one melee swing end-to-end. This is the single entry
+    Purpose: For melee combat. Resolve one melee swing end-to-end. This is the single entry
     point the CombatHandler calls per tick per queued attack action.
 
     Entry:
@@ -302,23 +293,23 @@ def resolve_melee_swing(
         None (delegates to other module functions).
 
     Methodology:
-        1. Compute R_atk and R_def via attack_roll / defense_roll.
+        1. Compute R_atk and R_def via melee_attack_roll / melee_defense_roll.
         2. Compute hit_prob via hit_chance.
         3. Roll against hit_prob; if miss, return damage=0.
-        4. Compute max_hit and roll uniform damage.
+        4. Compute max_melee_hit and roll uniform damage.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
     source = rng if rng is not None else _random_module
 
-    r_atk = attack_roll(attacker_eff_atk, attacker_equip_atk)
-    r_def = defense_roll(defender_eff_def, defender_equip_def)
+    r_atk = melee_attack_roll(attacker_eff_atk, attacker_equip_atk)
+    r_def = melee_defense_roll(defender_eff_def, defender_equip_def)
     chance = hit_chance(r_atk, r_def)
 
     if source.random() >= chance:
         return {"hit": False, "damage": 0, "hit_prob": chance}
 
-    dmg = roll_damage(max_hit(attacker_eff_str, attacker_equip_str), source)
+    dmg = roll_damage(max_melee_hit(attacker_eff_str, attacker_equip_str), source)
 
     return {"hit": True, "damage": dmg, "hit_prob": chance}
