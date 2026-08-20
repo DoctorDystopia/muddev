@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from items.equipment.handler import EquipmentError
+from systems.banking import messages
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 from systems.menus.base_menu import parse_quantity
 from systems.ui.colors import (
@@ -276,7 +277,9 @@ def node_item_detail(caller, **kwargs):
 class _TransferFlow:
     """One direction of a bank transfer (deposit or withdraw).
 
-    verb         — lowercase action word used in prompts ("deposit")
+    verb         — lowercase action word used in prompts, and the verb
+                   messages.format_transfer renders the outcome with, so it
+                   must be one of that module's VERB_* constants
     title        — heading for the select node ("Deposit Items")
     stock_label  — how the available count is phrased ("You have")
     empty_text   — shown when the source side holds nothing
@@ -329,19 +332,26 @@ def _equipped_marker(caller, item):
 
 
 def _do_deposit(caller, items, quantity):
-    """Move `quantity` units drawn from `items` into the bank."""
-    caller.bank.deposit_many(items, quantity)
+    """Move `quantity` units drawn from `items` into the bank.
+
+    Returns the handler's TransferResult; _perform_transfer renders it.
+    """
+    return caller.bank.deposit_many(items, quantity)
 
 
 def _do_withdraw(caller, items, quantity):
-    """Move `quantity` units drawn from `items` out of the bank, space permitting."""
+    """Move `quantity` units drawn from `items` out of the bank, space permitting.
+
+    Returns the handler's TransferResult; _perform_transfer renders it.
+    """
     caller.inventory.sync()
     caller.equipment.validate_inventory_space()
-    caller.bank.withdraw_many(items, quantity)
+
+    return caller.bank.withdraw_many(items, quantity)
 
 
 DEPOSIT_FLOW = _TransferFlow(
-    verb="deposit",
+    verb=messages.VERB_DEPOSIT,
     title="Deposit Items",
     stock_label="You have",
     empty_text="You are not carrying anything.",
@@ -356,7 +366,7 @@ DEPOSIT_FLOW = _TransferFlow(
 )
 
 WITHDRAW_FLOW = _TransferFlow(
-    verb="withdraw",
+    verb=messages.VERB_WITHDRAW,
     title="Withdraw Items",
     stock_label="Bank has",
     empty_text="Your bank vault is empty.",
@@ -516,20 +526,26 @@ def _perform_transfer(caller, flow, item_ids, count):
         count is a positive int, or the string "all".
 
     Exit/Returns:
-        None. Messages the caller on every failure path.
+        None. Messages the caller with the outcome, successful or not.
 
     Module Globals:
         None
 
     Methodology:
         Re-resolve the group (members may have moved since the option was
-        drawn), clamp the count to the units actually present, then delegate
-        to the flow's execute callable.
+        drawn), clamp the count to the units actually present, delegate to
+        the flow's execute callable, then render the TransferResult it hands
+        back. A partial transfer prints what moved AND why it stopped, which
+        is the one place both halves are worth saying: the player picked a
+        quantity from a menu and needs to know it was not honoured in full.
 
     Notes/References:
         Returns nothing on purpose. Callers differ in what they must hand
         back to EvMenu -- a node needs rendered (text, options), a goto
         callable needs a node name -- so neither is decided here.
+
+        The handler no longer messages anyone; systems/banking/messages.py
+        owns the wording, shared with the deposit/withdraw commands.
 
     Author: Nick Hobar
     Creation date: 07/31/2026
@@ -544,9 +560,30 @@ def _perform_transfer(caller, flow, item_ids, count):
     quantity = max_qty if count == "all" else min(count, max_qty)
 
     try:
-        flow.execute(caller, items, quantity)
+        result = flow.execute(caller, items, quantity)
     except EquipmentError as err:
         caller.msg(f"{ERROR_COLOR}{err}{RESET_COLOR}")
+        return
+
+    _report_transfer(caller, flow, result)
+
+
+def _report_transfer(caller, flow, result) -> None:
+    """Print the outcome of one transfer, tinting anything that went wrong.
+
+    A partial success prints both lines: what landed, then the refusal that
+    cut it short. A total failure prints only the refusal, because
+    format_transfer already returns that as its whole message.
+    """
+    line = messages.format_transfer(result, flow.verb)
+
+    if line and result.success:
+        caller.msg(line)
+    elif line:
+        caller.msg(f"{ERROR_COLOR}{line}{RESET_COLOR}")
+
+    if result.success and result.error:
+        caller.msg(f"{ERROR_COLOR}{result.error}{RESET_COLOR}")
 
 
 def _make_execute_goto(flow):

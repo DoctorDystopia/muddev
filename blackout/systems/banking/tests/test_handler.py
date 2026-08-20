@@ -1,10 +1,19 @@
-from evennia import create_object
-from evennia.utils.test_resources import EvenniaTest, EvenniaCommandTest
+"""
+GNU License or generic module header.
+Author: Nick Hobar
+Creation date: 06/17/2026
+Description: Core deposit/withdraw behaviour, stackables, and per-character isolation.
 
+Run from blackout/:
+    ../evenv/Scripts/evennia.exe test --settings settings.py systems.banking
+"""
+
+from evennia import create_object
+from evennia.utils.test_resources import EvenniaTest
+
+from systems.banking.handler import NOT_STORED_ERROR, BankHandler
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.items import BaseItem
-from typeclasses.bank_nodes import CmdDeposit, CmdWithdraw, CmdBalance, BankNode
-from systems.banking.handler import BankHandler
 
 
 class TestBankHandler(EvenniaTest):
@@ -37,9 +46,12 @@ class TestBankHandler(EvenniaTest):
         self.handler.withdraw(self.test_item.id)
         self.assertEqual(self.handler.count_items(), 0)
 
-    def test_withdraw_nonexistent_returns_none(self):
+    def test_withdraw_nonexistent_reports_failure(self):
         result = self.handler.withdraw(99999)
-        self.assertIsNone(result)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.moved_count, 0)
+        self.assertEqual(result.error, NOT_STORED_ERROR)
 
     def test_list_items_empty_after_creation(self):
         self.assertEqual(self.handler.list_items(), [])
@@ -114,7 +126,12 @@ class TestBankHandler(EvenniaTest):
         for i in range(MAX_INVENTORY_SLOTS):
             filler = create_object(BaseItem, key=f"Filler{i}", location=self.char1)
         result = self.handler.withdraw(self.test_item.id)
-        self.assertIsNone(result)
+
+        self.assertFalse(result.success)
+        self.assertEqual(result.moved_count, 0)
+        # The refusal comes from the inventory handler, so assert that one was
+        # reported rather than pinning its exact wording here.
+        self.assertTrue(result.error)
 
     # --- Stackable item tests ---
 
@@ -274,110 +291,6 @@ class TestBankHandler(EvenniaTest):
         stored = self.handler.list_items()
         self.assertEqual(stored[0].quantity, 5)
 
-
-class TestBulkTransfers(EvenniaTest):
-    """Depositing/withdrawing several separate copies of a non-stackable."""
-
-    character_typeclass = BlackoutCharacter
-
-    def setUp(self):
-        super().setUp()
-        self.handler = BankHandler(self.char1)
-
-    def _make_pile(self, count, key="rusty scrap metal"):
-        return [
-            create_object(BaseItem, key=key, location=self.char1)
-            for _ in range(count)
-        ]
-
-    def _make_stack(self, key="credits", quantity=10):
-        obj = create_object(BaseItem, key=key, location=self.char1)
-        obj.attributes.add("stackable", True)
-        obj.attributes.add("quantity", quantity)
-        return obj
-
-    def test_deposit_many_moves_every_copy(self):
-        pile = self._make_pile(7)
-
-        moved = self.handler.deposit_many(pile)
-
-        self.assertEqual(moved, 7)
-        self.assertEqual(self.handler.count_items(), 7)
-        for obj in pile:
-            self.assertNotIn(obj, self.char1.contents)
-
-    def test_deposit_many_honours_a_count(self):
-        pile = self._make_pile(7)
-
-        moved = self.handler.deposit_many(pile, 3)
-
-        self.assertEqual(moved, 3)
-        self.assertEqual(self.handler.count_items(), 3)
-        still_carried = [obj for obj in pile if obj in self.char1.contents]
-        self.assertEqual(len(still_carried), 4)
-
-    def test_deposit_many_of_empty_list_does_nothing(self):
-        moved = self.handler.deposit_many([])
-
-        self.assertEqual(moved, 0)
-        self.assertEqual(self.handler.count_items(), 0)
-
-    def test_deposit_many_counts_stack_units_not_objects(self):
-        # A single stack contributes its whole size, so the unit count that
-        # the menu prompts with matches what actually moves.
-        stack = self._make_stack(quantity=10)
-
-        moved = self.handler.deposit_many([stack], 4)
-
-        self.assertEqual(moved, 4)
-        stored = self.handler.list_items()
-        self.assertEqual(stored[0].quantity, 4)
-
-    def test_withdraw_many_returns_every_copy(self):
-        pile = self._make_pile(5)
-        self.handler.deposit_many(pile)
-        stored = self.handler.list_items()
-
-        moved = self.handler.withdraw_many(stored)
-
-        self.assertEqual(moved, 5)
-        self.assertEqual(self.handler.count_items(), 0)
-
-    def test_withdraw_many_honours_a_count(self):
-        pile = self._make_pile(5)
-        self.handler.deposit_many(pile)
-        stored = self.handler.list_items()
-
-        moved = self.handler.withdraw_many(stored, 2)
-
-        self.assertEqual(moved, 2)
-        self.assertEqual(self.handler.count_items(), 3)
-
-    def test_find_items_by_name_returns_the_whole_run(self):
-        self.handler.deposit_many(self._make_pile(4))
-
-        matches = self.handler.find_items_by_name("rusty scrap metal")
-
-        self.assertEqual(len(matches), 4)
-
-    def test_find_items_by_name_never_mixes_keys(self):
-        self.handler.deposit_many(self._make_pile(4))
-        self.handler.deposit_many(self._make_pile(2, key="rusty metal chunk"))
-
-        matches = self.handler.find_items_by_name("rusty")
-
-        keys = {obj.key for obj in matches}
-        self.assertEqual(len(keys), 1, keys)
-
-    def test_find_item_by_name_still_returns_one(self):
-        self.handler.deposit_many(self._make_pile(4))
-
-        match = self.handler.find_item_by_name("rusty scrap metal")
-
-        self.assertIsNotNone(match)
-        self.assertEqual(match.key, "rusty scrap metal")
-
-
 class TestBankHandlerIsolation(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
@@ -394,136 +307,8 @@ class TestBankHandlerIsolation(EvenniaTest):
 
     def test_char2_cannot_access_char1_items(self):
         self.handler1.deposit(self.item)
+
         result = self.handler2.withdraw(self.item.id)
-        self.assertIsNone(result)
 
-
-class TestBankCommands(EvenniaCommandTest):
-    character_typeclass = BlackoutCharacter
-
-    def setUp(self):
-        super().setUp()
-        self.bank_node = create_object(
-            BankNode, key="bank terminal", location=self.room1
-        )
-        self.test_item = create_object(BaseItem, key="GoldCoin", location=self.char1)
-        self.test_item2 = create_object(BaseItem, key="SilverRing", location=self.char1)
-
-    def test_cmd_deposit(self):
-        response = self.call(
-            CmdDeposit(), " GoldCoin", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("deposit", response.lower())
-
-    def test_cmd_deposit_no_args(self):
-        response = self.call(
-            CmdDeposit(), "", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("what", response.lower())
-
-    def test_cmd_withdraw(self):
-        self.char1.bank.deposit(self.test_item)
-        response = self.call(
-            CmdWithdraw(), " GoldCoin", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("withdraw", response.lower())
-
-    def test_cmd_withdraw_empty_bank(self):
-        response = self.call(
-            CmdWithdraw(), "", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("empty", response.lower())
-
-    def test_cmd_balance_empty(self):
-        response = self.call(
-            CmdBalance(), "", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("empty", response.lower())
-
-    def test_cmd_balance_with_items(self):
-        self.char1.bank.deposit(self.test_item)
-        self.char1.bank.deposit(self.test_item2)
-        response = self.call(
-            CmdBalance(), "", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("GoldCoin", response)
-        self.assertIn("SilverRing", response)
-
-    def test_cmd_deposit_then_balance(self):
-        self.call(CmdDeposit(), " GoldCoin", caller=self.char1, obj=self.bank_node)
-        response = self.call(
-            CmdBalance(), "", caller=self.char1, obj=self.bank_node
-        )
-        self.assertIn("GoldCoin", response)
-
-    def test_deposit_and_withdraw_cycle(self):
-        self.call(CmdDeposit(), " GoldCoin", caller=self.char1, obj=self.bank_node)
-        self.assertNotIn(self.test_item, self.char1.contents)
-        self.call(CmdWithdraw(), " GoldCoin", caller=self.char1, obj=self.bank_node)
-        self.assertIn(self.test_item, self.char1.contents)
-
-    def _make_pile(self, count, key="rusty scrap metal"):
-        return [
-            create_object(BaseItem, key=key, location=self.char1)
-            for _ in range(count)
-        ]
-
-    def test_cmd_deposit_takes_a_multi_word_name(self):
-        self._make_pile(1)
-
-        self.call(
-            CmdDeposit(), " rusty scrap metal", caller=self.char1, obj=self.bank_node
-        )
-
-        self.assertEqual(self.char1.bank.count_items(), 1)
-
-    def test_cmd_deposit_banks_every_copy_by_default(self):
-        self._make_pile(6)
-
-        self.call(
-            CmdDeposit(), " rusty scrap metal", caller=self.char1, obj=self.bank_node
-        )
-
-        self.assertEqual(self.char1.bank.count_items(), 6)
-
-    def test_cmd_deposit_honours_a_trailing_quantity(self):
-        self._make_pile(6)
-
-        self.call(
-            CmdDeposit(), " rusty scrap metal 2", caller=self.char1, obj=self.bank_node
-        )
-
-        self.assertEqual(self.char1.bank.count_items(), 2)
-
-    def test_cmd_deposit_accepts_all(self):
-        self._make_pile(6)
-
-        self.call(
-            CmdDeposit(), " rusty scrap metal all", caller=self.char1, obj=self.bank_node
-        )
-
-        self.assertEqual(self.char1.bank.count_items(), 6)
-
-    def test_cmd_deposit_unknown_item_explains(self):
-        response = self.call(
-            CmdDeposit(), " nonexistent thing", caller=self.char1, obj=self.bank_node
-        )
-
-        self.assertIn("aren't carrying", response)
-
-    def test_cmd_withdraw_takes_a_trailing_quantity(self):
-        self.char1.bank.deposit_many(self._make_pile(6))
-
-        self.call(
-            CmdWithdraw(), " rusty scrap metal 4", caller=self.char1, obj=self.bank_node
-        )
-
-        self.assertEqual(self.char1.bank.count_items(), 2)
-
-    def test_cmd_balance_totals_identical_items(self):
-        self.char1.bank.deposit_many(self._make_pile(5))
-
-        response = self.call(CmdBalance(), "", caller=self.char1, obj=self.bank_node)
-
-        self.assertIn("x5", response)
-        self.assertEqual(response.count("rusty scrap metal"), 1, response)
+        self.assertFalse(result.success)
+        self.assertEqual(result.error, NOT_STORED_ERROR)

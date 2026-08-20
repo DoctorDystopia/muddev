@@ -8,6 +8,8 @@ Description: BankNode typeclass and the banking commands attached to it.
 from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_BANKING
+from systems.banking import messages
+from systems.banking.handler import BANK_MAX_UNIQUE_KEYS, NOT_STORED_ERROR
 from systems.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner, spawn_once
@@ -127,7 +129,11 @@ class CmdDeposit(Command):
             caller.msg(f"You aren't carrying '{item_key}'.")
             return
 
-        caller.bank.deposit_many(targets, count)
+        result = caller.bank.deposit_many(targets, count)
+        line = messages.format_transfer(result, messages.VERB_DEPOSIT)
+
+        if line:
+            caller.msg(line)
 
 
 class CmdWithdraw(Command):
@@ -169,10 +175,14 @@ class CmdWithdraw(Command):
         # non-stackables come out in one command.
         items = caller.bank.find_items_by_name(item_key)
         if not items:
-            caller.msg("You don't have that item stored in the bank.")
+            caller.msg(NOT_STORED_ERROR)
             return
 
-        caller.bank.withdraw_many(items, count)
+        result = caller.bank.withdraw_many(items, count)
+        line = messages.format_transfer(result, messages.VERB_WITHDRAW)
+
+        if line:
+            caller.msg(line)
 
 
 class CmdBalance(Command):
@@ -195,7 +205,12 @@ class CmdBalance(Command):
             return
 
         count = caller.bank.count_items()
-        lines = [f"Your bank contains {count} item{'s' if count != 1 else ''}:"]
+        used = caller.bank.used_slots()
+        plural = "s" if count != 1 else ""
+        lines = [
+            f"Your bank contains {count} item{plural} "
+            f"in {used}/{BANK_MAX_UNIQUE_KEYS} slots:"
+        ]
 
         # Non-stackables are stored one object per item, so listing them raw
         # printed the same line eleven times. Total by key instead.
