@@ -351,6 +351,10 @@ let blackoutInventory = (function () {
 
     // ─── Items ──────────────────────────────────────────────────────────────
 
+    // Frames and other geometry this pane built itself. Item meshes do NOT
+    // come through here — they came from blackoutMeshes, which may have handed
+    // out a clone sharing a cached model's geometry and materials, and only it
+    // knows whether freeing them is safe. Those go to blackoutMeshes.release.
     const disposeMesh = function (mesh) {
         mesh.traverse(function (child) {
             if (child.geometry) {
@@ -369,7 +373,7 @@ let blackoutInventory = (function () {
         Object.keys(itemMeshes).forEach(function (key) {
             const mesh = itemMeshes[key];
             itemGroup.remove(mesh);
-            disposeMesh(mesh);
+            blackoutMeshes.release(mesh);
             delete itemMeshes[key];
         });
         Object.keys(frameMeshes).forEach(function (key) {
@@ -425,7 +429,7 @@ let blackoutInventory = (function () {
         }
         blackoutMeshes.resolve(row.asset, row.family).then(function (mesh) {
             if (generation !== renderGeneration || !itemGroup) {
-                disposeMesh(mesh);
+                blackoutMeshes.release(mesh);
                 return;
             }
             mesh.scale.setScalar(ITEM_SCALE);
@@ -629,7 +633,7 @@ let blackoutInventory = (function () {
 
         if (mesh) {
             itemGroup.remove(mesh);
-            disposeMesh(mesh);
+            blackoutMeshes.release(mesh);
         }
         if (label && label.parentNode) {
             label.parentNode.removeChild(label);

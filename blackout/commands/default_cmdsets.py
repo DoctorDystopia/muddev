@@ -20,6 +20,7 @@ from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
 from commands.cleanup_cmds import CleanupCmdSet
 from commands.combat_cmds import CombatCmdSet
+from commands.drop_cmds import DropCmdSet
 from commands.equipment_cmds import EquipmentCmdSet
 from commands.get_cmds import GetCmdSet
 from commands.inventory_cmds import InventoryCmdSet
@@ -48,6 +49,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())
         self.add(GetCmdSet())
+        self.add(DropCmdSet())
         self.add(XYZGridCmdSet())
         # After XYZGridCmdSet, so BlackoutGotoCmd overloads the contrib's
         # CmdGoto rather than being overloaded by it.
