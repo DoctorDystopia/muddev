@@ -1,6 +1,6 @@
 ﻿# mygame/world/maps/test_oasis.py
 
-from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode
+from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode, MapTransitionNode
 # Imported for its side effect: the module's @register_spawner decorators must
 # have run before this map spawns tiles that reference those spawner keys.
 import typeclasses.skill_facilities as skill_facilities  # noqa: F401
@@ -29,8 +29,8 @@ MAPSTR = r'''
        \    | |  \ / \| | |
     3   #-m-#-#   F   #-#-†
         | | | |  / \ /| | |
-    2 #-#-#-#-#-#-#-#-#-#-#
-      | | | | | | | | | | |
+    2 T-#-#-#-#-#-#-#-#-#-#
+        | | | | | | | | | |
     1 #-#-#-#-†-#-#-#-#-†-#
       | | | | | | | | | | |
     0 #-#-!-#-#-#-†-#-#-#-ß
@@ -98,6 +98,13 @@ class MutantRaiderNPCNode(MapNode):
     display_symbol = "|#afff00m|n"
     prototype = "xyz_room"
 
+class ToOasisOutskirtsNode(MapTransitionNode):
+    """
+    MapNode to teleport to the Oasis Outskirts.
+    """
+    display_symbol = "|gT|n"
+    target_map_xyz = (8, 10, "oasis_outskirts")
+    prototype = None
 
 LEGEND = {
     "†": RustyPoleNode,
@@ -107,6 +114,7 @@ LEGEND = {
     "!": NPCNode,
     "§": ShopNPCNode,
     "m": MutantRaiderNPCNode,
+    "T": ToOasisOutskirtsNode,
 }
 
 
