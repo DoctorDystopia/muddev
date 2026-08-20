@@ -9,6 +9,7 @@ from evennia import CmdSet, Command
 
 from commands.constants import HELP_CATEGORY_COMBAT
 from systems.combat import combat_msg, constants as const
+from systems.combat.protocols import Combatant
 from systems.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.combat.auras.registry import AURA_REGISTRY, find_aura
 from systems.tick import debug as tick_debug
@@ -43,7 +44,7 @@ class CmdAttack(Command):
         if target is None:
             return
 
-        if not hasattr(target, "is_alive"):
+        if not isinstance(target, Combatant):
             caller.msg(f"You can't attack {target.key}.")
             return
 

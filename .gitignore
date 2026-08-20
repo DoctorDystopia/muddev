@@ -28,3 +28,7 @@ blackout/server/.cache/
 *.todo.md
 *.note
 *.note.md
+
+# Local/backup variants of operator scripts
+blackout/scripts/*.local
+blackout/scripts/*.dan

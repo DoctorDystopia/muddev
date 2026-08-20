@@ -31,6 +31,7 @@ COMBAT_HANDLER_KEY = "blackout_combat_handler"
 # chain, so adding an action means adding an entry and an apply_action case
 # rather than editing a validation ladder.
 _QUEUEABLE_ACTION_KINDS = frozenset({"attack", "hold", "flee", "wield"})
+from .protocols import Combatant
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
 from .rules.pipeline import resolve_action
@@ -64,14 +65,15 @@ def _normalize_xp_skills(xp_skill) -> tuple:
 
 
 def _plan_style_xp(attacker, style: dict, damage: int) -> list:
-    """Work out what XP a swing earns, WITHOUT granting any of it.
+    """Work out what XP a combat action earns, WITHOUT granting any of it.
 
     attacker — a CombatEntity that exposes .skills (Character / HostileNPC).
     style    — one entry from the entity's combat_styles table.
-    damage   — the integer damage returned by combat_calc.resolve_melee_swing.
+    damage   — the integer damage returned by resolve combat action
+               (e.g., combat_calc.resolve_melee_swing).
 
     Returns a list of (skill_key, amount) pairs, already filtered to the awards
-    worth granting. Planning is split from granting so the swing message can
+    worth granting. Planning is split from granting so the action message can
     name the XP on the same line as the damage: the player is told what the hit
     earned, instead of having to reopen the skills panel to find out.
 
@@ -121,9 +123,9 @@ def _apply_xp_awards(attacker, awards) -> None:
 
 
 def _award_style_xp(attacker, style: dict, damage: int) -> list:
-    """Plan and immediately grant a swing's XP. Returns the granted plan.
+    """Plan and immediately grant a combat action's XP. Returns the granted plan.
 
-    The combat swing path calls the two halves separately so it can print the
+    The combat action path calls the two halves separately so it can print the
     award before it lands; this wrapper exists for every other caller, which
     only wants the XP to happen.
     """
@@ -373,7 +375,7 @@ def get_defense_bonuses(entity) -> dict:
 # ─── Action classes ──────────────────────────────────────────────────────
 
 class _Action:
-    """Abstract twitch-combat action — one swing, hold, flee, or wield.
+    """Abstract twitch-combat action.
 
     Subclasses define resolve(handler) which the CombatHandler calls each
     tick when its personal weapon cooldown counter hits zero.
@@ -409,7 +411,7 @@ class _Action:
 
 
 class ActionAttack(_Action):
-    """An on-pace melee swing resolved against the combatant's current target."""
+    """An on-pace combat action (e.g., melee swing) resolved against the combatant's current target."""
 
     consumes_cooldown = True
 
@@ -419,7 +421,7 @@ class ActionAttack(_Action):
 
 
     def next_action(self, handler):
-        """Keep swinging at the same target until told otherwise."""
+        """Keep performing combat actions at the same target until told otherwise."""
         return self
 
 
@@ -429,7 +431,7 @@ class ActionAttack(_Action):
 
 
     def _land_hit(self, context, result) -> bool:
-        """Announce, damage, and pay out one connecting swing.
+        """Announce, damage, and pay out one connecting combat action (e.g., melee swing).
 
         Returns True if the hit was lethal.
 
@@ -504,6 +506,8 @@ class ActionAttack(_Action):
         # at_damage as the text for the same reason the text does: a killed NPC
         # deletes itself in there, and a client resolving target_id afterwards
         # would have nothing to attach a death animation to.
+        # TODO: update emit_swing name (e.g, emit_combat_action). Also, might be
+        # other useful metadata to carry through the pipeline
         feed.emit_swing(context, result, hp_after, max_hp, killed)
 
         target.at_damage(
@@ -517,10 +521,10 @@ class ActionAttack(_Action):
 
 
     def _build_context(self, handler, attacker, target) -> ActionContext:
-        """Snapshot everything one swing needs into an ActionContext.
+        """Snapshot everything one combat action needs into an ActionContext.
 
         This is the seam that replaced a block of loose local variables. The
-        swing's inputs now travel as one object, which is what lets a rules
+        action's inputs now travel as one object, which is what lets a rules
         definition reach the wielder's own stats -- an amulet that keys off
         Brawn-over-Fortitude cannot be expressed against six bare integers.
 
@@ -533,7 +537,7 @@ class ActionAttack(_Action):
 
         if not style:
             # A malformed/missing style dict would otherwise KeyError below and
-            # kill the swing.
+            # kill the combat action.
             logger.log_err(
                 f"ActionAttack: {attacker} has no usable attack style; falling back to unarmed."
             )
@@ -560,7 +564,7 @@ class ActionAttack(_Action):
         )
 
     def _land_backfire(self, context, result) -> bool:
-        """Apply a swing's self-damage to the attacker. True if it killed them.
+        """Apply a combat action's self-damage to the attacker. True if it killed them.
 
         Same message-before-damage ordering as _land_hit, and for the same
         reason: at_damage can end in at_death, which broadcasts and then
@@ -595,6 +599,8 @@ class ActionAttack(_Action):
             )
         )
 
+        # TODO: update emit_swing name (e.g, emit_combat_action). Also, might be
+        # other useful metadata to carry through the pipeline
         feed.emit_swing(context, result, hp_after, max_hp, killed, backfire=True)
 
         attacker.at_damage(
@@ -622,7 +628,7 @@ class ActionAttack(_Action):
         if getattr(target, "pk", None) is None:
             return True
 
-        if not hasattr(target, "is_alive"):
+        if not isinstance(target, Combatant):
             return True
 
         alive = target.is_alive()
@@ -631,18 +637,18 @@ class ActionAttack(_Action):
 
     def resolve(self, handler):
         """
-        Purpose: Resolve one swing and report what it did to the activity.
+        Purpose: Resolve one combat action and report what it did to the activity.
 
         Entry:
             handler is this action's owning BlackoutCombatHandler.
 
         Exit/Returns:
             Returns an ActivityEvent describing the outcome:
-                TARGET_INVALID       — nothing left to swing at, before or
-                                       after the swing landed
+                TARGET_INVALID       — nothing left to combat action at, before or
+                                       after the combat action landed
                 ACTOR_INCAPACITATED  — the attacker killed itself on a
                                        backfire
-                ACTION_RESOLVED      — the swing completed and the fight goes on
+                ACTION_RESOLVED      — the combat action completed and the fight goes on
 
         Module Globals:
             None
@@ -655,7 +661,7 @@ class ActionAttack(_Action):
             used to be scattered through here.
 
         Notes/References:
-            Self-damage lands AFTER the target's, so a swing that both kills
+            Self-damage lands AFTER the target's, so a combat action that both kills
             and backfires still reads in cause-then-consequence order.
 
         Author: Nick Hobar
@@ -696,7 +702,7 @@ class ActionAttack(_Action):
         return ActivityEvent.ACTION_RESOLVED
 
     def _announce_lost_target(self, attacker, target) -> None:
-        """Tell the attacker why the swing did not happen."""
+        """Tell the attacker why the combat action did not happen."""
         if target is None:
             attacker.msg("Your target is gone.")
             return
@@ -705,7 +711,7 @@ class ActionAttack(_Action):
         attacker.msg(f"|x{name} is already dead.|n")
 
     def _announce_miss(self, attacker, target, context) -> None:
-        """Broadcast a swing that connected with nothing."""
+        """Broadcast a combat action that connected with nothing."""
         attacker.msg(
             (combat_msg.format_outgoing_miss(attacker, target), {"type": "testing"})
         )
@@ -748,7 +754,7 @@ class ActionFlee(_Action):
 
 
 class ActionWield(_Action):
-    """Weapon change queued between swings. Resolves once, then hands the
+    """Weapon change queued between combat actions. Resolves once, then hands the
     combatant back to whatever they were attacking."""
 
     def __init__(self, weapon_id: int) -> None:
@@ -809,11 +815,10 @@ class BlackoutCombatHandler(TickableHandler):
     Each combatant runs ONE BlackoutCombatHandler at TICK_SECONDS
     interval. Every tick it decrements the combatant's personal weapon
     cooldown counter and, once that counter reaches zero, fires the
-    pending action: an attack swing resolves against the active target,
+    pending action: an attack combat action resolves against the active target,
     or a hold/flee/wield overrides the current intention.
 
-    Cleanup detail — per the research doc and the CombatEntity plan,
-    disconnect (at_post_unpuppet) triggers at_disconnect_combat_cleanup,
+    Disconnect (at_post_unpuppet) triggers at_disconnect_combat_cleanup,
     which in turn calls drop_combatant on this handler so no "combat‑log"
     exploit is possible.
     """
@@ -831,7 +836,7 @@ class BlackoutCombatHandler(TickableHandler):
         """Seed active_weapon_data from the combatant's current equipment.
 
         Runs on reuse as well as creation, so a weapon swapped between fights
-        is picked up. Without this the very first swing of a fight used the
+        is picked up. Without this the very first combat action of a fight used the
         unarmed baseline rather than the combatant's real weapon or an NPC's
         spawner-stamped combat_stats.
         """
@@ -857,7 +862,7 @@ class BlackoutCombatHandler(TickableHandler):
         at_script_creation to have run in this process.
         """
         if self.ndb.cooldown_ticks is None:
-            self.ndb.cooldown_ticks = 0  # ticks until the next swing fires
+            self.ndb.cooldown_ticks = 0  # ticks until the next combat action fires
 
         if self.ndb.active_weapon_data is None:
             self.ndb.active_weapon_data = _unarmed_weapon_data()
@@ -946,15 +951,25 @@ class BlackoutCombatHandler(TickableHandler):
         if location is None:
             return [obj], []
 
+        from systems.tick.engine import get_tick_engine
+
+        engine = get_tick_engine()
         my_target_id = self.ndb.target_id
         enemies = []
 
         for comb in location.contents:
-            if comb is obj or not hasattr(comb, "scripts"):
+            if comb is obj:
                 continue
-            their_handler = get_handler_for(comb)
+
+            # A dict lookup against the tick rotation, NOT obj.scripts.all().
+            # This runs for every occupant, of every combatant, on every tick;
+            # as a query it was O(N*M) round trips per 0.6s and the only
+            # symptom would have been tick drift.
+            their_handler = engine.handler_for(comb.id, COMBAT_HANDLER_KEY)
+
             if their_handler is None:
                 continue
+
             if comb.id == my_target_id or their_handler.ndb.target_id == obj.id:
                 enemies.append(comb)
 
@@ -1015,7 +1030,7 @@ class BlackoutCombatHandler(TickableHandler):
         # ndb is wiped by a reload; reseed before any read below.
         self.init_runtime_state()
 
-        if not hasattr(obj, "is_alive") or not obj.is_alive():
+        if not isinstance(obj, Combatant) or not obj.is_alive():
             # The combatant itself can no longer act. Routed through the state
             # machine rather than torn down directly, so the handler passes
             # through TERMINATED and a reader arriving mid-teardown sees why.
@@ -1086,9 +1101,9 @@ class BlackoutCombatHandler(TickableHandler):
         if follow_up is None or not follow_up.consumes_cooldown:
             return
 
-        # attack_speed is the number of ticks BETWEEN swings, so a speed-4
-        # weapon swings on tick 0, 4, 8... The swing itself consumes one
-        # tick, hence the -1; assigning the full value produced a
+        # attack_speed is the number of ticks BETWEEN combat actions, so a speed-4
+        # weapon performs actions on tick 0, 4, 8... The action itself consumes one
+        # tick, hence the -1. Assigning the full value produced a
         # speed+1 cadence (3.0s instead of 2.4s for a speed-4 weapon).
         weapon_data = self.ndb.active_weapon_data or _unarmed_weapon_data()
         speed = weapon_data["attack_speed"]
@@ -1159,10 +1174,10 @@ class BlackoutCombatHandler(TickableHandler):
             logger.log_err("CombatHandler.queue_action: 'attack' missing target")
             return False
 
-        if not hasattr(target, "is_alive"):
+        if not isinstance(target, Combatant):
             logger.log_err(
-                f"CombatHandler.queue_action: target {target} is not a CombatEntity "
-                f"(no is_alive method)"
+                f"CombatHandler.queue_action: target {target} does not satisfy "
+                f"the Combatant protocol"
             )
             return False
 
@@ -1195,7 +1210,7 @@ class BlackoutCombatHandler(TickableHandler):
 
         Notes/References:
             flee and wield clear the cooldown so they take effect on the tick
-            they land rather than waiting out a weapon swing.
+            they land rather than waiting out a weapon action.
 
         Author: Nick Hobar
         Creation date: 08/18/2026
@@ -1286,7 +1301,7 @@ class BlackoutCombatHandler(TickableHandler):
         self.end_combat()
 
     def is_valid(self) -> bool:
-        return self.obj is not None and hasattr(self.obj, "is_alive") and self.obj.is_alive()
+        return isinstance(self.obj, Combatant) and self.obj.is_alive()
 
 
 # ─── module helpers ────────────────────────────────────────────────────────

@@ -44,6 +44,7 @@ from systems.managers import get_singleton_script, register_manager
 
 TICK_ENGINE_KEY = "blackout_tick_engine"
 
+
 # ─── Tick phases ───────────────────────────────────────────────────────────
 # Named points other systems can attach to without the engine importing them.
 # The engine drives the game's heartbeat; it must not know which systems care
@@ -185,17 +186,81 @@ class BlackoutTickEngine(DefaultScript):
         registry = self.ndb._handler_ids
 
         if registry is None:
-            ordered_ids = (
-                ScriptDB.objects.filter(
-                    db_key__in=tickable.tickable_keys(), db_is_active=True
-                )
-                .order_by("id")
-                .values_list("id", flat=True)
-            )
-            registry = dict.fromkeys(ordered_ids)
-            self.ndb._handler_ids = registry
+            self._reseed()
+            registry = self.ndb._handler_ids
 
         return registry
+
+
+    def _reseed(self) -> None:
+        """Rebuild the rotation and the owner index from the database.
+
+        One query, ordered by id, populating both structures together so they
+        cannot disagree about what is registered.
+        """
+        handlers = (
+            ScriptDB.objects.filter(
+                db_key__in=tickable.tickable_keys(), db_is_active=True
+            )
+            .order_by("id")
+        )
+
+        registry = {}
+        owners = {}
+
+        for handler in handlers:
+            registry[handler.id] = handler
+            owner = handler.obj
+
+            if owner is not None:
+                owners[(owner.id, handler.key)] = handler
+
+        self.ndb._handler_ids = registry
+        self.ndb._owner_index = owners
+
+
+    def _owner_index(self) -> dict:
+        """(owner id, handler key) -> handler, for the handlers in rotation.
+
+        Exists so a lookup by OWNER costs a dict hit rather than a database
+        query. check_stop_combat asks "does this room occupant have a combat
+        handler?" for every occupant, of every combatant, on every tick; each
+        answer used to be a ScriptDB query through obj.scripts.all(). At one
+        player against one raider that is invisible. At twenty combatants in a
+        room it is O(N*M) queries every 0.6 seconds, and the symptom is tick
+        drift with nothing to point at.
+
+        Kept in step with the rotation by register/_drop/_reseed, never
+        written anywhere else.
+        """
+        owners = self.ndb._owner_index
+
+        if owners is None:
+            self._reseed()
+            owners = self.ndb._owner_index
+
+        return owners
+
+
+    def handler_for(self, owner_id: int, handler_key: str):
+        """Return the registered handler of `handler_key` on `owner_id`, or None.
+
+        A dict lookup, validated against the row still existing -- a handler
+        deleted without unregistering would otherwise be handed out dead. A
+        stale entry is evicted on the way past rather than left to be found
+        again.
+        """
+        owners = self._owner_index()
+        handler = owners.get((owner_id, handler_key))
+
+        if handler is None:
+            return None
+
+        if handler.pk is None:
+            owners.pop((owner_id, handler_key), None)
+            return None
+
+        return handler
 
 
     def _strikes(self) -> dict:
@@ -222,7 +287,12 @@ class BlackoutTickEngine(DefaultScript):
 
         # Assigning an existing key leaves its position alone, so re-arming a
         # handler mid-fight must not shuffle it to the back of the rotation.
-        registry[handler.id] = None
+        registry[handler.id] = handler
+
+        owner = handler.obj
+
+        if owner is not None:
+            self._owner_index()[(owner.id, handler.key)] = handler
 
         self._ensure_loop()
 
@@ -438,8 +508,18 @@ class BlackoutTickEngine(DefaultScript):
         registry = self._registry()
         strikes = self._strikes()
 
-        registry.pop(handler_id, None)
+        handler = registry.pop(handler_id, None)
         strikes.pop(handler_id, None)
+
+        if handler is None:
+            return
+
+        # The owner index is keyed on the owner, not the handler, so it has to
+        # be cleared through the handler that was just dropped.
+        owner = handler.obj
+
+        if owner is not None:
+            self._owner_index().pop((owner.id, handler.key), None)
 
 
     def _record_success(self, handler_id: int) -> None:
@@ -458,8 +538,8 @@ class BlackoutTickEngine(DefaultScript):
         """Charge a handler one strike, evicting it once it has too many.
 
         Entry:
-            handler_id is a registered id. stage names what failed ("lookup"
-            or "tick") and appears in the eviction log.
+            handler_id is a registered id. stage names what failed ("tick")
+            and appears in the eviction log.
 
         Exit/Returns:
             Returns True if this strike evicted the handler.
@@ -545,18 +625,14 @@ class BlackoutTickEngine(DefaultScript):
             rule had to go.
 
         Notes/References:
-            The per-handler query here is deliberate for now; batching the
-            whole rotation into one filter(id__in=...) is a separate change
-            and wants the owner-map that comes with it.
+            No query: the rotation holds the handler objects themselves, so
+            this used to be one ScriptDB round trip per handler per tick and
+            is now a dict lookup. A deleted row shows up as pk None on the
+            instance Evennia's idmapper already shares.
         """
-        try:
-            handler = ScriptDB.objects.filter(id=handler_id).first()
-        except Exception:
-            logger.log_trace()
-            self._record_failure(handler_id, "lookup")
-            return
+        handler = self._registry().get(handler_id)
 
-        if handler is None or not hasattr(handler, "tick"):
+        if handler is None or handler.pk is None or not hasattr(handler, "tick"):
             self._drop(handler_id)
             return
 
@@ -629,6 +705,11 @@ def get_tick_engine() -> BlackoutTickEngine:
     to bring the tick up. get_singleton_script owns the lookup, including
     rebuilding a row whose typeclass path no longer loads -- this module has
     moved once already, and the stale row silently degrades to DefaultScript.
+
+    get_singleton_script caches the resolved row per process, which matters
+    here because this sits on per-tick paths -- get_sides resolves the engine
+    once per combatant per tick, and as a query that was the last per-tick
+    round trip left after the rotation started holding handler objects.
     """
     engine = get_singleton_script(TICK_ENGINE_KEY, BlackoutTickEngine)
 
@@ -637,6 +718,7 @@ def get_tick_engine() -> BlackoutTickEngine:
 
     # start() is a no-op if the Script was already active, so re-arm explicitly.
     engine._ensure_loop()
+
     return engine
 
 

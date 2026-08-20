@@ -21,6 +21,7 @@ from systems.statefeed import events as feed
 from systems.statefeed import serializers as feed_serializers
 
 from .. import combat_msg
+from ..protocols import Combatant
 from systems.tick.tickable import TickableHandler, ensure_handler, register_tickable
 from systems.tick.tickable import get_handler_for as _get_tickable_handler_for
 from .registry import AURA_REGISTRY
@@ -279,7 +280,7 @@ class BlackoutAuraHandler(TickableHandler):
             self.stop_aura()
             return
 
-        if not hasattr(caster, "is_alive") or not caster.is_alive():
+        if not isinstance(caster, Combatant) or not caster.is_alive():
             self.stop_aura()
             return
 
