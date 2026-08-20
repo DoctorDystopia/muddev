@@ -18,6 +18,11 @@ _ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 # The display name lives on the ItemDef.
 CREDITS_ITEM_KEY = "credits"
 
+# Why a purchase delivered nothing. Both are shown to the player through
+# npc_shopkeep._report_trade, which prefixes them with "Transaction failed".
+_NO_ROOM_ERROR = "Your inventory is full."
+_OUT_OF_STOCK_ERROR = "That is no longer in stock."
+
 
 def _is_currency(item, currency_key: str = CREDITS_ITEM_KEY) -> bool:
     return item.is_typeclass(CurrencyItem, exact=False) and item.currency_key == currency_key
@@ -242,40 +247,300 @@ def count_available(entry: SellEntry) -> int:
     return count
 
 
+def _publish_inventory(caller) -> None:
+    """
+    Purpose: Push one inventory snapshot once a trade has fully resolved.
+
+    Entry:
+        caller - the trading Character. Called after the goods and the
+                 credits have both settled, on success and on failure.
+
+    Exit/Returns:
+        No return value. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Moving goods publishes a snapshot of its own, because move_to runs
+        Character.at_object_receive / at_object_leave. The CREDITS never do:
+        credits_deduct and credits_add write `quantity` onto a surviving
+        stack or call obj.delete(), and delete() assigns `self.location =
+        None` directly rather than moving, so no hook fires. Selling part of
+        a stack is the same story. One publish at the end of the transaction
+        is what keeps the graphical grid honest about both halves of a trade
+        -- and about a refunded purchase, where nothing moved at all.
+
+    Notes/References:
+        systems/crafting/crafting_service.py _publish_inventory documents the
+        same asymmetry for the craft path.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    from evennia.utils import logger
+
+    from systems.statefeed import events as feed
+
+    try:
+        feed.emit_inventory(caller)
+    except Exception:
+        logger.log_trace()
+
+
+def _deliver_purchase(caller, obj) -> bool:
+    """
+    Purpose: Hand one bought object to the buyer.
+
+    Entry:
+        caller - the buying Character.
+        obj    - the object being sold: detached, when it was just spawned
+                 from a prototype, or still in the shopkeeper's contents when
+                 it was pre-stocked.
+
+    Exit/Returns:
+        True once the object is carried. False when the move was refused, in
+        which case the object has not moved and the buyer owes nothing.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        move_to, not `obj.location = caller`. Direct assignment does not fire
+        at_object_receive (CLAUDE.md gotcha 5), so a bought item landed in
+        contents with no inventory slot, merged into no existing stack and
+        published no state-feed snapshot -- the 3D client's pane sat stale
+        until some unrelated movement repaired it. at_pre_object_receive
+        never ran either, so a player at 32/32 could go on buying forever.
+
+        Nothing is dropped on the shop floor when the move is refused. A
+        craft has nowhere to put a rejected output but the ground; a purchase
+        does -- the goods simply stay in stock and the credits go back, which
+        is reversible and is what a shopkeeper would actually do.
+
+    Notes/References:
+        world/item_database.py ItemDef.create documents the same
+        spawn-detached-then-move pattern and the same reason for it.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    carried = obj.move_to(caller, quiet=True, move_type="buy")
+    return bool(carried)
+
+
+def _buy_prototype(caller, item_def, buy_count: int) -> tuple[int, bool]:
+    """
+    Purpose: Spawn and deliver up to `buy_count` copies of a prototype ware.
+
+    Entry:
+        caller    - the buying Character.
+        item_def  - the ItemDef named by the BuyEntry's key.
+        buy_count - how many were asked for.
+
+    Exit/Returns:
+        (delivered, refused). `delivered` is how many the buyer now carries;
+        `refused` is True when a copy would not fit, which ends the run. No
+        undelivered copy survives -- one that cannot be handed over is
+        deleted rather than left detached in the database forever.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Spawned detached and moved in a second step, with `home` pointed at
+        the buyer so the copy is never homeless in between. ItemDef.create
+        takes the same route for its own reason: at_object_receive reads
+        `stackable` and `quantity` to decide on a merge, and an object
+        spawned straight into a container runs that hook before the
+        attributes exist.
+
+    Notes/References: None.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    delivered = 0
+
+    for _ in range(buy_count):
+        obj = item_def.create(home=caller)
+        carried = _deliver_purchase(caller, obj)
+
+        if not carried:
+            obj.delete()
+            return delivered, True
+
+        delivered += 1
+
+    return delivered, False
+
+
+def _buy_stock(caller, npc, entry: BuyEntry, buy_count: int) -> tuple[int, bool]:
+    """
+    Purpose: Hand over up to `buy_count` of a ware the shopkeeper physically
+    holds.
+
+    Entry:
+        caller    - the buying Character.
+        npc       - the shopkeeper whose contents the wares live in.
+        entry     - the BuyEntry, whose content_items are those objects.
+        buy_count - how many were asked for.
+
+    Exit/Returns:
+        (delivered, refused), read as in _buy_prototype. Delivered objects
+        are dropped from entry.content_items, so a second pass over the same
+        entry cannot sell the same object twice.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The location guard stays: get_buy_items may have been built before
+        another shopper got here, so an object listed in the entry is not
+        proof the shopkeeper still holds it. A missing object is skipped; a
+        refusal ends the run, because the next copy would not fit either.
+
+    Notes/References: None.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    delivered = 0
+
+    for obj in list(entry.content_items):
+        if delivered >= buy_count:
+            break
+
+        if obj is None or obj.location != npc:
+            continue
+
+        carried = _deliver_purchase(caller, obj)
+
+        if not carried:
+            return delivered, True
+
+        entry.content_items.remove(obj)
+        delivered += 1
+
+    return delivered, False
+
+
 def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
+    """
+    Purpose: Charge for and hand over up to `buy_count` of one ware.
+
+    Entry:
+        caller    - the buying Character.
+        npc       - the shopkeeper.
+        entry     - the BuyEntry chosen from get_buy_items.
+        buy_count - how many were asked for.
+
+    Exit/Returns:
+        A BuyResult. `total_price` is what was actually charged, which is the
+        price of `bought_count` rather than of `buy_count`: anything not
+        delivered is refunded before returning. A purchase that delivered
+        nothing comes back success=False with every credit restored.
+
+    Module Globals:
+        _NO_ROOM_ERROR, _OUT_OF_STOCK_ERROR.
+
+    Methodology:
+        Pay first, refund the shortfall. Deducting the whole price up front
+        keeps the affordability test in one place, and every exit below
+        either delivers goods or hands credits back, so no refused delivery
+        can leave the buyer out of pocket. That matters now in a way it did
+        not before: delivery goes through move_to, which
+        Character.at_pre_object_receive can veto at 32/32.
+
+    Notes/References:
+        systems/menus/npc_dialogues/npc_shopkeep.py _report_trade prints
+        bought_count and total_price in one sentence, which is why the two
+        have to describe the same goods.
+
+    Author: Nick Hobar
+    Creation date: 07/13/2026
+    """
     if not entry:
         return BuyResult(success=False, error="Item not found.")
 
     total_price = buy_count * entry.buy_price
-    if not credits_deduct(caller, total_price):
+    paid = credits_deduct(caller, total_price)
+
+    if not paid:
         return BuyResult(success=False, error="Insufficient credits.")
 
-    bought = 0
     if entry.is_prototype:
         item_def = ITEM_DB.get(entry.key)
+
         if item_def is None:
             credits_add(caller, total_price)
             return BuyResult(success=False, error="Item definition missing.")
-        for _ in range(buy_count):
-            item_def.create(location=caller)
-            bought += 1
+
+        bought, refused = _buy_prototype(caller, item_def, buy_count)
     else:
-        for obj in list(entry.content_items):
-            if bought >= buy_count:
-                break
-            if obj.location == npc:
-                obj.location = caller
-                bought += 1
+        bought, refused = _buy_stock(caller, npc, entry, buy_count)
+
+    charged = bought * entry.buy_price
+    refund = total_price - charged
+
+    if refund > 0:
+        credits_add(caller, refund)
+
+    _publish_inventory(caller)
+
+    if bought == 0:
+        error = _NO_ROOM_ERROR if refused else _OUT_OF_STOCK_ERROR
+        return BuyResult(success=False, error=error)
 
     return BuyResult(
         success=True,
         bought_count=bought,
-        total_price=total_price,
+        total_price=charged,
         item_name=entry.name,
     )
 
 
 def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResult:
+    """
+    Purpose: Take up to `sell_count` of one ware off the seller and pay for
+    it.
+
+    Entry:
+        caller     - the selling Character.
+        npc        - the shopkeeper, who receives whole objects.
+        entry      - the SellEntry chosen from get_sell_items; its item list
+                     and count are updated in place to match what is left.
+        sell_count - how many were asked for.
+
+    Exit/Returns:
+        A SellResult carrying what was actually sold and what was paid for
+        it. An object the shopkeeper refuses stays with the seller and is not
+        paid for.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A whole object leaves through move_to, not `obj.location = npc`. That
+        is the mirror image of the buy-side bug: direct assignment skips
+        Character.at_object_leave, so the seller's inventory slot was never
+        released and no snapshot was published -- the grid went on showing
+        goods that now belonged to the shopkeeper, and the freed slot did not
+        come back until the next real item movement.
+
+        A part-sold STACK cannot use that route, because nothing leaves: the
+        surviving object merely has a smaller `quantity`, and a drained one
+        is deleted, which assigns location None rather than moving. Both are
+        invisible to the hooks, which is why the closing snapshot is
+        published from here rather than left to them.
+
+    Notes/References:
+        typeclasses/characters.py at_object_leave documents why the leave
+        hook has to name the departing object when it publishes.
+
+    Author: Nick Hobar
+    Creation date: 07/13/2026
+    """
     if not entry or not entry.items:
         return SellResult(success=False, error="Items no longer available.")
 
@@ -306,7 +571,12 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
             total_price += to_sell * entry.unit_price
             sold_count += to_sell
         else:
-            obj.location = npc
+            handed_over = obj.move_to(npc, quiet=True, move_type="sell")
+
+            if not handed_over:
+                remaining_items.append(obj)
+                continue
+
             total_price += entry.unit_price
             sold_count += 1
 
@@ -314,6 +584,8 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
     entry.count = count_available(entry)
 
     credits_add(caller, total_price)
+
+    _publish_inventory(caller)
 
     return SellResult(
         success=True,
