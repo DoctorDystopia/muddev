@@ -28,6 +28,7 @@ import time
 
 from evennia.utils import logger
 
+from . import buffer
 from . import constants as const
 from . import subscriptions
 
@@ -176,6 +177,15 @@ def emit(obj, payload, force: bool = False) -> int:
         return 0
 
     try:
+        # Inside a tick, a coalescable channel is held and sent once at the
+        # end -- the trailing send this module's rate cap could not offer. The
+        # buffer's own flush calls back in with force=True and the holding
+        # flag already cleared, so this cannot recurse.
+        held = buffer.hold(obj, payload)
+
+        if held:
+            return 0
+
         now = time.monotonic()
         sessions = _eligible_sessions(obj, channel, now, force)
 

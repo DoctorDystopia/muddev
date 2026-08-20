@@ -14,3 +14,7 @@ Description: The structured state feed — a machine-readable side-channel that
                  payloads.*                     — one dataclass per channel
                  constants.CHANNEL_*            — the channel names
 """
+
+# Imported for its side effect: buffer registers the tick-phase hooks that
+# bracket its per-tick coalescing window.
+from . import buffer  # noqa: E402,F401

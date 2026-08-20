@@ -168,6 +168,39 @@ CHANNEL_MIN_INTERVAL_SECONDS: dict = {
 # Fallback when a channel has no entry above.
 DEFAULT_MIN_INTERVAL_SECONDS: float = 0.0
 
+# ─── Coalescing ──────────────────────────────────────────────────────────────
+# Channels whose messages may be COALESCED: held during a tick and sent once at
+# the end, newest winning. This is the "trailing send" the cap discussion above
+# asks for -- nothing is dropped, the client simply gets one message per tick
+# instead of several.
+#
+# The membership rule is the same distinction the cap table draws, applied more
+# strictly. A channel may be coalesced ONLY if each message entirely SUPERSEDES
+# the last, so that keeping only the newest loses nothing:
+#
+#   - Whole-snapshot channels qualify. A grid, a vitals reading, a room's
+#     occupant list: the newest one tells the whole truth on its own.
+#   - EVENT and DELTA channels do NOT, and this is the half that matters.
+#     CHANNEL_COMBAT carries one message per swing; two attackers hitting the
+#     same target on one tick produce two, and keeping only the newest loses a
+#     hit the text log still shows. CHANNEL_ROOM_PLAYER_ADD / _REMOVE are
+#     deltas for the same reason -- coalescing two arrivals into one is the
+#     room_players bug in a new place.
+#   - CHANNEL_MAP is excluded despite being a snapshot, because it is CHUNKED:
+#     its messages are pieces of one payload, not successive versions of it,
+#     so "newest wins" would deliver chunk 2 and drop chunk 1.
+#
+# When in doubt, leave a channel OUT. An uncoalesced channel is merely chattier;
+# a wrongly coalesced one silently loses information.
+COALESCABLE_CHANNELS: frozenset = frozenset((
+    CHANNEL_CHAR_VITALS,
+    CHANNEL_CHAR_STATUS,
+    CHANNEL_CHAR_SUMMARY,
+    CHANNEL_CHAR_ITEMS,
+    CHANNEL_ROOM_INFO,
+    CHANNEL_ROOM_PLAYERS,
+))
+
 # The ndb attribute holding {channel: last_send_monotonic} per session.
 RATE_STATE_ATTR: str = "statefeed_last_send"
 
@@ -272,8 +305,15 @@ ITEM_FAMILY_GENERIC: str = "generic"
 # pane sends is exactly what the player sees beside the item when they type
 # `inventory`. The 0-based index in the payload is an array position, and the
 # conversion happens here rather than in the client.
+#
+# Drop names a SLOT, not a name, for the reason commands.inventory_cmds
+# .resolve_carried_item gives: eight identical rusty metal chunks are a real
+# inventory, and `drop rusty metal chunk` is a command whose target the pane
+# cannot predict. It sent one anyway until 08/17/2026, and the server picked
+# the lowest-numbered copy -- so right-clicking the eighth chunk dropped the
+# first. A slot index is exactly what the pane has.
 INVENTORY_ACTION_EQUIP: tuple = ("Equip", "equip {slot}")
-INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {name}")
+INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {slot}")
 INVENTORY_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
 
 # What an equipped item affords. Keyed by slot value rather than grid index,
