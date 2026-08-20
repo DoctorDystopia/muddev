@@ -83,7 +83,6 @@ class RustyPole(DefaultObject):
             Standard identification hook.
         
         Notes/References:
-            Replaces the legacy is_plant() check.
         
         Author: Nick Hobar
         Creation date: 06/05/2026

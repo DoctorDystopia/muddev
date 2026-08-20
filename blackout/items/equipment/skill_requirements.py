@@ -27,10 +27,6 @@ WEAPON_SKILL_MAP: dict[str, str | None] = {
     # Combat categories — gated via the Strike skill (melee accuracy).
     "shortsword": "strike",
     "spear":      "strike",
-    # Legacy alias: weapons.py renamed tool_type "sword" -> "shortsword", but
-    # objects spawned before that rename still carry the old value. Kept so
-    # those rows stay gated instead of failing closed and becoming unequippable.
-    "sword":      "strike",
     # Gadgets are salvage anyone can point at anything. Their behaviour comes
     # from an action rules definition rather than from the wielder's accuracy,
     # so gating them on Strike would be gating the wrong skill.

@@ -27,6 +27,10 @@ from world.item_database import ITEM_DB
 STACKABLE_KEY = "credits"
 NON_STACKABLE_KEY = "hammer"
 
+# An ItemDef tag is a (key, category) pair. Evennia's TagHandler.batch_add
+# reads any third element as tag DATA, not as a second category.
+_TAG_TUPLE_LENGTH = 2
+
 
 
 class TestCreatePrototypeParity(EvenniaTest):
@@ -159,6 +163,29 @@ class TestSpawnedAttributesMatchDefinition(EvenniaTest):
                 item_def.default_combat_style,
                 msg=item_key,
             )
+
+    def test_every_declared_tag_is_a_key_category_pair(self):
+        """Tags go straight to Evennia's TagHandler.batch_add, which reads a
+        THIRD tuple element as tag *data*, not as a second category. Writing
+        ("broken_bit_blade", "bit_blade", "weapon") therefore filed the item
+        under category "bit_blade" and silently dropped it out of the "weapon"
+        family -- which is what statefeed/serializers._family_of reads to pick
+        a mesh, so those weapons rendered as generic props in the 3D client.
+
+        Checked as its own test because the failure is invisible at runtime:
+        nothing raises, the item just quietly stops being a weapon.
+        """
+        for item_key, item_def in ITEM_DB.items():
+            for tag in item_def.tags:
+                self.assertEqual(
+                    len(tag),
+                    _TAG_TUPLE_LENGTH,
+                    msg=(
+                        f"{item_key} declares tag {tag!r}; ItemDef tags must be "
+                        f"(key, category) pairs -- a third element becomes tag "
+                        f"DATA and pushes the item out of its family category."
+                    ),
+                )
 
     def test_declared_tags_reach_the_object(self):
         for item_key, item_def in ITEM_DB.items():
