@@ -169,9 +169,32 @@ class TestInventoryActions(EvenniaTest):
 
         payload = feed_inventory.build_payload(self.char1)
         row = payload.items[0]
-        expected = "drop " + ITEM_DB["rusty_metal_chunk"].name
 
-        self.assertIn(expected, _commands(row))
+        self.assertIn("drop 1", _commands(row))
+
+    def test_drop_names_a_slot_rather_than_a_name(self):
+        """Drop must be addressed the way Equip is.
+
+        This asserted `drop <name>` until 08/17/2026, faithfully pinning a
+        template that was itself the bug: with eight identical chunks
+        carried, every row in the payload carried the SAME drop command, so
+        right-clicking any of them dropped whichever the server matched
+        first. A slot is the only target the pane can name that resolves
+        back to the item the player actually clicked.
+        """
+        for _ in range(3):
+            ITEM_DB["rusty_metal_chunk"].create(location=self.char1)
+
+        payload = feed_inventory.build_payload(self.char1)
+        drops = []
+
+        for row in payload.items:
+            for command in _commands(row):
+                if command.startswith("drop "):
+                    drops.append(command)
+
+        self.assertEqual(drops, ["drop 1", "drop 2", "drop 3"])
+        self.assertEqual(len(set(drops)), len(drops))
 
 
 class TestEquippedSnapshot(EvenniaTest):

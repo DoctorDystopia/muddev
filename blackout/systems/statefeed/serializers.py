@@ -162,6 +162,102 @@ def _classify(entity) -> tuple:
     return const.ASSET_KIND_ITEM, const.ASSET_KEY_GENERIC
 
 
+def _item_family(item) -> str:
+    """
+    Purpose: Name the mesh FAMILY an item belongs to.
+
+    Entry:
+        item - a live object.
+
+    Exit/Returns:
+        One of the const.ITEM_FAMILY_* values, or ITEM_FAMILY_GENERIC when the
+        item carries no recognised family tag.
+
+    Module Globals:
+        const.ITEM_FAMILIES and const.ITEM_FAMILY_GENERIC read.
+
+    Methodology:
+        Every ItemDef declares its family as a tag CATEGORY already -- a spear
+        is tagged ("rusty_scrap_spear", "weapon") -- so this reads a fact the
+        item database owns rather than restating it in a table here. The same
+        rule the asset key follows: adding an item to ITEM_DB must not require
+        an edit anywhere else before it renders.
+
+        The membership test against ITEM_FAMILIES is what makes this safe to
+        run over every tag on the object. A spawned item also carries Evennia's
+        own from_prototype tag, and a naive "first category wins" would return
+        that as the family for every item in the game.
+
+    Notes/References:
+        A family with no mesh client-side falls through to a generic one, so
+        adding a family to ITEM_FAMILIES ahead of its art is harmless.
+
+        Lived in inventory.py until the world pane started resolving its
+        entities through the same mesh resolver as the inventory pane. It sits
+        beside _classify now because the two answer halves of one question --
+        which mesh, and which mesh if that one does not exist -- and inventory.py
+        imports it the way it already imports _classify.
+
+    Author: Nick Hobar
+    Creation date: 08/15/2026
+    """
+    tag_handler = getattr(item, "tags", None)
+
+    if tag_handler is None:
+        return const.ITEM_FAMILY_GENERIC
+
+    tagged = tag_handler.all(return_key_and_category=True)
+
+    for _tag_key, category in tagged:
+        if category in const.ITEM_FAMILIES:
+            return str(category)
+
+    return const.ITEM_FAMILY_GENERIC
+
+
+def _mesh_family(entity, kind: str) -> str:
+    """
+    Purpose: Name the fallback mesh key for anything the feed can describe.
+
+    Entry:
+        entity - a live object.
+        kind   - the entity's ASSET_KIND_*, as decided by _classify.
+
+    Exit/Returns:
+        Returns the item's family for an item, and the kind itself for
+        everything else. Never "".
+
+    Module Globals:
+        const.ASSET_KIND_ITEM read.
+
+    Methodology:
+        ONE field, not two, and the reason is what happens on the client. The
+        resolver takes an asset key and a fallback key; giving it a `family`
+        for items and expecting it to reach for `kind` otherwise puts the
+        precedence rule in the renderer, where it would have to be repeated in
+        every client that ever connects. The server decides, exactly as it
+        already decides the interact verb.
+
+        The two vocabularies do not collide -- weapon, armor, jewellery,
+        crafting_material, crafting_tool and currency against npc, character,
+        station and gatherable -- so one namespace holds both.
+
+    Notes/References:
+        A spear on the floor and the same spear in a bag therefore report the
+        same family and draw the same mesh, which is the whole point of the
+        resolver being shared.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    if kind != const.ASSET_KIND_ITEM:
+        return kind
+
+    family = _item_family(entity)
+
+    return family
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def interact_command(entity, kind: str) -> str:
@@ -235,8 +331,8 @@ def serialize_entity(entity, coords=()) -> dict:
 
     Exit/Returns:
         Returns a dict of JSON-safe primitives. Always carries id, name, kind,
-        asset, interact and coords -- `interact` being "" for anything that
-        affords nothing, which a client reads as "not clickable". Carries
+        asset, family, interact and coords -- `interact` being "" for anything
+        that affords nothing, which a client reads as "not clickable". Carries
         hp / max_hp only when the entity actually has them, so a client can
         tell "full health" from "not a combatant" -- an item reported at 0/0
         would render a health bar on a rock.
@@ -245,6 +341,10 @@ def serialize_entity(entity, coords=()) -> dict:
         being 0: once the feed reports entities the observer is not standing
         with, a client has no way to place them without being told where they
         are, and would stack the whole neighbourhood onto the player's tile.
+
+        `asset` and `family` are the two tiers of one lookup, the same pair
+        CharItemsPayload sends: the client draws a model for the asset key if
+        it has one, and the family's generic mesh if it does not.
 
     Module Globals:
         None.
@@ -262,11 +362,13 @@ def serialize_entity(entity, coords=()) -> dict:
     Creation date: 08/07/2026
     """
     kind, asset_key = _classify(entity)
+    family = _mesh_family(entity, kind)
     body = {
         "id": entity.id,
         "name": str(entity.key),
         "kind": kind,
         "asset": asset_key,
+        "family": family,
         "interact": interact_command(entity, kind),
         "coords": list(coords),
     }

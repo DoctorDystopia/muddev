@@ -430,16 +430,22 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             except Exception:
                 pass
         super().at_object_leave(moved_obj, target_location, move_type=move_type, **kwargs)
-        self._publish_inventory()
+        # moved_obj is still in self.contents here -- move_to does not reassign
+        # its location until the step AFTER this hook. Publishing without
+        # naming it would re-adopt it into a free slot; see
+        # InventoryHandler.sync.
+        self._publish_inventory(ignore=moved_obj)
 
 
-    def _publish_inventory(self) -> None:
+    def _publish_inventory(self, ignore=None) -> None:
         """
         Purpose: Push a fresh inventory snapshot to this character's graphical
         clients after an item has finished moving.
 
         Entry:
             Called from at_object_receive and at_object_leave, AFTER super().
+            `ignore` is an object to treat as already gone, which the leave
+            path passes and the receive path does not.
 
         Exit/Returns:
             No return value. Never raises.
@@ -455,6 +461,14 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             existing. Waiting until the move has completed is what makes the
             snapshot true.
 
+            The two callers are NOT symmetric, because Evennia's move_to does
+            not treat them symmetrically. at_object_receive runs at step 8,
+            after the location change, so `contents` is already correct and
+            there is nothing to ignore. at_object_leave runs at step 4, before
+            it, so the departing object is still present and must be named --
+            otherwise sync() re-adopts it and the snapshot describes the
+            inventory the player had a moment ago.
+
             InventoryHandler deliberately does not publish from its own
             mutators for that same reason -- see EquipmentHandler._publish,
             which documents the other half of the asymmetry.
@@ -467,7 +481,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Creation date: 08/15/2026
         """
         try:
-            feed.emit_inventory(self)
+            feed.emit_inventory(self, ignore=ignore)
         except Exception:
             logger.log_trace()
 

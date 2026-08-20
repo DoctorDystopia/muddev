@@ -12,9 +12,10 @@ Description: Turn a character's inventory grid and equipment slots into the
              with a different shape: no coordinates, a slot index, a stack
              size, and several afforded verbs rather than one.
 
-             It does share serializers._classify, because the asset key is the
-             same fact in both places -- the mesh a client draws for a spear on
-             the floor is the mesh it draws for the same spear in a bag.
+             It does share serializers._classify and serializers._item_family,
+             because both are the same fact in both places -- the mesh a client
+             draws for a spear on the floor is the mesh it draws for the same
+             spear in a bag.
 
              What it deliberately does NOT carry is `desc`. serialize_entity
              gives the reason and it applies here twice over: the text channel
@@ -24,57 +25,10 @@ Description: Turn a character's inventory grid and equipment slots into the
 """
 
 from . import constants as const
-from .serializers import _classify
+from .serializers import _classify, _item_family
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
-
-def _item_family(item) -> str:
-    """
-    Purpose: Name the mesh FAMILY an item belongs to.
-
-    Entry:
-        item - a live object.
-
-    Exit/Returns:
-        One of the const.ITEM_FAMILY_* values, or ITEM_FAMILY_GENERIC when the
-        item carries no recognised family tag.
-
-    Module Globals:
-        const.ITEM_FAMILIES and const.ITEM_FAMILY_GENERIC read.
-
-    Methodology:
-        Every ItemDef declares its family as a tag CATEGORY already -- a spear
-        is tagged ("rusty_scrap_spear", "weapon") -- so this reads a fact the
-        item database owns rather than restating it in a table here. The same
-        rule the asset key follows: adding an item to ITEM_DB must not require
-        an edit anywhere else before it renders.
-
-        The membership test against ITEM_FAMILIES is what makes this safe to
-        run over every tag on the object. A spawned item also carries Evennia's
-        own from_prototype tag, and a naive "first category wins" would return
-        that as the family for every item in the game.
-
-    Notes/References:
-        A family with no mesh client-side falls through to a generic one, so
-        adding a family to ITEM_FAMILIES ahead of its art is harmless.
-
-    Author: Nick Hobar
-    Creation date: 08/15/2026
-    """
-    tag_handler = getattr(item, "tags", None)
-
-    if tag_handler is None:
-        return const.ITEM_FAMILY_GENERIC
-
-    tagged = tag_handler.all(return_key_and_category=True)
-
-    for _tag_key, category in tagged:
-        if category in const.ITEM_FAMILIES:
-            return str(category)
-
-    return const.ITEM_FAMILY_GENERIC
-
 
 def _equip_slot_value(item) -> str:
     """Name the equipment slot this item would occupy, or "" if it is not
@@ -245,7 +199,7 @@ def _serialize_equipped(handler) -> list:
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
-def build_payload(observer):
+def build_payload(observer, ignore=None):
     """
     Purpose: Snapshot an observer's whole inventory and equipment.
 
@@ -253,6 +207,10 @@ def build_payload(observer):
         observer - a puppeted Character. One with no inventory handler (an NPC,
                    a half-built test object) is a supported case and yields an
                    empty payload rather than raising.
+        ignore   - an object to omit from the snapshot even though the observer
+                   still technically contains it, or None. Passed straight to
+                   InventoryHandler.sync, which documents the one case that
+                   needs it.
 
     Exit/Returns:
         Returns a CharItemsPayload, or None when the observer has no inventory
@@ -267,6 +225,12 @@ def build_payload(observer):
         and it is the only thing that knows whether a slot points at an object
         that has since been deleted or moved -- reading `slots` without syncing
         first is how a snapshot ships an id that no longer resolves.
+
+        `ignore` is threaded rather than filtered out afterwards, because the
+        thing that must not see the departing object is sync() itself: its
+        adoption loop would re-slot the item and persist that, so filtering the
+        serialized rows would hide a bad payload while leaving the bad WRITE in
+        place.
 
         The equipment handler is read directly, without a sync, because it
         holds object references rather than ids and has no equivalent repair
@@ -288,7 +252,7 @@ def build_payload(observer):
     if inventory is None:
         return None
 
-    inventory.sync()
+    inventory.sync(ignore=ignore)
     carried = _serialize_carried(inventory)
     equipment = getattr(observer, "equipment", None)
     equipped = []

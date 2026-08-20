@@ -307,7 +307,7 @@ def emit_summary(observer, force: bool = False) -> int:
     return emit(observer, payload, force=force)
 
 
-def emit_inventory(observer, force: bool = False) -> int:
+def emit_inventory(observer, force: bool = False, ignore=None) -> int:
     """
     Purpose: Publish the observer's carried grid and equipment to themself.
 
@@ -317,6 +317,9 @@ def emit_inventory(observer, force: bool = False) -> int:
         force    - True to bypass rate caps. A formality today, since the
                    channel is uncapped by design, kept so the resync call site
                    looks like every other one.
+        ignore   - an object to treat as already gone when building the
+                   snapshot, or None. Only at_object_leave needs this; see
+                   InventoryHandler.sync for why.
 
     Exit/Returns:
         Returns the number of sends performed. Zero when nobody is subscribed,
@@ -365,7 +368,7 @@ def emit_inventory(observer, force: bool = False) -> int:
         return 0
 
     try:
-        payload = inventory_serializer.build_payload(observer)
+        payload = inventory_serializer.build_payload(observer, ignore=ignore)
     except Exception:
         logger.log_trace()
         return 0

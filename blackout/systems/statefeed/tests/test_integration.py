@@ -28,8 +28,8 @@ from systems.combat import constants as combat_const
 from systems.combat.combat import ensure_combat_handler
 from systems.combat.rules.context import ActionResult
 from systems.statefeed import constants as const
-from systems.statefeed import serializers
-from systems.statefeed.payloads import CombatPayload
+from systems.statefeed import serializers, subscriptions
+from systems.statefeed.payloads import CharItemsPayload, CombatPayload
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
 from typeclasses.npc_combat import spawn_mutant_raider
@@ -109,6 +109,40 @@ class TestEntitySerialisation(EvenniaTest):
 
         self.assertEqual(body["kind"], const.ASSET_KIND_GATHERABLE)
         self.assertEqual(body["asset"], "rusty_pole")
+
+    def test_an_item_on_the_floor_reports_the_family_it_reports_in_a_bag(self):
+        # The whole reason the resolver is shared: the mesh drawn for a spear
+        # lying on the ground is the mesh drawn for the same spear in a slot,
+        # which can only hold if both are told the same family.
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.room1)
+
+        body = serializers.serialize_entity(item)
+
+        self.assertEqual(body["family"], const.ITEM_FAMILY_WEAPON)
+
+    def test_a_non_item_falls_back_to_its_own_kind(self):
+        npc = spawn_mutant_raider(self.room1)
+
+        body = serializers.serialize_entity(npc)
+
+        self.assertEqual(body["family"], const.ASSET_KIND_NPC)
+
+    def test_a_gathering_node_reports_the_gatherable_family(self):
+        node = create_object(RustyPole, key="rusty pole", location=self.room1)
+
+        body = serializers.serialize_entity(node)
+
+        self.assertEqual(body["family"], const.ASSET_KIND_GATHERABLE)
+
+    def test_family_is_never_empty(self):
+        # An empty family would send the client to its generic cube by way of
+        # a lookup miss rather than a decision, which is the failure mode that
+        # looks like a rendering bug and is a serialisation one.
+        plain = self.obj1
+
+        body = serializers.serialize_entity(plain)
+
+        self.assertTrue(body["family"])
 
     def test_an_entity_carries_its_real_name_for_the_generic_fallback(self):
         npc = spawn_mutant_raider(self.room1)
@@ -246,7 +280,7 @@ class TestCombatFeed(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         recorder = _FeedRecorder()
 
@@ -383,6 +417,88 @@ class TestCombatFeed(EvenniaTest):
             self.assertIsInstance(value, (int, str, bool), msg=key)
 
 
+class TestInventoryFeedDuringAMove(EvenniaTest):
+    """
+    The snapshot published from at_object_leave must describe the
+    inventory the player is LEFT with.
+
+    This needs a SUBSCRIBED session and that is the whole point of it.
+    emit_inventory returns 0 before building anything when nobody is
+    listening, so on an unsubscribed character the serializer never runs,
+    sync() is never called mid-move, and the defect is invisible -- which
+    is exactly why it reached the 3D webclient with a green suite behind
+    it. Reproducing it requires paying the subscription cost.
+
+    The defect: move_to calls source.at_object_leave at step 4 and only
+    reassigns the moved object's location at step 5, so the departing item
+    is still in contents while the hook runs. sync()'s adoption loop then
+    re-slots the item the hook just removed, persists that, and publishes
+    a payload identical to the pre-drop one.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+
+    character_typeclass = BlackoutCharacter
+
+    def setUp(self):
+        super().setUp()
+        subscriptions.subscribe(self.session, [const.CHANNEL_CHAR_ITEMS])
+
+    def _drop(self, item):
+        """Move one carried item to the floor, recording what the feed said."""
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.statefeed.events.emit", recorder):
+            item.move_to(self.room1, quiet=True, move_type="drop")
+
+        return recorder
+
+    def test_the_snapshot_omits_the_item_being_dropped(self):
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.char1)
+
+        recorder = self._drop(item)
+        snapshots = recorder.of_type(CharItemsPayload)
+
+        self.assertTrue(snapshots, "the leave hook published nothing")
+        dropped = snapshots[-1]
+        carried_ids = [row["id"] for row in dropped.items]
+        self.assertNotIn(item.id, carried_ids)
+
+    def test_the_snapshot_counts_the_dropped_item_as_gone(self):
+        ITEM_DB[_TEST_ITEM_KEY].create(location=self.char1)
+        item = ITEM_DB["rusty_metal_chunk"].create(location=self.char1)
+
+        recorder = self._drop(item)
+        dropped = recorder.of_type(CharItemsPayload)[-1]
+
+        self.assertEqual(dropped.slots_used, 1)
+
+    def test_the_departing_item_is_not_re_slotted_in_the_saved_grid(self):
+        """The half that outlives the payload. A re-adopted item writes a
+        corrupted slot map to the database mid-move."""
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.char1)
+
+        self._drop(item)
+
+        self.assertEqual(self.char1.inventory.find_slot(item), -1)
+        self.assertEqual(self.char1.inventory.count_used(), 0)
+
+    def test_a_pickup_still_reports_the_item_it_gained(self):
+        """The receive side runs at step 8, after the location change, so it
+        must keep seeing the arriving object -- `ignore` is leave-only."""
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.room1)
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.statefeed.events.emit", recorder):
+            item.move_to(self.char1, quiet=True, move_type="get")
+
+        gained = recorder.of_type(CharItemsPayload)[-1]
+        carried_ids = [row["id"] for row in gained.items]
+        self.assertIn(item.id, carried_ids)
+        self.assertEqual(gained.slots_used, 1)
+
+
 class TestFeedIsSilentWithoutSubscribers(EvenniaTest):
     """The whole point of the opt-in: telnet players pay nothing."""
 
@@ -392,7 +508,7 @@ class TestFeedIsSilentWithoutSubscribers(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
         result = ActionResult(hit=True, damage=_SMALL_DAMAGE, hit_prob=1.0)
 
         with mock.patch("systems.combat.combat.resolve_action", return_value=result):

@@ -117,6 +117,66 @@ class TestMoveSlot(EvenniaTest):
         self.assertEqual(self.char1.inventory.find_slot(item), DISTANT_SLOT)
 
 
+class TestSyncIgnore(EvenniaTest):
+    """
+    The one window where `contents` lies.
+
+    move_to calls source.at_object_leave at step 4 but does not reassign
+    the moved object's location until step 5, so a departing item is
+    still in contents while the hook runs. sync()'s adoption loop would
+    therefore undo the remove_item that hook just performed -- re-slotting
+    an item that is on its way out, persisting that, and publishing a
+    state-feed snapshot describing an inventory the player no longer has.
+    """
+
+    def _carry(self, item_key: str = "rusty_metal_chunk"):
+        return ITEM_DB[item_key].create(location=self.char1)
+
+    def test_sync_readopts_an_unslotted_carried_item_by_default(self):
+        """The behaviour `ignore` suppresses. Adoption is load-bearing --
+        create_object(location=...) does not fire at_object_receive, so a
+        spawner-placed item gets its slot here or nowhere."""
+        item = self._carry()
+        self.char1.inventory.remove_item(item)
+
+        self.char1.inventory.sync()
+
+        self.assertGreaterEqual(self.char1.inventory.find_slot(item), 0)
+
+    def test_an_ignored_item_is_not_readopted(self):
+        item = self._carry()
+        self.char1.inventory.remove_item(item)
+
+        self.char1.inventory.sync(ignore=item)
+
+        self.assertEqual(self.char1.inventory.find_slot(item), -1)
+
+    def test_an_ignored_item_does_not_count_against_the_grid(self):
+        item = self._carry()
+        self.char1.inventory.remove_item(item)
+
+        self.char1.inventory.sync(ignore=item)
+
+        self.assertEqual(self.char1.inventory.count_used(), 0)
+
+    def test_ignoring_one_item_leaves_the_others_slotted(self):
+        leaving = self._carry("rusty_metal_chunk")
+        staying = self._carry("rusty_scrap_metal")
+        self.char1.inventory.remove_item(leaving)
+
+        self.char1.inventory.sync(ignore=leaving)
+
+        self.assertGreaterEqual(self.char1.inventory.find_slot(staying), 0)
+        self.assertEqual(self.char1.inventory.count_used(), 1)
+
+    def test_ignoring_nothing_is_the_old_behaviour(self):
+        item = self._carry()
+
+        self.char1.inventory.sync(ignore=None)
+
+        self.assertGreaterEqual(self.char1.inventory.find_slot(item), 0)
+
+
 class TestCanAccept(EvenniaTest):
     """
     can_accept is the pre-move check at_pre_object_receive relies on to
