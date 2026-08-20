@@ -65,7 +65,7 @@ def _send_self(observer) -> int:
         levels = _read_levels(skills)
 
     status = CharStatusPayload(
-        in_combat=bool(observer.attributes.get("in_combat", default=False)),
+        in_combat=bool(getattr(observer, "in_combat", False)),
         levels=levels,
     )
 

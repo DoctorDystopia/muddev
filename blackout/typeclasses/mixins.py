@@ -51,8 +51,9 @@ class CombatEntity:
                      or falls back to FORTITUDE_START_LEVEL (10).
 
         Exit/Returns:
-            No conditions. After this call, self.db.hp, self.db.max_hp, and
-            self.db.in_combat are all guaranteed to exist.
+            No conditions. After this call, self.db.hp and self.db.max_hp are
+            guaranteed to exist. in_combat is NOT seeded -- it is a derived
+            property now (see below), not an Attribute.
 
         Module Globals:
             combat_constants.FORTITUDE_START_LEVEL read as the default floor.
@@ -74,7 +75,6 @@ class CombatEntity:
 
         self.db.max_hp = max_hp
         self.db.hp = max_hp
-        self.db.in_combat = False
 
 
     @property
@@ -517,8 +517,7 @@ class CombatEntity:
             None.
 
         Methodology:
-            1. Mark self.db.in_combat = False (the canonical combat state).
-            2. Query self.combat (CombatEntity's lazy accessor) and if the
+            1. Query self.combat (CombatEntity's lazy accessor) and if the
                accessor returned a non-None handler, call its drop_combatant
                so the per-combatant Script can release the entity cleanly.
             3. Drop the lazy_property cache.
@@ -529,8 +528,6 @@ class CombatEntity:
         Author: Nick Hobar
         Creation date: 07/26/2026
         """
-        self.db.in_combat = False
-
         try:
             handler = self.combat
         except Exception:
@@ -582,11 +579,60 @@ class CombatEntity:
         # Deferred and guarded: a diagnostic must never be able to break the
         # anti-combat-log path it is riding on.
         try:
-            from systems.combat import tick_debug
+            from systems.tick import debug as tick_debug
 
             tick_debug.detach(self)
         except Exception as exc:
             logger.log_err(f"at_disconnect_combat_cleanup tick_debug detach failed: {exc!r}")
+
+    @property
+    def in_combat(self) -> bool:
+        """
+        Purpose: Report whether this entity is currently in a fight.
+
+        Entry:
+            No conditions. Safe on an entity that has never fought.
+
+        Exit/Returns:
+            True while a live combat handler exists and is not tearing down.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            DERIVED, not stored. This was a persistent `db.in_combat`
+            Attribute written from five places, alongside four other things
+            that also answered "is this entity in combat?" -- whether a
+            handler script existed, its db_is_active column, its membership of
+            the tick rotation, and whether a pending action was set. Nothing
+            kept them in agreement, and the code to repair their disagreement
+            was most of what made combat teardown hard to follow.
+
+            The predicate is "has a live handler that is not final" rather
+            than "is mid-swing", because a defender who has been attacked but
+            has not acted yet IS in combat. `examine mutant raider` reporting
+            otherwise was a bug once already.
+
+        Notes/References:
+            systems/tick/states.py owns the state this reads.
+
+        Author: Nick Hobar
+        Creation date: 08/18/2026
+        """
+        from systems.tick import states
+
+        try:
+            handler = self.combat
+        except Exception:
+            return False
+
+        if handler is None or handler.pk is None:
+            return False
+
+        final = states.is_final(handler.state)
+
+        return not final
+
 
     # ─── CombatHandler lazy accessor (filled in by combat.py in batch 2) ────
 

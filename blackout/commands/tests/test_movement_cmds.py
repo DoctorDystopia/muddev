@@ -16,7 +16,7 @@ from unittest import mock
 from evennia.contrib.grid.xyzgrid.commands import CmdGoto
 
 from commands.movement_cmds import BlackoutGotoCmd
-from systems.combat.constants import COMBAT_TICK_SECONDS
+from systems.tick.constants import TICK_SECONDS
 
 # Public constant definitions
 
@@ -91,7 +91,7 @@ class TestBlackoutGotoPacing(unittest.TestCase):
     """
 
     def test_one_tile_per_server_tick(self):
-        self.assertEqual(BlackoutGotoCmd.auto_step_delay, COMBAT_TICK_SECONDS)
+        self.assertEqual(BlackoutGotoCmd.auto_step_delay, TICK_SECONDS)
 
     def test_the_contrib_default_is_actually_overridden(self):
         # Guards against the attribute being renamed upstream, which would

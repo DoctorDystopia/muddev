@@ -6,7 +6,6 @@ Description: Per-combatant BlackoutCombatHandler (DefaultScript) and action
              classes for twitch-style melee combat — attack, hold, flee, wield.
 """
 
-from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 
 from items.equipment.constants import WieldLocation
@@ -15,6 +14,23 @@ from systems.statefeed import events as feed
 
 from . import combat_msg
 from . import constants as const
+from systems.tick import states
+from systems.tick.states import ActivityEvent
+from systems.tick.tickable import TickableHandler, ensure_handler, register_tickable
+from systems.tick.tickable import get_handler_for as _get_tickable_handler_for
+
+
+# ─── module constants ──────────────────────────────────────────────────────
+
+# Canonical key for the per-combatant handler, used as its HANDLER_KEY, by
+# @register_tickable, and by the CombatEntity.combat accessor. Declared up here
+# rather than at the foot of the module because the class body now reads it.
+COMBAT_HANDLER_KEY = "blackout_combat_handler"
+
+# Every action kind queue_action will accept. A table rather than a branch
+# chain, so adding an action means adding an entry and an apply_action case
+# rather than editing a validation ladder.
+_QUEUEABLE_ACTION_KINDS = frozenset({"attack", "hold", "flee", "wield"})
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
 from .rules.pipeline import resolve_action
@@ -33,18 +49,15 @@ _WEAPON_STYLE_XP_MAP: dict[str, float] = {
 
 
 def _normalize_xp_skills(xp_skill) -> tuple:
-    """Resolve a style's `xp_skill` entry to a tuple of skill keys.
+    """Resolve a style's XP-skill entry to a tuple of skill keys.
 
-    Accepts a single key ("strike"), any iterable of keys, or the legacy
-    "controlled" sentinel still stored on weapons spawned before multi-skill
-    styles existed. Returns an empty tuple when the style awards nothing.
+    Accepts a single key ("strike") or any iterable of keys. Returns an empty
+    tuple when the style awards nothing.
     """
     if xp_skill is None:
         return ()
 
     if isinstance(xp_skill, str):
-        if xp_skill == const.LEGACY_CONTROLLED_XP_SENTINEL:
-            return const.CONTROLLED_XP_SKILLS
         return (xp_skill,)
 
     return tuple(xp_skill)
@@ -78,10 +91,7 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
     if getattr(attacker, "skills", None) is None:
         return []
 
-    # "weapon_style_xp_skill" is the current key. Weapons spawned before that
-    # rename still carry "xp_skill" in their stored style dicts, so fall back
-    # to it rather than silently awarding those swings nothing.
-    raw_targets = style.get("weapon_style_xp_skill", style.get("xp_skill"))
+    raw_targets = style.get("weapon_style_xp_skill")
     skill_targets = _normalize_xp_skills(raw_targets)
 
     awards = []
@@ -168,19 +178,14 @@ def _object_by_id(obj_id):
 def _stored_combat_styles(entity) -> dict:
     """Read an entity's combat-style table off its db attributes.
 
-    `combat_styles` is the current attribute. Objects spawned before the
-    rename still carry the table under `attack_type`, which collided
-    confusingly with the per-style `attack_type` key naming the damage type
-    (stab/slash/crush). Both are read here so live DB rows keep resolving
-    their styles instead of silently degrading to unarmed.
+    Named `combat_styles` rather than `attack_type` so it does not collide
+    with the per-style `attack_type` key, which names the damage type
+    (stab/slash/crush) instead of the table.
     """
     styles = getattr(entity.db, "combat_styles", None)
+
     if styles:
         return styles
-
-    legacy_styles = getattr(entity.db, "attack_type", None)
-    if legacy_styles:
-        return legacy_styles
 
     return {}
 
@@ -240,8 +245,7 @@ def available_combat_styles(weapon) -> dict:
     """Return the style-key -> style-dict table stored on `weapon`.
 
     Thin public wrapper around _stored_combat_styles so callers outside this
-    module (the combat-options menu) don't reach past the legacy attack_type
-    fallback it also handles.
+    module (the combat-options menu) read the table through one accessor.
     """
     return _stored_combat_styles(weapon)
 
@@ -390,8 +394,13 @@ class _Action:
     def __init__(self, kind: str) -> None:
         self.kind = kind
 
-    def resolve(self, handler) -> bool:
-        """Execute the action. Return True if combat ends after this action."""
+    def resolve(self, handler):
+        """Execute the action and report what happened to the activity.
+
+        Returns an ActivityEvent. Subclasses do NOT tear anything down: the
+        transition table decides what an outcome means, which is what keeps
+        an action from having to know about handler teardown at all.
+        """
         raise NotImplementedError
 
     def next_action(self, handler):
@@ -597,63 +606,113 @@ class ActionAttack(_Action):
 
         return killed
 
-    def resolve(self, handler) -> bool:
+    def _target_unusable(self, target) -> bool:
+        """Whether `target` can no longer be acted on, for any reason.
+
+        Four separate checks used to be written out along resolve's length --
+        `target is None`, no `is_alive` attribute, `is_alive()` returning
+        False, and `target.pk is None` after an NPC deleted itself inside
+        at_damage -- with two of them repeated at different points. They are
+        one question with one answer, and the state machine has one event for
+        it.
+        """
+        if target is None:
+            return True
+
+        if getattr(target, "pk", None) is None:
+            return True
+
+        if not hasattr(target, "is_alive"):
+            return True
+
+        alive = target.is_alive()
+
+        return not alive
+
+    def resolve(self, handler):
+        """
+        Purpose: Resolve one swing and report what it did to the activity.
+
+        Entry:
+            handler is this action's owning BlackoutCombatHandler.
+
+        Exit/Returns:
+            Returns an ActivityEvent describing the outcome:
+                TARGET_INVALID       — nothing left to swing at, before or
+                                       after the swing landed
+                ACTOR_INCAPACITATED  — the attacker killed itself on a
+                                       backfire
+                ACTION_RESOLVED      — the swing completed and the fight goes on
+
+        Module Globals:
+            None
+
+        Methodology:
+            Returns an EVENT rather than a should-end boolean, and calls no
+            teardown itself. Deciding what an outcome means for the activity
+            is the transition table's job; this routine's job is to say what
+            happened. That is what removed the four end_combat() calls that
+            used to be scattered through here.
+
+        Notes/References:
+            Self-damage lands AFTER the target's, so a swing that both kills
+            and backfires still reads in cause-then-consequence order.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
         attacker = handler.obj
         target = self._get_target()
 
-        if target is None:
-            attacker.msg("Your target is gone.")
-            handler.end_combat()
-            return True
+        unusable = self._target_unusable(target)
 
-        if not hasattr(target, "is_alive") or not target.is_alive():
-            attacker.msg(f"|x{getattr(target, 'key', 'something')} is already dead.|n")
-            handler.end_combat()
-            return True
+        if unusable:
+            self._announce_lost_target(attacker, target)
+            return ActivityEvent.TARGET_INVALID
 
-        # ── swing resolution ─────────────────────────────────────────────
         context = self._build_context(handler, attacker, target)
         result = resolve_action(context)
 
-        # ── broadcast & damage application ───────────────────────────────
         if result.hit and result.damage > 0:
             killed = self._land_hit(context, result)
 
             if killed:
-                handler.end_combat()
-                return True
+                return ActivityEvent.TARGET_INVALID
         elif result.damage <= 0 and not result.self_damage:
-            attacker.msg((combat_msg.format_outgoing_miss(attacker, target), {"type": "testing"}))
-            target.msg((combat_msg.format_incoming_miss(attacker, target), {"type": "testing"}))
-            feed.emit_miss(context)
+            self._announce_miss(attacker, target, context)
 
-        # Self-damage lands AFTER the target's, so a swing that both kills and
-        # backfires still reads in cause-then-consequence order.
         if result.self_damage > 0:
             self_killed = self._land_backfire(context, result)
 
             if self_killed:
-                # The attacker's own at_death already ran leave_combat, which
-                # calls drop_combatant on THIS handler and deletes the row.
-                # Unlike the target-death path above -- where the dying entity
-                # owns a different handler -- ending combat again here would
-                # log four swallowed errors on every backfire death.
-                if handler.pk is not None:
-                    handler.end_combat()
+                return ActivityEvent.ACTOR_INCAPACITATED
 
-                return True
+        # at_damage may have deleted the target out from under us.
+        gone = self._target_unusable(target)
 
-        # A slain NPC deletes itself inside at_damage, so confirm the row
-        # still exists before touching db-backed state on it.
-        if target.pk is None:
-            handler.end_combat()
-            return True
+        if gone:
+            return ActivityEvent.TARGET_INVALID
 
-        if hasattr(target, "is_alive") and not target.is_alive():
-            handler.end_combat()
-            return True
+        return ActivityEvent.ACTION_RESOLVED
 
-        return False
+    def _announce_lost_target(self, attacker, target) -> None:
+        """Tell the attacker why the swing did not happen."""
+        if target is None:
+            attacker.msg("Your target is gone.")
+            return
+
+        name = getattr(target, "key", "something")
+        attacker.msg(f"|x{name} is already dead.|n")
+
+    def _announce_miss(self, attacker, target, context) -> None:
+        """Broadcast a swing that connected with nothing."""
+        attacker.msg(
+            (combat_msg.format_outgoing_miss(attacker, target), {"type": "testing"})
+        )
+        target.msg(
+            (combat_msg.format_incoming_miss(attacker, target), {"type": "testing"})
+        )
+        feed.emit_miss(context)
 
 
 class ActionHold(_Action):
@@ -662,8 +721,9 @@ class ActionHold(_Action):
     def __init__(self) -> None:
         super().__init__("hold")
 
-    def resolve(self, _handler) -> bool:
-        return False
+    def resolve(self, _handler):
+        """Holding is a completed action -- it just does nothing."""
+        return ActivityEvent.ACTION_RESOLVED
 
 
 class ActionFlee(_Action):
@@ -672,7 +732,7 @@ class ActionFlee(_Action):
     def __init__(self) -> None:
         super().__init__("flee")
 
-    def resolve(self, handler) -> bool:
+    def resolve(self, handler):
         obj = handler.obj
         obj.msg("|xYou scramble back and flee.|n")
         room = getattr(obj, "location", None)
@@ -680,11 +740,11 @@ class ActionFlee(_Action):
         if room is not None:
             room.msg_contents(f"|x{obj.key} flees!|n", exclude=obj)
 
-        handler.end_combat()
-
-        # MUST be True, end_combat deletes this script, so the tick loop has to
-        # stop touching self.db immediately.
-        return True
+        # No teardown here: the event says the actor chose to stop, and the
+        # transition table turns that into ENDING, which tick() acts on. This
+        # used to call end_combat() itself and return True purely so the loop
+        # would stop touching a deleted row.
+        return ActivityEvent.ACTIVITY_ABANDONED
 
 
 class ActionWield(_Action):
@@ -699,16 +759,16 @@ class ActionWield(_Action):
         weapon = _object_by_id(self.weapon_id)
         return weapon
 
-    def resolve(self, handler) -> bool:
+    def resolve(self, handler):
         weapon = self._get_weapon()
         if weapon is None:
             handler.obj.msg("|rYour weapon is gone.|n")
-            return False
+            return ActivityEvent.ACTION_RESOLVED
 
         equipment = getattr(handler.obj, "equipment", None)
         if equipment is None:
             handler.obj.msg("|rYou can't wield anything.|n")
-            return False
+            return ActivityEvent.ACTION_RESOLVED
 
         # Call the handler directly rather than execute_cmd("equip ..."):
         # CmdEquipment is a menu opener that ignores its arguments, so the
@@ -719,12 +779,12 @@ class ActionWield(_Action):
             equipment.equip(weapon)
         except EquipmentError as exc:
             handler.obj.msg(f"|r{exc}|n")
-            return False
+            return ActivityEvent.ACTION_RESOLVED
 
         handler._refresh_weapon()
         handler.obj.msg(f"|gYou ready your |w{weapon.key}|g.|n")
 
-        return False
+        return ActivityEvent.ACTION_RESOLVED
 
     def next_action(self, handler):
         """Resume attacking the current target, if there still is one.
@@ -742,10 +802,11 @@ class ActionWield(_Action):
 
 # ─── Combat handler ──────────────────────────────────────────────────────
 
-class BlackoutCombatHandler(DefaultScript):
+@register_tickable
+class BlackoutCombatHandler(TickableHandler):
     """Per-combatant twitch-combat ticker. Attached to a CombatEntity during combat.
 
-    Each combatant runs ONE BlackoutCombatHandler at COMBAT_TICK_SECONDS
+    Each combatant runs ONE BlackoutCombatHandler at TICK_SECONDS
     interval. Every tick it decrements the combatant's personal weapon
     cooldown counter and, once that counter reaches zero, fires the
     pending action: an attack swing resolves against the active target,
@@ -757,21 +818,27 @@ class BlackoutCombatHandler(DefaultScript):
     exploit is possible.
     """
 
-    def at_script_creation(self) -> None:
-        """Set up the in-memory state the handler reads every tick."""
-        self.key = COMBAT_HANDLER_KEY
-        self.desc = "Per‑combatant combat state"
+    HANDLER_KEY = COMBAT_HANDLER_KEY
+    ACCESSOR_NAME = "combat"
+    HANDLER_DESC = "Per‑combatant combat state"
 
-        # No Evennia timer of our own: ScriptDB.db_interval is an IntegerField
-        # and cannot express the 0.6s OSRS tick. The global BlackoutTickEngine
-        # owns the LoopingCall and calls our tick() instead.
-        self.interval = HANDLER_NO_TIMER_INTERVAL
+    # at_script_creation, mark_running and the ensure/get machinery all live on
+    # TickableHandler now -- they were written twice, once here and once on the
+    # aura handler, and had already drifted over when the accessor cache gets
+    # cleared.
 
-        # Twitch combat does not survive a restart; the engine sweeps leftovers
-        # at server start, and a fresh handler is created on the next attack.
-        self.persistent = False
+    def on_ensured(self) -> None:
+        """Seed active_weapon_data from the combatant's current equipment.
 
-        self.init_runtime_state()
+        Runs on reuse as well as creation, so a weapon swapped between fights
+        is picked up. Without this the very first swing of a fight used the
+        unarmed baseline rather than the combatant's real weapon or an NPC's
+        spawner-stamped combat_stats.
+        """
+        try:
+            self._refresh_weapon()
+        except Exception as exc:
+            logger.log_err(f"ensure_combat_handler _refresh_weapon failed: {exc!r}")
 
     # ── per-tick runtime state ───────────────────────────────────────────
     # All four fields below live on ndb, NOT db. They are rebuilt from scratch
@@ -837,24 +904,28 @@ class BlackoutCombatHandler(DefaultScript):
     # ── combat lifecycle ─────────────────────────────────────────────
 
     def start_combat_state(self, target=None) -> None:
-        """Mark this combatant (and optional target) as in combat.
+        """Move this combatant, and its target, into the fight.
 
-        Sets the previously-missing `db.in_combat = True` producer that
-        CombatEntity, CmdFlee, examine-display, and disconnect cleanup all
-        read but no code path was writing.
+        Used to write `db.in_combat = True` on both sides. That Attribute is
+        gone: CombatEntity.in_combat now derives from whether a live handler
+        exists, so ensuring the target HAS one is what puts it in combat --
+        which the attack command already does before calling this.
+
+        The defender is deliberately not given ACTION_QUEUED. It has not
+        queued anything; it is in combat because it is being attacked, and
+        its handler sitting in IDLE says exactly that.
         """
-        try:
-            self.obj.db.in_combat = True
-        except Exception as exc:
-            logger.log_err(f"CombatHandler.start_combat_state failed: {exc!r}")
+        self.dispatch(ActivityEvent.ACTION_QUEUED)
 
-        if target is not None:
-            try:
-                target.db.in_combat = True
-            except Exception as exc:
-                logger.log_err(
-                    f"CombatHandler.start_combat_state (target) failed: {exc!r}"
-                )
+        if target is None:
+            return
+
+        try:
+            ensure_combat_handler(target)
+        except Exception as exc:
+            logger.log_err(
+                f"CombatHandler.start_combat_state (target) failed: {exc!r}"
+            )
 
     def get_sides(self):
         """Return (allies, enemies) of this handler's combatant.
@@ -927,29 +998,13 @@ class BlackoutCombatHandler(DefaultScript):
 
     # ── liveness ─────────────────────────────────────────────────────────
 
-    def mark_running(self) -> None:
-        """Flag this handler as live.
-
-        With `interval = -1` Evennia will never set `db_is_active` for us
-        (`ScriptBase._start_task` bails out when the interval is <= 0), yet
-        `get_handler_for`, the `CombatEntity.combat` accessor and the tick
-        engine's registry rebuild all key off that flag. Since the engine —
-        not Evennia — owns our timer, we set it ourselves. `stop()` clears it
-        again on the way out.
-        """
-        if self.is_active:
-            return
-        
-        self.db_is_active = True
-        self.save(update_fields=["db_is_active"])
-
     # ── tick loop ────────────────────────────────────────────────────────
 
     def tick(self) -> None:
-        """Advance one COMBAT_TICK_SECONDS tick.
+        """Advance one TICK_SECONDS tick.
 
         Called by the global BlackoutTickEngine's LoopingCall, not by Evennia's
-        Script timer — see tick_engine.py for why.
+        Script timer — see systems/tick/engine.py for why.
         """
         obj = self.obj
 
@@ -961,7 +1016,10 @@ class BlackoutCombatHandler(DefaultScript):
         self.init_runtime_state()
 
         if not hasattr(obj, "is_alive") or not obj.is_alive():
-            self.end_combat()
+            # The combatant itself can no longer act. Routed through the state
+            # machine rather than torn down directly, so the handler passes
+            # through TERMINATED and a reader arriving mid-teardown sees why.
+            self._settle(ActivityEvent.ACTOR_INCAPACITATED)
             return
 
         # Per-tick keep-alive: end combat if our target fled the room or died
@@ -977,68 +1035,181 @@ class BlackoutCombatHandler(DefaultScript):
         if action is None:
             return
 
-        should_end = action.resolve(self)
-        if should_end:
+        event = action.resolve(self)
+
+        finished = self._settle(event)
+
+        if finished:
             return
 
-        # Hand the action a chance to name its successor, then charge a
-        # cooldown only if that successor costs one. An action that returns
-        # None idles the combatant instead of re-resolving every tick --
-        # ActionWield used to re-fire forever because nothing cleared it.
+        self._charge_cooldown(action)
+
+    def _settle(self, event) -> bool:
+        """Apply an action's outcome and tear down if the activity is over.
+
+        Returns True when the handler is finished for this tick -- either
+        because combat ended or because the row is already gone.
+
+        This is the one place teardown happens now. The actions used to call
+        end_combat() from four separate points and return a boolean saying
+        whether they had; the table decides instead, and a state reaching
+        ENDING or TERMINATED is what dismantles the handler.
+        """
+        if event is None:
+            return False
+
+        self.dispatch(event)
+
+        over = states.is_final(self.state)
+
+        if not over:
+            return False
+
+        # A backfire death runs the attacker's at_death, which calls
+        # leave_combat -> drop_combatant and deletes this row. Ending combat
+        # again would log four swallowed errors on every such death.
+        if self.pk is not None:
+            self.end_combat()
+
+        return True
+
+    def _charge_cooldown(self, action) -> None:
+        """Queue the action's successor and pay for it, if it costs anything.
+
+        An action that names no successor idles the combatant rather than
+        re-resolving every tick -- ActionWield used to re-fire forever because
+        nothing cleared it.
+        """
         follow_up = action.next_action(self)
         self.ndb.pending_action = follow_up
 
-        if follow_up is not None and follow_up.consumes_cooldown:
-            # attack_speed is the number of ticks BETWEEN swings, so a speed-4
-            # weapon swings on tick 0, 4, 8... The swing itself consumes one
-            # tick, hence the -1; assigning the full value produced a
-            # speed+1 cadence (3.0s instead of 2.4s for a speed-4 weapon).
-            speed = (self.ndb.active_weapon_data or _unarmed_weapon_data())["attack_speed"]
-            self.ndb.cooldown_ticks = max(0, speed - 1)
+        if follow_up is None or not follow_up.consumes_cooldown:
+            return
 
-        target = _object_by_id(self.ndb.target_id)
+        # attack_speed is the number of ticks BETWEEN swings, so a speed-4
+        # weapon swings on tick 0, 4, 8... The swing itself consumes one
+        # tick, hence the -1; assigning the full value produced a
+        # speed+1 cadence (3.0s instead of 2.4s for a speed-4 weapon).
+        weapon_data = self.ndb.active_weapon_data or _unarmed_weapon_data()
+        speed = weapon_data["attack_speed"]
 
-        if target is not None and hasattr(target, "is_alive") and not target.is_alive():
-            self.end_combat()
+        self.ndb.cooldown_ticks = max(0, speed - 1)
 
     # ── command interface ───────────────────────────────────────────────
 
     def queue_action(self, action_dict: dict) -> None:
-        """Called by combat Cmd* twitch commands. Replace the current pending action.
-
-        Expected keys:
-            'kind'   — 'attack' | 'hold' | 'flee' | 'wield'
-            'target' — (for 'attack') an Evennia Object.
-            'weapon' — (for 'wield') an Evennia Object.
-
-        Raises NO user-facing exception; logs errors.
         """
+        Purpose: Accept an intention from a combat command, to take effect at
+                 the top of the next tick.
+
+        Entry:
+            Expected keys:
+                'kind'   — 'attack' | 'hold' | 'flee' | 'wield'
+                'target' — (for 'attack') an Evennia Object.
+                'weapon' — (for 'wield') an Evennia Object.
+
+        Exit/Returns:
+            No return value. Raises no user-facing exception; logs errors and
+            messages the caller on a rejected attack.
+
+        Module Globals:
+            None
+
+        Methodology:
+            Validation happens NOW, because a player who typed `attack corpse`
+            should be told immediately rather than 600ms later. The state
+            change happens on the tick, because a command arrives whenever its
+            packet does and mutating handler state mid-tick made "does this
+            tick see it?" depend on rotation order.
+
+            start_combat_state is also immediate: it is the acknowledgement
+            that combat has begun, read by the summary panel and `examine`,
+            and it takes no part in per-tick resolution ordering.
+
+        Notes/References:
+            The mutations themselves are apply_action, which only the engine's
+            INPUT phase calls.
+
+        Author: Nick Hobar
+        Creation date: 07/26/2026
+        """
+        kind = action_dict.get("kind")
+
+        if kind == "attack":
+            accepted = self._validate_attack(action_dict)
+
+            if not accepted:
+                return
+
+            self.start_combat_state(target=action_dict.get("target"))
+
+        elif kind not in _QUEUEABLE_ACTION_KINDS:
+            logger.log_err(f"CombatHandler.queue_action got unrecognized kind: {kind!r}")
+            return
+
+        from systems.tick.engine import get_tick_engine
+
+        get_tick_engine().enqueue_action(self, action_dict)
+
+    def _validate_attack(self, action_dict: dict) -> bool:
+        """Check an attack intention, messaging the attacker if it is refused."""
+        target = action_dict.get("target")
+
+        if target is None:
+            logger.log_err("CombatHandler.queue_action: 'attack' missing target")
+            return False
+
+        if not hasattr(target, "is_alive"):
+            logger.log_err(
+                f"CombatHandler.queue_action: target {target} is not a CombatEntity "
+                f"(no is_alive method)"
+            )
+            return False
+
+        if not target.is_alive():
+            self.obj.msg(f"|x{target.key} is already dead.|n")
+            return False
+
+        return True
+
+    def apply_action(self, action_dict: dict) -> None:
+        """
+        Purpose: Make a queued intention this handler's pending action. Called
+                 only from the tick engine's INPUT phase.
+
+        Entry:
+            action_dict has already passed queue_action's validation. The
+            objects it names may have been deleted since, so ids are read
+            defensively.
+
+        Exit/Returns:
+            No return value.
+
+        Module Globals:
+            None
+
+        Methodology:
+            Every write that per-tick resolution reads -- pending_action,
+            target_id, cooldown_ticks -- happens here and nowhere else, so
+            they all land at the same point in the tick for every combatant.
+
+        Notes/References:
+            flee and wield clear the cooldown so they take effect on the tick
+            they land rather than waiting out a weapon swing.
+
+        Author: Nick Hobar
+        Creation date: 08/18/2026
+        """
+        self.init_runtime_state()
+
         kind = action_dict.get("kind")
 
         if kind == "attack":
             target = action_dict.get("target")
 
-            if target is None:
-                logger.log_err("CombatHandler.queue_action: 'attack' missing target")
+            if target is None or target.pk is None:
                 return
-            
-            if not hasattr(target, "is_alive"):
-                logger.log_err(
-                    f"CombatHandler.queue_action: target {target} is not a CombatEntity "
-                    f"(no is_alive method)"
-                )
-                return
-            
-            if not target.is_alive():
-                self.obj.msg(f"|x{target.key} is already dead.|n")
-                return
-            
-            # Flip the in-combat flag on both sides — the canonical state signal
-            # that CombatEntity, examine, CmdFlee, and disconnect cleanup all read.
-            # Previously only `False` was ever written anywhere, which is why
-            # `examine me` and `examine mutant raider` both reported in_combat=False
-            # even mid-swing.
-            self.start_combat_state(target=target)
+
             self.ndb.pending_action = ActionAttack(target.id)
             self.ndb.target_id = target.id
 
@@ -1052,12 +1223,9 @@ class BlackoutCombatHandler(DefaultScript):
         elif kind == "wield":
             weapon_obj = action_dict.get("weapon")
 
-            if weapon_obj is not None:
+            if weapon_obj is not None and weapon_obj.pk is not None:
                 self.ndb.pending_action = ActionWield(weapon_obj.id)
                 self.ndb.cooldown_ticks = 0
-
-        else:
-            logger.log_err(f"CombatHandler.queue_action got unrecognized kind: {kind!r}")
 
     # ── cleanup ─────────────────────────────────────────────────────────
 
@@ -1071,12 +1239,10 @@ class BlackoutCombatHandler(DefaultScript):
         """
         obj = self.obj
 
-        # Clear the canonical in-combat flag the rest of the codebase reads.
-        try:
-            if obj is not None:
-                obj.db.in_combat = False
-        except Exception as exc:
-            logger.log_err(f"CombatHandler.end_combat failed db cleanup: {exc!r}")
+        # No flag to clear: in_combat derives from this handler, which is
+        # about to be deleted. Announce the teardown to the state machine so a
+        # reader arriving mid-teardown sees ENDING rather than a live fight.
+        self.dispatch(ActivityEvent.ACTIVITY_ABANDONED)
 
         # Clear the CombatEntity.combat accessor cache. `lazy_property` caches
         # in obj.__dict__ (evennia/utils/utils.py), NOT on ndb, and its
@@ -1088,7 +1254,7 @@ class BlackoutCombatHandler(DefaultScript):
 
         # Drop out of the global tick rotation before the script goes away.
         try:
-            from .tick_engine import get_tick_engine
+            from systems.tick.engine import get_tick_engine
 
             get_tick_engine().unregister(self)
         except Exception as exc:
@@ -1123,108 +1289,28 @@ class BlackoutCombatHandler(DefaultScript):
         return self.obj is not None and hasattr(self.obj, "is_alive") and self.obj.is_alive()
 
 
-# ─── module constants ──────────────────────────────────────────────────────
-
-# Canonical key used by at_script_creation, get_handler_for, ensure_combat_handler,
-# and the CombatEntity.combat accessor — defined once (DRY).
-COMBAT_HANDLER_KEY = "blackout_combat_handler"
-
-# Sentinel interval marking a handler as having no Evennia-owned timer. The
-# global BlackoutTickEngine drives tick() instead; see tick_engine.py.
-HANDLER_NO_TIMER_INTERVAL = -1
-
-
 # ─── module helpers ────────────────────────────────────────────────────────
 
 def get_handler_for(entity) -> BlackoutCombatHandler | None:
-    """Scan entity's scripts and return the first *active* BlackoutCombatHandler, or None.
+    """Return entity's ACTIVE combat handler, or None.
 
-    A scripted combatant is considered "in combat" iff its handler is running.
-    Specifying is_active ensures that leftover stopped handlers (e.g. after
-    end_combat stops the script, or after a server reload races state) are not
-    mistaken for live combat — which previously caused the `caller.combat`
-    accessor to return a parked script and the `flee`/`hold` "you aren't in
-    combat" guard to behave inconsistently.
+    A named wrapper rather than a direct tickable.get_handler_for call because
+    a dozen call sites read `get_handler_for(caller)` and should not each have
+    to name the class.
     """
-    for script in entity.scripts.all():
-        if getattr(script, "key", "") == COMBAT_HANDLER_KEY and script.is_active:
-            return script
-        
-    return None
+    handler = _get_tickable_handler_for(entity, BlackoutCombatHandler)
+
+    return handler
 
 
 def ensure_combat_handler(combatant) -> BlackoutCombatHandler:
-    """Return the combatant's existing handler, or create+start one if absent.
+    """Return the combatant's handler, creating and arming one if absent.
 
     Used by the twitch combat commands (attack/wield/etc.) so each command
-    site doesn't reimplement the lazy create-or-fetch dance.
-
-    Handles DefaultScript.create()'s (script, errors) return contract:
-    surfaces any creation errors to the combatant and aborts on failure.
-
-    Two cases:
-        1. A well-formed handler already exists -> reuse it.
-        2. Anything else (no handler, or one persisted under an older/broken
-           configuration) -> delete the leftover and create a fresh one.
-
-    Case 2's delete-and-recreate replaces the old "revive a stopped leftover"
-    behaviour, which is what made the original bug permanent: handlers written
-    with `db_interval = 0` were resurrected on every attack forever, and no
-    amount of restarting them could ever produce a timer.
+    site doesn't reimplement the lazy create-or-fetch dance. The dance itself
+    is tickable.ensure_handler; the weapon refresh this used to do inline is
+    BlackoutCombatHandler.on_ensured.
     """
-    from .tick_engine import get_tick_engine
+    handler = ensure_handler(combatant, BlackoutCombatHandler)
 
-    existing = None
-    for script in combatant.scripts.all():
-        if getattr(script, "key", "") == COMBAT_HANDLER_KEY:
-            existing = script
-            break
-
-    if existing is not None and existing.interval != HANDLER_NO_TIMER_INTERVAL:
-        # Stale configuration (e.g. a pre-tick-engine handler). Don't revive it.
-        logger.log_info(
-            f"ensure_combat_handler: discarding stale handler on {combatant} "
-            f"(interval={existing.interval})."
-        )
-
-        combatant.__dict__.pop("combat", None)
-
-        try:
-            existing.delete()
-        except Exception as exc:
-            logger.log_err(f"ensure_combat_handler failed to delete stale handler: {exc!r}")
-
-        existing = None
-
-    if existing is None:
-        existing, errors = BlackoutCombatHandler.create(
-            key=COMBAT_HANDLER_KEY,
-            obj=combatant,
-        )
-
-        if errors:
-            for err in errors:
-                combatant.msg(f"|r{err}|n")
-            raise RuntimeError(f"Could not create combat handler for {combatant}: {errors}")
-        
-        combatant.__dict__.pop("combat", None)
-
-    # Evennia will not flag a zero-interval script active, so we own liveness.
-    existing.mark_running()
-
-    # A reused handler may have had its ndb wiped by a reload since it was
-    # created, so re-seed before anything reads the per-tick fields.
-    existing.init_runtime_state()
-
-    # Seed active_weapon_data from the combatant's current equipment (player)
-    # or spawner-stamped combat_stats (NPC), so the very first swing uses the
-    # combatant's real weapon/style rather than the unarmed baseline. Also
-    # re-runs on reuse, in case they changed weapons between combats.
-    try:
-        existing._refresh_weapon()
-    except Exception as exc:
-        logger.log_err(f"ensure_combat_handler _refresh_weapon failed: {exc!r}")
-
-    get_tick_engine().register(existing)
-
-    return existing
+    return handler

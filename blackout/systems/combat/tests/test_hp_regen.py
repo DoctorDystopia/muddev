@@ -14,6 +14,7 @@ from evennia.scripts.models import ScriptDB
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.combat import constants as const
+from systems.combat.combat import ensure_combat_handler
 from systems.combat.hp_regen import (
     REGEN_MANAGER_KEY,
     bootstrap_regen,
@@ -98,7 +99,7 @@ class TestRegenRegistration(EvenniaTest):
 
 class TestRegenSweep(EvenniaTest):
     """sweep() -- the healing logic itself. Runs unconditionally: regen is
-    not gated on db.in_combat, per the 08/08 design dialogue."""
+    not gated on being in combat, per the 08/08 design dialogue."""
 
     def test_sweep_heals_a_wounded_entity(self):
         manager = get_regen_manager()
@@ -114,7 +115,7 @@ class TestRegenSweep(EvenniaTest):
         """Regen must keep working mid-fight, not just once combat ends."""
         manager = get_regen_manager()
         self.char1.db.hp = self.char1.db.max_hp - 3
-        self.char1.db.in_combat = True
+        ensure_combat_handler(self.char1)  # in_combat is derived from this
         manager.register(self.char1)
 
         healed = manager.sweep()
@@ -177,10 +178,10 @@ class TestRegenHpSetterIntegration(EvenniaTest):
         self.assertNotIn(self.char1, manager.db.registry)
 
     def test_hp_setter_registers_while_still_in_combat(self):
-        """Registration must not depend on in_combat being False -- regen
+        """Registration must not depend on being out of combat -- regen
         runs ALL the time, mid-fight included."""
         manager = get_regen_manager()
-        self.char1.db.in_combat = True
+        ensure_combat_handler(self.char1)  # in_combat is derived from this
 
         self.char1.hp = self.char1.max_hp - 1
 

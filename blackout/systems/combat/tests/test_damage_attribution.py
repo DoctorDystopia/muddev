@@ -80,7 +80,7 @@ class TestMeleeAttribution(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         with mock.patch("systems.combat.combat.resolve_action",
                         return_value=result):
@@ -231,7 +231,7 @@ class TestBackfireSwing(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         result = ActionResult(hit=True, damage=damage, self_damage=self_damage,
                              hit_prob=1.0,
@@ -256,7 +256,7 @@ class TestBackfireSwing(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         result = ActionResult(hit=True, damage=0, self_damage=2, hit_prob=1.0,
                              damage_type=const.DAMAGE_TYPE_ENERGY)
@@ -299,7 +299,7 @@ class TestBackfireSwing(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
         result = ActionResult(hit=False, damage=0, hit_prob=0.0)
 
         with mock.patch("systems.combat.combat.resolve_action",

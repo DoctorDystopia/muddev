@@ -160,8 +160,7 @@ class TestDefaultRulesMatchTheReference(unittest.TestCase):
         result = resolve_action(context)
 
         self.assertTrue(result.hit, msg="seed 1 was chosen because it hits")
-        self.assertEqual(recorder.trace,
-                         ["random", "randint", "randint", "randint"])
+        self.assertEqual(recorder.trace, ["random", "randint"])
 
     def test_a_miss_draws_only_the_accuracy_roll(self):
         recorder = RecordingRandom(random.Random(0))
@@ -477,9 +476,11 @@ class TestScriptedRngStub(unittest.TestCase):
             resolve_action(context)
 
     def test_a_scripted_low_roll_always_connects(self):
-        # roll_damage draws a round-direction coin flip then two randint
-        # draws averaged together: r=0, a=4, b=4 -> floor((4+4)/2) == 4.
-        rng = ScriptedRandom(randoms=[0.0], randints=[0, 4, 4])
+        # roll_damage is a SINGLE uniform randint on [0, max_hit], so the one
+        # scripted draw is the damage. It briefly averaged two draws around a
+        # coin flip (combat_calc.roll_damage's commented-out variant), which is
+        # why this used to script three.
+        rng = ScriptedRandom(randoms=[0.0], randints=[4])
         context = _build_context(rng=rng)
 
         result = resolve_action(context)

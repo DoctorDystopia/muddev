@@ -11,7 +11,7 @@ from commands.constants import HELP_CATEGORY_COMBAT
 from systems.combat import combat_msg, constants as const
 from systems.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.combat.auras.registry import AURA_REGISTRY, find_aura
-from systems.combat import tick_debug
+from systems.tick import debug as tick_debug
 from systems.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
 from systems.combat.rules.introspect import describe_action_rules, describe_registry
 from systems.ui import colors

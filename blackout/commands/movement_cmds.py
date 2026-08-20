@@ -15,7 +15,7 @@ Description: Movement command overrides.
 from evennia.commands.cmdset import CmdSet
 from evennia.contrib.grid.xyzgrid.commands import CmdGoto
 
-from systems.combat.constants import COMBAT_TICK_SECONDS
+from systems.tick.constants import TICK_SECONDS
 
 
 class BlackoutGotoCmd(CmdGoto):
@@ -41,14 +41,13 @@ class BlackoutGotoCmd(CmdGoto):
     # OSRS-derived -- where one tile per tick IS walking speed. Pacing the
     # auto-walk to anything else invents a second clock for the same world.
     #
-    # Derived from COMBAT_TICK_SECONDS rather than written as 0.6, so retuning
-    # the tick moves the walk with it. The name says "combat" because that is
-    # what needed a heartbeat first; it is the server's tick length.
+    # Derived from TICK_SECONDS rather than written as 0.6, so retuning
+    # the tick moves the walk with it.
     #
     # A float is safe here. This is handed to evennia.utils.utils.delay, which
     # is twisted's deferLater and honours sub-second values -- it is NOT the
     # ScriptDB.db_interval integer field that truncates 0.6 to 0 and silently
-    # disables a timer. See the comment beside COMBAT_TICK_SECONDS for the
+    # disables a timer. See the comment beside TICK_SECONDS for the
     # trap this is not.
     #
     # This paces AUTO-WALK only. Manual movement -- a typed direction, the
@@ -57,7 +56,7 @@ class BlackoutGotoCmd(CmdGoto):
     # pathfinder by typing. Throttling that too would mean a gate in
     # Character.at_pre_move, which is a gameplay decision affecting telnet
     # players and has deliberately not been taken here.
-    auto_step_delay = COMBAT_TICK_SECONDS
+    auto_step_delay = TICK_SECONDS
 
     def _search_by_key_and_alias(self, inp, xyz_start):
         """

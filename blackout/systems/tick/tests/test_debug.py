@@ -20,10 +20,10 @@ from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTest
 
 from commands.combat_cmds import CmdTickDebug
-from systems.combat import constants as const
-from systems.combat import tick_debug
+from systems.tick import constants as const
+from systems.tick import debug as tick_debug
 from systems.combat.combat import ensure_combat_handler
-from systems.combat.tick_engine import get_tick_engine
+from systems.tick.engine import get_tick_engine
 
 
 class TickDebugTestCase(EvenniaTest):
@@ -97,7 +97,7 @@ class TestEngineTiming(TickDebugTestCase):
         """Regression: _tick returned early on an empty registry, so a player
         watching the tick saw nothing until somebody attacked."""
         engine = get_tick_engine()
-        engine.ndb._handler_ids = set()
+        engine.ndb._handler_ids = {}  # ordered registry; see BlackoutTickEngine._registry
         engine.ndb.tick_number = None
 
         engine._tick()
@@ -123,7 +123,7 @@ class TestEngineTiming(TickDebugTestCase):
 
         engine._tick()
 
-        self.assertEqual(engine.ndb.tick_interval, const.COMBAT_TICK_SECONDS)
+        self.assertEqual(engine.ndb.tick_interval, const.TICK_SECONDS)
 
     def test_registration_is_publicly_readable(self):
         engine = get_tick_engine()
@@ -246,7 +246,7 @@ class TestStreaming(TickDebugTestCase):
         engine._tick()
         self.lines.clear()
 
-        late = const.COMBAT_TICK_SECONDS * const.TICK_DEBUG_LATE_TICK_FACTOR
+        late = const.TICK_SECONDS * const.TICK_DEBUG_LATE_TICK_FACTOR
         stalled_at = engine.ndb.last_tick_at - (late * 2)
         engine.ndb.last_tick_at = stalled_at
 
@@ -258,16 +258,27 @@ class TestStreaming(TickDebugTestCase):
         self.assertIn("LATE", lines[0])
 
     def test_a_handler_dropped_from_the_rotation_is_reported(self):
-        """The silent failure the monitor exists for: _tick discards a handler
-        on any exception, and combat just stops with nothing said."""
+        """The silent failure the monitor exists for: a handler leaves the
+        rotation and combat just stops with nothing said.
+
+        Eviction now costs TICK_HANDLER_MAX_STRIKES consecutive failures
+        rather than one, so the failing ticks before the last are quiet by
+        design -- the handler is still registered and still recoverable. Only
+        the tick that actually evicts is worth reporting.
+        """
         engine = get_tick_engine()
         handler = self._engage()
 
         tick_debug.attach(self.char1, tick_debug.MODE_QUIET)
         engine._tick()
-        self.lines.clear()
 
         with mock.patch.object(type(handler), "tick", side_effect=RuntimeError("boom")):
+            for _ in range(const.TICK_HANDLER_MAX_STRIKES - 1):
+                engine._tick()
+
+            # Nothing has been evicted yet, so nothing should have been said.
+            self.lines.clear()
+
             engine._tick()
 
         lines = self._stream_lines()
@@ -303,7 +314,7 @@ class TestObserverLifecycle(TickDebugTestCase):
         engine = get_tick_engine()
 
         tick_debug.attach(self.char1, tick_debug.MODE_QUIET)
-        engine.ndb._handler_ids = set()
+        engine.ndb._handler_ids = {}  # ordered registry; see BlackoutTickEngine._registry
 
         for _ in range(const.TICK_DEBUG_AUTO_EXPIRE_TICKS):
             engine._tick()

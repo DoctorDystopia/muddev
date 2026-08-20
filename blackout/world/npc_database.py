@@ -46,7 +46,7 @@ class NpcDef:
     max_hp: int = 1
 
     # ─── Combat tunables ─────────────────────────────────────────────
-    # attack_speed — integer ticks; one tick = COMBAT_TICK_SECONDS (0.6s).
+    # attack_speed — integer ticks; one tick = TICK_SECONDS (0.6s).
     #     None falls back to UNARMED_ATTACK_SPEED_TICKS at create time.
     attack_speed: int | None = None
 

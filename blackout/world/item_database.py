@@ -33,7 +33,7 @@ class ItemDef:
     tags: list = field(default_factory=list)
     
     # ─── Combat fields (weapons only; None on non-combat items) ──
-    # attack_speed — integer ticks; one tick = COMBAT_TICK_SECONDS (0.6s).
+    # attack_speed — integer ticks; one tick = TICK_SECONDS (0.6s).
     # combat_stat_bonuses — dict[str, int] keyed by per-damage-type stat (e.g.
     #     'stab_attack_bonus', 'slash_attack_bonus', 'crush_attack_bonus',
     #     'melee_strength_bonus', 'stab_defense_bonus', 'slash_defense_bonus',

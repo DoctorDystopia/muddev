@@ -5,41 +5,6 @@ Creation date: 07/26/2026
 Description: Global tunables for the OSRS-derived Blackout combat engine (0-127 skill scaling).
 """
 
-# ─── Tick rhythm ─────────────────────────────────────────────────────────────
-# Blackout surfaces a universal tick so the engine rhythm can be retuned
-# globally without touching weapon definitions.
-#
-# This is consumed by the twisted LoopingCall in tick_engine.py, NOT by an
-# Evennia Script.interval — ScriptDB.db_interval is a Django IntegerField and
-# would silently truncate 0.6 to 0, which disables the timer entirely.
-COMBAT_TICK_SECONDS: float = 0.6
-
-# How often the tick engine's Evennia-side watchdog fires to confirm the
-# LoopingCall above is still alive. Must be a whole number of seconds.
-TICK_ENGINE_WATCHDOG_SECONDS: int = 60
-
-# ─── Tick diagnostics ────────────────────────────────────────────────────────
-# Knobs for the player-toggleable tick monitor in tick_debug.py. Diagnostics
-# only: nothing here changes what the engine DOES, only what it reports.
-
-# How many ticks a streaming observer is served before the monitor switches
-# itself off. At COMBAT_TICK_SECONDS that is five minutes. Left on, a stream
-# emits ~100 lines a minute forever, and the player who forgot about it is the
-# last person who will notice.
-TICK_DEBUG_AUTO_EXPIRE_TICKS: int = 500
-
-# A tick is reported LATE when the measured gap since the previous one exceeds
-# this multiple of COMBAT_TICK_SECONDS. LoopingCall schedules on a fixed
-# cadence and absorbs small overruns on its own, so a factor rather than a flat
-# margin is what distinguishes a real stall from ordinary scheduler noise.
-TICK_DEBUG_LATE_TICK_FACTOR: float = 1.5
-
-# How many measured intervals the engine keeps for the `tickdebug status`
-# mean/max/late report. Recorded unconditionally -- one deque append per tick
-# costs nothing, and it is what makes status a health check over a window
-# rather than a single instantaneous reading.
-TICK_DEBUG_SAMPLE_WINDOW: int = 50
-
 # ─── Skill scaling bounds ────────────────────────────────────────────────────
 # Blackout scales all skills 0..127 (inclusive). OSRS uses 1..99; the formulas
 # are scale-agnostic, so this constant exists purely as documentation and for
@@ -77,7 +42,7 @@ MAX_HP_CAP: int = MAX_FORTITUDE_LEVEL * HP_PER_FORTITUDE_LEVEL
 # mid-combat, not just while out of a fight.
 #
 # Rides on hp_regen.py's plain Evennia Script interval, NOT the twisted
-# LoopingCall in tick_engine.py -- 60 is a whole number of seconds, so
+# LoopingCall in systems/tick/engine.py -- 60 is a whole number of seconds, so
 # ScriptDB.db_interval (a Django IntegerField) holds it natively.
 HP_REGEN_INTERVAL_SECONDS: int = 60
 HP_REGEN_AMOUNT: int = 1
@@ -174,10 +139,6 @@ AGGRESSIVE_XP_SKILLS: tuple = ("brawn", "fortitude")
 CONTROLLED_XP_SKILLS: tuple = ("strike", "brawn", "defense", "fortitude")
 DEFENSIVE_XP_SKILLS: tuple = ("defense", "fortitude")
 
-# Weapons spawned before multi-skill styles existed stored the bare string
-# "controlled" in their attack_type dicts. Those DB rows are still live, so the
-# award path maps this sentinel onto CONTROLLED_XP_SKILLS above.
-LEGACY_CONTROLLED_XP_SENTINEL: str = "controlled"
 
 # ─── Augmentation ───────────────────────
 # OSRS treats Prayer as a percentage multiplier on effective level.

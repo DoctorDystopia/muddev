@@ -40,7 +40,7 @@ class BaseAura:
     radius = 0
 
     # Ticks between damage pulses. The tick engine calls the handler every
-    # COMBAT_TICK_SECONDS (0.6s); this is the multiplier on top of that.
+    # TICK_SECONDS (0.6s); this is the multiplier on top of that.
     tick_interval = const.AURA_DEFAULT_TICK_INTERVAL
 
     # Share of the caster's scaling-skill level dealt per pulse, as a fraction.

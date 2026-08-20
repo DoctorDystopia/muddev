@@ -7,7 +7,7 @@ Description: BlackoutRegenManager — the single server-wide sweep that heals
 
 Why a Script and not the twitch tick engine
 --------------------------------------------
-This is NOT part of the 0.6s combat rhythm in tick_engine.py -- regen is a
+This is NOT part of the 0.6s tick rhythm in systems/tick/engine.py -- regen is a
 per-minute mechanic (Player_Overview.md: "Players regenerate 1 Hitpoint per
 minute"), and HP_REGEN_INTERVAL_SECONDS is a whole number, so it can ride
 Evennia's own Script.interval (a Django IntegerField) directly instead of
@@ -38,11 +38,11 @@ any entity at or above max_hp is dropped, so nothing needs to explicitly
 unregister on healing.
 """
 
-from evennia.scripts.models import ScriptDB
 from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 
 from . import constants as const
+from systems.managers import get_singleton_script, register_manager
 
 # ─── module constants ──────────────────────────────────────────────────────
 
@@ -164,12 +164,7 @@ def get_regen_manager() -> BlackoutRegenManager:
 
     Mirrors get_respawn_manager / get_tick_engine.
     """
-    manager = ScriptDB.objects.filter(db_key=REGEN_MANAGER_KEY).first()
-
-    if manager is None:
-        manager, errors = BlackoutRegenManager.create(key=REGEN_MANAGER_KEY)
-        if errors:
-            raise RuntimeError(f"Could not create the Blackout regen manager: {errors}")
+    manager = get_singleton_script(REGEN_MANAGER_KEY, BlackoutRegenManager)
 
     manager._ensure_running()
     return manager
@@ -194,6 +189,7 @@ def register_for_regen(entity) -> bool:
     return get_regen_manager().register(entity)
 
 
+@register_manager
 def bootstrap_regen() -> BlackoutRegenManager:
     """Bring passive regen up at server start. Called from at_server_startstop."""
     return get_regen_manager()
