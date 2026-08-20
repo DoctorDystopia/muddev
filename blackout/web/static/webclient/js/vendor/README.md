@@ -45,3 +45,53 @@ refresh alone will not pick it up.
 ### Licence
 
 three.js is MIT licensed. Keep its licence header intact in the minified file.
+
+## `GLTFLoader.js` — required by `blackout_meshes.js` tier 1
+
+Present, pinned at **three.js r147** (`three@0.147.0`), the `examples/js` UMD
+build, 103 KB. It attaches `THREE.GLTFLoader` to the global namespace and is
+loaded straight after `three.min.js`.
+
+### Why r147 against an r159 core
+
+Because r159 does not have one. three.js deprecated the non-module
+`examples/js` directory at r147 and **deleted it at r148**; from r148 onward
+the loader ships only as an ES module importing from `'three'`, which the UMD
+global build never satisfies. r147 is therefore the newest UMD loader that
+exists at all, and pairing it with an r159 core was checked rather than hoped:
+
+- Every one of the 63 `THREE.*` symbols the loader touches is present in the
+  vendored r159 build.
+- The one API that moved between them is colour space — the loader still writes
+  `texture.encoding = THREE.sRGBEncoding`, renamed to `.colorSpace` at r152.
+  r159 keeps a compatibility accessor that maps the old property onto the new
+  one, so base-colour textures come out correctly sRGB and each one prints a
+  deprecation warning saying so.
+- Parsing was verified end to end against the real vendored core: a GLB in,
+  a `MeshStandardMaterial` with the right factors out.
+
+`toTrianglesDrawMode` is inlined in this build, so unlike the ES-module version
+it needs no `BufferGeometryUtils` alongside it.
+
+**This is the same r160 cliff `three.min.js` sits on, and they fall off it
+together.** Whichever release forces three.js into ES modules forces this
+loader into ES modules on the same day; the fix for both is one import map, not
+two separate migrations.
+
+### Replacing or upgrading the file
+
+    curl -sSL -o GLTFLoader.js https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js
+
+Draco- and KTX2-compressed models are **not** supported: those need
+`DRACOLoader` / `KTX2Loader` vendored beside this file and handed to the loader
+instance in `blackout_meshes.js`. A compressed model without them fails to
+load, which the resolver reports once and then renders procedurally — the item
+is still there and still labelled, it just is not the model you expected.
+
+If this file is missing entirely, `blackout_meshes.js` warns once and every
+item falls back to its procedural family mesh. Nothing breaks.
+
+### Licence
+
+MIT, same as three.js itself.
+

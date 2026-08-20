@@ -61,7 +61,13 @@ let blackout3d = (function () {
     const TILE_HEIGHT     = 0.16;
     const Z_LEVEL_GAP     = 4.0;    // gap between the disconnected map islands
     const ENTITY_RADIUS   = 0.26;   // ring radius for entities inside one tile
-    const ENTITY_SIZE     = 0.13;
+
+    // Entities come from blackoutMeshes, which returns everything inside a
+    // unit box, so this is how much of a tile one of them fills rather than a
+    // radius. Close to the 0.26 diameter of the spheres it replaced: big
+    // enough that a silhouette reads, small enough that four in a ring do not
+    // touch.
+    const ENTITY_SCALE    = 0.34;
 
     // Z is a map NAME, not an elevation, so the islands' relative placement
     // cannot be derived — it has to be authored. Maps not listed here fall in
@@ -114,8 +120,8 @@ let blackout3d = (function () {
 
     // Cursor-to-entity distance, in pixels, that counts as picking it.
     //
-    // Entities are ENTITY_SIZE spheres, which at a normal zoom is a handful of
-    // pixels — small enough that an honest ray/mesh intersection would make
+    // Entities are ENTITY_SCALE of a tile, which at a normal zoom is a handful
+    // of pixels — small enough that an honest ray/mesh intersection would make
     // them a test of aim rather than an interface. Comparing cursor distance to
     // each entity's projected position is forgiving, and does the more
     // obliging thing when two of them overlap in the ring: it takes whichever
@@ -186,12 +192,12 @@ let blackout3d = (function () {
     const COLOR_TILE_CURRENT = 0x35e0c0;
     const COLOR_LINK         = 0x2e4256;
     const COLOR_PLAYER       = 0x35e0c0;
-    const COLOR_ENTITY_NPC   = 0xff5f56;
-    const COLOR_ENTITY_ITEM  = 0xf0c674;
-    const COLOR_ENTITY_CHAR  = 0x7fb3ff;
-    const COLOR_ENTITY_STATN = 0x9d7bd8;   // crafting facility, bank terminal
-    const COLOR_ENTITY_NODE  = 0x7ac74f;   // gathering node
     const COLOR_HIT_FLASH    = 0xffffff;
+
+    // The COLOR_ENTITY_* palette that used to sit here now lives in
+    // blackout_meshes.js, with the shapes it paints. What an entity looks like
+    // is one fact and it has one owner; this pane asks for a mesh and draws
+    // what it is given.
     const COLOR_AURA         = 0xff8c42;
 
     // Hover is an EMISSIVE tint, not a colour swap, so it cannot fight the two
@@ -235,8 +241,12 @@ let blackout3d = (function () {
     const maps = {};                // z -> {nodes, links, chunksSeen, chunkCount}
     const zOffsets = {};            // z -> world X offset
     const tileMeshes = {};          // "z:x:y" -> Mesh
-    const entityMeshes = {};        // entity id -> Mesh
-    const flashes = [];             // {mesh, until, baseColor}
+    const entityMeshes = {};        // entity id -> Object3D from the resolver
+    const flashes = [];             // {mesh, until, baseColors}
+
+    // Bumped every time the entity list is redrawn. A mesh resolved for an
+    // older one is discarded rather than placed — see placeEntity.
+    let entityGeneration = 0;
 
     let currentRoom = null;         // {num, coords:[x,y,z], room_kind}
     let lastEntities = [];          // last room_players payload, for replay
@@ -294,17 +304,6 @@ let blackout3d = (function () {
         const color = new THREE.Color();
         color.setHSL(hue, 0.42, 0.42);
         return color.getHex();
-    };
-
-    // Kind drives the colour; `interact` drives what a click does. Keeping the
-    // two apart is what lets a shopkeeper look like the NPC it is while
-    // affording `talk` rather than `attack`.
-    const entityColor = function (entity) {
-        if (entity.kind === "npc")        { return COLOR_ENTITY_NPC; }
-        if (entity.kind === "character")  { return COLOR_ENTITY_CHAR; }
-        if (entity.kind === "station")    { return COLOR_ENTITY_STATN; }
-        if (entity.kind === "gatherable") { return COLOR_ENTITY_NODE; }
-        return COLOR_ENTITY_ITEM;
     };
 
     // Assign each map island a world offset. Named maps keep their authored
@@ -571,14 +570,98 @@ let blackout3d = (function () {
 
     // ─── Entity rendering ───────────────────────────────────────────────────
 
+    // Give an entity mesh materials of its OWN, and remember them.
+    //
+    // Hover and the hit flash both write to a material — emissive for one,
+    // colour for the other — and a mesh from the resolver may be a clone whose
+    // materials belong to a cached prototype shared with every other entity of
+    // that asset key. Writing through that would flash every mutant raider in
+    // the neighbourhood when one of them is hit.
+    //
+    // Cloning is per material, not per resource: geometry and textures stay
+    // shared, which is the expensive half. What it costs is that this pane now
+    // owns something it has to free, hence the list.
+    const takeOwnMaterials = function (mesh) {
+        const owned = [];
+
+        mesh.traverse(function (child) {
+            if (!child.material) {
+                return;
+            }
+            if (Array.isArray(child.material)) {
+                child.material = child.material.map(function (material) {
+                    const copy = material.clone();
+
+                    owned.push(copy);
+                    return copy;
+                });
+                return;
+            }
+            child.material = child.material.clone();
+            owned.push(child.material);
+        });
+        mesh.userData.ownMaterials = owned;
+    };
+
+    // Write one colour channel across every material an entity owns.
+    //
+    // A resolved entity is a Group of several meshes, so neither the flash nor
+    // the hover glow can reach for `mesh.material` any more. Both take the
+    // list takeOwnMaterials built rather than traversing again, so a mesh this
+    // pane did not prepare is silently left alone instead of half-tinted.
+    const paintOwned = function (mesh, channel, hex) {
+        const owned = mesh.userData.ownMaterials;
+
+        if (!owned) {
+            return;
+        }
+        owned.forEach(function (material) {
+            if (material[channel]) {
+                material[channel].setHex(hex);
+            }
+        });
+    };
+
+    const readOwnedColors = function (mesh) {
+        const owned = mesh.userData.ownMaterials || [];
+
+        return owned.map(function (material) {
+            return material.color.getHex();
+        });
+    };
+
+    const restoreOwnedColors = function (mesh, colors) {
+        const owned = mesh.userData.ownMaterials || [];
+
+        owned.forEach(function (material, index) {
+            if (index < colors.length) {
+                material.color.setHex(colors[index]);
+            }
+        });
+    };
+
     const clearEntities = function () {
         // Whatever was under the cursor is about to stop existing. The next
         // pointermove re-establishes the hover against the new meshes.
         setHover(null);
+
+        // A flash outlives its mesh otherwise, and restoring a colour onto a
+        // freed material is how a disposed entity comes back as a white ghost.
+        flashes.length = 0;
+
         Object.keys(entityMeshes).forEach(function (id) {
-            entityGroup.remove(entityMeshes[id]);
-        });
-        Object.keys(entityMeshes).forEach(function (id) {
+            const mesh = entityMeshes[id];
+
+            entityGroup.remove(mesh);
+            (mesh.userData.ownMaterials || []).forEach(function (material) {
+                material.dispose();
+            });
+            // Geometry and anything shared: the resolver decides, because the
+            // resolver is what knows whether this was built for us or cloned
+            // from a cached model. Before this call the pane freed NOTHING —
+            // every placeEntities left a geometry and a material behind, and
+            // an entity walking in and out of radius did it once each way.
+            blackoutMeshes.release(mesh);
             delete entityMeshes[id];
         });
     };
@@ -598,12 +681,37 @@ let blackout3d = (function () {
         return null;
     };
 
+    // Put one resolved mesh in the scene, if the scene it was resolved for is
+    // still the current one.
+    //
+    // `generation` is the whole reason this is a separate routine. Resolving
+    // is asynchronous, entity lists arrive on every delta, and a mesh whose
+    // snapshot has already been replaced must be thrown away rather than
+    // added — otherwise an NPC that left the radius reappears a frame later,
+    // placed where it used to stand, with nothing to remove it.
+    const placeEntity = function (entity, position, generation) {
+        blackoutMeshes.resolve(entity.asset, entity.family).then(function (mesh) {
+            if (generation !== entityGeneration || !entityGroup) {
+                blackoutMeshes.release(mesh);
+                return;
+            }
+            takeOwnMaterials(mesh);
+            mesh.scale.setScalar(ENTITY_SCALE);
+            mesh.position.copy(position);
+            mesh.userData.entity = entity;
+            entityGroup.add(mesh);
+            entityMeshes[entity.id] = mesh;
+        });
+    };
+
     const placeEntities = function (entities) {
         lastEntities = entities;
         if (!entityGroup) {
             return;
         }
         clearEntities();
+        entityGeneration += 1;
+        const generation = entityGeneration;
 
         // Group by tile before placing. entitySlotPos spreads N entities
         // evenly around one tile's ring, so the count it is given has to be
@@ -632,17 +740,10 @@ let blackout3d = (function () {
                 tile.coords[2], tile.coords[0], tile.coords[1]);
 
             tile.members.forEach(function (entity, index) {
-                const geo = new THREE.SphereGeometry(ENTITY_SIZE, 10, 8);
-                const mat = new THREE.MeshStandardMaterial({
-                    color: entityColor(entity)
-                });
-                const mesh = new THREE.Mesh(geo, mat);
-                mesh.position.copy(entitySlotPos(
-                    base, entity.id, index, tile.members.length));
-                mesh.userData.baseColor = mat.color.getHex();
-                mesh.userData.entity = entity;
-                entityGroup.add(mesh);
-                entityMeshes[entity.id] = mesh;
+                const position = entitySlotPos(
+                    base, entity.id, index, tile.members.length);
+
+                placeEntity(entity, position, generation);
             });
         });
     };
@@ -692,12 +793,24 @@ let blackout3d = (function () {
         if (!mesh) {
             return;
         }
-        mesh.material.color.setHex(COLOR_HIT_FLASH);
+        // A second hit inside the first flash extends it rather than starting
+        // again. Restarting would record WHITE as the colour to restore, and
+        // the entity would stay white until it was next redrawn — which for a
+        // stationary NPC being hit repeatedly is the whole fight.
+        const running = flashes.find(function (flash) {
+            return flash.mesh === mesh;
+        });
+
+        if (running) {
+            running.until = performance.now() + HIT_FLASH_MS;
+            return;
+        }
         flashes.push({
             mesh: mesh,
             until: performance.now() + HIT_FLASH_MS,
-            baseColor: mesh.userData.baseColor
+            baseColors: readOwnedColors(mesh)
         });
+        paintOwned(mesh, "color", COLOR_HIT_FLASH);
     };
 
     // ─── Aura ring ──────────────────────────────────────────────────────────
@@ -901,18 +1014,27 @@ let blackout3d = (function () {
 
     // ─── Hover feedback ─────────────────────────────────────────────────────
 
+    // Tiles are single meshes this pane built and own their materials
+    // outright; entities are Groups carrying the list takeOwnMaterials made.
+    // One routine covers both rather than branching on which was hovered.
+    const glow = function (mesh, hex) {
+        if (!mesh) {
+            return;
+        }
+        if (mesh.material && mesh.material.emissive) {
+            mesh.material.emissive.setHex(hex);
+            return;
+        }
+        paintOwned(mesh, "emissive", hex);
+    };
+
     const setHover = function (mesh) {
         if (hoverMesh === mesh) {
             return;
         }
-        if (hoverMesh && hoverMesh.material) {
-            hoverMesh.material.emissive.setHex(COLOR_NO_GLOW);
-        }
+        glow(hoverMesh, COLOR_NO_GLOW);
         hoverMesh = mesh;
-
-        if (hoverMesh && hoverMesh.material) {
-            hoverMesh.material.emissive.setHex(COLOR_HOVER_GLOW);
-        }
+        glow(hoverMesh, COLOR_HOVER_GLOW);
     };
 
     // ─── Control ────────────────────────────────────────────────────────────
@@ -1056,7 +1178,8 @@ let blackout3d = (function () {
 
         while (flashes.length && flashes[0].until <= now) {
             const flash = flashes.shift();
-            flash.mesh.material.color.setHex(flash.baseColor);
+
+            restoreOwnedColors(flash.mesh, flash.baseColors);
         }
 
         updateCamera();
@@ -1211,6 +1334,15 @@ let blackout3d = (function () {
             element.innerHTML =
                 "<p style='padding:1em'>three.js is not loaded — " +
                 "the 3D view is unavailable. The text pane is unaffected.</p>";
+            return;
+        }
+        // Second thing this pane cannot draw without, since the entities stopped
+        // being spheres it built itself. Same degradation: say so, and leave
+        // everything else about the client working.
+        if (!window.blackoutMeshes) {
+            element.innerHTML =
+                "<p style='padding:1em'>blackout_meshes.js is not loaded — " +
+                "the world pane has nothing to draw entities with.</p>";
             return;
         }
 
