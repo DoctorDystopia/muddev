@@ -16,6 +16,7 @@ from evennia.utils.test_resources import EvenniaTest
 from systems.combat import constants as const
 from systems.combat.combat import ensure_combat_handler
 from systems.combat.hp_regen import (
+    NO_EVENNIA_TIMER,
     REGEN_MANAGER_KEY,
     bootstrap_regen,
     get_regen_manager,
@@ -34,36 +35,97 @@ class TestRegenManagerWiring(EvenniaTest):
         self.assertEqual(first.id, second.id)
         self.assertEqual(ScriptDB.objects.filter(db_key=REGEN_MANAGER_KEY).count(), 1)
 
-    def test_sweep_interval_is_a_whole_number(self):
-        """Rides on Evennia's IntegerField, so it must be an int -- a float
-        would truncate and disable the timer entirely."""
+    def test_the_manager_owns_no_evennia_timer(self):
+        """The sweep runs on the tick scheduler; this Script exists only to
+        hold the persistent registry."""
         manager = get_regen_manager()
 
-        self.assertIsInstance(const.HP_REGEN_INTERVAL_SECONDS, int)
-        self.assertGreater(const.HP_REGEN_INTERVAL_SECONDS, 0)
-        self.assertEqual(manager.interval, const.HP_REGEN_INTERVAL_SECONDS)
+        self.assertEqual(manager.interval, NO_EVENNIA_TIMER)
+
+    def test_the_interval_is_a_whole_number_of_ticks(self):
+        """60s at 0.6s is exactly 100 ticks, so nothing is quantised away."""
+        self.assertIsInstance(const.HP_REGEN_INTERVAL_TICKS, int)
+        self.assertGreater(const.HP_REGEN_INTERVAL_TICKS, 0)
+        self.assertEqual(const.HP_REGEN_INTERVAL_TICKS, 100)
 
     def test_manager_is_persistent(self):
         """A non-persistent manager would silently drop the registry on reload."""
         self.assertTrue(get_regen_manager().persistent)
 
-    def test_ensure_running_rearms_a_timerless_manager(self):
-        """Simulates the hard-crash path: the server never got to pause the
-        script, so it comes back is_active with no task and would never sweep
-        again."""
-        manager = get_regen_manager()
-        manager.ndb._task = None
-
-        manager._ensure_running()
-
-        self.assertIsNotNone(manager.ndb._task)
-        self.assertTrue(manager.ndb._task.running)
-
     def test_bootstrap_starts_the_manager(self):
         manager = bootstrap_regen()
 
         self.assertEqual(manager.key, REGEN_MANAGER_KEY)
-        self.assertTrue(manager.is_active)
+
+
+class TestRegenIsScheduled(EvenniaTest):
+    """Regen rides the tick now, not an Evennia timer."""
+
+    def setUp(self):
+        super().setUp()
+        from systems.tick.engine import get_tick_engine
+
+        self.engine = get_tick_engine()
+        self.engine.ndb._handler_ids = {}
+        self.engine.ndb._scheduler = None
+        self.manager = get_regen_manager()
+        self.manager.ndb._sweep_handle = None
+
+    def test_bootstrap_books_a_sweep(self):
+        """Load-bearing: the scheduler is ndb, so a sweep booked before a
+        reload is gone and every user must re-arm itself at boot."""
+        bootstrap_regen()
+
+        self.assertIsNotNone(self.manager.ndb._sweep_handle)
+        self.assertEqual(self.engine.scheduler().pending_count(), 1)
+
+    def test_arming_twice_does_not_stack_two_sweeps(self):
+        self.manager.arm()
+        self.manager.arm()
+
+        self.assertEqual(self.engine.scheduler().pending_count(), 1)
+
+    def test_the_sweep_fires_on_its_tick(self):
+        self.char1.hp = self.char1.max_hp - 5
+        self.manager.arm()
+
+        for _ in range(const.HP_REGEN_INTERVAL_TICKS):
+            self.engine._tick()
+
+        self.assertEqual(self.char1.hp, self.char1.max_hp - 4)
+
+    def test_the_sweep_does_not_fire_early(self):
+        self.char1.hp = self.char1.max_hp - 5
+        self.manager.arm()
+
+        for _ in range(const.HP_REGEN_INTERVAL_TICKS - 1):
+            self.engine._tick()
+
+        self.assertEqual(self.char1.hp, self.char1.max_hp - 5)
+
+    def test_it_re_arms_itself_for_the_next_interval(self):
+        self.manager.arm()
+
+        for _ in range(const.HP_REGEN_INTERVAL_TICKS):
+            self.engine._tick()
+
+        self.assertEqual(self.engine.scheduler().pending_count(), 1)
+
+    def test_a_raising_sweep_still_books_the_next_one(self):
+        """The reason _on_due arms BEFORE sweeping. The scheduler contains a
+        callback's exceptions, so a sweep that raised before re-arming would
+        leave regen unscheduled forever with nothing to point at."""
+        from unittest import mock
+
+        self.manager.arm()
+
+        with mock.patch.object(
+            self.manager, "sweep", side_effect=RuntimeError("boom")
+        ):
+            for _ in range(const.HP_REGEN_INTERVAL_TICKS):
+                self.engine._tick()
+
+        self.assertEqual(self.engine.scheduler().pending_count(), 1)
 
 
 class TestRegenRegistration(EvenniaTest):

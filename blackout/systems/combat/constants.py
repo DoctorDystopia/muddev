@@ -5,6 +5,9 @@ Creation date: 07/26/2026
 Description: Global tunables for the OSRS-derived Blackout combat engine (0-127 skill scaling).
 """
 
+from systems.tick.scheduler import seconds_to_ticks
+
+
 # ─── Skill scaling bounds ────────────────────────────────────────────────────
 # Blackout scales all skills 0..127 (inclusive). OSRS uses 1..99; the formulas
 # are scale-agnostic, so this constant exists purely as documentation and for
@@ -45,6 +48,12 @@ MAX_HP_CAP: int = MAX_FORTITUDE_LEVEL * HP_PER_FORTITUDE_LEVEL
 # LoopingCall in systems/tick/engine.py -- 60 is a whole number of seconds, so
 # ScriptDB.db_interval (a Django IntegerField) holds it natively.
 HP_REGEN_INTERVAL_SECONDS: int = 60
+
+# The same interval in ticks, which is what the regen sweep is actually
+# scheduled on. Derived rather than written as 100 so retuning the tick moves
+# regen with it; 60s at 0.6s is exactly 100 ticks, so nothing is quantised
+# away here.
+HP_REGEN_INTERVAL_TICKS: int = seconds_to_ticks(HP_REGEN_INTERVAL_SECONDS)
 HP_REGEN_AMOUNT: int = 1
 
 # ─── Effective-level formula constants ─────────────────────────
@@ -73,7 +82,7 @@ HIT_CHANCE_FLOOR: float = 0.0
 HIT_CHANCE_CEILING: float = 0.99
 
 # ─── Melee attack types ──────────────────────────────────────────────────────
-# Which equipment bonus a swing reads. These strings are INTERPOLATED into
+# Which equipment bonus a melee swing reads. These strings are INTERPOLATED into
 # attribute keys — f"{attack_type}_attack_bonus" — so they must match the key
 # spellings in UNARMED_DEFAULT_COMBAT_STATS below and in world/item_defs/.
 
@@ -144,9 +153,9 @@ DEFENSIVE_XP_SKILLS: tuple = ("defense", "fortitude")
 # OSRS treats Prayer as a percentage multiplier on effective level.
 # In Blackout that role belongs to the Augmentation system (not yet built).
 # Crucially: Augmentation-flicking — toggling an augmentation for the tick a
-# swing lands and un-toggling it the tick after — is a CORE MECHANIC, not an
+# melee swing lands and un-toggling it the tick after — is a CORE MECHANIC, not an
 # anti-pattern to guard against. No MIN_BUFF_DURATION_TICKS knob exists. The
-# combat handler resolves each swing against the augmentation state at the
+# combat handler resolves each melee swing against the augmentation state at the
 # exact tick it lands, exactly as OSRS does, and lets the player own the APM.
 AUGMENTATION_DEFAULT_MULT: float = 1.0  # M_augmentation baseline
 
@@ -179,7 +188,7 @@ SPECIAL_ENERGY_REGEN_PER_30S: int = 10  # full bar in 5 min
 AURA_MIN_DAMAGE: int = 1
 
 # Default cadence, in ticks, between one aura's damage pulses. Four ticks is
-# 2.4 seconds, exactly one speed-4 weapon swing.
+# 2.4 seconds, exactly one speed-4 weapon combat action.
 AURA_DEFAULT_TICK_INTERVAL: int = 4
 
 # Distance metric used to decide which grid tiles a radius covers.
