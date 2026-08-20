@@ -12,13 +12,15 @@ from systems.stat_tracker.constants import KILLS_PER_HOSTILE_STAT_KEY
 from systems.stat_tracker.constants import CUTTING_TOTALS_STAT_KEY
 from systems.stat_tracker.constants import CREDITS_SPENT_STAT_KEY
 
+
 class StatKind(Enum):
     """
     Purpose: Distinguish the two shapes a tracked stat's storage can take.
 
     Notes/References:
         COUNTER holds one running total (e.g. total credits earned).
-        KEYED_COUNTER a dict holding a running total per sub-key (e.g. kills for every hostile type)
+        KEYED_COUNTER holds a dict of running totals, one per sub-key (e.g.
+        kills for every hostile type).
 
     Author: Danny Hered
     Creation date: 08/17/2026
