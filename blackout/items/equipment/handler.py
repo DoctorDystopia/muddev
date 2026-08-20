@@ -8,7 +8,7 @@ Description: EquipmentHandler — per-character wield-slot state and the
 
 from evennia.utils import logger
 
-from .constants import WieldLocation, MAX_INVENTORY_SLOTS
+from .constants import MAX_INVENTORY_SLOTS, WieldLocation, slots_displaced_by
 from .skill_requirements import ARMOR_SKILL_MAP, WEAPON_SKILL_MAP
 
 
@@ -256,85 +256,140 @@ class EquipmentHandler:
         return totals
 
 
-    def equip(self, obj):
+    def _required_skill_for(self, tool_type_value):
+        """Return the skill key gating this tool type, or None if ungated.
+
+        Raises EquipmentError for an UNREGISTERED type: failing closed is what
+        stops a renamed category from silently losing its level check. A type
+        mapped to None is explicitly exempt, which is why the two cases are
+        distinguished rather than both falling through.
         """
-        Equips an item from the character's inventory.
-        Removes it from contents (location=None) and places it in its slot.
-        Displaced items are returned to inventory (location=character).
+        if tool_type_value in WEAPON_SKILL_MAP:
+            return WEAPON_SKILL_MAP[tool_type_value]
+
+        if tool_type_value in ARMOR_SKILL_MAP:
+            return ARMOR_SKILL_MAP[tool_type_value]
+
+        logger.log_err(
+            f"EquipmentHandler.equip: unregistered tool_type "
+            f"{tool_type_value!r}; add it to WEAPON_SKILL_MAP or "
+            f"ARMOR_SKILL_MAP."
+        )
+        raise EquipmentError("You don't know how to use that.")
+
+    def _check_requirements(self, obj):
+        """Validate that this character may equip `obj`, and say where it goes.
+
+        Returns the WieldLocation it occupies. Raises EquipmentError with a
+        player-facing reason otherwise.
         """
         if obj not in self.obj.contents:
             raise EquipmentError("You must be carrying that to equip it.")
 
         use_slot = getattr(obj, "inventory_use_slot", None)
+
         if use_slot is None:
             raise EquipmentError("That item cannot be equipped.")
 
-        # Tool Tier Requirement Check — dispatched through WEAPON_SKILL_MAP and
-        # ARMOR_SKILL_MAP so new weapon/tool/armor categories can register
-        # their required skill without re-touching this branch block
-        # (data-driven tool-tier gate).
-        if hasattr(obj, "db"):
-            tool_type_value = obj.db.tool_type
-            if tool_type_value:
-                # An UNREGISTERED tool_type fails closed; a tool_type mapped to
-                # None is explicitly exempt. Distinguishing the two is what
-                # keeps a renamed weapon category from silently losing its
-                # level check on objects already spawned in the DB.
-                if tool_type_value in WEAPON_SKILL_MAP:
-                    required_skill = WEAPON_SKILL_MAP[tool_type_value]
-                elif tool_type_value in ARMOR_SKILL_MAP:
-                    required_skill = ARMOR_SKILL_MAP[tool_type_value]
-                else:
-                    logger.log_err(
-                        f"EquipmentHandler.equip: {obj} has unregistered "
-                        f"tool_type {tool_type_value!r}; add it to "
-                        f"WEAPON_SKILL_MAP or ARMOR_SKILL_MAP."
-                    )
-                    raise EquipmentError("You don't know how to use that.")
+        if not hasattr(obj, "db"):
+            return use_slot
 
-                if required_skill is not None:
-                    req_level = obj.db.req_level or 0
-                    meets_req = self.obj.skills.meets_prerequisite(required_skill, req_level)
-                    if not meets_req:
-                        skill_label = required_skill.capitalize()
-                        raise EquipmentError(
-                            f"You need a {skill_label} level of {req_level} to equip this."
-                        )
+        tool_type_value = obj.db.tool_type
 
-        # Determine which items will be displaced
-        to_unequip = []
-        if use_slot == WieldLocation.TWO_HANDS:
-            to_unequip = [self.slots[WieldLocation.MAIN_HAND], self.slots[WieldLocation.OFF_HAND]]
-        elif use_slot in (WieldLocation.MAIN_HAND, WieldLocation.OFF_HAND):
-            to_unequip = [self.slots[WieldLocation.TWO_HANDS], self.slots[use_slot]]
-        else:
-            to_unequip = [self.slots[use_slot]]
+        if not tool_type_value:
+            return use_slot
 
-        displaced_count = sum(1 for o in to_unequip if o is not None)
+        required_skill = self._required_skill_for(tool_type_value)
+
+        if required_skill is None:
+            return use_slot
+
+        req_level = obj.db.req_level or 0
+        meets_req = self.obj.skills.meets_prerequisite(required_skill, req_level)
+
+        if not meets_req:
+            skill_label = required_skill.capitalize()
+            raise EquipmentError(
+                f"You need a {skill_label} level of {req_level} to equip this."
+            )
+
+        return use_slot
+
+    def _displaced_by(self, use_slot) -> list:
+        """The items currently occupying every slot `use_slot` would clear."""
+        displaced = []
+
+        for slot in slots_displaced_by(use_slot):
+            occupant = self.slots[slot]
+
+            if occupant is not None:
+                displaced.append(occupant)
+
+        return displaced
+
+    def _check_inventory_room(self, displaced) -> None:
+        """Refuse a swap that would not fit back in the inventory.
+
+        Equipping frees one slot (the item leaves the grid) while each
+        displaced item consumes one, hence the -1.
+        """
         available = MAX_INVENTORY_SLOTS - self.count_inventory()
-        # Equipping frees 1 slot (item leaves inventory), displaced items consume slots
-        if displaced_count - 1 > available:
+
+        if len(displaced) - 1 > available:
             raise EquipmentError("Your inventory is too full to swap equipment.")
 
-        # Remove from inventory and free its slot
+    def _place(self, obj, use_slot, displaced) -> None:
+        """Move `obj` out of the inventory and into its slot.
+
+        Clears every slot the placement displaces -- from the same table that
+        decided WHAT was displaced, so the two cannot disagree -- then returns
+        the displaced items to the inventory.
+        """
         obj.location = None
+
         if hasattr(self.obj, "inventory"):
             self.obj.inventory.remove_item(obj)
 
-        if use_slot == WieldLocation.TWO_HANDS:
-            self.slots[WieldLocation.MAIN_HAND] = None
-            self.slots[WieldLocation.OFF_HAND] = None
-            self.slots[use_slot] = obj
-        elif use_slot in (WieldLocation.MAIN_HAND, WieldLocation.OFF_HAND):
-            self.slots[WieldLocation.TWO_HANDS] = None
-            self.slots[use_slot] = obj
-        else:
-            self.slots[use_slot] = obj
+        for slot in slots_displaced_by(use_slot):
+            self.slots[slot] = None
 
-        # Return displaced items to inventory
-        for old_obj in to_unequip:
-            if old_obj:
-                self._return_to_inventory(old_obj)
+        self.slots[use_slot] = obj
+
+        for old_obj in displaced:
+            self._return_to_inventory(old_obj)
+
+    def equip(self, obj):
+        """
+        Purpose: Equip a carried item, displacing whatever it conflicts with.
+
+        Entry:
+            obj is in the character's contents and declares an
+            inventory_use_slot.
+
+        Exit/Returns:
+            No return value. Raises EquipmentError, with a player-facing
+            message, if the item cannot be equipped or the swap will not fit.
+
+        Module Globals:
+            None
+
+        Methodology:
+            Check, collect, check again, place. The slot-conflict rule lives
+            in one table (constants.slots_displaced_by) that both the collect
+            and the place step read.
+
+        Notes/References:
+            Displaced items return to the inventory; the equipped item leaves
+            it (location=None) rather than being carried in both places.
+
+        Author: Nick Hobar
+        Creation date: 06/17/2026
+        """
+        use_slot = self._check_requirements(obj)
+        displaced = self._displaced_by(use_slot)
+
+        self._check_inventory_room(displaced)
+        self._place(obj, use_slot, displaced)
 
         self._save()
         self._publish()

@@ -76,4 +76,34 @@ SLOT_DISPLAY_ORDER = (
 
 # Max number of unequipped items a character can carry in their Evennia inventory (contents).
 # Equipped items (tracked by the handler) do not count against this limit.
+
+# Slots that must ALSO be emptied to put an item into a given slot, besides
+# that slot itself.
+#
+# A table because the rule was previously written out twice inside
+# EquipmentHandler.equip -- once to work out what would be displaced, once to
+# clear the slots -- and the two copies did not agree. The "what is displaced"
+# copy omitted the two-hand slot from its own conflict list, so equipping a
+# two-hander over a two-hander orphaned the old one: its location was already
+# None, and nothing returned it to the inventory. No two-handed item exists in
+# ITEM_DB yet, which is the only reason that never lost anyone an item.
+#
+# Slots not listed here conflict with nothing but themselves.
+SLOT_CONFLICTS: dict = {
+    WieldLocation.TWO_HANDS: (WieldLocation.MAIN_HAND, WieldLocation.OFF_HAND),
+    WieldLocation.MAIN_HAND: (WieldLocation.TWO_HANDS,),
+    WieldLocation.OFF_HAND: (WieldLocation.TWO_HANDS,),
+}
+
+
+def slots_displaced_by(use_slot) -> tuple:
+    """Every slot emptied by equipping into `use_slot`, including it.
+
+    Used both to collect what will be displaced and to clear those slots, so
+    the two can no longer disagree.
+    """
+    conflicts = SLOT_CONFLICTS.get(use_slot, ())
+
+    return (use_slot,) + conflicts
+
 MAX_INVENTORY_SLOTS = 32
