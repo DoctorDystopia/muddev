@@ -264,6 +264,21 @@ TARGETED_VERB_BY_KIND: dict = {
 # behaviour of the ('*', '*') entry in a map's PROTOTYPES table.
 ROOM_KIND_DEFAULT: str = "default"
 
+# The kind reported for a MAP-TRANSITION node: the `T` glyph that moves a
+# player to a coordinate on another map.
+#
+# It is a synthesised kind rather than a prototype key, because a transition
+# node has no prototype -- the contrib requires `prototype = None` on it, so no
+# room is ever spawned there and there is no key to read. Without this the
+# lookup below falls through to the map's ('*', '*') wildcard and reports the
+# tile as ordinary ground, which is how the one tile leading off the map came
+# to be drawn as more sand.
+#
+# Written in the ROOM_KIND_DEFAULT style -- a lowercase machine token rather
+# than a display name like "Bank" -- because no author typed it and none can
+# override it.
+ROOM_KIND_TRANSITION: str = "map_transition"
+
 
 # ─── Inventory ───────────────────────────────────────────────────────────────
 

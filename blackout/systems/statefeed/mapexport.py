@@ -29,6 +29,52 @@ from .payloads import MapChunkPayload
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
+def _is_transition_node(node) -> bool:
+    """
+    Purpose: Say whether a node is a transition to another map.
+
+    Entry:
+        node - a MapNode belonging to a parsed XYMap.
+
+    Exit/Returns:
+        Returns True for a configured map transition and False for every
+        ordinary node.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        `target_map_xyz` is what MAKES a node a transition -- the contrib's
+        MapTransitionNode declares it and nothing else does -- so this reads the
+        attribute rather than importing the contrib to isinstance against it,
+        which would put a map-layer import inside a statefeed module for one
+        type test.
+
+        A node carrying the attribute unset still holds (None, None, None), so
+        the Z slot is checked too. That is the map NAME, and a transition
+        without one leads nowhere; reporting it as a transition would put a
+        teleporter on a tile that cannot teleport.
+
+    Notes/References:
+        evennia/contrib/grid/xyzgrid/xymap_legend.py:1180 declares the node.
+        Note the base class carries the attribute MISSPELLED (`taget_map_xyz`)
+        and MapTransitionNode redeclares it correctly; this reads the spelling
+        every map in world/maps/ actually sets.
+
+    Author: Nick Hobar
+    Creation date: 08/20/2026
+    """
+    target = getattr(node, "target_map_xyz", None)
+
+    if not target:
+        return False
+
+    map_name = target[-1]
+    named = bool(map_name)
+
+    return named
+
+
 def _node_room_kind(xymap, node) -> str:
     """
     Purpose: Name the room type for one map node, without touching the DB.
@@ -38,11 +84,12 @@ def _node_room_kind(xymap, node) -> str:
         node  - a MapNode belonging to it.
 
     Exit/Returns:
-        Returns the prototype's "key" for that coordinate, falling back to the
-        map's ('*', '*') wildcard entry, then to ROOM_KIND_DEFAULT.
+        Returns ROOM_KIND_TRANSITION for a map-transition node, and otherwise
+        the prototype's "key" for that coordinate, falling back to the map's
+        ('*', '*') wildcard entry, then to ROOM_KIND_DEFAULT.
 
     Module Globals:
-        const.ROOM_KIND_DEFAULT read.
+        const.ROOM_KIND_TRANSITION, const.ROOM_KIND_DEFAULT read.
 
     Methodology:
         Mirrors the lookup order the xyzgrid builder itself uses when spawning
@@ -50,12 +97,22 @@ def _node_room_kind(xymap, node) -> str:
         order is what makes the exported room_kind agree with the room a player
         actually walks into.
 
+        A transition node is answered BEFORE that lookup, because for it the
+        lookup has no right answer to find: it spawns no room, so it owns no
+        prototype key, and the wildcard it would otherwise inherit describes
+        the ground around it rather than the way off the map.
+
     Notes/References:
         A map with no PROTOTYPES table at all is valid, hence the guard.
 
     Author: Nick Hobar
     Creation date: 08/07/2026
     """
+    transition = _is_transition_node(node)
+
+    if transition:
+        return const.ROOM_KIND_TRANSITION
+
     prototypes = getattr(xymap, "prototypes", None)
 
     if not prototypes:

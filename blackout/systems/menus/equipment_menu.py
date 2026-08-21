@@ -13,6 +13,7 @@ from items.equipment.constants import (
 )
 from items.equipment.handler import EquipmentError
 from systems.combat.combat_msg import format_combat_stat_bonuses
+from systems.menus.base_menu import back_option
 from systems.ui.colors import (
     ERROR_COLOR,
     HIGHLIGHT_COLOR,
@@ -23,6 +24,9 @@ from systems.ui.colors import (
 
 
 EQUIPPED_MARKER = "(equipped)"
+
+# Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
+CLOSING_TEXT = "Closing equipment menu."
 
 
 
@@ -84,7 +88,6 @@ def start(caller: object, **kwargs) -> tuple:
         "goto": "node_inventory",
     }
     options_list.append(inventory_cmd)
-    options_list.append({"desc": "Exit equipment menu", "goto": "node_exit"})
 
     return text, tuple(options_list)
 
@@ -106,7 +109,7 @@ def node_inventory(caller: object, **kwargs) -> tuple:
     if not items:
         text_lines.append(f"{HIGHLIGHT_COLOR}You are not carrying anything.{RESET_COLOR}")
         text = "\n".join(text_lines)
-        options = ({"desc": "Back to equipment overview", "goto": "start"},)
+        options = (back_option("Back to equipment overview", "start"),)
         return text, options
 
     options_list = []
@@ -133,7 +136,7 @@ def node_inventory(caller: object, **kwargs) -> tuple:
             })
 
     text = "\n".join(text_lines)
-    options_list.append({"desc": "Back to equipment overview", "goto": "start"})
+    options_list.append(back_option("Back to equipment overview", "start"))
     return text, tuple(options_list)
 
 
@@ -149,7 +152,7 @@ def node_equip_item(caller: object, **kwargs) -> tuple:
 
     if target_item is None:
         text = f"{ERROR_COLOR}That item is no longer in your inventory.{RESET_COLOR}"
-        options = ({"desc": "Back to inventory", "goto": "node_inventory"},)
+        options = (back_option("Back to inventory", "node_inventory"),)
         return text, options
 
     try:
@@ -160,7 +163,7 @@ def node_equip_item(caller: object, **kwargs) -> tuple:
         error_text = str(equip_err)
         text = f"{ERROR_COLOR}{error_text}{RESET_COLOR}"
 
-    options = ({"desc": "Back to equipment overview", "goto": "start"},)
+    options = (back_option("Back to equipment overview", "start"),)
     return text, options
 
 
@@ -176,14 +179,14 @@ def node_unequip(caller: object, **kwargs) -> tuple:
         slot_key = WieldLocation(slot_value)
     except ValueError:
         text = f"{ERROR_COLOR}Invalid equipment slot.{RESET_COLOR}"
-        options = ({"desc": "Back to equipment overview", "goto": "start"},)
+        options = (back_option("Back to equipment overview", "start"),)
         return text, options
 
     current_item = slots_data.get(slot_key)
 
     if current_item is None or current_item.id != item_id:
         text = f"{ERROR_COLOR}That item is no longer equipped.{RESET_COLOR}"
-        options = ({"desc": "Back to equipment overview", "goto": "start"},)
+        options = (back_option("Back to equipment overview", "start"),)
         return text, options
 
     try:
@@ -193,7 +196,7 @@ def node_unequip(caller: object, **kwargs) -> tuple:
     except EquipmentError as err:
         text = f"{ERROR_COLOR}{err}{RESET_COLOR}"
 
-    options = ({"desc": "Back to equipment overview", "goto": "start"},)
+    options = (back_option("Back to equipment overview", "start"),)
     return text, options
 
 
@@ -210,7 +213,7 @@ def node_item_detail(caller: object, **kwargs) -> tuple:
 
     if item_obj is None or item_obj.id != item_id:
         text = f"{HIGHLIGHT_COLOR}That item is no longer equipped.{RESET_COLOR}"
-        options = ({"desc": "Back to equipment overview", "goto": "start"},)
+        options = (back_option("Back to equipment overview", "start"),)
         return text, options
 
     slot_label = slot_key.label
@@ -237,7 +240,7 @@ def node_item_detail(caller: object, **kwargs) -> tuple:
                 text_lines.append(f"  {bonus_line}")
 
     text = "\n".join(text_lines)
-    options = ({"desc": "Back to equipment overview", "goto": "start"},)
+    options = (back_option("Back to equipment overview", "start"),)
     return text, options
 
 
@@ -253,7 +256,7 @@ def node_item_detail_inv(caller: object, **kwargs) -> tuple:
 
     if target_item is None:
         text = f"{ERROR_COLOR}That item is no longer in your inventory.{RESET_COLOR}"
-        options = ({"desc": "Back to inventory", "goto": "node_inventory"},)
+        options = (back_option("Back to inventory", "node_inventory"),)
         return text, options
 
     slot_idx = caller.inventory.find_slot(target_item)
@@ -286,10 +289,6 @@ def node_item_detail_inv(caller: object, **kwargs) -> tuple:
                 lines.append(f"  {bonus_line}")
 
     text = "\n".join(lines)
-    options = ({"desc": "Back to inventory", "goto": "node_inventory"},)
+    options = (back_option("Back to inventory", "node_inventory"),)
     return text, options
 
-
-def node_exit(caller: object, **kwargs) -> tuple:
-    text = "Closing equipment menu."
-    return text, None

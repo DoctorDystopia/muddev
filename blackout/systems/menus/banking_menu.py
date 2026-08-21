@@ -14,7 +14,19 @@ from typing import Callable
 from items.equipment.handler import EquipmentError
 from systems.banking import messages
 from items.equipment.constants import MAX_INVENTORY_SLOTS
-from systems.menus.base_menu import parse_quantity
+from systems.menus.base_menu import (
+    QUANTITY_ALL_KEYWORD,
+    back_option,
+    cancel_option,
+    parse_quantity,
+)
+from systems.menus.constants import (
+    QUANTITY_ALL_KEYS,
+    QUANTITY_CUSTOM_DESC,
+    QUANTITY_CUSTOM_KEYS,
+    QUANTITY_ONE_DESC,
+    QUANTITY_ONE_KEYS,
+)
 from systems.ui.colors import (
     ERROR_COLOR,
     HIGHLIGHT_COLOR,
@@ -25,6 +37,9 @@ from systems.ui.colors import (
 
 
 SEPARATOR = "-" * 60
+
+# Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
+CLOSING_TEXT = "Closing banking menu."
 
 
 def _format_item_details(item):
@@ -175,7 +190,6 @@ def start(caller, **kwargs):
         {"desc": "View storage", "goto": "node_storage"},
         {"desc": "Deposit items", "goto": "node_deposit_select"},
         {"desc": "Withdraw items", "goto": "node_withdraw_select"},
-        {"desc": "Exit banking menu", "goto": "node_exit"},
     ]
 
     return text, options
@@ -188,7 +202,7 @@ def node_storage(caller, **kwargs):
         text = f"{HIGHLIGHT_COLOR}Your bank vault is empty.{RESET_COLOR}"
         options = (
             {"desc": "Deposit items", "goto": "node_deposit_select"},
-            {"desc": "Back to menu", "goto": "start"},
+            back_option("Back to menu", "start"),
         )
 
         return text, options
@@ -204,7 +218,7 @@ def node_storage(caller, **kwargs):
             }
         )
 
-    options.append({"desc": "Back to menu", "goto": "start"})
+    options.append(back_option("Back to menu", "start"))
 
     return text, options
 
@@ -216,8 +230,8 @@ def node_item_detail(caller, **kwargs):
     if not item_objs:
         text = f"{ERROR_COLOR}That item is no longer in your bank.{RESET_COLOR}"
         options = (
-            {"desc": "Back to storage", "goto": "node_storage"},
             {"desc": "Back to menu", "goto": "start"},
+            back_option("Back to storage", "node_storage"),
         )
         return text, options
 
@@ -254,8 +268,8 @@ def node_item_detail(caller, **kwargs):
             "desc": f"Withdraw {item_obj.key}",
             "goto": ("node_withdraw_quantity", {"item_ids": item_ids}),
         },
-        {"desc": "Back to storage", "goto": "node_storage"},
         {"desc": "Back to menu", "goto": "start"},
+        back_option("Back to storage", "node_storage"),
     )
 
     return text, options
@@ -386,7 +400,7 @@ def _select_node(caller, flow):
 
     if not items:
         text = f"{HIGHLIGHT_COLOR}{flow.empty_text}{RESET_COLOR}"
-        return text, ({"desc": "Back to menu", "goto": "start"},)
+        return text, (back_option("Back to menu", "start"),)
 
     text = (
         f"{TITLE_COLOR}--- {flow.title} ---{RESET_COLOR}\n"
@@ -402,7 +416,7 @@ def _select_node(caller, flow):
             }
         )
 
-    options.append({"desc": "Back to menu", "goto": "start"})
+    options.append(back_option("Back to menu", "start"))
 
     return text, options
 
@@ -445,8 +459,8 @@ def _quantity_node(caller, flow, **kwargs):
     if not items:
         text = f"{ERROR_COLOR}{flow.gone_text}{RESET_COLOR}"
         options = (
-            {"desc": f"Back to {flow.verb} list", "goto": flow.select_node},
             {"desc": "Back to menu", "goto": "start"},
+            back_option(f"Back to {flow.verb} list", flow.select_node),
         )
         return text, options
 
@@ -468,10 +482,22 @@ def _quantity_node(caller, flow, **kwargs):
 
     text = _quantity_prompt(flow, items[0].key, max_qty)
     options = [
-        {"desc": "1", "goto": (flow.execute_goto, {"item_ids": item_ids, "count": 1})},
-        {"desc": "X (custom)", "goto": (flow.custom_node, {"item_ids": item_ids, "max_qty": max_qty})},
-        {"desc": f"All ({max_qty})", "goto": (flow.execute_goto, {"item_ids": item_ids, "count": "all"})},
-        {"desc": "Cancel", "goto": flow.select_node},
+        {
+            "key": QUANTITY_ONE_KEYS,
+            "desc": QUANTITY_ONE_DESC,
+            "goto": (flow.execute_goto, {"item_ids": item_ids, "count": 1}),
+        },
+        {
+            "key": QUANTITY_CUSTOM_KEYS,
+            "desc": QUANTITY_CUSTOM_DESC,
+            "goto": (flow.custom_node, {"item_ids": item_ids, "max_qty": max_qty}),
+        },
+        {
+            "key": QUANTITY_ALL_KEYS,
+            "desc": f"All ({max_qty})",
+            "goto": (flow.execute_goto, {"item_ids": item_ids, "count": QUANTITY_ALL_KEYWORD}),
+        },
+        cancel_option(flow.select_node),
     ]
 
     return text, options
@@ -501,6 +527,7 @@ def _custom_qty_node(caller, flow, raw_string, **kwargs):
                 {"item_ids": item_ids, "max_qty": max_qty, "custom_qty_state": "awaiting"},
             ),
         },
+        cancel_option((flow.quantity_node, {"item_ids": item_ids})),
     )
 
     if kwargs.get("custom_qty_state") != "awaiting":
@@ -523,7 +550,7 @@ def _perform_transfer(caller, flow, item_ids, count):
     Entry:
         item_ids is a list of dbids resolvable by flow.find_item, all holding
         the same kind of item.
-        count is a positive int, or the string "all".
+        count is a positive int, or QUANTITY_ALL_KEYWORD.
 
     Exit/Returns:
         None. Messages the caller with the outcome, successful or not.
@@ -557,7 +584,7 @@ def _perform_transfer(caller, flow, item_ids, count):
         return
 
     max_qty = _available_quantity(items)
-    quantity = max_qty if count == "all" else min(count, max_qty)
+    quantity = max_qty if count == QUANTITY_ALL_KEYWORD else min(count, max_qty)
 
     try:
         result = flow.execute(caller, items, quantity)
@@ -628,9 +655,3 @@ def node_withdraw_quantity(caller, **kwargs):
 
 def node_withdraw_custom_qty(caller, raw_string, **kwargs):
     return _custom_qty_node(caller, WITHDRAW_FLOW, raw_string, **kwargs)
-
-
-def node_exit(caller, **kwargs):
-    text = "Closing banking menu."
-
-    return text, None

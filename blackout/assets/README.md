@@ -7,19 +7,30 @@ those files were built from, and nothing here is served to anyone.
 ```
 assets/
 ├── pack_model.py                     the one build step
-└── items/weapons/rusty_sword/        one download, as it arrived
-    ├── scene.gltf  scene.bin  textures/  license.txt
+├── items/weapons/rusty_sword/        one download, as it arrived
+│   ├── scene.gltf  scene.bin  textures/  license.txt
+├── npcs/sus_eye/
+└── world_objects/sm_teleporter/
 ```
+
+The **top directory** a download sits in — `items`, `npcs`, `world_objects` —
+is the only thing that decides where the packed file is served from:
+`assets/npcs/x/` can only ever pack into `models/npcs/`. Nothing restates that
+mapping, so it cannot be typed inconsistently.
 
 ## Adding a model
 
-1. Drop the download in under `items/<family>/<name>/`, unmodified, licence
-   file and all.
+1. Drop the download in under `<family>/<name>/`, unmodified, licence file and
+   all.
 2. Pack it, naming the **asset key** it is for — not the file it came from:
 
    ```bash
    ../evenv/Scripts/python.exe assets/pack_model.py assets/items/weapons/rusty_sword rusty_scrap_shortsword
    ```
+
+   A third argument overrides `MAX_TEXTURE_EDGE` for that one model. The
+   teleporter is packed at 256 because it is drawn flat on a single tile; at
+   512 its six maps came to 1.1 MB of detail the tile cannot show.
 
 3. Register the key in `web/static/webclient/js/blackout_models.js`.
 4. Add the credit to `web/static/webclient/models/CREDITS.md`, in the same
@@ -29,7 +40,9 @@ assets/
 
 Steps 2–4 are three files and no code. An item with no model registered renders
 its family's procedural mesh, so a missing step 3 is invisible rather than
-broken — check the item actually changed shape before believing it worked.
+broken — check the item actually changed shape before believing it worked. A
+TILE prop is the exception: a room kind with nothing registered draws no prop
+at all, so there the missing step is simply nothing appearing.
 
 ## What packing does, and why
 
@@ -45,7 +58,16 @@ and one. It never writes to the source directory, so re-running it is safe and
 the original stays the original.
 
 Raise `MAX_TEXTURE_EDGE` if a model is ever shown large enough to want it — but
-raise it for that model, by packing it separately, rather than for everything.
+raise it for that model, with the optional third argument, rather than for
+everything. It cuts both ways: the teleporter is packed at 256 rather than 512
+because six maps on a tile-sized pad is where the default stops being honest.
+
+It also normalises what the download declares. Sketchfab still exports
+`KHR_materials_pbrSpecularGlossiness`, which the vendored GLTFLoader dropped —
+a model left in that form loads with no error and renders flat white, which is
+the worst kind of failure because nothing reports it. The packer rewrites those
+materials as core metallic-roughness, and refuses rather than approximates when
+the material is one it cannot convert exactly.
 
 ## Keeping the sources out of git
 

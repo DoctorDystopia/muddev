@@ -29,7 +29,10 @@
 (function () {
     "use strict";
 
-    const MODEL_ROOT = "/static/webclient/models/items/";
+    // The served tree mirrors the source tree under assets/, so the family
+    // directory is part of what a registration names. assets/pack_model.py
+    // decides which one a download lands in, from where the download sits.
+    const MODEL_ROOT = "/static/webclient/models/";
 
     if (!window.blackoutMeshes) {
         console.warn("blackout_models.js: blackoutMeshes is not loaded; "
@@ -53,6 +56,37 @@
     // +PI/2 rather than -PI/2 puts the TIP up and the guard down, which is how
     // the procedural weapon in tier 2 is built and therefore how the pane's
     // labels and tilt are aimed.
-    register("rusty_scrap_shortsword", "rusty_scrap_shortsword.glb",
+    register("rusty_scrap_shortsword", "items/rusty_scrap_shortsword.glb",
         { rotation: [Math.PI / 2, 0, 0] });
+
+    // ─── NPCs ───────────────────────────────────────────────────────────────
+
+    // "sus eye" by Jeff for no reason., CC-BY-4.0. The key is the NPC_DB key,
+    // which is what serializers._classify sends as the asset for anything
+    // carrying db.npc_key — so this line is the whole wiring.
+    //
+    // No rotation: the export already stands eyeball-up with the tail hanging,
+    // which is the way the procedural figure it replaces stands.
+    //
+    // `opaque` because the body material arrived with a base-colour alpha of
+    // zero against alphaMode BLEND — an invisible body around a floating
+    // eyeball. Nothing measures that; see forceOpaque in blackout_meshes.js.
+    // register("floating_eye", "npcs/floating_eye.glb", { opaque: true });
+    register("floating_eye", "npcs/floating_eye.glb", { 
+        opaque: true,
+        position: [0, 1.0, 0]
+    });
+
+    // ─── World ──────────────────────────────────────────────────────────────
+
+    // "SM_Teleporter" by Kain Hunter, CC-BY-4.0. Keyed by ROOM KIND rather
+    // than by an entity's asset key: this is a prop the world pane draws on a
+    // tile, and mapexport names a map-transition node "map_transition" so the
+    // tile a `T` glyph spawns can be told from the sand around it.
+    //
+    // The export is a flat pad twenty units across with a beam thirteen tall,
+    // so normalising on the longest axis lands the pad flush with the tile and
+    // the beam at about two thirds of one. That is the whole reason it needs
+    // no correction here.
+    register("map_transition", "world_objects/map_transition.glb");
 })();

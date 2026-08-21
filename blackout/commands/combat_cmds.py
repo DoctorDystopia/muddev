@@ -285,9 +285,9 @@ class CmdCombatOptions(Command):
     def func(self) -> None:
         caller = self.caller
 
-        from evennia.utils.evmenu import EvMenu
+        from systems.menus.base_menu import start_blackout_menu
 
-        EvMenu(
+        start_blackout_menu(
             caller,
             "systems.menus.combat_options_menu",
             startnode="start",

@@ -28,6 +28,11 @@ def _node(x, y):
     return SimpleNamespace(X=x, Y=y, links={})
 
 
+def _transition_node(x, y, target=(8, 10, "oasis_outskirts")):
+    """Return a stand-in MapTransitionNode -- a node that spawns no room."""
+    return SimpleNamespace(X=x, Y=y, links={}, target_map_xyz=target)
+
+
 def _link(node_a, node_b, direction="e", reverse="w"):
     """Join two stand-in nodes the way a two-way map link does -- both ways."""
     node_a.links[direction] = node_b
@@ -110,6 +115,39 @@ class TestRoomKindLookup(unittest.TestCase):
         chunks = build_map_chunks(_xymap([_node(0, 0)], prototypes))
 
         self.assertEqual(chunks[0].nodes[0]["room_kind"], const.ROOM_KIND_DEFAULT)
+
+
+class TestTransitionNodes(unittest.TestCase):
+    """The one tile leading off the map must not report as the ground."""
+
+    def test_a_transition_node_reports_its_own_kind(self):
+        chunks = build_map_chunks(_xymap([_transition_node(0, 2)]))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, const.ROOM_KIND_TRANSITION)
+
+    def test_the_wildcard_prototype_does_not_win_over_it(self):
+        prototypes = {("*", "*"): {"key": "Oasis"}}
+        chunks = build_map_chunks(
+            _xymap([_transition_node(0, 2)], prototypes))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, const.ROOM_KIND_TRANSITION)
+
+    def test_a_transition_with_no_target_map_is_not_one(self):
+        unset = _transition_node(0, 2, target=(None, None, None))
+        prototypes = {("*", "*"): {"key": "Oasis"}}
+        chunks = build_map_chunks(_xymap([unset], prototypes))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, "Oasis")
+
+    def test_ordinary_nodes_are_untouched_by_the_check(self):
+        prototypes = {("*", "*"): {"key": "Oasis"}}
+        chunks = build_map_chunks(_xymap([_node(4, 4)], prototypes))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, "Oasis")
 
 
 class TestLinkExport(unittest.TestCase):

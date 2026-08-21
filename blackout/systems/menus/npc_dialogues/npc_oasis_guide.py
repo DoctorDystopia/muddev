@@ -6,6 +6,8 @@ Description: Dialogue nodes for the oasis guide NPC, including its quest
              offer and progress branches.
 """
 
+from systems.menus.base_menu import back_option
+from systems.menus.dialogue import menu_npc
 from systems.quests.loader import GLOBAL_QUEST_REGISTRY
 
 
@@ -17,6 +19,11 @@ NPC_DESC = (
     "you approach, one mechanical hand resting on a rusted irrigation pipe."
 )
 OASIS_QUEST_KEY = "oasis"
+
+# This NPC keeps its dialogue in this module rather than on the object, so its
+# parting line is a constant here. It is still PRINTED only by
+# BlackoutEvMenu.close_menu, via CLOSING_TEXT at the foot of this module.
+NPC_FAREWELL = '"May the oasis find you again."'
 
 from systems.ui.colors import (
     HIGHLIGHT_COLOR,
@@ -91,7 +98,7 @@ def start(caller: object, **kwargs) -> tuple:
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
-    npc = kwargs.get("npc")
+    npc = menu_npc(caller)
     npc_name = NPC_NAME
 
     if npc:
@@ -421,7 +428,7 @@ def node_quest_progress(caller: object, **kwargs) -> tuple:
         )
 
     options = (
-        {"desc": "Back to conversation.", "goto": "start"},
+        back_option("Back to conversation.", "start"),
     )
 
     return text, options
@@ -471,26 +478,30 @@ def node_post_quest(caller: object, **kwargs) -> tuple:
 
 def node_goodbye(caller: object, **kwargs) -> tuple:
     """
-    Purpose: Exit node for the oasis NPC conversation.
+    Purpose: End the conversation in-fiction, by choosing to.
 
     Entry:
         caller is a valid Evennia Character object
 
     Exit/Returns:
-        Returns a tuple of (text, None) to exit the menu.
+        Returns ("", None). The None closes the menu; the empty text is the
+        point -- closing is what speaks.
 
     Module Globals:
         None
 
     Methodology:
-        Shows a farewell and returns None to close the menu.
+        Prints nothing. CLOSING_TEXT carries the farewell, so that choosing
+        to say goodbye and typing q part with the same words.
 
     Notes/References:
-        None
+        See BlackoutEvMenu.close_menu.
 
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
-    text = _dialog('"May the oasis find you again.\"')
+    return "", None
 
-    return text, None
+
+# Spoken by BlackoutEvMenu.close_menu, however the conversation ends.
+CLOSING_TEXT = _dialog(NPC_FAREWELL)

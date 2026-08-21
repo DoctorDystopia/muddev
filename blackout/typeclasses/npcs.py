@@ -7,7 +7,6 @@ Description: Talkative and shopkeeper NPC typeclasses, plus the talk command.
 
 from evennia import Command, CmdSet
 from evennia import DefaultObject
-from evennia.utils.evmenu import EvMenu
 
 from commands.constants import HELP_CATEGORY_GENERAL
 from systems.statefeed.constants import ASSET_KIND_NPC
@@ -43,9 +42,15 @@ class CmdTalk(Command):
         TALK_COMMAND_LOCKS read
 
     Methodology:
-        Sends a brief introduction message to the caller,
-        then launches EvMenu using the NPC's stored module path.
-        Passes the NPC itself as a keyword argument for menu nodes.
+        Sends a brief introduction message to the caller, then opens the
+        NPC's stored dialogue module through start_blackout_menu. Every NPC
+        goes through the same launcher -- the shopkeep used to be branched
+        out to a styled menu while everyone else got a bare EvMenu, which is
+        why only the shopkeep had the shared look.
+
+        Passes the NPC itself as a keyword argument. EvMenu assigns leftover
+        keywords onto the menu INSTANCE, so nodes read it back with
+        dialogue.menu_npc rather than out of their own kwargs.
 
     Notes/References:
         Pattern from evennia.contrib.tutorials.talking_npc.
@@ -94,20 +99,12 @@ class CmdTalk(Command):
 
         caller.msg(f"(You walk up and talk to {npc.key}.)")
 
-        if menu_module_path == SHOPKEEP_DIALOGUE_MODULE:
-            start_blackout_menu(
-                caller,
-                menu_module_path,
-                startnode="start",
-                npc=npc,
-            )
-        else:
-            EvMenu(
-                caller,
-                menu_module_path,
-                startnode="start",
-                npc=npc,
-            )
+        start_blackout_menu(
+            caller,
+            menu_module_path,
+            startnode="start",
+            npc=npc,
+        )
 
 
 

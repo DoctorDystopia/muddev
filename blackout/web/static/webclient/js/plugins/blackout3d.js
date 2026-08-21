@@ -69,6 +69,12 @@ let blackout3d = (function () {
     // touch.
     const ENTITY_SCALE    = 0.34;
 
+    // How much of a tile a prop drawn ON that tile covers. Bigger than an
+    // entity on purpose: a prop is part of the ground rather than something
+    // standing on it, and the teleporter it was set for is a floor pad that
+    // reads as a pad only when it reaches the tile's edges.
+    const TILE_PROP_SCALE = 0.9;
+
     // Z is a map NAME, not an elevation, so the islands' relative placement
     // cannot be derived — it has to be authored. Maps not listed here fall in
     // after the named ones, in arrival order, so a new map still shows up.
@@ -217,7 +223,11 @@ let blackout3d = (function () {
         "Pole clearing":              0xcc6633,
         "Shopkeeper":                 0xddcc44,
         "Mutant Raider Tile":         0x8fbf00,
-        "Big Mutant Tile":            0xbf3f00
+        "Big Mutant Tile":            0xbf3f00,
+        // Not a prototype key like the rest: the server synthesises this one
+        // for a node that spawns no room. It is the way OFF the map, so it is
+        // coloured whether or not the teleporter model is there to stand on it.
+        "map_transition":             0x35e0c0
     };
 
     // ─── Module state ───────────────────────────────────────────────────────
@@ -241,6 +251,7 @@ let blackout3d = (function () {
     const maps = {};                // z -> {nodes, links, chunksSeen, chunkCount}
     const zOffsets = {};            // z -> world X offset
     const tileMeshes = {};          // "z:x:y" -> Mesh
+    const tileProps = {};           // "z:x:y" -> Object3D, for tiles with art
     const entityMeshes = {};        // entity id -> Object3D from the resolver
     const flashes = [];             // {mesh, until, baseColors}
 
@@ -510,6 +521,54 @@ let blackout3d = (function () {
 
     // ─── Map rendering ──────────────────────────────────────────────────────
 
+    // Stand a model on one tile, if that tile's room kind has one registered.
+    //
+    // Deliberately NOT the entity path. An entity always gets a mesh, because
+    // an item nobody has modelled still has to be visible and clickable, so the
+    // resolver falls through to a procedural family shape. A prop is scenery:
+    // a tile whose kind has no art keeps being a plain coloured slab, which is
+    // what every tile in the game was before this. Asking hasModel() first is
+    // what draws that line — resolve() alone cannot, since it answers every
+    // key with something.
+    //
+    // The key IS the room kind. mapexport names a transition node
+    // "map_transition"; blackout_models.js registers a .glb under that name;
+    // nothing in between has to be edited to give another room kind a prop.
+    const placeTileProp = function (z, node, position) {
+        const kind = node.room_kind;
+        const modelled = blackoutMeshes.hasModel(kind);
+
+        if (!modelled) {
+            return;
+        }
+        const key = tileKey(z, node.x, node.y);
+        const group = tileGroup;
+
+        blackoutMeshes.resolve(kind, kind).then(function (mesh) {
+            // The pane can be rebuilt while a .glb is still in flight, and the
+            // group this was resolved for is then no longer the one on screen.
+            // Adding it anyway would leave a prop in a discarded scene and a
+            // second copy when drawMap runs again against the new one.
+            if (group !== tileGroup) {
+                blackoutMeshes.release(mesh);
+                return;
+            }
+            const bounds = new THREE.Box3();
+
+            mesh.scale.setScalar(TILE_PROP_SCALE);
+            mesh.position.copy(position);
+            // Rest it ON the tile rather than through it. The resolver centres
+            // every model in a unit box, but only the LONGEST axis is a unit
+            // long — the teleporter is a flat pad two thirds as tall as it is
+            // wide — so half the prop's height is not half the scale. Measuring
+            // the scaled copy is the answer that also holds for the next model.
+            bounds.setFromObject(mesh);
+            mesh.position.y += (position.y + (TILE_HEIGHT / 2)) - bounds.min.y;
+            tileGroup.add(mesh);
+            tileProps[key] = mesh;
+        });
+    };
+
     const drawMap = function (z) {
         const data = maps[z];
         if (!data || !tileGroup) {
@@ -534,6 +593,10 @@ let blackout3d = (function () {
             mesh.userData.tile = { z: z, x: node.x, y: node.y };
             tileGroup.add(mesh);
             tileMeshes[key] = mesh;
+            // After the tile is registered, so the guard above covers the prop
+            // too: a second drawMap for the same z returns before it can ask
+            // for a second copy of a model still loading for the first.
+            placeTileProp(z, node, mesh.position);
         });
 
         if (data.links.length && !data.linksDrawn) {
@@ -1273,6 +1336,12 @@ let blackout3d = (function () {
     // the world redraws without having to re-request it from the server.
     const resetRenderState = function () {
         Object.keys(tileMeshes).forEach(function (k) { delete tileMeshes[k]; });
+        // Props are handed back rather than just forgotten: a prop for a
+        // skinned model owns a skeleton, and only the resolver knows that.
+        Object.keys(tileProps).forEach(function (k) {
+            blackoutMeshes.release(tileProps[k]);
+            delete tileProps[k];
+        });
         Object.keys(entityMeshes).forEach(function (k) { delete entityMeshes[k]; });
         Object.keys(maps).forEach(function (z) { maps[z].linksDrawn = false; });
         flashes.length = 0;

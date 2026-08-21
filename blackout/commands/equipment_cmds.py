@@ -190,9 +190,9 @@ class CmdEquipment(Command):
         target_text = self.args.strip()
 
         if not target_text:
-            from evennia.utils.evmenu import EvMenu
+            from systems.menus.base_menu import start_blackout_menu
 
-            EvMenu(
+            start_blackout_menu(
                 caller,
                 EQUIPMENT_MODULE_PATH,
                 startnode="start",

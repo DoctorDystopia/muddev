@@ -8,7 +8,7 @@ Description: CraftingFacility base typeclass and the craft command attached
 
 from evennia import Command, CmdSet
 from evennia import DefaultObject
-from evennia.utils.evmenu import EvMenu
+from systems.menus.base_menu import start_blackout_menu
 
 from commands.constants import HELP_CATEGORY_CRAFTING
 from systems.statefeed.constants import ASSET_KIND_STATION
@@ -66,7 +66,7 @@ class CmdCraft(Command):
             CRAFT_MENU_MODULE_PATH read
 
         Methodology:
-            Starts EvMenu using the shared crafting menu module.
+            Starts the styled menu using the shared crafting menu module.
             Passes facility=self.obj to the start node via startnode_input --
             EvMenu's own **kwargs only become attributes on the menu
             instance, they are not forwarded to the start node.
@@ -82,7 +82,7 @@ class CmdCraft(Command):
 
         caller.msg(f"(You approach the {facility.key}.)")
 
-        EvMenu(
+        start_blackout_menu(
             caller,
             CRAFT_MENU_MODULE_PATH,
             startnode="start",

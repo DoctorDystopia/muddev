@@ -44,7 +44,6 @@ DRILL_DOWNS = (
 )
 
 REFRESH_DESC = "Refresh"
-CLOSE_DESC = "Close dossier"
 CLOSE_TEXT = "Closing dossier."
 
 
@@ -143,7 +142,7 @@ def start(caller: object, **kwargs) -> tuple:
         Returns the (text, options) tuple EvMenu requires of a node.
 
     Module Globals:
-        DRILL_DOWNS, REFRESH_DESC, CLOSE_DESC read.
+        DRILL_DOWNS, REFRESH_DESC read.
 
     Methodology:
         One node holds the entire screen. The summary is rebuilt on every visit
@@ -171,7 +170,6 @@ def start(caller: object, **kwargs) -> tuple:
         })
 
     options_list.append({"desc": REFRESH_DESC, "goto": "start"})
-    options_list.append({"desc": CLOSE_DESC, "goto": "node_exit"})
 
     return text, tuple(options_list)
 
@@ -210,27 +208,43 @@ def node_launch(caller: object, **kwargs) -> tuple:
     return "", None
 
 
-def node_exit(caller: object, **kwargs) -> tuple:
+def _closing_text(caller: object, menu: object) -> str:
     """
-    Purpose: Close the dossier without a drill-down.
+    Purpose: Say "closing" only when the dossier is actually going away.
 
     Entry:
-        caller is a Character.
+        caller is the Character whose dossier is closing.
+        menu is the BlackoutEvMenu being torn down; unused.
 
     Exit/Returns:
-        Returns (text, None), which closes the menu.
+        Returns CLOSE_TEXT when the dossier is closing for good, or "" when
+        it is closing in order to hand off to a drill-down command.
 
     Module Globals:
+        FOLLOWUP_ATTR read.
         CLOSE_TEXT read.
 
     Methodology:
-        Leaves FOLLOWUP_ATTR untouched at None, so _on_exit falls back to the
-        default exit command.
+        Runs before _on_exit and therefore before the followup is consumed,
+        so the queued command is still readable here. A drill-down prints its
+        own screen a moment later; announcing the dossier's closure in front
+        of it would narrate plumbing the player did not ask about.
 
     Notes/References:
-        None
+        Wired in as this module's CLOSING_TEXT below. See
+        BlackoutEvMenu.close_menu -- one exit, one line, whichever route out
+        the player took.
 
     Author: Nick Hobar
-    Creation date: 08/08/2026
+    Creation date: 08/20/2026
     """
-    return CLOSE_TEXT, None
+    followup = getattr(caller.ndb, FOLLOWUP_ATTR, None)
+
+    if followup:
+        return ""
+
+    return CLOSE_TEXT
+
+
+# Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
+CLOSING_TEXT = _closing_text

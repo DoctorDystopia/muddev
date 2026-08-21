@@ -16,6 +16,7 @@ from systems.progression.skills.gatherables import (
     get_gatherable_item_name,
     get_gatherables_for_skill,
 )
+from systems.menus.base_menu import back_option
 from systems.progression.skills.registry import SKILL_REGISTRY
 from systems.ui.colors import (
     HIGHLIGHT_COLOR,
@@ -25,6 +26,11 @@ from systems.ui.colors import (
     TITLE_COLOR,
 )
 from systems.ui.meters import build_xp_meter
+
+
+# Public constant definitions
+# Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
+CLOSING_TEXT = "Closing skills panel."
 
 
 
@@ -130,8 +136,6 @@ def start(caller: object, **kwargs) -> tuple:
                 "goto": ("node_skill_detail", {"skill_key": skill_key}),
             })
 
-    options_list.append({"desc": "Exit skills panel", "goto": "node_exit"})
-
     return text, tuple(options_list)
 
 
@@ -182,7 +186,7 @@ def node_category_detail(caller: object, **kwargs) -> tuple:
         }
         options_list.append(option_dict)
 
-    options_list.append({"desc": "Back to skill categories", "goto": "start"})
+    options_list.append(back_option("Back to skill categories", "start"))
 
     options_tuple = tuple(options_list)
 
@@ -408,7 +412,7 @@ def node_skill_detail(caller: object, **kwargs) -> tuple:
 
     if skill_class is None:
         text = f"{HIGHLIGHT_COLOR}Skill '{skill_key}' not found.{RESET_COLOR}"
-        options = ({"desc": "Back", "goto": "node_category_detail"},)
+        options = (back_option("Back", "node_category_detail"),)
 
         return text, options
 
@@ -461,36 +465,11 @@ def node_skill_detail(caller: object, **kwargs) -> tuple:
         text += _format_unlock_section(header, current_level, unlock_rows)
 
     options = (
-        {"desc": "Back to category", "goto": ("node_category_detail", {"category": skill_class.category})},
         {"desc": "Back to skill list", "goto": "start"},
+        back_option(
+            "Back to category",
+            ("node_category_detail", {"category": skill_class.category}),
+        ),
     )
 
     return text, options
-
-
-
-def node_exit(caller: object, **kwargs) -> tuple:
-    """
-    Purpose: Exit node that closes the skills menu.
-
-    Entry:
-        caller is a valid Evennia Character object
-
-    Exit/Returns:
-        Returns a tuple of (text, None) to signal menu exit.
-
-    Module Globals:
-        None
-
-    Methodology:
-        Returns no options, causing EvMenu to close automatically.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 07/13/2026
-    """
-    text = "Closing skills panel."
-
-    return text, None

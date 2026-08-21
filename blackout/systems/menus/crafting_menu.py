@@ -11,7 +11,16 @@ manages display formatting and navigation flow.
 
 import systems.crafting.craft_batch as craft_batch
 import systems.crafting.crafting_service as crafting_service
-from systems.menus.base_menu import parse_quantity
+from systems.menus.base_menu import back_option, cancel_option, parse_quantity
+from systems.menus.constants import (
+    CONFIRM_NO_KEYS,
+    CONFIRM_YES_KEYS,
+    QUANTITY_ALL_KEYS,
+    QUANTITY_CUSTOM_DESC,
+    QUANTITY_CUSTOM_KEYS,
+    QUANTITY_ONE_DESC,
+    QUANTITY_ONE_KEYS,
+)
 from systems.ui.colors import (
     ERROR_COLOR,
     HIGHLIGHT_COLOR,
@@ -23,6 +32,9 @@ from systems.ui.colors import (
 
 
 RECIPE_SEPARATOR = "-" * 60
+
+# Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
+CLOSING_TEXT = "Closing crafting menu."
 
 
 
@@ -73,8 +85,6 @@ def start(caller, **kwargs):
                 ),
             }
         )
-    options.append({"desc": "Exit crafting menu", "goto": "node_exit"})
-
     return text, options
 
 
@@ -86,7 +96,7 @@ def node_recipe_detail(caller, **kwargs):
     if not display:
         text = f"{ERROR_COLOR}Recipe not found.{RESET_COLOR}"
         return text, (
-            {"desc": "Back to recipes", "goto": ("start", {"facility": facility})},
+            back_option("Back to recipes", ("start", {"facility": facility})),
         )
 
     material_lines = []
@@ -149,11 +159,11 @@ def node_recipe_detail(caller, **kwargs):
                     {"recipe_key": recipe_key, "facility": facility},
                 ),
             },
-            {"desc": "Back to recipes", "goto": ("start", {"facility": facility})},
+            back_option("Back to recipes", ("start", {"facility": facility})),
         )
     else:
         options = (
-            {"desc": "Back to recipes", "goto": ("start", {"facility": facility})},
+            back_option("Back to recipes", ("start", {"facility": facility})),
         )
 
     return text, options
@@ -197,7 +207,7 @@ def node_craft_quantity(caller, **kwargs):
         text = f"{ERROR_COLOR}Recipe not found.{RESET_COLOR}"
 
         return text, (
-            {"desc": "Back to recipes", "goto": ("start", {"facility": facility})},
+            back_option("Back to recipes", ("start", {"facility": facility})),
         )
 
     if craft_batch.is_batch_active(caller):
@@ -208,13 +218,10 @@ def node_craft_quantity(caller, **kwargs):
         )
 
         return text, (
-            {
-                "desc": "Back to recipe details",
-                "goto": (
-                    "node_recipe_detail",
-                    {"recipe_key": recipe_key, "facility": facility},
-                ),
-            },
+            back_option(
+                "Back to recipe details",
+                ("node_recipe_detail", {"recipe_key": recipe_key, "facility": facility}),
+            ),
         )
 
     max_qty = crafting_service.get_max_craftable(caller, recipe_key)
@@ -224,13 +231,10 @@ def node_craft_quantity(caller, **kwargs):
         text = f"{ERROR_COLOR}Cannot craft: {'; '.join(reasons)}.{RESET_COLOR}"
 
         return text, (
-            {
-                "desc": "Back to recipe details",
-                "goto": (
-                    "node_recipe_detail",
-                    {"recipe_key": recipe_key, "facility": facility},
-                ),
-            },
+            back_option(
+                "Back to recipe details",
+                ("node_recipe_detail", {"recipe_key": recipe_key, "facility": facility}),
+            ),
         )
 
     needs_confirm = _confirm_required(caller, recipe_cls)
@@ -254,22 +258,23 @@ def node_craft_quantity(caller, **kwargs):
         f"{HIGHLIGHT_COLOR}How many to craft?{RESET_COLOR}"
     )
     options = [
-        {"desc": "1", "goto": _target(1)},
+        {"key": QUANTITY_ONE_KEYS, "desc": QUANTITY_ONE_DESC, "goto": _target(1)},
         {
-            "desc": "X (custom)",
+            "key": QUANTITY_CUSTOM_KEYS,
+            "desc": QUANTITY_CUSTOM_DESC,
             "goto": (
                 "node_craft_custom_qty",
                 {"recipe_key": recipe_key, "facility": facility, "max_qty": max_qty},
             ),
         },
-        {"desc": f"All ({max_qty})", "goto": _target(max_qty)},
         {
-            "desc": "Cancel",
-            "goto": (
-                "node_recipe_detail",
-                {"recipe_key": recipe_key, "facility": facility},
-            ),
+            "key": QUANTITY_ALL_KEYS,
+            "desc": f"All ({max_qty})",
+            "goto": _target(max_qty),
         },
+        cancel_option(
+            ("node_recipe_detail", {"recipe_key": recipe_key, "facility": facility})
+        ),
     ]
 
     return text, options
@@ -310,13 +315,9 @@ def node_craft_custom_qty(caller, raw_string, **kwargs):
                 },
             ),
         },
-        {
-            "desc": "Cancel",
-            "goto": (
-                "node_craft_quantity",
-                {"recipe_key": recipe_key, "facility": facility},
-            ),
-        },
+        cancel_option(
+            ("node_craft_quantity", {"recipe_key": recipe_key, "facility": facility})
+        ),
     )
 
     if kwargs.get("custom_qty_state") != "awaiting":
@@ -347,7 +348,7 @@ def node_confirm_craft(caller, **kwargs):
         text = f"{ERROR_COLOR}Recipe not found.{RESET_COLOR}"
 
         return text, (
-            {"desc": "Back to recipes", "goto": ("start", {"facility": facility})},
+            back_option("Back to recipes", ("start", {"facility": facility})),
         )
 
     can_craft, reasons = crafting_service.check_craftable(caller, recipe_key)
@@ -356,13 +357,10 @@ def node_confirm_craft(caller, **kwargs):
         text = f"{ERROR_COLOR}Cannot craft: {'; '.join(reasons)}.{RESET_COLOR}"
 
         return text, (
-            {
-                "desc": "Back to recipe details",
-                "goto": (
-                    "node_recipe_detail",
-                    {"recipe_key": recipe_key, "facility": facility},
-                ),
-            },
+            back_option(
+                "Back to recipe details",
+                ("node_recipe_detail", {"recipe_key": recipe_key, "facility": facility}),
+            ),
         )
 
     max_craftable = crafting_service.get_max_craftable(caller, recipe_key)
@@ -385,6 +383,7 @@ def node_confirm_craft(caller, **kwargs):
     )
     options = (
         {
+            "key": CONFIRM_YES_KEYS,
             "desc": f"Yes, craft {recipe_cls.name} x{count}",
             "goto": (
                 execute_craft_batch,
@@ -392,6 +391,7 @@ def node_confirm_craft(caller, **kwargs):
             ),
         },
         {
+            "key": CONFIRM_NO_KEYS,
             "desc": "No, go back",
             "goto": (
                 "node_recipe_detail",
@@ -424,8 +424,3 @@ def node_cancel_batch(caller, **kwargs):
 
     return start(caller, facility=facility)
 
-
-def node_exit(caller, **kwargs):
-    text = "Closing crafting menu."
-
-    return text, None

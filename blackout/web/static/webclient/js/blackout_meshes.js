@@ -36,8 +36,9 @@
  * A CALLER OWNS WHAT IT GETS BACK, BUT NOT ALWAYS WHAT HANGS OFF IT. resolve()
  * returns a fresh Object3D every time; a procedural one owns its geometry and
  * materials, a clone of a cached model shares the prototype's with every other
- * clone. Callers therefore hand a mesh back to release() instead of disposing
- * it themselves, because only this module knows which of the two it gave out.
+ * clone — except for a SKELETON, which is the one thing a clone must have to
+ * itself and must therefore free. Callers hand a mesh back to release() instead
+ * of disposing it themselves, because only this module knows which is which.
  *
  * Author: Nick Hobar
  * Creation date: 08/15/2026
@@ -90,7 +91,7 @@ let blackoutMeshes = (function () {
 
     // ─── Module state ───────────────────────────────────────────────────────
 
-    // assetKey -> {url, rotation, scale} for tier 1, filled by registerModel.
+    // assetKey -> {url, rotation, scale, opaque} for tier 1, from registerModel.
     const models = {};
 
     // assetKey -> Promise<THREE.Object3D | null>, so ten stacks of the same
@@ -114,6 +115,16 @@ let blackoutMeshes = (function () {
     // so anything this module did not build is disposed as it always was.
     const OWNS_RESOURCES = "blackoutOwnsResources";
 
+    // userData flag on a PROTOTYPE: it holds at least one SkinnedMesh, so it
+    // must be copied by cloneSkinned rather than by clone(). Recorded once at
+    // prepare() time because it is a fact about the download, and re-deriving
+    // it would be a full traversal per entity per snapshot.
+    const HAS_SKIN = "blackoutHasSkin";
+
+    // userData flag on a CLONED SkinnedMesh: the skeleton hanging off it was
+    // built for that clone alone, and uploads a bone texture of its own.
+    const OWNS_SKELETON = "blackoutOwnsSkeleton";
+
     // ─── Private helpers ────────────────────────────────────────────────────
 
     const standardMaterial = function (color, metalness, roughness) {
@@ -132,6 +143,23 @@ let blackoutMeshes = (function () {
         return standardMaterial(color, 0.05, 0.85);
     };
 
+    // Visit every material on one node.
+    //
+    // A glTF primitive drawn with several materials carries an ARRAY here
+    // rather than a single material, and every routine that touches materials
+    // has to know it. One owner for that, rather than the same two-branch test
+    // copied into each of them.
+    const eachMaterial = function (node, visit) {
+        if (!node.material) {
+            return;
+        }
+        if (Array.isArray(node.material)) {
+            node.material.forEach(visit);
+            return;
+        }
+        visit(node.material);
+    };
+
     // Textures are deliberately left alone. Nothing procedural has any, and a
     // model's belong to the cached prototype, which outlives every clone.
     const disposeMaterial = function (material) {
@@ -142,15 +170,20 @@ let blackoutMeshes = (function () {
         if (node.geometry) {
             node.geometry.dispose();
         }
-        if (!node.material) {
+        eachMaterial(node, disposeMaterial);
+    };
+
+    // Free the bone texture a rebound skeleton uploaded. Only a skeleton this
+    // module built for one clone is freed; a prototype's is shared and outlives
+    // every copy of it, exactly as its geometry does.
+    const releaseSkeleton = function (node) {
+        if (!node.isSkinnedMesh) {
             return;
         }
-        // A glTF primitive drawn with several materials carries an array here.
-        if (Array.isArray(node.material)) {
-            node.material.forEach(disposeMaterial);
+        if (!node.userData[OWNS_SKELETON]) {
             return;
         }
-        disposeMaterial(node.material);
+        node.skeleton.dispose();
     };
 
     // ─── Procedural families ────────────────────────────────────────────────
@@ -402,6 +435,37 @@ let blackoutMeshes = (function () {
         return gltfLoader;
     };
 
+    // Force every material in an import opaque.
+    //
+    // A per-model correction like `rotation`, and it exists for the same
+    // reason: an export can be wrong about itself in a way no measurement
+    // catches. Sketchfab's converter writes the authoring tool's base-colour
+    // ALPHA into the glTF, and the floating eye's body arrived with alpha 0
+    // against `alphaMode: BLEND` — a fully transparent material on a mesh that
+    // is plainly meant to be seen. Nothing downstream can recover from that:
+    // the model loads, reports no error, and renders an invisible body around
+    // a floating eyeball.
+    const forceOpaque = function (root) {
+        root.traverse(function (node) {
+            eachMaterial(node, function (material) {
+                material.transparent = false;
+                material.opacity = 1.0;
+            });
+        });
+    };
+
+    // Record whether an import is skinned, for cloneForCaller to dispatch on.
+    const markSkinned = function (root) {
+        let skinned = false;
+
+        root.traverse(function (node) {
+            if (node.isSkinnedMesh) {
+                skinned = true;
+            }
+        });
+        root.userData[HAS_SKIN] = skinned;
+    };
+
     // Fit a loaded scene into the same box a procedural build occupies, and
     // apply the per-key corrections a bounding box cannot infer.
     //
@@ -443,6 +507,7 @@ let blackoutMeshes = (function () {
         if (rotation) {
             frame.rotation.set(rotation[0], rotation[1], rotation[2]);
         }
+
         shell.add(frame);
         bounds.setFromObject(shell);
         bounds.getSize(size);
@@ -454,7 +519,20 @@ let blackoutMeshes = (function () {
         bounds.setFromObject(shell);
         bounds.getCenter(centre);
         shell.position.sub(centre);
+
+        // Add positional offset support after auto-centering:
+        if (entry.position) {
+            shell.position.x += entry.position[0];
+            shell.position.y += entry.position[1];
+            shell.position.z += entry.position[2];
+        }
+
         pivot.add(shell);
+
+        if (entry.opaque) {
+            forceOpaque(pivot);
+        }
+        markSkinned(pivot);
         return pivot;
     };
 
@@ -486,6 +564,76 @@ let blackoutMeshes = (function () {
         });
     };
 
+    // Walk two matching hierarchies at once, visiting each node beside its
+    // counterpart. Safe only because `copy` came from `source.clone()`, so the
+    // two trees have identical shape and identical child order — which is what
+    // lets a bone be paired with its copy without matching on names a glTF is
+    // under no obligation to give them.
+    const parallelTraverse = function (source, copy, visit) {
+        const children = source.children;
+
+        visit(source, copy);
+
+        for (let i = 0; i < children.length; i += 1) {
+            parallelTraverse(children[i], copy.children[i], visit);
+        }
+    };
+
+    // Copy a SKINNED prototype so the copy stands where it is put.
+    //
+    // A plain clone() of a skinned model does not. This is not a subtle
+    // difference: measured against the floating eye, a clone moved to
+    // (7, 0, -3) renders its vertices at the PROTOTYPE's position, exactly as
+    // if it had never been moved — so every eye in the world would stack on
+    // one spot at the origin, and nothing about the scene graph would look
+    // wrong while it happened.
+    //
+    // The cause is the skinning chain the vertex shader runs:
+    //
+    //     world = modelMatrix * bindMatrixInverse * boneMatrix * bindMatrix * v
+    //
+    // clone() copies the SkinnedMesh but leaves `skeleton` pointing at the
+    // prototype's, so `boneMatrix` is built from the prototype's bones and
+    // carries the prototype's world transform. Meanwhile the default 'attached'
+    // bind mode sets `bindMatrixInverse` to the inverse of the CLONE's world
+    // matrix — which then cancels the clone's own `modelMatrix` exactly, and
+    // what is left is the prototype's placement.
+    //
+    // The fix is the one three.js prescribes in SkeletonUtils: give the copy
+    // its own skeleton, bound to the bones inside the copy. It is written out
+    // here rather than vendored because it is twenty lines of the addon and
+    // the addon is seven hundred, most of them animation retargeting.
+    //
+    // Each rebound skeleton uploads a bone texture of its own, so a clone made
+    // here has something to free that a plain clone does not; release() is
+    // where that is answered.
+    const cloneSkinned = function (prototype) {
+        const copy = prototype.clone();
+        const sourceOf = new Map();
+        const cloneOf = new Map();
+
+        parallelTraverse(prototype, copy, function (source, target) {
+            sourceOf.set(target, source);
+            cloneOf.set(source, target);
+        });
+        copy.traverse(function (node) {
+            if (!node.isSkinnedMesh) {
+                return;
+            }
+            const source = sourceOf.get(node);
+            const skeleton = source.skeleton.clone();
+            const bones = source.skeleton.bones.map(function (bone) {
+                return cloneOf.get(bone);
+            });
+
+            skeleton.bones = bones;
+            node.bindMatrix.copy(source.bindMatrix);
+            node.bind(skeleton, node.bindMatrix);
+            node.userData[OWNS_SKELETON] = true;
+        });
+        return copy;
+    };
+
     // Hand a caller its own copy of a cached prototype.
     //
     // clone() deep-copies the scene GRAPH and shallow-copies everything that
@@ -493,9 +641,17 @@ let blackoutMeshes = (function () {
     // textures. That sharing is the entire value of the cache — ten stacks of
     // one item upload one set of buffers — and it is exactly why the copy must
     // be marked as not owning them before it leaves this module.
+    //
+    // A skeleton is the one thing that cannot be shared; see cloneSkinned.
     const cloneForCaller = function (prototype) {
-        const copy = prototype.clone();
+        const skinned = prototype.userData[HAS_SKIN];
+        let copy = null;
 
+        if (skinned) {
+            copy = cloneSkinned(prototype);
+        } else {
+            copy = prototype.clone();
+        }
         copy.userData[OWNS_RESOURCES] = false;
         return copy;
     };
@@ -510,11 +666,28 @@ let blackoutMeshes = (function () {
     //              stands. A bounding box cannot tell you which end is the tip.
     //   scale    - a multiplier on the normalised UNIT size, for a model whose
     //              bounding box is mostly empty space
+    //   opaque   - force every material solid, for an export that declares
+    //              itself transparent and is not. See forceOpaque.
     const registerModel = function (assetKey, url, options) {
         const entry = options || {};
 
         entry.url = url;
         models[assetKey] = entry;
+    };
+
+    // Whether a model is REGISTERED for a key.
+    //
+    // Not "is it loaded" and not "will it load" — resolve() answers those, and
+    // answers them asynchronously and with a tier 2 mesh when the answer is no.
+    // This is for the caller that has to decide whether to ask at all, because
+    // for it tier 2 is not a fallback but a wrong answer: the world pane draws
+    // a prop on a tile that has art and NOTHING on one that does not, since a
+    // generic block on every unmodelled tile is scenery nobody asked for.
+    const hasModel = function (assetKey) {
+        const entry = models[assetKey];
+        const registered = Boolean(entry);
+
+        return registered;
     };
 
     // Give back a mesh that resolve() handed out.
@@ -531,6 +704,12 @@ let blackoutMeshes = (function () {
         if (!object) {
             return;
         }
+        // Before the ownership test, not after it. A clone is precisely the
+        // case that owns NO geometry and NO materials and DOES own a skeleton,
+        // so a skeleton freed after the early return below is never freed at
+        // all — one bone texture per entity that ever walked out of radius.
+        object.traverse(releaseSkeleton);
+
         const owned = object.userData[OWNS_RESOURCES];
 
         if (owned === false) {
@@ -565,7 +744,8 @@ let blackoutMeshes = (function () {
     return {
         resolve: resolve,
         release: release,
-        registerModel: registerModel
+        registerModel: registerModel,
+        hasModel: hasModel
     };
 })();
 

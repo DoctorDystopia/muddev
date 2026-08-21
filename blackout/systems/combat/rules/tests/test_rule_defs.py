@@ -253,8 +253,9 @@ class TestToySword(unittest.TestCase):
                            attacker_levels=weak)
 
         eff_str = combat_calc.effective_level(1)
-        ceiling = combat_calc.max_hit(eff_str,
-                                      _ATTACKER_STATS["melee_strength_bonus"])
+        ceiling = combat_calc.max_melee_hit(
+            eff_str, _ATTACKER_STATS["melee_strength_bonus"]
+        )
         result = resolve_action(context)
 
         self.assertLess(ceiling, TOY_SWORD_DIE_MAX)

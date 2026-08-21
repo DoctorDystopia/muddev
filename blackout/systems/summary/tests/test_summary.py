@@ -268,7 +268,7 @@ class TestMenuNodes(_SummaryTest):
 
     def test_start_offers_every_drill_down_plus_refresh_and_close(self):
         _text, options = summary_menu.start(self.char1)
-        expected = len(summary_menu.DRILL_DOWNS) + 2
+        expected = len(summary_menu.DRILL_DOWNS) + 1
 
         self.assertEqual(expected, len(options))
 
@@ -281,14 +281,23 @@ class TestMenuNodes(_SummaryTest):
             "skills", getattr(self.char1.ndb, summary_menu.FOLLOWUP_ATTR)
         )
 
-    def test_exit_closes_without_queueing_anything(self):
+    def test_quit_closes_without_queueing_anything(self):
         summary_menu.start_summary_menu(self.char1)
         self.char1.execute_cmd("quit")
 
-        _text, options = summary_menu.node_exit(self.char1)
-
-        self.assertIsNone(options)
         self.assertIsNone(getattr(self.char1.ndb, summary_menu.FOLLOWUP_ATTR, None))
+
+    def test_closing_text_is_silent_when_a_drilldown_is_queued(self):
+        setattr(self.char1.ndb, summary_menu.FOLLOWUP_ATTR, "skills")
+
+        self.assertEqual("", summary_menu._closing_text(self.char1, None))
+
+    def test_closing_text_speaks_when_nothing_is_queued(self):
+        setattr(self.char1.ndb, summary_menu.FOLLOWUP_ATTR, None)
+
+        self.assertEqual(
+            summary_menu.CLOSE_TEXT, summary_menu._closing_text(self.char1, None)
+        )
 
 
 class TestPublicSummary(_SummaryTest):
