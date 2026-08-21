@@ -1,0 +1,25 @@
+# Cloudflare Tunnel ingress for game.playblackout.io
+#
+# Copy to C:\Users\<you>\.cloudflared\config.yml and fill in the tunnel id.
+# The tunnel dials OUT from this machine, so no port forwarding is needed --
+# which is the point, since this connection sits behind three NAT layers.
+#
+# Rules are evaluated top to bottom; the first match wins. The websocket rule
+# MUST come before the catch-all or the browser client will be handed HTML.
+
+tunnel: REPLACE-WITH-TUNNEL-ID
+credentials-file: C:\Users\NickR\.cloudflared\REPLACE-WITH-TUNNEL-ID.json
+
+ingress:
+  # Webclient websocket. WEBSOCKET_CLIENT_URL in settings.py points here.
+  # `path` is a Go regular expression, not a glob.
+  - hostname: game.playblackout.io
+    path: ^/ws
+    service: ws://localhost:4002
+
+  # Everything else -- the Evennia webserver (WEBSERVER_PORTS proxy port).
+  - hostname: game.playblackout.io
+    service: http://localhost:4001
+
+  # Required catch-all.
+  - service: http_status:404

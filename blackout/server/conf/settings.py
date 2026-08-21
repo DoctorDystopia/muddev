@@ -53,6 +53,41 @@ GODOT_CLIENT_WEBSOCKET_PORT = 4008
 GODOT_CLIENT_WEBSOCKET_CLIENT_INTERFACE = "127.0.0.1"
 
 ######################################################################
+# Public hosting - game.playblackout.io via Cloudflare Tunnel
+#
+# The tunnel dials out from this machine, so nothing is port-forwarded.
+# Cloudflare terminates TLS at the edge and forwards plain HTTP to the
+# ports below, which is why SECURE_PROXY_SSL_HEADER is required: without
+# it Django believes every request arrived over http:// and rejects the
+# secure-cookie handshake.
+######################################################################
+
+# Evennia defaults this to ["*"]. Narrow it - a wildcard lets anyone
+# reach the site through any hostname that resolves here.
+ALLOWED_HOSTS = [
+    "game.playblackout.io",
+    "localhost",
+    "127.0.0.1",
+]
+
+# Admin logins and any form POST are rejected without this.
+CSRF_TRUSTED_ORIGINS = ["https://game.playblackout.io"]
+
+# Trust Cloudflare's forwarded scheme so request.is_secure() is correct.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Safe to enable now that every public request arrives over TLS.
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# The webclient template falls back to `"ws://" + hostname + ":4002"` when
+# this is None (evennia/web/templates/webclient/base.html). Over HTTPS the
+# browser blocks that as mixed content and the client silently never
+# connects, so the wss:// URL must be stated explicitly. No query string -
+# evennia.js appends its own session parameters.
+WEBSOCKET_CLIENT_URL = "wss://game.playblackout.io/ws"
+
+######################################################################
 # Settings given in secret_settings.py override those in this file.
 ######################################################################
 try:
