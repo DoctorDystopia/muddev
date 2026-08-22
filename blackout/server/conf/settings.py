@@ -87,6 +87,26 @@ CSRF_COOKIE_SECURE = True
 # evennia.js appends its own session parameters.
 WEBSOCKET_CLIENT_URL = "wss://game.playblackout.io/ws"
 
+# Cloudflare closes a proxied websocket after ~100s with no traffic either
+# way, as an abnormal 1006 with no reason attached -- which reads in-game as
+# an aggressive inactivity disconnect even though IDLE_TIMEOUT is off below.
+# Measured 08/21/2026: three silent sockets through the tunnel died at 125.6s,
+# 126.0s and 126.9s; a socket pinged every 45s survived, and a control socket
+# straight to ws://127.0.0.1:4002 stayed up for the full 30-minute test.
+#
+# This cannot be fixed from deploy/cloudflared/config.yml -- originRequest
+# keepAliveTimeout covers cloudflared's HTTP pool to the origin, not the
+# edge's websocket idle timer. The protocol below pings instead.
+WEBSOCKET_PROTOCOL_CLASS = "server.conf.websocket.KeepAliveWebSocketClient"
+
+# Seconds between those pings. Must stay well under the ~100s edge limit;
+# 0 disables the keepalive and restores stock behaviour.
+WEBSOCKET_KEEPALIVE_INTERVAL = 45.0
+
+# Left explicit rather than inherited: the disconnects players reported were
+# never Evennia's idle timer, and this records that we checked.
+IDLE_TIMEOUT = -1
+
 ######################################################################
 # Settings given in secret_settings.py override those in this file.
 ######################################################################
