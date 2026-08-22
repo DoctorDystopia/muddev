@@ -16,6 +16,17 @@ ingress:
   - hostname: game.playblackout.io
     path: ^/ws
     service: ws://localhost:4002
+    originRequest:
+      # NOTE: these do NOT control the websocket idle disconnect. They govern
+      # cloudflared's HTTP connection pool to the origin. Measured 08/21/2026
+      # with keepAliveTimeout already at 1000s, silent websockets still died
+      # at 125.6s / 126.0s / 126.9s -- because it is the Cloudflare EDGE that
+      # closes websockets idle for ~100s, and that timer is not configurable
+      # below Enterprise. The real fix is server-side: Evennia now pings every
+      # 45s via WEBSOCKET_PROTOCOL_CLASS in blackout/server/conf/settings.py.
+      # Kept because a longer-lived origin pool is still mildly useful.
+      keepAliveTimeout: 1000s
+      tcpKeepAlive: 90s
 
   # Everything else -- the Evennia webserver (WEBSERVER_PORTS proxy port).
   - hostname: game.playblackout.io
