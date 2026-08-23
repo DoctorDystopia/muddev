@@ -28,6 +28,7 @@ class GatherableDef:
     xp_reward: int
 
 
+
 # Every gatherable node in the world. Adding a node type means adding one
 # entry here -- the typeclass and its skill def read required_level/xp_reward
 # from this dict instead of each restating their own constants.
@@ -39,6 +40,14 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         required_level=0,
         item_key="rusty_metal_chunk",
         xp_reward=10,
+    ),
+    "metal_pole": GatherableDef(
+        key="metal_pole",
+        node_name="Metal Pole",
+        skill_key="cutting",
+        required_level=10,
+        item_key="metal_chunk",
+        xp_reward=25,
     ),
 }
 
@@ -84,6 +93,7 @@ def get_gatherable(key: str) -> GatherableDef | None:
     return gatherable_def
 
 
+
 def get_gatherables_for_skill(skill_key: str) -> list[GatherableDef]:
     """
     Purpose: Get every gatherable node that unlocks under a given skill.
@@ -117,6 +127,7 @@ def get_gatherables_for_skill(skill_key: str) -> list[GatherableDef]:
     matches.sort(key=lambda entry: (entry.required_level, entry.node_name))
 
     return matches
+
 
 
 def get_gatherable_item_name(gatherable_def: GatherableDef) -> str:
