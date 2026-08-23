@@ -1,6 +1,6 @@
 {
   "maps": [
-    { "module": "world.maps.test_oasis", "zcoord": "oasis" },
-    { "module": "world.maps.test_oasis_outskirts", "zcoord": "oasis_outskirts" }
+    { "module": "world.maps.oasis", "zcoord": "oasis" },
+    { "module": "world.maps.oasis_outskirts", "zcoord": "oasis_outskirts" }
   ]
 }
