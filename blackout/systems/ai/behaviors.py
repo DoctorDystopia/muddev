@@ -94,7 +94,9 @@ def _can_be_fought(npc, target) -> bool:
     # Imported here for the same cycle reason as _last_attacker's import.
     from systems.combat.combat import target_unusable
 
-    if target_unusable(target):
+    unusable = target_unusable(target)
+
+    if unusable:
         return False
 
     if target.location is None or target.location is not npc.location:
@@ -146,7 +148,11 @@ def aggressive_melee(handler):
 
     target = _last_attacker(npc)
 
-    if not _can_be_fought(npc, target):
+    can_be_fought = _can_be_fought(npc, target)
+
+    if not can_be_fought:
         return None
 
-    return {"kind": "attack", "target": target}
+    action = {"kind": "attack", "target": target}
+
+    return action

@@ -1,40 +1,31 @@
 """
-Purpose: The one owner of the fact "where does a dead player come back".
-
-Entry:
-    Imported by typeclasses/characters.py (Character.respawn). Nothing else
-    should hard-code a respawn coordinate.
-
-Exit/Returns:
-    Exposes RESPAWN_XYZ and get_respawn_room().
-
-Module Globals:
-    RESPAWN_XYZ - the (x, y, zcoord) tuple a dead player returns to.
-
-Methodology:
-    Blackout sets neither START_LOCATION nor DEFAULT_HOME in settings.py, so
-    before this module there was no respawn-room fact anywhere in the codebase
-    and CombatEntity.respawn could only refill HP where the body fell.
-
-    The anchor is a COORDINATE, not a map module name. world/maps/oasis.py was
-    called world/maps/test_oasis.py until recently, and scripts/map_manifest.json
-    is what binds a module to its zcoord -- so a module rename moves the
-    manifest row, not the zcoord. Naming (0, 0, "oasis") survives that rename;
-    naming "world.maps.test_oasis" would not have.
-
-Notes/References:
-    (0, 0) on the oasis map is "Oasis Entrance" -- a named landmark with no NPC
-    prototype on the tile, and far enough from the Mutant Raider tile at (2, 3)
-    that a player cannot respawn inside the fight that just killed them. That
-    last property is the load-bearing one: see docs/2026-08-23-DESIGN-0003, §5,
-    "Player death loop".
-
-    Deliberately NOT an Evennia Attribute or a settings value. A constant in
-    world/ is greppable, is version-controlled next to the map that defines the
-    tile, and cannot drift per-database the way a stamped Attribute can.
-
+GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/23/2026
+Description: The one owner of the fact "where does a dead player come back".
+             Exposes RESPAWN_XYZ and get_respawn_room(); imported by
+             typeclasses/characters.py (Character.respawn) and by nothing else.
+             Nowhere may hard-code a respawn coordinate.
+
+Blackout sets neither START_LOCATION nor DEFAULT_HOME in settings.py, so before
+this module there was no respawn-room fact anywhere in the codebase and
+CombatEntity.respawn could only refill HP where the body fell.
+
+The anchor is a COORDINATE, not a map module name. world/maps/oasis.py was
+called world/maps/test_oasis.py until recently, and scripts/map_manifest.json is
+what binds a module to its zcoord -- so a module rename moves the manifest row,
+not the zcoord. Naming (0, 0, "oasis") survives that rename; naming
+"world.maps.test_oasis" would not have.
+
+(0, 0) on the oasis map is "Oasis Entrance" -- a named landmark with no NPC
+prototype on the tile, and far enough from the Mutant Raider tile at (2, 3) that
+a player cannot respawn inside the fight that just killed them. That last
+property is the load-bearing one: see docs/2026-08-23-DESIGN-0003, §5, "Player
+death loop".
+
+Deliberately NOT an Evennia Attribute or a settings value. A constant in world/
+is greppable, is version-controlled next to the map that defines the tile, and
+cannot drift per-database the way a stamped Attribute can.
 """
 
 from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
