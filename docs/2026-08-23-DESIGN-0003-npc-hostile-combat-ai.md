@@ -1,8 +1,9 @@
 # NPC Hostile Combat AI — research and implementation plan
 
 **Date:** 2026-08-23
-**Status:** plan, not yet implemented
-**Branch:** `claude/npc-hostile-combat-ai-5dv6gg`
+**Status:** phases 1-3 implemented and merged to `main`; phase 4 not started
+**Branch:** landed on `main` (originally drafted on
+`claude/npc-hostile-combat-ai-5dv6gg`, squashed on merge)
 **Goal:** hostile NPCs fight back, deal real damage to players, and resolve
 that combat against real skill levels rather than a fabricated stat facade.
 
@@ -288,7 +289,7 @@ Fortitude fix in §2 lands. Skills work first, then aggro.
 
 Each phase is independently shippable and independently testable.
 
-### Phase 1 — Skill source (A3 + protocol split + Fortitude bridge)
+### Phase 1 — Skill source (A3 + protocol split + Fortitude bridge) — DONE
 1. `systems/combat/protocols.py`: split `SkillSource` / `XpEarner`; add
    `set_level` / `modify_level` to `SkillSource`.
 2. New `systems/progression/skills/stat_block.py` — `StatBlockSkills`, storing
@@ -303,13 +304,13 @@ Each phase is independently shippable and independently testable.
 8. Tests: Big Mutant reads Fortitude 87 and a sane combat level; an NPC
    landing a hit awards no XP; a drain moves an NPC's effective level.
 
-### Phase 2 — Player death policy
+### Phase 2 — Player death policy — DONE
 9. Respawn-room fact in `world/` (one owner, greppable), plus a
    `Character.respawn` override: move, restore full HP, no XP penalty.
 10. Test: a player killed by an NPC lands in the respawn room at full HP with
     combat torn down on both sides.
 
-### Phase 3 — Retaliation (B3)
+### Phase 3 — Retaliation (B3) — DONE
 11. `systems/ai/` — behaviour registry + `@register_behavior`, and an
     `aggressive_melee` behaviour returning an action dict or None.
 12. `NpcDef.ai_behavior` field, stamped by `create`, defaulting to retaliate.
@@ -320,7 +321,7 @@ Each phase is independently shippable and independently testable.
     stops when the player leaves the room; two players attacking one NPC do
     not become enemies of each other (`get_sides` regression).
 
-### Phase 4 — Aggro (optional, gated on phase 1)
+### Phase 4 — Aggro (optional, gated on phase 1) — NOT STARTED
 16. `NpcDef.aggressive` + a room-entry trigger; combat-level tolerance rule.
 
 **Test command** (per CLAUDE.md — never bulk-import under `blackout/`, and
@@ -347,3 +348,63 @@ Full suite before merge:
 | Player death loop (respawn in the room they died in, get re-killed) | Phase 2 lands before phase 3; respawn room is not a combat room |
 | NPC XP leak via `_land_hit` → `_apply_xp_awards` | `XpEarner` split in phase 1, before any NPC can land a hit |
 | Aggro scan cost per tick | Event-driven trigger, not polling; scheduler only if tolerance timers are wanted |
+
+
+---
+
+## 6. What actually shipped
+
+Phases 1-3 landed together. Deviations from the plan above, and facts learned
+in the writing, are recorded here rather than by editing the plan.
+
+### Phase 2
+
+- The respawn fact is `world/respawn.py`: `RESPAWN_XYZ = (0, 0, "oasis")` plus
+  `get_respawn_room()`. (0, 0) is the "Oasis Entrance" tile -- a named landmark
+  with no NPC prototype, and clear of the Mutant Raider tile at (2, 3), which
+  is what stops the death loop §5 warns about.
+- The anchor is the zcoord, not the map module. This was load-bearing sooner
+  than expected: `world/maps/test_oasis.py` was renamed to `world/maps/oasis.py`
+  in the same window this work landed. `scripts/map_manifest.json` binds module
+  to zcoord, so the rename moved a manifest row and left `"oasis"` untouched.
+- `Character.respawn` restores HP through the `hp` **property**, not `db.hp`.
+  The setter is what publishes the state-feed HP event; writing `db.hp`
+  directly refills the number and leaves every connected client showing the
+  corpse's zero. The base `CombatEntity.respawn` still writes `db.hp` and is
+  now documented as the degraded path rather than a stub.
+- HP is restored BEFORE the move, because the move is the step that can fail.
+
+### Phase 3
+
+- `systems/ai/` holds `constants.py`, `registry.py` (`@register_behavior`,
+  explicit module list -- never a directory walk) and `behaviors.py`.
+- The seam is `BlackoutCombatHandler._consult_controller`, called from `tick`
+  when `pending_action is None`. The controller IS `db.ai_behavior`: a player
+  never stamps it, so the player/NPC split costs no isinstance check.
+- `NpcDef.ai_behavior` defaults to `aggressive_melee` and is stamped by
+  `create()` alongside `npc_key`, not carried in `to_combat_block()` -- it
+  decides who is asked for an action, not how one resolves.
+- **`ActionAttack._target_unusable` was promoted to a module-level
+  `combat.target_unusable`.** The behaviour has to ask the same question before
+  queueing an action that names a target, and a behaviour-local subset of those
+  checks would have missed the `pk is None` case -- which is exactly the case
+  that bites once something holds an id across a tick boundary.
+- Retaliation begins when the first hit lands, because `at_damage` is what
+  records the attacker. `ActionAttack.next_action` returns `self`, so one
+  queued attack self-sustains at `attack_speed`; the behaviour fires roughly
+  once per fight, not once per tick.
+
+### Migration note
+
+`db.ai_behavior` is stamped at spawn. NPCs already standing on the grid from
+before this change carry no such attribute and will NOT retaliate until they
+respawn or the maps are rebuilt
+(`scripts/clean_and_reload_all_maps.ps1`).
+
+### Found in passing, not fixed
+
+`Character.at_object_delete` (typeclasses/characters.py) is annotated `-> None`
+and returns nothing. Evennia's `DefaultObject.delete()` treats a falsy return
+from that hook as a veto, so **a Blackout Character cannot currently be
+deleted**. Unrelated to combat AI and deliberately left alone; the test that
+needed a deleted attacker uses a second NPC and says why.

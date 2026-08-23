@@ -7,6 +7,7 @@ Description: CombatEntity mixin —_HP, death, and disconnect hooks for any comb
 
 from evennia.utils import logger, lazy_property
 
+from systems.ai.constants import LAST_ATTACKER_ID_ATTR
 from systems.combat import constants as combat_constants
 from systems.combat import combat_msg
 from systems.combat.combat_level.logic import get_combat_level
@@ -295,6 +296,9 @@ class CombatEntity:
         """
         if amount < 0:
             amount = 0
+
+        self._record_attacker(attacker)
+
         old_hp = self.hp
         delta = min(amount, old_hp)
         new_hp = old_hp - delta
@@ -305,6 +309,59 @@ class CombatEntity:
                           damage_type=damage_type)
 
         return delta
+
+
+    def _record_attacker(self, attacker) -> None:
+        """
+        Purpose: Remember who last damaged this entity, for the AI to read.
+
+        Entry:
+            attacker - the CombatEntity that dealt the damage, or None for an
+                       environmental or unattributed source.
+
+        Exit/Returns:
+            No return value. Writes ndb.<LAST_ATTACKER_ID_ATTR>.
+
+        Module Globals:
+            LAST_ATTACKER_ID_ATTR read.
+
+        Methodology:
+            Stores the id, not the object. A reference would pin a row that may
+            be deleted before the next tick reads it; combat.py resolves
+            combatants by id throughout for the same reason.
+
+            ndb rather than db: this is fight-scoped, and a server reload ends
+            every fight anyway. It also keeps a per-hit write off the Attribute
+            table, which would otherwise be a database round trip on every
+            connecting blow of every fight in the game.
+
+            A None attacker is ignored rather than clearing the record. Taking
+            poison or fall damage mid-fight should not make a monster forget
+            who it was fighting.
+
+            Self-damage is ignored for the same reason at_death normalises a
+            self-kill to no killer: a backfiring gadget must not make its
+            wielder their own retaliation target.
+
+        Notes/References:
+            This is the threat-table seam. §3.2 of
+            docs/2026-08-23-DESIGN-0003 chose "last attacker" now with a threat
+            table later; upgrading means accumulating per-attacker damage HERE
+            and changing what systems/ai/behaviors._last_attacker reads. No
+            other caller and no behaviour changes.
+
+        Author: Nick Hobar
+        Creation date: 08/23/2026
+        """
+        if attacker is None or attacker is self:
+            return
+
+        attacker_id = getattr(attacker, "id", None)
+
+        if attacker_id is None:
+            return
+
+        setattr(self.ndb, LAST_ATTACKER_ID_ATTR, attacker_id)
 
 
     def at_death(self, killer=None, source=None, damage_type=None) -> None:
@@ -479,9 +536,15 @@ class CombatEntity:
 
     def respawn(self) -> None:
         """
-        Purpose: Subclass-overridable respawn hook. Default behavior in this
-        batch is a no-op FOR NPCs (NPCs despawn via session/disconnect logic)
-        and a stub for Players (Blackout has no respawn location policy yet).
+        Purpose: Subclass-overridable respawn hook. The base behaviour is a
+        bare HP refill in place; both real combatant types override it.
+        HostileNPC deletes its row and enqueues on the respawn manager, and
+        Character moves to the respawn room (world/respawn.py) at full HP.
+
+        This body is therefore the DEGRADED path, not a stub: it is what
+        Character.respawn falls back to when the respawn room cannot be
+        resolved, which is the behaviour every player death had before there
+        was a respawn-room fact anywhere in the codebase.
 
         Entry:
             None.
@@ -499,8 +562,8 @@ class CombatEntity:
             respawn room and restore HP to max_hp.
 
         Notes/References:
-            Author design dialogue: stub respawn; no per-NPC spawn table
-            behavior implemented in this batch.
+            Player respawn policy: docs/2026-08-23-DESIGN-0003 §1.4 --
+            respawn room, full HP, deliberately no XP penalty.
 
         Author: Nick Hobar
         Creation date: 07/26/2026

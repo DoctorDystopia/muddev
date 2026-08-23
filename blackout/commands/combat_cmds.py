@@ -49,9 +49,13 @@ class CmdAttack(Command):
             return
 
         # Per twitch-tutorial combat_twitch.py:335, give EACH side its own
-        # handler. Note this does NOT make the NPC fight back: nothing queues
-        # an action for it and there is no AI hook yet. The target's handler
-        # exists so it registers as a combatant for get_sides/check_stop_combat.
+        # handler. The target's handler registers it as a combatant for
+        # get_sides/check_stop_combat, and -- since the AI landed -- is also
+        # what gives a hostile somewhere to be asked for an action: the
+        # controller seam in BlackoutCombatHandler.tick consults db.ai_behavior
+        # whenever a combatant has no pending action. Still nothing queues one
+        # for the target HERE; retaliation begins when the first hit lands and
+        # at_damage records who threw it.
         ensure_combat_handler(target)
         handler = ensure_combat_handler(caller)
 

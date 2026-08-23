@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 from evennia import create_object
 
+from systems.ai import constants as ai_constants
 from systems.combat import constants as combat_constants
 
 
@@ -22,10 +23,11 @@ class NpcDef:
     live in per-category modules under world/npc_defs/ and are merged into
     the single NPC_DB registry below.
 
-    Field surface deliberately mirrors exactly what
-    HostileNPC.apply_combat_stats consumes (the combat stat block plus
-    respawn_seconds). Aggression flags / drop tables / AI hooks are deferred
-    additions on top of this base.
+    Field surface covers what HostileNPC.apply_combat_stats consumes (the
+    combat stat block), plus the facts create() stamps onto the spawned object
+    so they survive the row being deleted: respawn_seconds and ai_behavior.
+    Unprovoked-aggression flags are still a deferred addition on top of this
+    base; ai_behavior only decides how an NPC answers a fight it is already in.
 
     Skill-axis levels are flat ints, unpacked by apply_combat_stats into the
     {skill_key: level} dict StatBlockSkills reads, so the OSRS combat math
@@ -115,6 +117,23 @@ class NpcDef:
     #     `evennia reload` affects NPCs already standing on the grid.
     loot_table: str | None = None
 
+    # ─── AI ──────────────────────────────────────────────────────────
+    # ai_behavior — key into systems/ai/registry.BEHAVIOR_REGISTRY, naming the
+    #     behaviour the combat handler consults when this NPC has no pending
+    #     action. None means the NPC never acts on its own, which is what every
+    #     hostile did before this field existed.
+    #
+    #     Defaults to retaliation rather than to None: a hostile that stands
+    #     still while being hit is the bug this field exists to fix, so the
+    #     safe default is the one that makes a monster behave like one. A
+    #     genuinely passive NPC (a training dummy, a quest-giver that can be
+    #     attacked) sets this to None explicitly.
+    #
+    #     Stamped onto the object by create(), alongside npc_key -- NOT part of
+    #     to_combat_block. It is not a combat statistic; it decides who is
+    #     asked for an action, not how one resolves.
+    ai_behavior: str | None = ai_constants.AI_BEHAVIOR_AGGRESSIVE_MELEE
+
 
     def to_combat_block(self) -> dict:
         """Assemble the dict shape HostileNPC.apply_combat_stats expects.
@@ -191,6 +210,12 @@ class NpcDef:
         # None -> permanent despawn on death. int -> HostileNPC.respawn()
         # enqueues on the global BlackoutRespawnManager.
         obj.db.respawn_seconds = self.respawn_seconds
+
+        # Which behaviour the combat handler's controller seam consults for
+        # this NPC. Stamped rather than looked up live because the seam runs on
+        # every idle combat tick, and an NPC_DB round trip per tick per
+        # combatant is the cost this avoids.
+        obj.db.ai_behavior = self.ai_behavior
 
         return obj
 
