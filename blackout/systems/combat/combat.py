@@ -31,7 +31,7 @@ COMBAT_HANDLER_KEY = "blackout_combat_handler"
 # chain, so adding an action means adding an entry and an apply_action case
 # rather than editing a validation ladder.
 _QUEUEABLE_ACTION_KINDS = frozenset({"attack", "hold", "flee", "wield"})
-from .protocols import Combatant
+from .protocols import Combatant, XpEarner
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
 from .rules.pipeline import resolve_action
@@ -67,7 +67,8 @@ def _normalize_xp_skills(xp_skill) -> tuple:
 def _plan_style_xp(attacker, style: dict, damage: int) -> list:
     """Work out what XP a combat action earns, WITHOUT granting any of it.
 
-    attacker — a CombatEntity that exposes .skills (Character / HostileNPC).
+    attacker — a CombatEntity. Returns an empty plan unless its .skills
+               satisfies XpEarner, which a HostileNPC's deliberately does not.
     style    — one entry from the entity's combat_styles table.
     damage   — the integer damage returned by resolve combat action
                (e.g., combat_calc.resolve_melee_swing).
@@ -90,7 +91,13 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
         )
         return []
 
-    if getattr(attacker, "skills", None) is None:
+    # An attacker that earns nothing plans nothing. `.skills is None` used to
+    # gate this, which was true only for an entity with no skills handler at
+    # all -- every NPC has one, so a monster hitting a player planned a full
+    # award list on every connecting hit and then handed it to a no-op add_xp.
+    # Asking for the capability skips the planning as well as the granting, and
+    # keeps a monster out of the XP line the hit message prints.
+    if not isinstance(getattr(attacker, "skills", None), XpEarner):
         return []
 
     raw_targets = style.get("weapon_style_xp_skill")
@@ -115,7 +122,8 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
 def _apply_xp_awards(attacker, awards) -> None:
     """Grant a plan built by _plan_style_xp. Safe to call with an empty plan."""
     skills = getattr(attacker, "skills", None)
-    if skills is None:
+
+    if not isinstance(skills, XpEarner):
         return
 
     for skill_key, amount in awards:

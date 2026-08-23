@@ -10,6 +10,7 @@ from evennia.utils import logger, lazy_property
 from systems.combat import constants as combat_constants
 from systems.combat import combat_msg
 from systems.combat.combat_level.logic import get_combat_level
+from systems.combat.protocols import XpEarner
 from systems.statefeed import events as feed
 
 
@@ -197,7 +198,7 @@ class CombatEntity:
 
         Entry:
             self exposes a `skills` handler (Character's SkillHandler, or
-            HostileNPC's _NpcSkillsShim) -- true for every CombatEntity host
+            HostileNPC's StatBlockSkills) -- true for every CombatEntity host
             today.
 
         Exit/Returns:
@@ -336,9 +337,10 @@ class CombatEntity:
                the death line, and the killer-side hooks below need the
                latter so a victim cannot award themselves their own kill.
             3. Build and broadcast the death line to the room.
-            4. If killer has `skills` (i.e. is a Player-side handler-bearer),
-               award combat XP. We do NOT gate on isinstance(killer, Character)
-               here; the optional API surface (skills, quests) gates itself.
+            4. If the killer's `.skills` satisfies XpEarner, award combat XP.
+               We do NOT gate on isinstance(killer, Character) here -- but nor
+               do we gate on the mere PRESENCE of `.skills`, which every NPC
+               also has. The protocol names the capability being asked about.
             5. If killer has `quests`, fire the wildcard kill-progress update.
             6. call self.respawn() to permit subclass divergence (player
                respawn vs NPC despawn).
@@ -374,8 +376,14 @@ class CombatEntity:
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death broadcast failed: {exc!r}")
 
-        skills = getattr(killer, "skills", None)
-        if skills is not None:
+        # `getattr(killer, "skills", None) is not None` used to gate this, and
+        # it asked the wrong question: every HostileNPC has a `.skills`, so an
+        # NPC that killed a player passed the gate and ran the killer-XP path.
+        # That was harmless only because the NPC-side skill facade's add_xp was
+        # a no-op -- the check was one attribute name standing in for "is this
+        # an XP earner?", which is now a protocol that answers directly.
+        earns_xp = isinstance(getattr(killer, "skills", None), XpEarner)
+        if earns_xp:
             try:
                 self._award_killer_xp(killer)
             except Exception as exc:

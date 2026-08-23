@@ -139,6 +139,105 @@ def get_level(obj: object, skill_key: str) -> int:
     return current_level
 
 
+def set_level(obj: object, skill_key: str, level: int) -> int:
+    """
+    Purpose: Set a skill's level directly, bypassing the XP curve.
+
+    Entry:
+        obj is a valid Evennia Character object
+        skill_key is a valid string matching a key in SKILL_REGISTRY
+        level is the wanted integer level
+
+    Exit/Returns:
+        Returns the level actually stored, after clamping into
+        [MIN_BASE_SKILL_LEVEL, MAX_BASE_SKILL_LEVEL].
+
+    Module Globals:
+        skill_constants.MIN_BASE_SKILL_LEVEL read.
+        skill_constants.MAX_BASE_SKILL_LEVEL read.
+
+    Methodology:
+        This is NOT how a character earns a level -- add_xp is. It is the write
+        path a stat drain, a builder command, or a test fixture needs, and it
+        is the character half of the SkillSource contract in
+        systems/combat/protocols.py.
+
+        Banked XP is deliberately left untouched. Zeroing it would mean a
+        drained-then-restored character had silently lost progress toward
+        their next level; carrying it means the level they were working toward
+        is still the one they arrive back at.
+
+        apply_level_up_side_effects runs when the level actually moves, for the
+        same reason add_xp calls it: Fortitude drives max_hp, and a level set
+        without that refresh leaves the HP cap pinned at its old value. It runs
+        on a DECREASE too -- a drained Fortitude must lower the cap, or a
+        drain would be free.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    ensure_skill(obj, skill_key)
+
+    wanted = int(level)
+
+    if wanted < skill_constants.MIN_BASE_SKILL_LEVEL:
+        clamped = skill_constants.MIN_BASE_SKILL_LEVEL
+    elif wanted > skill_constants.MAX_BASE_SKILL_LEVEL:
+        clamped = skill_constants.MAX_BASE_SKILL_LEVEL
+    else:
+        clamped = wanted
+
+    skills_dict = obj.db.skills
+    skill_data = dict(skills_dict[skill_key])
+    previous = skill_data["level"]
+    skill_data["level"] = clamped
+
+    obj.db.skills[skill_key] = skill_data
+
+    if clamped != previous:
+        apply_level_up_side_effects(obj, skill_key)
+
+    return clamped
+
+
+def modify_level(obj: object, skill_key: str, delta: int) -> int:
+    """
+    Purpose: Shift a skill's level by a signed amount. The drain/buff path.
+
+    Entry:
+        obj is a valid Evennia Character object
+        skill_key is a valid string matching a key in SKILL_REGISTRY
+        delta is a signed integer; negative drains, positive buffs
+
+    Exit/Returns:
+        Returns the new level, after clamping.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Expressed in terms of get_level and set_level so the clamp and the
+        side-effect refresh are defined exactly once.
+
+        Like set_level, this writes the PERMANENT level. A drain that wears off
+        needs a layer that remembers the pre-drain value; combat_calc's
+        transient `potion_boost` parameter is where that belongs, not here.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    current = get_level(obj, skill_key)
+    wanted = current + int(delta)
+
+    return set_level(obj, skill_key, wanted)
+
+
 def get_total_xp(obj: object, skill_key: str) -> int:
     """
     Purpose: Returns the total cumulative XP earned for a skill across all levels.

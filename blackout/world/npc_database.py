@@ -27,11 +27,12 @@ class NpcDef:
     respawn_seconds). Aggression flags / drop tables / AI hooks are deferred
     additions on top of this base.
 
-    Skill-axis levels are flat ints read by _NpcSkillsShim so the OSRS
-    combat math picks the NPC's strike / brawn / defense the same way
-    it does a Character's. Raw OSRS monster stat values (e.g. Goblin L2's
-    attack -21, def -15) transfer directly because combat_calc.py uses
-    the same integer keys weapon ItemDefs use.
+    Skill-axis levels are flat ints, unpacked by apply_combat_stats into the
+    {skill_key: level} dict StatBlockSkills reads, so the OSRS combat math
+    picks the NPC's strike / brawn / defense / fortitude the same way it does
+    a Character's. Raw OSRS monster stat values (e.g. Goblin L2's attack -21,
+    def -15) transfer directly because combat_calc.py uses the same integer
+    keys weapon ItemDefs use.
     """
 
     key: str
@@ -39,11 +40,31 @@ class NpcDef:
     typeclass: str = "typeclasses.npc_combat.HostileNPC"
     desc: str = ""
 
-    # ─── Skill-axis levels (flat; read by _NpcSkillsShim) ────────────
+    # ─── Skill-axis levels (read by StatBlockSkills) ─────────────────
     strike_level: int = 1
     brawn_level: int = 1
     defense_level: int = 1
     max_hp: int = 1
+
+    # fortitude_level — the NPC's Hitpoints axis. None means "derive it from
+    #     max_hp", which is what every NpcDef written before this field existed
+    #     wants: HP_PER_FORTITUDE_LEVEL is 1, so Fortitude and max HP are the
+    #     same number by definition (the vault's rule, and what
+    #     logic.sync_max_hp_from_fortitude enforces for characters).
+    #
+    #     It has to be here at all because combat_level's base term is
+    #     (Fortitude + Defense). Before the field existed, to_combat_block
+    #     never emitted a Fortitude and the old NPC skill shim answered its
+    #     unknown-key default of 1 -- so the Big Mutant's 87 hitpoints computed
+    #     a combat level off a Fortitude of 1, and every rules definition that
+    #     reads the Brawn-over-Fortitude surplus (the Glass Cannon amulet)
+    #     evaluated against a number nobody had written down.
+    #
+    #     max_hp is still the field an NpcDef is expected to set: an OSRS
+    #     monster's stat block is quoted as Hitpoints, and that is what it
+    #     transfers to. Setting this explicitly is for a monster whose
+    #     Fortitude axis deliberately differs from its HP pool.
+    fortitude_level: int | None = None
 
     # ─── Combat tunables ─────────────────────────────────────────────
     # attack_speed — integer ticks; one tick = TICK_SECONDS (0.6s).
@@ -100,12 +121,18 @@ class NpcDef:
 
         Resolves None attack_speed / default_combat_style to their unarmed
         canonical constants so individual NpcDef entries can omit them
-        (an unarmed goblin shouldn't have to repeat UNARMED_* in its def).
+        (an unarmed goblin shouldn't have to repeat UNARMED_* in its def), and
+        resolves None fortitude_level to max_hp for the same reason.
         """
         return {
             "strike_level": self.strike_level,
             "brawn_level": self.brawn_level,
             "defense_level": self.defense_level,
+            "fortitude_level": (
+                self.fortitude_level
+                if self.fortitude_level is not None
+                else self.max_hp
+            ),
             "max_hp": self.max_hp,
             "attack_speed": (
                 self.attack_speed
