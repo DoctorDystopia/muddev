@@ -74,6 +74,7 @@ def _iter_recipe_modules():
     yield from configured
 
 
+
 def _is_registrable_recipe(obj, module_path: str) -> bool:
     """
     Purpose: Decide whether a class found in a recipe module is a real recipe.
@@ -120,6 +121,7 @@ def _is_registrable_recipe(obj, module_path: str) -> bool:
         return False
 
     return True
+
 
 
 def _discover_recipes() -> dict:
@@ -177,6 +179,7 @@ def _discover_recipes() -> dict:
             registry[recipe_name] = obj
 
     return registry
+
 
 
 RECIPE_REGISTRY: dict = _discover_recipes()
