@@ -98,7 +98,8 @@ def _classify(entity) -> tuple:
         constants; `asset_key` is ASSET_KEY_GENERIC when nothing better exists.
 
     Module Globals:
-        const.ASSET_KIND_* and const.ASSET_KEY_GENERIC read.
+        const.ASSET_KIND_*, const.ASSET_KEY_GENERIC and
+        const.ASSET_KEY_CHARACTER read.
 
     Methodology:
         Ordered most-specific first. npc_key is checked before anything else
@@ -116,6 +117,13 @@ def _classify(entity) -> tuple:
         ("character",) on DefaultCharacter and ("object",) on everything else.
         Using the engine's classification keeps this module from importing the
         typeclass layer and inverting the dependency between a system and it.
+
+        A character is named ASSET_KEY_CHARACTER and not ASSET_KEY_GENERIC.
+        The two were the same key until art existed for a person, and sharing
+        them stopped being harmless the moment it did: generic is the fallback
+        for an unclassified ITEM, so a client that registered a body against it
+        would draw one for every unmodelled object in the game. A character
+        that declares `asset_key` still overrides this, one branch above.
 
         Do NOT be tempted back to a `hasattr(entity, "sessions")` check here.
         Every DefaultObject carries a sessions handler, so that test is true
@@ -152,7 +160,7 @@ def _classify(entity) -> tuple:
     content_types = getattr(entity, "_content_types", ())
 
     if _CHARACTER_CONTENT_TYPE in content_types:
-        return const.ASSET_KIND_CHARACTER, const.ASSET_KEY_GENERIC
+        return const.ASSET_KIND_CHARACTER, const.ASSET_KEY_CHARACTER
 
     proto_key = _prototype_key(entity)
 

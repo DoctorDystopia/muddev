@@ -18,11 +18,14 @@ Description: The adapter layer — game events in, payloads out, emitted.
              Nothing here raises; emit() swallows and logs.
 """
 
+
+
 from . import constants as const
 from . import serializers, subscriptions
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
+    CharAvatarPayload,
     CharItemsPayload,
     CharSummaryPayload,
     CharVitalsPayload,
@@ -34,11 +37,13 @@ from .payloads import (
 )
 
 
+
 # ─── Public constant definitions ─────────────────────────────────────────────
 
 AURA_EVENT_ACTIVATE: str = "activate"
 AURA_EVENT_DEACTIVATE: str = "deactivate"
 AURA_EVENT_PULSE: str = "pulse"
+
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -89,6 +94,7 @@ def _visible_rooms(room) -> list:
     return rooms_within_radius(room, const.STATEFEED_ENTITY_RADIUS)
 
 
+
 def _style_name(context) -> str:
     """Name the active combat style as a player would recognise it.
 
@@ -112,6 +118,7 @@ def _style_name(context) -> str:
     return str(context.style.get("weapon_style", ""))
 
 
+
 def _broadcast(payload, attacker, target, room) -> int:
     """Send one payload to the two combatants and their onlookers.
 
@@ -130,8 +137,11 @@ def _broadcast(payload, attacker, target, room) -> int:
     return sent
 
 
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
+# TODO: update emit_swing name (e.g, emit_combat_action). Also, might be
+# other useful metadata to carry through the pipeline?
 def emit_swing(context, result, hp_after: int, max_hp: int,
                killed: bool, backfire: bool = False) -> int:
     """
@@ -195,6 +205,7 @@ def emit_swing(context, result, hp_after: int, max_hp: int,
     return _broadcast(payload, attacker, context.defender, room)
 
 
+
 def emit_miss(context) -> int:
     """
     Purpose: Publish a swing that connected with nothing.
@@ -242,6 +253,7 @@ def emit_miss(context) -> int:
     return _broadcast(payload, attacker, target, room)
 
 
+
 def emit_vitals(entity) -> int:
     """Publish one entity's own health to its own sessions.
 
@@ -252,6 +264,59 @@ def emit_vitals(entity) -> int:
     payload = CharVitalsPayload(hp=getattr(entity, "hp", 0), max_hp=max_hp)
 
     return emit(entity, payload)
+
+
+
+def emit_avatar(observer, force: bool = False) -> int:
+    """
+    Purpose: Tell the observer what they themself look like.
+
+    Entry:
+        observer - the puppeted Character, or None (a no-op, matching every
+                   other observer-facing emitter here).
+        force    - True to bypass rate caps. Used by resync.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The body is TAKEN FROM serialize_entity rather than assembled here,
+        even though only three of its keys are kept. That routine owns the
+        answer to "what names this thing's art" -- it is what decides an NPC by
+        npc_key, an item by prototype, a character by ASSET_KEY_CHARACTER --
+        and a second place deriving the same pair for the observer alone is a
+        second place to forget when a character can choose its appearance. The
+        three keys are picked off the result; the rest is dropped because
+        char_vitals and room_info already carry it. See CharAvatarPayload.
+
+        Sent on resync only, which is every login, every reconnect and every
+        server reload. That is the whole schedule this fact has today: a
+        character's asset key is fixed for its lifetime. When appearance
+        becomes mutable, whatever sets it calls this, and nothing else here
+        changes.
+
+    Notes/References:
+        emit_room_contents excludes the observer from their own entity list,
+        which is why this channel has to exist at all.
+
+    Author: Nick Hobar
+    Creation date: 08/22/2026
+    """
+    if observer is None:
+        return 0
+
+    body = serializers.serialize_entity(observer)
+    payload = CharAvatarPayload(
+        entity_id=body["id"],
+        asset=body["asset"],
+        family=body["family"],
+    )
+
+    return emit(observer, payload, force=force)
+
 
 
 def emit_summary(observer, force: bool = False) -> int:
@@ -305,6 +370,7 @@ def emit_summary(observer, force: bool = False) -> int:
     payload = CharSummaryPayload(panels=summary_data(observer))
 
     return emit(observer, payload, force=force)
+
 
 
 def emit_inventory(observer, force: bool = False, ignore=None) -> int:
@@ -379,6 +445,7 @@ def emit_inventory(observer, force: bool = False, ignore=None) -> int:
     return emit(observer, payload, force=force)
 
 
+
 def emit_room_info(observer, force: bool = False) -> int:
     """Publish the observer's current room to the observer alone.
 
@@ -399,6 +466,7 @@ def emit_room_info(observer, force: bool = False) -> int:
     )
 
     return emit(observer, payload, force=force)
+
 
 
 def emit_room_contents(observer, force: bool = False) -> int:
@@ -425,6 +493,7 @@ def emit_room_contents(observer, force: bool = False) -> int:
     return emit(observer, payload, force=force)
 
 
+
 def emit_entity_arrived(room, entity) -> int:
     """Tell everyone who can see `room` that `entity` just appeared.
 
@@ -438,6 +507,7 @@ def emit_entity_arrived(room, entity) -> int:
     rooms = _visible_rooms(room)
 
     return emit_to_area(rooms, payload, exclude=(entity,))
+
 
 
 def emit_entity_left(room, entity_id: int, exclude=()) -> int:
@@ -477,6 +547,7 @@ def emit_entity_left(room, entity_id: int, exclude=()) -> int:
     rooms = _visible_rooms(room)
 
     return emit_to_area(rooms, payload, exclude=exclude)
+
 
 
 def emit_aura(owner, event: str, aura_key: str, radius: int,
