@@ -26,6 +26,7 @@ from items.inventory.handler import InventoryHandler
 from systems.quests.quests import QuestHandler
 from systems.statefeed import events as feed
 from systems.statefeed import resync
+from world.respawn import get_respawn_room
 
 
 
@@ -360,6 +361,87 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
         parent_class = super()
         parent_class.at_post_unpuppet(account, session=session, **kwargs)
+
+
+    # ─── Death ──────────────────────────────────────────────────────────────
+
+    def respawn(self) -> None:
+        """
+        Purpose: Return a dead player to the respawn room at full HP.
+
+        Entry:
+            None. Called by CombatEntity.at_death, which has already
+            broadcast the death line, rolled drops and torn this side of the
+            fight down via leave_combat.
+
+        Exit/Returns:
+            No return value. Raises nothing: see Methodology.
+
+        Module Globals:
+            world.respawn.get_respawn_room read.
+
+        Methodology:
+            1. Resolve the respawn room. None means "unresolvable" -- already
+               logged by get_respawn_room.
+            2. Restore HP first, THEN move. A move fires at_object_receive on
+               the destination and is the step that can fail; doing it second
+               means a failed move still leaves a live player rather than a
+               0 HP one standing where they died.
+            3. Move quietly and message explicitly. The default move messaging
+               would announce a routine arrival ("X arrives from the north"),
+               which is wrong for a respawn -- there is no direction they came
+               from, and at_death already told the old room what happened.
+
+            The base CombatEntity.respawn refills HP in place, which was the
+            only behaviour available while Blackout had no respawn-room fact.
+            That is exactly what this degrades back to if the room cannot be
+            resolved.
+
+            No XP penalty. That is a deliberate scope decision recorded in
+            docs/2026-08-23-DESIGN-0003 §1.4, not an omission -- a death
+            penalty is a tuning question, and hostile retaliation had to land
+            before there was anything to tune it against.
+
+        Notes/References:
+            Every failure path here is caught. This runs inside at_death: an
+            exception escaping would abandon the death sequence with combat
+            already torn down and HP still at zero, which is a worse state
+            than any respawn bug it could report. Death must never crash.
+
+        Author: Nick Hobar
+        Creation date: 08/23/2026
+        """
+        # Through the property, not db.hp: the hp setter is what clamps to
+        # max_hp AND publishes the state-feed HP event the 3D client's bar
+        # reads. Writing db.hp directly refills the number but leaves every
+        # connected client still showing the corpse's zero.
+        self.hp = self.max_hp
+
+        room = get_respawn_room()
+
+        if room is None:
+            self.msg(
+                "|rYou black out... and come to where you fell, barely "
+                "breathing but alive.|n"
+            )
+            return
+
+        if self.location is room:
+            self.msg("|rYou black out... and wake where you stand.|n")
+            return
+
+        try:
+            self.move_to(room, quiet=True, move_type="teleport")
+        except Exception as exc:
+            logger.log_err(f"Character.respawn move to {room} failed: {exc!r}")
+            self.msg(
+                "|rYou black out... and come to where you fell, barely "
+                "breathing but alive.|n"
+            )
+            return
+
+        self.msg("|rYou black out.|n")
+        self.msg(f"|wYou wake up at {room.key}, your wounds closed over.|n")
 
 
     def at_pre_object_receive(self, moved_obj, source_location, **kwargs):
