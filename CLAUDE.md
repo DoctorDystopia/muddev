@@ -62,7 +62,7 @@ are thin wrappers around it. `scripts/clean_and_reload_all_maps.ps1 -DryRun`
 ../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
 ```
 
-**Before merging or major changes:** run the full suite (500+ tests, ~10 minutes):
+**Before merging or major changes:** run the full suite (1200+ tests, ~20 minutes):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
