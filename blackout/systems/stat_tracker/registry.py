@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from systems.stat_tracker.constants import KILLS_PER_HOSTILE_STAT_KEY
+from systems.stat_tracker.constants import DEATHS_PER_HOSTILE_STAT_KEY
 from systems.stat_tracker.constants import CUTTING_TOTALS_STAT_KEY
 from systems.stat_tracker.constants import CREDITS_SPENT_STAT_KEY
 
@@ -55,6 +56,13 @@ STAT_REGISTRY: dict[str, StatDef] = {
         key=KILLS_PER_HOSTILE_STAT_KEY,
         name="Kills per Hostile",
         desc="Number of kills on every hostile.",
+        kind=StatKind.KEYED_COUNTER,
+        category="combat",
+    ),
+    DEATHS_PER_HOSTILE_STAT_KEY: StatDef(
+        key=DEATHS_PER_HOSTILE_STAT_KEY,
+        name="Deaths per Hostile",
+        desc="Number of deaths to every hostile.",
         kind=StatKind.KEYED_COUNTER,
         category="combat",
     ),

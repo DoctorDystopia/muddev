@@ -463,6 +463,14 @@ class CombatEntity:
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death KILLS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
 
+        stats_b = getattr(self, "stats", None)
+        npc_key_b = getattr(getattr(killer, "db", None), "npc_key", None)
+        if stats_b is not None and npc_key_b:
+            try:
+                stats_b.increment(stat_constants.DEATHS_PER_HOSTILE_STAT_KEY, npc_key_b)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.at_death DEATHS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
+
         # Drops must roll BEFORE respawn. HostileNPC.respawn() deletes the row,
         # and the loot table is resolved off db.npc_key while it still exists.
         self.drop_loot(killer)
