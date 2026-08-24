@@ -68,6 +68,7 @@ def _iter_skill_modules():
         yield module_name
 
 
+
 def _discover_skills() -> dict:
     """
     Purpose: Build the master skill registry by importing every skill module.
@@ -132,6 +133,7 @@ def _discover_skills() -> dict:
             registry[skill_key] = obj
 
     return registry
+
 
 
 SKILL_REGISTRY: dict = _discover_skills()

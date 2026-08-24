@@ -24,6 +24,8 @@ several more options for customizing the Guest account system.
 
 from evennia.accounts.accounts import DefaultAccount, DefaultGuest
 
+from world.respawn import get_respawn_room
+
 
 class Account(DefaultAccount):
     """
@@ -136,10 +138,46 @@ class Account(DefaultAccount):
 
     """
 
-    pass
+    def create_character(self, *args, **kwargs):
+        """
+        Purpose: Spawn a brand-new character at the same coordinate a dead
+        player wakes up at, instead of settings.START_LOCATION (Limbo).
+
+        Entry:
+            Same signature as DefaultAccount.create_character.
+
+        Exit/Returns:
+            Same as the parent: (character, errs).
+
+        Module Globals:
+            world.respawn.get_respawn_room read.
+
+        Methodology:
+            DefaultAccount.create_character only fills in kwargs["location"]
+            with settings.START_LOCATION when "location" is absent, so
+            setting it here first pre-empts that fallback. get_respawn_room
+            already degrades to None (grid not built yet, e.g. a fresh dev
+            database) -- in that case "location" is left unset and the
+            parent's normal Limbo fallback runs unchanged, exactly as it did
+            before this override existed.
+
+        Notes/References:
+            world/respawn.py is the one place a respawn coordinate may be
+            named; see its module docstring.
+
+        Author: Nick Hobar
+        Creation date: 08/23/2026
+        """
+        if "location" not in kwargs:
+            room = get_respawn_room()
+            if room is not None:
+                kwargs["location"] = room
+
+        parent_class = super()
+        return parent_class.create_character(*args, **kwargs)
 
 
-class Guest(DefaultGuest):
+class Guest(Account, DefaultGuest):
     """
     This class is used for guest logins. Unlike Accounts, Guests and their
     characters are deleted after disconnection.

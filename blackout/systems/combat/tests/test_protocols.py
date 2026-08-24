@@ -13,54 +13,119 @@ Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings settings.py systems.combat
 """
 
+import inspect
+
 from evennia.utils.test_resources import EvenniaTest
 
-from systems.combat.protocols import Combatant, SkillSource
-from typeclasses.npc_combat import _NpcSkillsShim
+from systems.combat.protocols import Combatant, SkillSource, XpEarner
+from systems.progression.skills.handler import SkillHandler
+from systems.progression.skills.stat_block import StatBlockSkills
 from world.npc_database import NPC_DB
 
 
-class TestSkillSourceConformance(EvenniaTest):
-    """Both `.skills` implementations must cover the same surface.
+def _protocol_members(protocol) -> set:
+    """The method names a Protocol declares, without the typing machinery."""
+    return {name for name in dir(protocol) if not name.startswith("_")}
 
-    The shim's own docstring records what happens when they diverge: combat
-    calls a method the shim lacks, it raises inside the tick loop, the engine
-    contains the failure, and the NPC stops fighting with nothing surfaced.
+
+def _signature_mismatches(protocol, implementation) -> list:
+    """Compare each protocol member's parameters against an implementation's.
+
+    Returns a list of human-readable complaints, empty when they agree.
+
+    A Protocol's runtime isinstance check only asks whether the NAMES exist,
+    so an implementation whose get_level took different parameters from the
+    one combat calls satisfied it. That is the same silent breakage the
+    protocol was written to catch, one step further in: it fails at the call
+    site, inside the tick loop, where the engine swallows it.
+
+    Return annotations are deliberately not compared -- an implementation is
+    free to be more specific about what it hands back than the contract is.
+    """
+    complaints = []
+
+    for name in _protocol_members(protocol):
+        expected = inspect.signature(getattr(protocol, name))
+        actual_attr = getattr(implementation, name, None)
+
+        if actual_attr is None:
+            complaints.append(f"{implementation.__name__} is missing {name}()")
+            continue
+
+        actual = inspect.signature(actual_attr)
+
+        expected_params = list(expected.parameters)
+        actual_params = list(actual.parameters)
+
+        if expected_params != actual_params:
+            complaints.append(
+                f"{implementation.__name__}.{name}{actual} does not match "
+                f"the contract's {name}{expected}"
+            )
+
+    return complaints
+
+
+class TestSkillSourceConformance(EvenniaTest):
+    """Both `.skills` implementations must cover the same level surface.
+
+    The NPC facade this replaced recorded the failure mode in its own
+    docstring: combat calls a method it lacks, the call raises inside the tick
+    loop, the engine contains the failure by discarding the handler, and the
+    NPC stops fighting with nothing surfaced to the player.
     """
 
     def test_the_character_skill_handler_satisfies_the_contract(self):
         self.assertIsInstance(self.char1.skills, SkillSource)
 
-    def test_the_npc_shim_satisfies_the_contract(self):
+    def test_the_npc_stat_block_satisfies_the_contract(self):
         npc = NPC_DB["mutant_raider"].create(location=self.room1)
 
         self.assertIsInstance(npc.skills, SkillSource)
 
-    def test_the_shim_implements_every_method_the_contract_names(self):
-        """Explicit rather than relying on isinstance alone: a Protocol checks
-        that names exist, and naming them here makes the failure message say
-        WHICH one is missing."""
-        for name in ("get_level", "add_xp", "get_total_xp", "meets_prerequisite"):
-            self.assertTrue(
-                callable(getattr(_NpcSkillsShim, name, None)),
-                msg=f"_NpcSkillsShim is missing {name}()",
-            )
+    def test_the_stat_block_matches_the_contract_signatures(self):
+        complaints = _signature_mismatches(SkillSource, StatBlockSkills)
 
-    def test_both_implementations_agree_on_the_method_set(self):
-        """The regression that matters: a method added to the real handler and
-        forgotten on the shim. Compared against the contract rather than
-        against each other, so the real handler is free to have extras."""
-        contract = {
-            name for name in dir(SkillSource)
-            if not name.startswith("_")
-        }
-        shim_methods = {name for name in dir(_NpcSkillsShim) if not name.startswith("_")}
+        self.assertEqual(complaints, [], msg="; ".join(complaints))
 
-        missing = contract - shim_methods
+    def test_the_skill_handler_matches_the_contract_signatures(self):
+        complaints = _signature_mismatches(SkillSource, SkillHandler)
 
-        self.assertEqual(
-            missing, set(), msg=f"_NpcSkillsShim does not implement {sorted(missing)}"
-        )
+        self.assertEqual(complaints, [], msg="; ".join(complaints))
+
+
+class TestXpEarnerConformance(EvenniaTest):
+    """Only a character earns. The split is what the killer-XP gate reads."""
+
+    def test_a_character_is_an_xp_earner(self):
+        self.assertIsInstance(self.char1.skills, XpEarner)
+
+    def test_an_npc_is_not_an_xp_earner(self):
+        """The assertion the whole split exists for.
+
+        `getattr(killer, "skills", None) is not None` gated the killer-XP
+        award in CombatEntity.at_death and the per-hit XP plan in the combat
+        handler. Every NPC has a `.skills`, so both gates opened for a monster
+        that killed a player -- harmless only for as long as the NPC-side
+        add_xp stayed a no-op. StatBlockSkills does not implement the XP
+        surface at all, so the question now has a real answer.
+        """
+        npc = NPC_DB["mutant_raider"].create(location=self.room1)
+
+        self.assertNotIsInstance(npc.skills, XpEarner)
+
+    def test_the_skill_handler_matches_the_contract_signatures(self):
+        complaints = _signature_mismatches(XpEarner, SkillHandler)
+
+        self.assertEqual(complaints, [], msg="; ".join(complaints))
+
+    def test_the_two_contracts_do_not_overlap(self):
+        """Guards the split itself: a method drifting back into both
+        protocols would make the isinstance check above pass for NPCs again
+        the moment StatBlockSkills grew it."""
+        shared = _protocol_members(SkillSource) & _protocol_members(XpEarner)
+
+        self.assertEqual(shared, set(), msg=f"declared in both: {sorted(shared)}")
 
 
 class TestCombatantConformance(EvenniaTest):

@@ -29,17 +29,28 @@ class TestAvailableCombatStyles(EvenniaTest):
         self.char1.equipment.equip(item)
         return item
 
-    def test_available_styles_lists_all_four_shortsword_styles(self):
+    def test_available_styles_are_exactly_the_itemdefs_styles(self):
+        """The reader surfaces the definition's table, whatever is in it.
+
+        Asserting a literal style set instead couples this test to one
+        weapon's design data: adding a fifth shortsword style would fail a
+        test about the reader, not about the styles.
+        """
+        item_def = ITEM_DB["rusty_scrap_shortsword"]
         weapon = self._equip_shortsword()
 
         styles = available_combat_styles(weapon)
 
-        self.assertEqual(set(styles.keys()), {"irimi", "lunge", "slash", "guard"})
+        self.assertTrue(item_def.combat_styles, "fixture weapon declares no styles")
+        self.assertEqual(set(styles), set(item_def.combat_styles))
 
-    def test_active_style_key_matches_the_itemdef_default(self):
+    def test_active_style_key_is_the_itemdefs_declared_default(self):
+        item_def = ITEM_DB["rusty_scrap_shortsword"]
         weapon = self._equip_shortsword()
 
-        self.assertEqual(active_combat_style_key(weapon), "irimi")
+        self.assertEqual(
+            active_combat_style_key(weapon), item_def.default_combat_style
+        )
 
     def test_active_style_key_falls_back_when_default_is_unset(self):
         """An unset default_combat_style still resolves to *some* valid key

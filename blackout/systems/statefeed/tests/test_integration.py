@@ -28,8 +28,13 @@ from systems.combat import constants as combat_const
 from systems.combat.combat import ensure_combat_handler
 from systems.combat.rules.context import ActionResult
 from systems.statefeed import constants as const
-from systems.statefeed import serializers, subscriptions
-from systems.statefeed.payloads import CharItemsPayload, CombatPayload
+from systems.statefeed import events, resync, serializers, subscriptions
+from systems.statefeed.payloads import (
+    CharAvatarPayload,
+    CharItemsPayload,
+    CharVitalsPayload,
+    CombatPayload,
+)
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
 from typeclasses.npc_combat import spawn_mutant_raider
@@ -97,6 +102,23 @@ class TestEntitySerialisation(EvenniaTest):
         body = serializers.serialize_entity(self.char1)
 
         self.assertEqual(body["kind"], const.ASSET_KIND_CHARACTER)
+
+    def test_a_character_is_named_by_the_character_asset_key(self):
+        body = serializers.serialize_entity(self.char1)
+
+        self.assertEqual(body["asset"], const.ASSET_KEY_CHARACTER)
+
+    def test_a_character_does_not_share_the_generic_asset_key(self):
+        # Not a restatement of the test above. Generic is also what an
+        # unclassified ITEM falls back to, so the two keys being equal would
+        # mean art registered for a person draws one in place of every
+        # unmodelled object in the game -- a client-side symptom with a
+        # server-side cause, which is the kind that takes a day to find.
+        character = serializers.serialize_entity(self.char1)
+        unclassified = serializers.serialize_entity(self.obj1)
+
+        self.assertEqual(unclassified["asset"], const.ASSET_KEY_GENERIC)
+        self.assertNotEqual(character["asset"], unclassified["asset"])
 
     def test_a_gathering_node_is_not_an_item(self):
         # A node carries get:false(), so a client told "item" offers to pick up
@@ -178,6 +200,94 @@ class TestEntitySerialisation(EvenniaTest):
         # list field, and it carries two ints and the map NAME.
         for member in body["coords"]:
             self.assertIsInstance(member, (int, str))
+
+
+class TestCharAvatarChannel(EvenniaTest):
+    """The one thing a client cannot learn from room_players: itself."""
+
+    character_typeclass = BlackoutCharacter
+
+    def _emit_avatar(self):
+        """Run the avatar emitter with the emit seam recorded."""
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.statefeed.events.emit", recorder):
+            events.emit_avatar(self.char1, force=True)
+
+        return recorder
+
+    def test_the_avatar_names_the_observers_own_asset(self):
+        recorder = self._emit_avatar()
+
+        avatar = recorder.of_type(CharAvatarPayload)[-1]
+        self.assertEqual(avatar.asset, const.ASSET_KEY_CHARACTER)
+
+    def test_the_avatar_carries_the_family_tier_as_well(self):
+        # Both tiers, spelled the way every entity dict spells them, so the
+        # client resolves its own mesh through the lookup it already runs for
+        # an NPC instead of a special case that can rot on its own.
+        recorder = self._emit_avatar()
+
+        avatar = recorder.of_type(CharAvatarPayload)[-1]
+        self.assertEqual(avatar.family, const.ASSET_KIND_CHARACTER)
+
+    def test_the_avatar_carries_the_observers_entity_id(self):
+        # What makes a combat event recognisable as being about you:
+        # CombatPayload names its attacker and target by id.
+        recorder = self._emit_avatar()
+
+        avatar = recorder.of_type(CharAvatarPayload)[-1]
+        self.assertEqual(avatar.entity_id, self.char1.id)
+
+    def test_the_avatar_agrees_with_how_anyone_else_would_be_drawn(self):
+        # The observer is excluded from their own room_players list, so this
+        # is the only place the two descriptions can be compared -- and they
+        # have to match, or you would render differently in your own client
+        # than you do in the client of the person standing next to you.
+        recorder = self._emit_avatar()
+        seen_by_others = serializers.serialize_entity(self.char1)
+
+        avatar = recorder.of_type(CharAvatarPayload)[-1]
+        self.assertEqual(avatar.asset, seen_by_others["asset"])
+        self.assertEqual(avatar.family, seen_by_others["family"])
+
+    def test_a_missing_observer_is_absorbed(self):
+        # Every observer-facing emitter in the feed tolerates None; a session
+        # that subscribed before puppeting anything is the ordinary case.
+        sent = events.emit_avatar(None)
+
+        self.assertEqual(sent, 0)
+
+    def test_the_payload_is_json_safe_throughout(self):
+        recorder = self._emit_avatar()
+
+        avatar = recorder.of_type(CharAvatarPayload)[-1]
+
+        for key, value in avatar.to_dict().items():
+            self.assertIsInstance(value, (int, str), msg=key)
+
+    def test_a_full_resync_includes_the_avatar(self):
+        # The wiring half. The payload being correct is worth nothing if the
+        # only path that sends it -- login, reconnect, reload -- does not.
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.statefeed.events.emit", recorder):
+            with mock.patch("systems.statefeed.resync.emit", recorder):
+                resync.send_full_state(self.char1)
+
+        self.assertTrue(recorder.of_type(CharAvatarPayload))
+
+    def test_the_avatar_precedes_the_vitals_it_describes(self):
+        # Vitals arriving first describe a character the client cannot draw.
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.statefeed.events.emit", recorder):
+            with mock.patch("systems.statefeed.resync.emit", recorder):
+                resync.send_full_state(self.char1)
+
+        order = [type(payload) for payload in recorder.payloads]
+        self.assertLess(order.index(CharAvatarPayload),
+                        order.index(CharVitalsPayload))
 
 
 class TestRoomSerialisation(EvenniaTest):

@@ -23,6 +23,7 @@ CHANNEL_ROOM_INFO: str = "room_info"                  # -> Room.Info
 CHANNEL_ROOM_PLAYERS: str = "room_players"            # -> Room.Players
 CHANNEL_ROOM_PLAYER_ADD: str = "room_add_player"      # -> Room.AddPlayer
 CHANNEL_ROOM_PLAYER_REMOVE: str = "room_remove_player"  # -> Room.RemovePlayer
+CHANNEL_CHAR_AVATAR: str = "char_avatar"              # -> Char.Avatar
 CHANNEL_CHAR_VITALS: str = "char_vitals"              # -> Char.Vitals
 CHANNEL_CHAR_STATUS: str = "char_status"              # -> Char.Status
 
@@ -57,6 +58,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_ROOM_PLAYERS,
     CHANNEL_ROOM_PLAYER_ADD,
     CHANNEL_ROOM_PLAYER_REMOVE,
+    CHANNEL_CHAR_AVATAR,
     CHANNEL_CHAR_VITALS,
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
@@ -193,6 +195,7 @@ DEFAULT_MIN_INTERVAL_SECONDS: float = 0.0
 # When in doubt, leave a channel OUT. An uncoalesced channel is merely chattier;
 # a wrongly coalesced one silently loses information.
 COALESCABLE_CHANNELS: frozenset = frozenset((
+    CHANNEL_CHAR_AVATAR,
     CHANNEL_CHAR_VITALS,
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
@@ -242,6 +245,18 @@ ASSET_KIND_STATION: str = "station"
 ASSET_KIND_GATHERABLE: str = "gatherable"
 
 ASSET_KEY_GENERIC: str = "generic"
+
+# Every puppetable character, until one of them says otherwise.
+#
+# It has to be a key of its own rather than ASSET_KEY_GENERIC, and the reason
+# is the client's registry: an asset key with art registered against it draws
+# that art for EVERY entity carrying the key. Generic is also the fallback for
+# an item nothing else classified, so art registered there would put a person
+# in place of every unmodelled object in the game.
+#
+# Named for what it is rather than for a particular download, so replacing the
+# art is a client-side edit and reaches every character at once.
+ASSET_KEY_CHARACTER: str = "player_character"
 
 # The command a client sends to act on an entity, when there is one.
 #

@@ -1,11 +1,14 @@
 ﻿# mygame/world/maps/test_oasis.py
 
+
+
 from evennia.contrib.grid.xyzgrid.xymap_legend import MapNode, MapTransitionNode
 # Imported for its side effect: the module's @register_spawner decorators must
 # have run before this map spawns tiles that reference those spawner keys.
 import typeclasses.skill_facilities as skill_facilities  # noqa: F401
 
 # from .legend import BLACKOUT_LEGEND
+
 
 
 # The topological layout for the sector
@@ -41,6 +44,7 @@ MAPSTR = r'''
 '''
 
 
+
 class RustyPoleNode(MapNode):
     """
     Custom MapNode for Rusty Poles.
@@ -51,12 +55,14 @@ class RustyPoleNode(MapNode):
     prototype = "xyz_room"
 
 
+
 class BankNode(MapNode):
     """
     Custom MapNode for banking facilities.
     """
     display_symbol = "|#4488FFß|n"
     prototype = "xyz_room"
+
 
 
 class FurnaceFacilityNode(MapNode):
@@ -67,12 +73,14 @@ class FurnaceFacilityNode(MapNode):
     prototype = "xyz_room"
 
 
+
 class AnvilFacilityNode(MapNode):
     """
     Custom MapNode for blacksmith anvils.
     """
     display_symbol = "|wA|n"
     prototype = "xyz_room"
+
 
 
 class NPCNode(MapNode):
@@ -83,12 +91,14 @@ class NPCNode(MapNode):
     prototype = "xyz_room"
 
 
+
 class ShopNPCNode(MapNode):
     """
     Custom MapNode for Shop NPC characters.
     """
     display_symbol = "|Y§|n"
     prototype = "xyz_room"
+
 
 
 class MutantRaiderNPCNode(MapNode):
@@ -98,6 +108,8 @@ class MutantRaiderNPCNode(MapNode):
     display_symbol = "|#afff00m|n"
     prototype = "xyz_room"
 
+
+
 class ToOasisOutskirtsNode(MapTransitionNode):
     """
     MapNode to teleport to the Oasis Outskirts.
@@ -105,6 +117,8 @@ class ToOasisOutskirtsNode(MapTransitionNode):
     display_symbol = "|gT|n"
     target_map_xyz = (8, 10, "oasis_outskirts")
     prototype = None
+
+
 
 LEGEND = {
     "†": RustyPoleNode,
@@ -118,12 +132,13 @@ LEGEND = {
 }
 
 
+
 # The PROTOTYPES dictionary allows for map-wide defaults and exact coordinate overrides.
 # The '*' characters act as wildcards for (X, Y) nodes and (X, Y, direction) links.
 _rusty_pole = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
-    "key": "Pole clearing",
+    "key": "Rusty pole clearing",
     "desc": "A rusted pole. Maybe I can cut it down?",
 }
 
@@ -169,6 +184,8 @@ _npc_mutant_raider = {
     "desc": "A mutant raider with a crude weapon.",
 }
 
+
+
 PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
     ('*', '*'): {
@@ -204,6 +221,8 @@ PROTOTYPES = {
     (2, 3): _npc_mutant_raider,
 }
 
+
+
 # Aggregate all configuration data for the parser
 XYMAP_DATA = {
     "zcoord": "oasis",
@@ -212,6 +231,8 @@ XYMAP_DATA = {
     "prototypes": PROTOTYPES,
     "options": {}
 }
+
+
 
 # XYMAP_DATA_LIST is parsed first by the engine, allowing for multiple maps per module.
 XYMAP_DATA_LIST = [

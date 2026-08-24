@@ -466,6 +466,48 @@ let blackoutMeshes = (function () {
         root.userData[HAS_SKIN] = skinned;
     };
 
+    // Measure one subtree, after making sure it knows where its own parts are.
+    //
+    // THE updateMatrixWorld IS THE WHOLE ROUTINE, and leaving it out is a bug
+    // that reads as a broken model rather than a broken measurement.
+    //
+    // Box3.setFromObject refreshes each node it visits with
+    // updateWorldMatrix(false, false) — from the node's own `matrix`, without
+    // recomputing that matrix. GLTFLoader leaves an imported node's matrix
+    // baked and its matrixAutoUpdate off, so what gets measured is whichever
+    // matrixWorld the import happens to be holding at that moment, which for a
+    // freshly parsed file is not the one it will render with.
+    //
+    // Measured on the character model the difference is ninety degrees. Its
+    // bind-pose geometry stands 1.790 tall on Y; measured cold it comes back
+    // 1.790 deep on Z and 0.308 tall — a figure lying on its back — and
+    // measured after this call it comes back upright, which is how it draws.
+    //
+    // What that costs downstream is not a wrong SIZE. The scale is taken from
+    // the longest axis and a person is as tall as they are long, so it lands
+    // right by luck; it is the CENTRE that comes out of the wrong axis, and
+    // the model ends up offset by half its own height — floating over the
+    // tile it is standing on.
+    //
+    // The trap is that `rotation` looks like the fix. It is what stands the
+    // rusty sword up, the export has the same Sketchfab conversion matrix on
+    // its root, and a quarter turn does make the BOX agree with the model. It
+    // does it by laying the model down. Measured through resolve(), a
+    // character registered with rotation [PI/2, 0, 0] is 0.059 tall and 0.340
+    // deep; with no rotation at all it is 0.340 tall, which is exactly
+    // ENTITY_SCALE and exactly right.
+    //
+    // Box3's `precise` flag is NOT the answer here and was tried: it walks
+    // real vertices through the bone transform, costs a pass over all 39k of
+    // them twice per model, and returns the same box either way. The stale
+    // matrix is upstream of it.
+    const measure = function (bounds, object) {
+        object.updateMatrixWorld(true);
+        bounds.setFromObject(object);
+
+        return bounds;
+    };
+
     // Fit a loaded scene into the same box a procedural build occupies, and
     // apply the per-key corrections a bounding box cannot infer.
     //
@@ -492,6 +534,11 @@ let blackoutMeshes = (function () {
     // the second re-centres what the scaling moved. One pass would mean
     // assuming the imported root has an identity transform, and that Y-up
     // conversion matrix is exactly the case where it does not.
+    //
+    // Both passes go through measure(), which is where a SKINNED import stops
+    // being measurable the cheap way. Read that before adding a `rotation` to
+    // a rigged model: the correction a mis-measured skeleton seems to ask for
+    // is the one that breaks it.
     const prepare = function (scene, entry) {
         const pivot = new THREE.Group();
         const shell = new THREE.Group();
@@ -509,14 +556,14 @@ let blackoutMeshes = (function () {
         }
 
         shell.add(frame);
-        bounds.setFromObject(shell);
+        measure(bounds, shell);
         bounds.getSize(size);
         const longest = Math.max(size.x, size.y, size.z);
 
         if (longest > 0) {
             shell.scale.setScalar((UNIT / longest) * bias);
         }
-        bounds.setFromObject(shell);
+        measure(bounds, shell);
         bounds.getCenter(centre);
         shell.position.sub(centre);
 

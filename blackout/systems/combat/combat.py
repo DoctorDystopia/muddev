@@ -10,6 +10,8 @@ from evennia.utils import logger
 
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
+from systems.ai.constants import AI_BEHAVIOR_ATTR
+from systems.ai.registry import get_behavior
 from systems.statefeed import events as feed
 
 from . import combat_msg
@@ -31,7 +33,7 @@ COMBAT_HANDLER_KEY = "blackout_combat_handler"
 # chain, so adding an action means adding an entry and an apply_action case
 # rather than editing a validation ladder.
 _QUEUEABLE_ACTION_KINDS = frozenset({"attack", "hold", "flee", "wield"})
-from .protocols import Combatant
+from .protocols import Combatant, XpEarner
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
 from .rules.pipeline import resolve_action
@@ -67,7 +69,8 @@ def _normalize_xp_skills(xp_skill) -> tuple:
 def _plan_style_xp(attacker, style: dict, damage: int) -> list:
     """Work out what XP a combat action earns, WITHOUT granting any of it.
 
-    attacker — a CombatEntity that exposes .skills (Character / HostileNPC).
+    attacker — a CombatEntity. Returns an empty plan unless its .skills
+               satisfies XpEarner, which a HostileNPC's deliberately does not.
     style    — one entry from the entity's combat_styles table.
     damage   — the integer damage returned by resolve combat action
                (e.g., combat_calc.resolve_melee_swing).
@@ -90,7 +93,13 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
         )
         return []
 
-    if getattr(attacker, "skills", None) is None:
+    # An attacker that earns nothing plans nothing. `.skills is None` used to
+    # gate this, which was true only for an entity with no skills handler at
+    # all -- every NPC has one, so a monster hitting a player planned a full
+    # award list on every connecting hit and then handed it to a no-op add_xp.
+    # Asking for the capability skips the planning as well as the granting, and
+    # keeps a monster out of the XP line the hit message prints.
+    if not isinstance(getattr(attacker, "skills", None), XpEarner):
         return []
 
     raw_targets = style.get("weapon_style_xp_skill")
@@ -115,7 +124,8 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
 def _apply_xp_awards(attacker, awards) -> None:
     """Grant a plan built by _plan_style_xp. Safe to call with an empty plan."""
     skills = getattr(attacker, "skills", None)
-    if skills is None:
+
+    if not isinstance(skills, XpEarner):
         return
 
     for skill_key, amount in awards:
@@ -175,6 +185,35 @@ def _object_by_id(obj_id):
         return ObjectDB.objects.get(id=obj_id)
     except ObjectDB.DoesNotExist:
         return None
+
+
+def target_unusable(target) -> bool:
+    """Whether `target` can no longer be acted on, for any reason.
+
+    Four separate checks used to be written out along ActionAttack.resolve's
+    length -- `target is None`, no `is_alive` attribute, `is_alive()` returning
+    False, and `target.pk is None` after an NPC deleted itself inside
+    at_damage -- with two of them repeated at different points. They are one
+    question with one answer, and the state machine has one event for it.
+
+    Module-level rather than a method on the action because systems/ai/ asks it
+    too, BEFORE queueing an action that names a target. A behaviour that
+    open-coded a subset of these checks would reintroduce exactly the drift
+    this consolidation removed -- the `pk is None` case in particular, which
+    only shows up once something can hold an id across a tick boundary.
+    """
+    if target is None:
+        return True
+
+    if getattr(target, "pk", None) is None:
+        return True
+
+    if not isinstance(target, Combatant):
+        return True
+
+    alive = target.is_alive()
+
+    return not alive
 
 
 def _stored_combat_styles(entity) -> dict:
@@ -615,25 +654,14 @@ class ActionAttack(_Action):
     def _target_unusable(self, target) -> bool:
         """Whether `target` can no longer be acted on, for any reason.
 
-        Four separate checks used to be written out along resolve's length --
-        `target is None`, no `is_alive` attribute, `is_alive()` returning
-        False, and `target.pk is None` after an NPC deleted itself inside
-        at_damage -- with two of them repeated at different points. They are
-        one question with one answer, and the state machine has one event for
-        it.
+        Delegates to the module-level target_unusable, which is where the
+        answer now lives so systems/ai/ can ask the same question before it
+        queues an action naming a target. Kept as a method because resolve()
+        below reads better asking itself.
         """
-        if target is None:
-            return True
+        unusable = target_unusable(target)
 
-        if getattr(target, "pk", None) is None:
-            return True
-
-        if not isinstance(target, Combatant):
-            return True
-
-        alive = target.is_alive()
-
-        return not alive
+        return unusable
 
     def resolve(self, handler):
         """
@@ -1048,6 +1076,7 @@ class BlackoutCombatHandler(TickableHandler):
 
         action = self.ndb.pending_action
         if action is None:
+            self._consult_controller()
             return
 
         event = action.resolve(self)
@@ -1058,6 +1087,81 @@ class BlackoutCombatHandler(TickableHandler):
             return
 
         self._charge_cooldown(action)
+
+    def _consult_controller(self) -> None:
+        """
+        Purpose: Ask this combatant's controller what to do on an idle tick.
+
+        Entry:
+            None. Called from tick() only when pending_action is None and the
+            combatant is off cooldown.
+
+        Exit/Returns:
+            No return value. Queues an action as a side effect, or does
+            nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The controller IS the db.ai_behavior attribute. An entity that
+            names no behaviour has no controller and is left alone -- which is
+            precisely a player Character, waiting for the next command. So the
+            player/NPC distinction costs no isinstance check and no second
+            code path: players simply never stamp the attribute.
+
+            Queueing goes through queue_action, not a direct pending_action
+            write. queue_action routes through the tick engine's INPUT phase,
+            so the action lands at the top of the NEXT tick exactly as a typed
+            command would. That is the engine's OSRS-style packet buffering and
+            bypassing it would give NPCs a half-tick advantage over players.
+
+        Notes/References:
+            EVERY failure here is caught and logged. The tick engine swallows
+            exceptions raised inside a handler's tick, so an uncaught error in
+            a behaviour would present as an NPC that silently stopped fighting
+            with nothing in the log to say why -- the exact failure mode
+            docs/2026-08-23-DESIGN-0003 §5 lists first.
+
+        Author: Nick Hobar
+        Creation date: 08/23/2026
+        """
+        obj = self.obj
+        behavior_key = getattr(obj.db, AI_BEHAVIOR_ATTR, None)
+
+        if not behavior_key:
+            return
+
+        behavior = get_behavior(behavior_key)
+
+        if behavior is None:
+            logger.log_err(
+                f"CombatHandler._consult_controller: {obj} names unknown "
+                f"behaviour {behavior_key!r}; it will not act"
+            )
+            return
+
+        try:
+            action_dict = behavior(self)
+        except Exception as exc:
+            logger.log_err(
+                f"CombatHandler._consult_controller: behaviour "
+                f"{behavior_key!r} raised for {obj}: {exc!r}"
+            )
+            logger.log_trace()
+            return
+
+        if action_dict is None:
+            return
+
+        try:
+            self.queue_action(action_dict)
+        except Exception as exc:
+            logger.log_err(
+                f"CombatHandler._consult_controller: queueing {action_dict!r} "
+                f"for {obj} failed: {exc!r}"
+            )
+            logger.log_trace()
 
     def _settle(self, event) -> bool:
         """Apply an action's outcome and tear down if the activity is over.

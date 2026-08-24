@@ -54,7 +54,14 @@ def _send_room(observer) -> int:
 
 
 def _send_self(observer) -> int:
-    """Push the observer's own vitals and status."""
+    """Push the observer's own avatar, vitals and status.
+
+    The avatar goes first, and it is the only ordering here that matters: it
+    is the observer's identity, and vitals arriving before it describe a
+    character the client cannot yet draw.
+    """
+    sent = events.emit_avatar(observer, force=True)
+
     max_hp = getattr(observer, "max_hp", 0)
     vitals = CharVitalsPayload(hp=getattr(observer, "hp", 0), max_hp=max_hp)
 
@@ -69,7 +76,7 @@ def _send_self(observer) -> int:
         levels=levels,
     )
 
-    sent = emit(observer, vitals, force=True)
+    sent += emit(observer, vitals, force=True)
     sent += emit(observer, status, force=True)
 
     return sent

@@ -15,7 +15,7 @@ from world.item_database import ITEM_DB
 
 
 
-_MIN_HARVEST_COOLDOWN = 3.0
+_MIN_HARVEST_COOLDOWN = 2.0
 
 
 
@@ -30,11 +30,13 @@ class Cutting(BaseSkill):
     cooldown_seconds = _MIN_HARVEST_COOLDOWN
 
 
+
     def get_unlock_requirements(self, character: object) -> bool:
         """
         Purpose: Cutting is always unlocked for all players.
         """
         return True
+
 
 
     def _get_loot_info(self, target: object) -> tuple[str | None, str | None, int]:
@@ -83,6 +85,7 @@ class Cutting(BaseSkill):
         return item_key, item_name, xp_reward
 
 
+
     def _has_tool(self, character: object) -> bool:
         """
         Purpose: Checks if the character has an axe in inventory or equipped.
@@ -95,6 +98,7 @@ class Cutting(BaseSkill):
             has_axe = any(_is_axe(item) for item in character.equipment.all())
 
         return has_axe
+
 
 
     def _execute_gathering(self, character: object, target: object, item_key: str, item_name: str, xp_reward: int) -> None:
@@ -137,6 +141,7 @@ class Cutting(BaseSkill):
         
         success_msg = f"You successfully cut the {target.key} and receive a {item_name} for {xp_reward} XP."
         character.msg(success_msg)
+
 
 
     def execute(self, character: object, target: object) -> None:
@@ -210,4 +215,3 @@ class Cutting(BaseSkill):
             return
 
         self._execute_gathering(character, target, item_key, item_name, xp_reward)
-

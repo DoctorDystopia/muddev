@@ -6,6 +6,8 @@ Description: BlackoutRecipe — the project's CraftingRecipe subclass, adding
              a skill gate and an XP award on top of the Evennia contrib.
 """
 
+
+
 from evennia.contrib.game_systems.crafting.crafting import (
     CraftingRecipe,
     CraftingValidationError,
@@ -18,6 +20,7 @@ from .constants import (
     DEFAULT_CRAFT_SECONDS,
     TOOL_TAG_CATEGORY,
 )
+
 
 
 class BlackoutRecipe(CraftingRecipe):
@@ -74,8 +77,10 @@ class BlackoutRecipe(CraftingRecipe):
     success_xp_message = "You gain {xp} {skill} XP."
 
 
+
     def unlock_requirement_check(self, crafter):
         return self.unlocked
+
 
 
     def _tag_map(self, tag_category):
@@ -92,6 +97,7 @@ class BlackoutRecipe(CraftingRecipe):
             and hasattr(obj, "tags")
             and inherits_from(obj, "evennia.objects.models.ObjectDB")
         }
+
 
 
     def _validate_tools(self):
@@ -129,6 +135,7 @@ class BlackoutRecipe(CraftingRecipe):
                 raise CraftingValidationError(err)
 
         self.validated_tools = validated
+
 
 
     def _validate_consumables(self):
@@ -178,6 +185,7 @@ class BlackoutRecipe(CraftingRecipe):
         self._consumption_plan = plan
 
 
+
     def _consume_inputs(self):
         """Decrement or delete every object in the consumption plan."""
         for obj, units in self._consumption_plan.items():
@@ -187,6 +195,7 @@ class BlackoutRecipe(CraftingRecipe):
                     obj.delete()
             else:
                 obj.delete()
+
 
 
     def pre_craft(self, **kwargs):
@@ -211,6 +220,7 @@ class BlackoutRecipe(CraftingRecipe):
 
         self._validate_tools()
         self._validate_consumables()
+
 
 
     def post_craft(self, craft_result, **kwargs):

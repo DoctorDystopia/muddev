@@ -861,33 +861,47 @@ evennia reload
 
 ## Running Tests
 
+### Always use `test_settings.py`
+
+Pass `--settings test_settings.py`, not `--settings settings.py`. It is
+`settings.py` with one line changed — the Django password hasher — because
+Evennia's test fixtures create two accounts per test method and the default
+PBKDF2 hasher costs 0.46s per account. That one line took the full suite from
+~20 minutes to 6.4. See `../docs/2026-08-23-TEST-0001-suite-audit.md`.
+
 ### Quick testing (most common)
 
-While developing, run **only the module(s) you changed** — this avoids waiting 10 minutes on the full suite:
+While developing, run **only the module(s) you changed** — these finish in
+seconds:
 
 ```bash
 # Single module
-../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
 
 # Multiple modules
-../evenv/Scripts/evennia.exe test --settings settings.py systems.combat.tests systems.crafting.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.combat.tests systems.crafting.tests
 ```
 
 ### Full test suite (only when necessary)
 
-The full suite has ballooned to **500+ tests taking ~10 minutes**. Only run it when you need complete verification (e.g., before merging, or if a change affects multiple systems):
+**1273 tests, ~6.5 minutes.** Run it before merging, or when a change affects
+multiple systems:
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
+../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world
 ```
+
+Append `--durations 20` to see the slowest tests.
 
 The three roots that actually hold tests are `items`, `systems`, and `world`;
 `typeclasses` and `commands` are listed so any test added there is picked up
 too. **Omitting a root silently runs fewer tests rather than erroring** — that
 is how `world/tests/` went unnoticed. Plain `evennia test .` is *not*
-equivalent: it collects fewer tests, because `world/maps/test_oasis.py` and
-`test_neo_cairo.py` are map definitions whose names happen to match the
-discovery pattern.
+equivalent: it collects fewer tests.
+
+`--parallel` does not work — Django's cloned worker databases do not carry the
+dbrefs `EvenniaTestMixin` assumes, and every worker dies in `setUp` on
+`settings.DEFAULT_HOME (= '#2') does not exist`. Don't spend time on it.
 
 ### Writing tests
 
