@@ -350,3 +350,83 @@ INVENTORY_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
 # because an equipped item has no grid position to name.
 EQUIPMENT_ACTION_UNEQUIP: tuple = ("Unequip", "unequip {equip_slot}")
 EQUIPMENT_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
+
+
+# ─── Tile affordances ────────────────────────────────────────────────────────
+
+# What clicking a TILE does, named by the server the way an entity's `interact`
+# already is.
+#
+# WHY THIS MOVED. The client used to work it out, and the rules it needed were
+# all facts about the map: that a different z is a different map and cannot be
+# walked to, that a cardinal neighbour with no exit is a wall, that a DIAGONAL
+# neighbour with no exit is not a wall but two cardinal steps, and a grid-delta
+# -> direction-name table to turn any of it into a command. Every one of those
+# is the server's to know, and the diagonal rule was got wrong once already --
+# refusing it left the eight tiles nearest the player the only ones in the pane
+# that could not be clicked.
+#
+# It is the same argument that deleted the client's entity verb table, and it
+# is stronger here: a second client (godot/) has not yet reimplemented any of
+# it, so moving it now costs one implementation instead of two that must agree.
+
+# A tile's action is {command, kind}. The command is what to SEND -- whole, no
+# substitution left to do. The kind is what it means for a walk in progress,
+# which the client tracks because the client is what started it.
+TILE_ACTION_KIND_STEP: str = "step"      # one move; ends a tracked walk
+TILE_ACTION_KIND_WALK: str = "walk"      # a pathfinder walk; starts tracking
+TILE_ACTION_KIND_LOOK: str = "look"      # no movement, no effect on tracking
+TILE_ACTION_KIND_CANCEL: str = "cancel"  # aborts the walk in progress
+
+# The tile affords NOTHING, said out loud rather than by omission.
+#
+# Omission means "fall through to the map node's own `goto`", so a tile that
+# must NOT be walked to needs its own answer. It carries an empty command, the
+# same way an entity that affords nothing carries an empty `interact`.
+#
+# It exists for one case: a CARDINAL neighbour with no exit, which is a wall.
+# The pathfinder would happily route around it, and the client used to refuse
+# the click for exactly that reason -- so that a click on a visible barrier
+# does not send the player the long way around it. That is a real judgement
+# about how the pane should feel, and moving the rule to the server is not a
+# licence to drop it.
+#
+# A DIAGONAL neighbour with no exit is NOT this. Most maps are drawn with
+# cardinal links only, so the diagonals around a player are ordinarily two
+# steps away rather than barriers; refusing those was a bug that left the tiles
+# nearest the player the only ones in the pane that could not be clicked.
+TILE_ACTION_KIND_NONE: str = "none"
+
+# The cardinal offsets checked for that wall case. Diagonals are deliberately
+# absent; see above.
+TILE_CARDINAL_OFFSETS: tuple = ((0, 1), (1, 0), (0, -1), (-1, 0))
+
+# The command a client sends to look at where it already is.
+TILE_COMMAND_LOOK: str = "look"
+
+# Bare `goto` aborts a walk in progress; `goto (X,Y)` starts one. Both are the
+# contrib's pathfinder reached exactly as a telnet player reaches it -- see
+# commands/movement_cmds.py, which lifts the contrib's Builder lock on the
+# coordinate form because a tile is the only name a graphical client has for a
+# room.
+TILE_COMMAND_GOTO: str = "goto"
+TILE_COMMAND_GOTO_TEMPLATE: str = "goto ({x},{y})"
+
+# How a tile is keyed in a tile-action map. Formatted here rather than in the
+# client for the same reason serialize_inventory formats its slot numbers here:
+# one owner for the shape, and no client left holding a format string.
+TILE_KEY_TEMPLATE: str = "{x}:{y}"
+
+
+# The command that moves an item between two inventory slots.
+#
+# Unlike equip/unequip, this one CANNOT be pre-named per item the way
+# INVENTORY_ACTION_* above are: it takes two endpoints, and only the drag knows
+# both. So the server owns the SPELLING and the client composes the gesture --
+# which is the honest split. A drag from slot 3 to slot 7 is a gesture, not a
+# fact about slot 3, and pre-naming every pair would be 42x42 commands to
+# express one verb.
+#
+# Slot numbers are 1-BASED, matching what the text grid prints, what CmdSwap
+# parses, and what serialize_inventory converts to for the per-item actions.
+INVENTORY_SWAP_TEMPLATE: str = "swap {source} {target}"

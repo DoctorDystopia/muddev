@@ -87,7 +87,7 @@ NPCS = {
         default_combat_style="headbutt",
         # 30s timed respawn on the raider's spawn tile, driven by
         # BlackoutRespawnManager (systems/spawning/respawn.py).
-        respawn_seconds=30,
+        respawn_seconds=20,
         # Drop table in world/loot_defs/hostile.py, resolved at death through
         # db.npc_key -> NPC_DB -> LOOT_DB by systems/loot/drops.py.
         loot_table="mutant_raider_drops",
@@ -96,22 +96,22 @@ NPCS = {
         key="big_mutant",
         name="Big Mutant",
         desc="Bigger than you'd expect.",
-        strike_level=1,
-        brawn_level=1,
-        defense_level=1,
+        strike_level=76,
+        brawn_level=78,
+        defense_level=81,
         max_hp=87,
         attack_speed=4,
         combat_stat_bonuses={
             # stats based on OSRS Greater Demon
-            "stab_attack_bonus": 76,
-            "slash_attack_bonus": 76,
-            "crush_attack_bonus": 76,
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
             # Defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
             # Other bonuses
-            "melee_strength_bonus": 78,
+            "melee_strength_bonus": 0,
         },
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",
@@ -126,9 +126,9 @@ NPCS = {
         key="floating_eye",
         name="Floating Eye",
         desc="Terrified of needles.",
-        strike_level=1,
-        brawn_level=1,
-        defense_level=1,
+        strike_level=8,
+        brawn_level=8,
+        defense_level=12,
         max_hp=20,
         attack_speed=4,
         combat_stat_bonuses={

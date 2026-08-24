@@ -148,10 +148,26 @@ class TestGetCombatLevelForNPC(EvenniaTest):
 
         big_mutant = NPC_DB["big_mutant"].create(location=self.room1)
 
-        self.assertEqual(big_mutant.skills.get_level("fortitude"), 87)
+        definition = NPC_DB["big_mutant"]
 
-        base = const.COMBAT_LEVEL_BASE_WEIGHT * (87 + 1)
-        melee = const.COMBAT_LEVEL_BRANCH_WEIGHT * (1 + 1)
+        # Derived from the def, not typed. This assertion IS the regression the
+        # docstring describes -- fortitude must come from max_hp -- and writing
+        # 87 here made it a statement about one monster's balance instead.
+        self.assertEqual(
+            big_mutant.skills.get_level("fortitude"), definition.max_hp)
+
+        # Likewise for the rest of the inputs. These were `(87 + 1)` and
+        # `(1 + 1)`, hardcoding a Big Mutant whose defense, strike and brawn
+        # were all 1; a rebalance on 08/23/2026 moved the OSRS Greater Demon
+        # numbers off the equipment bonuses and onto the skill levels, and this
+        # test failed for the balance change rather than for a defect.
+        #
+        # A change to the FORMULA itself is not this test's job to catch --
+        # that is what the rest of this module is for.
+        base = const.COMBAT_LEVEL_BASE_WEIGHT * (
+            definition.max_hp + definition.defense_level)
+        melee = const.COMBAT_LEVEL_BRANCH_WEIGHT * (
+            definition.strike_level + definition.brawn_level)
         expected = math.floor(base + melee)
 
         self.assertEqual(get_combat_level(big_mutant), expected)

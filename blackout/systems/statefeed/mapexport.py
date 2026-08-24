@@ -24,6 +24,7 @@ Description: Export a Z-level's room graph as chunked Blackout.Map payloads.
 from evennia.utils import logger
 
 from . import constants as const
+from . import serializers
 from .payloads import MapChunkPayload
 
 
@@ -136,7 +137,42 @@ def _node_room_kind(xymap, node) -> str:
 
 
 def _node_entries(xymap) -> list:
-    """Return [{x, y, room_kind}, ...] for every node on the map."""
+    """
+    Purpose: Return [{x, y, room_kind, action}, ...] for every node on the map.
+
+    Entry:
+        xymap - a parsed XYMap.
+
+    Exit/Returns:
+        One entry per node. `action` is the pathfinder walk to that node.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        `action` is stamped HERE, once per map per session, rather than sent
+        per move on room_info, because it does not depend on where the observer
+        is: the walk to (6,3) is `goto (6,3)` from anywhere on the same map.
+        Only the immediate exits change as a player walks, and those are the
+        at-most-eight entries room_info carries.
+
+        Named `action` rather than `interact` on purpose. An ENTITY's
+        `interact` is a bare command string; a tile's action is
+        {command, kind}, because the client tracks the walk it started and has
+        to be told whether a command begins one, ends one, or does neither. Two
+        shapes should not share a field name.
+
+    Notes/References:
+        A node's action is valid only from within its own map. Blackout's maps
+        are joined by transition NODES (the `T` glyph -- oasis and
+        oasis_outskirts each have one), which are walked onto like any other
+        tile; `goto` itself does not cross maps, and the server answers "target
+        outside of area" if asked to. A client therefore uses this only for a
+        tile on the map it is standing on.
+
+    Author: Nick Hobar
+    Creation date: 08/07/2026
+    """
     index_map = getattr(xymap, "node_index_map", None)
 
     if not index_map:
@@ -146,7 +182,12 @@ def _node_entries(xymap) -> list:
 
     for node in index_map.values():
         kind = _node_room_kind(xymap, node)
-        entries.append({"x": node.X, "y": node.Y, "room_kind": kind})
+        entries.append({
+            "x": node.X,
+            "y": node.Y,
+            "room_kind": kind,
+            "action": serializers.goto_action(node.X, node.Y),
+        })
 
     return entries
 
@@ -294,10 +335,15 @@ def build_all_map_chunks() -> list:
         would pull a Script model into every server start.
 
     Notes/References:
-        Blackout's three maps are disconnected -- no transition nodes exist
-        between oasis, oasis_outskirts and trade town sector 1. A client
-        therefore receives three independent islands and needs an authored
-        z -> world-offset table to place them relative to one another.
+        Blackout's maps are separate ISLANDS to a renderer even though they
+        are joined in play: oasis and oasis_outskirts each carry a `T`
+        transition node onto the other, but a transition is a node you walk
+        ONTO rather than an edge between two maps, so nothing here relates one
+        map's coordinates to another's. A client receives independent islands
+        and needs an authored z -> world-offset table to place them.
+
+        (This note previously said no transition nodes existed at all. They
+        do -- see ToOasisOutskirtsNode in world/maps/oasis.py.)
 
         Reading .all_maps() parses the map modules on first access if the
         grid's cache is cold. That is once per server lifetime and only on the
