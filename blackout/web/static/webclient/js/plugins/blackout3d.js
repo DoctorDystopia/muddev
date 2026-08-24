@@ -40,6 +40,7 @@ let blackout3d = (function () {
     const CH_CHAR_VITALS    = "char_vitals";
     const CH_CHAR_STATUS    = "char_status";
     const CH_CHAR_SUMMARY   = "char_summary";
+    const CH_CHAR_AVATAR    = "char_avatar";
     const CH_MAP            = "blackout_map";
     const CH_COMBAT         = "blackout_combat";
     const CH_AURA           = "blackout_aura";
@@ -50,9 +51,15 @@ let blackout3d = (function () {
     // channel itself is bound before the first acknowledgement arrives.
     const CHANNELS = [
         CH_ROOM_INFO, CH_ROOM_PLAYERS, CH_PLAYER_ADD, CH_PLAYER_REMOVE,
-        CH_CHAR_VITALS, CH_CHAR_STATUS, CH_CHAR_SUMMARY, CH_MAP, CH_COMBAT,
-        CH_AURA, CH_SUBSCRIBED
+        CH_CHAR_VITALS, CH_CHAR_STATUS, CH_CHAR_SUMMARY, CH_CHAR_AVATAR,
+        CH_MAP, CH_COMBAT, CH_AURA, CH_SUBSCRIBED
     ];
+
+    // The one family name this pane has to know, because it is the one it
+    // asks for on its own behalf rather than passing through from a payload.
+    // Must match const.ASSET_KIND_CHARACTER in systems/statefeed/constants.py,
+    // the same way every CH_* above matches a CHANNEL_* there.
+    const FAMILY_CHARACTER = "character";
 
     // ─── Layout tunables ────────────────────────────────────────────────────
 
@@ -68,6 +75,14 @@ let blackout3d = (function () {
     // enough that a silhouette reads, small enough that four in a ring do not
     // touch.
     const ENTITY_SCALE    = 0.34;
+
+    // How far above a tile the CENTRE of a character sits. One constant
+    // because it is one fact: the local player is drawn by a different routine
+    // from everyone else in the room, and the two heights disagreeing is the
+    // difference between standing among people and hovering over them. It was
+    // 0.22 for entities and 0.42 for the local marker, which was correct only
+    // while the marker was a cone half a tile tall and nothing else.
+    const ENTITY_LIFT     = 0.22;
 
     // How much of a tile a prop drawn ON that tile covers. Bigger than an
     // entity on purpose: a prop is part of the ground rather than something
@@ -214,6 +229,12 @@ let blackout3d = (function () {
     const COLOR_HOVER_GLOW   = 0x2f5f6b;
     const COLOR_NO_GLOW      = 0x000000;
 
+    // How strongly COLOR_PLAYER is burnt into the local player's own mesh.
+    // See markAsSelf: enough to pick yourself out of a tile with company,
+    // far short of repainting the model. Lower than the 0.6 the cone carried,
+    // because the cone had nothing underneath the tint to preserve.
+    const SELF_GLOW_INTENSITY = 0.3;
+
     // Known room kinds get a deliberate colour; everything else is hashed to a
     // stable hue so a new room type is visually distinct without an edit here.
     const ROOM_KIND_COLORS = {
@@ -266,6 +287,42 @@ let blackout3d = (function () {
     let playerAnchor = null;        // settled marker position, WITHOUT the bob
     let playerTween = null;         // {from:Vector3, to:Vector3, start, dur}
     let auraRing = null;
+
+    // Who the local player IS, from char_avatar: {id, asset, family}.
+    //
+    // The pane cannot work this out for itself. emit_room_contents excludes
+    // the observer from their own entity list — a client already knows where
+    // it put the camera — so every OTHER character arrives carrying an asset
+    // key and the local one arrives on a channel of its own.
+    //
+    // Null until that channel lands, and null is a working state rather than a
+    // wait: resolvePlayerMarker asks for the character FAMILY with no key,
+    // which is the procedural figure. A player whose avatar message is slow,
+    // or who is playing against a server too old to send one, gets the same
+    // figure the pane drew before any of this existed.
+    let selfEntity = null;
+
+    // Whether the local player has a known position to be drawn at.
+    //
+    // Deliberately NOT `playerMarker.visible`. The marker is now resolved
+    // asynchronously, so there are frames — and, for a slow model, seconds —
+    // where the pane knows exactly where the player is standing and has
+    // nothing yet to stand there. Keeping the FACT separate from the object
+    // that displays it is what lets room_info land during that window without
+    // being dropped, and what lets the camera follow a player who is still
+    // loading.
+    let playerVisible = false;
+
+    // Which way the marker is turned, in radians. Held rather than read back
+    // off the mesh because the mesh is replaced whenever the avatar changes,
+    // and a replacement that faced east again on every re-resolve would spin
+    // the player at random.
+    let playerYaw = 0;
+
+    // Bumped on every marker re-resolve, for the same reason entityGeneration
+    // exists: char_avatar can arrive while an earlier resolve is still in
+    // flight, and the loser must be released rather than added.
+    let markerGeneration = 0;
 
     // Orbit rig. These survive a pane rebuild deliberately: re-opening the
     // pane, or activating a saved layout, should not throw away the angle the
@@ -353,7 +410,7 @@ let blackout3d = (function () {
         const angle = ((slotIndex + jitter * 0.35) / spread) * Math.PI * 2;
         return new THREE.Vector3(
             basePos.x + Math.cos(angle) * ENTITY_RADIUS,
-            basePos.y + 0.22,
+            basePos.y + ENTITY_LIFT,
             basePos.z + Math.sin(angle) * ENTITY_RADIUS
         );
     };
@@ -391,17 +448,19 @@ let blackout3d = (function () {
         scene.add(tileGroup);
         scene.add(entityGroup);
 
-        const markerGeo = new THREE.ConeGeometry(0.16, 0.42, 6);
-        const markerMat = new THREE.MeshStandardMaterial({
-            color: COLOR_PLAYER, emissive: COLOR_PLAYER, emissiveIntensity: 0.6
-        });
-        playerMarker = new THREE.Mesh(markerGeo, markerMat);
-        playerMarker.visible = false;
-        scene.add(playerMarker);
+        // The local player used to be a cone built right here, and it was the
+        // last thing in the pane that decided for itself what something looks
+        // like. It is now resolved exactly as every other character is, which
+        // is what makes "you" and "the person standing next to you" the same
+        // mesh at the same size — they were a teal cone and a blue figure.
+        //
+        // The anchor is created BEFORE the resolve and outlives every rebuild:
+        // it is where the player is standing, which is true whether or not
+        // there is currently anything drawn there.
         if (!playerAnchor) {
             playerAnchor = new THREE.Vector3();
         }
-        playerMarker.position.copy(playerAnchor);
+        resolvePlayerMarker();
         updateCamera();
     };
 
@@ -444,7 +503,9 @@ let blackout3d = (function () {
         if (!camera || !cameraFocus) {
             return;
         }
-        if (playerMarker && playerMarker.visible) {
+        // Follows the ANCHOR, not the mesh. A player whose model is still
+        // downloading is a player the camera should already be pointed at.
+        if (playerVisible) {
             cameraFocus.copy(playerAnchor);
             cameraFocus.y += CAM_FOCUS_HEIGHT;
         }
@@ -851,8 +912,49 @@ let blackout3d = (function () {
         placeEntities(remaining);
     };
 
+    // The mesh drawn for one entity id, wherever it happens to live.
+    //
+    // Two homes, because the local player is not in the entity list: the
+    // server excludes an observer from their own room_players payload, so the
+    // marker is the pane's only copy of them. Before char_avatar existed the
+    // pane had no id for itself at all, which is why a combat event naming YOU
+    // as the target flashed nothing and every hit you took looked like a miss.
+    const meshForEntityId = function (entityId) {
+        const known = entityMeshes[entityId];
+
+        if (known) {
+            return known;
+        }
+        const isSelf = selfEntity && selfEntity.id === entityId;
+
+        if (isSelf) {
+            // Null while the marker is still resolving, which flashEntity
+            // reads the same way it reads an NPC that has walked out of range.
+            return playerMarker;
+        }
+        return null;
+    };
+
+    // Forget any running flash on one mesh.
+    //
+    // A flash outlives its mesh otherwise, and restoring a colour onto a freed
+    // material is how a disposed entity comes back as a white ghost —
+    // clearEntities empties the whole list for the same reason. This is the
+    // narrow version, for the one mesh that is replaced without the rest of
+    // the scene being torn down with it.
+    const dropFlashesFor = function (mesh) {
+        let index = flashes.length - 1;
+
+        while (index >= 0) {
+            if (flashes[index].mesh === mesh) {
+                flashes.splice(index, 1);
+            }
+            index -= 1;
+        }
+    };
+
     const flashEntity = function (entityId) {
-        const mesh = entityMeshes[entityId];
+        const mesh = meshForEntityId(entityId);
         if (!mesh) {
             return;
         }
@@ -874,6 +976,123 @@ let blackout3d = (function () {
             baseColors: readOwnedColors(mesh)
         });
         paintOwned(mesh, "color", COLOR_HIT_FLASH);
+    };
+
+    // ─── The local player ───────────────────────────────────────────────────
+
+    // Tint the marker so you can find yourself in a crowd.
+    //
+    // This is what the teal cone was FOR. Drawing the local player with the
+    // same mesh as everyone else is the point of the change, and it costs
+    // exactly one thing on the way: in a tile holding three characters,
+    // nothing says which one you are steering. The camera centres on you and
+    // your tile is highlighted, but neither survives a tile with company.
+    //
+    // Emissive rather than colour, and for the reason COLOR_HOVER_GLOW is:
+    // `color` already has two owners on this mesh — the hit flash writes it
+    // and restoreOwnedColors puts it back — and a third would leave the player
+    // stuck teal after the next swing. Emissive has one owner here, since the
+    // marker is deliberately not pickable and so never hovers.
+    //
+    // Applied at low intensity on purpose. At 1.0 a teal emissive swallows
+    // whatever the model's own materials say and hands back a flat silhouette,
+    // which is the same as having no model.
+    const markAsSelf = function (mesh) {
+        const owned = mesh.userData.ownMaterials || [];
+
+        owned.forEach(function (material) {
+            if (!material.emissive) {
+                return;
+            }
+            material.emissive.setHex(COLOR_PLAYER);
+            material.emissiveIntensity = SELF_GLOW_INTENSITY;
+        });
+    };
+
+    // Which way to turn a figure walking from `from` to `to`.
+    //
+    // atan2(dx, dz), not the atan2(dz, dx) a maths text would write. This is
+    // the rotation that puts +Z along the direction of travel, and +Z is the
+    // way a glTF character is authored to face. Returns the CURRENT yaw for a
+    // zero-length move rather than snapping to zero, so a player who arrives
+    // where they already were keeps facing the way they were going.
+    const yawTowards = function (from, to) {
+        const dx = to.x - from.x;
+        const dz = to.z - from.z;
+        const still = dx === 0 && dz === 0;
+
+        if (still) {
+            return playerYaw;
+        }
+        const yaw = Math.atan2(dx, dz);
+
+        return yaw;
+    };
+
+    // Give the marker's mesh back to the resolver.
+    //
+    // Materials first and the resolver second, in that order, mirroring
+    // clearEntities: takeOwnMaterials cloned the materials for this mesh alone
+    // so the pane owns those outright, while the geometry underneath them may
+    // belong to a cached prototype shared with every other character in the
+    // room. Only the resolver knows which, so only the resolver decides.
+    const releasePlayerMarker = function () {
+        if (!playerMarker) {
+            return;
+        }
+        const going = playerMarker;
+
+        playerMarker = null;
+        dropFlashesFor(going);
+
+        if (scene) {
+            scene.remove(going);
+        }
+        (going.userData.ownMaterials || []).forEach(function (material) {
+            material.dispose();
+        });
+        blackoutMeshes.release(going);
+    };
+
+    // Draw the local player as whatever the pane currently knows them to be.
+    //
+    // Called twice in the ordinary case and that is by design: once from
+    // buildScene, which cannot wait for a channel, and again from onCharAvatar
+    // when the server says who this is. Between the two the player is the
+    // procedural figure — the same tier-2 guarantee every unmodelled entity
+    // in the game gets, applied to the one entity the pane draws itself.
+    //
+    // The generation check is entityGeneration's reasoning applied to one
+    // mesh. A .glb is slow enough that a second avatar message, or a pane
+    // rebuilt while the first is still in flight, is an ordinary race rather
+    // than a theoretical one; the loser is released instead of added, or the
+    // pane ends up with two players in it and a handle on only one.
+    const resolvePlayerMarker = function () {
+        if (!scene) {
+            return;
+        }
+        const asset = selfEntity ? selfEntity.asset : "";
+        const family = selfEntity ? selfEntity.family : FAMILY_CHARACTER;
+        const target = scene;
+
+        markerGeneration += 1;
+        const generation = markerGeneration;
+
+        blackoutMeshes.resolve(asset, family).then(function (mesh) {
+            if (generation !== markerGeneration || scene !== target) {
+                blackoutMeshes.release(mesh);
+                return;
+            }
+            releasePlayerMarker();
+            takeOwnMaterials(mesh);
+            markAsSelf(mesh);
+            mesh.scale.setScalar(ENTITY_SCALE);
+            mesh.position.copy(playerAnchor);
+            mesh.rotation.y = playerYaw;
+            mesh.visible = playerVisible;
+            scene.add(mesh);
+            playerMarker = mesh;
+        });
     };
 
     // ─── Aura ring ──────────────────────────────────────────────────────────
@@ -1228,11 +1447,24 @@ let blackout3d = (function () {
         // accumulated onto the marker: the anchor is what the camera follows,
         // and a per-frame `+=` would both drift the marker and hand the camera
         // a target that jitters with the frame rate.
-        playerMarker.position.copy(playerAnchor);
-        if (playerMarker.visible) {
-            const bob = Math.sin(clock * Math.PI * 2 * AMBIENT_BOB_HZ);
-            playerMarker.position.y += bob * AMBIENT_BOB_AMP;
-            playerMarker.rotation.y = clock * 0.6;
+        //
+        // Null for the first frames of a session and for as long as a .glb
+        // takes, since the marker is resolved rather than built here now.
+        if (playerMarker) {
+            playerMarker.visible = playerVisible;
+            playerMarker.position.copy(playerAnchor);
+
+            if (playerVisible) {
+                const bob = Math.sin(clock * Math.PI * 2 * AMBIENT_BOB_HZ);
+                playerMarker.position.y += bob * AMBIENT_BOB_AMP;
+
+                // The cone span here (`clock * 0.6`), because a cone has no
+                // front and turning is what stopped it reading as a stuck
+                // triangle. A figure does have a front, and a person revolving
+                // on the spot while they walk reads as a bug rather than as
+                // ambient motion. Facing is set where the move is: onRoomInfo.
+                playerMarker.rotation.y = playerYaw;
+            }
         }
         if (auraRing) {
             auraRing.material.opacity = 0.4 + 0.15 *
@@ -1273,15 +1505,25 @@ let blackout3d = (function () {
 
         // No scene yet: the room is recorded and buildPane replays it. This is
         // the common case for a player who never opens the pane at all.
-        if (!playerMarker) {
+        //
+        // Tested on the SCENE rather than on the marker, which is what it used
+        // to mean back when buildScene made a cone on the spot. The marker is
+        // resolved asynchronously now, so testing it here would drop every
+        // room_info that arrived while a model was loading — including the
+        // first one, which is the whole reason the pane knows where you are.
+        if (!scene) {
             return;
         }
         if (!data.coords || data.coords.length < 3) {
-            playerMarker.visible = false;
+            playerVisible = false;
             return;
         }
         const target = tileWorldPos(data.coords[2], data.coords[0], data.coords[1]);
-        target.y += 0.42;
+
+        // The same height every other character in the room is drawn at. It
+        // was 0.42 while the marker was a cone standing on its base and the
+        // rest of the room stood at 0.22.
+        target.y += ENTITY_LIFT;
 
         const adjacent = previous && previous.coords &&
             previous.coords.length === 3 &&
@@ -1289,11 +1531,16 @@ let blackout3d = (function () {
             Math.abs(previous.coords[0] - data.coords[0]) <= 1 &&
             Math.abs(previous.coords[1] - data.coords[1]) <= 1;
 
-        if (playerMarker.visible && adjacent) {
+        if (playerVisible && adjacent) {
             // Only tween between neighbouring tiles. Sliding a character
             // through intervening walls on a teleport reads far worse than a
             // hard cut, so anything non-adjacent snaps. The camera inherits
             // both behaviours for free, since it tracks the same anchor.
+            //
+            // Turning happens here and only here, on the one move the pane
+            // actually watches happen. A snap has no direction worth facing --
+            // a teleport is not a walk -- so it leaves the yaw alone.
+            playerYaw = yawTowards(playerAnchor, target);
             playerTween = {
                 from: playerAnchor.clone(),
                 to: target,
@@ -1304,9 +1551,37 @@ let blackout3d = (function () {
             playerAnchor.copy(target);
             playerTween = null;
         }
-        playerMarker.position.copy(playerAnchor);
-        playerMarker.visible = true;
+        // The mesh is not touched here. The frame loop copies the anchor onto
+        // whatever is currently drawn, which is the only arrangement that
+        // works when "whatever is currently drawn" can be nothing yet.
+        playerVisible = true;
         updateCamera();
+    };
+
+    // Who the server says the local player is.
+    //
+    // Re-resolves only when the ASSET changed, which today means only on the
+    // first message: a character's asset key is fixed for its lifetime, and
+    // this channel is a resync snapshot, so a reconnect resends a value the
+    // pane already has. Rebuilding the marker on every reconnect would throw
+    // away a loaded model to load the same file again.
+    //
+    // The id is recorded whether or not anything is redrawn, because it is
+    // what makes a combat event about you recognisable as being about you.
+    const onCharAvatar = function (data) {
+        const previous = selfEntity;
+
+        selfEntity = {
+            id: data.entity_id,
+            asset: data.asset || "",
+            family: data.family || FAMILY_CHARACTER
+        };
+
+        const changed = !previous || previous.asset !== selfEntity.asset;
+
+        if (changed) {
+            resolvePlayerMarker();
+        }
     };
 
     const onCombat = function (data) {
@@ -1347,6 +1622,18 @@ let blackout3d = (function () {
         flashes.length = 0;
         playerTween = null;
         auraRing = null;
+
+        // The marker is handed back for the same reason the props above are:
+        // it is a resolver mesh now, so it may be a clone of a cached model
+        // and may own a skeleton, and forgetting it would leak both. Bumping
+        // the generation on the way out retires any resolve still in flight,
+        // which would otherwise land its mesh in a scene being discarded.
+        //
+        // playerVisible and playerAnchor deliberately survive: the player has
+        // not moved just because the pane was rebuilt around them, and
+        // buildPane replays the room that put them there.
+        releasePlayerMarker();
+        markerGeneration += 1;
         // The canvas the drag was captured on is about to be discarded, so the
         // pointerup for an in-flight drag can never arrive. The orbit ANGLES
         // are kept: a rebuilt pane should look the way the player left it.
@@ -1568,6 +1855,7 @@ let blackout3d = (function () {
         else if (cmdname === CH_COMBAT)        { onCombat(data); }
         else if (cmdname === CH_AURA)          { onAura(data); }
         else if (cmdname === CH_CHAR_SUMMARY)  { latestSummary = data.panels || {}; }
+        else if (cmdname === CH_CHAR_AVATAR)   { onCharAvatar(data); }
         else if (cmdname === CH_SUBSCRIBED)    { bindAcknowledged(data.channels); }
     };
 

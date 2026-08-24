@@ -140,6 +140,10 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
         """Guards against a channel drifting into the set. Anything added here
         must survive "keeping only the newest loses nothing"."""
         expected = {
+            # Identity, and a fixed one: two avatars for the same observer in
+            # one tick are the same message twice, so the newest is the whole
+            # truth by definition.
+            const.CHANNEL_CHAR_AVATAR,
             const.CHANNEL_CHAR_VITALS,
             const.CHANNEL_CHAR_STATUS,
             const.CHANNEL_CHAR_SUMMARY,

@@ -46,3 +46,7 @@ Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 - Packed with `assets/pack_model.py`, textures resampled 2048² → 256²: six maps
   on something drawn flat on one tile, where 512² came to 1.1 MB for detail the
   tile is too small to show
+
+## `characters/player_character.glb`
+
+"Spider-man - SM:BND MCU" (https://skfb.ly/pMx9y) by YE YE is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).

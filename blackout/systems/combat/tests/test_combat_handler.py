@@ -24,6 +24,7 @@ from systems.combat import constants as const
 from systems.tick import constants as tick_const
 from systems.combat.combat import (
     COMBAT_HANDLER_KEY,
+    _plan_style_xp,
     combat_profile,
     ensure_combat_handler,
     get_defense_bonuses,
@@ -250,12 +251,15 @@ class TestNpcSeeding(EvenniaTest):
         self.assertEqual(style["attack_type"], "crush")
         self.assertEqual(handler.ndb.active_weapon_data["attack_speed"], 4)
 
-    def test_raider_skill_levels_reach_the_shim(self):
+    def test_raider_skill_levels_reach_the_stat_block(self):
         # OSRS Goblin L2: Attack 1, Strength 1, Defence 1, Hitpoints 5.
         npc = spawn_mutant_raider(self.room1)
 
         self.assertEqual(npc.skills.get_level("defense"), 1)
         self.assertEqual(npc.skills.get_level("strike"), 1)
+        # Hitpoints IS the Fortitude axis; before the bridge in
+        # NpcDef.to_combat_block this read the old facade's fabricated 1.
+        self.assertEqual(npc.skills.get_level("fortitude"), 5)
 
     def test_raider_combat_bonuses_match_goblin_l2(self):
         """OSRS Goblin L2 monster bonuses: attack -21, strength -15,
@@ -516,6 +520,86 @@ class TestRuntimeStateIsNotPersisted(EvenniaTest):
         handler.ndb.active_weapon_data = None
 
         handler.tick()  # must not raise
+
+
+class TestNpcAttackerEarnsNothing(EvenniaTest):
+    """A monster swinging at a player must not run the XP pipeline.
+
+    `getattr(attacker, "skills", None) is None` used to gate the per-hit XP
+    plan and `getattr(killer, "skills", None) is not None` the killing-blow
+    award. Every HostileNPC has a `.skills`, so both gates opened for an NPC --
+    harmless only for as long as the NPC-side add_xp stayed a no-op, and a
+    landmine under any change that made NPC skills real. The gates now ask
+    `isinstance(..., XpEarner)`, which StatBlockSkills deliberately fails.
+
+    These tests matter now rather than later: nothing has ever driven an
+    attack in the NPC->player direction, so this whole path is untravelled.
+    """
+
+    def _npc_swing_at_char(self, damage):
+        """Land exactly one NPC swing of `damage` on char1."""
+        npc = spawn_mutant_raider(self.room1)
+        handler = ensure_combat_handler(npc)
+        ensure_combat_handler(self.char1)
+        handler.apply_action({"kind": "attack", "target": self.char1})
+
+        swing_result = ActionResult(hit=True, damage=damage, hit_prob=1.0)
+
+        with mock.patch(
+            "systems.combat.combat.resolve_action",
+            return_value=swing_result,
+        ):
+            handler.tick()
+
+        return npc
+
+    def test_an_npc_hit_plans_no_xp(self):
+        style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
+        npc = spawn_mutant_raider(self.room1)
+
+        self.assertEqual(_plan_style_xp(npc, style, damage=10), [])
+
+    def test_a_character_hit_still_plans_xp(self):
+        """Guards the assertion above: a gate that returned [] for everyone
+        would pass it while silently switching off player progression."""
+        style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
+
+        self.assertNotEqual(_plan_style_xp(self.char1, style, damage=10), [])
+
+    def test_an_npc_swing_damages_the_player(self):
+        """The direction of travel this whole batch exists to enable."""
+        before = self.char1.hp
+
+        self._npc_swing_at_char(damage=3)
+
+        self.assertEqual(self.char1.hp, before - 3)
+
+    def test_an_npc_swing_grants_the_npc_no_levels(self):
+        npc = self._npc_swing_at_char(damage=3)
+
+        self.assertEqual(npc.skills.get_level("strike"), 1)
+        self.assertEqual(npc.skills.get_level("fortitude"), 5)
+
+    def test_an_npc_killing_blow_runs_no_killer_xp(self):
+        """at_death's killer gate. The NPC must not be credited for the kill."""
+        self.char1.db.hp = 2
+        npc = spawn_mutant_raider(self.room1)
+
+        with mock.patch.object(
+            type(self.char1), "_award_killer_xp"
+        ) as mocked_award:
+            self.char1.at_damage(5, attacker=npc)
+
+        mocked_award.assert_not_called()
+
+    def test_a_character_killing_blow_still_runs_killer_xp(self):
+        """The other side of the same gate."""
+        npc = spawn_mutant_raider(self.room1)
+
+        with mock.patch.object(type(npc), "_award_killer_xp") as mocked_award:
+            npc.at_damage(npc.hp, attacker=self.char1)
+
+        mocked_award.assert_called_once()
 
 
 class TestSwingReporting(EvenniaTest):

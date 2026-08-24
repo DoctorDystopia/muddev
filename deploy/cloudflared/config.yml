@@ -1,6 +1,10 @@
 # Cloudflare Tunnel ingress for game.playblackout.io
 #
-# Copy to C:\Users\<you>\.cloudflared\config.yml and fill in the tunnel id.
+# Copy to C:\ProgramData\cloudflared\config.yml and fill in the tunnel id.
+# That single location serves BOTH the Windows service and manual runs -- see
+# the README. Do NOT put the live config in the cloudflared install directory:
+# cloudflared rewrites that file with a stub every time the service starts.
+#
 # The tunnel dials OUT from this machine, so no port forwarding is needed --
 # which is the point, since this connection sits behind three NAT layers.
 #
@@ -8,7 +12,7 @@
 # MUST come before the catch-all or the browser client will be handed HTML.
 
 tunnel: REPLACE-WITH-TUNNEL-ID
-credentials-file: C:\Users\NickR\.cloudflared\REPLACE-WITH-TUNNEL-ID.json
+credentials-file: C:\ProgramData\cloudflared\REPLACE-WITH-TUNNEL-ID.json
 
 ingress:
   # Webclient websocket. WEBSOCKET_CLIENT_URL in settings.py points here.
@@ -34,3 +38,9 @@ ingress:
 
   # Required catch-all.
   - service: http_status:404
+
+# Logging. The key is `log-directory` -- kebab-case, matching the CLI flag.
+# `logDirectory` is NOT a recognised key. cloudflared ignores it silently and
+# writes no logs at all, which is how the service stayed undiagnosable until
+# 08/22/2026. Verify after any change: a cloudflared-*.log must appear here.
+log-directory: C:\ProgramData\cloudflared

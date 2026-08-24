@@ -118,6 +118,37 @@ class RoomPlayerRemovePayload(_Payload):
 
 
 @dataclass
+class CharAvatarPayload(_Payload):
+    """Who the observer IS, as the renderer needs to know it. Char.Avatar.
+
+    The one thing a graphical client cannot work out for itself. Every other
+    entity it draws arrives on room_players carrying `asset` and `family`, but
+    emit_room_contents excludes the observer from their own list -- so the
+    client knows where to put the camera and nothing at all about what to draw
+    there. This channel closes exactly that gap and nothing else.
+
+    `asset` and `family` are the same two tiers, spelled the same way, that
+    every entity dict carries, so a client resolves its own mesh through the
+    identical lookup it already runs for an NPC. `entity_id` is what makes a
+    combat event recognisable as being about YOU: CombatPayload names an
+    attacker and a target by id, and a client with no id of its own can only
+    guess by name.
+
+    DELIBERATELY THREE FIELDS. serialize_entity also reports name, coords, hp
+    and max_hp -- all of which are already on char_vitals or room_info for this
+    observer. Repeating them here would be a second source for a fact that
+    changes on a different schedule, which is the drift char_items_list is
+    written to avoid.
+    """
+
+    channel = const.CHANNEL_CHAR_AVATAR
+
+    entity_id: int = 0
+    asset: str = ""
+    family: str = ""
+
+
+@dataclass
 class CharVitalsPayload(_Payload):
     """The observer's own health. GMCP Char.Vitals."""
 

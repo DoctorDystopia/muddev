@@ -10,11 +10,13 @@ assets/
 ├── items/weapons/rusty_sword/        one download, as it arrived
 │   ├── scene.gltf  scene.bin  textures/  license.txt
 ├── npcs/sus_eye/
+├── characters/spider-man_-_smbnd_mcu/
 └── world_objects/sm_teleporter/
 ```
 
-The **top directory** a download sits in — `items`, `npcs`, `world_objects` —
-is the only thing that decides where the packed file is served from:
+The **top directory** a download sits in — `items`, `npcs`, `characters`,
+`world_objects` — is the only thing that decides where the packed file is
+served from:
 `assets/npcs/x/` can only ever pack into `models/npcs/`. Nothing restates that
 mapping, so it cannot be typed inconsistently.
 

@@ -56,31 +56,59 @@ are thin wrappers around it. `scripts/clean_and_reload_all_maps.ps1 -DryRun`
 
 ## Testing
 
-**During development:** run only the modules you changed (takes seconds to ~1 min):
+**Always pass `--settings test_settings.py`, never `settings.py`.** The only
+thing it changes is the password hasher, and that alone is the difference
+between a 6-minute suite and a 20-minute one — see
+[docs/2026-08-23-TEST-0001-suite-audit.md](docs/2026-08-23-TEST-0001-suite-audit.md).
+
+**During development:** run only the modules you changed (seconds):
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
 ```
 
-**Before merging or major changes:** run the full suite (500+ tests, ~10 minutes):
+**Before merging or major changes:** run the full suite (1273 tests, ~6.5 min):
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
+../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world
 ```
+
+Add `--durations 20` to either to see where the time went.
 
 Details:
 - **Omitting a root silently runs fewer tests** rather than erroring. `items`,
   `systems`, and `world` are the roots that hold tests.
-- `evennia test .` is **not** equivalent — it collects fewer tests, because
-  `world/maps/test_oasis.py` and `test_neo_cairo.py` are map definitions whose
-  names match the discovery pattern.
+- `evennia test .` is **not** equivalent — it collects fewer tests.
 - Every test module must subclass `unittest.TestCase`. **Bare module-level
   `def test_*()` functions are silently skipped** by Django's discovery.
 - A `tests/` directory without `__init__.py` is not collected at all.
 - `pytest` is installed but **`pytest-django` is not**, so pytest cannot
   bootstrap the DB. It is not the runner here.
+- **`--parallel` does not work.** Django's cloned worker databases do not
+  carry the dbrefs `EvenniaTestMixin` assumes, so every worker dies in setUp
+  on `settings.DEFAULT_HOME (= '#2') does not exist`. Don't spend time on it.
 
-Server control: `../evenv/Scripts/evennia.exe status | reload | start | stop`
+### Writing tests
+
+- **Inherit the cheapest base class that works.** `EvenniaTest` builds two
+  accounts, two rooms, two objects, two characters, an exit, a script and a
+  session *per test method*. If a test never touches `self.char1` and friends,
+  it is paying ~0.2s for nothing — use `EvenniaTestCase` (DB, no fixtures) or
+  plain `unittest.TestCase` (no DB).
+- **Never assert a census of a registry.** `assertEqual(sorted(RECIPE_REGISTRY),
+  [six literal names])` fails when someone adds a seventh recipe as intended,
+  which trains everyone to edit the test rather than read it. Derive the
+  expectation from the source of truth — the modules in
+  `settings.CRAFT_RECIPE_MODULES`, the `ItemDef`, the `WieldLocation` enum —
+  and assert the *relationship*: everything defined is registered, every
+  registered entry is well-formed, every slot has a label.
+- **Wrap registry loops in `self.subTest(...)`.** A bare
+  `for item_def in ITEM_DB.values():` stops at the first bad entry and hides
+  the rest; `subTest` reports all of them and names the offender.
+- Assert on message *keywords*, not whole sentences —
+  `assertIn("aren't carrying", response.lower())` survives a copy edit.
+- Inject a seeded `random.Random(...)` or a scripted stub; never let a test
+  read the global RNG.
 
 ## Code conventions
 

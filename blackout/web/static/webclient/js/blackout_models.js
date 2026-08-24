@@ -26,6 +26,8 @@
  * Creation date: 08/17/2026
  */
 
+
+
 (function () {
     "use strict";
 
@@ -71,11 +73,52 @@
     // `opaque` because the body material arrived with a base-colour alpha of
     // zero against alphaMode BLEND — an invisible body around a floating
     // eyeball. Nothing measures that; see forceOpaque in blackout_meshes.js.
-    // register("floating_eye", "npcs/floating_eye.glb", { opaque: true });
-    register("floating_eye", "npcs/floating_eye.glb", { 
+    //
+    // The lift was 1.0 and is 0.16 for the SAME on-screen result. It was never
+    // really a lift: this model is rigged, measure() used to mis-measure a
+    // rigged import, and the eye came out of prepare() at twice its intended
+    // size and offset downward — so a whole unit of correction was what it
+    // took to sit it on its tile. With the measurement fixed the eye is
+    // normalised the way every other entity is, and 0.16 puts its base back
+    // where 1.0 used to put it: 0.024 above the tile against 0.025 before.
+    //
+    // It is now HALF the size it was on screen, which is the correction rather
+    // than a side effect of it — one unit across the longest axis is the
+    // contract every other mesh in the game is drawn to. If the eye wants to
+    // be a bigger monster than that, `scale` is the knob that says so out loud.
+    register("floating_eye", "npcs/floating_eye.glb", {
         opaque: true,
-        position: [0, 1.0, 0]
+        position: [0, 0.16, 0]
     });
+
+    // ─── Characters ─────────────────────────────────────────────────────────
+
+    // "Spider-man - SM:BND MCU" by YE YE, CC-BY-4.0. See models/CREDITS.md.
+    //
+    // The key is const.ASSET_KEY_CHARACTER in systems/statefeed/constants.py,
+    // which _classify reports for every puppetable character — so this one
+    // line is what the local player, the person standing next to them, and
+    // everyone in the neighbourhood are all drawn with. The local player is
+    // additionally told their own key on `char_avatar`, because the server
+    // leaves an observer out of their own room_players list.
+    //
+    // NO ROTATION, and that is a measured claim rather than an omission. The
+    // export carries the same Sketchfab Y-up-to-Z-up matrix the rusty sword
+    // does, so the quarter turn that stands the SWORD up is the obvious thing
+    // to write here — and it lays this one flat. Measured through resolve():
+    // no rotation gives a figure 0.340 tall, which is ENTITY_SCALE exactly;
+    // either quarter turn gives one 0.059 tall and 0.340 deep.
+    //
+    // The difference is that this model is rigged, and a rigged import has to
+    // be measured with its world matrices current or it reads as lying down
+    // when it is not. See measure() in blackout_meshes.js — that is where the
+    // box worth believing comes from, and it is worth reading before adding a
+    // rotation to any rigged model.
+    //
+    // No scale bias either. It arrives 1.79 units tall against 1.32 of
+    // outstretched arms, so normalising on the longest axis is normalising on
+    // its height, which is what a figure wants.
+    register("player_character", "characters/player_character.glb");
 
     // ─── World ──────────────────────────────────────────────────────────────
 

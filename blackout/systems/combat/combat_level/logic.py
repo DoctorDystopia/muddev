@@ -22,7 +22,7 @@ def _skill_level(character: object, skill_key: str) -> int:
 
     Entry:
         character - any object exposing a `skills` handler (Character's
-        SkillHandler, or HostileNPC's _NpcSkillsShim).
+        SkillHandler, or HostileNPC's StatBlockSkills).
         skill_key - a skill key that MAY or may not be registered.
 
     Exit/Returns:
@@ -42,9 +42,10 @@ def _skill_level(character: object, skill_key: str) -> int:
         them must contribute 0, not crash every combat_level read until that
         skill ships.
 
-        _NpcSkillsShim.get_level never raises (it falls back to 1 for an
-        unknown key), so this guard changes behaviour only for real
-        Characters -- which is exactly where it is needed.
+        StatBlockSkills.get_level never raises (an NPC that declares no level
+        in a skill reads the absent-skill floor), so this guard changes
+        behaviour only for real Characters -- which is exactly where it is
+        needed.
 
     Notes/References:
         None

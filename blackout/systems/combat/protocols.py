@@ -9,14 +9,18 @@ Why these exist
 Combat calls methods on objects it never checks the type of. Two of those
 contracts were held together by ``hasattr`` probes and a docstring:
 
-``.skills`` — ``_NpcSkillsShim`` (typeclasses/npc_combat.py) stands in for a
-real SkillHandler on NPCs, and its own docstring describes the failure mode
-exactly:
+``.skills`` — two implementations, because a monster and a player do not
+store the same thing. ``SkillHandler`` (characters) derives a level from
+accumulated XP; ``StatBlockSkills`` (NPCs) stores the level itself and has no
+XP at all. Combat reads levels off both without checking which it holds.
+
+Before the split below there was one protocol and a read-only NPC facade whose
+own docstring described the failure mode exactly:
 
     The shim must cover every method combat code calls on `.skills`, not just
     the ones NPCs meaningfully implement. Combat duck-types on this interface,
     so a missing method raises inside the tick loop, which the tick engine
-    catches by discarding the handler — the NPC would silently stop fighting
+    catches by discarding the handler -- the NPC would silently stop fighting
     with no error surfaced to the player.
 
 That is a contract with no way to check it. Adding a method to SkillHandler and
@@ -29,13 +33,18 @@ this thing a combatant?". One name standing in for a type.
 What a Protocol buys, and what it does not
 ------------------------------------------
 ``runtime_checkable`` makes ``isinstance`` check that the METHODS EXIST. It
-does not check signatures, so this is not stronger than the hasattr probes it
-replaces at any single call site.
+does not check signatures, so at any single call site this is not stronger
+than the hasattr probes it replaces.
 
-The value is elsewhere: the contract is now stated in one place, and
+The value is elsewhere: the contract is stated in one place, and
 tests/test_protocols.py asserts that every implementation satisfies it. A
 missing method becomes a failing test at the moment it is forgotten, rather
 than an NPC that quietly stops fighting weeks later.
+
+That test compares ``inspect.signature`` against each protocol member, not
+just the method NAMES. Name-set comparison passed an implementation whose
+``get_level`` took different parameters from the one combat calls, which is
+the same silent breakage one step further in.
 """
 
 from typing import Protocol, runtime_checkable
@@ -47,17 +56,51 @@ from typing import Protocol, runtime_checkable
 class SkillSource(Protocol):
     """What combat and equipment require of an entity's ``.skills``.
 
-    Implemented by systems/progression/skills/handler.SkillHandler for
-    characters and by typeclasses/npc_combat._NpcSkillsShim for NPCs. Adding a
+    Reading and writing LEVELS, which every combatant has. Implemented by
+    systems/progression/skills/handler.SkillHandler for characters and by
+    systems/progression/skills/stat_block.StatBlockSkills for NPCs. Adding a
     method here without adding it to both is what test_protocols.py catches.
+
+    Deliberately says nothing about XP -- see XpEarner below.
     """
 
     def get_level(self, skill_key: str) -> int:
         """Return the entity's current level in a skill."""
         ...
 
+    def set_level(self, skill_key: str, level: int) -> int:
+        """Set a skill's level directly, clamped to the legal range.
+
+        Returns the level actually stored. This is the write path a stat
+        drain or a builder command needs; it is NOT how a character earns a
+        level, which is add_xp's job.
+        """
+        ...
+
+    def modify_level(self, skill_key: str, delta: int) -> int:
+        """Shift a skill's level by `delta`, clamped. Returns the new level."""
+        ...
+
+
+@runtime_checkable
+class XpEarner(Protocol):
+    """What the progression system requires of an entity that can EARN.
+
+    Implemented by SkillHandler only. An NPC has no XP -- not "zero XP", none:
+    there is no curve behind its levels, and awarding it experience is
+    meaningless rather than merely wasteful.
+
+    Splitting this out of SkillSource is what lets a caller ask the question it
+    actually means. `getattr(killer, "skills", None) is not None` was standing
+    in for "is this an XP earner?" at the killer-XP gate in
+    CombatEntity.at_death and in the combat handler's per-hit XP planner, and
+    it answered TRUE for every NPC -- harmless only for as long as the NPC-side
+    add_xp stayed a no-op. `isinstance(x, XpEarner)` asks it directly, so the
+    NPC implementation is free to simply not have the method.
+    """
+
     def add_xp(self, skill_key: str, amount: int) -> None:
-        """Grant experience. May be a no-op for entities that do not level."""
+        """Grant experience, levelling the skill if the curve is cleared."""
         ...
 
     def get_total_xp(self, skill_key: str) -> int:
