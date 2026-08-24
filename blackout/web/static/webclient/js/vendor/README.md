@@ -1,97 +1,141 @@
 # Vendored third-party JavaScript
 
-## `three.min.js` — required by `plugins/blackout3d.js`
+## `three/` — three.js as ES modules
 
-Present, pinned at **three.js r159** (`three@0.159.0`), the minified UMD build,
-668 KB.
+Present, pinned at **three.js r159**, the ES-module build plus the two addons
+the resolver needs:
 
-If it is ever missing, the 3D pane renders a short "three.js is not loaded"
-message and everything else about the webclient — the text pane, input,
-history, the whole default plugin set — works exactly as before. Nothing in the
-game depends on it.
+    three/three.module.js                       1.24 MB   -> bare specifier `three`
+    three/addons/loaders/GLTFLoader.js            106 KB   -> `three/addons/loaders/GLTFLoader.js`
+    three/addons/utils/BufferGeometryUtils.js      31 KB   -> imported by GLTFLoader
 
-### Why vendored rather than a CDN
+The first two are named in the import map in
+`web/templates/webclient/base.html`; the third is not, and does not need to be
+— GLTFLoader imports it by a RELATIVE path (`../utils/BufferGeometryUtils.js`),
+which is why the `addons/` directory structure has to be preserved exactly as
+three.js ships it.
 
-Evennia's stock `base.html` does pull jQuery, mustache, popper and bootstrap
-from CDNs, so a CDN would not be out of character for this page. It is still
-the wrong call here:
+### What this replaced, and why
 
-- A `<script>` from a third-party origin executes with full access to the
-  webclient page, which is the page carrying the player's authenticated
-  session. Every CDN added is another party who can run code in it.
-- The game is expected to run on a LAN or a private host during development.
-  A CDN dependency means the 3D pane silently stops working offline, at the
-  exact moment it is least obvious why.
-- Version drift. A pinned local file renders the same next year.
+`three.min.js` (the UMD build) and a separately vendored `examples/js`
+`GLTFLoader.js`, loaded as classic scripts that assigned the `THREE` global.
+Two problems, both now gone:
 
-### Replacing or upgrading the file
+- **A version ceiling.** three.js deprecated the UMD build at r150 and removed
+  it at **r161**, so r159 was the newest version that architecture could ever
+  run. The ESM build has no such limit; upgrading is now a normal dependency
+  bump.
+- **A version MISMATCH that was live.** The UMD loader was r147 paired against
+  an r159 core, because r148 deleted the non-module `examples/js` directory —
+  r147 was simply the newest UMD loader that existed. It worked only through
+  an r159 compatibility accessor mapping the loader's `texture.encoding` onto
+  the renamed `.colorSpace`, printing a deprecation warning per texture.
+  **The loader and the core are now the same release**, and that whole
+  paragraph of justification is deleted rather than maintained.
 
-    curl -sSL -o three.min.js https://unpkg.com/three@0.159.0/build/three.min.js
+### This was NOT a version upgrade
 
-**Do not upgrade past r159 without changing `blackout3d.js` first.** three.js
-deprecated the UMD build at r150 and *removed* it at r160 — the file still
-downloads at newer versions, but you are one release away from the ES-module-only
-world, at which point `blackout3d.js` must be rewritten as a module with an
-import map. It currently reads the global `THREE`, which an ES-module build
-never defines, and the failure mode is a blank pane rather than an error.
+Deliberately. r159 → r159, the same code the client was already running, so
+nothing about rendering changed and the module conversion could be verified on
+its own. **Upgrading three.js is a separate change** with its own API
+migration (colour-space handling moved again after r159) and its own
+click-testing.
 
-The file opens with a `console.warn` about that deprecation. That is expected —
-the real, MIT-licensed library follows it in the same file.
+### Replacing or upgrading the files
 
-It is served from `STATIC_ROOT`, so run `evennia reload` (or `evennia start`)
-after replacing it; both run `collectstatic` automatically, and a browser
-refresh alone will not pick it up.
+    V=0.159.0
+    curl -sSL -o three/three.module.js "https://unpkg.com/three@$V/build/three.module.js"
+    curl -sSL -o three/addons/loaders/GLTFLoader.js "https://unpkg.com/three@$V/examples/jsm/loaders/GLTFLoader.js"
+    curl -sSL -o three/addons/utils/BufferGeometryUtils.js "https://unpkg.com/three@$V/examples/jsm/utils/BufferGeometryUtils.js"
 
-### Licence
+If an upgrade makes GLTFLoader import something new, the import will 404 and
+the WHOLE module graph fails to load — both panes vanish, not just the models.
+`systems/statefeed/tests/test_client_assets.py` walks the graph and catches
+exactly that without a browser; add the new file to `_MODULE_ASSETS` there.
 
-three.js is MIT licensed. Keep its licence header intact in the minified file.
-
-## `GLTFLoader.js` — required by `blackout_meshes.js` tier 1
-
-Present, pinned at **three.js r147** (`three@0.147.0`), the `examples/js` UMD
-build, 103 KB. It attaches `THREE.GLTFLoader` to the global namespace and is
-loaded straight after `three.min.js`.
-
-### Why r147 against an r159 core
-
-Because r159 does not have one. three.js deprecated the non-module
-`examples/js` directory at r147 and **deleted it at r148**; from r148 onward
-the loader ships only as an ES module importing from `'three'`, which the UMD
-global build never satisfies. r147 is therefore the newest UMD loader that
-exists at all, and pairing it with an r159 core was checked rather than hoped:
-
-- Every one of the 63 `THREE.*` symbols the loader touches is present in the
-  vendored r159 build.
-- The one API that moved between them is colour space — the loader still writes
-  `texture.encoding = THREE.sRGBEncoding`, renamed to `.colorSpace` at r152.
-  r159 keeps a compatibility accessor that maps the old property onto the new
-  one, so base-colour textures come out correctly sRGB and each one prints a
-  deprecation warning saying so.
-- Parsing was verified end to end against the real vendored core: a GLB in,
-  a `MeshStandardMaterial` with the right factors out.
-
-`toTrianglesDrawMode` is inlined in this build, so unlike the ES-module version
-it needs no `BufferGeometryUtils` alongside it.
-
-**This is the same r160 cliff `three.min.js` sits on, and they fall off it
-together.** Whichever release forces three.js into ES modules forces this
-loader into ES modules on the same day; the fix for both is one import map, not
-two separate migrations.
-
-### Replacing or upgrading the file
-
-    curl -sSL -o GLTFLoader.js https://unpkg.com/three@0.147.0/examples/js/loaders/GLTFLoader.js
-
-Draco- and KTX2-compressed models are **not** supported: those need
-`DRACOLoader` / `KTX2Loader` vendored beside this file and handed to the loader
-instance in `blackout_meshes.js`. A compressed model without them fails to
-load, which the resolver reports once and then renders procedurally — the item
-is still there and still labelled, it just is not the model you expected.
-
-If this file is missing entirely, `blackout_meshes.js` warns once and every
-item falls back to its procedural family mesh. Nothing breaks.
+Draco- and KTX2-compressed models are still **not** supported: those need
+`DRACOLoader` / `KTX2Loader` vendored alongside and handed to the loader in
+`blackout_meshes.js`. A compressed model without them fails to load, which the
+resolver reports once and then renders procedurally — the item is still there
+and still labelled, it just is not the model you expected.
 
 ### Licence
 
-MIT, same as three.js itself.
+MIT.
 
+## `goldenlayout.min.js` — required by `plugins/goldenlayout.js` (Evennia's own)
+
+Present, 66,602 bytes, vendored **08/23/2026** from
+`https://golden-layout.com/files/latest/js/goldenlayout.min.js`. Its two
+stylesheets are vendored alongside it in `../../css/vendor/`.
+
+### Why vendored
+
+This one is not optional the way three.js is. GoldenLayout **is** the layout
+engine: `plugins/goldenlayout.js` builds every pane in the client through it,
+and its `init()` removes the HTML-defined prompt and input divs before
+constructing the replacements. If the script does not load, the client does not
+degrade to a plain text pane — it renders blank.
+
+Evennia's stock template fetched it from `golden-layout.com/files/latest`, with
+no SRI and no version. That is a third party able to change the whole client at
+any time, and a hard external dependency for anyone self-hosting (see
+`docs/2026-08-21-INFRA-0001-public-hosting.md`).
+
+### Why not simply pin a release number
+
+Because `latest` was not any release. Measured on the day it was vendored:
+
+| Source | Bytes |
+|---|---:|
+| `golden-layout.com/files/latest` | 66,602 |
+| cdnjs `golden-layout/1.5.9` | 67,923 |
+
+Swapping the URL for a pinned release would therefore have been a **behaviour
+change disguised as a freeze**. Vendoring the exact bytes that were already
+running is the only move that changes nothing.
+
+### Replacing or upgrading the file
+
+There is no upgrade path worth taking blind — the panes in
+`plugins/blackout3d.js` and `plugins/blackout_inventory.js` depend on
+`registerComponent`, `getItemsByType`, `setActiveContentItem` and the
+`onLayoutChanged` re-registration dance. **Open the client and click before
+committing any replacement**: open both 3D panes, drag one into a stack, save a
+layout, and reload.
+
+### Licence
+
+MIT.
+
+## `favico.min.js` — required by `plugins/notifications.js` (Evennia's own)
+
+Present, 9,033 bytes, favico.js **0.3.10**, vendored **08/23/2026**.
+
+### Why vendored, and why this one mattered more than it looked
+
+Evennia's stock template fetched it from `cdn.rawgit.com`. **RawGit shut down
+in October 2019.** The URL kept working only because it 301-redirects to
+jsDelivr, so the client had been depending on a defunct service's courtesy
+redirect for years.
+
+The failure mode if that redirect ever stopped is not a missing favicon badge:
+
+- `notifications.js` calls `new Favico(...)` in its `init()` with no guard.
+- `plugin_handler.init()` in `webclient_gui.js` is a bare loop over plugins
+  with **no `try`/`catch`**.
+- So a `ReferenceError` there aborts the loop, and every plugin loaded *after*
+  `notifications.js` never initialises — including `goldenlayout`, and
+  including both Blackout panes.
+
+The page renders blank. The `document.write` warning the stock template pairs
+with the script could never have caught it either: by the time it runs, writing
+to a loaded document replaces the document.
+
+### Replacing or upgrading the file
+
+    curl -sSL -o favico.min.js https://cdn.jsdelivr.net/gh/ejci/favico.js@0.3.10/favico-0.3.10.min.js
+
+### Licence
+
+MIT.

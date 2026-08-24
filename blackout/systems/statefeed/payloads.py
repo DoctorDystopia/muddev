@@ -80,6 +80,24 @@ class RoomInfoPayload(_Payload):
     coords: list = field(default_factory=list)   # [x, y, z] -- z is a map NAME
     exits: dict = field(default_factory=dict)    # {direction: destination_num}
 
+    # What the tiles NEAR the observer afford: {"x:y": {command, kind}}.
+    #
+    # Near only -- the observer's own tile and everything one real exit away,
+    # at most nine entries. A tile further off affords the same `goto (X,Y)`
+    # wherever the observer stands, so that is stamped on the MAP NODE once per
+    # session (see mapexport) rather than resent here on every move.
+    #
+    # `exits` above is kept and is not redundant with this. It is the GMCP
+    # Room.Info field as IRE and Aardwolf define it, keyed by direction and
+    # carrying destination ids, which is what a text client wants; this is
+    # keyed by tile and carries commands, which is what a graphical one wants.
+    tile_actions: dict = field(default_factory=dict)
+
+    # What clicking the tile you are standing on means while a walk is running.
+    # Not part of tile_actions because whether a walk IS running is the
+    # client's own tracking; see serializers.cancel_action.
+    cancel_action: dict = field(default_factory=dict)
+
 
 @dataclass
 class RoomPlayersPayload(_Payload):

@@ -638,3 +638,219 @@ def room_coords(room) -> list:
         return []
 
     return [int(xyz[0]), int(xyz[1]), str(xyz[2])]
+
+
+def tile_key(x: int, y: int) -> str:
+    """
+    Purpose: Render a tile's coordinate pair as the key a client looks it up by.
+
+    Entry:
+        x, y - grid coordinates on one map. The map name (z) is NOT part of the
+        key: a tile-action map is always about one map, and the caller knows
+        which.
+
+    Exit/Returns:
+        The key string, e.g. "6:3".
+
+    Module Globals:
+        const.TILE_KEY_TEMPLATE read.
+
+    Methodology:
+        One template, one owner. The client used to build this string itself in
+        two places and the map's own node lookup built it in a third.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    return const.TILE_KEY_TEMPLATE.format(x=x, y=y)
+
+
+def tile_action(command: str, kind: str) -> dict:
+    """
+    Purpose: Build one tile affordance.
+
+    Entry:
+        command - the whole command to send, with nothing left to substitute.
+        kind    - one of the const.TILE_ACTION_KIND_* values.
+
+    Exit/Returns:
+        Returns {"command": str, "kind": str}.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A named constructor rather than a dict literal at each call site, so
+        the payload's shape has one definition and the two keys cannot be
+        spelled differently in two places.
+
+    Notes/References:
+        `kind` exists because the client tracks the walk IT started -- see
+        runAction in blackout3d.js. The client needs to know whether a command
+        begins a walk, ends one, or leaves it alone; it should not have to
+        infer that from the command's text.
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    return {"command": command, "kind": kind}
+
+
+def goto_action(x: int, y: int) -> dict:
+    """
+    Purpose: The pathfinder walk to one tile.
+
+    Entry:
+        x, y - grid coordinates on the observer's own map.
+
+    Exit/Returns:
+        Returns a tile action whose command is `goto (X,Y)`.
+
+    Module Globals:
+        const.TILE_COMMAND_GOTO_TEMPLATE read.
+
+    Methodology:
+        The command is spelled out in full here so no client has to know the
+        coordinate syntax. It is a property of the NODE rather than of the
+        observer -- the walk to (6,3) is `goto (6,3)` from anywhere on the map
+        -- which is why mapexport stamps it on the map node once per session
+        rather than emit_room_info resending it per move.
+
+    Notes/References:
+        Everything about the walk then belongs to the server: Dijkstra over the
+        contrib's baked path matrix, `interrupt_path` nodes that stop it, and a
+        re-path when the player walks off-route by hand.
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    command = const.TILE_COMMAND_GOTO_TEMPLATE.format(x=x, y=y)
+
+    return tile_action(command, const.TILE_ACTION_KIND_WALK)
+
+
+def cancel_action() -> dict:
+    """
+    Purpose: The command that aborts a walk in progress.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        Returns a tile action carrying bare `goto`.
+
+    Module Globals:
+        const.TILE_COMMAND_GOTO read.
+
+    Methodology:
+        Sent alongside the tile actions rather than inside them, because it is
+        not a property of any tile: it is what clicking the tile you are
+        STANDING ON means while a walk is running, and whether one is running
+        is the client's own tracking.
+
+    Notes/References:
+        Bare `goto` is the contrib's own abort. See commands/movement_cmds.py.
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    return tile_action(const.TILE_COMMAND_GOTO, const.TILE_ACTION_KIND_CANCEL)
+
+
+def tile_actions(room) -> dict:
+    """
+    Purpose: What the tiles NEAR the observer afford, from where they stand.
+
+    Entry:
+        room - the observer's current room, or None.
+
+    Exit/Returns:
+        Returns {tile_key: {"command", "kind"}} covering the room the observer
+        is in and every tile one real exit away. Empty for a room with no
+        coordinates.
+
+    Module Globals:
+        const read.
+
+    Methodology:
+        NEAR tiles only, and that split is the whole reason this stays small.
+        A tile further off affords the same `goto (X,Y)` no matter where the
+        observer stands, so mapexport stamps that on the map node once per
+        session; only the immediate exits change as the player moves, and there
+        are at most eight of them. Sending every reachable tile from here would
+        make room_info ~3KB on EVERY room change, on a channel that fires once
+        per move, to say something that had not changed.
+
+        Directions come from the room's real spawned EXITS, not from a
+        grid-delta table. The exit already knows both its own name ("north",
+        which is what a telnet player types) and its destination, and the
+        destination knows its coordinates -- so the mapping is read off the
+        world rather than derived from one. That is what makes a one-way exit,
+        a diagonal link, or a map whose geometry does not match its directions
+        come out right without a special case.
+
+        An exit whose destination has no coordinates is skipped rather than
+        guessed at; that is a room off the grid, which no tile can represent.
+
+    Notes/References:
+        A cardinal neighbour with NO exit simply has no entry here, and picks
+        up the map node's `goto` instead -- which is the correction to the
+        client rule this replaces. The client refused those outright, treating
+        every unlinked neighbour as a wall; most maps are drawn with cardinal
+        links only, so the diagonal neighbours around a player are ordinarily
+        two steps away rather than walls.
+
+    Author: Nick Hobar
+    Creation date: 08/23/2026
+    """
+    here = room_coords(room)
+
+    if not here:
+        return {}
+
+    actions = {
+        tile_key(here[0], here[1]): tile_action(
+            const.TILE_COMMAND_LOOK, const.TILE_ACTION_KIND_LOOK),
+    }
+
+    for exit_obj in room.exits:
+        destination = exit_obj.destination
+
+        if destination is None:
+            continue
+
+        there = room_coords(destination)
+
+        if not there:
+            continue
+
+        key = tile_key(there[0], there[1])
+
+        # The observer's own tile is already claimed by `look`, and an exit
+        # looping back to its own room must not overwrite it.
+        if key in actions:
+            continue
+
+        actions[key] = tile_action(
+            str(exit_obj.key), const.TILE_ACTION_KIND_STEP)
+
+    # A cardinal neighbour no exit reached is a wall. Say so, rather than
+    # leaving it out: omission means "fall through to the node's own `goto`",
+    # and the pathfinder would route the player the long way around a barrier
+    # they can see. Diagonals are deliberately not checked -- see
+    # const.TILE_ACTION_KIND_NONE for why those two cases differ.
+    #
+    # A cardinal offset that is not on the map at all also lands here, and that
+    # is harmless: the client never draws a tile the map did not send, so the
+    # entry is four bytes nobody reads. Checking would mean giving this routine
+    # the parsed map for no gain.
+    for offset_x, offset_y in const.TILE_CARDINAL_OFFSETS:
+        key = tile_key(here[0] + offset_x, here[1] + offset_y)
+
+        if key not in actions:
+            actions[key] = tile_action("", const.TILE_ACTION_KIND_NONE)
+
+    return actions
