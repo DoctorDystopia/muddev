@@ -212,11 +212,20 @@ class TestSweep(EvenniaTest):
 
 class TestHostileNpcDeathPath(EvenniaTest):
     def test_create_stamps_identity_and_spawn_room(self):
+        from world.npc_database import NPC_DB
+
         npc = spawn_mutant_raider(self.room1)
 
         self.assertEqual(npc.db.npc_key, RAIDER_KEY)
         self.assertEqual(npc.db.spawn_room, self.room1)
-        self.assertEqual(npc.db.respawn_seconds, 30)
+
+        # That the def's value is STAMPED THROUGH, which is what this test is
+        # named for -- not that the value is any particular number. It was `30`
+        # and broke when the raider's respawn was retuned to 20 on 08/23/2026,
+        # which told nobody anything except that a designer had changed their
+        # mind.
+        self.assertEqual(
+            npc.db.respawn_seconds, NPC_DB[RAIDER_KEY].respawn_seconds)
 
     def test_raider_with_a_respawn_delay_enqueues_then_deletes(self):
         npc = spawn_mutant_raider(self.room1)
