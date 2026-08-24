@@ -1,9 +1,11 @@
 /*
  * Blackout channel ownership — who is allowed to bind which feed channel.
  *
- * REQUIRES: nothing. Must load before any Blackout plugin.
+ * An ES MODULE. Not a plugin -- it registers nothing with plugin_handler.
  *
- * Not a plugin. A plain global, like blackout_meshes.js.
+ * It used to be a plain global that "must load before any Blackout plugin",
+ * which was a requirement nothing could enforce. It is now imported by the
+ * panes that use it, so the ordering is the import graph.
  *
  * THE PROBLEM THIS EXISTS FOR:
  *
@@ -39,46 +41,39 @@
  * Creation date: 08/15/2026
  */
 
-let blackoutChannels = (function () {
-    "use strict";
 
-    // channel name -> the plugin name that holds it.
-    const owners = {};
 
-    // Try to take ownership of a channel.
-    //
-    // Returns true when the caller may bind it — either because it was
-    // unclaimed, or because the caller already holds it and is re-binding,
-    // which happens on a GoldenLayout layout change. Returns false when
-    // another plugin owns it, and logs, because a refused claim always means
-    // two panes disagree about who handles something.
-    const claim = function (channel, pluginName) {
-        const owner = owners[channel];
+// channel name -> the plugin name that holds it. Module-scoped, so this is
+// exactly one registry no matter how many modules import it -- which is the
+// property the whole thing depends on. A second copy would let two panes each
+// believe they own a channel.
+const owners = {};
 
-        if (owner && owner !== pluginName) {
-            console.log("[blackout_channels] " + pluginName +
-                " asked for '" + channel + "' but " + owner +
-                " already owns it; not binding.");
-            return false;
-        }
-        owners[channel] = pluginName;
-        return true;
-    };
 
-    // Who owns a channel, or "" if nobody does. Diagnostic only.
-    const ownerOf = function (channel) {
-        return owners[channel] || "";
-    };
 
-    return {
-        claim: claim,
-        ownerOf: ownerOf
-    };
-})();
+// Try to take ownership of a channel.
+//
+// Returns true when the caller may bind it — either because it was
+// unclaimed, or because the caller already holds it and is re-binding,
+// which happens on a GoldenLayout layout change. Returns false when
+// another plugin owns it, and logs, because a refused claim always means
+// two panes disagree about who handles something.
+export const claim = function (channel, pluginName) {
+    const owner = owners[channel];
 
-// Published on `window` explicitly. A top-level `let` creates a lexical
-// binding in the global SCOPE but no property on the global OBJECT, so
-// `window.blackoutChannels` would otherwise be undefined — and the window
-// property is the only form a plugin can guard on without risking a
-// ReferenceError when this file has failed to load.
-window.blackoutChannels = blackoutChannels;
+    if (owner && owner !== pluginName) {
+        console.log("[blackout_channels] " + pluginName +
+            " asked for '" + channel + "' but " + owner +
+            " already owns it; not binding.");
+        return false;
+    }
+    owners[channel] = pluginName;
+    return true;
+};
+
+
+
+// Who owns a channel, or "" if nobody does. Diagnostic only.
+export const ownerOf = function (channel) {
+    return owners[channel] || "";
+};
