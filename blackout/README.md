@@ -690,6 +690,48 @@ now raises at import on an unregistered category to make that impossible.
 
 ---
 
+## Stat Tracker
+
+Generic counters and stats all stored in a single per-character dict, e.g. kills per hostile type, credits spent. 
+
+### In-game commands: inspect a character's stats
+
+```bash
+> py me.stats.all()
+> py me.stats.get("kills_per_hostile")
+> py me.stats.get("kills_per_hostile", key="mutant_raider")
+```
+
+### Adding a new tracked stat
+
+1. Add a `STAT_KEY` constant in `systems/stat_tracker/constants.py`.
+2. Add a matching `StatDef` to `STAT_REGISTRY` in `systems/stat_tracker/registry.py`.
+3. Record an increment at the site of the event, following this pattern:
+
+```python
+# e.g. typeclasses/mixins.py, CombatEntity.at_death
+stats = getattr(killer, "stats", None)
+npc_key = getattr(self.db, "npc_key", None)
+if stats is not None and npc_key:
+    try:
+        stats.increment(stat_constants.KILLS_PER_HOSTILE_STAT_KEY, npc_key)
+    except Exception as exc:
+        logger.log_err(f"CombatEntity.at_death KILLS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
+```
+
+### Types of stats
+Each stat type is defined in `StatKind` once in `systems/stat_tracker/registry.py`.
+`StatHandler` defines how each is handled.
+
+Source of truth definitions in `systems/stat_tracker/registry.py`
+
+```text
+COUNTER stat stores         |  {stat_key: total(int)}
+KEYED_COUNTER stat stores   |  {stat_key: {sub_key: total(int)}}
+```
+
+---
+
 ## Admin Commands
 
 ### Purge items from the world
