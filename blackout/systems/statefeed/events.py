@@ -463,6 +463,8 @@ def emit_room_info(observer, force: bool = False) -> int:
         room_kind=serializers.room_kind(room),
         coords=serializers.room_coords(room),
         exits=serializers.serialize_exits(room),
+        tile_actions=serializers.tile_actions(room),
+        cancel_action=serializers.cancel_action(),
     )
 
     return emit(observer, payload, force=force)
