@@ -224,6 +224,32 @@ The asymmetry is deliberate: **a client key naming nothing is a bug; a server
 fact with no client entry is fine** — both tables document a fallback, so
 adding content must never require a client edit.
 
+### An item may belong to several families
+
+`ItemDef.tags` is a LIST of `(key, category)` pairs and Evennia files each pair
+independently, so **an item declares as many families as it belongs to** — the
+rusty scrap axe is `crafting_tool` *and* `weapon`. A recipe finds it under the
+first (`_has_tool_available` asks only whether that one category carries the
+value); the pane picks its mesh out of the second. Neither reader cares that
+the other tag is there.
+
+Which family a multi-family item resolves to is decided by
+`ITEM_FAMILY_PRIORITY` in `systems/statefeed/constants.py`, **never by tag
+order** — Evennia returns an object's tags as an unordered set, so a reader
+taking the first family category it sees can answer differently on two calls
+about the same item, and the axe would render as a tool in one session and a
+weapon in the next. `ITEM_FAMILIES` is derived from that tuple so the ordered
+and the membership view cannot list different families.
+
+**A family tag is a look, not a rule.** Nothing in combat reads one:
+`_combat_style_source` reads `combat_styles` and `attack_speed` off the wielded
+object and never asks its tag or its typeclass. An ItemDef tagged `weapon` with
+no `combat_styles` therefore renders as a weapon and swings at unarmed speed
+and unarmed accuracy — which is exactly the trap a tool being given a second
+family walks into. `test_an_item_in_the_weapon_family_can_actually_fight` in
+`world/tests/test_item_database.py` asserts the relationship over `ITEM_DB`, so
+a weapon added tomorrow is covered without an edit.
+
 ## Evennia gotchas found the hard way
 
 1. **`evennia.utils.utils.crop` is not ANSI-aware** in this build — it measures
@@ -325,7 +351,20 @@ the split is the same one the quest system makes:
 |---|---|---|
 | `systems/devtools/constants.py` | The god-mode attribute name, the audit vocabulary, the bounds, the message templates | `systems/ui/colors.py` |
 | `systems/devtools/actions.py` | The effects. Every one is `(actor, target, ...) -> (succeeded, message)` | `constants`, plus whatever system it reaches into |
-| `systems/menus/dev_egg_menu.py` | EvMenu nodes. Presentation only | `actions`, `constants`, `base_menu` |
+| `systems/devtools/dossier.py` | The read-only report. Changes nothing | `constants`, `actions`, `systems/summary/` |
+| `systems/menus/dev_egg_menu.py` | EvMenu nodes. Presentation only | `actions`, `dossier`, `constants`, `base_menu` |
+
+`dossier.py` is split from `actions.py` on the read/write line, so a reviewer
+can tell at a glance which of the two a moderator screen is calling. Most of
+the report is not written there at all: `systems/summary/` already renders a
+character's dossier and owns what that contains, so the module adds only the
+staff half (dbrefs, the account, god mode, the itemised bag, live quest
+counters) and pastes the player's own screen above it **verbatim** — a
+moderator asking "is this what they are looking at" cannot be answered by a
+re-render of the same numbers. It is named `dossier` and not `inspect` because
+a module called `inspect.py` inside a package shadows the standard library the
+moment anything grows a relative import, and `systems/summary/registry.py`
+depends on the real one.
 
 **The menu is not in the package on purpose.** An effect has to stay callable
 from a test, a script or a future command with no EvMenu anywhere; a package
@@ -342,6 +381,30 @@ row keeps one writer and `ban`'s Developer lock still refuses an Admin. The
 item, skill and map lists are read live from `ITEM_DB`, `SKILL_REGISTRY` and
 `scripts/map_manifest.json`, so adding content reaches the menu with no edit
 in `systems/devtools/`.
+
+**Quest writes belong to `QuestHandler`, not to the tool.**
+`force_complete_quest`, `force_step` and `reset_quest` sit beside
+`accept_quest` in `systems/quests/handler.py` for the reason CLAUDE.md already
+gives: `db.active_quests` has exactly one owner, and a staff tool writing it
+directly would be the fourth module to own that fact. They are the write path
+a test fixture or a content migration needs too — the same role
+`skills.logic.set_level` plays next to `add_xp`. Three rules they encode:
+a forced completion **pays rewards** (exercising that callback is the main
+reason to force one); a step jump **re-seeds** the destination's counters and
+fires its `on_enter`, but nothing for the steps it skipped; and **reset is not
+abandon** — abandon leaves a completion record standing, reset is what makes a
+finished quest takeable again.
+
+**One irreversible entry, and it is guarded twice.** `Empty inventory` is the
+only thing on the tool that cannot be undone by doing something else, so it is
+the only one behind a confirmation — and the confirmation counts what it will
+destroy and names whose it is, because a moderator who reads "31 carried and 4
+equipped from Bob" catches a wrong target while one who reads "are you sure?"
+confirms it. The second guard is `DEV_TOOL_TAG_CATEGORY`, which lives in
+`systems/devtools/constants.py` and is imported by `world/item_defs/dev_tools.py`
+rather than typed there: the ItemDef stamps the tag and `clear_inventory`
+refuses to delete anything carrying it, and a staff item whose tag disagreed
+with that check is one a moderator destroys by emptying their own bag.
 
 **God mode is the one new game rule.** A flag on the CHARACTER, read in
 `CombatEntity.at_damage` (`typeclasses/mixins.py`), which returns 0 before the
