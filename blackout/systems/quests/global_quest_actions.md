@@ -15,10 +15,38 @@ targets={"interact:pipe": True, "kill:raider": 3}
 
 **Example Progression Hook in Game Logic:**
 
+Game systems call `notify_quests`. They know what the player *did*, not which
+quest wanted it, so they never name a quest key:
+
 ```python
-caller.quests.update_progress("oasis", "interact", "pipe")
-killer.quests.update_progress("oasis", "kill", "raider", amount=1)
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
+
+notify_quests(caller, quest_constants.ACTION_INTERACT, "pipe")
+notify_quests(killer, quest_constants.ACTION_KILL, npc_key, amount=1)
 ```
+
+`notify_quests` fans the action out across every quest the character has
+active, tolerates an actor with no quest handler (every hostile NPC), rejects
+an action that is not in this document, and never raises — it sits inside
+`at_death` and `perform_craft`, where an exception would take real game state
+down with it.
+
+`character.quests.update_progress("oasis", "interact", "pipe")` still exists
+for the rare caller that genuinely knows which quest it is advancing. Prefer
+`notify_quests`.
+
+> **The argument is a stable snake_case identifier, never a display name.**
+> `db.npc_key` (`"mutant_raider"`), a recipe key, an `ItemDef` key. The
+> kill hook in `at_death` used to pass `self.key` — `"Mutant Raider"` — which
+> no blueprint could reasonably declare.
+
+**Adding an action:** add the constant to `systems/quests/constants.py`, add
+it to `QUEST_ACTIONS`, and add a level-3 heading below whose text is the
+verb wrapped in backticks (the same shape every section already uses).
+`test_quest_vocabulary.py` parses this file's level-3 headings and asserts
+they match `QUEST_ACTIONS` exactly in both directions, so the code and this
+document cannot drift.
 
 ---
 
