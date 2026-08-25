@@ -766,16 +766,47 @@ What the menu offers:
 
 | Entry | Effect |
 |---|---|
+| Inspect | The target's full player dossier (the same one `score` renders) plus a staff addendum: dbrefs, the account and its permissions, god-mode state, the itemised bag, and every quest with live objective counters. Read-only. |
 | Spawn an item | Any `ITEM_DB` key, 1 or N. Stackables arrive as one stack; a request larger than the grid is clamped and says so. |
+| Spawn an NPC | Any `NPC_DB` key, 1-20, into **the target's room**. They land live and hostile, with the full combat block and respawn stamp `NpcDef.create` gives a map-placed one. |
 | Toggle god mode | The target ignores all incoming damage. Persists on the CHARACTER, not the egg -- dropping the egg does not turn it off. |
 | Restore | Refresh max HP from Fortitude, heal to full, drop out of combat. |
+| Empty inventory | Destroys everything carried **and equipped**. Behind a confirmation that counts what it will destroy and names whose it is. Staff items are skipped. |
 | Teleport to a map | Any map in `scripts/map_manifest.json`, landing on its `(0,0)` entrance tile. |
+| Teleport to a player | Sends the target to whichever character you name. |
+| Bring target to me | The same call with the arguments swapped. |
 | Grant XP / Set a skill level | Any key in `SKILL_REGISTRY`. Levels accept the full 0-127 range. |
+| Quests | Accept, abandon, complete, reset, or jump to any step of any quest in the registry. See below. |
 | Boot or ban an account | Types Evennia's own `boot` / `ban` / `unban`. `ban` keeps its Developer lock. |
 | Change target | Aims every entry above at another character. Blank resets to yourself. |
 
+The egg protects itself: `Empty inventory` refuses to delete anything tagged
+as a staff item, so emptying your own bag does not destroy the egg you are
+holding to do it with.
+
+#### Quest testing
+
+The quest screen is the one to reach for when testing content. Four
+whole-quest writes plus a step jump:
+
+| Operation | What it does |
+|---|---|
+| Accept | Starts the quest properly -- seeds progress, fires step 1's `on_enter`. Indistinguishable from taking it from an NPC. |
+| Abandon | Drops progress. **Leaves any completion record standing**, so a finished quest stays finished. |
+| Complete | Marks it done and **pays the rewards**. Skipped steps' hooks do not fire. |
+| Reset | Clears active *and* completed. The only one that makes a finished quest takeable again. |
+| Jump to a step | Moves an active quest to any step, forward or back. Re-seeds that step's counters and fires its `on_enter`, so the quest keeps playing from there. |
+
+Abandon vs. Reset is the distinction worth knowing: **abandon** returns a quest
+in progress to not-started, but does nothing to a quest already completed.
+**Reset** is what a tester replaying content wants.
+
+The step jump is what makes a five-step quest testable in minutes rather than
+by replaying it: accept, jump to the step under test, exercise it, jump back.
+
 Every action taken through the egg writes one `[MODTOOL]` line to the server
-log naming the actor, the verb and the target. To review a session:
+log naming the actor, the verb and the target. Reading a dossier is logged
+too. To review a session:
 
 ```bash
 grep MODTOOL server/logs/server.log

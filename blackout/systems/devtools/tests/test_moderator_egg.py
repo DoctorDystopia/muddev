@@ -15,6 +15,7 @@ Run from blackout/:
 """
 
 import unittest
+from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
 from evennia.utils.utils import class_from_module
@@ -203,6 +204,7 @@ class MenuWiringTests(EvenniaTest):
     def test_every_list_node_offers_a_way_back(self):
         list_nodes = (
             dev_egg_menu.node_spawn,
+            dev_egg_menu.node_npc,
             dev_egg_menu.node_teleport,
             dev_egg_menu.node_xp_skill,
             dev_egg_menu.node_level_skill,
@@ -223,6 +225,125 @@ class MenuWiringTests(EvenniaTest):
         for item_key in ITEM_DB:
             with self.subTest(item=item_key):
                 self.assertIn(item_key, descriptions)
+
+    def test_the_inspect_node_renders_the_report_as_node_text(self):
+        """
+        The report IS the node text, not a msg() before it. A screen this long
+        printed as a message would be redrawn off the top by whatever EvMenu
+        renders next.
+        """
+        text, options = dev_egg_menu.node_inspect(self.char1)
+
+        self.assertIn(self.char1.key, text)
+        self.assertIn(f"#{self.char1.id}", text)
+        self.assertGreater(len(options), 0)
+
+    def test_the_quest_detail_node_renders_for_every_shipped_quest(self):
+        """Each one is reachable from the list, so each one must render."""
+        from systems.devtools import actions as dev_actions
+
+        for quest_key in dev_actions.quest_keys():
+            with self.subTest(quest=quest_key):
+                text, options = dev_egg_menu.node_quest_detail(
+                    self.char1, quest_key=quest_key
+                )
+
+                self.assertTrue(text)
+                self.assertGreater(len(options), 0)
+
+    def test_the_quest_step_node_lists_steps_in_blueprint_order(self):
+        from systems.devtools import actions as dev_actions
+
+        quest_keys = dev_actions.quest_keys()
+
+        for quest_key in quest_keys:
+            with self.subTest(quest=quest_key):
+                _text, options = dev_egg_menu.node_quest_step(
+                    self.char1, quest_key=quest_key
+                )
+                labels = [option.get("desc", "") for option in options]
+                expected = dev_actions.quest_step_keys(quest_key)
+                offered = [label for label in labels if label.split()[0] in expected]
+
+                self.assertEqual(
+                    [label.split()[0] for label in offered],
+                    expected,
+                )
+
+    def test_every_quest_operation_in_the_table_has_a_label(self):
+        """The table pairs each verb with the sentence explaining it, because
+        Abandon and Reset are distinguishable only by that sentence."""
+        labelled = [operation for operation, _label
+                    in dev_egg_menu._QUEST_OPERATION_LABELS]
+
+        self.assertEqual(sorted(labelled),
+                         sorted(dev_egg_menu._QUEST_OPERATIONS.keys()))
+
+    def test_an_empty_quest_registry_explains_itself(self):
+        """
+        "No quests" and "every content module failed to import" look identical
+        from the menu, and the second is the state the game actually shipped
+        in. The screen has to say so.
+        """
+        from systems.devtools import actions as dev_actions
+
+        with mock.patch.object(dev_actions, "quest_keys", return_value=[]):
+            text, options = dev_egg_menu.node_quest(self.char1)
+
+        self.assertIn("load_errors", text)
+        self.assertGreater(len(options), 0)
+
+    def test_the_npc_list_offers_every_npc_in_the_database(self):
+        from world.npc_database import NPC_DB
+
+        _text, options = dev_egg_menu.node_npc(self.char1)
+        descriptions = [option.get("desc") for option in options]
+
+        for npc_key in NPC_DB:
+            with self.subTest(npc=npc_key):
+                self.assertIn(npc_key, descriptions)
+
+    def test_the_npc_list_names_the_room_they_will_land_in(self):
+        """Spawning into the TARGET's room, not the moderator's, is the whole
+        point -- so the screen has to say which room that is."""
+        _text, _options = dev_egg_menu.node_npc(self.char1)
+        text, _options = dev_egg_menu.node_npc(self.char1)
+
+        self.assertIn(self.char1.location.key, text)
+
+    def test_the_clear_confirmation_counts_what_it_will_destroy(self):
+        """
+        A moderator who reads the numbers and the name catches a wrong target.
+        One who reads "are you sure?" confirms it.
+        """
+        item_key = sorted(ITEM_DB.keys())[0]
+        ITEM_DB[item_key].create(location=self.char1, home=self.char1)
+        text, _options = dev_egg_menu.node_clear_confirm(self.char1)
+
+        self.assertIn(self.char1.key, text)
+        self.assertIn("1", text)
+
+    def test_the_clear_confirmation_binds_the_shared_yes_key(self):
+        """Bound rather than auto-numbered, so confirming a destruction is
+        never the digit that meant something else on the previous screen."""
+        from systems.menus.constants import CONFIRM_YES_KEYS
+
+        _text, options = dev_egg_menu.node_clear_confirm(self.char1)
+        keys = [option.get("key") for option in options]
+
+        self.assertIn(CONFIRM_YES_KEYS, keys)
+
+    def test_clearing_is_the_only_entry_behind_a_confirmation(self):
+        """
+        It is the only irreversible one. If a second confirmation appears
+        here, either something else became irreversible or a confirmation was
+        added where it only costs a keystroke.
+        """
+        _text, options = dev_egg_menu.start(self.char1)
+        confirmed = [option for option in options
+                     if str(option.get("goto")) == "node_clear_confirm"]
+
+        self.assertEqual(len(confirmed), 1)
 
     def test_the_root_reports_god_mode_state(self):
         from systems.devtools import actions as dev_actions

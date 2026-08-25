@@ -22,7 +22,9 @@ from evennia.utils import logger
 
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 from systems.progression.skills.registry import SKILL_REGISTRY
+from systems.quests.loader import GLOBAL_QUEST_REGISTRY
 from world.item_database import ITEM_DB
+from world.npc_database import NPC_DB
 from world.maps.manifest import ManifestError, load_entries, zcoords_of
 
 from systems.devtools import constants as dev_constants
@@ -233,6 +235,37 @@ def _map_anchor_room(zcoord: str):
     fallback = rooms.first()
 
     return fallback
+
+
+# ─── Audit ───────────────────────────────────────────────────────────────────
+
+def audit_inspect(actor, target) -> None:
+    """
+    Purpose: Record that one moderator read another character's dossier.
+
+    Entry:
+        actor is the moderator. target is the character that was read.
+
+    Exit/Returns:
+        No return value.
+
+    Module Globals:
+        dev_constants.ACTION_INSPECT read.
+
+    Methodology:
+        The one public door onto _audit, and it exists for exactly one caller:
+        systems/devtools/inspect.py, which changes nothing and so has no
+        business importing a module of writers for anything else.
+
+    Notes/References:
+        A read is audited because "who looked at whom" is what a moderation
+        review actually asks. Nothing else in this module audits without also
+        acting.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    _audit(actor, dev_constants.ACTION_INSPECT, target, "dossier read")
 
 
 # ─── God mode ────────────────────────────────────────────────────────────────
@@ -452,6 +485,220 @@ def grant_item(actor, target, item_key: str, quantity: int) -> tuple:
     return True, message
 
 
+# ─── NPC spawning ────────────────────────────────────────────────────────────
+
+def npc_keys() -> list:
+    """
+    Purpose: Name every NPC the spawner can produce, in a stable order.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a sorted list of NPC_DB keys.
+
+    Module Globals:
+        NPC_DB read.
+
+    Notes/References:
+        Derived from the registry, exactly as item_keys is. Adding an NpcDef
+        must reach this menu with no edit here.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    keys = sorted(NPC_DB.keys())
+
+    return keys
+
+
+def spawn_npc(actor, target, npc_key: str, quantity: int = 1) -> tuple:
+    """
+    Purpose: Spawn one or more hostiles in the room the target is standing in.
+
+    Entry:
+        actor is the moderator. target is the Character whose room receives
+        them. npc_key names an entry in NPC_DB. quantity is what was asked
+        for, before clamping.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means an unknown NPC, or a
+        target with no location.
+
+    Module Globals:
+        NPC_DB read. dev_constants MIN_NPC_SPAWN, MAX_NPC_SPAWN,
+        MSG_SPAWN_NPC_* read.
+
+    Methodology:
+        Spawns into the TARGET's room, not the moderator's. The two are the
+        same when a moderator is testing on themself and different when they
+        are reproducing a player's report, and the second is the case worth
+        getting right -- "spawn it where they are" is the whole request.
+
+        NpcDef.create does the rest: it applies the combat block, stamps the
+        respawn identity and names the AI behaviour, so a spawned raider is
+        the same object the map builder would have placed. A hand-rolled
+        create_object here would produce something that fights but never
+        respawns and answers to no behaviour.
+
+    Notes/References:
+        These are LIVE COMBATANTS the moment they land. They join the tick,
+        pick targets and swing, which is why MAX_NPC_SPAWN is 20 and not the
+        item ceiling's 1000.
+
+        db.spawn_room is stamped by create() to the room they land in, so a
+        spawned hostile with a respawn_seconds will come back HERE rather
+        than at whatever tile its map placement would have used.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    npc_def = NPC_DB.get(npc_key)
+
+    if npc_def is None:
+        return False, dev_constants.MSG_SPAWN_NPC_UNKNOWN.format(npc_key=npc_key)
+
+    room = getattr(target, "location", None)
+
+    if room is None:
+        return False, dev_constants.MSG_SPAWN_NPC_NOWHERE.format(target=target.key)
+
+    count = min(quantity, dev_constants.MAX_NPC_SPAWN)
+    count = max(count, dev_constants.MIN_NPC_SPAWN)
+    made = 0
+
+    while made < count:
+        npc_def.create(location=room)
+        made += 1
+
+    _audit(actor, dev_constants.ACTION_SPAWN_NPC, target, f"{made}x {npc_key} in {room.key}")
+    message = dev_constants.MSG_SPAWN_NPC_DONE.format(
+        quantity=made,
+        npc_name=npc_def.name,
+        room=room.key,
+    )
+
+    return True, message
+
+
+# ─── Destroying belongings ───────────────────────────────────────────────────
+
+def _is_staff_item(item) -> bool:
+    """
+    Purpose: Whether an item must survive a clear.
+
+    Entry:
+        item is a live object.
+
+    Exit/Returns:
+        True when the item carries the staff tag category.
+
+    Module Globals:
+        dev_constants.DEV_TOOL_TAG_CATEGORY read.
+
+    Methodology:
+        Read off the TAG CATEGORY the ItemDef declares, not off the typeclass.
+        A tag check needs no import of typeclasses.dev_tools, and it protects
+        every future staff item the moment it is defined rather than when
+        somebody remembers to extend an isinstance chain here.
+
+    Notes/References:
+        This is what stops a moderator emptying their own bag from destroying
+        the egg they are holding to do it with.
+
+        `tags.get(category=...)` with no key, NOT `tags.all(category=...)` --
+        TagHandler.all takes no category argument at all, so the second spells
+        a filter that would never have been applied.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    tagged = item.tags.get(
+        category=dev_constants.DEV_TOOL_TAG_CATEGORY,
+        return_list=True,
+    )
+
+    return bool(tagged)
+
+
+def clear_inventory(actor, target) -> tuple:
+    """
+    Purpose: Destroy everything a character is carrying and wearing.
+
+    Entry:
+        actor is the moderator. target is the Character to strip.
+
+    Exit/Returns:
+        Returns (succeeded, message) reporting the counts destroyed and any
+        staff items left alone. Failure means there was nothing to clear.
+
+    Module Globals:
+        dev_constants.MSG_CLEAR_* read.
+
+    Methodology:
+        Both surfaces, in one action. `purge` already treats carried and
+        equipped as one thing, and a moderator resetting a test character who
+        found their weapon still wielded would just run it twice.
+
+        An equipped item is removed from its slot BEFORE being deleted.
+        EquipmentHandler.remove clears the slot, saves, republishes to the 3D
+        client and refreshes the combat profile; deleting the object out from
+        under a live slot would leave the handler naming a destroyed row and
+        the equipment pane drawing it.
+
+        Staff items are skipped and counted, not silently passed over. A
+        moderator who expected an empty bag and got one item needs to be told
+        which rule kept it.
+
+    Notes/References:
+        The only irreversible thing on the tool. Everything else it does can
+        be undone by doing something else; a deleted item is gone.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    equipment = target.equipment
+    carried_removed = 0
+    equipped_removed = 0
+    kept = 0
+
+    for item in list(equipment.all()):
+        if _is_staff_item(item):
+            kept += 1
+            continue
+
+        equipment.remove(item)
+        item.delete()
+        equipped_removed += 1
+
+    for _slot, item in target.inventory.all_items():
+        if _is_staff_item(item):
+            kept += 1
+            continue
+
+        item.delete()
+        carried_removed += 1
+
+    target.inventory.sync()
+    total = carried_removed + equipped_removed
+
+    if total < 1:
+        return False, dev_constants.MSG_CLEAR_NOTHING.format(target=target.key)
+
+    _audit(actor, dev_constants.ACTION_CLEAR, target,
+           f"{carried_removed} carried, {equipped_removed} equipped, {kept} kept")
+    message = dev_constants.MSG_CLEAR_DONE.format(
+        carried=carried_removed,
+        equipped=equipped_removed,
+        target=target.key,
+    )
+
+    if kept > 0:
+        message = f"{message}\n{dev_constants.MSG_CLEAR_KEPT.format(kept=kept)}"
+
+    return True, message
+
+
 # ─── Teleport ────────────────────────────────────────────────────────────────
 
 def map_zcoords() -> list:
@@ -535,6 +782,91 @@ def teleport_to_map(actor, target, zcoord: str) -> tuple:
     if room is None:
         return False, dev_constants.MSG_TELEPORT_NO_ROOM.format(zcoord=zcoord)
 
+    succeeded, message = _move_to_room(actor, target, room, zcoord)
+
+    return succeeded, message
+
+
+def teleport_to_character(actor, target, other) -> tuple:
+    """
+    Purpose: Move a character to wherever another character is standing.
+
+    Entry:
+        actor is the moderator. target is the Character to move. other is the
+        Character whose room is the destination. The three may overlap in any
+        combination -- "bring them to me" passes actor as `other`, and "go to
+        them" passes actor as `target`.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means the destination character
+        is nowhere, or the move was refused.
+
+    Module Globals:
+        dev_constants.MSG_TELEPORT_NO_DESTINATION, MSG_TELEPORT_ALREADY_THERE
+        read.
+
+    Methodology:
+        Both directions a moderator wants are this one function with the
+        arguments swapped, so there is one move path and one set of failure
+        modes rather than a `bring_here` that drifts away from a `go_to`.
+
+        Landing in the same room is reported and skipped rather than performed.
+        A no-op move still fires the room's at_object_receive and would
+        announce an arrival to everyone present, which is a confusing thing to
+        broadcast about someone who never left.
+
+    Notes/References:
+        A logged-out character has no location; that is normal, not an error,
+        and it is the common case for "teleport to <name>" typed from memory.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    room = getattr(other, "location", None)
+
+    if room is None:
+        return False, dev_constants.MSG_TELEPORT_NO_DESTINATION.format(
+            other=other.key)
+
+    if target.location is room:
+        return False, dev_constants.MSG_TELEPORT_ALREADY_THERE.format(
+            target=target.key, room=room.key)
+
+    succeeded, message = _move_to_room(actor, target, room, other.key)
+
+    return succeeded, message
+
+
+def _move_to_room(actor, target, room, detail: str) -> tuple:
+    """
+    Purpose: Perform one teleport and report it, whatever chose the room.
+
+    Entry:
+        actor is the moderator. target is the Character to move. room is a
+        resolved destination. detail names what the moderator asked for, for
+        the audit line -- a map name, or a character's key.
+
+    Exit/Returns:
+        Returns (succeeded, message).
+
+    Module Globals:
+        dev_constants.MSG_TELEPORT_FAILED, MSG_TELEPORT_ARRIVAL,
+        MSG_TELEPORT_DONE read.
+
+    Methodology:
+        The move is quiet and the arrival is announced to the target alone.
+        Default move messaging would tell the destination room that someone
+        "arrives from the north", which is false -- there is no direction a
+        teleport comes from. Character.respawn makes the same choice.
+
+    Notes/References:
+        Shared by teleport_to_map and teleport_to_character. Everything that
+        differs between them is the choosing of `room`, and everything that is
+        the same is here.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
     try:
         target.move_to(room, quiet=True, move_type="teleport")
     except Exception as exc:
@@ -543,7 +875,7 @@ def teleport_to_map(actor, target, zcoord: str) -> tuple:
         return False, dev_constants.MSG_TELEPORT_FAILED.format(room=room.key)
 
     target.msg(dev_constants.MSG_TELEPORT_ARRIVAL)
-    _audit(actor, dev_constants.ACTION_TELEPORT, target, f"{zcoord} -> {room.key}")
+    _audit(actor, dev_constants.ACTION_TELEPORT, target, f"{detail} -> {room.key}")
     message = dev_constants.MSG_TELEPORT_DONE.format(target=target.key, room=room.key)
 
     return True, message
@@ -656,6 +988,279 @@ def set_skill_level(actor, target, skill_key: str, level: int) -> tuple:
         skill_key=skill_key,
         level=stored,
     )
+
+    return True, message
+
+
+# ─── Quests ──────────────────────────────────────────────────────────────────
+
+def quest_keys() -> list:
+    """
+    Purpose: Name every quest the tool can act on, in a stable order.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a sorted list of GLOBAL_QUEST_REGISTRY keys.
+
+    Module Globals:
+        GLOBAL_QUEST_REGISTRY read.
+
+    Notes/References:
+        An EMPTY list here is a real signal, not an empty screen to shrug at:
+        it means every content module failed to import inside the loader's
+        `except`, which is the state the game shipped in until 08/25/2026 and
+        whose only in-play symptom was a quest that could not be accepted. The
+        menu says so rather than drawing nothing.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    keys = sorted(GLOBAL_QUEST_REGISTRY.keys())
+
+    return keys
+
+
+def quest_step_keys(quest_key: str) -> list:
+    """
+    Purpose: Name the steps of one quest, in blueprint order.
+
+    Entry:
+        quest_key names a quest in the registry.
+
+    Exit/Returns:
+        Returns the ordered step keys, or an empty list for an unknown quest.
+
+    Module Globals:
+        GLOBAL_QUEST_REGISTRY read.
+
+    Notes/References:
+        Ordered, never sorted. A quest's steps are a sequence, and presenting
+        them alphabetically would make "jump back one step" a puzzle.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
+
+    if blueprint is None:
+        return []
+
+    return list(blueprint.step_keys)
+
+
+def quest_title(quest_key: str) -> str:
+    """Give a quest's display title, falling back to its key."""
+    blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
+    title = getattr(blueprint, "title", None)
+
+    return title or quest_key
+
+
+def accept_quest(actor, target, quest_key: str) -> tuple:
+    """
+    Purpose: Start a quest on a character's behalf.
+
+    Entry:
+        actor is the moderator. target is the Character. quest_key names a
+        quest in the registry.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means an unknown quest, or one
+        the character cannot currently take.
+
+    Module Globals:
+        GLOBAL_QUEST_REGISTRY read. dev_constants MSG_QUEST_* read.
+
+    Methodology:
+        Routes through QuestHandler.accept_quest, so the opening step's
+        on_enter fires and the progress dict is seeded exactly as it would be
+        from the android's dialogue. A moderator-started quest must be
+        indistinguishable from a player-started one, or it tests nothing.
+
+    Notes/References:
+        accept_quest returns a bare bool and messages the TARGET on an unknown
+        key. The registry check here is what lets the MODERATOR see the
+        refusal too -- otherwise the only person told is the person who did
+        not do anything.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    known = quest_key in GLOBAL_QUEST_REGISTRY
+
+    if not known:
+        return False, dev_constants.MSG_QUEST_UNKNOWN.format(quest_key=quest_key)
+
+    started = target.quests.accept_quest(quest_key)
+
+    if not started:
+        return False, dev_constants.MSG_QUEST_UNAVAILABLE.format(
+            target=target.key, quest_key=quest_key)
+
+    _audit(actor, dev_constants.ACTION_QUEST, target, f"accept {quest_key}")
+    message = dev_constants.MSG_QUEST_ACCEPTED.format(
+        target=target.key, quest_key=quest_key)
+
+    return True, message
+
+
+def abandon_quest(actor, target, quest_key: str) -> tuple:
+    """
+    Purpose: Drop a character's in-progress quest, keeping any completion
+        record.
+
+    Entry:
+        actor is the moderator. target is the Character. quest_key names an
+        active quest.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means the quest is not active.
+
+    Module Globals:
+        dev_constants.MSG_QUEST_NOT_ACTIVE, MSG_QUEST_ABANDONED read.
+
+    Notes/References:
+        This is NOT reset. Abandoning leaves a completion record standing, so
+        a finished quest stays finished and cannot be taken again. The message
+        says so, because the two sit one keystroke apart on the menu.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    dropped = target.quests.abandon_quest(quest_key)
+
+    if not dropped:
+        return False, dev_constants.MSG_QUEST_NOT_ACTIVE.format(
+            target=target.key, quest_key=quest_key)
+
+    _audit(actor, dev_constants.ACTION_QUEST, target, f"abandon {quest_key}")
+    message = dev_constants.MSG_QUEST_ABANDONED.format(
+        target=target.key, quest_key=quest_key)
+
+    return True, message
+
+
+def complete_quest(actor, target, quest_key: str) -> tuple:
+    """
+    Purpose: Finish a quest outright, paying its rewards.
+
+    Entry:
+        actor is the moderator. target is the Character. quest_key names a
+        quest in the registry; it need not be active.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means an unknown quest or one
+        already complete.
+
+    Module Globals:
+        GLOBAL_QUEST_REGISTRY read. dev_constants MSG_QUEST_* read.
+
+    Methodology:
+        Rewards DO pay out -- see QuestHandler.force_complete_quest. Exercising
+        the reward callback is the main reason to force a completion, so a
+        version that skipped it would skip the one part not otherwise
+        reachable without playing the whole quest.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    known = quest_key in GLOBAL_QUEST_REGISTRY
+
+    if not known:
+        return False, dev_constants.MSG_QUEST_UNKNOWN.format(quest_key=quest_key)
+
+    completed = target.quests.force_complete_quest(quest_key)
+
+    if not completed:
+        return False, dev_constants.MSG_QUEST_ALREADY_COMPLETE.format(
+            target=target.key, quest_key=quest_key)
+
+    _audit(actor, dev_constants.ACTION_QUEST, target, f"complete {quest_key}")
+    message = dev_constants.MSG_QUEST_COMPLETED.format(
+        target=target.key, quest_key=quest_key)
+
+    return True, message
+
+
+def reset_quest(actor, target, quest_key: str) -> tuple:
+    """
+    Purpose: Return a quest to not-started, from active or complete.
+
+    Entry:
+        actor is the moderator. target is the Character. quest_key names a
+        quest the character has some record of.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means the character had no
+        record of it either way.
+
+    Module Globals:
+        dev_constants.MSG_QUEST_NOTHING_TO_RESET, MSG_QUEST_RESET read.
+
+    Notes/References:
+        The one operation that makes a finished quest takeable again, which is
+        what a tester replaying content actually needs. Rewards already paid
+        are not clawed back.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    cleared = target.quests.reset_quest(quest_key)
+
+    if not cleared:
+        return False, dev_constants.MSG_QUEST_NOTHING_TO_RESET.format(
+            target=target.key, quest_key=quest_key)
+
+    _audit(actor, dev_constants.ACTION_QUEST, target, f"reset {quest_key}")
+    message = dev_constants.MSG_QUEST_RESET.format(
+        target=target.key, quest_key=quest_key)
+
+    return True, message
+
+
+def set_quest_step(actor, target, quest_key: str, step_key: str) -> tuple:
+    """
+    Purpose: Move an active quest to a named step, forward or back.
+
+    Entry:
+        actor is the moderator. target is the Character. quest_key names an
+        active quest; step_key names one of its steps.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means the quest is not active,
+        or the blueprint has no such step.
+
+    Module Globals:
+        dev_constants MSG_QUEST_NOT_ACTIVE, MSG_QUEST_UNKNOWN_STEP,
+        MSG_QUEST_STEP_SET read.
+
+    Methodology:
+        The handler returns one bool for two different refusals, so the two
+        are separated HERE by asking which precondition actually failed. A
+        moderator told "that did not work" about a quest they can see is
+        active will retype it rather than look at the step name.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    active = target.quests.is_active(quest_key)
+
+    if not active:
+        return False, dev_constants.MSG_QUEST_NOT_ACTIVE.format(
+            target=target.key, quest_key=quest_key)
+
+    moved = target.quests.force_step(quest_key, step_key)
+
+    if not moved:
+        return False, dev_constants.MSG_QUEST_UNKNOWN_STEP.format(
+            quest_key=quest_key, step_key=step_key)
+
+    _audit(actor, dev_constants.ACTION_QUEST, target,
+           f"step {quest_key} -> {step_key}")
+    message = dev_constants.MSG_QUEST_STEP_SET.format(
+        target=target.key, quest_key=quest_key, step_key=step_key)
 
     return True, message
 

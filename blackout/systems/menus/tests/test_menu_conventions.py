@@ -42,7 +42,7 @@ MENU_MODULE_PATHS = (
     "systems.menus.equipment_menu",
     "systems.menus.skills_menu",
     "systems.menus.summary_menu",
-    "systems.menus.npc_dialogues.npc_oasis_guide",
+    "systems.menus.npc_dialogues.npc_oasis_lone_android",
     "systems.menus.npc_dialogues.npc_shopkeep",
 )
 

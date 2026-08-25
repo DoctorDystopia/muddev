@@ -13,6 +13,8 @@ Description: Moderator tooling -- the effects a superuser or Admin may apply
                              templates. Imports systems/ui/colors.py only.
                actions.py    the effects. Imports constants, and whatever
                              system it is reaching into.
+               dossier.py    the read-only report. Changes nothing, which is
+                             why it is not in actions.py.
                (menu)        systems/menus/dev_egg_menu.py -- presentation
                              only, and NOT part of this package.
 

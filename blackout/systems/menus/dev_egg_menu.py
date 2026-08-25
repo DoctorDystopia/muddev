@@ -22,7 +22,9 @@ from typing import Callable
 
 from systems.devtools import actions as dev_actions
 from systems.devtools import constants as dev_constants
+from systems.devtools import dossier as dev_dossier
 from systems.menus.base_menu import back_option, cancel_option, parse_quantity
+from systems.menus.constants import CONFIRM_YES_KEYS
 from systems.progression.skills import constants as skill_constants
 from systems.ui.colors import (
     ERROR_COLOR,
@@ -60,6 +62,8 @@ _TARGET_LINE = f"Target: {HIGHLIGHT_COLOR}{{target}}{RESET_COLOR}"
 _GODMODE_LINE = "God mode: {state}"
 
 _PROMPT_SPAWN = "How many {item_key}? (1-{maximum})"
+_PROMPT_NPC = "How many {npc_key}? (1-{maximum}) They spawn live and hostile."
+_PROMPT_TELEPORT_PLAYER = "Send {target} to which character?"
 _PROMPT_XP = "How much XP for {skill_key}? (1-{maximum})"
 _PROMPT_LEVEL = "What level for {skill_key}? ({minimum}-{maximum})"
 _PROMPT_ACCOUNT = "Account name, optionally 'name : reason':"
@@ -68,6 +72,33 @@ _PROMPT_TARGET = "Whose character? (a name, or blank for yourself)"
 _BAD_NUMBER = "Enter a whole number between {minimum} and {maximum}."
 
 _BACK_TO_EGG = "Back to the egg"
+
+# Quest screens.
+_QUEST_LIST_ROW = "{quest_key}  ({status})"
+_QUEST_DETAIL_TITLE = f"{TITLE_COLOR}{{title}}{RESET_COLOR}"
+_QUEST_DETAIL_STATUS = f"Status: {HIGHLIGHT_COLOR}{{status}}{RESET_COLOR}"
+_QUEST_DETAIL_STEP = f"Step:   {HIGHLIGHT_COLOR}{{step_key}}{RESET_COLOR}"
+_NO_STEP = "-"
+_CURRENT_STEP_MARK = f"{HIGHLIGHT_COLOR}(current){RESET_COLOR}"
+_NO_QUESTS = (
+    "The quest registry is empty. That is either a game with no quests or "
+    "every content module failing to import inside the loader -- check "
+    "GLOBAL_QUEST_REGISTRY.load_errors."
+)
+_UNKNOWN_QUEST_OPERATION = "That quest operation does not exist."
+
+# Shown when the target is in no room at all -- a logged-out character, or one
+# mid-move. Rare, but every screen that names a destination has to say
+# something when there is not one.
+_NOWHERE = "nowhere"
+
+# The confirmation. Counts what is about to be destroyed rather than asking
+# "are you sure": a moderator who reads the numbers and the name catches a
+# wrong target, one who reads "are you sure?" confirms it.
+_CLEAR_WARNING = (
+    "This DESTROYS {carried} carried and {equipped} equipped items belonging "
+    "to {target}. It cannot be undone. Staff items are left alone."
+)
 
 
 
@@ -277,6 +308,84 @@ def _handle_account(caller, raw_string: str, kwargs: dict) -> tuple:
     return succeeded, message
 
 
+def _handle_npc(caller, raw_string: str, kwargs: dict) -> tuple:
+    """Parse an NPC count, then spawn them into the target's room."""
+    maximum = dev_constants.MAX_NPC_SPAWN
+    count, parse_error = parse_quantity(raw_string, maximum)
+
+    if parse_error is not None:
+        return False, parse_error
+
+    npc_key = kwargs.get("npc_key", "")
+    target = _target(caller)
+    succeeded, message = dev_actions.spawn_npc(caller, target, npc_key, count)
+
+    return succeeded, message
+
+
+def _handle_teleport_player(caller, raw_string: str, kwargs: dict) -> tuple:
+    """Resolve a named character, then send the target to their room."""
+    other, error = _resolve_character(caller, raw_string)
+
+    if other is None:
+        return False, error
+
+    target = _target(caller)
+    succeeded, message = dev_actions.teleport_to_character(caller, target, other)
+
+    return succeeded, message
+
+
+def _resolve_character(caller, typed: str) -> tuple:
+    """
+    Purpose: Turn a typed name into a Character, or explain why not.
+
+    Entry:
+        caller is the moderator, whose `search` does the matching. typed is
+        whatever they entered.
+
+    Exit/Returns:
+        Returns (character, error_message). Exactly one is non-None.
+
+    Module Globals:
+        dev_constants.MSG_NO_TARGET read.
+
+    Methodology:
+        The match must have progression and combat state on it -- `skills` is
+        the cheapest thing only a Character has. Without that check, `search`
+        happily returns the sword lying on the floor, and the next action aims
+        at it.
+
+    Notes/References:
+        Shared by the target picker and the teleport-to-player prompt. They
+        ask the same question, and a second copy of the Character test is a
+        second place for it to be wrong.
+
+        caller.search messages the caller itself on a miss, so the error
+        returned here is a second line rather than the only one. That is
+        deliberate: the prompt has to redraw with SOMETHING in its error slot.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    cleaned = (typed or "").strip()
+
+    if not cleaned:
+        return None, dev_constants.MSG_NO_TARGET
+
+    found = caller.search(cleaned, global_search=True)
+
+    if found is None:
+        return None, dev_constants.MSG_NO_TARGET
+
+    is_character = hasattr(found, "skills")
+
+    if not is_character:
+        return None, dev_constants.MSG_NO_TARGET
+
+    return found, None
+
+
 def _handle_target(caller, raw_string: str, kwargs: dict) -> tuple:
     """
     Purpose: Point the menu at another character.
@@ -292,12 +401,9 @@ def _handle_target(caller, raw_string: str, kwargs: dict) -> tuple:
 
     Methodology:
         A blank entry resets to the caller rather than erroring, so backing
-        out of a mis-aimed action is one keystroke.
-
-        The match must be something with progression and combat state on it --
-        `skills` is the cheapest thing only a Character has. Without that
-        check, `search` happily returns the sword lying on the floor, and the
-        next spawn aims at it.
+        out of a mis-aimed action is one keystroke. That is why this cannot
+        just call _resolve_character and be done: a blank name means something
+        HERE and means nothing at a teleport prompt.
 
     Author: Nick Hobar
     Creation date: 08/25/2026
@@ -309,15 +415,10 @@ def _handle_target(caller, raw_string: str, kwargs: dict) -> tuple:
 
         return True, _TARGET_LINE.format(target=caller.key)
 
-    found = caller.search(typed, global_search=True)
+    found, error = _resolve_character(caller, typed)
 
     if found is None:
-        return False, dev_constants.MSG_NO_TARGET
-
-    is_character = hasattr(found, "skills")
-
-    if not is_character:
-        return False, dev_constants.MSG_NO_TARGET
+        return False, error
 
     _set_target(caller, found)
 
@@ -341,10 +442,41 @@ class _Prompt:
     back_node: str = "start"
 
 
+# The five quest writes, as data. One goto callable dispatches through this
+# rather than five near-identical callables differing only in which action they
+# call -- which is the shape the fourth copy always drifts out of.
+#
+# The label is here beside the function on purpose: "Abandon" and "Reset" are
+# distinguishable only by what they do to the completion record, and a table
+# that pairs each verb with the sentence explaining it is one edit, not two.
+_QUEST_OPERATION_ACCEPT = "accept"
+_QUEST_OPERATION_ABANDON = "abandon"
+_QUEST_OPERATION_COMPLETE = "complete"
+_QUEST_OPERATION_RESET = "reset"
+
+_QUEST_OPERATIONS = {
+    _QUEST_OPERATION_ACCEPT: dev_actions.accept_quest,
+    _QUEST_OPERATION_ABANDON: dev_actions.abandon_quest,
+    _QUEST_OPERATION_COMPLETE: dev_actions.complete_quest,
+    _QUEST_OPERATION_RESET: dev_actions.reset_quest,
+}
+
+_QUEST_OPERATION_LABELS = (
+    (_QUEST_OPERATION_ACCEPT, "Accept (starts it properly, fires step 1)"),
+    (_QUEST_OPERATION_ABANDON, "Abandon (drops progress, keeps completion)"),
+    (_QUEST_OPERATION_COMPLETE, "Complete (pays rewards)"),
+    (_QUEST_OPERATION_RESET, "Reset (clears both, makes it takeable again)"),
+)
+
+
 # Bound after the handlers above, which they name.
 _PROMPT_TABLE = {
     "node_spawn_qty": _Prompt(node="node_spawn_qty", handler=_handle_spawn,
                               back_node="node_spawn"),
+    "node_npc_qty": _Prompt(node="node_npc_qty", handler=_handle_npc,
+                            back_node="node_npc"),
+    "node_teleport_player": _Prompt(node="node_teleport_player",
+                                    handler=_handle_teleport_player),
     "node_xp_amount": _Prompt(node="node_xp_amount", handler=_handle_xp,
                               back_node="node_xp_skill"),
     "node_level_value": _Prompt(node="node_level_value", handler=_handle_level,
@@ -486,17 +618,56 @@ def start(caller, **kwargs):
 
     text = "\n".join(lines)
     options = (
+        {"desc": "Inspect (full dossier)", "goto": "node_inspect"},
         {"desc": "Spawn an item", "goto": "node_spawn"},
+        {"desc": "Spawn an NPC (into the target's room)", "goto": "node_npc"},
         {"desc": "Toggle god mode", "goto": _goto_godmode},
         {"desc": "Restore (full HP, out of combat)", "goto": _goto_restore},
+        {"desc": "Empty inventory (destroys carried AND equipped)",
+         "goto": "node_clear_confirm"},
         {"desc": "Teleport to a map", "goto": "node_teleport"},
+        {"desc": "Teleport to a player", "goto": "node_teleport_player"},
+        {"desc": "Bring target to me", "goto": _goto_bring_here},
         {"desc": "Grant XP", "goto": "node_xp_skill"},
         {"desc": "Set a skill level", "goto": "node_level_skill"},
+        {"desc": "Quests", "goto": "node_quest"},
         {"desc": "Boot or ban an account", "goto": "node_account"},
         {"desc": "Change target", "goto": "node_target"},
     )
 
     return text, options
+
+
+def node_inspect(caller, **kwargs):
+    """
+    Purpose: Show the target's full dossier plus the staff addendum.
+
+    Entry:
+        caller is the moderator's Character.
+
+    Exit/Returns:
+        Returns the (text, options) tuple EvMenu renders.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The report IS the node text, not a msg() before it. A screen this long
+        printed as a message would be redrawn off the top by the node EvMenu
+        renders next; as node text it stays put until the moderator leaves it.
+
+    Notes/References:
+        Read-only, and the only node here that is. It still audits -- see
+        dossier.render_report.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    target = _target(caller)
+    report = dev_dossier.render_report(caller, target)
+    options = (back_option(_BACK_TO_EGG, "start"),)
+
+    return report, options
 
 
 def node_target(caller, raw_string="", **kwargs):
@@ -528,6 +699,77 @@ def node_spawn_qty(caller, raw_string="", **kwargs):
     return rendered
 
 
+def node_npc(caller, **kwargs):
+    """List every NPC in NPC_DB, to spawn into the target's room."""
+    keys = dev_actions.npc_keys()
+    room = _target(caller).location
+    room_name = room.key if room is not None else _NOWHERE
+    text = f"{_HEADING}\n\nSpawn which NPC into {room_name}?"
+    options = _key_options(keys, "node_npc_qty", "npc_key")
+    options.append(back_option(_BACK_TO_EGG, "start"))
+
+    return text, tuple(options)
+
+
+def node_npc_qty(caller, raw_string="", **kwargs):
+    """Ask how many of the chosen NPC to spawn."""
+    prompt_text = _PROMPT_NPC.format(
+        npc_key=kwargs.get("npc_key", ""),
+        maximum=dev_constants.MAX_NPC_SPAWN,
+    )
+    rendered = _typed_node(caller, raw_string, prompt_text, "node_npc_qty", **kwargs)
+
+    return rendered
+
+
+def node_clear_confirm(caller, **kwargs):
+    """
+    Purpose: Require an explicit yes before destroying a character's things.
+
+    Entry:
+        caller is the moderator's Character.
+
+    Exit/Returns:
+        Returns the (text, options) tuple EvMenu renders.
+
+    Module Globals:
+        _CLEAR_WARNING read, CONFIRM_YES_KEYS read.
+
+    Methodology:
+        The ONLY confirmation on the egg, because this is the only entry that
+        cannot be undone by doing something else. A spawn can be cleared and a
+        level can be set back; a deleted item is gone.
+
+        The warning counts what is actually about to be destroyed rather than
+        saying "are you sure". A moderator who reads "destroy 31 carried and 4
+        equipped items from Bob" catches a wrong target; one who reads "are
+        you sure?" confirms it.
+
+    Notes/References:
+        Bound to the shared yes key rather than left auto-numbered, so
+        confirming is never the digit that meant something else on the last
+        screen. See systems/menus/constants.py.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    target = _target(caller)
+    carried = target.inventory.count_used()
+    equipped = target.equipment.count_equipped()
+    warning = _CLEAR_WARNING.format(
+        target=target.key,
+        carried=carried,
+        equipped=equipped,
+    )
+    text = f"{_HEADING}\n\n{ERROR_COLOR}{warning}{RESET_COLOR}"
+    options = (
+        {"key": CONFIRM_YES_KEYS, "desc": "Yes, destroy them", "goto": _goto_clear},
+        cancel_option("start"),
+    )
+
+    return text, options
+
+
 def node_teleport(caller, **kwargs):
     """List every map the manifest names."""
     zcoords = dev_actions.map_zcoords()
@@ -536,6 +778,19 @@ def node_teleport(caller, **kwargs):
     options.append(back_option(_BACK_TO_EGG, "start"))
 
     return text, tuple(options)
+
+
+def node_teleport_player(caller, raw_string="", **kwargs):
+    """Ask which character to send the target to."""
+    rendered = _typed_node(
+        caller,
+        raw_string,
+        _PROMPT_TELEPORT_PLAYER.format(target=_target(caller).key),
+        "node_teleport_player",
+        **kwargs,
+    )
+
+    return rendered
 
 
 def node_xp_skill(caller, **kwargs):
@@ -579,6 +834,176 @@ def node_level_value(caller, raw_string="", **kwargs):
     rendered = _typed_node(caller, raw_string, prompt_text, "node_level_value", **kwargs)
 
     return rendered
+
+
+def node_quest(caller, **kwargs):
+    """
+    Purpose: List every quest in the registry with the target's standing on it.
+
+    Entry:
+        caller is the moderator's Character.
+
+    Exit/Returns:
+        Returns the (text, options) tuple EvMenu renders.
+
+    Module Globals:
+        _QUEST_LIST_ROW, _NO_QUESTS read.
+
+    Methodology:
+        The STATUS goes in the option label, not one screen deeper. Choosing
+        which quest to reset means knowing which are already complete, and a
+        list that makes you open all six to find out is a list you stop using.
+
+    Notes/References:
+        An empty registry gets a message naming what it means. The loader
+        swallows a content module's ImportError, so "no quests" and "every
+        quest failed to load" look identical from here -- and the second is
+        the state the game actually shipped in until 08/25/2026.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    target = _target(caller)
+    keys = dev_actions.quest_keys()
+
+    if not keys:
+        text = f"{_HEADING}\n\n{ERROR_COLOR}{_NO_QUESTS}{RESET_COLOR}"
+
+        return text, (back_option(_BACK_TO_EGG, "start"),)
+
+    text = f"{_HEADING}\n\nWhich quest, for {target.key}?"
+    options = []
+
+    for quest_key in keys:
+        label = _QUEST_LIST_ROW.format(
+            quest_key=quest_key,
+            status=target.quests.status(quest_key),
+        )
+        options.append({
+            "desc": label,
+            "goto": ("node_quest_detail", {"quest_key": quest_key}),
+        })
+
+    options.append(back_option(_BACK_TO_EGG, "start"))
+
+    return text, tuple(options)
+
+
+def node_quest_detail(caller, **kwargs):
+    """
+    Purpose: Show one quest's state on the target, and offer every write.
+
+    Entry:
+        caller is the moderator's Character. kwargs carries quest_key.
+
+    Exit/Returns:
+        Returns the (text, options) tuple EvMenu renders.
+
+    Module Globals:
+        _QUEST_OPERATIONS, _QUEST_DETAIL_* read.
+
+    Methodology:
+        Every option is offered whether or not it currently applies. The
+        effects each refuse with a message naming the precondition that
+        failed, and a screen that hides "Abandon" on an inactive quest teaches
+        nothing about why -- while a refusal that says "not active, accept it
+        first" teaches exactly that.
+
+        Abandon and Reset are labelled with what they do to the COMPLETION
+        RECORD, because that is the entire difference between them and the
+        one thing a moderator picking between them needs to know.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    target = _target(caller)
+    quest_key = kwargs.get("quest_key", "")
+    handler = target.quests
+    step_key = handler.current_step_key(quest_key)
+
+    lines = [
+        _HEADING,
+        "",
+        _QUEST_DETAIL_TITLE.format(title=dev_actions.quest_title(quest_key)),
+        _QUEST_DETAIL_STATUS.format(status=handler.status(quest_key)),
+        _QUEST_DETAIL_STEP.format(step_key=step_key or _NO_STEP),
+    ]
+
+    for line in handler.objective_lines(quest_key):
+        lines.append(f"  {line}")
+
+    # Carried here by _goto_quest_op and _goto_quest_step. Printed as node
+    # text rather than msg()-ed, so it sits above the status it just changed
+    # instead of scrolling off behind the redraw.
+    outcome = kwargs.get("result", "")
+
+    if outcome:
+        lines.append("")
+        lines.append(outcome)
+
+    text = "\n".join(lines)
+    options = []
+
+    for operation, label in _QUEST_OPERATION_LABELS:
+        options.append({
+            "desc": label,
+            "goto": (_goto_quest_op, {"quest_key": quest_key, "operation": operation}),
+        })
+
+    options.append({
+        "desc": "Jump to a step",
+        "goto": ("node_quest_step", {"quest_key": quest_key}),
+    })
+    options.append(back_option("Back to the quest list", "node_quest"))
+
+    return text, tuple(options)
+
+
+def node_quest_step(caller, **kwargs):
+    """
+    Purpose: List one quest's steps, in blueprint order, to jump to.
+
+    Entry:
+        caller is the moderator's Character. kwargs carries quest_key.
+
+    Exit/Returns:
+        Returns the (text, options) tuple EvMenu renders.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Ordered, never sorted -- a quest's steps are a sequence, and an
+        alphabetical list makes "back up one step" a puzzle. The current step
+        is marked, so jumping back is a matter of counting upward from a
+        visible position rather than remembering one.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    target = _target(caller)
+    quest_key = kwargs.get("quest_key", "")
+    step_keys = dev_actions.quest_step_keys(quest_key)
+    current = target.quests.current_step_key(quest_key)
+
+    text = f"{_HEADING}\n\nJump {target.key} to which step of '{quest_key}'?"
+    options = []
+
+    for step_key in step_keys:
+        label = step_key
+
+        if step_key == current:
+            label = f"{step_key} {_CURRENT_STEP_MARK}"
+
+        options.append({
+            "desc": label,
+            "goto": (_goto_quest_step, {"quest_key": quest_key, "step_key": step_key}),
+        })
+
+    options.append(back_option("Back to the quest", ("node_quest_detail",
+                                                    {"quest_key": quest_key})))
+
+    return text, tuple(options)
 
 
 def node_account(caller, **kwargs):
@@ -674,6 +1099,29 @@ def _goto_restore(caller, raw_string, **kwargs) -> str:
     return "start"
 
 
+def _goto_bring_here(caller, raw_string, **kwargs) -> str:
+    """Pull the target into the moderator's own room.
+
+    The same action teleport-to-player runs, with the arguments swapped: the
+    moderator IS the destination. Worth its own root option rather than making
+    someone select themselves as a destination they are already standing in.
+    """
+    target = _target(caller)
+    _succeeded, message = dev_actions.teleport_to_character(caller, target, caller)
+    _report(caller, message)
+
+    return "start"
+
+
+def _goto_clear(caller, raw_string, **kwargs) -> str:
+    """Destroy the target's belongings, after the confirmation node."""
+    target = _target(caller)
+    _succeeded, message = dev_actions.clear_inventory(caller, target)
+    _report(caller, message)
+
+    return "start"
+
+
 def _goto_teleport(caller, raw_string, **kwargs) -> str:
     """Move the target to the chosen map and return to the root."""
     target = _target(caller)
@@ -682,3 +1130,61 @@ def _goto_teleport(caller, raw_string, **kwargs) -> str:
     _report(caller, message)
 
     return "start"
+
+
+def _goto_quest_op(caller, raw_string, **kwargs):
+    """
+    Purpose: Apply one of the four whole-quest writes, then redraw the quest.
+
+    Entry:
+        kwargs carries quest_key and operation, the latter a key of
+        _QUEST_OPERATIONS.
+
+    Exit/Returns:
+        Returns (node name, kwargs) -- the form EvMenu accepts from a goto
+        callable that needs to carry state onward. Landing back on the quest's
+        own screen rather than the root is what makes "accept, then jump to
+        step three" two keystrokes instead of six.
+
+    Module Globals:
+        _QUEST_OPERATIONS read.
+
+    Methodology:
+        The outcome travels forward in kwargs and is printed by the node it
+        lands on, not msg()-ed here and not stashed in _report. _report is
+        `start`'s channel, and a quest write that returns to the quest screen
+        would leave its line sitting there until the moderator happened to
+        visit the root -- reporting a completion three actions after it
+        happened.
+
+    Notes/References:
+        An unknown operation cannot happen from the menu, whose options come
+        from the same table. It is still handled, because a goto callable that
+        raises leaves the player in a menu that will not move.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    quest_key = kwargs.get("quest_key", "")
+    operation = kwargs.get("operation", "")
+    action = _QUEST_OPERATIONS.get(operation)
+
+    if action is None:
+        _report(caller, f"{ERROR_COLOR}{_UNKNOWN_QUEST_OPERATION}{RESET_COLOR}")
+
+        return "start"
+
+    target = _target(caller)
+    _succeeded, message = action(caller, target, quest_key)
+
+    return "node_quest_detail", {"quest_key": quest_key, "result": message}
+
+
+def _goto_quest_step(caller, raw_string, **kwargs):
+    """Move the target to the chosen step and redraw the quest screen."""
+    quest_key = kwargs.get("quest_key", "")
+    step_key = kwargs.get("step_key", "")
+    target = _target(caller)
+    _succeeded, message = dev_actions.set_quest_step(caller, target, quest_key, step_key)
+
+    return "node_quest_detail", {"quest_key": quest_key, "result": message}
