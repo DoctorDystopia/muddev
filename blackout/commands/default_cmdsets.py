@@ -14,14 +14,19 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 
 """
 
+# from blackout.commands.sittables import CmdSetSit2
 from evennia import default_cmds
 from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
 from commands.cleanup_cmds import CleanupCmdSet
 from commands.combat_cmds import CombatCmdSet
+from commands.drop_cmds import DropCmdSet
 from commands.equipment_cmds import EquipmentCmdSet
+from commands.get_cmds import GetCmdSet
 from commands.inventory_cmds import InventoryCmdSet
+from commands.movement_cmds import MovementCmdSet
 from commands.progression_cmds import ProgressionCmdSet
+from commands.quest_cmds import QuestCmdSet
 
 
 class CharacterCmdSet(default_cmds.CharacterCmdSet):
@@ -42,12 +47,20 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         # any commands you add below will overload the default ones.
         #
         self.add(ProgressionCmdSet())
+        self.add(QuestCmdSet())
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())
+        self.add(GetCmdSet())
+        self.add(DropCmdSet())
         self.add(XYZGridCmdSet())
+        # After XYZGridCmdSet, so BlackoutGotoCmd overloads the contrib's
+        # CmdGoto rather than being overloaded by it.
+        self.add(MovementCmdSet())
         self.add(CleanupCmdSet())
 
         self.add(CombatCmdSet())
+
+        # self.add(CmdSetSit2())
 
 
 class AccountCmdSet(default_cmds.AccountCmdSet):

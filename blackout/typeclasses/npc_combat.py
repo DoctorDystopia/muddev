@@ -11,60 +11,12 @@ from evennia.utils import logger
 from evennia.utils.utils import lazy_property
 
 from systems.combat import constants as combat_constants
+from systems.progression.skills.constants import COMBAT_SKILL_KEYS
+from systems.progression.skills.stat_block import StatBlockSkills
 from typeclasses.mixins import CombatEntity
 from typeclasses.objects import ObjectParent
 
 from .spawners import register_spawner
-
-
-class _NpcSkillsShim:
-    """Minimal read-only `skills` facade for HostileNPC.
-
-    The OSRS combat math (combat_calc.effective_level, etc.) is fed by
-    `entity.skills.get_level(skill_key)`. Characters have a real
-    SkillHandler backed by `db.skills`. NPCs in this batch are *not*
-    skill-tracked (no XP gain, no levelling) — they use a flat
-    `combat_stats` dict that the spawner stamps once.
-
-    Rather than installing a full SkillHandler (which would allocate the
-    full skill registry per NPC), this shim translates `get_level` calls
-    into reads against the NPC's flat `combat_stats`:
-
-        strike   -> combat_stats["strike_level"]
-        brawn    -> combat_stats["brawn_level"]
-        defense  -> combat_stats["defense_level"]
-        <other>  -> 1   (best-effort floor; matches the previous fallback
-                          branch in ActionAttack.resolve)
-
-    This keeps NPC defense math correct without coupling NPCs to the
-    Character progression system.
-
-    The shim must cover every method combat code calls on `.skills`, not
-    just the ones NPCs meaningfully implement. Combat duck-types on this
-    interface, so a missing method raises inside the tick loop, which the
-    tick engine catches by discarding the handler — the NPC would silently
-    stop fighting with no error surfaced to the player.
-    """
-
-    def __init__(self, npc) -> None:
-        self._npc = npc
-
-    def get_level(self, skill_key: str) -> int:
-        stats = self._npc.db.combat_stats or {}
-        return int(stats.get(f"{skill_key}_level", 1))
-
-    def add_xp(self, skill_key: str, amount: int) -> None:
-        """No-op. NPCs are not skill-tracked and never level."""
-        return None
-
-    def get_total_xp(self, skill_key: str) -> int:
-        """NPCs carry no XP; report zero."""
-        return 0
-
-    def meets_prerequisite(self, skill_key: str, required_level: int) -> bool:
-        """Compare the NPC's flat stat block against a level requirement."""
-        level = self.get_level(skill_key)
-        return level >= required_level
 
 
 class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
@@ -77,6 +29,8 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
             - strike_level (int)
             - brawn_level (int)
             - defense_level (int)
+            - fortitude_level (int; NpcDef.to_combat_block derives it from
+                               max_hp when the def does not set it)
             - max_hp (optional; falls back to 10 if unset)
 
     Exit/Returns:
@@ -100,15 +54,21 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
     """
 
     @lazy_property
-    def skills(self) -> _NpcSkillsShim:
-        """Lazy cached shim exposing `npc.skills.get_level(...)` for combat math.
+    def skills(self) -> StatBlockSkills:
+        """Lazy cached level source, exposing `npc.skills.get_level(...)`.
 
-        See _NpcSkillsShim docstring. Previously HostileNPC had no `skills`
-        attribute at all, so ActionAttack.resolve always defaulted the NPC's
-        defense level to 1, making enemies trivially hittable regardless of
-        their intended stats.
+        A StatBlockSkills, not a SkillHandler: an NPC's levels are authored by
+        its NpcDef rather than earned, so there is no XP curve behind them and
+        nothing that could advance them. It satisfies the SkillSource protocol
+        and deliberately NOT XpEarner, which is what stops the killer-XP gate
+        in CombatEntity.at_death and the per-hit XP planner in the combat
+        handler from paying a monster for hitting a player.
+
+        Before any of this existed HostileNPC had no `skills` attribute at all,
+        so ActionAttack.resolve defaulted every NPC's defense level to 1 and
+        made enemies trivially hittable regardless of their intended stats.
         """
-        return _NpcSkillsShim(self)
+        return StatBlockSkills(self)
 
 
     def at_object_creation(self) -> None:
@@ -131,13 +91,37 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
 
         Entry:
             stats - the stat block to apply. If None, reads db.combat_stats.
-                    If given, it is also stored to db.combat_stats so the
-                    _NpcSkillsShim can read the skill levels back out.
+                    If given, it is also stored to db.combat_stats, which
+                    stays the authored wire shape; the "<skill>_level" keys in
+                    it are unpacked below into the dict StatBlockSkills reads.
         """
         if stats is not None:
             self.db.combat_stats = stats
 
         raw_stats = self.db.combat_stats or {}
+
+        # Unpack the "<skill>_level" keys into the {skill_key: level} dict
+        # StatBlockSkills reads. The stat block keeps its flat wire shape --
+        # it is what an NpcDef authors and what a prototype can carry -- and
+        # this is the one place that translates between the two, exactly as
+        # the lines below translate its other keys onto discrete attributes.
+        #
+        # Going through self.skills is safe on the creation path even though it
+        # is a lazy_property: StatBlockSkills holds nothing but a reference to
+        # this object, so a handler built here stays correct afterwards.
+        #
+        # A key the stat block does not name is left out rather than defaulted,
+        # so StatBlockSkills answers its own absent-skill floor instead of this
+        # method inventing one. That is the shim bug in miniature: the old
+        # facade's silent 1 for a missing key is exactly why every NPC read
+        # Fortitude 1 for as long as to_combat_block omitted it.
+        self.skills.seed(
+            {
+                skill_key: raw_stats[f"{skill_key}_level"]
+                for skill_key in COMBAT_SKILL_KEYS
+                if f"{skill_key}_level" in raw_stats
+            }
+        )
 
         self.init_combat_attrs(max_hp=raw_stats.get("max_hp") or self.db.max_hp or 10)
         self.db.attack_speed = raw_stats.get("attack_speed", combat_constants.UNARMED_ATTACK_SPEED_TICKS)
@@ -152,6 +136,29 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
         self.db.combat_rules = raw_stats.get(combat_constants.COMBAT_RULES_ATTR, [])
 
 
+    def drop_loot(self, killer=None) -> None:
+        """Roll this NPC's loot table onto the floor of the room it died in.
+
+        The table is named by its NpcDef's `loot_table` field and resolved live
+        through db.npc_key, so an NPC with no table simply drops nothing --
+        every NPC type is opt-in, exactly as respawn_seconds is.
+
+        Wrapped the way at_death wraps its own XP and quest hooks: a broken
+        loot table must never block the death itself, because a skipped
+        respawn() would leave a 0-hp corpse standing and hang the fight (see
+        respawn() below for the full version of that failure).
+        """
+        try:
+            # Local import: systems.loot pulls in world.item_database, and
+            # this module is loaded by SPAWNER_MODULES at load_all_spawners()
+            # time. Matches the local-import style used throughout this module.
+            from systems.loot.drops import award_drops
+
+            award_drops(self, killer)
+        except Exception:
+            logger.log_trace()
+
+
     def respawn(self) -> None:
         """Despawn, and queue a timed comeback if this NpcDef asked for one.
 
@@ -162,8 +169,8 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
         which is why this is the last possible moment (it is the final call in
         CombatEntity.at_death).
 
-        No corpse object is left behind; that, drops, and kill XP are separate
-        work.
+        No corpse object is left behind; that and kill XP are separate work.
+        Drops are handled by drop_loot() above, which at_death runs before this.
         """
         npc_key = self.db.npc_key
         respawn_seconds = self.db.respawn_seconds

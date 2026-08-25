@@ -12,6 +12,8 @@ instead of navigating. The deposit/withdraw quantity and custom-quantity
 nodes used to do exactly that.
 """
 
+from unittest import mock
+
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
@@ -95,6 +97,105 @@ class TestNodesReturnRenderedOutput(_BankingMenuTest):
         result = banking_menu.node_deposit_custom_qty(self.char1, "", item_id=-1)
 
         self.assertIsInstance(result, tuple)
+
+
+class TestGroupedTransfers(_BankingMenuTest):
+    """Identical non-stackables list as one row and move in one action."""
+
+    def _make_pile(self, count, key="rusty scrap metal"):
+        return [self._make_item(key=key) for _ in range(count)]
+
+    def test_identical_items_collapse_to_one_option(self):
+        self._make_pile(5)
+
+        _text, options = banking_menu.node_deposit_select(self.char1)
+
+        descs = [opt["desc"] for opt in options]
+        matching = [d for d in descs if "rusty scrap metal" in d]
+        self.assertEqual(len(matching), 1, descs)
+        self.assertIn("(x5)", matching[0])
+
+    def test_differing_items_stay_separate(self):
+        self._make_pile(2)
+        self._make_item(key="rusty metal chunk")
+
+        _text, options = banking_menu.node_deposit_select(self.char1)
+
+        descs = [opt["desc"] for opt in options]
+        self.assertTrue(any("rusty scrap metal (x2)" in d for d in descs), descs)
+        self.assertTrue(any("rusty metal chunk" in d for d in descs), descs)
+
+    def test_pile_offers_a_quantity_prompt(self):
+        pile = self._make_pile(4)
+        ids = [obj.id for obj in pile]
+
+        text, options = banking_menu.node_deposit_quantity(self.char1, item_ids=ids)
+
+        descs = [opt["desc"] for opt in options]
+        self.assertIn("You have 4.", text)
+        self.assertIn("All (4)", descs)
+        # Nothing moved just by asking how many.
+        self.assertEqual(self.char1.bank.count_items(), 0)
+
+    def test_deposit_all_of_a_pile_in_one_action(self):
+        pile = self._make_pile(6)
+        ids = [obj.id for obj in pile]
+
+        banking_menu.DEPOSIT_FLOW.execute_goto(
+            self.char1, "", item_ids=ids, count="all"
+        )
+
+        self.assertEqual(self.char1.bank.count_items(), 6)
+        for obj in pile:
+            self.assertNotIn(obj, self.char1.contents)
+
+    def test_deposit_partial_pile_leaves_the_rest_carried(self):
+        pile = self._make_pile(6)
+        ids = [obj.id for obj in pile]
+
+        banking_menu.node_deposit_custom_qty(
+            self.char1, "4", item_ids=ids, max_qty=6, custom_qty_state="awaiting"
+        )
+
+        self.assertEqual(self.char1.bank.count_items(), 4)
+        still_carried = [obj for obj in pile if obj in self.char1.contents]
+        self.assertEqual(len(still_carried), 2)
+
+    def test_withdraw_all_of_a_pile_in_one_action(self):
+        pile = self._make_pile(5)
+        self.char1.bank.deposit_many(pile)
+        banked_ids = [obj.id for obj in self.char1.bank.list_items()]
+
+        banking_menu.WITHDRAW_FLOW.execute_goto(
+            self.char1, "", item_ids=banked_ids, count="all"
+        )
+
+        self.assertEqual(self.char1.bank.count_items(), 0)
+
+    def test_single_item_still_transfers_without_prompting(self):
+        item = self._make_item()
+
+        result = banking_menu.node_deposit_quantity(self.char1, item_ids=[item.id])
+
+        self.assertIsInstance(result, tuple)
+        self.assertIn(item, self.char1.bank.list_items())
+
+    def test_grouped_deposit_reports_one_line(self):
+        pile = self._make_pile(5)
+        ids = [obj.id for obj in pile]
+        self.char1.msg = mock.MagicMock()
+
+        banking_menu.DEPOSIT_FLOW.execute_goto(
+            self.char1, "", item_ids=ids, count="all"
+        )
+
+        deposit_lines = [
+            call.args[0]
+            for call in self.char1.msg.call_args_list
+            if call.args and "deposit" in str(call.args[0])
+        ]
+        self.assertEqual(len(deposit_lines), 1, deposit_lines)
+        self.assertIn("(x5)", deposit_lines[0])
 
 
 class TestQuantityPrompting(_BankingMenuTest):

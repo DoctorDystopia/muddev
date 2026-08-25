@@ -36,6 +36,11 @@ TAG_DEATH = DANGER_COLOR
 TAG_XP = HIGHLIGHT_COLOR    # per-hit experience gained, on the same line
 TAG_RESET = RESET_COLOR
 
+# Item names on a kill's drop line. The same highlight XP uses, because both
+# are the reward half of a fight and a player scanning a combat log is looking
+# for exactly those two things.
+TAG_LOOT = HIGHLIGHT_COLOR
+
 # Tiles covered by the caller's active damage aura, tinted on the grid map.
 # Deliberately NOT the same tag as TAG_INCOMING: the overlay marks ground the
 # caller is burning, which is good news for them, and reusing the damage-taken

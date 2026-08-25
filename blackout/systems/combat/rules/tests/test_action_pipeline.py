@@ -476,6 +476,10 @@ class TestScriptedRngStub(unittest.TestCase):
             resolve_action(context)
 
     def test_a_scripted_low_roll_always_connects(self):
+        # roll_damage is a SINGLE uniform randint on [0, max_hit], so the one
+        # scripted draw is the damage. It briefly averaged two draws around a
+        # coin flip (combat_calc.roll_damage's commented-out variant), which is
+        # why this used to script three.
         rng = ScriptedRandom(randoms=[0.0], randints=[4])
         context = _build_context(rng=rng)
 

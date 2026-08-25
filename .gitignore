@@ -22,3 +22,13 @@ blackout/server/.cache/
 # before being cleaned out in the 08/01 audit.
 *.sav
 *.sav[0-9]
+
+# notes
+*.todo
+*.todo.md
+*.note
+*.note.md
+
+# Local/backup variants of operator scripts
+blackout/scripts/*.local
+blackout/scripts/*.dan

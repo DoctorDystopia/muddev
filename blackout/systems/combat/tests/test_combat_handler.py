@@ -21,20 +21,22 @@ from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.combat import constants as const
+from systems.tick import constants as tick_const
 from systems.combat.combat import (
     COMBAT_HANDLER_KEY,
-    HANDLER_NO_TIMER_INTERVAL,
+    _plan_style_xp,
     combat_profile,
     ensure_combat_handler,
     get_defense_bonuses,
     get_handler_for,
 )
 from systems.combat.rules.context import ActionResult
-from systems.combat.tick_engine import (
+from systems.tick.tickable import HANDLER_NO_TIMER_INTERVAL
+from systems.tick.engine import (
     TICK_ENGINE_KEY,
-    bootstrap_combat,
+    bootstrap_tick,
     get_tick_engine,
-    purge_stale_combat_handlers,
+    purge_stale_handlers,
 )
 from typeclasses.npc_combat import spawn_mutant_raider
 from world.item_database import ITEM_DB
@@ -63,22 +65,6 @@ class TestCombatHandlerWiring(EvenniaTest):
         self.assertIs(get_handler_for(self.char1), handler)
         self.assertIsNotNone(self.char1.combat)
 
-    def test_stale_handler_is_replaced_not_revived(self):
-        """Regression: a handler persisted with a broken interval used to be
-        revived forever, so combat could never recover."""
-        handler = ensure_combat_handler(self.char1)
-        old_id = handler.id
-
-        # Simulate a pre-tick-engine handler left in the DB.
-        handler.db_interval = 0
-        handler.save(update_fields=["db_interval"])
-
-        replacement = ensure_combat_handler(self.char1)
-
-        self.assertNotEqual(replacement.id, old_id)
-        self.assertEqual(replacement.interval, HANDLER_NO_TIMER_INTERVAL)
-        self.assertFalse(ScriptDB.objects.filter(id=old_id).exists())
-
 
 class TestTickEngine(EvenniaTest):
     """The global 0.6s LoopingCall owner."""
@@ -94,8 +80,8 @@ class TestTickEngine(EvenniaTest):
         """The watchdog rides on Evennia's IntegerField, so it must be an int."""
         engine = get_tick_engine()
 
-        self.assertIsInstance(const.TICK_ENGINE_WATCHDOG_SECONDS, int)
-        self.assertEqual(engine.interval, const.TICK_ENGINE_WATCHDOG_SECONDS)
+        self.assertIsInstance(tick_const.TICK_ENGINE_WATCHDOG_SECONDS, int)
+        self.assertEqual(engine.interval, tick_const.TICK_ENGINE_WATCHDOG_SECONDS)
         self.assertGreater(engine.interval, 0)
 
     def test_registered_handler_is_ticked(self):
@@ -108,14 +94,33 @@ class TestTickEngine(EvenniaTest):
         mocked.assert_called_once()
 
     def test_one_broken_handler_does_not_stop_the_loop(self):
-        """A raising combatant must be dropped, not allowed to kill the tick."""
+        """A raising combatant must never be allowed to kill the tick.
+
+        Eviction now takes TICK_HANDLER_MAX_STRIKES consecutive failures
+        rather than one -- see BlackoutTickEngine._record_failure -- so this
+        drives the loop that many times. The invariant under test is
+        unchanged: _tick must not raise, and a persistently broken handler
+        must not stay in the rotation forever.
+        """
         engine = get_tick_engine()
         handler = ensure_combat_handler(self.char1)
 
         with mock.patch.object(type(handler), "tick", side_effect=RuntimeError("boom")):
-            engine._tick()  # must not raise
+            for _ in range(tick_const.TICK_HANDLER_MAX_STRIKES):
+                engine._tick()  # must not raise
 
         self.assertNotIn(handler.id, engine._registry())
+
+    def test_a_single_bad_tick_does_not_end_the_fight(self):
+        """The regression the strike counter exists for: one transient failure
+        used to drop the handler, and combat stopped with nothing said."""
+        engine = get_tick_engine()
+        handler = ensure_combat_handler(self.char1)
+
+        with mock.patch.object(type(handler), "tick", side_effect=RuntimeError("boom")):
+            engine._tick()
+
+        self.assertIn(handler.id, engine._registry())
 
     def test_bootstrap_purges_then_starts_the_engine(self):
         """Server start must both clear leftovers and stand the engine up,
@@ -123,7 +128,7 @@ class TestTickEngine(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         handler_id = handler.id
 
-        engine = bootstrap_combat()
+        engine = bootstrap_tick()
 
         self.assertFalse(ScriptDB.objects.filter(id=handler_id).exists())
         self.assertEqual(engine.key, TICK_ENGINE_KEY)
@@ -131,13 +136,15 @@ class TestTickEngine(EvenniaTest):
 
     def test_purge_clears_stale_handlers(self):
         handler = ensure_combat_handler(self.char1)
-        self.char1.db.in_combat = True
+        self.assertTrue(self.char1.in_combat)
 
-        purged = purge_stale_combat_handlers()
+        purged = purge_stale_handlers()
 
         self.assertEqual(purged, 1)
         self.assertFalse(ScriptDB.objects.filter(id=handler.id).exists())
-        self.assertFalse(self.char1.db.in_combat)
+        # in_combat is DERIVED from the handler -- deleting it is what ends
+        # combat, and there is no flag left to fall out of step with.
+        self.assertFalse(self.char1.in_combat)
 
 
 class TestSwingCadence(EvenniaTest):
@@ -148,7 +155,7 @@ class TestSwingCadence(EvenniaTest):
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
 
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         weapon_data = dict(handler.ndb.active_weapon_data)
         weapon_data["attack_speed"] = attack_speed
@@ -184,7 +191,7 @@ class TestHandlerLifecycle(EvenniaTest):
         handler.end_combat()
 
         self.assertFalse(ScriptDB.objects.filter(id=handler_id).exists())
-        self.assertFalse(self.char1.db.in_combat)
+        self.assertFalse(self.char1.in_combat)
 
     def test_end_combat_clears_the_lazy_property_cache(self):
         """Regression: `del obj.ndb.combat` was a swallowed no-op, because
@@ -203,12 +210,12 @@ class TestHandlerLifecycle(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
-        handler.queue_action({"kind": "flee"})
+        handler.apply_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "flee"})
 
         handler.tick()  # must not raise
 
-        self.assertFalse(self.char1.db.in_combat)
+        self.assertFalse(self.char1.in_combat)
 
 
 class TestNpcSeeding(EvenniaTest):
@@ -244,12 +251,15 @@ class TestNpcSeeding(EvenniaTest):
         self.assertEqual(style["attack_type"], "crush")
         self.assertEqual(handler.ndb.active_weapon_data["attack_speed"], 4)
 
-    def test_raider_skill_levels_reach_the_shim(self):
+    def test_raider_skill_levels_reach_the_stat_block(self):
         # OSRS Goblin L2: Attack 1, Strength 1, Defence 1, Hitpoints 5.
         npc = spawn_mutant_raider(self.room1)
 
         self.assertEqual(npc.skills.get_level("defense"), 1)
         self.assertEqual(npc.skills.get_level("strike"), 1)
+        # Hitpoints IS the Fortitude axis; before the bridge in
+        # NpcDef.to_combat_block this read the old facade's fabricated 1.
+        self.assertEqual(npc.skills.get_level("fortitude"), 5)
 
     def test_raider_combat_bonuses_match_goblin_l2(self):
         """OSRS Goblin L2 monster bonuses: attack -21, strength -15,
@@ -400,6 +410,57 @@ class TestMultiSlotStatAggregation(EvenniaTest):
         self.assertEqual(bonuses["slash_defense_bonus"], 2)
 
 
+class TestEquipMidCombatRefreshesTheWeapon(EvenniaTest):
+    """Regression test for equipping a new weapon mid-fight.
+
+    `wield` (the mid-combat action) has always called
+    handler._refresh_weapon() after swapping gear. The general `equip`
+    command and the equipment EvMenu go through EquipmentHandler.equip()
+    directly and never called it, so a fighter who typed `equip <item>`
+    mid-fight kept swinging with the old weapon's style, speed, and stat
+    bonuses in ndb.active_weapon_data until combat ended and restarted.
+    EquipmentHandler.equip()/unequip() now call the refresh themselves.
+    """
+
+    def test_equip_during_combat_updates_style_and_speed(self):
+        # rusty_scrap_spear's default style ("lunge") is a stab; the gizmo's
+        # ("discharge") is a crush -- distinct enough to prove the snapshot
+        # actually changed rather than being coincidentally equal.
+        spear = ITEM_DB["rusty_scrap_spear"].create(location=self.char1)
+        self.char1.equipment.equip(spear)
+
+        handler = ensure_combat_handler(self.char1)
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["attack_type"],
+            "stab",
+        )
+
+        gizmo = ITEM_DB["malfunctioning_gizmo"].create(location=self.char1)
+        self.char1.equipment.equip(gizmo)
+
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["attack_type"],
+            "crush",
+        )
+
+    def test_unequip_during_combat_falls_back_to_unarmed(self):
+        spear = ITEM_DB["rusty_scrap_spear"].create(location=self.char1)
+        self.char1.equipment.equip(spear)
+
+        handler = ensure_combat_handler(self.char1)
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["attack_type"],
+            "stab",
+        )
+
+        self.char1.equipment.unequip(spear)
+
+        self.assertEqual(
+            handler.ndb.active_weapon_data["active_combat_style"]["weapon_style"],
+            "accurate",
+        )
+
+
 class TestRuntimeStateIsNotPersisted(EvenniaTest):
     """Per-tick handler state belongs on ndb, not db.
 
@@ -429,7 +490,7 @@ class TestRuntimeStateIsNotPersisted(EvenniaTest):
         ensure_combat_handler(target)
 
         # Drive a full action cycle so every field has been assigned.
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
         handler.tick()
 
         stored_keys = {attr.key for attr in handler.attributes.all()}
@@ -459,6 +520,86 @@ class TestRuntimeStateIsNotPersisted(EvenniaTest):
         handler.ndb.active_weapon_data = None
 
         handler.tick()  # must not raise
+
+
+class TestNpcAttackerEarnsNothing(EvenniaTest):
+    """A monster swinging at a player must not run the XP pipeline.
+
+    `getattr(attacker, "skills", None) is None` used to gate the per-hit XP
+    plan and `getattr(killer, "skills", None) is not None` the killing-blow
+    award. Every HostileNPC has a `.skills`, so both gates opened for an NPC --
+    harmless only for as long as the NPC-side add_xp stayed a no-op, and a
+    landmine under any change that made NPC skills real. The gates now ask
+    `isinstance(..., XpEarner)`, which StatBlockSkills deliberately fails.
+
+    These tests matter now rather than later: nothing has ever driven an
+    attack in the NPC->player direction, so this whole path is untravelled.
+    """
+
+    def _npc_swing_at_char(self, damage):
+        """Land exactly one NPC swing of `damage` on char1."""
+        npc = spawn_mutant_raider(self.room1)
+        handler = ensure_combat_handler(npc)
+        ensure_combat_handler(self.char1)
+        handler.apply_action({"kind": "attack", "target": self.char1})
+
+        swing_result = ActionResult(hit=True, damage=damage, hit_prob=1.0)
+
+        with mock.patch(
+            "systems.combat.combat.resolve_action",
+            return_value=swing_result,
+        ):
+            handler.tick()
+
+        return npc
+
+    def test_an_npc_hit_plans_no_xp(self):
+        style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
+        npc = spawn_mutant_raider(self.room1)
+
+        self.assertEqual(_plan_style_xp(npc, style, damage=10), [])
+
+    def test_a_character_hit_still_plans_xp(self):
+        """Guards the assertion above: a gate that returned [] for everyone
+        would pass it while silently switching off player progression."""
+        style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
+
+        self.assertNotEqual(_plan_style_xp(self.char1, style, damage=10), [])
+
+    def test_an_npc_swing_damages_the_player(self):
+        """The direction of travel this whole batch exists to enable."""
+        before = self.char1.hp
+
+        self._npc_swing_at_char(damage=3)
+
+        self.assertEqual(self.char1.hp, before - 3)
+
+    def test_an_npc_swing_grants_the_npc_no_levels(self):
+        npc = self._npc_swing_at_char(damage=3)
+
+        self.assertEqual(npc.skills.get_level("strike"), 1)
+        self.assertEqual(npc.skills.get_level("fortitude"), 5)
+
+    def test_an_npc_killing_blow_runs_no_killer_xp(self):
+        """at_death's killer gate. The NPC must not be credited for the kill."""
+        self.char1.db.hp = 2
+        npc = spawn_mutant_raider(self.room1)
+
+        with mock.patch.object(
+            type(self.char1), "_award_killer_xp"
+        ) as mocked_award:
+            self.char1.at_damage(5, attacker=npc)
+
+        mocked_award.assert_not_called()
+
+    def test_a_character_killing_blow_still_runs_killer_xp(self):
+        """The other side of the same gate."""
+        npc = spawn_mutant_raider(self.room1)
+
+        with mock.patch.object(type(npc), "_award_killer_xp") as mocked_award:
+            npc.at_damage(npc.hp, attacker=self.char1)
+
+        mocked_award.assert_called_once()
 
 
 class TestSwingReporting(EvenniaTest):
@@ -494,7 +635,7 @@ class TestSwingReporting(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         swing_result = ActionResult(hit=True, damage=damage, hit_prob=1.0)
 
@@ -569,7 +710,7 @@ class TestSwingReporting(EvenniaTest):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room1)
         ensure_combat_handler(target)
-        handler.queue_action({"kind": "attack", "target": target})
+        handler.apply_action({"kind": "attack", "target": target})
 
         swing_result = ActionResult(hit=False, damage=0, hit_prob=0.0)
 

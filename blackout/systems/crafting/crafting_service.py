@@ -31,6 +31,8 @@ from .constants import (
     TOOL_TAG_CATEGORY,
 )
 from .registry import RECIPE_REGISTRY
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
 
 
 def _iter_candidate_items(caller, include_location):
@@ -386,6 +388,119 @@ def get_recipe_display_data(caller, recipe_key):
     }
 
 
+def _deliver_output(caller, obj):
+    """
+    Purpose: Hand one freshly crafted object to the crafter, or to the floor
+    when it will not fit.
+
+    Entry:
+        caller - the crafting Character.
+        obj    - one object from a recipe's result list. The contrib spawns
+                 its outputs detached, so this is normally at location None.
+
+    Exit/Returns:
+        No return value. The object always ends up somewhere: carried, on the
+        ground, or -- only when the crafter is nowhere at all -- left detached
+        and logged.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        move_to, not `obj.location = caller`. Direct assignment does not fire
+        at_object_receive (CLAUDE.md gotcha 5), so a crafted item landed in
+        contents with no inventory slot, merged into no existing stack, and
+        published no state-feed snapshot. The 3D client's inventory pane
+        therefore sat unchanged through an entire batch craft, and a later
+        inventory.sync() -- triggered by some unrelated item movement -- was
+        what eventually repaired the grid.
+
+        The full-inventory case only becomes reachable now that the move runs
+        the hooks: Character.at_pre_object_receive vetoes at 32/32 and move_to
+        returns False, which would strand the object at location None. It goes
+        to the room instead, which is where the player can still pick it up
+        after clearing space. at_pre_object_receive has already said why.
+
+    Notes/References:
+        world/item_database.py ItemDef.create documents the same
+        spawn-detached-then-move pattern and the same reason for it.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    from evennia.utils import logger
+
+    carried = obj.move_to(caller, quiet=True, move_type="craft")
+
+    if carried:
+        return
+
+    room = caller.location
+
+    if room is not None:
+        dropped = obj.move_to(room, quiet=True, move_type="drop")
+
+        if dropped:
+            caller.msg(f"You have no room for {obj.key}; it falls to the ground.")
+            return
+
+    logger.log_err(
+        f"perform_craft: could not deliver crafted {obj!r} to {caller!r} "
+        f"or to {room!r}; it is left detached."
+    )
+
+
+def _publish_inventory(caller):
+    """
+    Purpose: Push one inventory snapshot once a craft has fully resolved.
+
+    Entry:
+        caller - the crafting Character. Called after outputs are delivered,
+                 whether the craft succeeded or not.
+
+    Exit/Returns:
+        No return value. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Delivering an output publishes a snapshot of its own, because move_to
+        runs Character.at_object_receive. CONSUMING the inputs publishes
+        nothing: BlackoutRecipe._consume_inputs either decrements `quantity`
+        on a surviving stack or calls obj.delete(), and delete() assigns
+        `self.location = None` directly rather than moving -- so
+        at_object_leave never runs and the feed never hears about it. On a
+        batch craft that is every single tick, which is why the pane kept
+        showing scrap metal that had already been hammered into a chainbody.
+
+        Published from here rather than from _consume_inputs because this is
+        the point where the craft is over: inputs gone, outputs delivered, one
+        snapshot that is true of both. It also covers a FAILED craft that
+        still consumed its inputs (consume_on_fail), which no other hook in
+        the path would report.
+
+        Wrapped, because the batch loop calls this from a `delay` callback
+        with no command frame around it -- a raise here would kill the
+        remainder of the batch over a display concern.
+
+    Notes/References:
+        systems/statefeed/events.py emit_inventory pre-checks the
+        subscription, so this costs one getattr on a telnet-only server.
+
+    Author: Nick Hobar
+    Creation date: 08/17/2026
+    """
+    from evennia.utils import logger
+
+    from systems.statefeed import events as feed
+
+    try:
+        feed.emit_inventory(caller)
+    except Exception:
+        logger.log_trace()
+
+
 def perform_craft(caller, recipe_key):
     """Gather all applicable materials and tools and execute the craft.
 
@@ -431,6 +546,13 @@ def perform_craft(caller, recipe_key):
 
     if result:
         for obj in result:
-            obj.location = caller
+            _deliver_output(caller, obj)
+
+        # Reported on the recipe KEY, which is the recipe's `name` and the
+        # same string a blueprint declares as `craft:rusty scrap axe`. The
+        # spawned object's key is an item name and can differ.
+        notify_quests(caller, quest_constants.ACTION_CRAFT, recipe_key)
+
+    _publish_inventory(caller)
 
     return result

@@ -23,8 +23,11 @@ from systems.progression.skills.handler import SkillHandler
 from systems.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
-from systems.quests.quests import QuestHandler
+from systems.quests.handler import QuestHandler
+from systems.stat_tracker.handler import StatHandler
+from systems.statefeed import events as feed
 from systems.statefeed import resync
+from world.respawn import get_respawn_room
 
 
 
@@ -112,6 +115,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     inventory = _handler_property(InventoryHandler, "inventory")
     bank = _handler_property(BankHandler, "bank")
     quests = _handler_property(QuestHandler, "quests")
+    stats = _handler_property(StatHandler, "stats")
 
     # Evennia's contrib cooldown handler. Stores absolute expiry timestamps in
     # a persistent Attribute, so unlike the ndb timestamp it replaces, a
@@ -153,10 +157,12 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         empty_skills_dict = {}
         empty_active_quests_dict = {}
         empty_completed_quests_list = []
+        empty_stats_dict = {}
         
         self.db.skills = empty_skills_dict
         self.db.active_quests = empty_active_quests_dict
         self.db.completed_quests = empty_completed_quests_list
+        self.db.stats = empty_stats_dict
 
         self.skills.init_all_skills()
 
@@ -173,6 +179,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         self.equipment
         self.inventory
         self.cooldowns
+        self.stats
 
 
     # ─── Playtime ───────────────────────────────────────────────────────────
@@ -361,13 +368,146 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         parent_class.at_post_unpuppet(account, session=session, **kwargs)
 
 
+    # ─── Death ──────────────────────────────────────────────────────────────
+
+    def respawn(self) -> None:
+        """
+        Purpose: Return a dead player to the respawn room at full HP.
+
+        Entry:
+            None. Called by CombatEntity.at_death, which has already
+            broadcast the death line, rolled drops and torn this side of the
+            fight down via leave_combat.
+
+        Exit/Returns:
+            No return value. Raises nothing: see Methodology.
+
+        Module Globals:
+            world.respawn.get_respawn_room read.
+
+        Methodology:
+            1. Resolve the respawn room. None means "unresolvable" -- already
+               logged by get_respawn_room.
+            2. Restore HP first, THEN move. A move fires at_object_receive on
+               the destination and is the step that can fail; doing it second
+               means a failed move still leaves a live player rather than a
+               0 HP one standing where they died.
+            3. Move quietly and message explicitly. The default move messaging
+               would announce a routine arrival ("X arrives from the north"),
+               which is wrong for a respawn -- there is no direction they came
+               from, and at_death already told the old room what happened.
+
+            The base CombatEntity.respawn refills HP in place, which was the
+            only behaviour available while Blackout had no respawn-room fact.
+            That is exactly what this degrades back to if the room cannot be
+            resolved.
+
+            No XP penalty. That is a deliberate scope decision recorded in
+            docs/2026-08-23-DESIGN-0003 §1.4, not an omission -- a death
+            penalty is a tuning question, and hostile retaliation had to land
+            before there was anything to tune it against.
+
+        Notes/References:
+            Every failure path here is caught. This runs inside at_death: an
+            exception escaping would abandon the death sequence with combat
+            already torn down and HP still at zero, which is a worse state
+            than any respawn bug it could report. Death must never crash.
+
+        Author: Nick Hobar
+        Creation date: 08/23/2026
+        """
+        # Through the property, not db.hp: the hp setter is what clamps to
+        # max_hp AND publishes the state-feed HP event the 3D client's bar
+        # reads. Writing db.hp directly refills the number but leaves every
+        # connected client still showing the corpse's zero.
+        self.hp = self.max_hp
+
+        room = get_respawn_room()
+
+        if room is None:
+            self.msg(
+                "|rYou black out... and come to where you fell, barely "
+                "breathing but alive.|n"
+            )
+            return
+
+        if self.location is room:
+            self.msg("|rYou black out... and wake where you stand.|n")
+            return
+
+        try:
+            self.move_to(room, quiet=True, move_type="teleport")
+        except Exception as exc:
+            logger.log_err(f"Character.respawn move to {room} failed: {exc!r}")
+            self.msg(
+                "|rYou black out... and come to where you fell, barely "
+                "breathing but alive.|n"
+            )
+            return
+
+        self.msg("|rYou black out.|n")
+        self.msg(f"|wYou wake up at {room.key}, your wounds closed over.|n")
+
+
+    def at_pre_object_receive(self, moved_obj, source_location, **kwargs):
+        """
+        Purpose: Refuse an incoming item once the 32-slot grid is full,
+        before the move happens.
+
+        Entry:
+            moved_obj is the object about to move into this Character.
+            source_location is where it is moving from.
+
+        Exit/Returns:
+            True to allow the move, False to cancel it and leave
+            moved_obj where it was.
+
+        Methodology:
+            Runs at move_to() step 3 (destination.at_pre_object_receive),
+            which is the one hook in the move sequence that can veto
+            before anything changes -- the object hasn't left
+            source_location yet, so there is no bounce-back to perform.
+            InventoryHandler.can_accept mirrors add_item's own stack/
+            free-slot logic, so a pickup that would merge into an
+            existing stack is still allowed at 32/32.
+
+            This is what makes the swallowed InventoryError in
+            at_object_receive (below) unreachable in the full-inventory
+            case: that hook now only ever sees objects this one already
+            approved. Before this hook existed, add_item's
+            InventoryError was raised *after* the object had already
+            been moved into contents (move_to's step 8) and caught by a
+            bare except-pass, so the item sat in contents with no slot
+            -- invisible to `inv`, uncounted against the 32-slot cap,
+            but still real and still tradeable/droppable. That is what
+            let Carrying 32/32 keep accepting `get`s.
+
+        Notes/References: CLAUDE.md gotcha table doesn't cover this one;
+            see evennia.objects.objects.DefaultObject.move_to docstring
+            for the full pre/post hook order.
+
+        Author: Nick Hobar
+        Creation date: 08/16/2026
+        """
+        if hasattr(moved_obj, "is_stackable") and not self.inventory.can_accept(moved_obj):
+            self.msg("Your inventory is completely full.")
+            return False
+        parent_class = super()
+        return parent_class.at_pre_object_receive(moved_obj, source_location, **kwargs)
+
+
     def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
         if hasattr(moved_obj, "is_stackable"):
             try:
                 self.inventory.add_item(moved_obj)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.log_err(
+                    f"Character.at_object_receive: add_item failed for "
+                    f"{moved_obj!r} on {self!r} despite at_pre_object_receive "
+                    f"approving the move: {exc!r}"
+                )
         super().at_object_receive(moved_obj, source_location, move_type=move_type, **kwargs)
+        self._publish_inventory()
 
 
     def at_object_leave(self, moved_obj, target_location, move_type="move", **kwargs):
@@ -377,6 +517,60 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             except Exception:
                 pass
         super().at_object_leave(moved_obj, target_location, move_type=move_type, **kwargs)
+        # moved_obj is still in self.contents here -- move_to does not reassign
+        # its location until the step AFTER this hook. Publishing without
+        # naming it would re-adopt it into a free slot; see
+        # InventoryHandler.sync.
+        self._publish_inventory(ignore=moved_obj)
+
+
+    def _publish_inventory(self, ignore=None) -> None:
+        """
+        Purpose: Push a fresh inventory snapshot to this character's graphical
+        clients after an item has finished moving.
+
+        Entry:
+            Called from at_object_receive and at_object_leave, AFTER super().
+            `ignore` is an object to treat as already gone, which the leave
+            path passes and the receive path does not.
+
+        Exit/Returns:
+            No return value. Never raises.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            After super(), not before, and not inside the try block above it.
+            add_item merges a stackable pickup by writing onto the surviving
+            stack and DELETING the incoming object; a snapshot taken mid-merge
+            would describe a grid holding an object that is about to stop
+            existing. Waiting until the move has completed is what makes the
+            snapshot true.
+
+            The two callers are NOT symmetric, because Evennia's move_to does
+            not treat them symmetrically. at_object_receive runs at step 8,
+            after the location change, so `contents` is already correct and
+            there is nothing to ignore. at_object_leave runs at step 4, before
+            it, so the departing object is still present and must be named --
+            otherwise sync() re-adopts it and the snapshot describes the
+            inventory the player had a moment ago.
+
+            InventoryHandler deliberately does not publish from its own
+            mutators for that same reason -- see EquipmentHandler._publish,
+            which documents the other half of the asymmetry.
+
+        Notes/References:
+            emit_inventory pre-checks the subscription, so on a telnet-only
+            server this costs one getattr per item movement.
+
+        Author: Nick Hobar
+        Creation date: 08/15/2026
+        """
+        try:
+            feed.emit_inventory(self, ignore=ignore)
+        except Exception:
+            logger.log_trace()
 
 
     def at_object_delete(self) -> None:

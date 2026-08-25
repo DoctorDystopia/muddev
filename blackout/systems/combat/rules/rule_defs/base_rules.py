@@ -224,7 +224,7 @@ class BaseActionRules:
         equip_str = modifiers.apply_to_int(
             context.attacker_bag, const.CHANNEL_STRENGTH_BONUS, base_equip
         )
-        raw_max = combat_calc.max_hit(eff_str, equip_str)
+        raw_max = combat_calc.max_melee_hit(eff_str, equip_str)
         modified = modifiers.apply_to_int(
             context.attacker_bag, const.CHANNEL_MAX_HIT, raw_max
         )
@@ -275,8 +275,8 @@ class BaseActionRules:
             context.defense_equip_bonus(),
         )
 
-        r_atk = combat_calc.attack_roll(eff_atk, equip_atk)
-        r_def = combat_calc.defense_roll(eff_def, equip_def)
+        r_atk = combat_calc.melee_attack_roll(eff_atk, equip_atk)
+        r_def = combat_calc.melee_defense_roll(eff_def, equip_def)
         chance = combat_calc.hit_chance(r_atk, r_def)
         modified = modifiers.apply_to_scalar(
             context.attacker_bag, const.CHANNEL_HIT_CHANCE, chance

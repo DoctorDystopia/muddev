@@ -15,11 +15,11 @@ import random
 from unittest import TestCase
 
 from systems.combat.combat_calc import (
-    attack_roll,
-    defense_roll,
+    melee_attack_roll,
+    melee_defense_roll,
     effective_level,
     hit_chance,
-    max_hit,
+    max_melee_hit,
     resolve_melee_swing,
     roll_damage,
 )
@@ -42,39 +42,39 @@ class TestCombatCalc(TestCase):
         assert effective_level(50, set_mult=1.10) == 63
 
 
-    # ─── max_hit ───────────────────────────────────────────────────────────────
+    # ─── max_melee_hit ─────────────────────────────────────────────────────
 
 
     def test_max_hit_zero_equip(self):
-        assert max_hit(110, 0) == 11  # canonical OSRS: bare-fist at 99+8+3 = 110 -> 11
+        assert max_melee_hit(110, 0) == 11  # canonical OSRS: bare-fist at 99+8+3 = 110 -> 11
 
 
     def test_max_hit_level_one(self):
-        assert max_hit(1, 0) == 0
+        assert max_melee_hit(1, 0) == 0
 
 
-    # ─── attack_roll / defense_roll ────────────────────────────────────────────
+    # ─── melee_attack_roll / melee_defense_roll ────────────────────────────
 
 
     def test_attack_roll_no_equip(self):
-        assert attack_roll(110, 0) == 110 * 64
+        assert melee_attack_roll(110, 0) == 110 * 64
 
 
     def test_defense_roll_equalizes_attack(self):
-        assert defense_roll(110, 0) == attack_roll(110, 0)
+        assert melee_defense_roll(110, 0) == melee_attack_roll(110, 0)
 
 
     # ─── hit_chance ───────────────────────────────────────────────────────────
 
 
     def test_hit_chance_equal_rolls_approx_half(self):
-        r = attack_roll(10, 0)
+        r = melee_attack_roll(10, 0)
         p = hit_chance(r, r)
         assert 0.49 < p < 0.50
 
 
     def test_hit_chance_double_attacker_greater(self):
-        r = attack_roll(10, 0)
+        r = melee_attack_roll(10, 0)
         p = hit_chance(2 * r, r)
         assert 0.74 < p < 0.76
 
@@ -83,13 +83,13 @@ class TestCombatCalc(TestCase):
         """The defender's own equipment must move the accuracy curve.
 
         Guards the arithmetic side of the audit bug where the swing pipeline fed
-        the *attacker's* equipment into defense_roll, so a defender's armour was
+        the *attacker's* equipment into melee_defense_roll, so a defender's armour was
         mathematically inert. See test_combat_handler.TestDefenderBonuses for the
         plumbing side.
         """
-        r_atk = attack_roll(50, 20)
-        bare = hit_chance(r_atk, defense_roll(50, 0))
-        armoured = hit_chance(r_atk, defense_roll(50, 100))
+        r_atk = melee_attack_roll(50, 20)
+        bare = hit_chance(r_atk, melee_defense_roll(50, 0))
+        armoured = hit_chance(r_atk, melee_defense_roll(50, 100))
 
         assert armoured < bare
 

@@ -27,6 +27,22 @@ class GatherableDef:
     item_key: str
     xp_reward: int
 
+    # Whether this node can be worked with bare hands, at the cost of
+    # BARE_HAND_HP_COST hit points. XP is unaffected -- the exemption opens
+    # the bootstrap deadlock, it doesn't also make the harvest worthless.
+    #
+    # Without this, gathering deadlocks the game: cutting requires an axe, the
+    # only axe is crafted from scrap metal, and the only scrap metal comes
+    # from cutting. A brand-new character in the wastes has no way in. The
+    # opening quest turns that deadlock into its first lesson -- the player
+    # tears a chunk off a rusty pole with their hands, bleeds for it, and the
+    # android teaches them the skill they just did badly.
+    #
+    # Default False, so the exemption is granted per node rather than assumed.
+    # Only the lowest tier carries it; every real node still needs the axe.
+    bare_hands: bool = False
+
+
 
 # Every gatherable node in the world. Adding a node type means adding one
 # entry here -- the typeclass and its skill def read required_level/xp_reward
@@ -39,6 +55,15 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         required_level=0,
         item_key="rusty_metal_chunk",
         xp_reward=10,
+        bare_hands=True,
+    ),
+    "metal_pole": GatherableDef(
+        key="metal_pole",
+        node_name="Metal Pole",
+        skill_key="cutting",
+        required_level=10,
+        item_key="metal_chunk",
+        xp_reward=25,
     ),
 }
 
@@ -84,6 +109,7 @@ def get_gatherable(key: str) -> GatherableDef | None:
     return gatherable_def
 
 
+
 def get_gatherables_for_skill(skill_key: str) -> list[GatherableDef]:
     """
     Purpose: Get every gatherable node that unlocks under a given skill.
@@ -117,6 +143,7 @@ def get_gatherables_for_skill(skill_key: str) -> list[GatherableDef]:
     matches.sort(key=lambda entry: (entry.required_level, entry.node_name))
 
     return matches
+
 
 
 def get_gatherable_item_name(gatherable_def: GatherableDef) -> str:

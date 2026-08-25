@@ -2,14 +2,14 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/04/2026
-Description: Glass cannon amulet — converts surplus Brawn over Fortitude into
+Description: Glass cannon amulet — converts surplus Brawn over Defense into
              extra effective Brawn.
 """
 
 from systems.combat import constants as const
 from systems.progression.skills.constants import (
     BRAWN_SKILL_KEY,
-    FORTITUDE_SKILL_KEY,
+    DEFENSE_SKILL_KEY,
 )
 
 from .base_rules import BaseActionRules
@@ -24,7 +24,7 @@ GLASS_CANNON_BONUS_PER_STEP = 1
 
 class GlassCannonAmuletRules(BaseActionRules):
     """
-    Purpose: Grant bonus Brawn for every whole step of Brawn above Fortitude.
+    Purpose: Grant bonus Brawn for every whole step of Brawn above Defense.
 
     Entry:
         No conditions. Applies whenever an equipped item names this key.
@@ -53,8 +53,8 @@ class GlassCannonAmuletRules(BaseActionRules):
 
     Notes/References:
         The surplus is FLOORED AT ZERO, deliberately diverging from the design
-        note's literal `floor((basebrawn - fortitude) / 5)`. Python's // floors
-        toward negative infinity, so a character at Brawn 10 / Fortitude 50
+        note's literal `floor((basebrawn - defense) / 5)`. Python's // floors
+        toward negative infinity, so a character at Brawn 10 / Defense 50
         would take an eight-level Brawn PENALTY from equipping a support item.
         Per design decision 08/04: no penalty, the amulet is pure upside and a
         low-Brawn wearer simply gets nothing.
@@ -65,13 +65,13 @@ class GlassCannonAmuletRules(BaseActionRules):
 
     key = "glass_cannon_amulet"
     name = "Glass Cannon"
-    description = "Turns Brawn you have over Fortitude into more Brawn."
+    description = "Turns Brawn you have over Defense into more Brawn."
     priority = const.RULES_PRIORITY_MODIFIER
 
     def contribute_modifiers(self, context, bag) -> None:
-        """Add one bonus Brawn level per whole step of surplus over Fortitude."""
+        """Add one bonus Brawn level per whole step of surplus over Defense."""
         levels = context.levels_for(bag)
-        surplus = levels[BRAWN_SKILL_KEY] - levels[FORTITUDE_SKILL_KEY]
+        surplus = levels[BRAWN_SKILL_KEY] - levels[DEFENSE_SKILL_KEY]
 
         if surplus < GLASS_CANNON_BRAWN_PER_STEP:
             return

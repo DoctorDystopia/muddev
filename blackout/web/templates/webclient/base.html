@@ -82,9 +82,20 @@ JQuery available.
 <!--
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mustache.js/2.3.0/mustache.min.js"></script>
 -->
-    <script type="text/javascript" src="https://golden-layout.com/files/latest/js/goldenlayout.min.js"></script>
-    <link type="text/css" rel="stylesheet" href="https://golden-layout.com/files/latest/css/goldenlayout-base.css" />
-    <link type="text/css" rel="stylesheet" href="https://golden-layout.com/files/latest/css/goldenlayout-dark-theme.css" />
+    <!--
+    GoldenLayout is VENDORED, not fetched. It used to come from
+    golden-layout.com/files/latest -- unpinned, no SRI, from a third party --
+    and it is the whole layout engine: if that host serves something different
+    one morning, or nothing at all, the client does not degrade, it stops.
+    "latest" also meant the exact bytes were unknowable; the vendored copy is
+    the 66,602-byte build that URL served on 08/23/2026, which is NOT
+    byte-identical to any cdnjs release (1.5.9 is 67,923), so pinning to a
+    release number would have been a silent behaviour change rather than a
+    freeze. See js/vendor/README.md.
+    -->
+    <script type="text/javascript" src={% static "webclient/js/vendor/goldenlayout.min.js" %}></script>
+    <link type="text/css" rel="stylesheet" href={% static "webclient/css/vendor/goldenlayout-base.css" %} />
+    <link type="text/css" rel="stylesheet" href={% static "webclient/css/vendor/goldenlayout-dark-theme.css" %} />
     <link type="text/css" rel="stylesheet" href={% static "webclient/css/goldenlayout.css" %} />
 
     <!-- Load gui library -->
@@ -121,12 +132,66 @@ JQuery available.
         <script src={% static "webclient/js/plugins/multimedia.js" %} language="javascript" type="text/javascript"></script>
         <script src={% static "webclient/js/plugins/html.js" %} language="javascript" type="text/javascript"></script>
         <script src={% static "webclient/js/plugins/text2html.js" %} language="javascript" type="text/javascript"></script>
+
+        <!--
+        Blackout's own code is ONE module tag, and it must stay inside THIS
+        block rather than the `scripts` block below: webclient.html overrides
+        `scripts` with an empty one, so a tag put there is silently dropped and
+        the panes never register.
+
+        The 27 lines that used to stand here explained six load-order
+        constraints binding seven script tags, none of them checkable. They are
+        imports now -- see blackout_main.js, which documents what each one
+        replaced. A `type="module"` script is deferred, so this runs after every
+        classic script above but before $(document).ready, which is when
+        plugin_handler.init() runs. That window is what lets the panes register
+        in time; it was measured in a browser, not assumed.
+
+        The import map below is how `three` and `three/addons/` resolve. It has
+        to precede any module that imports them, and the `static` tag is used
+        so the paths follow STATIC_URL rather than hardcoding /static/.
+
+        Do NOT write a template tag in prose here, not even as an example.
+        Django parses tags inside HTML comments -- the comment is stripped by
+        the BROWSER, long after the template engine has already compiled it --
+        so a bare tag with no argument is a TemplateSyntaxError that 500s the
+        whole page. This comment said the tag's name in braces and did exactly
+        that.
+        -->
+        <script type="importmap">
+        {
+          "imports": {
+            "three": "{% static 'webclient/js/vendor/three/three.module.js' %}",
+            "three/addons/": "{% static 'webclient/js/vendor/three/addons/' %}"
+          }
+        }
+        </script>
+        <script type="module" src={% static "webclient/js/blackout_main.js" %}></script>
     {% endblock %}
 
-    <script src="https://cdn.rawgit.com/ejci/favico.js/master/favico-0.3.10.min.js" language="javascript" type="text/javascript" charset="utf-8"></script>
+    <!--
+    favico.js is VENDORED, and this one was load-bearing in a way the warning
+    below never admitted.
+
+    It used to be fetched from cdn.rawgit.com. RawGit shut down in October
+    2019; the URL kept working only because it 301s to jsDelivr, so the client
+    has been depending on a defunct service's courtesy redirect. The failure if
+    that redirect ever stops is NOT a missing favicon badge:
+
+        Evennia's stock notifications.js calls `new Favico(...)` in its init()
+        with no guard, and plugin_handler.init() is a bare loop with no
+        try/catch. A ReferenceError there aborts the loop, so every plugin
+        loaded AFTER notifications never initialises -- including goldenlayout,
+        whose init() builds the layout. The page renders blank.
+
+    The document.write() warning below could never have fired for that case
+    either: by the time it runs, writing to a loaded document replaces it.
+    It is kept only because a blocked local file is still worth naming.
+    -->
+    <script src={% static "webclient/js/vendor/favico.min.js" %} language="javascript" type="text/javascript" charset="utf-8"></script>
     <script type="text/javascript" charset="utf-8">
         if(!window.Favico) {
-            document.write("<div class='err'>Favico.js library not found or the online version could not be reached. Check so Javascript is not blocked in your browser.</div>");
+            document.write("<div class='err'>Favico.js library not found. Check so Javascript is not blocked in your browser.</div>");
         }
     </script>
 

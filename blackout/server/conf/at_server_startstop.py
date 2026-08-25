@@ -30,13 +30,12 @@ def at_server_start():
     This is called every time the server starts up, regardless of
     how it was shut down.
     """
-    from systems.combat.hp_regen import bootstrap_regen
-    from systems.combat.tick_engine import bootstrap_combat
-    from systems.spawning.respawn import bootstrap_respawns
+    # One call, not one per system. Adding a global manager means decorating
+    # its bootstrap with @register_manager and listing its module in
+    # systems/managers.py -- this file does not change again.
+    from systems.managers import bootstrap_all
 
-    bootstrap_combat()
-    bootstrap_respawns()
-    bootstrap_regen()
+    bootstrap_all()
 
 
 def at_server_stop():

@@ -6,6 +6,7 @@ Description: InventoryHandler — the 32-slot grid backing a character's
              carried items, including stack merging.
 """
 
+from items import stacking
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 
 SLOTS_TOTAL = MAX_INVENTORY_SLOTS
@@ -93,6 +94,28 @@ class InventoryHandler:
         return True
 
 
+    def can_accept(self, obj):
+        """
+        Whether `obj` can enter this grid without exceeding SLOTS_TOTAL.
+
+        Mirrors add_item's own decision tree (already-slotted, then
+        mergeable stack, then free slot) so the two can never disagree
+        about whether a pickup fits. Meant to be checked from
+        at_pre_object_receive, before the object has moved -- add_item
+        itself runs after the move and has nowhere to put a rejected
+        object back.
+        """
+        current_slot = self.find_slot(obj)
+        if current_slot >= 0:
+            return True
+
+        stack_slot = self._find_existing_stack(obj)
+        if stack_slot is not None:
+            return True
+
+        return self.has_free_slots()
+
+
     def _find_first_free(self):
         for i in range(SLOTS_TOTAL):
             if self.slots.get(i) is None:
@@ -101,12 +124,20 @@ class InventoryHandler:
 
 
     def _find_existing_stack(self, obj):
-        if not getattr(obj, "is_stackable", False):
-            return None
+        """Return the slot index holding a stack `obj` may merge into, or None.
+
+        The mergeability rule itself lives in items/stacking.py -- this used
+        to compare keys case-SENSITIVELY while the bank compared them
+        case-insensitively, so the same two objects could merge in a vault
+        and refuse to merge in a backpack.
+        """
         for i in range(SLOTS_TOTAL):
             existing = self.get_slot_content(i)
-            if existing is not None and existing.key == obj.key and getattr(existing, "is_stackable", False):
+            mergeable = stacking.is_mergeable(existing, obj)
+
+            if mergeable:
                 return i
+
         return None
 
 
@@ -118,16 +149,20 @@ class InventoryHandler:
         if current_slot >= 0:
             return current_slot
 
-        if getattr(obj, "is_stackable", False):
-            stack_slot = self._find_existing_stack(obj)
-            if stack_slot is not None:
-                existing = self.get_slot_content(stack_slot)
-                if existing is not None and existing.id != obj.id:
-                    additional = getattr(obj, "quantity", 1)
-                    existing.quantity += additional
-                    obj.delete()
-                    self._save()
-                    return stack_slot
+        stack_slot = self._find_existing_stack(obj)
+        if stack_slot is not None:
+            existing = self.get_slot_content(stack_slot)
+            # The merge DELETES `obj`, and nothing hears about it: Evennia's
+            # DefaultObject.delete clears db_location by direct assignment
+            # (evennia/objects/objects.py), which fires no at_object_leave, so
+            # Character's hook never runs and nothing re-enters this handler.
+            # That is safe here only because `obj` was never slotted on this
+            # path -- no slot is left naming a destroyed row. It is the caller
+            # of add_item that owes the state feed a snapshot; see
+            # equipment/handler.py _publish for why this handler stays silent.
+            stacking.merge(existing, obj)
+            self._save()
+            return stack_slot
 
         free = self._find_first_free()
         if free < 0:
@@ -149,23 +184,72 @@ class InventoryHandler:
         if slot_idx < 0 or obj is None:
             return None
 
-        is_stackable = getattr(obj, "is_stackable", False)
+        is_stackable = stacking.is_stackable(obj)
 
         if is_stackable and count is not None and count > 0:
-            current = getattr(obj, "quantity", 1)
+            current = stacking.quantity_of(obj)
+
+            # The slot is cleared BEFORE the object is destroyed. Not to
+            # survive a re-entry -- delete() fires no at_object_leave (see
+            # add_item) -- but so the map persisted by _save() never names a
+            # row that is on its way out. A stale id would read back as an
+            # empty slot anyway, because _get_item_by_id searches
+            # self.obj.contents and delete() removes the object from it, and
+            # _load clears it on the next handler build. Order first, safety
+            # net second.
             if count >= current:
                 self.slots[slot_idx] = None
                 self._save()
-                obj.delete()
+                stacking.reduce_units(obj, current)
                 return None
-            else:
-                obj.quantity = current - count
-                self._save()
-                return obj
-        else:
-            self.slots[slot_idx] = None
+
+            stacking.reduce_units(obj, count)
             self._save()
             return obj
+
+        self.slots[slot_idx] = None
+        self._save()
+        return obj
+
+
+    def move_slot(self, from_idx, to_idx):
+        """
+        Move the item in `from_idx` to `to_idx`, swapping if the target is
+        occupied.
+
+        Swap rather than displace-and-repack: the grid is the player's to
+        arrange, and any rule that shuffles a third slot to make room would
+        undo an arrangement they chose deliberately.
+
+        Stacks are NOT merged when one is dropped onto another. add_item
+        already merges on pickup, so two slots holding the same stackable key
+        should not coexist in the first place -- and a merge here would delete
+        an object as a side effect of a cosmetic rearrange, which is a far
+        worse failure than a no-op if that invariant is ever broken.
+
+        Raises InventoryError on an out-of-range index. Returns True when
+        anything changed, False when the move was a no-op.
+        """
+        for idx in (from_idx, to_idx):
+            if idx < 0 or idx >= SLOTS_TOTAL:
+                raise InventoryError(
+                    f"Slot {idx + 1} is outside your inventory."
+                )
+
+        if from_idx == to_idx:
+            return False
+
+        source = self.slots.get(from_idx)
+        target = self.slots.get(to_idx)
+
+        if source is None and target is None:
+            return False
+
+        self.slots[from_idx] = target
+        self.slots[to_idx] = source
+        self._save()
+
+        return True
 
 
     def all_items(self):
@@ -177,10 +261,56 @@ class InventoryHandler:
         return result
 
 
-    def sync(self):
-        needs_save = False
+    def sync(self, ignore=None):
+        """
+        Purpose: Reconcile the slot map against what the character actually
+            carries, in both directions.
 
-        content_ids = {obj.id for obj in self.obj.contents}
+        Entry:
+            ignore - an object to treat as ALREADY GONE even though it is
+                     still in `self.obj.contents`, or None.
+
+        Exit/Returns:
+            No return value. Saves only when something changed.
+
+        Module Globals:
+            SLOTS_TOTAL read.
+
+        Methodology:
+            `contents` is the truth and the slot map follows it: a slot
+            pointing at something no longer carried is cleared, and anything
+            carried without a slot is adopted into the first free one. That
+            adoption is load-bearing -- `create_object(location=...)` does
+            NOT fire `at_object_receive` (CLAUDE.md gotcha 5), so a spawner-
+            placed loadout gets its slots here or nowhere.
+
+            `ignore` exists because there is exactly one window where
+            `contents` LIES: Evennia's move_to calls
+            `source_location.at_object_leave` at step 4 but does not reassign
+            `self.location` until step 5, so a departing object is still in
+            contents while that hook runs. Without this, the hook's own
+            `remove_item` is undone one line later by the adoption loop --
+            the item is re-adopted into a free slot, a corrupted map is
+            persisted mid-move, and the state-feed snapshot published from
+            that hook describes an inventory the player no longer has.
+
+            Matching is by id, not identity, because that is what the slot
+            map stores.
+
+        Notes/References:
+            typeclasses/characters.py at_object_leave is the one caller that
+            passes `ignore`. See evennia.objects.objects.DefaultObject.move_to
+            for the full hook order.
+
+        Author: Nick Hobar
+        Creation date: 06/17/2026
+        """
+        needs_save = False
+        ignore_id = getattr(ignore, "id", None)
+
+        content_ids = {
+            obj.id for obj in self.obj.contents if obj.id != ignore_id
+        }
 
         for i in range(SLOTS_TOTAL):
             if self.slots[i] is not None and self.slots[i] not in content_ids:
@@ -188,6 +318,8 @@ class InventoryHandler:
                 needs_save = True
 
         for obj in self.obj.contents:
+            if obj.id == ignore_id:
+                continue
             if self.find_slot(obj) < 0:
                 free = self._find_first_free()
                 if free >= 0:

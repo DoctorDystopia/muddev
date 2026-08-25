@@ -15,14 +15,15 @@ target, no weapon, no cooldown on a swing, and it must keep pulsing whether or
 not the caster is swinging at anything.
 """
 
-from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 
 from systems.statefeed import events as feed
 from systems.statefeed import serializers as feed_serializers
 
 from .. import combat_msg
-from ..combat import HANDLER_NO_TIMER_INTERVAL
+from ..protocols import Combatant
+from systems.tick.tickable import TickableHandler, ensure_handler, register_tickable
+from systems.tick.tickable import get_handler_for as _get_tickable_handler_for
 from .registry import AURA_REGISTRY
 from .targeting import hostiles_in_rooms, rooms_within_radius
 
@@ -36,29 +37,22 @@ AURA_HANDLER_KEY = "blackout_aura_handler"
 
 # ─── the handler ───────────────────────────────────────────────────────────
 
-class BlackoutAuraHandler(DefaultScript):
+@register_tickable
+class BlackoutAuraHandler(TickableHandler):
     """Per-caster aura ticker. Attached to a CombatEntity while an aura is on.
 
-    Every COMBAT_TICK_SECONDS the tick engine calls tick(). Most ticks only
+    Every TICK_SECONDS the tick engine calls tick(). Most ticks only
     decrement a counter; on the aura's own cadence the handler resolves the
     radius, finds the hostiles in it, and applies one pulse to each.
     """
 
-    def at_script_creation(self) -> None:
-        """Set up the in-memory state the handler reads every tick."""
-        self.key = AURA_HANDLER_KEY
-        self.desc = "Per-caster damage aura state"
+    HANDLER_KEY = AURA_HANDLER_KEY
+    ACCESSOR_NAME = "aura"
+    HANDLER_DESC = "Per-caster damage aura state"
 
-        # No Evennia timer of our own: ScriptDB.db_interval is an IntegerField
-        # and cannot express the 0.6s tick. The global BlackoutTickEngine owns
-        # the LoopingCall and calls our tick() instead.
-        self.interval = HANDLER_NO_TIMER_INTERVAL
-
-        # An aura does not meaningfully survive a restart -- the engine sweeps
-        # leftovers at server start and the player re-toggles.
-        self.persistent = False
-
-        self.init_runtime_state()
+    # at_script_creation, mark_running and the ensure/get machinery live on
+    # TickableHandler; this class and BlackoutCombatHandler used to carry a
+    # copy each.
 
     # ── per-tick runtime state ───────────────────────────────────────────
     # Everything below lives on ndb, NOT db. The cadence counter and the cached
@@ -108,20 +102,6 @@ class BlackoutAuraHandler(DefaultScript):
         self.init_runtime_state()
 
         return AURA_REGISTRY.get(self.ndb.aura_key)
-
-    def mark_running(self) -> None:
-        """Flag the script active.
-
-        Evennia will not flag a timerless script active on its own -- it only
-        does that when it starts a task -- so the tick engine, not Evennia,
-        owns our liveness and we set it ourselves. Mirrors
-        BlackoutCombatHandler.mark_running.
-        """
-        if self.is_active:
-            return
-
-        self.db_is_active = True
-        self.save(update_fields=["db_is_active"])
 
     # ── radius cache ─────────────────────────────────────────────────────
 
@@ -277,10 +257,10 @@ class BlackoutAuraHandler(DefaultScript):
     # ── tick loop ────────────────────────────────────────────────────────
 
     def tick(self) -> None:
-        """Advance one COMBAT_TICK_SECONDS tick.
+        """Advance one TICK_SECONDS tick.
 
         Called by the global BlackoutTickEngine's LoopingCall, not by Evennia's
-        Script timer — see tick_engine.py for why.
+        Script timer — see systems/tick/engine.py for why.
 
         Every failure path here ends the aura rather than raising, because the
         engine drops a handler from its rotation on ANY exception: an error that
@@ -300,7 +280,7 @@ class BlackoutAuraHandler(DefaultScript):
             self.stop_aura()
             return
 
-        if not hasattr(caster, "is_alive") or not caster.is_alive():
+        if not isinstance(caster, Combatant) or not caster.is_alive():
             self.stop_aura()
             return
 
@@ -339,7 +319,7 @@ class BlackoutAuraHandler(DefaultScript):
             caster.__dict__.pop("aura", None)
 
         try:
-            from ..tick_engine import get_tick_engine
+            from systems.tick.engine import get_tick_engine
 
             get_tick_engine().unregister(self)
         except Exception as exc:
@@ -378,73 +358,23 @@ class BlackoutAuraHandler(DefaultScript):
 # ─── module helpers ────────────────────────────────────────────────────────
 
 def get_aura_handler_for(entity):
-    """Return the entity's active BlackoutAuraHandler, or None.
+    """Return the entity's ACTIVE aura handler, or None.
 
-    Gated on is_active for the same reason get_handler_for is: a leftover
-    stopped handler must not read as a live aura.
+    Named wrapper over tickable.get_handler_for so call sites need not name
+    the class; the is_active gate and its rationale live there.
     """
-    for script in entity.scripts.all():
-        if getattr(script, "key", "") == AURA_HANDLER_KEY and script.is_active:
-            return script
+    handler = _get_tickable_handler_for(entity, BlackoutAuraHandler)
 
-    return None
+    return handler
 
 
 def ensure_aura_handler(caster) -> BlackoutAuraHandler:
-    """Return the caster's existing aura handler, or create+start one.
+    """Return the caster's aura handler, creating and arming one if absent.
 
-    Handles DefaultScript.create()'s (script, errors) return contract, and
-    discards any leftover carrying a stale interval rather than reviving it —
-    the same delete-and-recreate rule ensure_combat_handler uses, which is what
-    stopped historical broken-interval handlers from being resurrected forever.
+    The find-or-create dance, the stale-interval discard and the accessor-cache
+    clear are all tickable.ensure_handler now -- this module and combat.py used
+    to carry ~50 near-identical lines each.
     """
-    from ..tick_engine import get_tick_engine
+    handler = ensure_handler(caster, BlackoutAuraHandler)
 
-    existing = None
-    for script in caster.scripts.all():
-        if getattr(script, "key", "") == AURA_HANDLER_KEY:
-            existing = script
-            break
-
-    if existing is not None and existing.interval != HANDLER_NO_TIMER_INTERVAL:
-        logger.log_info(
-            f"ensure_aura_handler: discarding stale handler on {caster} "
-            f"(interval={existing.interval})."
-        )
-
-        caster.__dict__.pop("aura", None)
-
-        try:
-            existing.delete()
-        except Exception as exc:
-            logger.log_err(f"ensure_aura_handler failed to delete stale handler: {exc!r}")
-
-        existing = None
-
-    if existing is None:
-        existing, errors = BlackoutAuraHandler.create(
-            key=AURA_HANDLER_KEY,
-            obj=caster,
-        )
-
-        if errors:
-            for err in errors:
-                caster.msg(f"|r{err}|n")
-            raise RuntimeError(f"Could not create aura handler for {caster}: {errors}")
-
-    # Evennia will not flag a timerless script active, so we own liveness.
-    existing.mark_running()
-
-    # Clear the accessor cache on EVERY path, not just creation. get_aura_handler_for
-    # is gated on is_active, so reviving a stopped leftover leaves a cached None
-    # behind — and the map overlay, which reads `looker.aura`, would then never
-    # see the aura it just lit.
-    caster.__dict__.pop("aura", None)
-
-    # A reused handler may have had its ndb wiped by a reload since it was
-    # created, so reseed before the engine can tick it.
-    existing.init_runtime_state()
-
-    get_tick_engine().register(existing)
-
-    return existing
+    return handler

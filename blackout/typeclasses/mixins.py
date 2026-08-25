@@ -7,10 +7,17 @@ Description: CombatEntity mixin —_HP, death, and disconnect hooks for any comb
 
 from evennia.utils import logger, lazy_property
 
+from systems.ai.constants import LAST_ATTACKER_ID_ATTR
 from systems.combat import constants as combat_constants
 from systems.combat import combat_msg
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
 from systems.combat.combat_level.logic import get_combat_level
+from systems.combat.protocols import XpEarner
+from systems.devtools import constants as dev_constants
 from systems.statefeed import events as feed
+
+from systems.stat_tracker import constants as stat_constants
 
 
 class CombatEntity:
@@ -51,8 +58,9 @@ class CombatEntity:
                      or falls back to FORTITUDE_START_LEVEL (10).
 
         Exit/Returns:
-            No conditions. After this call, self.db.hp, self.db.max_hp, and
-            self.db.in_combat are all guaranteed to exist.
+            No conditions. After this call, self.db.hp and self.db.max_hp are
+            guaranteed to exist. in_combat is NOT seeded -- it is a derived
+            property now (see below), not an Attribute.
 
         Module Globals:
             combat_constants.FORTITUDE_START_LEVEL read as the default floor.
@@ -74,7 +82,6 @@ class CombatEntity:
 
         self.db.max_hp = max_hp
         self.db.hp = max_hp
-        self.db.in_combat = False
 
 
     @property
@@ -197,7 +204,7 @@ class CombatEntity:
 
         Entry:
             self exposes a `skills` handler (Character's SkillHandler, or
-            HostileNPC's _NpcSkillsShim) -- true for every CombatEntity host
+            HostileNPC's StatBlockSkills) -- true for every CombatEntity host
             today.
 
         Exit/Returns:
@@ -273,9 +280,13 @@ class CombatEntity:
             entity's pre-damage HP (no over-kill).
 
         Module Globals:
-            None.
+            dev_constants.GODMODE_ATTR read.
 
         Methodology:
+            0. Record the attacker, then return 0 unchanged when this entity
+               is in god mode -- the moderator tool's damage immunity. The
+               swing still resolved and still printed; only the HP write is
+               skipped.
             1. Snapshot old HP.
             2. Clamp amount down to old HP (no negative HP stored).
             3. Assign new HP via self.hp = old_hp - amount (also clamps high).
@@ -294,6 +305,25 @@ class CombatEntity:
         """
         if amount < 0:
             amount = 0
+
+        self._record_attacker(attacker)
+
+        # God mode, the moderator tool's damage immunity. Read here rather
+        # than by calling systems.devtools.actions.godmode_enabled, which is
+        # the same read: that module pulls in ITEM_DB, the skill registry and
+        # the xyzgrid contrib, and this is the combat hot path -- every
+        # combatant, every tick. Only the ATTRIBUTE NAME is shared, from
+        # dev_constants, so the two readers cannot name different attributes.
+        # test_godmode asserts they agree behaviourally.
+        #
+        # The attacker is recorded FIRST and deliberately. An immune moderator
+        # should still draw the NPC's aggro, or standing in a fight to observe
+        # it would silently pacify the thing being observed.
+        immune = getattr(self.db, dev_constants.GODMODE_ATTR, False)
+
+        if immune:
+            return 0
+
         old_hp = self.hp
         delta = min(amount, old_hp)
         new_hp = old_hp - delta
@@ -304,6 +334,59 @@ class CombatEntity:
                           damage_type=damage_type)
 
         return delta
+
+
+    def _record_attacker(self, attacker) -> None:
+        """
+        Purpose: Remember who last damaged this entity, for the AI to read.
+
+        Entry:
+            attacker - the CombatEntity that dealt the damage, or None for an
+                       environmental or unattributed source.
+
+        Exit/Returns:
+            No return value. Writes ndb.<LAST_ATTACKER_ID_ATTR>.
+
+        Module Globals:
+            LAST_ATTACKER_ID_ATTR read.
+
+        Methodology:
+            Stores the id, not the object. A reference would pin a row that may
+            be deleted before the next tick reads it; combat.py resolves
+            combatants by id throughout for the same reason.
+
+            ndb rather than db: this is fight-scoped, and a server reload ends
+            every fight anyway. It also keeps a per-hit write off the Attribute
+            table, which would otherwise be a database round trip on every
+            connecting blow of every fight in the game.
+
+            A None attacker is ignored rather than clearing the record. Taking
+            poison or fall damage mid-fight should not make a monster forget
+            who it was fighting.
+
+            Self-damage is ignored for the same reason at_death normalises a
+            self-kill to no killer: a backfiring gadget must not make its
+            wielder their own retaliation target.
+
+        Notes/References:
+            This is the threat-table seam. §3.2 of
+            docs/2026-08-23-DESIGN-0003 chose "last attacker" now with a threat
+            table later; upgrading means accumulating per-attacker damage HERE
+            and changing what systems/ai/behaviors._last_attacker reads. No
+            other caller and no behaviour changes.
+
+        Author: Nick Hobar
+        Creation date: 08/23/2026
+        """
+        if attacker is None or attacker is self:
+            return
+
+        attacker_id = getattr(attacker, "id", None)
+
+        if attacker_id is None:
+            return
+
+        setattr(self.ndb, LAST_ATTACKER_ID_ATTR, attacker_id)
 
 
     def at_death(self, killer=None, source=None, damage_type=None) -> None:
@@ -336,10 +419,13 @@ class CombatEntity:
                the death line, and the killer-side hooks below need the
                latter so a victim cannot award themselves their own kill.
             3. Build and broadcast the death line to the room.
-            4. If killer has `skills` (i.e. is a Player-side handler-bearer),
-               award combat XP. We do NOT gate on isinstance(killer, Character)
-               here; the optional API surface (skills, quests) gates itself.
-            5. If killer has `quests`, fire the wildcard kill-progress update.
+            4. If the killer's `.skills` satisfies XpEarner, award combat XP.
+               We do NOT gate on isinstance(killer, Character) here -- but nor
+               do we gate on the mere PRESENCE of `.skills`, which every NPC
+               also has. The protocol names the capability being asked about.
+            5. Report the kill to the killer's quests, keyed on the victim's
+               stable `db.npc_key`. A player victim has no npc_key and is
+               therefore never a quest objective.
             6. call self.respawn() to permit subclass divergence (player
                respawn vs NPC despawn).
 
@@ -374,19 +460,51 @@ class CombatEntity:
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death broadcast failed: {exc!r}")
 
-        skills = getattr(killer, "skills", None)
-        if skills is not None:
+        # `getattr(killer, "skills", None) is not None` used to gate this, and
+        # it asked the wrong question: every HostileNPC has a `.skills`, so an
+        # NPC that killed a player passed the gate and ran the killer-XP path.
+        # That was harmless only because the NPC-side skill facade's add_xp was
+        # a no-op -- the check was one attribute name standing in for "is this
+        # an XP earner?", which is now a protocol that answers directly.
+        earns_xp = isinstance(getattr(killer, "skills", None), XpEarner)
+        if earns_xp:
             try:
                 self._award_killer_xp(killer)
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death killer XP award failed: {exc!r}")
 
-        quests = getattr(killer, "quests", None)
-        if quests is not None:
+        stats = getattr(killer, "stats", None)
+        npc_key = getattr(self.db, "npc_key", None)
+
+        # Two bugs lived in the four lines this replaces. The quest key passed
+        # was the literal "*", meant as "any active quest" but never
+        # implemented -- update_progress looks its first argument up in
+        # GLOBAL_QUEST_REGISTRY, found nothing, and returned, so no kill
+        # objective in the game could ever advance. And the argument was
+        # `self.key`, the display name "Mutant Raider", where the stat line
+        # directly below already used the stable `db.npc_key`
+        # ("mutant_raider"). notify_quests is the fan-out the "*" wanted, and
+        # npc_key is the identifier a blueprint can actually name.
+        if npc_key:
+            notify_quests(killer, quest_constants.ACTION_KILL, npc_key)
+
+        if stats is not None and npc_key:
             try:
-                quests.update_progress("*", "kill", self.key)
+                stats.increment(stat_constants.KILLS_PER_HOSTILE_STAT_KEY, npc_key)
             except Exception as exc:
-                logger.log_err(f"CombatEntity.at_death quest update failed: {exc!r}")
+                logger.log_err(f"CombatEntity.at_death KILLS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
+
+        stats_b = getattr(self, "stats", None)
+        npc_key_b = getattr(getattr(killer, "db", None), "npc_key", None)
+        if stats_b is not None and npc_key_b:
+            try:
+                stats_b.increment(stat_constants.DEATHS_PER_HOSTILE_STAT_KEY, npc_key_b)
+            except Exception as exc:
+                logger.log_err(f"CombatEntity.at_death DEATHS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
+
+        # Drops must roll BEFORE respawn. HostileNPC.respawn() deletes the row,
+        # and the loot table is resolved off db.npc_key while it still exists.
+        self.drop_loot(killer)
 
         # Tear combat down BEFORE respawn. respawn() restores HP to max, so
         # running it first made the corpse read as alive again and the fight
@@ -428,11 +546,54 @@ class CombatEntity:
         pass
 
 
+    def drop_loot(self, killer=None) -> None:
+        """
+        Purpose: Subclass-overridable hook for leaving loot behind on death.
+        Default behaviour is to drop nothing.
+
+        Entry:
+            killer - the entity that landed the killing blow, or None for an
+                     environmental or self-inflicted death (at_death has
+                     already normalised a self-kill to None by this point).
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A no-op stub for the same reason respawn() is: what death leaves
+            behind differs completely between an NPC (a drop table) and a
+            Player (a death penalty Blackout has no policy for yet), and the
+            base class should assert neither. HostileNPC overrides this to roll
+            its NpcDef's loot_table.
+
+        Notes/References:
+            Called from at_death BEFORE leave_combat/respawn, because
+            HostileNPC.respawn() deletes the database row this reads
+            db.npc_key off.
+
+            A Player override is where inventory-drop-on-death would land; the
+            hook exists now so that work needs no change to at_death.
+
+        Author: Nick Hobar
+        Creation date: 08/14/2026
+        """
+        pass
+
+
     def respawn(self) -> None:
         """
-        Purpose: Subclass-overridable respawn hook. Default behavior in this
-        batch is a no-op FOR NPCs (NPCs despawn via session/disconnect logic)
-        and a stub for Players (Blackout has no respawn location policy yet).
+        Purpose: Subclass-overridable respawn hook. The base behaviour is a
+        bare HP refill in place; both real combatant types override it.
+        HostileNPC deletes its row and enqueues on the respawn manager, and
+        Character moves to the respawn room (world/respawn.py) at full HP.
+
+        This body is therefore the DEGRADED path, not a stub: it is what
+        Character.respawn falls back to when the respawn room cannot be
+        resolved, which is the behaviour every player death had before there
+        was a respawn-room fact anywhere in the codebase.
 
         Entry:
             None.
@@ -450,8 +611,8 @@ class CombatEntity:
             respawn room and restore HP to max_hp.
 
         Notes/References:
-            Author design dialogue: stub respawn; no per-NPC spawn table
-            behavior implemented in this batch.
+            Player respawn policy: docs/2026-08-23-DESIGN-0003 §1.4 --
+            respawn room, full HP, deliberately no XP penalty.
 
         Author: Nick Hobar
         Creation date: 07/26/2026
@@ -476,8 +637,7 @@ class CombatEntity:
             None.
 
         Methodology:
-            1. Mark self.db.in_combat = False (the canonical combat state).
-            2. Query self.combat (CombatEntity's lazy accessor) and if the
+            1. Query self.combat (CombatEntity's lazy accessor) and if the
                accessor returned a non-None handler, call its drop_combatant
                so the per-combatant Script can release the entity cleanly.
             3. Drop the lazy_property cache.
@@ -488,8 +648,6 @@ class CombatEntity:
         Author: Nick Hobar
         Creation date: 07/26/2026
         """
-        self.db.in_combat = False
-
         try:
             handler = self.combat
         except Exception:
@@ -541,11 +699,60 @@ class CombatEntity:
         # Deferred and guarded: a diagnostic must never be able to break the
         # anti-combat-log path it is riding on.
         try:
-            from systems.combat import tick_debug
+            from systems.tick import debug as tick_debug
 
             tick_debug.detach(self)
         except Exception as exc:
             logger.log_err(f"at_disconnect_combat_cleanup tick_debug detach failed: {exc!r}")
+
+    @property
+    def in_combat(self) -> bool:
+        """
+        Purpose: Report whether this entity is currently in a fight.
+
+        Entry:
+            No conditions. Safe on an entity that has never fought.
+
+        Exit/Returns:
+            True while a live combat handler exists and is not tearing down.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            DERIVED, not stored. This was a persistent `db.in_combat`
+            Attribute written from five places, alongside four other things
+            that also answered "is this entity in combat?" -- whether a
+            handler script existed, its db_is_active column, its membership of
+            the tick rotation, and whether a pending action was set. Nothing
+            kept them in agreement, and the code to repair their disagreement
+            was most of what made combat teardown hard to follow.
+
+            The predicate is "has a live handler that is not final" rather
+            than "is mid-swing", because a defender who has been attacked but
+            has not acted yet IS in combat. `examine mutant raider` reporting
+            otherwise was a bug once already.
+
+        Notes/References:
+            systems/tick/states.py owns the state this reads.
+
+        Author: Nick Hobar
+        Creation date: 08/18/2026
+        """
+        from systems.tick import states
+
+        try:
+            handler = self.combat
+        except Exception:
+            return False
+
+        if handler is None or handler.pk is None:
+            return False
+
+        final = states.is_final(handler.state)
+
+        return not final
+
 
     # ─── CombatHandler lazy accessor (filled in by combat.py in batch 2) ────
 

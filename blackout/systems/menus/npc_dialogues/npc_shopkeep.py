@@ -7,7 +7,15 @@ Description: Dialogue nodes for shopkeeper NPCs: the buy and sell flows.
 
 from evennia.utils.evmenu import list_node
 
-from systems.menus.base_menu import parse_quantity
+from systems.menus.base_menu import back_option, cancel_option, parse_quantity
+from systems.menus.constants import (
+    CONFIRM_NO_KEYS,
+    CONFIRM_YES_KEYS,
+    QUANTITY_ALL_KEYS,
+    QUANTITY_CUSTOM_KEYS,
+    QUANTITY_ONE_KEYS,
+)
+from systems.menus.dialogue import resolve_farewell
 
 from systems.ui.colors import (
     ERROR_COLOR,
@@ -101,7 +109,7 @@ def node_buy(caller, raw_string, **kwargs):
         f'{_dialog("Here is what I have for sale.")}\n\n'
         f"{_hl(f'Your credits: {credits}')}"
     )
-    extra_options = [{"key": ("[b]ack", "b", "back"), "desc": "Back", "goto": "start"}]
+    extra_options = [back_option("Back", "start")]
     return text, extra_options
 
 
@@ -128,7 +136,7 @@ def _parse_custom_buy_quantity(caller, raw_string, **kwargs):
 def node_buy_quantity(caller, raw_string, **kwargs) -> tuple:
     entry = kwargs.get("buy_entry")
     if not entry:
-        return _dialog('"I do not see that item."'), [{"desc": "Back", "goto": "node_buy"}]
+        return _dialog('"I do not see that item."'), [back_option("Back", "node_buy")]
 
     credits = credits_count(caller)
     max_affordable = credits // entry.buy_price if entry.buy_price > 0 else 0
@@ -137,7 +145,7 @@ def node_buy_quantity(caller, raw_string, **kwargs) -> tuple:
     if total_available <= 0:
         return (
             _dialog('"You cannot afford that."'),
-            [{"desc": "Back", "goto": "node_buy"}],
+            [back_option("Back", "node_buy")],
         )
 
     if total_available == 1:
@@ -155,6 +163,7 @@ def node_buy_quantity(caller, raw_string, **kwargs) -> tuple:
         options = []
         if credits >= total_price:
             options.append({
+                "key": CONFIRM_YES_KEYS,
                 "desc": f"Confirm purchase ({total_price} credits)",
                 "goto": (_confirm_buy, {"buy_entry": entry, "buy_count": 1}),
             })
@@ -162,7 +171,9 @@ def node_buy_quantity(caller, raw_string, **kwargs) -> tuple:
             text_parts.append("")
             text_parts.append(f"{ERROR_COLOR}Not enough credits!{RESET_COLOR}")
             text = "\n".join(text_parts)
-        options.append({"desc": "Cancel", "goto": "node_buy"})
+        options.append(
+            {"key": CONFIRM_NO_KEYS, "desc": "Cancel", "goto": "node_buy"}
+        )
         return text, options
 
     text_parts = [
@@ -175,10 +186,25 @@ def node_buy_quantity(caller, raw_string, **kwargs) -> tuple:
     text = "\n".join(text_parts)
 
     options = [
-        {"key": "1", "desc": "Buy 1", "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": 1})},
-        {"key": ("x", "buy x"), "desc": "Buy X (custom)", "goto": ("node_buy_custom_qty", {"buy_entry": entry})},
-        {"key": ("a", "all"), "desc": f"Buy all {total_available} for {_hl(str(total_available * entry.buy_price))} credits", "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": total_available})},
-        {"desc": "Cancel", "goto": "node_buy"},
+        {
+            "key": QUANTITY_ONE_KEYS,
+            "desc": "Buy 1",
+            "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": 1}),
+        },
+        {
+            "key": QUANTITY_CUSTOM_KEYS,
+            "desc": "Buy X (custom)",
+            "goto": ("node_buy_custom_qty", {"buy_entry": entry}),
+        },
+        {
+            "key": QUANTITY_ALL_KEYS,
+            "desc": (
+                f"Buy all {total_available} for "
+                f"{_hl(str(total_available * entry.buy_price))} credits"
+            ),
+            "goto": (_pick_buy_quantity, {"buy_entry": entry, "buy_count": total_available}),
+        },
+        cancel_option("node_buy"),
     ]
 
     return text, options
@@ -194,7 +220,7 @@ def node_buy_custom_qty(caller, raw_string, **kwargs) -> tuple:
     """
     entry = kwargs.get("buy_entry")
     if not entry:
-        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_buy"}]
+        return _dialog('"That item is no longer available."'), [back_option("Back", "node_buy")]
 
     credits = credits_count(caller)
     max_affordable = credits // entry.buy_price if entry.buy_price > 0 else 0
@@ -211,7 +237,7 @@ def node_buy_custom_qty(caller, raw_string, **kwargs) -> tuple:
 
     options = [
         {"key": "_default", "goto": (_parse_custom_buy_quantity, {"buy_entry": entry})},
-        {"desc": "Cancel", "goto": ("node_buy_quantity", {"buy_entry": entry})},
+        cancel_option(("node_buy_quantity", {"buy_entry": entry})),
     ]
 
     return text, options
@@ -226,7 +252,7 @@ def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
     buy_count = kwargs.get("buy_count", 1)
 
     if not entry:
-        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_buy"}]
+        return _dialog('"That item is no longer available."'), [back_option("Back", "node_buy")]
 
     total_price = buy_count * entry.buy_price
     credits = credits_count(caller)
@@ -244,6 +270,7 @@ def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
     options = []
     if credits >= total_price:
         options.append({
+            "key": CONFIRM_YES_KEYS,
             "desc": f"Confirm purchase ({total_price} credits)",
             "goto": (_confirm_buy, {"buy_entry": entry, "buy_count": buy_count}),
         })
@@ -253,8 +280,14 @@ def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
         text = "\n".join(text_parts)
 
     if entry.count > 1 or entry.is_prototype:
-        options.append({"desc": "Change quantity", "goto": ("node_buy_quantity", {"buy_entry": entry})})
-    options.append({"desc": "Cancel", "goto": "node_buy"})
+        options.append({
+            "key": QUANTITY_CUSTOM_KEYS,
+            "desc": "Change quantity",
+            "goto": ("node_buy_quantity", {"buy_entry": entry}),
+        })
+    options.append(
+        {"key": CONFIRM_NO_KEYS, "desc": "Cancel", "goto": "node_buy"}
+    )
 
     return text, options
 
@@ -311,7 +344,7 @@ def node_sell(caller, raw_string, **kwargs):
         f'{_dialog("Let me see what you have.")}\n\n'
         f"{_hl(f'Your credits: {credits}')}"
     )
-    extra_options = [{"key": ("[b]ack", "b", "back"), "desc": "Back", "goto": "start"}]
+    extra_options = [back_option("Back", "start")]
     return text, extra_options
 
 
@@ -340,11 +373,11 @@ def _parse_custom_sell_quantity(caller, raw_string, **kwargs):
 def node_sell_quantity(caller, raw_string, **kwargs) -> tuple:
     entry = kwargs.get("sell_group")
     if not entry:
-        return _dialog('"I do not see that item."'), [{"desc": "Back", "goto": "node_sell"}]
+        return _dialog('"I do not see that item."'), [back_option("Back", "node_sell")]
 
     available = max(0, count_available(entry))
     if available <= 0:
-        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_sell"}]
+        return _dialog('"That item is no longer available."'), [back_option("Back", "node_sell")]
 
     if available == 1:
         total_price = entry.unit_price
@@ -357,6 +390,7 @@ def node_sell_quantity(caller, raw_string, **kwargs) -> tuple:
         text = "\n".join(text_parts)
         options = [
             {
+                "key": CONFIRM_YES_KEYS,
                 "desc": f"Confirm sale ({total_price} credits)",
                 "goto": (_confirm_sell, {
                     "sell_group": entry,
@@ -364,7 +398,9 @@ def node_sell_quantity(caller, raw_string, **kwargs) -> tuple:
                 }),
             },
         ]
-        options.append({"desc": "Cancel", "goto": "node_sell"})
+        options.append(
+            {"key": CONFIRM_NO_KEYS, "desc": "Cancel", "goto": "node_sell"}
+        )
         return text, options
 
     text_parts = [
@@ -376,10 +412,25 @@ def node_sell_quantity(caller, raw_string, **kwargs) -> tuple:
     text = "\n".join(text_parts)
 
     options = [
-        {"key": "1", "desc": "Sell 1", "goto": (_pick_sell_quantity, {"sell_group": entry, "sell_count": 1})},
-        {"key": ("x", "sell x"), "desc": "Sell X (custom)", "goto": ("node_sell_custom_qty", {"sell_group": entry})},
-        {"key": ("a", "all"), "desc": f"Sell all {available} for {_hl(str(available * entry.unit_price))} credits", "goto": (_pick_sell_quantity, {"sell_group": entry, "sell_count": available})},
-        {"desc": "Cancel", "goto": "node_sell"},
+        {
+            "key": QUANTITY_ONE_KEYS,
+            "desc": "Sell 1",
+            "goto": (_pick_sell_quantity, {"sell_group": entry, "sell_count": 1}),
+        },
+        {
+            "key": QUANTITY_CUSTOM_KEYS,
+            "desc": "Sell X (custom)",
+            "goto": ("node_sell_custom_qty", {"sell_group": entry}),
+        },
+        {
+            "key": QUANTITY_ALL_KEYS,
+            "desc": (
+                f"Sell all {available} for "
+                f"{_hl(str(available * entry.unit_price))} credits"
+            ),
+            "goto": (_pick_sell_quantity, {"sell_group": entry, "sell_count": available}),
+        },
+        cancel_option("node_sell"),
     ]
 
     return text, options
@@ -395,11 +446,11 @@ def node_sell_custom_qty(caller, raw_string, **kwargs) -> tuple:
     """
     entry = kwargs.get("sell_group")
     if not entry:
-        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_sell"}]
+        return _dialog('"That item is no longer available."'), [back_option("Back", "node_sell")]
 
     available = max(0, count_available(entry))
     if available <= 0:
-        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_sell"}]
+        return _dialog('"That item is no longer available."'), [back_option("Back", "node_sell")]
 
     text_parts = [
         _line(entry.name),
@@ -412,7 +463,7 @@ def node_sell_custom_qty(caller, raw_string, **kwargs) -> tuple:
 
     options = [
         {"key": "_default", "goto": (_parse_custom_sell_quantity, {"sell_group": entry})},
-        {"desc": "Cancel", "goto": ("node_sell_quantity", {"sell_group": entry})},
+        cancel_option(("node_sell_quantity", {"sell_group": entry})),
     ]
 
     return text, options
@@ -431,11 +482,11 @@ def node_confirm_sell(caller, raw_string, **kwargs) -> tuple:
     actual_count = kwargs.get("actual_count", 1)
 
     if not entry:
-        return _dialog('"I do not see that item."'), [{"desc": "Back", "goto": "node_sell"}]
+        return _dialog('"I do not see that item."'), [back_option("Back", "node_sell")]
 
     available = max(0, count_available(entry))
     if available <= 0:
-        return _dialog('"That item is no longer available."'), [{"desc": "Back", "goto": "node_sell"}]
+        return _dialog('"That item is no longer available."'), [back_option("Back", "node_sell")]
 
     actual_count = min(actual_count, available)
     total_price = actual_count * entry.unit_price
@@ -450,6 +501,7 @@ def node_confirm_sell(caller, raw_string, **kwargs) -> tuple:
 
     options = [
         {
+            "key": CONFIRM_YES_KEYS,
             "desc": f"Confirm sale ({total_price} credits)",
             "goto": (_confirm_sell, {
                 "sell_group": entry,
@@ -459,8 +511,14 @@ def node_confirm_sell(caller, raw_string, **kwargs) -> tuple:
     ]
 
     if entry.count > 1:
-        options.append({"desc": "Change quantity", "goto": ("node_sell_quantity", {"sell_group": entry})})
-    options.append({"desc": "Cancel", "goto": "node_sell"})
+        options.append({
+            "key": QUANTITY_CUSTOM_KEYS,
+            "desc": "Change quantity",
+            "goto": ("node_sell_quantity", {"sell_group": entry}),
+        })
+    options.append(
+        {"key": CONFIRM_NO_KEYS, "desc": "Cancel", "goto": "node_sell"}
+    )
 
     return text, options
 
@@ -507,6 +565,47 @@ def start(caller, **kwargs) -> tuple:
 
 
 def node_goodbye(caller, **kwargs) -> tuple:
-    npc = kwargs.get("npc", _get_npc(caller))
-    farewell = _dialog(getattr(npc.db, "farewell", None) or get_farewell(npc))
-    return farewell, None
+    """End the trade in-fiction. Prints nothing: closing the menu is what
+    speaks, so that "Goodbye" and q part with the same words."""
+    return "", None
+
+
+def _shop_farewell(caller: object, menu: object) -> str:
+    """
+    Purpose: Decide what a shopkeep says on parting.
+
+    Entry:
+        caller is the Character leaving.
+        menu is the BlackoutEvMenu being closed; it carries the NPC.
+
+    Exit/Returns:
+        Returns the styled farewell line.
+
+    Module Globals:
+        None
+
+    Methodology:
+        A shopkeep keeps its dialogue in its shop definition rather than on
+        the object, so this overrides the generic source in dialogue.py --
+        but only the SOURCE. The printing still happens once, in
+        BlackoutEvMenu.close_menu.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/20/2026
+    """
+    npc = getattr(menu, "npc", None)
+
+    if npc is None:
+        return _dialog(resolve_farewell(None))
+
+    spoken = npc.db.farewell or get_farewell(npc)
+    styled = _dialog(spoken)
+
+    return styled
+
+
+# Spoken by BlackoutEvMenu.close_menu, however the conversation ends.
+CLOSING_TEXT = _shop_farewell

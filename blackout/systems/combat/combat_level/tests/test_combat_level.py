@@ -107,7 +107,7 @@ class TestGetCombatLevelForCharacter(EvenniaTest):
 
 
 class TestGetCombatLevelForNPC(EvenniaTest):
-    """The same formula must work off HostileNPC's _NpcSkillsShim."""
+    """The same formula must work off HostileNPC's StatBlockSkills."""
 
     def setUp(self):
         super().setUp()
@@ -122,9 +122,12 @@ class TestGetCombatLevelForNPC(EvenniaTest):
         )
 
     def test_npc_combat_level_matches_formula(self):
-        # fortitude_level is absent from combat_stats -> _NpcSkillsShim
-        # defaults an unknown key to 1.
-        base = const.COMBAT_LEVEL_BASE_WEIGHT * (1 + 10)
+        # This stat block is hand-built rather than assembled by
+        # NpcDef.to_combat_block, so it names no fortitude_level at all and
+        # StatBlockSkills reports the absent-skill floor of 0. An NPC that
+        # came from an NpcDef gets its Fortitude derived from max_hp instead
+        # -- see test_an_npc_def_derives_fortitude_from_max_hp below.
+        base = const.COMBAT_LEVEL_BASE_WEIGHT * (0 + 10)
         melee = const.COMBAT_LEVEL_BRANCH_WEIGHT * (20 + 15)
         expected = math.floor(base + melee)
 
@@ -132,3 +135,44 @@ class TestGetCombatLevelForNPC(EvenniaTest):
 
     def test_npc_combat_level_property_works(self):
         self.assertEqual(self.npc.combat_level, get_combat_level(self.npc))
+
+    def test_an_npc_def_derives_fortitude_from_max_hp(self):
+        """The regression the shim hid.
+
+        to_combat_block never emitted a fortitude_level, and the old shim
+        answered its unknown-key default of 1 -- so the Big Mutant's 87
+        hitpoints produced a combat level computed off a Fortitude of 1, and
+        it read as a far weaker monster than it is.
+        """
+        from world.npc_database import NPC_DB
+
+        big_mutant = NPC_DB["big_mutant"].create(location=self.room1)
+
+        definition = NPC_DB["big_mutant"]
+
+        # Derived from the def, not typed. This assertion IS the regression the
+        # docstring describes -- fortitude must come from max_hp -- and writing
+        # 87 here made it a statement about one monster's balance instead.
+        self.assertEqual(
+            big_mutant.skills.get_level("fortitude"), definition.max_hp)
+
+        # Likewise for the rest of the inputs. These were `(87 + 1)` and
+        # `(1 + 1)`, hardcoding a Big Mutant whose defense, strike and brawn
+        # were all 1; a rebalance on 08/23/2026 moved the OSRS Greater Demon
+        # numbers off the equipment bonuses and onto the skill levels, and this
+        # test failed for the balance change rather than for a defect.
+        #
+        # A change to the FORMULA itself is not this test's job to catch --
+        # that is what the rest of this module is for.
+        base = const.COMBAT_LEVEL_BASE_WEIGHT * (
+            definition.max_hp + definition.defense_level)
+        melee = const.COMBAT_LEVEL_BRANCH_WEIGHT * (
+            definition.strike_level + definition.brawn_level)
+        expected = math.floor(base + melee)
+
+        self.assertEqual(get_combat_level(big_mutant), expected)
+        self.assertGreater(
+            get_combat_level(big_mutant),
+            get_combat_level(NPC_DB["mutant_raider"].create(location=self.room1)),
+            msg="an 87-hp monster must out-level a 5-hp one",
+        )

@@ -35,6 +35,8 @@ class FurnaceFacility(FoundryBaseFacility):
     Only Foundry-category recipes are shown in the craft menu.
     Tagged as a 'furnace' tool so it satisfies recipe tool requirements.
     """
+    asset_key = "furnace"
+
     def at_object_creation(self):
         parent_class = super()
         parent_class.at_object_creation()
@@ -66,6 +68,8 @@ class AnvilFacility(MetalsmithBaseFacility):
     Only Metalsmithing-category recipes are shown in the craft menu.
     Also tagged as a crafting_tool so it satisfies recipe tool requirements.
     """
+    asset_key = "anvil"
+
     def at_object_creation(self):
         parent_class = super()
         parent_class.at_object_creation()

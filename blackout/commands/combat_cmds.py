@@ -9,9 +9,10 @@ from evennia import CmdSet, Command
 
 from commands.constants import HELP_CATEGORY_COMBAT
 from systems.combat import combat_msg, constants as const
+from systems.combat.protocols import Combatant
 from systems.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.combat.auras.registry import AURA_REGISTRY, find_aura
-from systems.combat import tick_debug
+from systems.tick import debug as tick_debug
 from systems.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
 from systems.combat.rules.introspect import describe_action_rules, describe_registry
 from systems.ui import colors
@@ -43,14 +44,18 @@ class CmdAttack(Command):
         if target is None:
             return
 
-        if not hasattr(target, "is_alive"):
+        if not isinstance(target, Combatant):
             caller.msg(f"You can't attack {target.key}.")
             return
 
         # Per twitch-tutorial combat_twitch.py:335, give EACH side its own
-        # handler. Note this does NOT make the NPC fight back: nothing queues
-        # an action for it and there is no AI hook yet. The target's handler
-        # exists so it registers as a combatant for get_sides/check_stop_combat.
+        # handler. The target's handler registers it as a combatant for
+        # get_sides/check_stop_combat, and -- since the AI landed -- is also
+        # what gives a hostile somewhere to be asked for an action: the
+        # controller seam in BlackoutCombatHandler.tick consults db.ai_behavior
+        # whenever a combatant has no pending action. Still nothing queues one
+        # for the target HERE; retaliation begins when the first hit lands and
+        # at_damage records who threw it.
         ensure_combat_handler(target)
         handler = ensure_combat_handler(caller)
 
@@ -284,9 +289,9 @@ class CmdCombatOptions(Command):
     def func(self) -> None:
         caller = self.caller
 
-        from evennia.utils.evmenu import EvMenu
+        from systems.menus.base_menu import start_blackout_menu
 
-        EvMenu(
+        start_blackout_menu(
             caller,
             "systems.menus.combat_options_menu",
             startnode="start",

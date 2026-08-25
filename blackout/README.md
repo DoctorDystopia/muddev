@@ -492,6 +492,92 @@ return on a dictionary truth test before reading any handler state.
 
 ---
 
+## Loot Tables
+
+Kill an NPC and its drops land **on the floor of the room it died in**. Pick
+them up with the stock `get` command.
+
+### How a drop is resolved
+
+`CombatEntity.at_death` → `drop_loot()` → `systems/loot/drops.py`, which reads
+`db.npc_key` → `NPC_DB[key].loot_table` → `LOOT_DB[table_key]` and rolls it.
+Resolution is **live**, not stamped at spawn, so editing a table and running
+`evennia reload` affects NPCs already standing on the grid.
+
+An NPC whose `NpcDef` sets no `loot_table` drops nothing — every NPC is opt-in,
+the same way `respawn_seconds` is.
+
+### The three stages of a table
+
+| Stage | Behaviour |
+|---|---|
+| `always` | Every entry drops on every kill. |
+| `main` | `rolls` weighted picks. `nothing_weight` is the no-drop share of the same pool. |
+| `tertiary` | Independent 1/N rolls; can land alongside a main-table drop. |
+
+Weights are relative integers. The shipped tables are all denominated in 128ths
+so an OSRS wiki drop rate copies across without arithmetic.
+
+### Registering a new table
+
+```python
+# world/loot_defs/hostile.py — example entry
+"scav_drops": LootTableDef(
+    key="scav_drops",
+    always=[LootEntry(item_key="rusty_metal_chunk")],
+    main=[
+        LootEntry(item_key="credits", min_quantity=5, max_quantity=15,
+                  weight=40),
+    ],
+    nothing_weight=88,
+    tertiary=[
+        TertiaryDrop(entry=LootEntry(item_key="glass_cannon_amulet"),
+                     chance_denominator=128),
+    ],
+),
+```
+
+Then name it from the NPC:
+
+```python
+# world/npc_defs/hostile.py
+"scav": NpcDef(key="scav", ..., loot_table="scav_drops"),
+```
+
+Two NpcDefs may name the same table; that is how a shared rare table works
+without duplicating data.
+
+### Check a table without killing anything
+
+```bash
+> py from world.loot_database import LOOT_DB; print(LOOT_DB["mutant_raider_drops"].roll())
+```
+
+### Validate every table
+
+Catches unknown `item_key`s, inverted quantity ranges, unrollable pools, and a
+table registered under a key its def disagrees with:
+
+```bash
+> py from world.loot_database import validate_loot_tables; print(validate_loot_tables() or "clean")
+```
+
+An empty list means clean. This also runs as a test
+(`world.tests.test_loot_database`); at runtime a bad key is logged and skipped
+rather than raised, so a typo never blocks a death.
+
+### Known gaps
+
+- No corpse object and no loot ownership — drops are free for anyone in the
+  room to `get`.
+- No auto-loot. `award_drops` takes `killer` but does not read it yet.
+- Player death drops nothing; `CombatEntity.drop_loot` is a no-op stub for
+  anything that is not a `HostileNPC`.
+- Drops are not published to the state feed, so a graphical client sees the
+  items appear only via the room contents.
+
+---
+
 ## Banking System
 
 ### In-game commands
@@ -499,23 +585,32 @@ return on a dictionary truth test before reading any handler state.
 ```bash
 > deposit rusty metal chunk
 
-Item deposited.
+You deposit rusty metal chunk (x11) into the bank.
 
 > balance
 
 --- Storage ---
-1. rusty metal chunk [2.0kg, 1 credits]
+1. rusty metal chunk (2.0kg, 1g) x11
 
-> withdraw rusty metal chunk
+> withdraw rusty metal chunk 4
 
-You withdraw rusty metal chunk from the bank.
+You withdraw rusty metal chunk (x4) from the bank.
 ```
+
+A quantity is optional and may be a number or `all`. **Omitting it moves
+everything that matches** — the whole stack for a stackable item, and every
+copy of it otherwise. Items that do not stack are separate objects, so a pile
+of eleven scrap plates is eleven bank entries, but one command moves them all.
 
 Opens the full banking menu:
 
 ```bash
 > bank
 ```
+
+The menu's deposit and withdraw lists collapse identical items into one row
+with a total (`rusty scrap metal (x11)`) and then prompt for a quantity, so
+bulk transfers do not need the command form.
 
 ### Python inspection
 
@@ -530,7 +625,7 @@ Opens the full banking menu:
 ### Bulk deposit all items of a type
 
 ```python
-> py [self.bank.deposit(obj) for obj in self.contents if obj.key == "rusty metal chunk"]
+> py self.bank.deposit_many([obj for obj in self.contents if obj.key == "rusty metal chunk"])
 ```
 
 ---
@@ -595,6 +690,48 @@ now raises at import on an unregistered category to make that impossible.
 
 ---
 
+## Stat Tracker
+
+Generic counters and stats all stored in a single per-character dict, e.g. kills per hostile type, credits spent. 
+
+### In-game commands: inspect a character's stats
+
+```bash
+> py me.stats.all()
+> py me.stats.get("kills_per_hostile")
+> py me.stats.get("kills_per_hostile", key="mutant_raider")
+```
+
+### Adding a new tracked stat
+
+1. Add a `STAT_KEY` constant in `systems/stat_tracker/constants.py`.
+2. Add a matching `StatDef` to `STAT_REGISTRY` in `systems/stat_tracker/registry.py`.
+3. Record an increment at the site of the event, following this pattern:
+
+```python
+# e.g. typeclasses/mixins.py, CombatEntity.at_death
+stats = getattr(killer, "stats", None)
+npc_key = getattr(self.db, "npc_key", None)
+if stats is not None and npc_key:
+    try:
+        stats.increment(stat_constants.KILLS_PER_HOSTILE_STAT_KEY, npc_key)
+    except Exception as exc:
+        logger.log_err(f"CombatEntity.at_death KILLS_PER_HOSTILE_STAT_KEY stat update failed: {exc!r}")
+```
+
+### Types of stats
+Each stat type is defined in `StatKind` once in `systems/stat_tracker/registry.py`.
+`StatHandler` defines how each is handled.
+
+Source of truth definitions in `systems/stat_tracker/registry.py`
+
+```text
+COUNTER stat stores         |  {stat_key: total(int)}
+KEYED_COUNTER stat stores   |  {stat_key: {sub_key: total(int)}}
+```
+
+---
+
 ## Admin Commands
 
 ### Purge items from the world
@@ -605,6 +742,75 @@ now raises at import on an unregistered category to make that impossible.
 ```
 
 Requires Builder permission. Searches both inventory and equipment slots.
+
+### The Moderator Egg
+
+An in-game item that opens the moderator toolkit as a menu. Give yourself one:
+
+```python
+> py from world.item_database import ITEM_DB; ITEM_DB["moderator_egg"].create(location=self, home=self)
+```
+
+Then, with it in your inventory:
+
+```bash
+> egg
+```
+
+The command is locked to `perm(Admin)`; superusers bypass the lock as they do
+every other. The egg is inert in anyone else's hands, and `tradeable=False`
+keeps it out of shops and trades -- the only way one reaches a player is
+someone handing it over.
+
+What the menu offers:
+
+| Entry | Effect |
+|---|---|
+| Inspect | The target's full player dossier (the same one `score` renders) plus a staff addendum: dbrefs, the account and its permissions, god-mode state, the itemised bag, and every quest with live objective counters. Read-only. |
+| Spawn an item | Any `ITEM_DB` key, 1 or N. Stackables arrive as one stack; a request larger than the grid is clamped and says so. |
+| Spawn an NPC | Any `NPC_DB` key, 1-20, into **the target's room**. They land live and hostile, with the full combat block and respawn stamp `NpcDef.create` gives a map-placed one. |
+| Toggle god mode | The target ignores all incoming damage. Persists on the CHARACTER, not the egg -- dropping the egg does not turn it off. |
+| Restore | Refresh max HP from Fortitude, heal to full, drop out of combat. |
+| Empty inventory | Destroys everything carried **and equipped**. Behind a confirmation that counts what it will destroy and names whose it is. Staff items are skipped. |
+| Teleport to a map | Any map in `scripts/map_manifest.json`, landing on its `(0,0)` entrance tile. |
+| Teleport to a player | Sends the target to whichever character you name. |
+| Bring target to me | The same call with the arguments swapped. |
+| Grant XP / Set a skill level | Any key in `SKILL_REGISTRY`. Levels accept the full 0-127 range. |
+| Quests | Accept, abandon, complete, reset, or jump to any step of any quest in the registry. See below. |
+| Boot or ban an account | Types Evennia's own `boot` / `ban` / `unban`. `ban` keeps its Developer lock. |
+| Change target | Aims every entry above at another character. Blank resets to yourself. |
+
+The egg protects itself: `Empty inventory` refuses to delete anything tagged
+as a staff item, so emptying your own bag does not destroy the egg you are
+holding to do it with.
+
+#### Quest testing
+
+The quest screen is the one to reach for when testing content. Four
+whole-quest writes plus a step jump:
+
+| Operation | What it does |
+|---|---|
+| Accept | Starts the quest properly -- seeds progress, fires step 1's `on_enter`. Indistinguishable from taking it from an NPC. |
+| Abandon | Drops progress. **Leaves any completion record standing**, so a finished quest stays finished. |
+| Complete | Marks it done and **pays the rewards**. Skipped steps' hooks do not fire. |
+| Reset | Clears active *and* completed. The only one that makes a finished quest takeable again. |
+| Jump to a step | Moves an active quest to any step, forward or back. Re-seeds that step's counters and fires its `on_enter`, so the quest keeps playing from there. |
+
+Abandon vs. Reset is the distinction worth knowing: **abandon** returns a quest
+in progress to not-started, but does nothing to a quest already completed.
+**Reset** is what a tester replaying content wants.
+
+The step jump is what makes a five-step quest testable in minutes rather than
+by replaying it: accept, jump to the step under test, exercise it, jump back.
+
+Every action taken through the egg writes one `[MODTOOL]` line to the server
+log naming the actor, the verb and the target. Reading a dossier is logged
+too. To review a session:
+
+```bash
+grep MODTOOL server/logs/server.log
+```
 
 ---
 
@@ -662,14 +868,39 @@ evennia xyzgrid delete "trade town sector 1"
 .\scripts\clean_and_reload_all_maps.ps1
 ```
 
-Stops Evennia, runs `xyz_cleanup.py`, adds all maps, spawns, and reloads.
+Stops Evennia, runs `map_sync.py`, spawns, and reloads.
 
-**Which maps are rebuilt is controlled by `scripts/map_manifest.json`** —
-each entry carries the map module and its z-coordinate, and is the single
-source of truth for both `clean_and_reload_all_maps.ps1`,
-`clean_and_reload_all_maps.sh`, and `xyz_cleanup.py`. To include or drop a
-map from a rebuild, edit that one file (a z-coordinate is deleted only if
-its map remains listed).
+**`scripts/map_manifest.json` is the only file you edit to add or remove a
+map.** Each row carries a map module and the z-coordinate that module
+declares:
+
+```json
+{
+  "maps": [
+    { "module": "world.maps.test_oasis", "zcoord": "oasis" }
+  ]
+}
+```
+
+- **Add a row** → the module is loaded, its map registered, its rooms spawned.
+- **Delete a row** → that map is removed from the grid and its rooms and exits
+  are deleted on the next rebuild. Anyone standing in a deleted room is sent
+  home rather than deleted.
+
+`map_sync.py` validates before it deletes anything: every listed module must
+import, yield exactly one map, and declare the z-coordinate its row claims.
+It also reads the grid back after registering, so a map that fails to load
+aborts the rebuild instead of quietly vanishing from it.
+
+Preview a rebuild without changing anything (safe while the server is up):
+
+```powershell
+.\scripts\clean_and_reload_all_maps.ps1 -DryRun
+```
+
+```bash
+./scripts/clean_and_reload_all_maps.sh --dry-run
+```
 
 ---
 
@@ -733,40 +964,55 @@ evennia reload
 | Script | Purpose | How to run |
 |---|---|---|
 | `scripts/reload_characters.py` | Re-runs `at_object_creation()` on all Character objects | `py -3 scripts/reload_characters.py` (from `blackout/`) |
-| `scripts/xyz_cleanup.py` | Deletes all rooms tagged with configured z-coordinates | `../evenv/Scripts/python.exe scripts/xyz_cleanup.py` (from `blackout/`) |
-| `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → cleanup → add → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1` |
+| `scripts/map_sync.py` | Reconciles the grid with `map_manifest.json`: removes unlisted maps, purges and re-registers listed ones | `../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run]` (from `blackout/`) |
+| `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → sync → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1 [-DryRun]` |
+| `scripts/clean_and_reload_all_maps.sh` | Same rebuild from Git Bash | `./scripts/clean_and_reload_all_maps.sh [--dry-run]` |
 
 ---
 
 ## Running Tests
 
+### Always use `test_settings.py`
+
+Pass `--settings test_settings.py`, not `--settings settings.py`. It is
+`settings.py` with one line changed — the Django password hasher — because
+Evennia's test fixtures create two accounts per test method and the default
+PBKDF2 hasher costs 0.46s per account. That one line took the full suite from
+~20 minutes to 6.4. See `../docs/2026-08-23-TEST-0001-suite-audit.md`.
+
 ### Quick testing (most common)
 
-While developing, run **only the module(s) you changed** — this avoids waiting 10 minutes on the full suite:
+While developing, run **only the module(s) you changed** — these finish in
+seconds:
 
 ```bash
 # Single module
-../evenv/Scripts/evennia.exe test --settings settings.py systems.banking.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
 
 # Multiple modules
-../evenv/Scripts/evennia.exe test --settings settings.py systems.combat.tests systems.crafting.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.combat.tests systems.crafting.tests
 ```
 
 ### Full test suite (only when necessary)
 
-The full suite has ballooned to **500+ tests taking ~10 minutes**. Only run it when you need complete verification (e.g., before merging, or if a change affects multiple systems):
+**1273 tests, ~6.5 minutes.** Run it before merging, or when a change affects
+multiple systems:
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings settings.py items systems typeclasses commands world
+../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world
 ```
+
+Append `--durations 20` to see the slowest tests.
 
 The three roots that actually hold tests are `items`, `systems`, and `world`;
 `typeclasses` and `commands` are listed so any test added there is picked up
 too. **Omitting a root silently runs fewer tests rather than erroring** — that
 is how `world/tests/` went unnoticed. Plain `evennia test .` is *not*
-equivalent: it collects fewer tests, because `world/maps/test_oasis.py` and
-`test_neo_cairo.py` are map definitions whose names happen to match the
-discovery pattern.
+equivalent: it collects fewer tests.
+
+`--parallel` does not work — Django's cloned worker databases do not carry the
+dbrefs `EvenniaTestMixin` assumes, and every worker dies in `setUp` on
+`settings.DEFAULT_HOME (= '#2') does not exist`. Don't spend time on it.
 
 ### Writing tests
 

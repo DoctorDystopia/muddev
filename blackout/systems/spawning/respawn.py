@@ -48,16 +48,16 @@ acceptable at these timescales.
 
 import time
 
-from evennia.scripts.models import ScriptDB
 from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
+from systems.managers import get_singleton_script, register_manager
 
 # ─── module constants ──────────────────────────────────────────────────────
 
 RESPAWN_MANAGER_KEY = "blackout_respawn_manager"
 
 # Whole seconds — ScriptDB.db_interval is a Django IntegerField, so a float
-# would truncate (see systems/combat/tick_engine.py's module docstring). 2s
+# would truncate (see systems/tick/engine.py's module docstring). 2s
 # bounds worst-case lateness on a 30s respawn at ~7%.
 RESPAWN_SWEEP_SECONDS: int = 2
 
@@ -74,8 +74,8 @@ def npc_present(npc_key, room) -> bool:
     hostile type shares a tile — a mutant raider standing next to a feral dog
     would suppress the dog's respawn forever.
 
-    A falsy `npc_key` never matches, so an unstamped legacy NPC (whose
-    ``npc_key`` reads None) cannot be mistaken for anything.
+    A falsy `npc_key` never matches, so an NPC carrying no key cannot be
+    mistaken for anything.
     """
     if not npc_key or room is None or getattr(room, "pk", None) is None:
         return False
@@ -297,14 +297,7 @@ def get_respawn_manager() -> BlackoutRespawnManager:
     Mirrors get_tick_engine, plus the explicit _ensure_running that an
     interval-driven Script needs to survive a hard crash.
     """
-    manager = ScriptDB.objects.filter(db_key=RESPAWN_MANAGER_KEY).first()
-
-    if manager is None:
-        manager, errors = BlackoutRespawnManager.create(key=RESPAWN_MANAGER_KEY)
-        if errors:
-            raise RuntimeError(
-                f"Could not create the Blackout respawn manager: {errors}"
-            )
+    manager = get_singleton_script(RESPAWN_MANAGER_KEY, BlackoutRespawnManager)
 
     manager._ensure_running()
     return manager
@@ -315,13 +308,14 @@ def schedule_respawn(npc_key, room, delay_seconds, now=None) -> bool:
     return get_respawn_manager().schedule(npc_key, room, delay_seconds, now=now)
 
 
+@register_manager
 def bootstrap_respawns() -> BlackoutRespawnManager:
     """Bring respawns up at server start. Called from at_server_startstop.
 
     The immediate sweep matters: entries that came due while the server was
     down should land at boot rather than up to RESPAWN_SWEEP_SECONDS later,
     and it gives bootstrap an assertable behaviour — mirroring how
-    bootstrap_combat purges before creating the tick engine.
+    bootstrap_tick purges before creating the tick engine.
     """
     manager = get_respawn_manager()
     try:

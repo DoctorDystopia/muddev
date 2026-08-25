@@ -40,7 +40,9 @@ class CmdGatherFromNode(Command):
 
         Entry:
             self.caller is a valid Evennia Character.
-            self.args may name an object in the room or inventory.
+            self.obj is the gathering node this command was read from.
+            self.args may name an object in the room or inventory, overriding
+                self.obj.
 
         Exit/Returns:
             No conditions. Messages the caller on every failure path.
@@ -49,8 +51,13 @@ class CmdGatherFromNode(Command):
             SKILL_REGISTRY read.
 
         Methodology:
-            1. Reject an empty argument.
-            2. caller.search reports its own "Could not find" error.
+            1. An empty argument means the node this command hangs on --
+               same convention as CmdBank and CmdCraft, whose own object is
+               already the target. GatheringNodeCmdSet is added onto each
+               node individually, so self.obj is that specific node, not a
+               generic "gathering node in the room".
+            2. A given argument still searches by name, so `cut rusty pole`
+               keeps working exactly as before.
             3. Look the skill up by key and execute it against the target.
 
         Notes/References:
@@ -63,13 +70,12 @@ class CmdGatherFromNode(Command):
         args = self.args.strip()
 
         if not args:
-            caller.msg(f"What do you want to {self.cmdstring}?")
-            return
-
-        # Evennia's search prints its own standard failure message.
-        target = caller.search(args)
-        if not target:
-            return
+            target = self.obj
+        else:
+            # Evennia's search prints its own standard failure message.
+            target = caller.search(args)
+            if not target:
+                return
 
         skill_class = SKILL_REGISTRY.get(self.skill_key)
         if skill_class is None:

@@ -11,8 +11,11 @@ Run with:
 
 
 
+import importlib
+import inspect
 import unittest
 
+from django.conf import settings
 from evennia.contrib.game_systems.crafting.crafting import (
     CraftingRecipe,
     CraftingRecipeBase,
@@ -36,19 +39,40 @@ class TestRecipeDiscovery(unittest.TestCase):
             self.assertTrue(issubclass(recipe_cls, BlackoutRecipe))
             self.assertEqual(recipe_cls.name, recipe_name)
 
-    def test_all_six_recipes_are_registered(self):
-        """The six recipes defined across the two configured modules."""
-        self.assertEqual(
-            sorted(RECIPE_REGISTRY),
-            [
-                "rusty metal dust",
-                "rusty scrap axe",
-                "rusty scrap chainbody",
-                "rusty scrap metal",
-                "rusty scrap shortsword",
-                "rusty scrap spear",
-            ],
-        )
+    def test_every_recipe_in_a_configured_module_is_registered(self):
+        """Discovery must find every recipe the configured modules define.
+
+        Derived from the modules themselves rather than from a frozen list of
+        names: the bug worth catching is a recipe silently failing to
+        register, and a hardcoded census cannot tell that apart from someone
+        legitimately adding a seventh recipe. The predecessor of this test
+        asserted a literal six-name list and failed the moment the metalsmith
+        module grew.
+        """
+        defined = self._recipe_names_defined_in_configured_modules()
+
+        self.assertTrue(defined, "no recipes found in CRAFT_RECIPE_MODULES")
+        self.assertEqual(sorted(RECIPE_REGISTRY), sorted(defined))
+
+    def _recipe_names_defined_in_configured_modules(self):
+        """Every recipe name the configured modules define, found by import.
+
+        Deliberately reimplements discovery instead of calling the registry's
+        own helper -- a test that reuses the code under test proves nothing.
+        """
+        names = []
+        for module_path in settings.CRAFT_RECIPE_MODULES:
+            module = importlib.import_module(module_path)
+            for _attr_name, candidate in vars(module).items():
+                if not inspect.isclass(candidate):
+                    continue
+                if not issubclass(candidate, BlackoutRecipe):
+                    continue
+                if candidate.__module__ != module_path:
+                    continue
+                names.append(candidate.name)
+
+        return names
 
     def test_base_class_is_not_registered(self):
         """BlackoutRecipe is imported into both recipe modules, so a naive

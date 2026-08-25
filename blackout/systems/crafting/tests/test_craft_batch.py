@@ -36,8 +36,24 @@ class _CraftBatchTestCase(EvenniaCommandTest):
         self.hammer = ITEM_DB["hammer"].create(location=self.char1)
 
     def _give_chunks(self, count):
+        """
+        Spawn `count` chunks directly into contents, bypassing move_to.
+
+        rusty_metal_chunk is deliberately non-stackable (world/item_defs/
+        materials.py), so `count` above SLOTS_TOTAL cannot exist through a
+        real pickup once InventoryHandler.can_accept is enforced at
+        Character.at_pre_object_receive -- the 32-slot cap is exactly what
+        test_capped_at_max_batch_size needs to prove MAX_CRAFT_BATCH_SIZE
+        (99) binds tighter than materials on hand. Assigning `location`
+        directly instead of going through ItemDef.create()'s move_to skips
+        that hook (CLAUDE.md, "create_object(location=...) does not fire
+        at_object_receive"), which is fine here: crafting counts materials
+        by scanning caller.contents (_count_tagged_items) and consumes them
+        with a plain obj.delete(), neither of which reads inventory slots.
+        """
         for _ in range(count):
-            ITEM_DB["rusty_metal_chunk"].create(location=self.char1)
+            chunk = ITEM_DB["rusty_metal_chunk"].create()
+            chunk.location = self.char1
 
 
 class TestGetMaxCraftable(_CraftBatchTestCase):

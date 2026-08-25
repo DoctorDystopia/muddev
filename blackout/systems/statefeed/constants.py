@@ -23,6 +23,7 @@ CHANNEL_ROOM_INFO: str = "room_info"                  # -> Room.Info
 CHANNEL_ROOM_PLAYERS: str = "room_players"            # -> Room.Players
 CHANNEL_ROOM_PLAYER_ADD: str = "room_add_player"      # -> Room.AddPlayer
 CHANNEL_ROOM_PLAYER_REMOVE: str = "room_remove_player"  # -> Room.RemovePlayer
+CHANNEL_CHAR_AVATAR: str = "char_avatar"              # -> Char.Avatar
 CHANNEL_CHAR_VITALS: str = "char_vitals"              # -> Char.Vitals
 CHANNEL_CHAR_STATUS: str = "char_status"              # -> Char.Status
 
@@ -32,6 +33,17 @@ CHANNEL_CHAR_STATUS: str = "char_status"              # -> Char.Status
 # exactly what a Char.* channel is for and a client that understands
 # Char.Vitals will look for it there.
 CHANNEL_CHAR_SUMMARY: str = "char_summary"            # -> Char.Summary
+
+# The carried inventory grid and the equipment slots, together, as one
+# snapshot. IRE's published name for this is Char.Items.List, and Evennia's
+# GMCP encoder turns `char_items_list` into exactly that (it capitalises each
+# underscore-separated part), so a Mudlet user gets a channel their client
+# already understands.
+#
+# This is the one place the repo's "say inventory, never bag/items" rule loses,
+# and it loses only on the WIRE name. Everything Blackout owns inside the
+# payload says inventory -- see ITEM_LOCATION_INVENTORY below.
+CHANNEL_CHAR_ITEMS: str = "char_items_list"           # -> Char.Items.List
 
 # Blackout-specific extensions.
 CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
@@ -46,9 +58,11 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_ROOM_PLAYERS,
     CHANNEL_ROOM_PLAYER_ADD,
     CHANNEL_ROOM_PLAYER_REMOVE,
+    CHANNEL_CHAR_AVATAR,
     CHANNEL_CHAR_VITALS,
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
+    CHANNEL_CHAR_ITEMS,
     CHANNEL_MAP,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
@@ -89,11 +103,23 @@ CHANNEL_SUBSCRIBED_ACK: str = "blackout_subscribed"
 # How many tiles beyond the observer's own room may have their CONTENTS fed to
 # a client. Zero means the feed shows exactly what the text channel shows.
 #
-# Raising this is a BALANCE CHANGE, not a rendering change: a graphical client
-# would see NPCs through walls that a telnet player cannot. The knob exists so
-# that decision can be made deliberately later without a protocol change.
-# systems/combat/auras/targeting.rooms_within_radius is the tool to implement
-# it with if it is ever raised.
+# This is a BALANCE knob, not a rendering one: above zero, a graphical client
+# is told about NPCs through walls that a telnet player would have to walk to.
+# It is read in exactly one place -- events._visible_rooms -- so the contents
+# list and the add/remove deltas can never be widened out of step with each
+# other.
+#
+# COST. It is (2r+1)^2 rooms per contents emit: 9 at r=1, 49 at r=3, 441 at
+# r=10, which on Blackout's ~95-node maps is the entire map. The room lookup
+# and the contents lookup are one query each regardless of r, so the cost is
+# in the SIZE of the message rather than the number of queries -- but a
+# message naming every entity on the map, rebuilt on every room change, is
+# still the wrong shape. Keep this small; 2-3 tiles is a diorama, 10 is a
+# broadcast.
+#
+# Zero is not a dead setting: rooms_within_radius short-circuits to [origin]
+# without a query, so setting it back costs nothing and restores exactly the
+# text channel's visibility.
 STATEFEED_ENTITY_RADIUS: int = 10
 
 
@@ -124,6 +150,18 @@ STATEFEED_ENTITY_RADIUS: int = 10
 #     player opens their dossier and on resync, nowhere else. Nothing is
 #     scheduled behind a dropped one, so a cap here would mean a player pressing
 #     `score` twice in a second and getting no answer the second time.
+#   - CHANNEL_CHAR_ITEMS is uncapped, and this is the one most likely to be
+#     "fixed" by someone reading only the first paragraph. It LOOKS like a
+#     continuous value -- a whole-grid snapshot, each superseding the last --
+#     but nothing is scheduled behind a dropped one. Pick an item up, lose that
+#     send to a cap, and the pane shows a grid missing the item until the
+#     player happens to act again. That is the room_players bug exactly.
+#
+#     It is self-limiting anyway: sends are driven by discrete player actions
+#     bounded by the 0.6s tick. If a gathering loop ever does make it chatty,
+#     the fix is a COALESCING cap -- schedule a trailing send -- not a dropping
+#     one. emit.py has no such mechanism today, and adding one is a bigger
+#     change than the entry in this dict would suggest.
 CHANNEL_MIN_INTERVAL_SECONDS: dict = {
     CHANNEL_CHAR_VITALS: 0.5,
     CHANNEL_CHAR_STATUS: 1.0,
@@ -131,6 +169,40 @@ CHANNEL_MIN_INTERVAL_SECONDS: dict = {
 
 # Fallback when a channel has no entry above.
 DEFAULT_MIN_INTERVAL_SECONDS: float = 0.0
+
+# ─── Coalescing ──────────────────────────────────────────────────────────────
+# Channels whose messages may be COALESCED: held during a tick and sent once at
+# the end, newest winning. This is the "trailing send" the cap discussion above
+# asks for -- nothing is dropped, the client simply gets one message per tick
+# instead of several.
+#
+# The membership rule is the same distinction the cap table draws, applied more
+# strictly. A channel may be coalesced ONLY if each message entirely SUPERSEDES
+# the last, so that keeping only the newest loses nothing:
+#
+#   - Whole-snapshot channels qualify. A grid, a vitals reading, a room's
+#     occupant list: the newest one tells the whole truth on its own.
+#   - EVENT and DELTA channels do NOT, and this is the half that matters.
+#     CHANNEL_COMBAT carries one message per swing; two attackers hitting the
+#     same target on one tick produce two, and keeping only the newest loses a
+#     hit the text log still shows. CHANNEL_ROOM_PLAYER_ADD / _REMOVE are
+#     deltas for the same reason -- coalescing two arrivals into one is the
+#     room_players bug in a new place.
+#   - CHANNEL_MAP is excluded despite being a snapshot, because it is CHUNKED:
+#     its messages are pieces of one payload, not successive versions of it,
+#     so "newest wins" would deliver chunk 2 and drop chunk 1.
+#
+# When in doubt, leave a channel OUT. An uncoalesced channel is merely chattier;
+# a wrongly coalesced one silently loses information.
+COALESCABLE_CHANNELS: frozenset = frozenset((
+    CHANNEL_CHAR_AVATAR,
+    CHANNEL_CHAR_VITALS,
+    CHANNEL_CHAR_STATUS,
+    CHANNEL_CHAR_SUMMARY,
+    CHANNEL_CHAR_ITEMS,
+    CHANNEL_ROOM_INFO,
+    CHANNEL_ROOM_PLAYERS,
+))
 
 # The ndb attribute holding {channel: last_send_monotonic} per session.
 RATE_STATE_ATTR: str = "statefeed_last_send"
@@ -158,6 +230,14 @@ ASSET_KIND_NPC: str = "npc"
 ASSET_KIND_CHARACTER: str = "character"
 ASSET_KIND_ROOM: str = "room"
 
+# A fixed installation you use where it stands: a crafting facility, a bank
+# terminal. Distinct from an item for the same reason a gathering node is --
+# it carries `get:false()`, and a client told "item" offers to pocket the one
+# thing that cannot be pocketed. That is not hypothetical: the Foundry Furnace
+# fell through to "item", the 3D pane offered `get Foundry Furnace`, and a
+# superuser test account was allowed to walk off with the furnace.
+ASSET_KIND_STATION: str = "station"
+
 # A gathering node. Distinct from an item because the two afford opposite
 # things: an item is picked up, a node is harvested where it stands and carries
 # `get:false()` precisely so it cannot be pocketed. A client told only "item"
@@ -166,6 +246,206 @@ ASSET_KIND_GATHERABLE: str = "gatherable"
 
 ASSET_KEY_GENERIC: str = "generic"
 
+# Every puppetable character, until one of them says otherwise.
+#
+# It has to be a key of its own rather than ASSET_KEY_GENERIC, and the reason
+# is the client's registry: an asset key with art registered against it draws
+# that art for EVERY entity carrying the key. Generic is also the fallback for
+# an item nothing else classified, so art registered there would put a person
+# in place of every unmodelled object in the game.
+#
+# Named for what it is rather than for a particular download, so replacing the
+# art is a client-side edit and reaches every character at once.
+ASSET_KEY_CHARACTER: str = "player_character"
+
+# The command a client sends to act on an entity, when there is one.
+#
+# These two are the CHARACTER's commands, so they need a target appended:
+# `attack mutant raider`, `get rusty scrap spear`. Everything else that affords
+# anything carries its own cmdset -- a furnace has `craft`, a bank terminal has
+# `bank`, a talkative NPC has `talk` -- and those take no target because the
+# object the cmdset hangs on IS the target. A typeclass declares its own verb
+# in `interact_verb`; see serializers.interact_command.
+#
+# A CHARACTER is absent on purpose, and its absence is the policy: everything
+# else a misclick can do is recoverable, and opening combat on another player
+# is not.
+TARGETED_VERB_BY_KIND: dict = {
+    ASSET_KIND_NPC: "attack",
+    ASSET_KIND_ITEM: "get",
+}
+
 # Room prototype key used when a room carries none. Matches the wildcard
 # behaviour of the ('*', '*') entry in a map's PROTOTYPES table.
 ROOM_KIND_DEFAULT: str = "default"
+
+# The kind reported for a MAP-TRANSITION node: the `T` glyph that moves a
+# player to a coordinate on another map.
+#
+# It is a synthesised kind rather than a prototype key, because a transition
+# node has no prototype -- the contrib requires `prototype = None` on it, so no
+# room is ever spawned there and there is no key to read. Without this the
+# lookup below falls through to the map's ('*', '*') wildcard and reports the
+# tile as ordinary ground, which is how the one tile leading off the map came
+# to be drawn as more sand.
+#
+# Written in the ROOM_KIND_DEFAULT style -- a lowercase machine token rather
+# than a display name like "Bank" -- because no author typed it and none can
+# override it.
+ROOM_KIND_TRANSITION: str = "map_transition"
+
+
+# ─── Inventory ───────────────────────────────────────────────────────────────
+
+# The second tier of the client's mesh lookup, after the per-item asset key.
+#
+# These are already the TAG CATEGORIES every ItemDef declares -- a spear is
+# tagged ("rusty_scrap_spear", "weapon") -- so this restates no fact the item
+# database does not already own. It exists as an explicit set because a live
+# object also carries Evennia's own from_prototype tag, and the family reader
+# has to be able to tell a family category from an engine one.
+#
+# A key absent here is not an error: the client falls through to a generic mesh
+# labelled with the item's real name, which is the same guarantee the world
+# pane already gives. Adding a family here without adding a mesh for it
+# client-side is therefore harmless.
+ITEM_FAMILY_WEAPON: str = "weapon"
+ITEM_FAMILY_ARMOR: str = "armor"
+ITEM_FAMILY_JEWELLERY: str = "jewellery"
+ITEM_FAMILY_MATERIAL: str = "crafting_material"
+ITEM_FAMILY_TOOL: str = "crafting_tool"
+ITEM_FAMILY_CURRENCY: str = "currency"
+
+# The order the families are resolved in when ONE item declares several of
+# them.
+#
+# An item is allowed to be more than one thing: the rusty scrap axe is a
+# crafting_tool and a weapon, and nothing about a tag stops a third or a
+# fourth category joining it. Evennia stores an object's tags as an unordered
+# set, so "the first family category on the object" is whatever the database
+# happens to hand back on that call -- the same axe could render as a tool in
+# one session and a weapon in the next. Resolving against THIS tuple instead
+# of against tag order makes the answer the same every time.
+#
+# Ordered most-distinctive silhouette first, because this only decides which
+# mesh a multi-family item FALLS BACK to: an axe that chops trees and raiders
+# still looks like an axe, so the tool mesh describes it better than the
+# generic weapon one. A single-family item matches exactly one entry and is
+# unaffected by the order.
+ITEM_FAMILY_PRIORITY: tuple = (
+    ITEM_FAMILY_CURRENCY,
+    ITEM_FAMILY_MATERIAL,
+    ITEM_FAMILY_JEWELLERY,
+    ITEM_FAMILY_TOOL,
+    ITEM_FAMILY_ARMOR,
+    ITEM_FAMILY_WEAPON,
+)
+
+# Membership set, derived so the two can never list different families.
+ITEM_FAMILIES: frozenset = frozenset(ITEM_FAMILY_PRIORITY)
+
+ITEM_FAMILY_GENERIC: str = "generic"
+
+# The verbs an item in the inventory affords, as (label, command template).
+#
+# `{slot}` is substituted with the item's 1-BASED grid position and `{name}`
+# with its key. One-based because that is what the text grid prints
+# (display.py renders `slot_idx + 1`) and what the commands parse, so what the
+# pane sends is exactly what the player sees beside the item when they type
+# `inventory`. The 0-based index in the payload is an array position, and the
+# conversion happens here rather than in the client.
+#
+# Drop names a SLOT, not a name, for the reason commands.inventory_cmds
+# .resolve_carried_item gives: eight identical rusty metal chunks are a real
+# inventory, and `drop rusty metal chunk` is a command whose target the pane
+# cannot predict. It sent one anyway until 08/17/2026, and the server picked
+# the lowest-numbered copy -- so right-clicking the eighth chunk dropped the
+# first. A slot index is exactly what the pane has.
+INVENTORY_ACTION_EQUIP: tuple = ("Equip", "equip {slot}")
+INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {slot}")
+INVENTORY_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
+
+# What an equipped item affords. Keyed by slot value rather than grid index,
+# because an equipped item has no grid position to name.
+EQUIPMENT_ACTION_UNEQUIP: tuple = ("Unequip", "unequip {equip_slot}")
+EQUIPMENT_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
+
+
+# ─── Tile affordances ────────────────────────────────────────────────────────
+
+# What clicking a TILE does, named by the server the way an entity's `interact`
+# already is.
+#
+# WHY THIS MOVED. The client used to work it out, and the rules it needed were
+# all facts about the map: that a different z is a different map and cannot be
+# walked to, that a cardinal neighbour with no exit is a wall, that a DIAGONAL
+# neighbour with no exit is not a wall but two cardinal steps, and a grid-delta
+# -> direction-name table to turn any of it into a command. Every one of those
+# is the server's to know, and the diagonal rule was got wrong once already --
+# refusing it left the eight tiles nearest the player the only ones in the pane
+# that could not be clicked.
+#
+# It is the same argument that deleted the client's entity verb table, and it
+# is stronger here: a second client (godot/) has not yet reimplemented any of
+# it, so moving it now costs one implementation instead of two that must agree.
+
+# A tile's action is {command, kind}. The command is what to SEND -- whole, no
+# substitution left to do. The kind is what it means for a walk in progress,
+# which the client tracks because the client is what started it.
+TILE_ACTION_KIND_STEP: str = "step"      # one move; ends a tracked walk
+TILE_ACTION_KIND_WALK: str = "walk"      # a pathfinder walk; starts tracking
+TILE_ACTION_KIND_LOOK: str = "look"      # no movement, no effect on tracking
+TILE_ACTION_KIND_CANCEL: str = "cancel"  # aborts the walk in progress
+
+# The tile affords NOTHING, said out loud rather than by omission.
+#
+# Omission means "fall through to the map node's own `goto`", so a tile that
+# must NOT be walked to needs its own answer. It carries an empty command, the
+# same way an entity that affords nothing carries an empty `interact`.
+#
+# It exists for one case: a CARDINAL neighbour with no exit, which is a wall.
+# The pathfinder would happily route around it, and the client used to refuse
+# the click for exactly that reason -- so that a click on a visible barrier
+# does not send the player the long way around it. That is a real judgement
+# about how the pane should feel, and moving the rule to the server is not a
+# licence to drop it.
+#
+# A DIAGONAL neighbour with no exit is NOT this. Most maps are drawn with
+# cardinal links only, so the diagonals around a player are ordinarily two
+# steps away rather than barriers; refusing those was a bug that left the tiles
+# nearest the player the only ones in the pane that could not be clicked.
+TILE_ACTION_KIND_NONE: str = "none"
+
+# The cardinal offsets checked for that wall case. Diagonals are deliberately
+# absent; see above.
+TILE_CARDINAL_OFFSETS: tuple = ((0, 1), (1, 0), (0, -1), (-1, 0))
+
+# The command a client sends to look at where it already is.
+TILE_COMMAND_LOOK: str = "look"
+
+# Bare `goto` aborts a walk in progress; `goto (X,Y)` starts one. Both are the
+# contrib's pathfinder reached exactly as a telnet player reaches it -- see
+# commands/movement_cmds.py, which lifts the contrib's Builder lock on the
+# coordinate form because a tile is the only name a graphical client has for a
+# room.
+TILE_COMMAND_GOTO: str = "goto"
+TILE_COMMAND_GOTO_TEMPLATE: str = "goto ({x},{y})"
+
+# How a tile is keyed in a tile-action map. Formatted here rather than in the
+# client for the same reason serialize_inventory formats its slot numbers here:
+# one owner for the shape, and no client left holding a format string.
+TILE_KEY_TEMPLATE: str = "{x}:{y}"
+
+
+# The command that moves an item between two inventory slots.
+#
+# Unlike equip/unequip, this one CANNOT be pre-named per item the way
+# INVENTORY_ACTION_* above are: it takes two endpoints, and only the drag knows
+# both. So the server owns the SPELLING and the client composes the gesture --
+# which is the honest split. A drag from slot 3 to slot 7 is a gesture, not a
+# fact about slot 3, and pre-naming every pair would be 42x42 commands to
+# express one verb.
+#
+# Slot numbers are 1-BASED, matching what the text grid prints, what CmdSwap
+# parses, and what serialize_inventory converts to for the per-item actions.
+INVENTORY_SWAP_TEMPLATE: str = "swap {source} {target}"

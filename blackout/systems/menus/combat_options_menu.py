@@ -12,6 +12,7 @@ from systems.combat.combat import (
     held_weapon,
     set_combat_style,
 )
+from systems.menus.base_menu import back_option
 from systems.ui.colors import (
     ERROR_COLOR,
     HIGHLIGHT_COLOR,
@@ -22,6 +23,9 @@ from systems.ui.colors import (
 
 
 ACTIVE_MARKER = "(active)"
+
+# Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
+CLOSING_TEXT = "Closing combat options menu."
 
 
 def _skill_names(skill_keys) -> str:
@@ -63,15 +67,13 @@ def start(caller: object, **kwargs) -> tuple:
 
     if weapon is None:
         text = f"{ERROR_COLOR}You have no weapon equipped.{RESET_COLOR}"
-        options = ({"desc": "Exit", "goto": "node_exit"},)
-        return text, options
+        return text, None
 
     styles = available_combat_styles(weapon)
 
     if not styles:
         text = f"{HIGHLIGHT_COLOR}{weapon.key}{RESET_COLOR} has no combat styles to choose from."
-        options = ({"desc": "Exit", "goto": "node_exit"},)
-        return text, options
+        return text, None
 
     active_key = active_combat_style_key(weapon)
 
@@ -98,7 +100,6 @@ def start(caller: object, **kwargs) -> tuple:
         })
 
     text = "\n".join(text_lines)
-    options_list.append({"desc": "Exit", "goto": "node_exit"})
     return text, tuple(options_list)
 
 
@@ -108,7 +109,7 @@ def node_set_style(caller: object, **kwargs) -> tuple:
     weapon = held_weapon(caller)
     if weapon is None:
         text = f"{ERROR_COLOR}You no longer have a weapon equipped.{RESET_COLOR}"
-        options = ({"desc": "Back to combat options", "goto": "start"},)
+        options = (back_option("Back to combat options", "start"),)
         return text, options
 
     if set_combat_style(weapon, style_key, combatant=caller):
@@ -116,13 +117,5 @@ def node_set_style(caller: object, **kwargs) -> tuple:
     else:
         text = f"{ERROR_COLOR}That style is no longer available on {weapon.key}.{RESET_COLOR}"
 
-    options = (
-        {"desc": "Back to combat options", "goto": "start"},
-        {"desc": "Exit", "goto": "node_exit"},
-    )
+    options = (back_option("Back to combat options", "start"),)
     return text, options
-
-
-def node_exit(caller: object, **kwargs) -> tuple:
-    text = "Closing combat options menu."
-    return text, None

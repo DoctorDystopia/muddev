@@ -175,7 +175,7 @@ class WorldPanel(BasePanel):
         Purpose: List the titles of the character's active quests.
 
         Entry:
-            character is a Character with db.active_quests.
+            character is a Character with a quests handler.
 
         Exit/Returns:
             Returns a list of title strings, capped at MAX_LISTED_QUESTS with a
@@ -198,7 +198,7 @@ class WorldPanel(BasePanel):
         """
         from systems.quests.loader import GLOBAL_QUEST_REGISTRY
 
-        active = character.db.active_quests or {}
+        active = character.quests.active_keys()
         titles = []
 
         for quest_key in active:
@@ -281,8 +281,8 @@ class WorldPanel(BasePanel):
         Author: Nick Hobar
         Creation date: 08/08/2026
         """
-        active = character.db.active_quests or {}
-        completed = character.db.completed_quests or []
+        active = character.quests.active_keys()
+        completed = character.quests.completed_keys()
         playtime = getattr(character, "playtime_seconds", 0)
 
         pairs = [
@@ -335,7 +335,7 @@ class WorldPanel(BasePanel):
         Author: Nick Hobar
         Creation date: 08/08/2026
         """
-        completed = character.db.completed_quests or []
+        completed = character.quests.completed_keys()
         playtime = getattr(character, "playtime_seconds", 0)
 
         pairs = [
@@ -374,8 +374,8 @@ class WorldPanel(BasePanel):
         Creation date: 08/08/2026
         """
         location = character.location
-        active = character.db.active_quests or {}
-        completed = character.db.completed_quests or []
+        active = character.quests.active_keys()
+        completed = character.quests.completed_keys()
 
         if location is None:
             room_name = ""

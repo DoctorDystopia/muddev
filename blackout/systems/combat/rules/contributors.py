@@ -29,8 +29,9 @@ _UNRANKED_PRIORITY = const.RULES_PRIORITY_DEFAULT
 def _rules_keys(source) -> list:
     """Read the combat_rules key list off an object, tolerating its absence.
 
-    Items spawned before combat_rules existed carry no such attribute, and
-    nothing about that is an error -- they simply contribute nothing.
+    combat_rules is optional on an ItemDef and only emitted when populated
+    (world/item_database._get_attrs), so most items carry no such attribute.
+    That is not an error -- they simply contribute nothing.
     """
     stored = getattr(source.db, const.COMBAT_RULES_ATTR, None)
 

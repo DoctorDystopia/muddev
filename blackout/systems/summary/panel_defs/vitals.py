@@ -172,7 +172,8 @@ class VitalsPanel(BasePanel):
             STATUS_IN_COMBAT, STATUS_IDLE, STATUS_AURA_PREFIX read.
 
         Methodology:
-            Combat state comes from db.in_combat, the canonical flag every
+            Combat state comes from CombatEntity.in_combat, the derived
+            property every
             combat teardown path sets, rather than from whether a handler
             script happens to exist.
 
@@ -182,7 +183,7 @@ class VitalsPanel(BasePanel):
         Author: Nick Hobar
         Creation date: 08/08/2026
         """
-        is_fighting = bool(character.db.in_combat)
+        is_fighting = bool(getattr(character, "in_combat", False))
 
         if is_fighting:
             parts = [STATUS_IN_COMBAT]
@@ -315,7 +316,7 @@ class VitalsPanel(BasePanel):
             "combat_level": int(character.combat_level),
             "total_level": int(character.skills.total_level()),
             "total_xp": int(character.skills.combined_xp()),
-            "in_combat": bool(character.db.in_combat),
+            "in_combat": bool(getattr(character, "in_combat", False)),
             "aura": cls._aura_key(character),
         }
 

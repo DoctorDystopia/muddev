@@ -20,7 +20,7 @@ from systems.combat.auras.aura_handler import (
 )
 from systems.combat.auras.aura_defs.righteous_fire import RighteousFire
 from systems.combat.auras.registry import AURA_REGISTRY, find_aura
-from systems.combat.tick_engine import get_tick_engine, purge_stale_combat_handlers
+from systems.tick.engine import get_tick_engine, purge_stale_handlers
 from systems.progression.skills.constants import FORTITUDE_SKILL_KEY
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npc_combat import HostileNPC
@@ -312,7 +312,7 @@ class TestAuraHandlerLifecycle(EvenniaTest):
     def test_boot_sweep_purges_aura_handlers(self):
         ensure_aura_handler(self.char1)
 
-        purge_stale_combat_handlers()
+        purge_stale_handlers()
 
         self.assertFalse(
             ScriptDB.objects.filter(db_key=AURA_HANDLER_KEY).exists()

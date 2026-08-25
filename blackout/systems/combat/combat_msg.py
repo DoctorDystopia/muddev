@@ -17,6 +17,7 @@ Description: Inline ANSI-tagged combat message builders.
 from systems.ui.colors import (  # noqa: E402  (palette, not behaviour)
     TAG_DEATH,
     TAG_INCOMING,
+    TAG_LOOT,
     TAG_MISS,
     TAG_OUTGOING,
     TAG_OUTGOING_NAME,
@@ -43,6 +44,9 @@ SELF_HP_LABEL = "You"
 
 # Separator between the per-skill entries of one hit's XP award.
 XP_ENTRY_SEPARATOR = ", "
+
+# Separator between the items named on one kill's drop line.
+DROP_ENTRY_SEPARATOR = ", "
 
 # Every combat_stat_bonuses key is spelled "<axis>_bonus"; stripping this
 # suffix and title-casing the rest is what lets format_combat_stat_bonuses
@@ -270,6 +274,56 @@ def format_death(victim, killer=None, damage_type=None, self_inflicted=False) ->
         return f"{TAG_DEATH}{victim.key} collapses.{TAG_RESET}"
 
     return f"{TAG_DEATH}{victim.key} collapses, killed by {killer.key}.{TAG_RESET}"
+
+
+def format_drops(victim, drops: list) -> str:
+    """
+    Purpose: Room broadcast naming what a dead entity left on the ground.
+
+    Entry:
+        victim - the entity that just died.
+        drops  - list of (item_name, quantity) tuples, already resolved to
+                 DISPLAY NAMES by the caller. Must be non-empty; a kill that
+                 dropped nothing has no line to print, and deciding that is
+                 the caller's job, not this formatter's.
+
+    Exit/Returns:
+        Single-line string ready for location.msg_contents(...).
+
+    Module Globals:
+        TAG_LOOT read.
+        TAG_RESET read.
+        DROP_ENTRY_SEPARATOR read.
+
+    Methodology:
+        A quantity above one is suffixed "(xN)" rather than prefixed as a
+        count, because the item names in ITEM_DB are singular and unpluralised
+        -- "2 rusty metal chunk" reads as a bug, and pluralising properly would
+        need a second name field on every ItemDef to handle the irregulars.
+
+    Notes/References:
+        This is the follow-on message format_death's docstring reserved: the
+        death line stays a single stable sentence and drops arrive beside it,
+        so neither formatter's signature has to move when corpses land.
+
+        Takes display names rather than item keys so the message layer never
+        reaches into ITEM_DB -- systems/loot/drops.py already has the ItemDef
+        in hand at the point it calls this.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    parts = []
+
+    for item_name, quantity in drops:
+        if quantity > 1:
+            parts.append(f"{item_name} (x{quantity})")
+        else:
+            parts.append(str(item_name))
+
+    listed = DROP_ENTRY_SEPARATOR.join(parts)
+
+    return f"{TAG_LOOT}{victim.key} drops: {listed}.{TAG_RESET}"
 
 
 def format_backfire(wielder, source, damage: int) -> str:

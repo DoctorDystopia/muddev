@@ -28,6 +28,11 @@ def _node(x, y):
     return SimpleNamespace(X=x, Y=y, links={})
 
 
+def _transition_node(x, y, target=(8, 10, "oasis_outskirts")):
+    """Return a stand-in MapTransitionNode -- a node that spawns no room."""
+    return SimpleNamespace(X=x, Y=y, links={}, target_map_xyz=target)
+
+
 def _link(node_a, node_b, direction="e", reverse="w"):
     """Join two stand-in nodes the way a two-way map link does -- both ways."""
     node_a.links[direction] = node_b
@@ -110,6 +115,39 @@ class TestRoomKindLookup(unittest.TestCase):
         chunks = build_map_chunks(_xymap([_node(0, 0)], prototypes))
 
         self.assertEqual(chunks[0].nodes[0]["room_kind"], const.ROOM_KIND_DEFAULT)
+
+
+class TestTransitionNodes(unittest.TestCase):
+    """The one tile leading off the map must not report as the ground."""
+
+    def test_a_transition_node_reports_its_own_kind(self):
+        chunks = build_map_chunks(_xymap([_transition_node(0, 2)]))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, const.ROOM_KIND_TRANSITION)
+
+    def test_the_wildcard_prototype_does_not_win_over_it(self):
+        prototypes = {("*", "*"): {"key": "Oasis"}}
+        chunks = build_map_chunks(
+            _xymap([_transition_node(0, 2)], prototypes))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, const.ROOM_KIND_TRANSITION)
+
+    def test_a_transition_with_no_target_map_is_not_one(self):
+        unset = _transition_node(0, 2, target=(None, None, None))
+        prototypes = {("*", "*"): {"key": "Oasis"}}
+        chunks = build_map_chunks(_xymap([unset], prototypes))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, "Oasis")
+
+    def test_ordinary_nodes_are_untouched_by_the_check(self):
+        prototypes = {("*", "*"): {"key": "Oasis"}}
+        chunks = build_map_chunks(_xymap([_node(4, 4)], prototypes))
+        kind = chunks[0].nodes[0]["room_kind"]
+
+        self.assertEqual(kind, "Oasis")
 
 
 class TestLinkExport(unittest.TestCase):
@@ -209,3 +247,48 @@ class TestLinksRideOnTheFirstChunk(unittest.TestCase):
 
     def test_later_chunks_carry_none(self):
         self.assertEqual(self.chunks[1].links, [])
+
+
+class TestNodeActions(unittest.TestCase):
+    """Every node carries the pathfinder walk to itself."""
+
+    def test_a_node_carries_a_walk_action(self):
+        """
+        Stamped on the MAP rather than resent on room_info, because the walk to
+        (6,3) is `goto (6,3)` from anywhere on the same map. This is what the
+        client falls through to for any tile that is not an immediate exit.
+        """
+        chunks = build_map_chunks(_xymap([_node(6, 3)]))
+        node = chunks[0].nodes[0]
+
+        self.assertEqual(node["action"], {
+            "command": "goto (6,3)",
+            "kind": const.TILE_ACTION_KIND_WALK,
+        })
+
+    def test_the_action_names_the_nodes_own_coordinates(self):
+        """
+        A node whose action pointed anywhere but at itself would walk the
+        player to the wrong tile, and would look correct in every screenshot.
+        """
+        nodes = [_node(0, 0), _node(4, 1), _node(10, 7)]
+        chunks = build_map_chunks(_xymap(nodes))
+
+        for entry in chunks[0].nodes:
+            with self.subTest(x=entry["x"], y=entry["y"]):
+                self.assertEqual(
+                    entry["action"]["command"],
+                    "goto (%s,%s)" % (entry["x"], entry["y"]))
+
+    def test_a_transition_node_is_walkable_like_any_other(self):
+        """
+        A transition node is a tile you walk ONTO -- it is how oasis and
+        oasis_outskirts are joined -- so it affords the same walk as its
+        neighbours. Withholding an action would make the one tile leading off
+        the map the one tile that cannot be clicked.
+        """
+        chunks = build_map_chunks(_xymap([_transition_node(9, 10)]))
+        node = chunks[0].nodes[0]
+
+        self.assertEqual(node["room_kind"], const.ROOM_KIND_TRANSITION)
+        self.assertEqual(node["action"]["command"], "goto (9,10)")

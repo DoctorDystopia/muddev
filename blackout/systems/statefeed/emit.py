@@ -28,6 +28,7 @@ import time
 
 from evennia.utils import logger
 
+from . import buffer
 from . import constants as const
 from . import subscriptions
 
@@ -176,6 +177,15 @@ def emit(obj, payload, force: bool = False) -> int:
         return 0
 
     try:
+        # Inside a tick, a coalescable channel is held and sent once at the
+        # end -- the trailing send this module's rate cap could not offer. The
+        # buffer's own flush calls back in with force=True and the holding
+        # flag already cleared, so this cannot recurse.
+        held = buffer.hold(obj, payload)
+
+        if held:
+            return 0
+
         now = time.monotonic()
         sessions = _eligible_sessions(obj, channel, now, force)
 
@@ -214,9 +224,9 @@ def emit_to_room(room, payload, exclude=()) -> int:
         feed leaks no information the text channel does not already leak.
 
     Notes/References:
-        While STATEFEED_ENTITY_RADIUS is 0 this is the widest broadcast the
-        feed performs. Read that constant before adding a wider one -- feeding
-        neighbouring tiles is a balance change, not a rendering change.
+        This is the room-sized broadcast, matching the text channel exactly.
+        emit_to_area is the radius-sized one, used by the channels that report
+        entities the observer is not standing with.
 
     Author: Nick Hobar
     Creation date: 08/07/2026
@@ -237,6 +247,49 @@ def emit_to_room(room, payload, exclude=()) -> int:
             continue
 
         reached = emit(occupant, payload)
+        sent += reached
+
+    return sent
+
+
+def emit_to_area(rooms, payload, exclude=()) -> int:
+    """
+    Purpose: Send one payload to every subscribed observer in a group of rooms.
+
+    Entry:
+        rooms   - room objects, typically from targeting.rooms_within_radius.
+        payload - a payloads._Payload subclass instance.
+        exclude - objects to skip.
+
+    Exit/Returns:
+        Returns the total number of sessions reached.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The delta half of the radius contract. Once emit_room_contents reports
+        entities from a neighbourhood rather than one room, the add/remove
+        deltas have to travel the same distance or the two disagree: an
+        observer would be sent the full list including an NPC three tiles away,
+        then never hear that it died, and would render a corpse standing there
+        until they walked far enough to trigger a fresh list.
+
+        Reuses emit_to_room per room rather than flattening the occupant lists,
+        so there is one implementation of "who in a room hears this".
+
+    Notes/References:
+        This broadcast is WIDER than the text channel, which is exactly what
+        raising STATEFEED_ENTITY_RADIUS above 0 means and why that constant
+        documents itself as a balance decision rather than a rendering one.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    sent = 0
+
+    for room in rooms:
+        reached = emit_to_room(room, payload, exclude=exclude)
         sent += reached
 
     return sent

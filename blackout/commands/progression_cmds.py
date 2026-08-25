@@ -10,7 +10,7 @@ Description: Custom commands for players to interact with the progression system
 from commands.command import Command
 from commands.constants import HELP_CATEGORY_ADMIN, HELP_CATEGORY_PROGRESSION
 from evennia import CmdSet
-from evennia.utils.evmenu import EvMenu
+from systems.menus.base_menu import start_blackout_menu
 from systems.progression.skills.registry import SKILL_REGISTRY
 from systems.ui.meters import build_xp_meter
 
@@ -100,7 +100,7 @@ class CmdSkills(Command):
             caller.msg(final_output)
         else:
             # Open interactive skills panel menu for self
-            EvMenu(
+            start_blackout_menu(
                 caller,
                 self.SKILLS_MENU_PATH,
                 startnode="start",

@@ -18,10 +18,15 @@ Description: The adapter layer — game events in, payloads out, emitted.
              Nothing here raises; emit() swallows and logs.
 """
 
+
+
+from . import constants as const
 from . import serializers, subscriptions
-from .emit import emit, emit_to_room
+from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
+    CharAvatarPayload,
+    CharItemsPayload,
     CharSummaryPayload,
     CharVitalsPayload,
     CombatPayload,
@@ -32,6 +37,7 @@ from .payloads import (
 )
 
 
+
 # ─── Public constant definitions ─────────────────────────────────────────────
 
 AURA_EVENT_ACTIVATE: str = "activate"
@@ -39,7 +45,55 @@ AURA_EVENT_DEACTIVATE: str = "deactivate"
 AURA_EVENT_PULSE: str = "pulse"
 
 
+
 # ─── Private helper routines ─────────────────────────────────────────────────
+
+def _visible_rooms(room) -> list:
+    """
+    Purpose: The rooms whose contents an observer standing in `room` may see.
+
+    Entry:
+        room - a room object, or None.
+
+    Exit/Returns:
+        Returns a list of rooms, always including `room` itself. Returns []
+        for a None room.
+
+    Module Globals:
+        const.STATEFEED_ENTITY_RADIUS read.
+
+    Methodology:
+        The single place STATEFEED_ENTITY_RADIUS is read, so raising or
+        lowering it moves both the contents list and the deltas together.
+        Until this existed the constant was set to 10 and consulted nowhere:
+        the docstring beside it described a behaviour the code did not have.
+
+        rooms_within_radius short-circuits to [origin] for a radius of 0 and
+        for an off-grid room, so the zero case costs no query and the
+        hand-built-area case degrades to exactly the old behaviour.
+
+        Imported inside the routine. systems.combat.auras.targeting reaches
+        the xyzgrid contrib's models, and this module is imported by
+        typeclasses/mixins.py, which every Character and NPC pulls in at
+        startup -- a module-scope import would drag those models into
+        typeclass import time and couple the two systems' import order.
+
+    Notes/References:
+        Raising the radius is a BALANCE change, not a rendering one: a
+        graphical client is told about NPCs a telnet player would have to walk
+        to. See the constant's own comment.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    if room is None:
+        return []
+
+    from systems.combat.auras.targeting import rooms_within_radius
+
+    return rooms_within_radius(room, const.STATEFEED_ENTITY_RADIUS)
+
+
 
 def _style_name(context) -> str:
     """Name the active combat style as a player would recognise it.
@@ -64,6 +118,7 @@ def _style_name(context) -> str:
     return str(context.style.get("weapon_style", ""))
 
 
+
 def _broadcast(payload, attacker, target, room) -> int:
     """Send one payload to the two combatants and their onlookers.
 
@@ -82,8 +137,11 @@ def _broadcast(payload, attacker, target, room) -> int:
     return sent
 
 
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
+# TODO: update emit_swing name (e.g, emit_combat_action). Also, might be
+# other useful metadata to carry through the pipeline?
 def emit_swing(context, result, hp_after: int, max_hp: int,
                killed: bool, backfire: bool = False) -> int:
     """
@@ -147,6 +205,7 @@ def emit_swing(context, result, hp_after: int, max_hp: int,
     return _broadcast(payload, attacker, context.defender, room)
 
 
+
 def emit_miss(context) -> int:
     """
     Purpose: Publish a swing that connected with nothing.
@@ -194,6 +253,7 @@ def emit_miss(context) -> int:
     return _broadcast(payload, attacker, target, room)
 
 
+
 def emit_vitals(entity) -> int:
     """Publish one entity's own health to its own sessions.
 
@@ -204,6 +264,59 @@ def emit_vitals(entity) -> int:
     payload = CharVitalsPayload(hp=getattr(entity, "hp", 0), max_hp=max_hp)
 
     return emit(entity, payload)
+
+
+
+def emit_avatar(observer, force: bool = False) -> int:
+    """
+    Purpose: Tell the observer what they themself look like.
+
+    Entry:
+        observer - the puppeted Character, or None (a no-op, matching every
+                   other observer-facing emitter here).
+        force    - True to bypass rate caps. Used by resync.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The body is TAKEN FROM serialize_entity rather than assembled here,
+        even though only three of its keys are kept. That routine owns the
+        answer to "what names this thing's art" -- it is what decides an NPC by
+        npc_key, an item by prototype, a character by ASSET_KEY_CHARACTER --
+        and a second place deriving the same pair for the observer alone is a
+        second place to forget when a character can choose its appearance. The
+        three keys are picked off the result; the rest is dropped because
+        char_vitals and room_info already carry it. See CharAvatarPayload.
+
+        Sent on resync only, which is every login, every reconnect and every
+        server reload. That is the whole schedule this fact has today: a
+        character's asset key is fixed for its lifetime. When appearance
+        becomes mutable, whatever sets it calls this, and nothing else here
+        changes.
+
+    Notes/References:
+        emit_room_contents excludes the observer from their own entity list,
+        which is why this channel has to exist at all.
+
+    Author: Nick Hobar
+    Creation date: 08/22/2026
+    """
+    if observer is None:
+        return 0
+
+    body = serializers.serialize_entity(observer)
+    payload = CharAvatarPayload(
+        entity_id=body["id"],
+        asset=body["asset"],
+        family=body["family"],
+    )
+
+    return emit(observer, payload, force=force)
+
 
 
 def emit_summary(observer, force: bool = False) -> int:
@@ -259,6 +372,80 @@ def emit_summary(observer, force: bool = False) -> int:
     return emit(observer, payload, force=force)
 
 
+
+def emit_inventory(observer, force: bool = False, ignore=None) -> int:
+    """
+    Purpose: Publish the observer's carried grid and equipment to themself.
+
+    Entry:
+        observer - the puppeted Character. An object with no inventory handler
+                   is a supported no-op.
+        force    - True to bypass rate caps. A formality today, since the
+                   channel is uncapped by design, kept so the resync call site
+                   looks like every other one.
+        ignore   - an object to treat as already gone when building the
+                   snapshot, or None. Only at_object_leave needs this; see
+                   InventoryHandler.sync for why.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the same reason emit_summary
+        does it: building this payload walks 32 slots, syncs the handler, and
+        reads the tag set on every item. That is far more than the cheap
+        payloads around it, and emit() would discard the result for free but
+        only after the work was already done.
+
+        The build is WRAPPED, which the other event routines are not. They are
+        called from a command or a combat tick; this one is also called from
+        at_object_receive and at_object_leave, which sit directly in the path
+        of every item movement in the game. A feed that could raise there could
+        lose an item mid-move, and typeclasses/characters.py already swallows
+        exceptions around the inventory call it makes -- so a raise here would
+        be silently absorbed into exactly the behaviour that loses things.
+
+        systems.statefeed.inventory is imported inside the routine. It reaches
+        items.equipment.constants and items.inventory.handler, and this module
+        is imported by typeclasses/mixins.py, which every Character and NPC
+        pulls in at startup.
+
+    Notes/References:
+        payloads.CharItemsPayload documents why this is a snapshot rather than
+        a delta, and constants.CHANNEL_MIN_INTERVAL_SECONDS documents why the
+        channel must not be rate-capped.
+
+    Author: Nick Hobar
+    Creation date: 08/15/2026
+    """
+    from evennia.utils import logger
+
+    from . import inventory as inventory_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharItemsPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    try:
+        payload = inventory_serializer.build_payload(observer, ignore=ignore)
+    except Exception:
+        logger.log_trace()
+        return 0
+
+    if payload is None:
+        return 0
+
+    return emit(observer, payload, force=force)
+
+
+
 def emit_room_info(observer, force: bool = False) -> int:
     """Publish the observer's current room to the observer alone.
 
@@ -276,36 +463,53 @@ def emit_room_info(observer, force: bool = False) -> int:
         room_kind=serializers.room_kind(room),
         coords=serializers.room_coords(room),
         exits=serializers.serialize_exits(room),
+        tile_actions=serializers.tile_actions(room),
+        cancel_action=serializers.cancel_action(),
     )
 
     return emit(observer, payload, force=force)
 
 
+
 def emit_room_contents(observer, force: bool = False) -> int:
-    """Publish the full list of what the observer can see in their room.
+    """Publish the full list of what the observer can see around them.
 
     The "list" half of list-then-delta: sent on arrival and on resync, with
     emit_entity_arrived / emit_entity_left carrying the changes in between.
     The observer is excluded from their own list -- a client already knows
     where it put the camera.
+
+    "Around them" is STATEFEED_ENTITY_RADIUS tiles, not one room. Every entity
+    carries the coords of the room it is in, because a client given a
+    neighbourhood and no positions would stack all of it on the player's tile.
     """
     room = getattr(observer, "location", None)
 
     if room is None:
         return 0
 
-    entities = serializers.serialize_contents(room, exclude=(observer,))
+    rooms = _visible_rooms(room)
+    entities = serializers.serialize_area(rooms, exclude=(observer,))
     payload = RoomPlayersPayload(entities=entities)
 
     return emit(observer, payload, force=force)
 
 
-def emit_entity_arrived(room, entity) -> int:
-    """Tell everyone already in `room` that `entity` just appeared."""
-    body = serializers.serialize_entity(entity)
-    payload = RoomPlayerAddPayload(entity=body)
 
-    return emit_to_room(room, payload, exclude=(entity,))
+def emit_entity_arrived(room, entity) -> int:
+    """Tell everyone who can see `room` that `entity` just appeared.
+
+    Reaches the same radius emit_room_contents reports over. A narrower
+    broadcast would leave observers who were told about this room's contents
+    never hearing them change.
+    """
+    coords = serializers.room_coords(room)
+    body = serializers.serialize_entity(entity, coords=coords)
+    payload = RoomPlayerAddPayload(entity=body)
+    rooms = _visible_rooms(room)
+
+    return emit_to_area(rooms, payload, exclude=(entity,))
+
 
 
 def emit_entity_left(room, entity_id: int, exclude=()) -> int:
@@ -330,6 +534,11 @@ def emit_entity_left(room, entity_id: int, exclude=()) -> int:
         the object may already be deleted, and serialising it would either
         raise or produce a row of defaults.
 
+        Reaches the same radius emit_room_contents reports over. This is the
+        half that must not be missed: an observer told about a distant NPC and
+        never told it died renders it standing there indefinitely, since
+        nothing else is scheduled that would correct them.
+
     Notes/References:
         None.
 
@@ -337,8 +546,10 @@ def emit_entity_left(room, entity_id: int, exclude=()) -> int:
     Creation date: 08/07/2026
     """
     payload = RoomPlayerRemovePayload(entity_id=entity_id)
+    rooms = _visible_rooms(room)
 
-    return emit_to_room(room, payload, exclude=exclude)
+    return emit_to_area(rooms, payload, exclude=exclude)
+
 
 
 def emit_aura(owner, event: str, aura_key: str, radius: int,

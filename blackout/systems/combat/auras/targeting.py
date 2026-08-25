@@ -28,6 +28,7 @@ from evennia.contrib.grid.xyzgrid.xyzroom import (
 from evennia.utils import logger
 
 from .. import constants as const
+from ..protocols import Combatant
 
 
 # ─── Public constant definitions ───────────────────────────────────────────
@@ -146,7 +147,7 @@ def rooms_within_radius(origin, radius: int) -> list:
 
     Notes/References:
         Rooms can be deleted out from under a cached result by
-        scripts/xyz_cleanup.py, so callers must re-resolve rather than hold
+        scripts/map_sync.py, so callers must re-resolve rather than hold
         these objects indefinitely.
 
     Author: Nick Hobar
@@ -243,7 +244,7 @@ def is_hostile_pulse_target(obj, caster) -> bool:
 
     Notes/References:
         Deliberately a predicate rather than an isinstance check, matching
-        CmdAttack's `hasattr(target, "is_alive")` guard in commands/combat_cmds.py.
+        CmdAttack's Combatant check in commands/combat_cmds.py.
 
     Author: Nick Hobar
     Creation date: 08/03/2026
@@ -254,7 +255,7 @@ def is_hostile_pulse_target(obj, caster) -> bool:
     if getattr(obj.db, "npc_key", None) is None:
         return False
 
-    if not hasattr(obj, "is_alive"):
+    if not isinstance(obj, Combatant):
         return False
 
     return obj.is_alive()

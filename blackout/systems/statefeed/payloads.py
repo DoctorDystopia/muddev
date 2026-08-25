@@ -80,6 +80,24 @@ class RoomInfoPayload(_Payload):
     coords: list = field(default_factory=list)   # [x, y, z] -- z is a map NAME
     exits: dict = field(default_factory=dict)    # {direction: destination_num}
 
+    # What the tiles NEAR the observer afford: {"x:y": {command, kind}}.
+    #
+    # Near only -- the observer's own tile and everything one real exit away,
+    # at most nine entries. A tile further off affords the same `goto (X,Y)`
+    # wherever the observer stands, so that is stamped on the MAP NODE once per
+    # session (see mapexport) rather than resent here on every move.
+    #
+    # `exits` above is kept and is not redundant with this. It is the GMCP
+    # Room.Info field as IRE and Aardwolf define it, keyed by direction and
+    # carrying destination ids, which is what a text client wants; this is
+    # keyed by tile and carries commands, which is what a graphical one wants.
+    tile_actions: dict = field(default_factory=dict)
+
+    # What clicking the tile you are standing on means while a walk is running.
+    # Not part of tile_actions because whether a walk IS running is the
+    # client's own tracking; see serializers.cancel_action.
+    cancel_action: dict = field(default_factory=dict)
+
 
 @dataclass
 class RoomPlayersPayload(_Payload):
@@ -115,6 +133,37 @@ class RoomPlayerRemovePayload(_Payload):
     channel = const.CHANNEL_ROOM_PLAYER_REMOVE
 
     entity_id: int = 0
+
+
+@dataclass
+class CharAvatarPayload(_Payload):
+    """Who the observer IS, as the renderer needs to know it. Char.Avatar.
+
+    The one thing a graphical client cannot work out for itself. Every other
+    entity it draws arrives on room_players carrying `asset` and `family`, but
+    emit_room_contents excludes the observer from their own list -- so the
+    client knows where to put the camera and nothing at all about what to draw
+    there. This channel closes exactly that gap and nothing else.
+
+    `asset` and `family` are the same two tiers, spelled the same way, that
+    every entity dict carries, so a client resolves its own mesh through the
+    identical lookup it already runs for an NPC. `entity_id` is what makes a
+    combat event recognisable as being about YOU: CombatPayload names an
+    attacker and a target by id, and a client with no id of its own can only
+    guess by name.
+
+    DELIBERATELY THREE FIELDS. serialize_entity also reports name, coords, hp
+    and max_hp -- all of which are already on char_vitals or room_info for this
+    observer. Repeating them here would be a second source for a fact that
+    changes on a different schedule, which is the drift char_items_list is
+    written to avoid.
+    """
+
+    channel = const.CHANNEL_CHAR_AVATAR
+
+    entity_id: int = 0
+    asset: str = ""
+    family: str = ""
 
 
 @dataclass
@@ -155,6 +204,52 @@ class CharSummaryPayload(_Payload):
     channel = const.CHANNEL_CHAR_SUMMARY
 
     panels: dict = field(default_factory=dict)
+
+
+@dataclass
+class CharItemsPayload(_Payload):
+    """The whole carried inventory and every equipment slot. Char.Items.List.
+
+    A SNAPSHOT, deliberately, where RoomPlayersPayload is the list half of a
+    list-then-delta pair. The reasoning is inverted from that channel's and is
+    worth stating, because "be consistent with room_players" is the obvious
+    wrong answer here.
+
+    room_players uses deltas because with a radius of 10 the full list is large
+    and the mutation points are few and disciplined: an entity enters a room or
+    leaves it. The inventory is the other way round on both counts. The full
+    list is 32 slots plus 11 equipment slots -- a couple of kilobytes, well
+    inside the 65535-byte inbound buffer that forces MapChunkPayload to chunk --
+    while the mutation points are many and undisciplined. InventoryHandler
+    .add_item merges stacks with a bare `existing.quantity += additional` and
+    fires no hook at all; crafting consumes materials directly; banking moves
+    items in bulk; equipping displaces items back into the grid. A delta
+    protocol would need an emit at every one of those and would rot silently at
+    the first one anybody forgot.
+
+    A missed delta on an NPC three tiles away is a cosmetic ghost. A missed
+    delta on the player's own inventory is a phantom item they will try to
+    click. Sending the whole grid is cheap and cannot desync.
+
+    `items` and `equipped` ship together rather than as two messages because
+    equipping is a single transaction that changes both, and two messages could
+    be rendered half-applied.
+
+    `equip_slots` is the EMPTY FRAME list -- every wield location in display
+    order, whether or not something is in it. It ships because the alternative
+    is a client-side table restating SLOT_DISPLAY_ORDER, which is the exact
+    shape of duplication that made the client's old verb table wrong within a
+    week. Adding a slot to WieldLocation should light up a new frame in the 3D
+    pane with no client edit at all.
+    """
+
+    channel = const.CHANNEL_CHAR_ITEMS
+
+    slots_total: int = 0
+    slots_used: int = 0
+    items: list = field(default_factory=list)        # the carried grid
+    equipped: list = field(default_factory=list)     # what is worn
+    equip_slots: list = field(default_factory=list)  # every frame to draw
 
 
 @dataclass

@@ -66,7 +66,7 @@ def effective_level(
 
 # ─── Max hit ───────────────────────────────────────────────────
 
-def max_hit(eff_str: int, equip_str_bonus: int) -> int:
+def max_melee_hit(eff_str: int, equip_str_bonus: int) -> int:
     """
     Purpose: Compute the maximum melee damage for one swing.
 
@@ -99,7 +99,7 @@ def max_hit(eff_str: int, equip_str_bonus: int) -> int:
 
 # ─── Attack and defense rolls ──────────────────────────────
 
-def attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
+def melee_attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
     """
     Purpose: Compute the attacker's maximum attack roll for hit resolution.
 
@@ -120,16 +120,13 @@ def attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
         OSRS uses an identical structural shape for attack and defense rolls,
         hence the shared +64 constant.
 
-    Notes/References:
-        Research doc Eq. 3.
-
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
     return eff_atk * (equip_atk_bonus + combat_constants.MAX_HIT_K)
 
 
-def defense_roll(eff_def: int, equip_def_bonus: int) -> int:
+def melee_defense_roll(eff_def: int, equip_def_bonus: int) -> int:
     """
     Purpose: Compute the defender's maximum defense roll for hit resolution.
 
@@ -150,9 +147,6 @@ def defense_roll(eff_def: int, equip_def_bonus: int) -> int:
         R_def = eff_def * (equip_def_bonus + 64)
         Attack and defense rolls share the same structural formula; the
         only divergence is which equipment bonus feeds in.
-
-    Notes/References:
-        Research doc Eq. 4.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
@@ -183,12 +177,9 @@ def hit_chance(r_atk: int, r_def: int) -> float:
     Methodology:
         If R_atk > R_def:   P = 1 - (R_def + 2) / (2 * (R_atk + 1))
         If R_atk <= R_def:  P = R_atk / (2 * (R_def + 1))
-        The bifurcation guarantees the probability bounds; the diminishing-
+        The bifurcation guarantees the probability bounds. The diminishing-
         returns shape on the leading branch is what makes OSRS armor math
         cohere.
-
-    Notes/References:
-        Research doc Eq. 5 & 6.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
@@ -205,62 +196,62 @@ def hit_chance(r_atk: int, r_def: int) -> float:
 
 # ─── Damage roll ────────────────────────────────────────────────────────────
 
-# def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None) -> int:
-#     """
-#     Purpose: Uniform integer damage on [0, max_hit] inclusive.
-
-#     Entry:
-#         max_hit_value - cap from max_hit(eff_str, equip_str_bonus).
-#         rng           - optional random.Random instance for deterministic tests.
-#                         If None, uses the module-level random.
-
-#     Exit/Returns:
-#         Integer damage in [0, max_hit_value]. A 0 is a successful accuracy
-#         check followed by a 0 damage roll (an OSRS "splash" with a connect).
-
-#     Module Globals:
-#         None.
-
-#     Methodology:
-#         Single randint call. Rolls damage uniformly across the full
-#         range, so 0 is as likely as max_hit, and the average DPS converges
-#         to max_hit * hit_chance / 2.
-
-#     Author: Nick Hobar
-#     Creation date: 07/26/2026
-#     """
-#     source = rng if rng is not None else _random_module
-
-#     return source.randint(0, max_hit_value)
-
-
 def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None) -> int:
     """
-    Purpose: Roughly bell curved distribution of integer damage on [0, max_hit] inclusive.
+    Purpose: Uniform integer damage on [0, max_hit] inclusive.
+
+    Entry:
+        max_hit_value - cap from max_hit(eff_str, equip_str_bonus).
+        rng           - optional random.Random instance for deterministic tests.
+                        If None, uses the module-level random.
+
+    Exit/Returns:
+        Integer damage in [0, max_hit_value]. A 0 is a successful accuracy
+        check followed by a 0 damage roll (an OSRS "splash" with a connect).
+
+    Module Globals:
+        None.
 
     Methodology:
-        Average of two randint calls, rounded up or down randomly to avoid bias towards 0 or max_hit. 
-        0 is still as likely as max_hit, but both are less likely than the mid-range values.
-        The distribution is not a bell curve, it is a triangular distribution that peaks at max_hit/2. 
+        Single randint call. Rolls damage uniformly across the full
+        range, so 0 is as likely as max_hit, and the average DPS converges
+        to max_hit * hit_chance / 2.
 
-    Author: Danny
-    Creation date: 08/08/2026
+    Author: Nick Hobar
+    Creation date: 07/26/2026
     """
     source = rng if rng is not None else _random_module
 
-    r = source.randint(0, 1)
-    a = source.randint(0, max_hit_value)
-    b = source.randint(0, max_hit_value)
-
-    if r == 0:
-        damage = math.floor((a + b) / 2.0)
-    else:
-        damage = math.ceil((a + b) / 2.0)
-
-    return damage
+    return source.randint(0, max_hit_value)
 
 
-# ─── Swing resolution (top-level pipeline) ────────────────────────────────
+# def roll_damage(max_hit_value: int, rng: Optional[_random_module.Random] = None) -> int:
+#     """
+#     Purpose: Roughly bell curved distribution of integer damage on [0, max_hit] inclusive.
+
+#     Methodology:
+#         Average of two randint calls, rounded up or down randomly to avoid bias towards 0 or max_hit. 
+#         0 is still as likely as max_hit, but both are less likely than the mid-range values.
+#         The distribution is not a bell curve, it is a triangular distribution that peaks at max_hit/2. 
+
+#     Author: Danny
+#     Creation date: 08/08/2026
+#     """
+#     source = rng if rng is not None else _random_module
+
+#     r = source.randint(0, 1)
+#     a = source.randint(0, max_hit_value)
+#     b = source.randint(0, max_hit_value)
+
+#     if r == 0:
+#         damage = math.floor((a + b) / 2.0)
+#     else:
+#         damage = math.ceil((a + b) / 2.0)
+
+#     return damage
+
+
+# ─── Combat action resolution (top-level pipeline) ────────────────────────────────
 
 def resolve_melee_swing(
     attacker_eff_atk: int,
@@ -272,7 +263,7 @@ def resolve_melee_swing(
     rng: Optional[_random_module.Random] = None,
 ) -> dict:
     """
-    Purpose: Resolve one melee swing end-to-end. This is the single entry
+    Purpose: For melee combat. Resolve one melee swing end-to-end. This is the single entry
     point the CombatHandler calls per tick per queued attack action.
 
     Entry:
@@ -302,23 +293,23 @@ def resolve_melee_swing(
         None (delegates to other module functions).
 
     Methodology:
-        1. Compute R_atk and R_def via attack_roll / defense_roll.
+        1. Compute R_atk and R_def via melee_attack_roll / melee_defense_roll.
         2. Compute hit_prob via hit_chance.
         3. Roll against hit_prob; if miss, return damage=0.
-        4. Compute max_hit and roll uniform damage.
+        4. Compute max_melee_hit and roll uniform damage.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
     source = rng if rng is not None else _random_module
 
-    r_atk = attack_roll(attacker_eff_atk, attacker_equip_atk)
-    r_def = defense_roll(defender_eff_def, defender_equip_def)
+    r_atk = melee_attack_roll(attacker_eff_atk, attacker_equip_atk)
+    r_def = melee_defense_roll(defender_eff_def, defender_equip_def)
     chance = hit_chance(r_atk, r_def)
 
     if source.random() >= chance:
         return {"hit": False, "damage": 0, "hit_prob": chance}
 
-    dmg = roll_damage(max_hit(attacker_eff_str, attacker_equip_str), source)
+    dmg = roll_damage(max_melee_hit(attacker_eff_str, attacker_equip_str), source)
 
     return {"hit": True, "damage": dmg, "hit_prob": chance}
