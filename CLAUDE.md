@@ -26,6 +26,7 @@ Inside `blackout/`:
 | `typeclasses/` | Evennia typeclasses; `mixins.py` holds `CombatEntity` |
 | `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `shop_defs/`, `maps/` |
 | `commands/` | Command classes and cmdsets |
+| `web/` | Django site + the 3D webclient. See "The webclient" below. |
 | `scripts/` | **Destructive operator CLI scripts. See the warning below.** |
 
 > **Read the installed Evennia, not the submodule.** Imports resolve to
@@ -42,6 +43,13 @@ import check, a linter, a doc pass. Doing so once executed the map cleanup
 script and deleted 347 grid rooms. Everything in `scripts/` is now behind an
 `if __name__ == "__main__"` guard, but treat the directory as import-unsafe and
 exclude it explicitly.
+
+`export_client_constants.py` is the one file here that touches no database — it
+only renders the generated client constants — but it lives behind the same
+guard, and code that needs its output should import
+`systems/statefeed/clientexport.py` instead. That is why the output-path table
+lives in `clientexport.py` rather than in the script: the test that checks the
+generated files are current cannot import this directory.
 
 Maps are regenerable from `world/maps/*.py` via
 `scripts/clean_and_reload_all_maps.ps1`; accounts and characters are not stored
@@ -67,7 +75,7 @@ between a 6-minute suite and a 20-minute one — see
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
 ```
 
-**Before merging or major changes:** run the full suite (1273 tests, ~6.5 min):
+**Before merging or major changes:** run the full suite (1324 tests, ~6.6 min):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world
@@ -136,6 +144,86 @@ and tag categories in `systems/crafting/constants.py`; combat tunables in
 a literal that already has a named constant is how the "Metalsmith" vs
 "Metalsmithing" bug hid every anvil recipe.
 
+The rule crosses the language boundary too — see the webclient section below.
+
+## The webclient
+
+A 3D world pane and a 3D inventory pane, drawn with three.js, docked beside the
+text. Full audit and design rationale:
+[docs/2026-08-23-ENG-0004-webclient-architecture.md](docs/2026-08-23-ENG-0004-webclient-architecture.md).
+
+**Python owns what is TRUE about the game; JavaScript owns what it LOOKS like.**
+That line decides every question about where something belongs. Channel names,
+asset kinds, item families and tile affordances are the server's. Colours, mesh
+shapes, camera angles and the model registry are the client's.
+
+**The server names; the client draws.** When the client would branch on what
+something *is*, the server should already have said what can be *done* with it.
+`serialize_entity` sends `interact: "attack mutant raider"`; `tile_actions`
+sends `{command, kind}` per tile; `serialize_inventory` sends whole commands.
+The client sends them verbatim. A client verb table has been deleted twice for
+being wrong within a week — do not add a third.
+
+**The pane sends only what a telnet player could type.** Clicking a tile sends
+`["text", ["north"], {}]`. There is no privileged client channel that bypasses
+a Command, so every lock, permission and cooldown keeps working with no audit.
+
+### Regenerate after editing `systems/statefeed/constants.py`
+
+```bash
+python scripts/export_client_constants.py
+```
+
+It renders `web/static/webclient/js/generated/blackout_constants.js` **and**
+`godot/autoload/blackout_constants.gd` from the Python. Both are committed, and
+a test fails if either is stale — so a missed run is loud, not silent. Never
+hand-edit a generated file. `--check` writes nothing and exits non-zero, for CI.
+
+### ES modules, one entry point
+
+`web/templates/webclient/base.html` carries **one** `<script type="module">`
+pointing at `blackout_main.js`, plus an import map for `three` and
+`three/addons/`. Dependencies are imports, not script order.
+
+- **`plugins/hotkeys.js` must stay a CLASSIC script.** It has to load before
+  Evennia's `default_in.js`, and a module runs after every classic script *by
+  definition* — converting it silently breaks movement keys while everything
+  else keeps working.
+- A module script is deferred, so it runs after all classic scripts but
+  **before** `$(document).ready`, which is when `plugin_handler.init()` fires.
+  That window is the only reason the panes can register in time.
+- three.js is vendored as ESM at **r159**, loader and core the same release.
+  Upgrading is now a normal bump; the UMD build it replaced was removed
+  upstream at r161 and was a hard ceiling.
+
+### Panes
+
+`js/shell/pane.js` owns everything a pane needs that is not about drawing:
+GoldenLayout registration, the single-pane guard, opening, channel claiming and
+message routing. A pane calls `createPaneShell({name, title, build, route,
+channels})` and keeps its scene, camera, picking and teardown. **A new pane is
+a call to that, not another copy of 160 lines** — which is what the two panes
+were until 08/23/2026.
+
+JavaScript tests live in `web/jstests/` and need no dependencies:
+
+```bash
+node --import ./register.mjs --test
+```
+
+They cover pure logic only — `tileAction` is the model case. Rendering, layout
+and input are not tested; the pane is non-essential by design, so a headless
+browser is not worth its cost.
+
+### Client-side facts that cannot be generated
+
+`ROOM_KIND_COLORS` and `Z_LAYOUT_ORDER` mix a server fact (which room kinds and
+maps exist) with a client one (what colour, what order). They are guarded
+instead of generated, by `systems/statefeed/tests/test_client_constants.py`.
+The asymmetry is deliberate: **a client key naming nothing is a bug; a server
+fact with no client entry is fine** — both tables document a fallback, so
+adding content must never require a client edit.
+
 ## Evennia gotchas found the hard way
 
 1. **`evennia.utils.utils.crop` is not ANSI-aware** in this build — it measures
@@ -158,6 +246,113 @@ a literal that already has a named constant is how the "Metalsmith" vs
 7. **`lazy_property` caches into `obj.__dict__` under its `__name__`** and its
    deleter raises. Clear it with `obj.__dict__.pop("name", None)`; when
    building accessors from a factory, pass `name=` explicitly or they collide.
+8. **Django compiles template tags inside HTML comments.** The `<!-- -->` is
+   stripped by the *browser*, long after the engine has parsed the file — so
+   writing a tag in explanatory prose is a `TemplateSyntaxError` that 500s the
+   whole page. A bare `static` tag in a comment in `base.html` did exactly
+   that. Never write tag braces in template prose, not even as an example.
+9. **Evennia's emitter keeps ONE listener per channel name.** `Evennia.emitter`
+   does `listeners[cmdname] = listener`, so a second plugin binding a name is a
+   silent *theft*, not a second subscription — the first stops receiving a
+   channel it believes it still handles. `blackout_channels.js` is a
+   first-claim-wins registry that makes the collision loud and local.
+
+## The quest system
+
+`systems/quests/` splits four ways, and the split is load-bearing:
+
+| Module | Holds | May import |
+|---|---|---|
+| `constants.py` | The action vocabulary, status strings, message templates | `systems/ui/colors.py` |
+| `quests.py` | `QuestStep`, `QuestBlueprint` — the shapes content declares | `constants` **only** |
+| `loader.py` | `GLOBAL_QUEST_REGISTRY`, package auto-discovery of `content/` | `content` |
+| `handler.py` | `QuestHandler` — one character's progress | `loader`, `quests`, `constants` |
+
+**`quests.py` must never import `loader.py`.** The loader builds its singleton
+at import time by importing every module under `content/`, and every one of
+those imports `QuestBlueprint` back out of `quests.py`. An import of the
+loader at `quests.py` scope closes that ring, and the third hop finds a
+half-initialized module. That was the live state of the game until 08/25/2026:
+`typeclasses/characters.py` imported the handler first, so every content
+module raised `ImportError` inside the loader's `except Exception`, and
+**`GLOBAL_QUEST_REGISTRY` came up empty**. The only symptom was a quest that
+could not be accepted. `QuestRegistry.load_errors` plus
+`test_quest_registry.py` are what make that loud now.
+
+**Game systems call `notify_quests`, never `update_progress`.**
+
+```python
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
+
+notify_quests(killer, quest_constants.ACTION_KILL, npc_key)
+```
+
+A system knows what the player *did*, not which quest wanted it. `at_death`
+used to pass the literal quest key `"*"` meaning "any active quest" — never
+implemented, so no kill objective could ever advance. `notify_quests` is that
+fan-out, and it tolerates an actor with no quest handler, drops an
+undocumented verb loudly, and never raises.
+
+**The argument is a stable snake_case key, never a display name** —
+`db.npc_key`, a recipe key, an `ItemDef` key.
+
+**The verb vocabulary has one owner in two files that cannot drift.**
+`QUEST_ACTIONS` in `constants.py` and the level-3 verb headings in
+`global_quest_actions.md` are asserted equal in both directions by
+`test_quest_vocabulary.py`. A `QuestStep` naming an undocumented action raises
+at import — which the loader turns into a failing test rather than an
+objective that silently never fires.
+
+**Nothing outside `handler.py` reads `db.active_quests`.** Dialogue nodes, the
+`quest` command and the summary panel go through the read API (`status`,
+`is_active`, `on_step`, `current_step`, `objective_lines`). Three modules
+owning that fact is how the android's dialogue came to print `talk:tester: 0/True`
+at players.
+
+Progression hooks currently live in `typeclasses/mixins.py` (`kill`),
+`systems/crafting/crafting_service.py` (`craft`),
+`skill_defs/gathering/cutting.py` (`cut`, `gather`) and `typeclasses/rooms.py`
+(`visit`, opt-in per room via `db.quest_visit_key`). `talk` is fired by
+dialogue nodes, not by `CmdTalk` — one NPC can be two different targets.
+
+## The moderator egg
+
+An in-game item (`egg`) that opens a menu of staff actions. Three modules, and
+the split is the same one the quest system makes:
+
+| Module | Holds | May import |
+|---|---|---|
+| `systems/devtools/constants.py` | The god-mode attribute name, the audit vocabulary, the bounds, the message templates | `systems/ui/colors.py` |
+| `systems/devtools/actions.py` | The effects. Every one is `(actor, target, ...) -> (succeeded, message)` | `constants`, plus whatever system it reaches into |
+| `systems/menus/dev_egg_menu.py` | EvMenu nodes. Presentation only | `actions`, `constants`, `base_menu` |
+
+**The menu is not in the package on purpose.** An effect has to stay callable
+from a test, a script or a future command with no EvMenu anywhere; a package
+that imports EvMenu is one a test has to boot a session to touch.
+
+**`CmdEgg`'s lock is the entire permission story.** `cmd:perm(Admin)`, checked
+once, before the menu opens. Nothing in `actions.py` checks a permission, and
+nothing should start — a check repeated per effect is one that gets forgotten
+on the ninth.
+
+**Nothing here re-implements what already exists.** Boot and ban type
+Evennia's own commands through `execute_cmd`, so the `server_bans` ServerConfig
+row keeps one writer and `ban`'s Developer lock still refuses an Admin. The
+item, skill and map lists are read live from `ITEM_DB`, `SKILL_REGISTRY` and
+`scripts/map_manifest.json`, so adding content reaches the menu with no edit
+in `systems/devtools/`.
+
+**God mode is the one new game rule.** A flag on the CHARACTER, read in
+`CombatEntity.at_damage` (`typeclasses/mixins.py`), which returns 0 before the
+HP write. It is read inline there rather than through
+`actions.godmode_enabled`, because that module pulls in `ITEM_DB`, the skill
+registry and the xyzgrid contrib and `at_damage` is the combat hot path — every
+combatant, every tick. Only the attribute NAME is shared, from `constants.py`,
+and `test_actions.py` asserts the two readers agree. The attacker is recorded
+*before* the immunity check, so an immune moderator still draws aggro.
+
+Every effect writes one `[MODTOOL]` audit line naming actor, verb and target.
 
 ## Design intent
 

@@ -8,6 +8,9 @@ Rooms are simple containers that has no location of their own.
 from evennia.objects.objects import DefaultRoom
 from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
+
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
 from systems.statefeed import events as feed
 from systems.statefeed import subscriptions
 from .objects import ObjectParent
@@ -206,6 +209,16 @@ class GridTile(ObjectParent, XYZRoom):
         Creation date: 08/07/2026
         """
         super().at_object_receive(moved_obj, source_location, move_type=move_type, **kwargs)
+
+        # `visit` objectives are opt-in per room rather than derived from the
+        # room's coordinates. Two reasons. A coordinate triple is not a name a
+        # blueprint can read -- global_quest_actions.md spells the argument
+        # `visit:oasis_perimeter`, a landmark an author chose -- and this hook
+        # fires for every rock dropped and every NPC that wanders a tile, so
+        # the common case must cost one attribute read and stop.
+        visit_key = self.db.quest_visit_key
+        if visit_key:
+            notify_quests(moved_obj, quest_constants.ACTION_VISIT, visit_key)
 
         try:
             if subscriptions.has_subscribers(moved_obj):

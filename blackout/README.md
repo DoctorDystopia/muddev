@@ -743,6 +743,44 @@ KEYED_COUNTER stat stores   |  {stat_key: {sub_key: total(int)}}
 
 Requires Builder permission. Searches both inventory and equipment slots.
 
+### The Moderator Egg
+
+An in-game item that opens the moderator toolkit as a menu. Give yourself one:
+
+```python
+> py from world.item_database import ITEM_DB; ITEM_DB["moderator_egg"].create(location=self, home=self)
+```
+
+Then, with it in your inventory:
+
+```bash
+> egg
+```
+
+The command is locked to `perm(Admin)`; superusers bypass the lock as they do
+every other. The egg is inert in anyone else's hands, and `tradeable=False`
+keeps it out of shops and trades -- the only way one reaches a player is
+someone handing it over.
+
+What the menu offers:
+
+| Entry | Effect |
+|---|---|
+| Spawn an item | Any `ITEM_DB` key, 1 or N. Stackables arrive as one stack; a request larger than the grid is clamped and says so. |
+| Toggle god mode | The target ignores all incoming damage. Persists on the CHARACTER, not the egg -- dropping the egg does not turn it off. |
+| Restore | Refresh max HP from Fortitude, heal to full, drop out of combat. |
+| Teleport to a map | Any map in `scripts/map_manifest.json`, landing on its `(0,0)` entrance tile. |
+| Grant XP / Set a skill level | Any key in `SKILL_REGISTRY`. Levels accept the full 0-127 range. |
+| Boot or ban an account | Types Evennia's own `boot` / `ban` / `unban`. `ban` keeps its Developer lock. |
+| Change target | Aims every entry above at another character. Blank resets to yourself. |
+
+Every action taken through the egg writes one `[MODTOOL]` line to the server
+log naming the actor, the verb and the target. To review a session:
+
+```bash
+grep MODTOOL server/logs/server.log
+```
+
 ---
 
 ## Map Building Workflow
