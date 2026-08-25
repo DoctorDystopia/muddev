@@ -12,7 +12,7 @@ from evennia.utils import logger
 from systems.progression.skills.skill_defs.base_skill import BaseSkill
 from systems.progression.skills.gatherables import GATHERABLE_REGISTRY
 from world.item_database import ITEM_DB
-
+from systems.stat_tracker import constants as stat_constants
 
 
 _MIN_HARVEST_COOLDOWN = 2.0
@@ -138,6 +138,14 @@ class Cutting(BaseSkill):
         self.arm_cooldown(character)
 
         character.skills.add_xp(self.key, xp_reward)
+
+        stats = getattr(character, "stats", None)
+        gatherable_key = getattr(target.db, "gatherable_key", None)
+        if stats is not None and gatherable_key:
+            try:
+                stats.increment(stat_constants.CUTTING_TOTALS_STAT_KEY, gatherable_key)
+            except Exception as exc:
+                logger.log_err(f"Cutting._execute_gathering {stat_constants.CUTTING_TOTALS_STAT_KEY} stat update failed: {exc!r}")
         
         success_msg = f"You successfully cut the {target.key} and receive a {item_name} for {xp_reward} XP."
         character.msg(success_msg)

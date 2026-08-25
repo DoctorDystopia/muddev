@@ -7,10 +7,12 @@ Description: Shop service layer: pricing, stock lookup, and the buy/sell
 """
 
 from dataclasses import dataclass, field
+from evennia.utils import logger
 
 from typeclasses.items import CurrencyItem
 from world.item_database import ITEM_DB
 from world.shop_defs import SHOP_DB, ShopDef
+from systems.stat_tracker import constants as stat_constants
 
 _ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 
@@ -492,6 +494,13 @@ def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
         error = _NO_ROOM_ERROR if refused else _OUT_OF_STOCK_ERROR
         return BuyResult(success=False, error=error)
 
+    stats = getattr(caller, "stats", None)
+    if stats is not None and total_price:
+        try:
+            stats.increment(stat_constants.CREDITS_SPENT_STAT_KEY, amount=total_price)
+        except Exception as exc:
+            logger.log_err(f"shop_service.execute_buy CREDITS_SPENT_STAT_KEY stat update failed: {exc!r}")
+            
     return BuyResult(
         success=True,
         bought_count=bought,
