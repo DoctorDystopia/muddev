@@ -13,16 +13,20 @@ Description: ItemDef entries for moderator tooling -- items that exist to be
              agreement about which one heals.
 """
 
+from systems.devtools.constants import DEV_TOOL_TAG_CATEGORY
 from world.item_database import ItemDef
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
 
-# The tag category every moderator item declares. Deliberately NOT one of
-# statefeed's ITEM_FAMILIES: the 3D pane falls an unknown family through to a
-# generic mesh labelled with the item's real name, which is exactly right for
-# an object no art was ever commissioned for. See _item_family.
-_DEV_TOOL_TAG_CATEGORY = "dev_tool"
+# The tag category is imported, not typed. systems/devtools/constants.py owns
+# it because clear_inventory reads the same fact to decide what it must refuse
+# to delete -- and a staff item whose tag disagreed with that check is one a
+# moderator destroys by emptying their own bag.
+#
+# The import direction is safe: devtools/constants.py imports only
+# systems/ui/colors.py, so nothing here can close a ring back through
+# world/item_database.py.
 
 _MODERATOR_EGG_DESC = (
     "A smooth ovoid of dull ceramic, warm to the touch and heavier than it "
@@ -53,6 +57,6 @@ ITEMS = {
         # screen's rotation for no reason.
         tier=0,
         req_level=0,
-        tags=[("moderator_egg", _DEV_TOOL_TAG_CATEGORY)],
+        tags=[("moderator_egg", DEV_TOOL_TAG_CATEGORY)],
     ),
 }
