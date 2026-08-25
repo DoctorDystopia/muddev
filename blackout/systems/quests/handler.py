@@ -412,6 +412,182 @@ class QuestHandler:
         return True
 
 
+    # ─── Direct writes ──────────────────────────────────────────────────────
+    #
+    # Not how a character plays a quest -- accept_quest and notify are. These
+    # are the write path a staff tool, a test fixture or a content migration
+    # needs, and they exist HERE rather than in the caller because
+    # db.active_quests has exactly one owner. The same reasoning that put
+    # skills.logic.set_level beside add_xp.
+
+    def force_complete_quest(self, quest_key: str) -> bool:
+        """
+        Purpose: Mark a quest finished regardless of how far along it is.
+
+        Entry:
+            quest_key is a quest identifier. The quest may be active or never
+            started; both end in the completed state.
+
+        Exit/Returns:
+            Returns True if the quest was completed, False on an unknown key
+            or one already complete.
+
+        Module Globals:
+            GLOBAL_QUEST_REGISTRY read.
+
+        Methodology:
+            Delegates to _complete_quest, so the completion record, the
+            announcement and the reward callback are the SAME code the honest
+            route runs. Rewards do pay out: the main reason to force a
+            completion is to exercise the reward path, and a "completion" that
+            skipped it would test the one thing that is not being tested.
+
+            Intermediate steps' on_complete hooks do NOT fire. A hook that
+            spawns an encounter or teaches a skill is written to run when its
+            step is genuinely finished; firing four of them in a row because
+            someone skipped to the end is a worse lie than skipping them.
+
+        Notes/References:
+            Silent on an already-complete quest rather than completing it
+            twice, which would re-pay the rewards.
+
+        Author: Nick Hobar
+        Creation date: 08/25/2026
+        """
+        blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
+
+        if blueprint is None:
+            return False
+
+        if self.is_complete(quest_key):
+            return False
+
+        self._complete_quest(blueprint)
+
+        return True
+
+
+    def force_step(self, quest_key: str, step_key: str) -> bool:
+        """
+        Purpose: Move an active quest to a named step, forward or back.
+
+        Entry:
+            quest_key names an ACTIVE quest. step_key names a step of that
+            quest's blueprint.
+
+        Exit/Returns:
+            Returns True if the character now sits on that step, False if the
+            quest is not active or the blueprint has no such step.
+
+        Module Globals:
+            GLOBAL_QUEST_REGISTRY read.
+            constants.FIELD_STEP_INDEX, FIELD_PROGRESS written.
+            constants.MSG_STEP_SET read.
+
+        Methodology:
+            Re-seeds progress from the destination step's targets, exactly as
+            accept_quest and _check_step_completion do. Carrying the old
+            counters across would leave a target from the previous step
+            sitting in the dict, where _step_is_satisfied would read it as a
+            requirement that does not exist.
+
+            The destination's on_enter DOES fire, because it is what makes the
+            step playable -- a step whose on_enter teaches the skill its
+            objective needs is unreachable without it. Steps jumped OVER fire
+            nothing.
+
+            Requires the quest to be active rather than accepting it first.
+            "Start this quest" and "put them on step three" are two decisions,
+            and a method that silently made the first while being asked for
+            the second would re-run the opening step's on_enter as a side
+            effect nobody asked for.
+
+        Notes/References:
+            Jumping BACKWARD is supported and is the more useful direction:
+            it is how a step gets replayed without resetting the whole quest.
+
+        Author: Nick Hobar
+        Creation date: 08/25/2026
+        """
+        blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
+
+        if blueprint is None or not self.is_active(quest_key):
+            return False
+
+        step_index = blueprint.step_index_of(step_key)
+
+        if step_index < 0:
+            return False
+
+        target_step = blueprint.steps[step_index]
+        active_data = self.obj.db.active_quests[quest_key]
+        active_data[constants.FIELD_STEP_INDEX] = step_index
+        active_data[constants.FIELD_PROGRESS] = {
+            key: 0 for key in target_step.targets
+        }
+        self.obj.db.active_quests[quest_key] = active_data
+
+        self.obj.msg(constants.MSG_STEP_SET.format(
+            description=target_step.description))
+
+        self._fire_step_hook(target_step, "on_enter")
+
+        return True
+
+
+    def reset_quest(self, quest_key: str) -> bool:
+        """
+        Purpose: Return a quest to the not-started state, from anywhere.
+
+        Entry:
+            quest_key is a quest identifier.
+
+        Exit/Returns:
+            Returns True if anything was cleared, False if the character had
+            no record of this quest either way.
+
+        Module Globals:
+            constants.MSG_QUEST_RESET read.
+            GLOBAL_QUEST_REGISTRY read.
+
+        Methodology:
+            Clears BOTH lists. That is the difference from abandon_quest,
+            which drops progress but leaves a completion record standing --
+            so abandoning a finished quest does nothing at all, and a tester
+            who wanted to play it again is stuck. Reset is the one that makes
+            a quest takeable a second time.
+
+            No reward is clawed back. Whatever the completion paid out is an
+            item or an XP total now, and hunting it down from here would mean
+            this method knowing what every rewards_callback in the game does.
+
+        Notes/References:
+            Announced to the character. A quest silently vanishing from their
+            journal is indistinguishable from a bug, and they will report it
+            as one.
+
+        Author: Nick Hobar
+        Creation date: 08/25/2026
+        """
+        was_active = quest_key in self.active_keys()
+        was_complete = quest_key in self.completed_keys()
+
+        if not was_active and not was_complete:
+            return False
+
+        if was_active:
+            del self.obj.db.active_quests[quest_key]
+
+        if was_complete:
+            self.obj.db.completed_quests.remove(quest_key)
+
+        blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
+        title = getattr(blueprint, "title", None) or quest_key
+        self.obj.msg(constants.MSG_QUEST_RESET.format(title=title))
+
+        return True
+
+
     # ─── Progression ────────────────────────────────────────────────────────
 
     def notify(self, action: str, argument: object = None, amount: int = 1) -> None:

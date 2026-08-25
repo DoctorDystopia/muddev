@@ -111,6 +111,23 @@ MSG_QUEST_ABANDONED = (
     f"{{title}}.{RESET_COLOR}"
 )
 
+# Spoken when a quest is put back to the not-started state by staff. Distinct
+# from MSG_QUEST_ABANDONED because the two leave the character in the same
+# place by different routes, and a player who is told they "abandoned" a quest
+# they never dropped will report it as a bug.
+MSG_QUEST_RESET = (
+    f"{ERROR_COLOR}[QUEST RESET] Your progress on {{title}} has been "
+    f"cleared.{RESET_COLOR}"
+)
+
+# Spoken when staff move a character to a step out of order. Deliberately not
+# MSG_STEP_ADVANCED: that one says "Phase completed!", which is a lie when
+# nothing was completed, and a false completion notice is exactly the kind of
+# thing a player builds a wrong mental model of the quest around.
+MSG_STEP_SET = (
+    f"{HIGHLIGHT_COLOR}[QUEST UPDATE] Now: {{description}}{RESET_COLOR}"
+)
+
 
 # Rendered by QuestHandler.objective_lines for one objective. A counted
 # objective reads "Raiders repelled: 1/3"; a boolean one reads "[x] Speak to
