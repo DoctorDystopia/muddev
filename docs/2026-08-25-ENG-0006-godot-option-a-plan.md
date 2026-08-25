@@ -1,6 +1,6 @@
 # ENG-0006 — Option A: Godot as the only client. Implementation plan.
 
-**Status:** **Phase 0 DONE** (08/25/2026, commit `6847080`). Phases 1–5 not started.
+**Status:** **Phases 0–1 DONE** (08/25/2026). Phases 2–5 not started.
 **Date:** 08/25/2026
 **Decision:** Option A from [ENG-0005](2026-08-25-ENG-0005-godot-vs-webclient.md),
 taken 08/25/2026. Godot becomes the only client. The Evennia webclient's 3D and
@@ -175,7 +175,7 @@ actions adopted, both Godot headless tests green, full Python suite green.
 
 ---
 
-## 4. Phase 1 — commit the project to a web-capable renderer
+## 4. Phase 1 — commit the project to a web-capable renderer — **DONE 08/25/2026**
 
 ### 1.1 The renderer change
 
@@ -203,29 +203,74 @@ renderer is the whole point of Option A.
 rendering/renderer/rendering_method="gl_compatibility"
 ```
 
-**To verify, not assume:** Godot documents a per-platform override key
-`rendering/renderer/rendering_method.mobile`. A `.web` variant follows the same
-pattern and would let desktop keep Forward+, but I could not confirm from the
-docs that `.web` is a supported suffix — it is stated as an inference in
-community writing, not in the official renderers page. If you want the split,
-**verify it in the editor before designing around it** (30 minutes). If it does
-not exist, the choice is single-renderer or two manually-managed presets.
+> **Resolved 08/25/2026, and the guidance above was wrong to frame it as a
+> choice.** There is **no `.web` override, and none is needed**: the official
+> renderers page says Compatibility is *"used by default on the web platform"*
+> and that Forward+/Mobile are simply unsupported there. The web build renders
+> through Compatibility whatever this project asks for.
+>
+> Godot's general feature-tag mechanism does allow `setting.featuretag`, and
+> `web` is a real tag — but the feature-tags page also warns that overrides are
+> **not** applied by ordinary setting reads (`get_setting_with_override()` is
+> required), so relying on one for a setting the engine consumes at startup
+> would have been a guess dressed as a config.
+>
+> So the setting below does not configure the web build at all. It aligns the
+> **editor and desktop** with what web will already do. That is the one-renderer
+> outcome Option A wants, reached by a shorter route than expected.
+
+**Verified empirically, not assumed** — the key is
+`renderer/rendering_method` under `[rendering]`, because the section header
+already supplies the `rendering/` prefix:
+
+```
+PS rendering/renderer/rendering_method = gl_compatibility
+RS method  = gl_compatibility
+RS driver  = opengl3
+```
 
 ### 1.2 What this costs in already-written code
 
 `world_view.gd` and `entity_pool.gd` were authored and looked at under
 Forward+. Compatibility has real differences — no SDFGI, no volumetric fog,
-different tonemapping defaults, reduced light counts. The tile diorama is
-low-poly and unlikely to depend on any of it, but **this must be eyeballed, not
-assumed**: open the world scene under `gl_compatibility` and compare against a
-Forward+ screenshot before moving on.
+different tonemapping defaults, reduced light counts.
 
-Also drop or scope `rendering_device/driver.windows="d3d12"` — it names a
-RenderingDevice driver that the Compatibility renderer does not use.
+**Measured, 08/25/2026.** The same 6×6 map, marker and coloured room kinds were
+rendered offscreen at 1280×720 under both renderers by driving the real
+`Evennia.channel_received` signal path, then diffed:
 
-**Phase 1 exit bar:** project runs under `gl_compatibility` on desktop, world
-scene visually verified against the Forward+ baseline, both headless tests still
-green.
+| | |
+|---|---|
+| Mean luminance | `gl_compatibility` is **94.5%** of `forward_plus` |
+| Mean absolute RGB difference | 0.0102 |
+| Pixels meaningfully different | 7,600 of 230,400 sampled (**3.3%**) |
+| Shader / render errors | **none** |
+
+Geometry, island layout, link bars, the standing marker and every per-kind
+colour are identical. The difference is a modest tone shift confined to lit
+surfaces — Compatibility reads slightly darker and warmer. Nothing is missing
+and nothing failed to compile.
+
+**This is an art-pass item, not a code fix**, and it is the whole of risk R6.
+The environment and light in `scenes/world.tscn` were tuned by eye under
+Forward+; they should be re-tuned once under Compatibility, and from then on
+there is only one renderer to tune for.
+
+✅ Dropped `rendering_device/driver.windows="d3d12"`. It names a
+RenderingDevice driver, and Compatibility does not use RenderingDevice — it
+goes through the OpenGL backend — so the line was inert the moment the renderer
+changed.
+
+**Phase 1 exit bar:** ✅ project runs under `gl_compatibility` on desktop
+(confirmed by `RenderingServer.get_current_rendering_method()`, not by reading
+the file back); world scene visually diffed against the Forward+ baseline; both
+headless tests still green; full Python suite still green.
+
+**Not done here, and it gates Phase 4: the Godot export templates are not
+installed.** `%APPDATA%/Godot/export_templates/` exists and is empty, and there
+is no `export_presets.cfg` (it is gitignored). No web export can be produced
+until the 4.7.1 template pack is installed — roughly 1 GB. That is a download
+decision, so it is called out rather than taken.
 
 ---
 

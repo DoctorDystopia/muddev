@@ -4,7 +4,18 @@ Graphical client for the Blackout MUD. Talks to Evennia's `godotwebsocket`
 contrib port (`4008`, set in `blackout/server/conf/settings.py`).
 
 Plan, phases and design decisions:
-[docs/2026-08-08-ENG-0005-godot-client-plan.md](../docs/2026-08-08-ENG-0005-godot-client-plan.md).
+[docs/2026-08-25-ENG-0006-godot-option-a-plan.md](../docs/2026-08-25-ENG-0006-godot-option-a-plan.md),
+with the decision it implements in
+[docs/2026-08-25-ENG-0005-godot-vs-webclient.md](../docs/2026-08-25-ENG-0005-godot-vs-webclient.md).
+
+> This used to link `docs/2026-08-08-ENG-0005-godot-client-plan.md`, which was
+> never written — checked with `git log --all --diff-filter=A`. ENG-0005 is now
+> the decision record and ENG-0006 the plan.
+
+**This project renders through Compatibility (OpenGL 3.3 / WebGL 2.0), not
+Forward+.** The web export cannot use Forward+ at all, so the desktop build and
+the editor are held to the renderer the browser will actually use. See ENG-0006
+§4.
 
 **Status: Phase 3 — control.** Text game on the left, the 3D world on the
 right: tile grids per map, the links between them, room-kind colours, a marker

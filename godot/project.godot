@@ -12,9 +12,9 @@ config_version=5
 
 config/name="Blackout"
 config/description="Graphical client for the Blackout MUD. Talks to Evennia's
-godotwebsocket port; see docs/2026-08-08-ENG-0005-godot-client-plan.md."
+godotwebsocket port; see docs/2026-08-25-ENG-0006-godot-option-a-plan.md."
 run/main_scene="res://scenes/console.tscn"
-config/features=PackedStringArray("4.7", "Forward Plus")
+config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [autoload]
 
@@ -27,4 +27,26 @@ window/size/viewport_height=720
 
 [rendering]
 
-rendering_device/driver.windows="d3d12"
+; Compatibility (OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2.0) everywhere, including
+; the editor and the desktop build.
+;
+; The WEB EXPORT DOES NOT HONOUR A CHOICE HERE -- Forward+ and Mobile are not
+; supported on the web platform at all (they are built around modern low-level
+; graphics APIs, and Godot does not implement WebGPU as of 4.7), so a web build
+; renders through Compatibility whichever value this holds. There is no
+; documented `rendering_method.web` override, and none is needed.
+;
+; So this line does not configure the web build. It makes the EDITOR and the
+; DESKTOP build render the way the web build already will. Under ENG-0006 the
+; browser is the primary target, and leaving the project on Forward+ would mean
+; every visual change had to be verified twice -- once in a renderer most
+; players never see, once in the one they do. One renderer is the point.
+; Key is `renderer/rendering_method`, not `rendering_method`: the [rendering]
+; section header already supplies the `rendering/` prefix, so the full setting
+; is rendering/renderer/rendering_method.
+renderer/rendering_method="gl_compatibility"
+
+; `rendering_device/driver.windows="d3d12"` was here and is deliberately gone.
+; It names a RenderingDevice driver, and Compatibility does not use
+; RenderingDevice -- it goes through the OpenGL backend. The setting was inert
+; the moment the line above landed.
