@@ -191,10 +191,16 @@ def _item_family(item) -> str:
         rule the asset key follows: adding an item to ITEM_DB must not require
         an edit anywhere else before it renders.
 
-        The membership test against ITEM_FAMILIES is what makes this safe to
-        run over every tag on the object. A spawned item also carries Evennia's
-        own from_prototype tag, and a naive "first category wins" would return
-        that as the family for every item in the game.
+        The walk is over const.ITEM_FAMILY_PRIORITY rather than over the
+        object's tags, which is what makes this safe on both counts. A spawned
+        item also carries Evennia's own from_prototype tag, and a naive "first
+        category wins" would return that as the family for every item in the
+        game. And an item may declare SEVERAL families -- the rusty scrap axe
+        is a crafting_tool and a weapon -- where "first category wins" would
+        answer differently between two calls, because Evennia hands tags back
+        as an unordered set. Iterating the declared priority answers with the
+        same family every time; ITEM_FAMILY_PRIORITY documents why that order
+        is the one it is.
 
     Notes/References:
         A family with no mesh client-side falls through to a generic one, so
@@ -215,10 +221,11 @@ def _item_family(item) -> str:
         return const.ITEM_FAMILY_GENERIC
 
     tagged = tag_handler.all(return_key_and_category=True)
+    categories = {category for _tag_key, category in tagged}
 
-    for _tag_key, category in tagged:
-        if category in const.ITEM_FAMILIES:
-            return str(category)
+    for family in const.ITEM_FAMILY_PRIORITY:
+        if family in categories:
+            return str(family)
 
     return const.ITEM_FAMILY_GENERIC
 

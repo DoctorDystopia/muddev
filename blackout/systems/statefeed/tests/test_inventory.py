@@ -93,6 +93,40 @@ class TestInventorySnapshot(EvenniaTest):
 
         self.assertEqual(row["family"], const.ITEM_FAMILY_WEAPON)
 
+    def test_an_item_in_two_families_reports_the_higher_priority_one(self):
+        """The rusty scrap axe is a crafting_tool AND a weapon. Both tags are
+        real -- a recipe finds it under one, this payload reads the other --
+        so the family here is a CHOICE between them, made by
+        const.ITEM_FAMILY_PRIORITY."""
+        self._carry("rusty_scrap_axe")
+
+        payload = feed_inventory.build_payload(self.char1)
+        row = _row_for(payload, ITEM_DB["rusty_scrap_axe"].name)
+
+        self.assertEqual(row["family"], const.ITEM_FAMILY_TOOL)
+
+    def test_the_family_does_not_depend_on_the_order_the_tags_were_added(self):
+        """Evennia hands an object's tags back as an unordered set, so a
+        reader that returned the first family category it saw could answer
+        differently for two items carrying the same two families -- and
+        differently for the same item on two calls. Two items given weapon and
+        crafting_tool in OPPOSITE orders must land on the same family."""
+        weapon_then_tool = self._carry("rusty_scrap_shortsword")
+        weapon_then_tool.tags.add(
+            "rusty_scrap_shortsword", category=const.ITEM_FAMILY_TOOL)
+
+        tool_then_weapon = self._carry("hammer")
+        tool_then_weapon.tags.add(
+            "hammer", category=const.ITEM_FAMILY_WEAPON)
+
+        payload = feed_inventory.build_payload(self.char1)
+        families = {row["name"]: row["family"] for row in payload.items}
+
+        self.assertEqual(
+            families[ITEM_DB["rusty_scrap_shortsword"].name],
+            families[ITEM_DB["hammer"].name],
+        )
+
     def test_slots_used_counts_a_whole_stack_as_one(self):
         self._carry("credits", quantity=85)
 

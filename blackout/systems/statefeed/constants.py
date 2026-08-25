@@ -316,14 +316,33 @@ ITEM_FAMILY_MATERIAL: str = "crafting_material"
 ITEM_FAMILY_TOOL: str = "crafting_tool"
 ITEM_FAMILY_CURRENCY: str = "currency"
 
-ITEM_FAMILIES: frozenset = frozenset((
-    ITEM_FAMILY_WEAPON,
-    ITEM_FAMILY_ARMOR,
-    ITEM_FAMILY_JEWELLERY,
-    ITEM_FAMILY_MATERIAL,
-    ITEM_FAMILY_TOOL,
+# The order the families are resolved in when ONE item declares several of
+# them.
+#
+# An item is allowed to be more than one thing: the rusty scrap axe is a
+# crafting_tool and a weapon, and nothing about a tag stops a third or a
+# fourth category joining it. Evennia stores an object's tags as an unordered
+# set, so "the first family category on the object" is whatever the database
+# happens to hand back on that call -- the same axe could render as a tool in
+# one session and a weapon in the next. Resolving against THIS tuple instead
+# of against tag order makes the answer the same every time.
+#
+# Ordered most-distinctive silhouette first, because this only decides which
+# mesh a multi-family item FALLS BACK to: an axe that chops trees and raiders
+# still looks like an axe, so the tool mesh describes it better than the
+# generic weapon one. A single-family item matches exactly one entry and is
+# unaffected by the order.
+ITEM_FAMILY_PRIORITY: tuple = (
     ITEM_FAMILY_CURRENCY,
-))
+    ITEM_FAMILY_MATERIAL,
+    ITEM_FAMILY_JEWELLERY,
+    ITEM_FAMILY_TOOL,
+    ITEM_FAMILY_ARMOR,
+    ITEM_FAMILY_WEAPON,
+)
+
+# Membership set, derived so the two can never list different families.
+ITEM_FAMILIES: frozenset = frozenset(ITEM_FAMILY_PRIORITY)
 
 ITEM_FAMILY_GENERIC: str = "generic"
 
