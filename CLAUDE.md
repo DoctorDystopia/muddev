@@ -67,7 +67,7 @@ are thin wrappers around it. `scripts/clean_and_reload_all_maps.ps1 -DryRun`
 **Always pass `--settings test_settings.py`, never `settings.py`.** The only
 thing it changes is the password hasher, and that alone is the difference
 between a 6-minute suite and a 20-minute one — see
-[docs/2026-08-23-TEST-0001-suite-audit.md](docs/2026-08-23-TEST-0001-suite-audit.md).
+[docs/old/2026-08-23-TEST-0001-suite-audit.md](docs/old/2026-08-23-TEST-0001-suite-audit.md).
 
 **During development:** run only the modules you changed (seconds):
 
@@ -150,7 +150,7 @@ The rule crosses the language boundary too — see the webclient section below.
 
 A 3D world pane and a 3D inventory pane, drawn with three.js, docked beside the
 text. Full audit and design rationale:
-[docs/2026-08-23-ENG-0004-webclient-architecture.md](docs/2026-08-23-ENG-0004-webclient-architecture.md).
+[docs/old/2026-08-23-ENG-0004-webclient-architecture.md](docs/old/2026-08-23-ENG-0004-webclient-architecture.md).
 
 **Python owns what is TRUE about the game; JavaScript owns what it LOOKS like.**
 That line decides every question about where something belongs. Channel names,

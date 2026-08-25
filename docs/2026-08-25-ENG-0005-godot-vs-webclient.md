@@ -9,8 +9,8 @@ what was weighed.
 **Scope:** `systems/statefeed/`, `web/static/webclient/js/`, `godot/` on
 `godot-client-prototype`, the Cloudflare pipeline to `game.playblackout.io`, and
 the `playblackout-site` repo.
-**Related:** [ENG-0004](2026-08-23-ENG-0004-webclient-architecture.md),
-[INFRA-0001](2026-08-21-INFRA-0001-public-hosting.md),
+**Related:** [ENG-0004](old/2026-08-23-ENG-0004-webclient-architecture.md),
+[INFRA-0001](old/2026-08-21-INFRA-0001-public-hosting.md),
 [DESIGN-0002](2026-08-15-DESIGN-0002-3d-inventory.md)
 
 > **Dangling reference, resolved.** `godot/README.md` and `project.godot` on
@@ -105,7 +105,7 @@ act only this way (`Evennia.command()` in GDScript, `["text", [cmd], {}]` in JS)
 | `generated/blackout_constants.js` | 66 |
 
 **This layer finished a four-phase rebuild two days ago**
-([ENG-0004](2026-08-23-ENG-0004-webclient-architecture.md), all phases marked
+([ENG-0004](old/2026-08-23-ENG-0004-webclient-architecture.md), all phases marked
 DONE on 08/23/2026). It is now ES modules behind one entry point, with a shared
 pane shell, generated constants, server-declared tile affordances, and a
 `node --test` suite that needs no dependencies. **It has never been in better
@@ -302,7 +302,7 @@ on a marketing site, "recommend Chrome" is a real narrowing.
 
 ## 4. The pipeline to `game.playblackout.io`
 
-Current shape, from [INFRA-0001](2026-08-21-INFRA-0001-public-hosting.md):
+Current shape, from [INFRA-0001](old/2026-08-21-INFRA-0001-public-hosting.md):
 
 ```
 playblackout.io        Astro static → Cloudflare Workers assets   (playblackout-site)

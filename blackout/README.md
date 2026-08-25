@@ -978,7 +978,7 @@ Pass `--settings test_settings.py`, not `--settings settings.py`. It is
 `settings.py` with one line changed — the Django password hasher — because
 Evennia's test fixtures create two accounts per test method and the default
 PBKDF2 hasher costs 0.46s per account. That one line took the full suite from
-~20 minutes to 6.4. See `../docs/2026-08-23-TEST-0001-suite-audit.md`.
+~20 minutes to 6.4. See `../docs/old/2026-08-23-TEST-0001-suite-audit.md`.
 
 ### Quick testing (most common)
 

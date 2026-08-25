@@ -1,13 +1,14 @@
 # ENG-0006 — Option A: Godot as the only client. Implementation plan.
 
-**Status:** **Phases 0–1 DONE** (08/25/2026). Phases 2–5 not started.
+**Status:** **Phases 0–1 DONE**; **Phase 4 export pipeline proven** (08/25/2026).
+Phases 2, 3, 5 not started.
 **Date:** 08/25/2026
 **Decision:** Option A from [ENG-0005](2026-08-25-ENG-0005-godot-vs-webclient.md),
 taken 08/25/2026. Godot becomes the only client. The Evennia webclient's 3D and
 text panes are retired once Godot reaches the parity bar in §6.
 **Related:** [ENG-0005](2026-08-25-ENG-0005-godot-vs-webclient.md),
-[ENG-0004](2026-08-23-ENG-0004-webclient-architecture.md),
-[INFRA-0001](2026-08-21-INFRA-0001-public-hosting.md)
+[ENG-0004](old/2026-08-23-ENG-0004-webclient-architecture.md),
+[INFRA-0001](old/2026-08-21-INFRA-0001-public-hosting.md)
 
 > ENG-0005 recommended Option B. Option A was chosen anyway, deliberately, and
 > this plan implements it in full. The costs ENG-0005 raised are not restated as
@@ -411,16 +412,115 @@ made and tested.
 
 ## 7. Phase 4 — web export and hosting
 
-### 4.1 Export settings
+### 4.1 Export settings — **proven 08/25/2026**
 
-- **Single-threaded export.** Default and preferred since 4.3. Avoids
-  `SharedArrayBuffer`, therefore avoids COOP/COEP entirely, and reportedly
-  avoids the Apple-device problems. For a tile diorama on a 0.6s server tick
-  this is the right trade. **COOP/COEP is a non-issue under this choice** —
-  do not spend time on it.
-- Expect ~25–40 MB of WASM, ~5 MB Brotli. **Measure the real number early** —
-  ENG-0005's figure is a community measurement, not a build of this project, and
-  it drives the hosting decision below.
+> **BUILT AND BOOTED, 08/25/2026.** Export templates 4.7.1.stable installed
+> (1,280,486,955 bytes, byte-exact against the GitHub release asset), a `Web`
+> preset created with `variant/thread_support=false`, and the export served
+> over plain HTTP with **no COOP/COEP headers at all** and loaded in a browser.
+
+**Single-threaded needs no cross-origin isolation — proven, not inferred.**
+Probed in the running page:
+
+```
+crossOriginIsolated        : false
+sharedArrayBufferAvailable : false
+engine booted              : true
+```
+
+and the engine's own banner:
+
+```
+Godot Engine v4.7.1.stable.official
+OpenGL API OpenGL ES 3.0 (WebGL 2.0 ...) - Compatibility - Using Device: WebKit
+Build configuration: Emscripten 4.0.20, single-threaded, no GDExtension support
+```
+
+So the page is *not* isolated, `SharedArrayBuffer` is *not* available, and Godot
+runs anyway, through Compatibility/WebGL2 exactly as §4 predicted. **COOP/COEP
+is closed as a non-issue.** It also means the export can be served from any
+static host with no header configuration — which is what makes §4.2 easy.
+
+**Real size, measured on this project** (not a community figure):
+
+| | Bytes | |
+|---|---:|---|
+| Raw total | 39,892,593 | **38.0 MiB** |
+| gzip -9 | 10,229,859 | 9.8 MiB |
+| brotli -q11 | 7,036,836 | **6.7 MiB** (17.6% of raw) |
+
+ENG-0005's estimate was close. The shape matters more than the total:
+
+| | Bytes | Share |
+|---|---:|---:|
+| `index.wasm` (engine) | 39,513,091 | **99.0%** |
+| `index.pck` (this game) | 44,892 | 0.1% |
+
+**Essentially all of it is engine, and that is a floor, not a ceiling.** The
+`.pck` is 44 KB because the Godot project currently contains no art.
+
+**The art is the number to worry about.** 12.0 MiB of `.glb` still has to be
+ported from the three.js client:
+
+| Model | Bytes |
+|---|---:|
+| `player_character.glb` | 10,912,852 |
+| `floating_eye.glb` | 1,087,128 |
+| `map_transition.glb` | 485,384 |
+| `rusty_scrap_shortsword.glb` | 131,628 |
+
+**And the delivery model inverts.** `blackout_models.js` fetches a `.glb` on
+demand — a player who never opens the inventory pane never downloads the sword,
+and an item with no model costs nothing. Baked into a `.pck`, every byte ships
+up front, before the login prompt. glTF with PNG textures also compresses
+poorly, so most of that 12 MiB survives Brotli: a naive port takes the download
+from ~6.7 MiB to roughly ~18 MiB, and one 10.9 MiB character model is most of
+it.
+
+Two mitigations, both to decide in Phase 2 when the art is ported, not later:
+- **Keep lazy loading.** Godot can fetch a `.glb` at runtime and `GLTFDocument`
+  can parse it from a buffer, preserving the "art never blocks content" rule
+  that `blackout_models.js` is built around.
+- **Compress the art.** 10.9 MiB for one character is large regardless of
+  engine; texture resizing and mesh decimation are worth a pass either way.
+
+**Remaining Phase 4 export settings:**
+- Single-threaded confirmed as the right default. `web_nothreads_release.zip`
+  is the template variant in use.
+- Expect the Apple-device problems to be absent under single-threaded, per the
+  4.3 release notes. **Not yet tested on Safari** — R10 stands.
+
+### 4.1a The export preset is gitignored — recorded here so it is reproducible
+
+`godot/.gitignore` excludes `export_presets.cfg` (Godot's default, because the
+file can carry signing credentials). This project's has none, but that means a
+fresh clone and any CI runner has no preset and cannot export. The working one:
+
+```ini
+[preset.0]
+name="Web"
+platform="Web"
+runnable=true
+export_filter="all_resources"
+script_export_mode=2
+
+[preset.0.options]
+variant/extensions_support=false
+variant/thread_support=false          # the whole COOP/COEP story
+html/canvas_resize_policy=2
+html/focus_canvas_on_start=true
+progressive_web_app/enabled=false
+```
+
+Built with:
+
+```bash
+godot --headless --path godot --export-release "Web" <out>/index.html
+```
+
+**Decide before Phase 4 proper:** either un-ignore this file (it holds no
+secret) or generate it in CI. Leaving it only on one machine is how the build
+becomes unreproducible.
 
 ### 4.2 Serve the export from Cloudflare, not Django
 
@@ -512,13 +612,14 @@ favour of `main` rather than dropping the files.
 | R1 | **Clipboard paste broken at the login prompt** | **Highest** | `JavaScriptBridge` shim; prototype before Phase 4. Fallback: DOM overlay for credentials | 3 |
 | R2 | BBCode injection via names containing `[url=`/`[img]` | High | Adversarial round-trip test; escape before `parse_ansi` | 3 |
 | R3 | Text-client parity is under-scoped | High | §6's table; write the drop list down and agree it | 3 |
-| R4 | ~30 MB boot in front of a text game | Medium | Measure the real export early; Brotli; Cloudflare CDN | 4 |
+| R4 | ~30 MB boot in front of a text game | Medium | **Measured: 6.7 MiB Brotli / 38.0 MiB raw, 99% engine.** Cloudflare CDN + Brotli | 4 ✅ |
+| R11 | **Art delivery inverts: `.pck` ships all 12 MiB of `.glb` up front, where three.js lazy-loads it** | **High** | Runtime `.glb` fetch via `GLTFDocument`, and compress `player_character.glb` (10.9 MiB alone) | 2 |
 | R5 | No graceful degradation — renderer failure is total | Medium | Accepted cost of Option A. Keep a documented telnet-ish fallback path in mind | — |
 | R6 | Compatibility renderer changes the look | Medium | Screenshot diff against Forward+ baseline before proceeding | 1 |
 | R7 | Screen-reader regression | Medium | Record it explicitly as a known regression; revisit if AccessKit reaches web | 3 |
 | R8 | Colour code leaks into a payload — no conversion layer | Medium | The §5.2 test | 2 |
 | R9 | Godot not on PATH; `--import` needed before headless runs | Low | Already documented in `godot/README.md`; add to CI | 0 |
-| R10 | Safari WebGL2 issues | Low | Test on Safari; document a browser recommendation on `/play` | 4 |
+| R10 | Safari WebGL2 issues | Low | Test on Safari; document a browser recommendation on `/play`. **Not yet tested** | 4 |
 
 ---
 

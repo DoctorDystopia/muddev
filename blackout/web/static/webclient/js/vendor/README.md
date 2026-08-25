@@ -80,7 +80,7 @@ degrade to a plain text pane — it renders blank.
 Evennia's stock template fetched it from `golden-layout.com/files/latest`, with
 no SRI and no version. That is a third party able to change the whole client at
 any time, and a hard external dependency for anyone self-hosting (see
-`docs/2026-08-21-INFRA-0001-public-hosting.md`).
+`docs/old/2026-08-21-INFRA-0001-public-hosting.md`).
 
 ### Why not simply pin a release number
 

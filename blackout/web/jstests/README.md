@@ -21,7 +21,7 @@ recorded. No DOM, no canvas, no WebGL.
 **Not** rendering, layout, or input. A headless browser would be needed for
 those, and the cost is high for a pane that is by design non-essential — if it
 is closed or broken, nothing about play changes. See
-`docs/2026-08-23-ENG-0004-webclient-architecture.md`, §4.6.
+`docs/old/2026-08-23-ENG-0004-webclient-architecture.md`, §4.6.
 
 **Not** anything the server decides. The rules about which tile affords what
 live in `systems/statefeed/serializers.py` and are tested in
