@@ -26,6 +26,7 @@ from commands.get_cmds import GetCmdSet
 from commands.inventory_cmds import InventoryCmdSet
 from commands.movement_cmds import MovementCmdSet
 from commands.progression_cmds import ProgressionCmdSet
+from commands.quest_cmds import QuestCmdSet
 
 
 class CharacterCmdSet(default_cmds.CharacterCmdSet):
@@ -46,6 +47,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         # any commands you add below will overload the default ones.
         #
         self.add(ProgressionCmdSet())
+        self.add(QuestCmdSet())
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())
         self.add(GetCmdSet())

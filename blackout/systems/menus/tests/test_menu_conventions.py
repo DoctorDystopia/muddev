@@ -37,6 +37,7 @@ MENU_MODULE_PATHS = (
     "systems.menus.banking_menu",
     "systems.menus.combat_options_menu",
     "systems.menus.crafting_menu",
+    "systems.menus.dev_egg_menu",
     "systems.menus.dialogue",
     "systems.menus.equipment_menu",
     "systems.menus.skills_menu",
