@@ -32,7 +32,7 @@
 import * as THREE from "three";
 
 import * as blackoutMeshes from "../blackout_meshes.js";
-import * as blackoutChannels from "../blackout_channels.js";
+import { createPaneShell } from "../shell/pane.js";
 import {
     CH_CHAR_ITEMS, INVENTORY_SWAP_TEMPLATE
 } from "../generated/blackout_constants.js";
@@ -1269,64 +1269,6 @@ const buildPane = function (glContainer) {
     requestSnapshot();
 };
 
-const createComponent = function () {
-    const goldenlayout = window.plugins["goldenlayout"];
-
-    if (!goldenlayout) {
-        return false;
-    }
-    const myLayout = goldenlayout.getGL();
-
-    if (!myLayout) {
-        return false;
-    }
-    myLayout.registerComponent("blackout_inventory", buildPane);
-    return true;
-};
-
-const registerSafely = function (where) {
-    try {
-        return createComponent();
-    } catch (err) {
-        console.log("[blackout_inventory] component registration failed in "
-            + where + ": " + err.message);
-        return false;
-    }
-};
-
-const onLayoutChanged = function () {
-    registerSafely("onLayoutChanged");
-};
-
-// There can only be ONE, for the reason the world pane spells out: the
-// scene, renderer and mesh caches are module state, so a second pane does
-// not get a second inventory — it takes this one's, and buildPane's reset
-// then disposes the canvas the first was drawing on.
-const openPane = function () {
-    const myLayout = window.plugins["goldenlayout"].getGL();
-    const existing = myLayout.root.getItemsByType("component").filter(
-        function (item) {
-            return item.config.componentName === "blackout_inventory";
-        });
-
-    if (existing.length) {
-        const pane = existing[0];
-
-        if (pane.parent && pane.parent.setActiveContentItem) {
-            pane.parent.setActiveContentItem(pane);
-        }
-        return;
-    }
-    const component = {
-        title: "Inventory",
-        type: "component",
-        componentName: "blackout_inventory",
-        componentState: {}
-    };
-    const main = myLayout.root.getItemsByType("stack")[0].getActiveContentItem();
-    main.parent.addChild(component);
-};
-
 // ─── Plugin interface ───────────────────────────────────────────────────
 
 const boundChannels = {};
@@ -1340,67 +1282,45 @@ const route = function (cmdname, kwargs) {
     }
 };
 
-// Bind by name straight onto Evennia's emitter, NOT through the
-// onUnknownCmd plugin hook. DefaultEmitter dispatches to listeners[cmdname]
-// when one exists and only otherwise falls back to onDefault — whose first
-// taker is default_out.js, which claims every unknown command and prints it
-// as "Error or Unhandled event". This plugin necessarily loads after that
-// one, so a named listener is the only thing that can see the message.
-//
-// A CHANNEL HAS EXACTLY ONE LISTENER. DefaultEmitter.on does
-// `listeners[cmdname] = listener` — it REPLACES rather than appends — so
-// two plugins binding the same name is not two subscribers, it is the
-// second one silently taking the channel off the first. claimChannel is
-// what makes that impossible; see blackout_channels.js.
-const bindChannel = function (channel) {
-    if (!channel || boundChannels[channel]) {
-        return;
-    }
-    if (!blackoutChannels.claim(channel, PLUGIN_NAME)) {
-        return;
-    }
-    boundChannels[channel] = true;
-    Evennia.emitter.on(channel, function (args, kwargs) {
-        route(channel, kwargs);
-    });
-};
+// Lifecycle and Evennia wiring, shared with blackout3d.js -- eight routines
+// that were byte-for-byte identical there, differing only in the name and
+// title below. Constructed here because `buildPane` and `route` are declared
+// above and referencing a `const` before its declaration is a TDZ error.
+const shell = createPaneShell({
+    name: PLUGIN_NAME,
+    title: "Inventory",
+    build: buildPane,
+    route: route,
 
-// This pane binds ONE channel, and never the acknowledgement.
-//
-// It used to bind every channel the server acknowledged, copying what
-// blackout3d.js does — and that was a bug that blanked the world pane.
-// blackout3d binds from the acknowledgement because it needs to CLAIM AND
-// DROP channels it has never heard of, so a server-side addition cannot
-// reach default_out.js and get printed at the player as raw JSON. Copying
-// that policy into a second plugin meant this one claimed room_info,
-// blackout_map, room_players and the rest, then dropped them — leaving the
-// world pane with no data at all.
-//
-// blackout_subscribed is deliberately absent too. blackout3d owns it, and
-// that ownership is load-bearing: an EMPTY acknowledged set is the server
-// saying "I have forgotten you", which at_sync sends after every reload,
-// and blackout3d's handler is what re-subscribes. Taking that channel
-// meant nothing ever re-subscribed. This pane does not need it — it knows
-// its one channel name at authoring time.
-const bindListeners = function () {
-    if (!window.Evennia || !Evennia.emitter) {
-        return false;
-    }
-    bindChannel(CH_CHAR_ITEMS);
-    return true;
-};
+    // ONE channel, and never the acknowledgement.
+    //
+    // This pane used to bind every channel the server acknowledged, copying
+    // what blackout3d.js does -- and that was a bug that blanked the world
+    // pane. blackout3d binds from the acknowledgement because it needs to
+    // CLAIM channels it has never heard of, so a server-side addition cannot
+    // reach default_out.js and get printed at the player as raw JSON. Copying
+    // that policy here meant this pane claimed room_info, blackout_map,
+    // room_players and the rest, then dropped them.
+    //
+    // blackout_subscribed is deliberately absent too. blackout3d owns it, and
+    // that ownership is load-bearing: an EMPTY acknowledged set is the server
+    // saying "I have forgotten you", which at_sync sends after every reload,
+    // and blackout3d's handler is what re-subscribes. Taking that channel
+    // meant nothing ever re-subscribed. This pane does not need it -- it knows
+    // its one channel name at authoring time.
+    channels: function () { return [CH_CHAR_ITEMS]; }
+});
 
-const onUnknownCmd = function (cmdname, args, kwargs) {
-    if (!boundChannels[cmdname]) {
-        return false;
-    }
-    route(cmdname, kwargs);
-    return true;
+const postInit = function () {
+    const bound = shell.postInit();
+
+    console.log("Blackout Inventory plugin loaded." +
+        (bound ? "" : " WARNING: emitter unavailable, feed will not route."));
 };
 
 const onOptionsUI = function (parentdiv) {
     const openButton = $('<input type="button" value="Open Inventory" />');
-    openButton.on("click", openPane);
+    openButton.on("click", shell.openPane);
 
     const debugBox = $('<input type="checkbox" id="blackout-inventory-debug" />');
     debugBox.on("change", function () {
@@ -1423,25 +1343,6 @@ const onOptionsUI = function (parentdiv) {
     parentdiv.append(debugBox);
 };
 
-// Must register BEFORE GoldenLayout instantiates anything. init() is the
-// only hook early enough: goldenlayout's own init() constructs myLayout
-// from the layout saved in localStorage, and its postInit() is what calls
-// myLayout.init(). Registering in postInit() is a page-BLANKING bug for
-// any player who has ever opened this pane — GoldenLayout throws on the
-// unknown component type after the prompt and input divs have already been
-// removed, so the whole client renders blank, not just this pane.
-const init = function () {
-    registerSafely("init");
-};
-
-const postInit = function () {
-    registerSafely("postInit");
-
-    const bound = bindListeners();
-    console.log("Blackout Inventory plugin loaded." +
-        (bound ? "" : " WARNING: emitter unavailable, feed will not route."));
-};
-
 // The socket is reliably up by the time this fires, which is what makes it
 // the right place to retry a cold-start request that buildPane could not
 // send. A pane restored from a saved layout is built before the connection
@@ -1458,11 +1359,13 @@ const onLoggedIn = function () {
 };
 
 return {
-    init: init,
+    // init, onLayoutChanged and onUnknownCmd are the shell's outright; this
+    // pane adds nothing to them. postInit wraps the shell's only to log.
+    init: shell.init,
     postInit: postInit,
-    onLayoutChanged: onLayoutChanged,
+    onLayoutChanged: shell.onLayoutChanged,
+    onUnknownCmd: shell.onUnknownCmd,
     onLoggedIn: onLoggedIn,
-    onUnknownCmd: onUnknownCmd,
     onOptionsUI: onOptionsUI,
     getSnapshot: function () { return snapshot; }
 };

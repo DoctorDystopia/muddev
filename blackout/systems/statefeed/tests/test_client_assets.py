@@ -98,6 +98,7 @@ _CLASSIC_ASSETS: dict = {
 # template. three.js and its addons arrive through the import map, so the
 # template names them only as bare-specifier targets.
 _MODULE_ASSETS: tuple = (
+    "js/shell/pane.js",
     "js/vendor/three/three.module.js",
     "js/vendor/three/addons/loaders/GLTFLoader.js",
     "js/vendor/three/addons/utils/BufferGeometryUtils.js",
@@ -577,13 +578,21 @@ class PaneModuleTests(unittest.TestCase):
         "js/plugins/blackout3d.js": (
             "../generated/blackout_constants.js",
             "../blackout_meshes.js",
-            "../blackout_channels.js",
+            "../shell/pane.js",
         ),
         "js/plugins/blackout_inventory.js": (
             "../generated/blackout_constants.js",
             "../blackout_meshes.js",
-            "../blackout_channels.js",
+            "../shell/pane.js",
         ),
+    }
+
+    # The shell reaches blackout_channels on both panes' behalf. Asserted here
+    # rather than dropped: channel ownership is what stops two panes silently
+    # taking a feed channel off each other, and it would now go missing in ONE
+    # place instead of two -- which makes it easier to lose, not harder.
+    _SHELL: dict = {
+        "js/shell/pane.js": ("../blackout_channels.js",),
     }
 
     def _source(self, relative, strip_comments=False):
@@ -600,7 +609,7 @@ class PaneModuleTests(unittest.TestCase):
         globals that no longer exist -- and the failure is quiet: the pane
         registers, draws, and binds nothing.
         """
-        for pane, required in self._PANES.items():
+        for pane, required in {**self._PANES, **self._SHELL}.items():
             source = self._source(pane)
             specifiers = set(_IMPORT_RE.findall(source))
 
@@ -625,7 +634,7 @@ class PaneModuleTests(unittest.TestCase):
         banned = ("window.blackoutConstants", "window.blackoutMeshes",
                   "window.blackoutChannels", "window.THREE")
 
-        for pane in self._PANES:
+        for pane in list(self._PANES) + list(self._SHELL):
             source = self._source(pane, strip_comments=True)
 
             for name in banned:
@@ -712,3 +721,55 @@ class TemplateRenderTests(unittest.TestCase):
                     exists,
                     "The import map sends '%s' to %s, which does not exist "
                     "at %s." % (specifier, url, path))
+
+
+class JavaScriptTestSuiteTests(unittest.TestCase):
+    """The node test suite must stay runnable and stay in step with the map.
+
+    These do NOT run the JavaScript tests -- `node --test` is a separate
+    command and this suite must not depend on node being installed. They check
+    the two things that would silently rot: that the harness is still present,
+    and that its import map still matches the browser's.
+    """
+
+    _JSTESTS = os.path.join(_GAME_DIR, "web", "jstests")
+
+    def test_the_harness_exists(self):
+        for name in ("register.mjs", "import-map.mjs", "tileaction.test.mjs"):
+            with self.subTest(file=name):
+                self.assertTrue(
+                    os.path.isfile(os.path.join(self._JSTESTS, name)),
+                    "web/jstests/%s is missing; `node --import ./register.mjs "
+                    "--test` will not run." % name)
+
+    def test_the_node_import_map_matches_the_browsers(self):
+        """
+        Node has no import map, so web/jstests/import-map.mjs restates the one
+        in base.html as a resolver hook. Two copies of one fact -- unavoidable,
+        because one is a Django template and the other is a Node hook -- so it
+        is checked rather than trusted.
+
+        Drift here does not fail loudly on its own: the JS tests would resolve
+        `three` to a different file from the one the client ships, and pass
+        against code nobody runs.
+        """
+        path = os.path.join(self._JSTESTS, "import-map.mjs")
+
+        with open(path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+
+        for specifier, target in _IMPORT_MAP.items():
+            with self.subTest(specifier=specifier):
+                self.assertIn(
+                    '"%s"' % specifier, source,
+                    "web/jstests/import-map.mjs does not map '%s', which "
+                    "base.html does." % specifier)
+
+                # The hook's paths are relative to the js root; the template's
+                # are relative to web/static/webclient. Compare the shared tail.
+                tail = target[len("js/"):] if target.startswith("js/") else target
+
+                self.assertIn(
+                    tail, source,
+                    "web/jstests/import-map.mjs maps '%s' somewhere other "
+                    "than %s." % (specifier, target))

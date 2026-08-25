@@ -24,6 +24,7 @@ from unittest import mock
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.banking.handler import BankHandler
 from systems.combat import constants as combat_const
 from systems.combat.combat import ensure_combat_handler
 from systems.combat.rules.context import ActionResult
@@ -52,6 +53,10 @@ _SMALL_DAMAGE = 1
 # An item key that exists in ITEM_DB and is not stackable, so the spawn under
 # test survives an inventory merge intact.
 _TEST_ITEM_KEY = "rusty_scrap_spear"
+
+# A stackable ITEM_DB key, so a deposit can take the merging and partial
+# paths rather than the plain move_to one.
+_STACKABLE_ITEM_KEY = "rusty_metal_dust"
 
 
 class _FeedRecorder:
@@ -607,6 +612,117 @@ class TestInventoryFeedDuringAMove(EvenniaTest):
         carried_ids = [row["id"] for row in gained.items]
         self.assertIn(item.id, carried_ids)
         self.assertEqual(gained.slots_used, 1)
+
+
+class TestInventoryFeedAfterABankDeposit(EvenniaTest):
+    """
+    A deposit must republish the grid, even when nothing was moved off the
+    character.
+
+    The character's move hooks are the only thing that publishes an
+    inventory snapshot, and they only fire for a move_to. Two of the three
+    deposit paths never move the carried object at all: a whole stack that
+    matches one already in the vault is folded into it and DELETED where it
+    stands, and a partial deposit is a pair of quantity writes. Neither
+    fires a hook, so the 3D pane kept drawing a stack the vault already
+    held -- the player saw it vanish only after typing `inventory`.
+
+    Needs a SUBSCRIBED session for the same reason
+    TestInventoryFeedDuringAMove does: emit_inventory builds nothing when
+    nobody is listening, so the defect cannot be reproduced without paying
+    the subscription cost.
+
+    Author: Nick Hobar
+    Creation date: 08/24/2026
+    """
+
+    character_typeclass = BlackoutCharacter
+
+    def setUp(self):
+        super().setUp()
+        subscriptions.subscribe(self.session, [const.CHANNEL_CHAR_ITEMS])
+        self.bank = BankHandler(self.char1)
+
+    def _carry(self, quantity):
+        """Put one stack of the test material in the character's hands."""
+        return ITEM_DB[_STACKABLE_ITEM_KEY].create(
+            location=self.char1, quantity=quantity
+        )
+
+    def _record(self, action):
+        """Run one banking action with the emit seam recorded."""
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.statefeed.events.emit", recorder):
+            action()
+
+        return recorder
+
+    def _last_snapshot(self, recorder):
+        """The final inventory payload the action published."""
+        snapshots = recorder.of_type(CharItemsPayload)
+        self.assertTrue(snapshots, "the deposit published nothing")
+
+        return snapshots[-1]
+
+    def _rows_named(self, snapshot, key):
+        """Every carried row in a snapshot holding the named item."""
+        matching = []
+
+        for row in snapshot.items:
+            if row["name"] == key:
+                matching.append(row)
+
+        return matching
+
+    def test_merging_a_whole_stack_into_the_vault_republishes(self):
+        """The reported defect: the pane still drew the deposited dust."""
+        self.bank.deposit(self._carry(2))
+        second = self._carry(2)
+
+        recorder = self._record(lambda: self.bank.deposit(second))
+        snapshot = self._last_snapshot(recorder)
+
+        self.assertEqual(self._rows_named(snapshot, second.key), [])
+        self.assertEqual(snapshot.slots_used, 0)
+
+    def test_the_menu_path_republishes_once(self):
+        """deposit_many is what the banking EvMenu calls, and it must publish
+        one snapshot for the whole action rather than one per object -- a
+        snapshot syncs the handler and walks all 32 slots."""
+        self.bank.deposit(self._carry(2))
+        second = self._carry(2)
+
+        recorder = self._record(lambda: self.bank.deposit_many([second], None))
+        snapshots = recorder.of_type(CharItemsPayload)
+
+        self.assertEqual(len(snapshots), 1)
+        self.assertEqual(snapshots[-1].slots_used, 0)
+
+    def test_a_partial_deposit_republishes_the_reduced_stack(self):
+        """The vault already holds the key, so this is two quantity writes
+        and no move at all."""
+        self.bank.deposit(self._carry(2))
+        carried = self._carry(5)
+
+        recorder = self._record(lambda: self.bank.deposit(carried, 3))
+        snapshot = self._last_snapshot(recorder)
+        rows = self._rows_named(snapshot, carried.key)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["quantity"], 2)
+
+    def test_a_partial_deposit_into_an_empty_vault_republishes(self):
+        """split() moves a DETACHED copy into the vault, so the character's
+        leave hook never runs here either."""
+        carried = self._carry(5)
+
+        recorder = self._record(lambda: self.bank.deposit(carried, 3))
+        snapshot = self._last_snapshot(recorder)
+        rows = self._rows_named(snapshot, carried.key)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["quantity"], 2)
 
 
 class TestFeedIsSilentWithoutSubscribers(EvenniaTest):

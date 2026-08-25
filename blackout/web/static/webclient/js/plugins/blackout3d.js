@@ -31,7 +31,7 @@
 import * as THREE from "three";
 
 import * as blackoutMeshes from "../blackout_meshes.js";
-import * as blackoutChannels from "../blackout_channels.js";
+import { createPaneShell } from "../shell/pane.js";
 import {
     CH_ROOM_INFO, CH_ROOM_PLAYERS, CH_PLAYER_ADD, CH_PLAYER_REMOVE,
     CH_CHAR_VITALS, CH_CHAR_STATUS, CH_CHAR_SUMMARY, CH_CHAR_AVATAR,
@@ -1746,93 +1746,6 @@ const buildPane = function (glContainer) {
     setAuraRing(auraRadius);
 };
 
-// Teach GoldenLayout how to build our pane.
-//
-// This MUST happen before GoldenLayout itself starts, and the only hook
-// early enough is init(). The sequence is: plugin_handler.init() runs
-// every plugin's init(), during which goldenlayout's init() constructs
-// myLayout from the layout saved in localStorage; only afterwards does
-// plugin_handler.postInit() run, and goldenlayout's postInit() is what
-// calls myLayout.init() and actually instantiates the panes.
-//
-// A player who has ever opened the 3D pane has "blackout3d" written into
-// that saved layout. Registering in postInit() is a page-blanking bug for
-// exactly those players: we are the last plugin loaded, so goldenlayout's
-// postInit reaches myLayout.init() first, GoldenLayout throws on the
-// component type it has never heard of, and it throws AFTER goldenlayout's
-// init() has already removed the HTML-defined prompt and input divs — so
-// the whole client renders as a blank page, not just this pane.
-const createComponent = function () {
-    const goldenlayout = window.plugins["goldenlayout"];
-    if (!goldenlayout) {
-        return false;
-    }
-    const myLayout = goldenlayout.getGL();
-    if (!myLayout) {
-        return false;
-    }
-    myLayout.registerComponent("blackout3d", buildPane);
-    return true;
-};
-
-const registerSafely = function (where) {
-    try {
-        return createComponent();
-    } catch (err) {
-        console.log("[blackout3d] component registration failed in " +
-            where + ": " + err.message);
-        return false;
-    }
-};
-
-// GoldenLayout discards the entire layout and constructs a new one when a
-// saved layout is activated, then calls this so plugins can re-register.
-// Without it, the component type is unknown to the new layout and opening
-// the pane fails outright.
-const onLayoutChanged = function () {
-    registerSafely("onLayoutChanged");
-};
-
-// Bring up the world pane, or surface the one that already exists.
-//
-// There can only be ONE. The scene, camera, renderer and mesh caches are
-// module state, so a second pane does not get a second world — it takes the
-// first one's, and buildPane's own reset then disposes the canvas the first
-// pane was drawing on. Before this guard, clicking "Open 3D World" twice
-// (or once in a session whose layout GoldenLayout had already saved) left a
-// pane that looked fine and was not the one the module was pointing at:
-// rendering carried on in one canvas while pointer events arrived on
-// another, and every click silently resolved to nothing.
-//
-// Making a second pane impossible is a smaller fix than making the plugin
-// multi-pane, and multi-pane buys nothing — two views of one diorama, from
-// one camera the player steers in one place.
-const openPane = function () {
-    const myLayout = window.plugins["goldenlayout"].getGL();
-    const existing = myLayout.root.getItemsByType("component").filter(
-        function (item) {
-            return item.config.componentName === "blackout3d";
-        });
-
-    if (existing.length) {
-        const pane = existing[0];
-
-        // Already open, possibly as a background tab in its stack. Show it.
-        if (pane.parent && pane.parent.setActiveContentItem) {
-            pane.parent.setActiveContentItem(pane);
-        }
-        return;
-    }
-    const component = {
-        title: "World",
-        type: "component",
-        componentName: "blackout3d",
-        componentState: {}
-    };
-    const main = myLayout.root.getItemsByType("stack")[0].getActiveContentItem();
-    main.parent.addChild(component);
-};
-
 // ─── Plugin interface ───────────────────────────────────────────────────
 
 // The only message this plugin sends that is not a player command. Called
@@ -1883,42 +1796,6 @@ const route = function (cmdname, kwargs) {
     else if (cmdname === CH_SUBSCRIBED)    { bindAcknowledged(data.channels); }
 };
 
-// Bind one named listener per channel, straight onto Evennia's emitter.
-//
-// This is the load-bearing part of the wiring, and it is NOT
-// interchangeable with the onUnknownCmd plugin hook below. DefaultEmitter
-// dispatches to listeners[cmdname] if one exists and only otherwise falls
-// back to listeners["default"] -> plugin_handler.onDefault. And
-// onDefault's very first taker is default_out.js, whose onUnknownCmd
-// returns true unconditionally, claiming every unknown command and
-// printing it as "Error or Unhandled event" — so a plugin loaded after it
-// can never see one. This plugin necessarily loads after it, because
-// Evennia's own plugins occupy the guilib_import block and ours goes in
-// the scripts block below it.
-//
-// Binding by name sidesteps that ordering entirely.
-// A CHANNEL HAS EXACTLY ONE LISTENER. DefaultEmitter.on does
-// `listeners[cmdname] = listener` — it REPLACES rather than appends. That
-// matters here more than anywhere else, because bindAcknowledged below
-// deliberately claims channels this file has never heard of: without a
-// check, this pane would take a channel that belongs to another one the
-// moment the server started acknowledging it.
-//
-// It has already happened in the other direction — see blackout_channels.js
-// for what a silently stolen channel looks like from the losing side.
-const bindChannel = function (channel) {
-    if (!channel || boundChannels[channel]) {
-        return;
-    }
-    if (!blackoutChannels.claim(channel, "blackout3d")) {
-        return;
-    }
-    boundChannels[channel] = true;
-    Evennia.emitter.on(channel, function (args, kwargs) {
-        route(channel, kwargs);
-    });
-};
-
 // Bind every channel the SERVER says we are subscribed to.
 //
 // The server's blackout_subscribed acknowledgement carries the set it
@@ -1952,32 +1829,40 @@ const bindAcknowledged = function (channels) {
         subscribe();
         return;
     }
-    channels.forEach(bindChannel);
+    channels.forEach(shell.bindChannel);
 };
 
-const bindListeners = function () {
-    if (!window.Evennia || !Evennia.emitter) {
-        return false;
-    }
-    CHANNELS.forEach(bindChannel);
-    return true;
-};
+// Lifecycle and Evennia wiring: registration, the single-pane guard, opening,
+// channel claiming and routing. Eight routines that were byte-for-byte the
+// inventory pane's, differing only in the name and title below.
+//
+// Constructed HERE rather than at the top of the file because `buildPane` and
+// `route` are `const`s defined above -- referencing either before its
+// declaration is a TDZ error, not a hoisted undefined.
+const shell = createPaneShell({
+    name: "blackout3d",
+    title: "World",
+    build: buildPane,
+    route: route,
 
-// Retained as a fallback only. It fires if this plugin is ever loaded
-// BEFORE default_out.js, in which case onDefault reaches us first and the
-// named listeners are redundant. Harmless either way; routing is
-// idempotent per message.
-const onUnknownCmd = function (cmdname, args, kwargs) {
-    if (!boundChannels[cmdname]) {
-        return false;
-    }
-    route(cmdname, kwargs);
-    return true;
+    // A FUNCTION, not the array, and that is the whole reason the shell takes
+    // one: CHANNELS is only the starting point. bindAcknowledged adds whatever
+    // the server acknowledges on top, including channels this file has never
+    // heard of, so that a server-side addition cannot reach default_out.js and
+    // get printed at the player as raw JSON.
+    channels: function () { return CHANNELS; }
+});
+
+const postInit = function () {
+    const bound = shell.postInit();
+
+    console.log("Blackout 3D plugin loaded." +
+        (bound ? "" : " WARNING: emitter unavailable, feed will not route."));
 };
 
 const onOptionsUI = function (parentdiv) {
     const openButton = $('<input type="button" value="Open 3D World" />');
-    openButton.on("click", openPane);
+    openButton.on("click", shell.openPane);
 
     const debugBox = $('<input type="checkbox" id="blackout3d-debug" />');
     debugBox.on("change", function () {
@@ -1999,32 +1884,14 @@ const onOptionsUI = function (parentdiv) {
     parentdiv.append(debugBox);
 };
 
-// Runs while goldenlayout's own init() has already built myLayout but
-// before anything has been instantiated from it. See createComponent.
-const init = function () {
-    registerSafely("init");
-};
-
-const postInit = function () {
-    // Belt and braces. If the plugin order ever changes so that our init()
-    // ran before goldenlayout's, this is the next chance to register — and
-    // re-registering an already-known type is a harmless overwrite.
-    registerSafely("postInit");
-
-    // Safe here: webclient_gui.js calls Evennia.init() and wires its own
-    // listeners before it calls plugin_handler.postInit(), so the emitter
-    // exists by now. We only ADD names; nothing existing is replaced.
-    const bound = bindListeners();
-    console.log("Blackout 3D plugin loaded." +
-        (bound ? "" : " WARNING: emitter unavailable, feed will not route."));
-};
-
 return {
-    init: init,
+    // init, onLayoutChanged and onUnknownCmd are the shell's outright; this
+    // pane adds nothing to them. postInit wraps the shell's only to log.
+    init: shell.init,
     postInit: postInit,
-    onLayoutChanged: onLayoutChanged,
+    onLayoutChanged: shell.onLayoutChanged,
+    onUnknownCmd: shell.onUnknownCmd,
     onLoggedIn: onLoggedIn,
-    onUnknownCmd: onUnknownCmd,
     onOptionsUI: onOptionsUI,
     // Read-only accessor for the last dossier snapshot. Not part of the
     // plugin_handler interface; here so a stats overlay can be built as a
@@ -2049,5 +1916,6 @@ return {
 // so it is read off `window` rather than imported -- there is nothing to import
 // it from. This line runs after every classic script but before
 // $(document).ready, which is when plugin_handler.init() runs; see the
-// createComponent comment above for why registering that early matters.
+// createComponent comment in shell/pane.js for why registering that early
+// matters.
 window.plugin_handler.add("blackout3d", blackout3d);
