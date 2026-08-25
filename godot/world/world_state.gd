@@ -18,6 +18,11 @@ extends RefCounted
 ## first genuinely fractional field anyone adds.
 
 
+## Server-owned names, generated from blackout/systems/statefeed/constants.py.
+## Preloaded, not autoloaded -- the generated file declares no `extends Node`.
+const _Const := preload("res://autoload/blackout_constants.gd")
+
+
 ## One Z-level's grid.
 class Level:
 	extends RefCounted
@@ -25,6 +30,12 @@ class Level:
 	var cells: Array[Vector2i] = []
 	var kinds: Array[String] = []
 	var links: Array = []          # [[Vector2i, Vector2i], ...]
+
+	## cell -> {command, kind}: the pathfinder `goto` to that node, stamped
+	## once per session because the walk to (6,3) is the same from anywhere on
+	## the map. A node the server gave no action affords nothing.
+	var actions: Dictionary = {}
+
 	var seen := 0
 	var expected := 1
 
@@ -39,9 +50,20 @@ var current_z := ""
 var current_cell := Vector2i.ZERO
 
 ## Direction name -> destination room number, straight from `room_info.exits`.
-## Kept so a click can be refused when there is no door that way, rather than
-## sending a command the server will only reject.
 var current_exits: Dictionary = {}
+
+## "x:y" -> {command, kind}, covering the observer's own tile and everything
+## one REAL exit away. Straight from `room_info.tile_actions`.
+##
+## The server names the whole command; nothing here substitutes into it. It
+## also covers only the near tiles, because the walk to a distant node does not
+## change when the observer moves and is stamped on the map node instead.
+var current_tile_actions: Dictionary = {}
+
+## What to send to stop a walk already running. NOT part of tile_actions,
+## because whether a walk IS running is the client's own tracking -- the client
+## is what started it.
+var current_cancel_action: Dictionary = {}
 
 
 ## Fold one `blackout_map` chunk into the model.
@@ -62,8 +84,14 @@ func ingest_map_chunk(payload: Dictionary) -> String:
 	level.seen += 1
 
 	for entry: Dictionary in payload.get("nodes", []):
-		level.cells.append(Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0))))
+		var cell := Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0)))
+		level.cells.append(cell)
 		level.kinds.append(str(entry.get("room_kind", "")))
+
+		var action: Dictionary = entry.get("action", {})
+
+		if not action.is_empty():
+			level.actions[cell] = action
 
 	for entry: Dictionary in payload.get("links", []):
 		var from := _cell(entry.get("from"))
@@ -88,34 +116,51 @@ func ingest_room_info(payload: Dictionary) -> void:
 	current_cell = Vector2i(int(coords[0]), int(coords[1]))
 	current_z = str(coords[2])
 	current_exits = payload.get("exits", {})
+	current_tile_actions = payload.get("tile_actions", {})
+	current_cancel_action = payload.get("cancel_action", {})
 
 
-## The exit name that steps from one cell to a neighbouring one.
+## What clicking a cell means, as {command, kind}. Empty means "do nothing".
 ##
-## Empty when the cells are the same or more than one step apart, which is what
-## makes a click on a distant tile do nothing rather than send a command the
-## server would only refuse. Grid Y grows northward -- confirmed by walking:
-## `n` from (2,2) arrives at (2,3), `e` from (2,3) arrives at (3,3).
-static func direction_for(delta: Vector2i) -> String:
-	if delta == Vector2i.ZERO:
-		return ""
+## THE SERVER DECIDES. This replaced a grid-delta -> direction-name table that
+## the browser pane deleted for cause on 08/23/2026: that table could not
+## express a one-way exit, a diagonal link, or a map whose geometry and
+## direction names disagree, and it got the diagonal case wrong once in the
+## direction of "the tiles nearest the player were the only ones that could not
+## be clicked". Directions now come from the room's REAL spawned exits.
+##
+## Two lookups and one distinction:
+##
+##   near tile, EMPTY command -> {} . The server says no. It sends this for a
+##       cardinal neighbour with no exit -- a wall the player can SEE, and
+##       walking the long way around one reads as a bug.
+##   near tile, ABSENT        -> fall through to the node's own `goto`.
+##
+## The difference is the whole reason `tile_actions` carries wall markers at
+## all. Diagonals are deliberately absent: refusing those was the original bug.
+##
+## `cell` is resolved in the CURRENT island's coordinate space by
+## WorldView._cell_under, so a click on another island lands on a cell this map
+## has no node for and correctly affords nothing. `goto` does not cross maps.
+func tile_action(cell: Vector2i) -> Dictionary:
+	var key := _Const.TILE_KEY_TEMPLATE \
+		.replace("{x}", str(cell.x)) \
+		.replace("{y}", str(cell.y))
 
-	if absi(delta.x) > 1 or absi(delta.y) > 1:
-		return ""
+	if current_tile_actions.has(key):
+		var near: Dictionary = current_tile_actions[key]
 
-	var name := ""
+		if str(near.get("command", "")).is_empty():
+			return {}
 
-	if delta.y > 0:
-		name = "north"
-	elif delta.y < 0:
-		name = "south"
+		return near
 
-	if delta.x > 0:
-		name += "east"
-	elif delta.x < 0:
-		name += "west"
+	if not levels.has(current_z):
+		return {}
 
-	return name
+	var level: Level = levels[current_z]
+
+	return level.actions.get(cell, {})
 
 
 func _cell(raw: Variant) -> Vector2i:

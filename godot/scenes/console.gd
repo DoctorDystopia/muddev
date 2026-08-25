@@ -7,14 +7,16 @@ extends Control
 ## add a channel, which is the dispatch chain the whole ack-driven design
 ## exists to avoid.
 
-## Ask for everything. The server answers with the set it actually accepted and
-## THAT is what gets bound -- a hardcoded channel list here would be a second
-## copy of blackout/systems/statefeed/constants.py, free to drift.
-const _SUBSCRIBE_ALL := "all"
-
-## The subscribe handshake's ack. The only channel name the client has to know
-## before the server has told it anything.
-const _CH_SUBSCRIBED := "blackout_subscribed"
+## Every name the SERVER owns, generated from
+## blackout/systems/statefeed/constants.py by systems/statefeed/clientexport.py.
+## Preloaded, not autoloaded -- the generated file declares no `extends Node`.
+##
+## `SUBSCRIBE_ALL` asks for everything. The server answers with the set it
+## actually accepted and THAT is what gets bound; a hardcoded channel list here
+## would be a second copy of constants.py, free to drift. `CH_SUBSCRIBED` is
+## that answer -- the only channel name this client has to know before the
+## server has told it anything.
+const Const := preload("res://autoload/blackout_constants.gd")
 
 @onready var _output: RichTextLabel = %Output
 @onready var _input: LineEdit = %Input
@@ -63,7 +65,7 @@ func _on_submitted(line: String) -> void:
 
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:
-	if channel != _CH_SUBSCRIBED:
+	if channel != Const.CH_SUBSCRIBED:
 		if not _channels.has(channel):
 			# Printed rather than shown: an outputfunc nobody handles is a
 			# developer's problem, and the left pane belongs to the player.
@@ -79,7 +81,7 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 	# and this is the only signal that we need to.
 	if _channels.is_empty():
 		_note("server has no subscription for us; subscribing")
-		Evennia.send("blackout_subscribe", [], {"channels": _SUBSCRIBE_ALL})
+		Evennia.send("blackout_subscribe", [], {"channels": Const.SUBSCRIBE_ALL})
 		return
 
 	_note("subscribed: %d channels" % _channels.size())

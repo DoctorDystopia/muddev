@@ -15,13 +15,14 @@ extends Node3D
 ## type is visually distinct with no edit here, and is the same colour every
 ## session and for every player.
 
-const CH_MAP := "blackout_map"
-const CH_ROOM_INFO := "room_info"
-const CH_ROOM_PLAYERS := "room_players"
-const CH_PLAYER_ADD := "room_add_player"
-const CH_PLAYER_REMOVE := "room_remove_player"
-const CH_COMBAT := "blackout_combat"
-const CH_AURA := "blackout_aura"
+## Every name the SERVER owns, generated from
+## blackout/systems/statefeed/constants.py by systems/statefeed/clientexport.py.
+##
+## Preloaded rather than autoloaded: the generated file declares no `extends
+## Node`, and a Godot autoload must. Do not retype a channel name here -- the
+## dead "Pole clearing" room-kind key reached this file by exactly that route
+## and rendered a fallback hue in both clients until 08/23/2026.
+const Const := preload("res://autoload/blackout_constants.gd")
 
 const AURA_EVENT_DEACTIVATE := "deactivate"
 const AURA_EVENT_PULSE := "pulse"
@@ -52,14 +53,40 @@ const COLOR_LINK := Color("2e4256")
 const KIND_HSL_SATURATION := 0.42
 const KIND_HSL_LIGHTNESS := 0.42
 
+## Must colour the SAME set of room kinds as blackout3d.js, key for key --
+## ClientRoomKindTests asserts it in both directions. A key naming no map
+## prototype is dead configuration; a room kind with no key here is fine and
+## hashes to a stable hue.
 const ROOM_KIND_COLORS := {
 	"Bank": Color("4488ff"),
 	"Foundry Furnace Facility": Color("dd4422"),
 	"Metalsmith Anvil Facility": Color("aaaaaa"),
-	"Pole clearing": Color("cc6633"),
+	# Two clearings, not one, and they are told apart by what they yield:
+	# oasis grows rusty poles, oasis_outskirts grows metal ones. Coloured for
+	# the material rather than for the tile, so the map reads as a gradient
+	# from scrap to stock as the player moves out.
+	#
+	# This said "Pole clearing" until 08/25/2026 -- a key no map has ever
+	# declared, copied here from the browser pane before that pane was fixed.
+	# Both real clearings rendered the hash colour and nothing errored.
+	"Rusty pole clearing": Color("cc6633"),
+	"Metal pole clearing": Color("8899a6"),
 	"Shopkeeper": Color("ddcc44"),
 	"Mutant Raider Tile": Color("8fbf00"),
 	"Big Mutant Tile": Color("bf3f00"),
+	# Not a prototype key like the rest: the server synthesises this one for a
+	# node that spawns no room. It is the way OFF the map, so it is coloured
+	# whether or not the teleporter model is there to stand on it.
+	#
+	# A LITERAL, though Const.ROOM_KIND_TRANSITION holds the same string and
+	# blackout_models.js imports it. ClientRoomKindTests reads both clients as
+	# TEXT -- that is what lets one test cover two languages without importing
+	# either -- so a key written as a constant reference is invisible to it and
+	# reads as "this client colours nothing here". blackout3d.js spells it
+	# literally for the same reason. Making the scraper resolve constant
+	# references would let both use Const; until then the literal is what keeps
+	# the guard honest.
+	"map_transition": Color("35e0c0"),
 }
 
 @onready var _islands: Node3D = $Islands
@@ -82,30 +109,30 @@ func _ready() -> void:
 
 func _on_channel(channel: String, payload: Dictionary) -> void:
 	match channel:
-		CH_MAP:
+		Const.CH_MAP:
 			var completed := _state.ingest_map_chunk(payload)
 
 			if not completed.is_empty():
 				_relayout()
 
-		CH_ROOM_INFO:
+		Const.CH_ROOM_INFO:
 			_state.ingest_room_info(payload)
 			_place_marker()
 
-		CH_ROOM_PLAYERS:
+		Const.CH_ROOM_PLAYERS:
 			_entities.replace_all(payload.get("entities", []))
 
-		CH_PLAYER_ADD:
+		Const.CH_PLAYER_ADD:
 			_entities.add(payload.get("entity", {}))
 
-		CH_PLAYER_REMOVE:
+		Const.CH_PLAYER_REMOVE:
 			_entities.remove(int(payload.get("entity_id", 0)))
 
-		CH_COMBAT:
+		Const.CH_COMBAT:
 			if payload.get("hit", false):
 				_entities.flash(int(payload.get("target_id", 0)))
 
-		CH_AURA:
+		Const.CH_AURA:
 			_on_aura(payload)
 
 
@@ -164,18 +191,27 @@ func _act_on_entity(entity: Dictionary) -> void:
 	# able to do.
 
 
+## Send whatever the server said this tile affords.
+##
+## This used to compute a direction from the grid delta and check it against
+## `current_exits`. Both of those are rules about the MAP, and the server owns
+## the map -- see WorldState.tile_action for what that cost. Nothing here
+## decides anything any more: it forwards a command the server already named,
+## or it does nothing.
+##
+## NOT YET PORTED: the browser pane tracks an auto-walk in flight, so clicking
+## your own tile mid-walk sends `cancel_action` instead of `look`. This client
+## does not track a walk, so `current_cancel_action` is stored and unused and
+## a mid-walk click on your own tile looks. Harmless, and deliberately left for
+## whoever adds walk tracking rather than half-built here.
 func _walk_towards(cell: Vector2i) -> void:
-	var direction := WorldState.direction_for(cell - _state.current_cell)
+	var action := _state.tile_action(cell)
+	var command := str(action.get("command", ""))
 
-	if direction.is_empty():
+	if command.is_empty():
 		return
 
-	# Refused rather than sent: the server would only answer "you cannot go
-	# that way", and the exits it already told us about are enough to know.
-	if not _state.current_exits.has(direction):
-		return
-
-	Evennia.command(direction)
+	Evennia.command(command)
 
 
 ## Which tile a screen point lands on.

@@ -19,7 +19,7 @@ func _ready() -> void:
 	_room_info_without_coords_is_ignored()
 	_a_link_runs_along_its_own_span()
 	_the_hash_matches_the_browser()
-	_directions_name_the_step_they_take()
+	_the_server_decides_what_a_tile_affords()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -175,31 +175,77 @@ func _the_hash_matches_the_browser() -> void:
 	)
 
 
-func _directions_name_the_step_they_take() -> void:
-	# Grid Y grows northward. Confirmed by walking the real game: `n` from
-	# (2,2) arrives at (2,3). Getting this inverted would send every
-	# click-to-move command in exactly the wrong direction.
-	var steps := {
-		Vector2i(0, 1): "north",
-		Vector2i(0, -1): "south",
-		Vector2i(1, 0): "east",
-		Vector2i(-1, 0): "west",
-		Vector2i(1, 1): "northeast",
-		Vector2i(-1, 1): "northwest",
-		Vector2i(1, -1): "southeast",
-		Vector2i(-1, -1): "southwest",
-	}
+## The client reads the server's answer and does not compute one.
+##
+## Replaces ten cases that asserted a grid-delta -> direction-name table. That
+## table is gone: it could not express a one-way exit or a diagonal link, and
+## the browser pane deleted it on 08/23/2026. What is worth testing now is not
+## which way is north -- the server says -- but the ABSENT/EMPTY distinction,
+## which is the part that was nearly lost when the browser pane was rewritten.
+func _the_server_decides_what_a_tile_affords() -> void:
+	var state := WorldState.new()
 
-	for delta: Vector2i in steps:
-		_expect(
-			WorldState.direction_for(delta) == steps[delta],
-			"%s is %s" % [delta, steps[delta]]
-		)
+	state.ingest_map_chunk(_chunk("oasis", 0.0, 1.0, [
+		_node(2.0, 2.0, "Oasis", "goto (2,2)"),
+		_node(2.0, 3.0, "Oasis", "goto (2,3)"),
+		_node(3.0, 3.0, "Oasis", "goto (3,3)"),
+		_node(9.0, 9.0, "Oasis", "goto (9,9)"),
+	], []))
 
-	_expect(WorldState.direction_for(Vector2i.ZERO).is_empty(), "standing still is no direction")
+	# The observer stands on (2,2). North is a real exit; east is a wall the
+	# server marks with an EMPTY command; (9,9) is far away and carries only
+	# its own node `goto`.
+	state.ingest_room_info({
+		"coords": [2.0, 2.0, "oasis"],
+		"exits": {"north": 1.0},
+		"tile_actions": {
+			"2:3": {"command": "north", "kind": "step"},
+			"3:2": {"command": "", "kind": "none"},
+			"2:2": {"command": "look", "kind": "look"},
+		},
+		"cancel_action": {"command": "goto", "kind": "cancel"},
+	})
+
 	_expect(
-		WorldState.direction_for(Vector2i(2, 0)).is_empty(),
-		"a tile two steps away is not walkable in one command"
+		state.tile_action(Vector2i(2, 3)).get("command", "") == "north",
+		"a near tile sends the command the server named"
+	)
+	_expect(
+		state.tile_action(Vector2i(2, 2)).get("command", "") == "look",
+		"your own tile looks"
+	)
+
+	# EMPTY is not ABSENT. The server saying "no" must not fall through to the
+	# node's goto and walk the player the long way around a visible wall.
+	_expect(
+		state.tile_action(Vector2i(3, 2)).is_empty(),
+		"an empty command is refused, not fallen through"
+	)
+
+	# ABSENT falls through to the node's own walk.
+	_expect(
+		state.tile_action(Vector2i(9, 9)).get("command", "") == "goto (9,9)",
+		"a distant node falls through to its own goto"
+	)
+
+	# A cell no node occupies affords nothing at all.
+	_expect(
+		state.tile_action(Vector2i(40, 40)).is_empty(),
+		"a cell with no node affords nothing"
+	)
+
+	# Diagonals are deliberately ABSENT from tile_actions, so a diagonal
+	# neighbour falls through to its node's goto and routes through the
+	# pathfinder. Refusing these was the original bug -- the tiles nearest the
+	# player were the only ones that could not be clicked.
+	_expect(
+		state.tile_action(Vector2i(3, 3)).get("command", "") == "goto (3,3)",
+		"a diagonal neighbour routes through the pathfinder, not refused"
+	)
+
+	_expect(
+		state.current_cancel_action.get("command", "") == "goto",
+		"cancel_action is kept for whoever adds walk tracking"
 	)
 
 
@@ -220,8 +266,17 @@ func _chunk(z: String, index: float, count: float, nodes: Array, links: Array) -
 	}
 
 
-func _node(x: float, y: float, kind: String) -> Dictionary:
-	return {"x": x, "y": y, "room_kind": kind}
+## One map node, in the shape mapexport._node_entries emits.
+##
+## `action` is the pathfinder walk to this node. Omitted rather than sent empty
+## when a node affords nothing, which is what the server does.
+func _node(x: float, y: float, kind: String, walk := "") -> Dictionary:
+	var entry := {"x": x, "y": y, "room_kind": kind}
+
+	if not walk.is_empty():
+		entry["action"] = {"command": walk, "kind": "walk"}
+
+	return entry
 
 
 func _expect(passed: bool, what: String) -> void:
