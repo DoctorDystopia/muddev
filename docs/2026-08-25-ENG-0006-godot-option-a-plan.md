@@ -1,6 +1,6 @@
 # ENG-0006 — Option A: Godot as the only client. Implementation plan.
 
-**Status:** plan. Phase 0 partially executed (the merge). Nothing else started.
+**Status:** **Phase 0 DONE** (08/25/2026, commit `6847080`). Phases 1–5 not started.
 **Date:** 08/25/2026
 **Decision:** Option A from [ENG-0005](2026-08-25-ENG-0005-godot-vs-webclient.md),
 taken 08/25/2026. Godot becomes the only client. The Evennia webclient's 3D and
@@ -78,7 +78,7 @@ Today that invariant holds by accident of discipline. Phase 2 makes it a test.
 
 ---
 
-## 3. Phase 0 — land the merge, stop the drift *(hours, partially done)*
+## 3. Phase 0 — land the merge, stop the drift — **DONE 08/25/2026, `6847080`**
 
 ### 0.1 The merge — **DONE, staged, not committed**
 
@@ -100,7 +100,7 @@ in `web/jstests/` passes **13/13**.
 git commit --no-edit
 ```
 
-### 0.2 Commit the generated GDScript constants — §2.1
+### 0.2 Commit the generated GDScript constants — §2.1 — ✅
 
 ```bash
 python blackout/scripts/export_client_constants.py --check
@@ -116,7 +116,7 @@ git add godot/autoload/blackout_constants.gd
 
 Then correct ENG-0004 Phase 1 item 8, which currently claims this was done.
 
-### 0.3 Repoint `world_view.gd` at the generated constants
+### 0.3 Repoint `world_view.gd` at the generated constants — ✅
 
 Delete the seven hand-typed names at `world/world_view.gd:18-24`
 (`CH_MAP`, `CH_ROOM_INFO`, `CH_ROOM_PLAYERS`, `CH_PLAYER_ADD`,
@@ -133,7 +133,7 @@ fallback hue in both clients. Under Option A there is no second client to
 cross-check against, so generation stops being a nicety and becomes the only
 guard.
 
-### 0.4 Adopt `tile_actions`, delete `direction_for()`
+### 0.4 Adopt `tile_actions`, delete `direction_for()` — ✅
 
 `world_state.gd:direction_for()` is the grid-delta → direction-name table that
 ENG-0004 Phase 2 deleted from the JS client **for cause**: it cannot express a
@@ -153,7 +153,7 @@ the distinction the JS comment records and that was nearly lost once: **absent**
 means fall through to the node's `goto`; **empty command** means the server says
 no. Diagonals are deliberately absent.
 
-### 0.5 Green the branch
+### 0.5 Green the branch — ✅
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot --import
