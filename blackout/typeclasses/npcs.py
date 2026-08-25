@@ -22,6 +22,17 @@ TALK_CMD_SET_KEY = "npc_talk_cmdset"
 TALK_CMD_SET_PRIORITY = 10
 
 SHOPKEEP_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_shopkeep"
+OASIS_GUIDE_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_oasis_guide"
+
+# The oasis quest giver. The key must match the room key of the "Lone Android"
+# prototype in world/maps/oasis.py, because that key is what SPAWNER_REGISTRY
+# dispatches on.
+LONE_ANDROID_KEY = "Lone Android"
+LONE_ANDROID_DESC = (
+    "A farm-hand android, alone. Its chassis is sand-scoured down to the "
+    "primer and one knee joint whines when it moves. It is bent over a "
+    "datapad, writing, and does not appear to have noticed you."
+)
 SHOPKEEP_CLEANUP_SCRIPT = "scripts.shopkeep_inventory_cleanup.ShopkeepCleanup"
 
 
@@ -268,3 +279,89 @@ def spawn_shopkeep(room):
     # an already-placed NPC in step with edits to these values.
     shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
     shopkeep.db.shopdef_key = "oasis_shop"
+
+
+class LoneAndroidNPC(TalkativeNPC):
+    """
+    Purpose: The android that tends the oasis farm -- the giver of "Oasis in
+             the Wastes", the game's opening quest.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        No conditions.
+
+    Module Globals:
+        OASIS_GUIDE_DIALOGUE_MODULE read.
+
+    Methodology:
+        A TalkativeNPC that knows which dialogue module it speaks from. It
+        needs its own typeclass rather than a bare TalkativeNPC only so the
+        spawner below can identify one already standing on the tile -- and so
+        the 3D pane can draw it as something other than a shopkeeper.
+
+    Notes/References:
+        Design lives in the Obsidian vault, "Oasis in the Wastes"; the quest
+        blueprint is systems/quests/content/quest_oasis.py.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+
+    asset_key = "lone_android"
+
+
+    def at_object_creation(self) -> None:
+        """Point the NPC at its dialogue module and describe it."""
+        parent_class = super()
+        parent_class.at_object_creation()
+
+        self.db.menu_module = OASIS_GUIDE_DIALOGUE_MODULE
+        self.db.desc = LONE_ANDROID_DESC
+
+
+@register_spawner("Lone Android")
+def spawn_lone_android(room):
+    """
+    Purpose: Place the oasis quest giver on its map tile.
+
+    Entry:
+        room is the GridTile built from the "Lone Android" prototype in
+        world/maps/oasis.py.
+
+    Exit/Returns:
+        Returns the NPC standing on the tile.
+
+    Module Globals:
+        LONE_ANDROID_KEY, LONE_ANDROID_DESC read.
+        OASIS_GUIDE_DIALOGUE_MODULE read.
+
+    Methodology:
+        world/maps/oasis.py has carried a "Lone Android" tile at (2, 0) since
+        the map was written, but no spawner was ever registered for that room
+        key -- so the tile built an empty room NAMED "Lone Android" and the
+        quest giver did not exist. npc_oasis_guide.py was unreachable and the
+        opening quest could not be started by any means.
+
+        Stamps the description and dialogue module unconditionally, matching
+        spawn_shopkeep: spawn_once returns the pre-existing NPC on a map
+        rebuild, and re-applying keeps an already-placed android in step with
+        edits here.
+
+    Notes/References:
+        Maps are rebuilt with scripts/clean_and_reload_all_maps.ps1.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    android = spawn_once(
+        room,
+        "typeclasses.npcs.LoneAndroidNPC",
+        key=LONE_ANDROID_KEY,
+    )
+
+    android.db.desc = LONE_ANDROID_DESC
+    android.db.menu_module = OASIS_GUIDE_DIALOGUE_MODULE
+
+    return android

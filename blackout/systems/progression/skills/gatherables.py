@@ -27,6 +27,21 @@ class GatherableDef:
     item_key: str
     xp_reward: int
 
+    # Whether this node can be worked with bare hands, at the cost of
+    # BARE_HAND_HP_COST hit points. XP is unaffected -- the exemption opens
+    # the bootstrap deadlock, it doesn't also make the harvest worthless.
+    #
+    # Without this, gathering deadlocks the game: cutting requires an axe, the
+    # only axe is crafted from scrap metal, and the only scrap metal comes
+    # from cutting. A brand-new character in the wastes has no way in. The
+    # opening quest turns that deadlock into its first lesson -- the player
+    # tears a chunk off a rusty pole with their hands, bleeds for it, and the
+    # android teaches them the skill they just did badly.
+    #
+    # Default False, so the exemption is granted per node rather than assumed.
+    # Only the lowest tier carries it; every real node still needs the axe.
+    bare_hands: bool = False
+
 
 
 # Every gatherable node in the world. Adding a node type means adding one
@@ -40,6 +55,7 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         required_level=0,
         item_key="rusty_metal_chunk",
         xp_reward=10,
+        bare_hands=True,
     ),
     "metal_pole": GatherableDef(
         key="metal_pole",

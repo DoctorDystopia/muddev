@@ -31,6 +31,8 @@ from .constants import (
     TOOL_TAG_CATEGORY,
 )
 from .registry import RECIPE_REGISTRY
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
 
 
 def _iter_candidate_items(caller, include_location):
@@ -545,6 +547,11 @@ def perform_craft(caller, recipe_key):
     if result:
         for obj in result:
             _deliver_output(caller, obj)
+
+        # Reported on the recipe KEY, which is the recipe's `name` and the
+        # same string a blueprint declares as `craft:rusty scrap axe`. The
+        # spawned object's key is an item name and can differ.
+        notify_quests(caller, quest_constants.ACTION_CRAFT, recipe_key)
 
     _publish_inventory(caller)
 

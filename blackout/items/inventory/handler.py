@@ -152,9 +152,14 @@ class InventoryHandler:
         stack_slot = self._find_existing_stack(obj)
         if stack_slot is not None:
             existing = self.get_slot_content(stack_slot)
-            # `obj` was never slotted on this path, so the delete inside merge
-            # re-enters at_object_leave -> remove_item harmlessly (find_slot
-            # returns -1 for it).
+            # The merge DELETES `obj`, and nothing hears about it: Evennia's
+            # DefaultObject.delete clears db_location by direct assignment
+            # (evennia/objects/objects.py), which fires no at_object_leave, so
+            # Character's hook never runs and nothing re-enters this handler.
+            # That is safe here only because `obj` was never slotted on this
+            # path -- no slot is left naming a destroyed row. It is the caller
+            # of add_item that owes the state feed a snapshot; see
+            # equipment/handler.py _publish for why this handler stays silent.
             stacking.merge(existing, obj)
             self._save()
             return stack_slot
@@ -184,10 +189,14 @@ class InventoryHandler:
         if is_stackable and count is not None and count > 0:
             current = stacking.quantity_of(obj)
 
-            # The slot must be cleared BEFORE the object is destroyed. delete()
-            # fires Character.at_object_leave, which calls back into this very
-            # routine; clearing first makes that re-entry a no-op instead of a
-            # second removal against a half-updated map.
+            # The slot is cleared BEFORE the object is destroyed. Not to
+            # survive a re-entry -- delete() fires no at_object_leave (see
+            # add_item) -- but so the map persisted by _save() never names a
+            # row that is on its way out. A stale id would read back as an
+            # empty slot anyway, because _get_item_by_id searches
+            # self.obj.contents and delete() removes the object from it, and
+            # _load clears it on the next handler build. Order first, safety
+            # net second.
             if count >= current:
                 self.slots[slot_idx] = None
                 self._save()

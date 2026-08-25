@@ -10,8 +10,11 @@ from evennia.utils import logger, lazy_property
 from systems.ai.constants import LAST_ATTACKER_ID_ATTR
 from systems.combat import constants as combat_constants
 from systems.combat import combat_msg
+from systems.quests import constants as quest_constants
+from systems.quests.hooks import notify_quests
 from systems.combat.combat_level.logic import get_combat_level
 from systems.combat.protocols import XpEarner
+from systems.devtools import constants as dev_constants
 from systems.statefeed import events as feed
 
 from systems.stat_tracker import constants as stat_constants
@@ -277,9 +280,13 @@ class CombatEntity:
             entity's pre-damage HP (no over-kill).
 
         Module Globals:
-            None.
+            dev_constants.GODMODE_ATTR read.
 
         Methodology:
+            0. Record the attacker, then return 0 unchanged when this entity
+               is in god mode -- the moderator tool's damage immunity. The
+               swing still resolved and still printed; only the HP write is
+               skipped.
             1. Snapshot old HP.
             2. Clamp amount down to old HP (no negative HP stored).
             3. Assign new HP via self.hp = old_hp - amount (also clamps high).
@@ -300,6 +307,22 @@ class CombatEntity:
             amount = 0
 
         self._record_attacker(attacker)
+
+        # God mode, the moderator tool's damage immunity. Read here rather
+        # than by calling systems.devtools.actions.godmode_enabled, which is
+        # the same read: that module pulls in ITEM_DB, the skill registry and
+        # the xyzgrid contrib, and this is the combat hot path -- every
+        # combatant, every tick. Only the ATTRIBUTE NAME is shared, from
+        # dev_constants, so the two readers cannot name different attributes.
+        # test_godmode asserts they agree behaviourally.
+        #
+        # The attacker is recorded FIRST and deliberately. An immune moderator
+        # should still draw the NPC's aggro, or standing in a fight to observe
+        # it would silently pacify the thing being observed.
+        immune = getattr(self.db, dev_constants.GODMODE_ATTR, False)
+
+        if immune:
+            return 0
 
         old_hp = self.hp
         delta = min(amount, old_hp)
@@ -400,7 +423,9 @@ class CombatEntity:
                We do NOT gate on isinstance(killer, Character) here -- but nor
                do we gate on the mere PRESENCE of `.skills`, which every NPC
                also has. The protocol names the capability being asked about.
-            5. If killer has `quests`, fire the wildcard kill-progress update.
+            5. Report the kill to the killer's quests, keyed on the victim's
+               stable `db.npc_key`. A player victim has no npc_key and is
+               therefore never a quest objective.
             6. call self.respawn() to permit subclass divergence (player
                respawn vs NPC despawn).
 
@@ -448,15 +473,21 @@ class CombatEntity:
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death killer XP award failed: {exc!r}")
 
-        quests = getattr(killer, "quests", None)
-        if quests is not None:
-            try:
-                quests.update_progress("*", "kill", self.key)
-            except Exception as exc:
-                logger.log_err(f"CombatEntity.at_death quest update failed: {exc!r}")
-
         stats = getattr(killer, "stats", None)
         npc_key = getattr(self.db, "npc_key", None)
+
+        # Two bugs lived in the four lines this replaces. The quest key passed
+        # was the literal "*", meant as "any active quest" but never
+        # implemented -- update_progress looks its first argument up in
+        # GLOBAL_QUEST_REGISTRY, found nothing, and returned, so no kill
+        # objective in the game could ever advance. And the argument was
+        # `self.key`, the display name "Mutant Raider", where the stat line
+        # directly below already used the stable `db.npc_key`
+        # ("mutant_raider"). notify_quests is the fan-out the "*" wanted, and
+        # npc_key is the identifier a blueprint can actually name.
+        if npc_key:
+            notify_quests(killer, quest_constants.ACTION_KILL, npc_key)
+
         if stats is not None and npc_key:
             try:
                 stats.increment(stat_constants.KILLS_PER_HOSTILE_STAT_KEY, npc_key)

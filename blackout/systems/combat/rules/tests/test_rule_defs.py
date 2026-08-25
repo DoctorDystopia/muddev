@@ -297,17 +297,17 @@ class TestToySword(unittest.TestCase):
 
 
 class TestGlassCannonAmulet(unittest.TestCase):
-    """+1 Brawn per 5 Brawn over Fortitude, floored at zero."""
+    """+1 Brawn per 5 Brawn over Defense, floored at zero."""
 
     def setUp(self):
         self.rules = RULES_REGISTRY[GlassCannonAmuletRules.key]
 
-    def _bonus_for(self, brawn: int, fortitude: int) -> int:
+    def _bonus_for(self, brawn: int, defense: int) -> int:
         """Return the flat_pre the amulet contributes at these levels."""
         rng = ScriptedRandom(randoms=[_NEVER_HITS])
         context = _context(rng, attacker_rules=(self.rules,),
                            attacker_levels=_levels(brawn=brawn,
-                                                   fortitude=fortitude))
+                                                   defense=defense))
 
         resolve_action(context)
 
@@ -318,37 +318,37 @@ class TestGlassCannonAmulet(unittest.TestCase):
                          frozenset({"contribute_modifiers"}))
         self.assertEqual(self.rules.priority, const.RULES_PRIORITY_MODIFIER)
 
-    def test_no_bonus_when_brawn_equals_fortitude(self):
-        self.assertEqual(self._bonus_for(brawn=40, fortitude=40), 0)
+    def test_no_bonus_when_brawn_equals_defense(self):
+        self.assertEqual(self._bonus_for(brawn=40, defense=40), 0)
 
     def test_no_bonus_below_one_full_step(self):
         short = GLASS_CANNON_BRAWN_PER_STEP - 1
 
-        self.assertEqual(self._bonus_for(brawn=40 + short, fortitude=40), 0)
+        self.assertEqual(self._bonus_for(brawn=40 + short, defense=40), 0)
 
     def test_one_bonus_level_per_whole_step(self):
         step = GLASS_CANNON_BRAWN_PER_STEP
 
-        self.assertEqual(self._bonus_for(brawn=40 + step, fortitude=40),
+        self.assertEqual(self._bonus_for(brawn=40 + step, defense=40),
                          GLASS_CANNON_BONUS_PER_STEP)
-        self.assertEqual(self._bonus_for(brawn=40 + step * 2, fortitude=40),
+        self.assertEqual(self._bonus_for(brawn=40 + step * 2, defense=40),
                          GLASS_CANNON_BONUS_PER_STEP * 2)
 
     def test_a_partial_step_is_discarded_not_rounded_up(self):
         step = GLASS_CANNON_BRAWN_PER_STEP
 
-        self.assertEqual(self._bonus_for(brawn=40 + step * 2 + 1, fortitude=40),
+        self.assertEqual(self._bonus_for(brawn=40 + step * 2 + 1, defense=40),
                          GLASS_CANNON_BONUS_PER_STEP * 2)
 
     def test_a_negative_surplus_gives_no_penalty(self):
         # Python's // floors toward negative infinity, so the design note's
         # literal formula would give -8 here. Decided 08/04: pure upside.
-        self.assertEqual(self._bonus_for(brawn=10, fortitude=50), 0)
+        self.assertEqual(self._bonus_for(brawn=10, defense=50), 0)
 
     def test_the_bonus_lands_in_brawn_not_strike(self):
         rng = ScriptedRandom(randoms=[_NEVER_HITS])
         context = _context(rng, attacker_rules=(self.rules,),
-                           attacker_levels=_levels(brawn=60, fortitude=10))
+                           attacker_levels=_levels(brawn=60, defense=10))
 
         resolve_action(context)
 
@@ -372,7 +372,7 @@ class TestGlassCannonAmulet(unittest.TestCase):
 
     def test_the_bonus_raises_the_damage_ceiling(self):
         # End to end: more effective Brawn must mean a bigger max hit.
-        wearing = _levels(brawn=60, fortitude=10)
+        wearing = _levels(brawn=60, defense=10)
         # roll_damage makes exactly ONE randint draw, and its upper bound IS
         # the max hit. It briefly drew three (a coin flip plus two averaged
         # rolls), which is why this used to read the ceiling off the second.
@@ -397,7 +397,7 @@ class TestGlassCannonAmulet(unittest.TestCase):
         toy = RULES_REGISTRY[ToySwordRules.key]
         rng = ScriptedRandom(randints=[7], randoms=[_ALWAYS_HITS])
         context = _context(rng, attacker_rules=(self.rules, toy),
-                           attacker_levels=_levels(brawn=60, fortitude=10))
+                           attacker_levels=_levels(brawn=60, defense=10))
 
         result = resolve_action(context)
 

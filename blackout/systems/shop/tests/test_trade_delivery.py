@@ -237,3 +237,37 @@ class TestTradePublishesInventory(ShopTradeTestBase):
             result = shop_service.execute_buy(self.char1, self.shopkeep, entry)
 
         self.assertTrue(result.success)
+
+    def test_selling_part_of_a_stack_publishes_though_nothing_moved(self):
+        """The sell-side case the snapshot exists for. Draining part of a
+        stack is a bare `obj.db.quantity` write and the payment is a bare
+        `quantity` write on the credits stack -- neither is a move, so no
+        hook of the seller's fires and this is the only publish in the
+        transaction."""
+        dust = ITEM_DB["rusty_metal_dust"].create(location=self.char1, quantity=5)
+        entry = self._sell_entry(dust.key)
+
+        with mock.patch(
+            "systems.statefeed.events.emit_inventory"
+        ) as emit_inventory:
+            result = shop_service.execute_sell(self.char1, self.shopkeep, entry, 2)
+
+        self.assertEqual(result.sold_count, 2)
+        self.assertEqual(dust.quantity, 3)
+        emit_inventory.assert_called_once_with(self.char1)
+
+    def test_a_refused_purchase_publishes_the_refund(self):
+        """Nothing reached the buyer and nothing left them, so no move hook
+        ran -- but the credits stack was written twice, down for the charge
+        and back up for the refund. Without this publish the pane would go on
+        drawing the mid-transaction figure."""
+        entry = self._buy_entry(PROTOTYPE_KEY)
+
+        with mock.patch.object(InventoryHandler, "can_accept", return_value=False):
+            with mock.patch(
+                "systems.statefeed.events.emit_inventory"
+            ) as emit_inventory:
+                result = shop_service.execute_buy(self.char1, self.shopkeep, entry)
+
+        self.assertFalse(result.success)
+        emit_inventory.assert_called_once_with(self.char1)

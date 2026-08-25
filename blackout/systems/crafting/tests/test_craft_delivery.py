@@ -99,3 +99,24 @@ class TestCraftPublishesInventory(CraftDeliveryTestBase):
             result = crafting_service.perform_craft(self.char1, self.recipe_key)
 
         self.assertTrue(result)
+
+    def test_a_craft_that_moves_nothing_still_publishes(self):
+        """The only case where the service-level publish is load-bearing.
+
+        A successful craft normally delivers its output with move_to, and
+        that fires at_object_receive, which publishes on its own -- so
+        test_successful_craft_publishes_a_snapshot above would pass even with
+        _publish_inventory deleted. At 32/32 the output goes to the floor
+        instead: it was spawned detached, so no hook of the crafter's runs in
+        either direction, while _consume_inputs has still emptied the dust
+        with obj.delete(). Exactly one snapshot, and it comes from here."""
+        self._give_dust(2)
+
+        with mock.patch.object(InventoryHandler, "can_accept", return_value=False):
+            with mock.patch(
+                "systems.statefeed.events.emit_inventory"
+            ) as emit_inventory:
+                result = crafting_service.perform_craft(self.char1, self.recipe_key)
+
+        self.assertTrue(result)
+        emit_inventory.assert_called_once_with(self.char1)

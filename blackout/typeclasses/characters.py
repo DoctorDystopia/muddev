@@ -23,7 +23,7 @@ from systems.progression.skills.handler import SkillHandler
 from systems.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
-from systems.quests.quests import QuestHandler
+from systems.quests.handler import QuestHandler
 from systems.stat_tracker.handler import StatHandler
 from systems.statefeed import events as feed
 from systems.statefeed import resync

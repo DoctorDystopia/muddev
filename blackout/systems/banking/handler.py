@@ -92,6 +92,46 @@ class BankHandler:
         self.obj = obj
 
 
+    def _publish(self) -> None:
+        """
+        Tell any graphical client that this character's carried items changed.
+
+        Here rather than in the commands, for the same reason
+        EquipmentHandler._publish is: the EvMenu in
+        systems/menus/banking_menu.py reaches deposit_many() without passing
+        through a command at all, and that is the path most players use.
+
+        A deposit is the one item movement the character's own move hooks
+        cannot see. Character.at_object_leave publishes when an object is
+        moved off the character, but the three merging deposit paths never
+        move anything off it: a whole stack folded into a vault stack is
+        DELETED where it stands (stacking.merge), a partial deposit into an
+        existing vault stack is a pair of quantity writes, and a partial
+        deposit into an empty vault builds the new stack detached and then
+        drains the carried one. Evennia's delete() clears db_location by
+        assignment and fires no hook, and a bare quantity write fires none
+        either -- so without this call the pane kept drawing an item the
+        vault already held, until some later move happened to republish.
+
+        Withdraw deliberately does not call this. Every withdraw path ends in
+        a move_to onto the character, which fires at_object_receive and
+        publishes there; calling it here as well would build a second
+        identical snapshot for nothing.
+
+        Imported inside the method. This module is reached from typeclass
+        import time through the character's handlers, and a module-scope
+        import of the feed would couple the two systems' import order.
+        """
+        from evennia.utils import logger
+
+        from systems.statefeed import events as feed
+
+        try:
+            feed.emit_inventory(self.obj)
+        except Exception:
+            logger.log_trace()
+
+
     def _find_existing_stack_for(self, item):
         """Return the vault stack `item` may merge into, or None.
 
@@ -217,7 +257,7 @@ class BankHandler:
         return TransferResult(True, stacking.SINGLE_UNIT, item_key, item)
 
 
-    def deposit(self, item, count=None) -> TransferResult:
+    def _deposit(self, item, count=None) -> TransferResult:
         """
         Purpose: Move an item, or part of a stack, from the character into
                  the vault.
@@ -241,6 +281,11 @@ class BankHandler:
             is what took this back under the 50-line cap.
 
         Notes/References:
+            Private because it does NOT publish. deposit() and deposit_many()
+            are the public entry points and each publishes once when the
+            whole action is done; see _publish for why that matters and why
+            it cannot happen per item.
+
             Used to print its own success and failure lines. The messaging
             now lives in systems/banking/messages.py, so the menu and the
             `deposit` command share one wording and a non-telnet client can
@@ -262,6 +307,20 @@ class BankHandler:
             return self._deposit_whole_stack(item, item_qty)
 
         return self._deposit_partial_stack(item, deposit_qty)
+
+
+    def deposit(self, item, count=None) -> TransferResult:
+        """Deposit one carried item, or part of one stack, and refresh the
+        graphical client.
+
+        A thin wrapper over _deposit so that the single-item and many-item
+        entry points publish exactly once each; see _publish for why the
+        publish cannot be left to the character's move hooks.
+        """
+        result = self._deposit(item, count)
+        self._publish()
+
+        return result
 
 
     def _transfer_many(self, items, count, move_one) -> TransferResult:
@@ -341,11 +400,18 @@ class BankHandler:
         the rest follow. It is all-or-nothing here, unlike withdraw_many,
         which fills inventory slots one object at a time and genuinely can
         stop partway.
+
+        Calls _deposit rather than deposit so the whole run publishes one
+        snapshot at the end instead of one per object -- an eleven-plate
+        deposit would otherwise be eleven full inventory walks.
         """
         def _move(item, take):
-            return self.deposit(item, take)
+            return self._deposit(item, take)
 
-        return self._transfer_many(items, count, _move)
+        result = self._transfer_many(items, count, _move)
+        self._publish()
+
+        return result
 
 
     def _reserve_inventory_space(self, obj, count: int) -> str:
