@@ -32,3 +32,14 @@ blackout/server/.cache/
 # Local/backup variants of operator scripts
 blackout/scripts/*.local
 blackout/scripts/*.dan
+# Planning and design docs are working documents, not deliverables.
+#
+# The flow is: write one, implement it, move it to docs/old/. It never gets
+# committed -- the CODE is what carries the decision, and CLAUDE.md is where a
+# rule that outlives the doc goes. A committed plan is one that has to be kept
+# in step with a tree that has already moved past it.
+#
+# Ignoring the whole directory does NOT untrack the handful of older docs that
+# were already committed before this rule; git ignores .gitignore for files it
+# already tracks. It only stops new ones being added by a wide `git add`.
+docs/
