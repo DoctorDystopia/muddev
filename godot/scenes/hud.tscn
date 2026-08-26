@@ -39,3 +39,9 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 4
 text = "Character"
+
+[node name="OptionsButton" type="Button" parent="Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+text = "Options"

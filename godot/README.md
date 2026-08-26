@@ -43,6 +43,8 @@ your aura ring.
 | **Drag an inventory cell** | Swap, equip or unequip — whichever the server named |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Character button** | Opens the sheet — whatever panels `char_summary` sent |
+| **Options button** | Text size and interface scale, saved between runs |
+| **Up / Down in the input** | Walks the command history; a half-typed draft is kept |
 | **Right-drag** | Orbit the camera |
 | **Wheel** | Zoom |
 
@@ -89,7 +91,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All eight are headless and exit non-zero on failure.
+All ten are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -141,6 +143,13 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
 ```
 
+`test_command_history.tscn` and `test_client_settings.tscn` need nothing
+running either:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
+```
+
 `smoke_handshake.tscn` needs a running Evennia but no account —
 `blackout_subscribe` is answered on an unauthenticated session:
 
@@ -164,6 +173,9 @@ in the shape Godot's JSON parser produces:
 | `world/summary_state.gd` | The dossier. Knows no panel names and must not learn any. |
 | `scenes/summary/summary_view.gd` | The sheet, a native `Window`. Iterates panels, never enumerates them. |
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
+| `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
+| `world/client_settings.gd` | Font size and UI scale, via ConfigFile under `user://`. |
+| `scenes/options/options_view.gd` | The two sliders. Writes through the settings object, applies nothing. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |

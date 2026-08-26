@@ -40,9 +40,19 @@ var _items := InventoryState.new()
 ## The dossier. A model like the others; the window that draws it is a view.
 var _summary := SummaryState.new()
 
-## The sheet window, created in code because it is a Window rather than a
-## Control and has no place in the console's layout tree.
+## What was typed, and where in it the player is. Not a widget: the rules are
+## worth testing without a keyboard, and most of them are the sort that feel
+## obvious and are wrong in half the clients that implement them.
+var _history := CommandHistory.new()
+
+## How big everything looks. Persisted with ConfigFile under user://, which on
+## the web is IndexedDB and survives a reload.
+var _settings := ClientSettings.new()
+
+## Windows, created in code because they are Windows rather than Controls and
+## have no place in the console's layout tree.
 var _sheet: SummaryView
+var _options: OptionsView
 
 
 func _ready() -> void:
@@ -69,6 +79,22 @@ func _ready() -> void:
 	add_child(_sheet)
 	_sheet.bind(_summary)
 	_hud.sheet_requested.connect(_sheet.toggle)
+
+	_options = OptionsView.new()
+	add_child(_options)
+	_options.bind(_settings)
+	_hud.options_requested.connect(_options.toggle)
+
+	# Up and down in the input walk the history. Connected rather than given
+	# the LineEdit its own script: the history belongs to the session, not to
+	# the widget, and a second input box would share this one.
+	_input.gui_input.connect(_on_input_key)
+
+	# Applied AFTER load, so a saved preference is in effect before the first
+	# frame the player sees rather than snapping a moment later.
+	_settings.changed.connect(_apply_settings)
+	_settings.load_from_disk()
+	_apply_settings()
 
 	var err := Evennia.open()
 
@@ -97,9 +123,56 @@ func _on_text(bbcode: String) -> void:
 
 func _on_submitted(line: String) -> void:
 	_input.clear()
+	_history.push(line)
 
 	if not line.is_empty():
 		Evennia.command(line)
+
+
+## Up and down walk the history; everything else is the LineEdit's own.
+##
+## `accept_event` matters: without it the key also reaches the default UI focus
+## navigation and moves focus out of the input, which reads as the field going
+## dead on the first up-arrow.
+func _on_input_key(event: InputEvent) -> void:
+	if not (event is InputEventKey):
+		return
+
+	var key := event as InputEventKey
+
+	if not key.pressed:
+		return
+
+	if key.keycode == KEY_UP:
+		_input.text = _history.previous(_input.text)
+		_input.caret_column = _input.text.length()
+		_input.accept_event()
+		return
+
+	if key.keycode == KEY_DOWN:
+		_input.text = _history.next(_input.text)
+		_input.caret_column = _input.text.length()
+		_input.accept_event()
+
+
+## Turn preferences into pixels. The ONLY place that does.
+##
+## content_scale_factor scales layout as well as glyphs, which is what makes it
+## a real zoom rather than a font change -- the native answer to the one thing
+## browser zoom gave the webclient for free.
+func _apply_settings() -> void:
+	var size_px := _settings.font_size
+
+	for control: Control in [_output, _input]:
+		control.add_theme_font_size_override("font_size", size_px)
+
+	# RichTextLabel keeps a font size per style, so setting only `font_size`
+	# leaves bold and italic text at the default and the log ends up ragged.
+	for style: String in ["normal_font_size", "bold_font_size",
+			"italics_font_size", "mono_font_size"]:
+		_output.add_theme_font_size_override(style, size_px)
+
+	get_window().content_scale_factor = _settings.ui_scale
 
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:
