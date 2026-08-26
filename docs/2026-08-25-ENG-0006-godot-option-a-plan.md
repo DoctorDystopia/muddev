@@ -80,7 +80,7 @@ Today that invariant holds by accident of discipline. Phase 2 makes it a test.
 
 ---
 
-## 3. Phase 0 — land the merge, stop the drift — **DONE 08/25/2026, `6847080`**
+## 3. Phase 0 — land the merge, stop the drift — **DONE 08/25/2026, `4ca62e7`**
 
 ### 0.1 The merge — **DONE, staged, not committed**
 

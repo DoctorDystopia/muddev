@@ -118,6 +118,21 @@ Details:
 - Inject a seeded `random.Random(...)` or a scripted stub; never let a test
   read the global RNG.
 
+## Commits
+
+**`DoctorDystopia` is the sole author of every commit. Do not add a
+`Co-Authored-By:` trailer**, for Claude or for any other tool.
+
+The reason is that the trailer is redundant here rather than unwanted: this
+file exists, it is checked in, and it is addressed to an AI assistant — so the
+repository already records how it is worked on, in more detail than a trailer
+could. Repeating that on every commit adds a line to every message and tells a
+reader nothing the tree does not already say.
+
+Write the message about the change: what moved, and why it had to. The existing
+history is the model — a subject line naming the thing that changed, then prose
+explaining the decision, not a list of files.
+
 ## Code conventions
 
 **`style.md` is the contract.** Docstrings carry Purpose / Entry /
