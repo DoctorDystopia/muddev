@@ -47,8 +47,21 @@ CRAFT_RECIPE_MODULES = [
     "systems.crafting.recipes.metalsmith_recipes",
 ]
 
-# Godot web socket
-PORTAL_SERVICES_PLUGIN_MODULES.append('evennia.contrib.base_systems.godotwebsocket.webclient')
+# Godot web socket.
+#
+# server.conf.godot_websocket, NOT the contrib module it wraps. It subclasses
+# the contrib's protocol to add two things the contrib has no hook for:
+#
+#   - the 45s keepalive ping. WEBSOCKET_PROTOCOL_CLASS below is read only by
+#     the MAIN webclient service on 4002 (evennia/server/portal/service.py);
+#     the contrib builds its own service and hardcodes the stock protocol, so
+#     4008 had no keepalive and would drop at ~100s idle behind Cloudflare.
+#   - escaping BBCode a player typed, before the contrib converts ANSI into
+#     BBCode. Without it a name containing [color=...] or [img] is markup in
+#     every player's log.
+#
+# Naming both this and the contrib module would bind port 4008 twice.
+PORTAL_SERVICES_PLUGIN_MODULES.append('server.conf.godot_websocket')
 GODOT_CLIENT_WEBSOCKET_PORT = 4008
 GODOT_CLIENT_WEBSOCKET_CLIENT_INTERFACE = "127.0.0.1"
 
