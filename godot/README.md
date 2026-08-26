@@ -26,10 +26,12 @@ override and none is needed. See ENG-0006 §4.
 > and stripped every one of them — which the file's own header warns it will
 > do. Setting values there is fine; the reasons have to live here.
 
-**Status: Phase 3 — control.** Text game on the left, the 3D world on the
-right: tile grids per map, the links between them, room-kind colours, a marker
-on the room you are standing in, the NPCs and items in it, a white flash on
-anything you land a hit on, and your aura ring.
+**Status: all twelve state-feed channels consumed.** Text game on the left, the
+3D world and the inventory on the right, a vitals strip above the log and a
+character sheet behind a button. The world pane draws tile grids per map, the
+links between them, room-kind colours, a marker on the room you are standing
+in, the NPCs and items in it, a white flash on anything you land a hit on, and
+your aura ring.
 
 | Input | Does |
 |---|---|
@@ -40,6 +42,7 @@ anything you land a hit on, and your aura ring.
 | **Left-click a player** | Nothing, deliberately — see rule 3 below |
 | **Drag an inventory cell** | Swap, equip or unequip — whichever the server named |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
+| **Character button** | Opens the sheet — whatever panels `char_summary` sent |
 | **Right-drag** | Orbit the camera |
 | **Wheel** | Zoom |
 
@@ -81,7 +84,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All six are headless and exit non-zero on failure.
+All seven are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -121,6 +124,12 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_view.tscn
 ```
 
+`test_summary_state.tscn` needs nothing running either:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_summary_state.tscn
+```
+
 `smoke_handshake.tscn` needs a running Evennia but no account —
 `blackout_subscribe` is answered on an unauthenticated session:
 
@@ -141,6 +150,8 @@ in the shape Godot's JSON parser produces:
 | `world/inventory_state.gd` | Carried grid and worn slots. |
 | `scenes/inventory/inventory_view.gd` | Draws the grid and the paper doll; turns a gesture into a command. |
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |
+| `world/summary_state.gd` | The dossier. Knows no panel names and must not learn any. |
+| `scenes/summary/summary_view.gd` | The sheet, a native `Window`. Iterates panels, never enumerates them. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |

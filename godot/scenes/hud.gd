@@ -30,8 +30,18 @@ const NO_DATA_TEXT := "--/--"
 @onready var _bar: ProgressBar = %HealthBar
 @onready var _hp_label: Label = %HealthLabel
 @onready var _state_label: Label = %StateLabel
+@onready var _sheet_button: Button = %SheetButton
 
 var _state: CharState
+
+
+## Emitted when the player asks for the character sheet.
+##
+## The HUD does not own the sheet window -- it only knows a button was pressed.
+## A BUTTON rather than a hotkey because the text input owns the keyboard: a
+## global key would either steal a letter mid-command or need focus rules
+## nobody asked for.
+signal sheet_requested
 
 
 ## Bind to a model. Called by the console, which owns the CharState.
@@ -41,6 +51,7 @@ var _state: CharState
 ## to look at without a running server.
 func bind(state: CharState) -> void:
 	_state = state
+	_sheet_button.pressed.connect(sheet_requested.emit)
 	_state.changed.connect(_redraw)
 	_redraw()
 

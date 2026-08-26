@@ -33,12 +33,15 @@ var _channels := PackedStringArray()
 var _char := CharState.new()
 
 ## What you are carrying and wearing. Owned here for the same reason _char is:
-## it is a model, and the grid that will draw it is a view.
-##
-## Consumed but NOT YET DRAWN -- routing it now is what stops char_items_list
-## logging as an unbound channel while the grid is being built, and it means
-## the model is exercised against the live feed before anything depends on it.
+## it is a model, and the grid that draws it is a view.
 var _items := InventoryState.new()
+
+## The dossier. A model like the others; the window that draws it is a view.
+var _summary := SummaryState.new()
+
+## The sheet window, created in code because it is a Window rather than a
+## Control and has no place in the console's layout tree.
+var _sheet: SummaryView
 
 
 func _ready() -> void:
@@ -55,6 +58,11 @@ func _ready() -> void:
 	# every command it emits was named by the server and is one a telnet player
 	# could type. There is no privileged path from this screen to the game.
 	_inventory.command_requested.connect(Evennia.command)
+
+	_sheet = SummaryView.new()
+	add_child(_sheet)
+	_sheet.bind(_summary)
+	_hud.sheet_requested.connect(_sheet.toggle)
 
 	var err := Evennia.open()
 
@@ -90,14 +98,17 @@ func _on_submitted(line: String) -> void:
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:
 	if channel != Const.CH_SUBSCRIBED:
-		# The observer's own three channels. Offered to the model first, and it
-		# reports whether it wanted them -- so the channel names live in
-		# CharState next to the fields they fill, rather than being restated
-		# here in a second match that could disagree with it.
+		# The observer's own channels. Each model is OFFERED the message and
+		# reports whether it wanted it, so every channel name lives in the file
+		# holding the fields it fills rather than being restated here in a
+		# second match that could disagree with them.
 		if _char.ingest(channel, _payload):
 			return
 
 		if _items.ingest(channel, _payload):
+			return
+
+		if _summary.ingest(channel, _payload):
 			return
 
 		if not _channels.has(channel):
