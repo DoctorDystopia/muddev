@@ -79,7 +79,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All four are headless and exit non-zero on failure.
+All five are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -107,6 +107,12 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_model_registry.tscn
 ```
 
+`test_inventory_state.tscn` needs nothing running either:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_state.tscn
+```
+
 `smoke_handshake.tscn` needs a running Evennia but no account —
 `blackout_subscribe` is answered on an unauthenticated session:
 
@@ -124,6 +130,7 @@ in the shape Godot's JSON parser produces:
 | `world/world_state.gd` | The world model. Chunk reassembly and the float boundary. |
 | `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
 | `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
+| `world/inventory_state.gd` | Carried grid and worn slots. Consumed; the grid that draws it is not built yet. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |

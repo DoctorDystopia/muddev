@@ -31,6 +31,14 @@ var _channels := PackedStringArray()
 ## pane) binds to this, and does not have to reach through a widget to find it.
 var _char := CharState.new()
 
+## What you are carrying and wearing. Owned here for the same reason _char is:
+## it is a model, and the grid that will draw it is a view.
+##
+## Consumed but NOT YET DRAWN -- routing it now is what stops char_items_list
+## logging as an unbound channel while the grid is being built, and it means
+## the model is exercised against the live feed before anything depends on it.
+var _items := InventoryState.new()
+
 
 func _ready() -> void:
 	Evennia.opened.connect(_on_opened)
@@ -80,6 +88,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 		# CharState next to the fields they fill, rather than being restated
 		# here in a second match that could disagree with it.
 		if _char.ingest(channel, _payload):
+			return
+
+		if _items.ingest(channel, _payload):
 			return
 
 		if not _channels.has(channel):
