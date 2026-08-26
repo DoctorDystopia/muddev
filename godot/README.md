@@ -45,6 +45,8 @@ your aura ring.
 | **Character button** | Opens the sheet — whatever panels `char_summary` sent |
 | **Options button** | Text size and interface scale, saved between runs |
 | **Up / Down in the input** | Walks the command history; a half-typed draft is kept |
+| **Ctrl+F** | Find in the log. Enter steps, Escape closes |
+| **? button** | Client help — gestures and keys, not the game's `help` |
 | **Right-drag** | Orbit the camera |
 | **Wheel** | Zoom |
 
@@ -91,7 +93,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All ten are headless and exit non-zero on failure.
+All eleven are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -143,8 +145,8 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
 ```
 
-`test_command_history.tscn` and `test_client_settings.tscn` need nothing
-running either:
+`test_command_history.tscn`, `test_client_settings.tscn` and
+`test_scrollback_find.tscn` need nothing running either:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
@@ -175,6 +177,9 @@ running either:
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
 | `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
 | `world/client_settings.gd` | Font size and UI scale, via ConfigFile under `user://`. |
+| `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
+| `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |
+| `scenes/help/help_view.gd` | What the CLIENT does. The game's own `help` covers the rest. |
 | `scenes/options/options_view.gd` | The two sliders. Writes through the settings object, applies nothing. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |

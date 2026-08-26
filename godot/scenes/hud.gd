@@ -32,6 +32,7 @@ const NO_DATA_TEXT := "--/--"
 @onready var _state_label: Label = %StateLabel
 @onready var _sheet_button: Button = %SheetButton
 @onready var _options_button: Button = %OptionsButton
+@onready var _help_button: Button = %HelpButton
 
 var _state: CharState
 
@@ -47,6 +48,9 @@ signal sheet_requested
 ## Emitted when the player asks for the options window.
 signal options_requested
 
+## Emitted when the player asks for client help.
+signal help_requested
+
 
 ## Bind to a model. Called by the console, which owns the CharState.
 ##
@@ -57,6 +61,7 @@ func bind(state: CharState) -> void:
 	_state = state
 	_sheet_button.pressed.connect(sheet_requested.emit)
 	_options_button.pressed.connect(options_requested.emit)
+	_help_button.pressed.connect(help_requested.emit)
 	_state.changed.connect(_redraw)
 	_redraw()
 

@@ -60,6 +60,10 @@ bbcode_enabled = true
 scroll_following = true
 selection_enabled = true
 
+[node name="FindBar" type="PanelContainer" parent="Split/Game"]
+unique_name_in_owner = true
+layout_mode = 2
+
 [node name="Input" type="LineEdit" parent="Split/Game"]
 unique_name_in_owner = true
 layout_mode = 2

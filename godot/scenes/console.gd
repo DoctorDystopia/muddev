@@ -53,6 +53,8 @@ var _settings := ClientSettings.new()
 ## have no place in the console's layout tree.
 var _sheet: SummaryView
 var _options: OptionsView
+var _help: HelpView
+var _find: FindBar
 
 
 func _ready() -> void:
@@ -84,6 +86,20 @@ func _ready() -> void:
 	add_child(_options)
 	_options.bind(_settings)
 	_hud.options_requested.connect(_options.toggle)
+
+	_help = HelpView.new()
+	add_child(_help)
+	_hud.help_requested.connect(_help.toggle)
+
+	# The find bar replaces the placeholder node the scene reserves for it, so
+	# the layout slot is authored and the widget is built in code like the
+	# other two -- its contents depend on nothing in the scene.
+	_find = FindBar.new()
+	var slot: Node = %FindBar
+	slot.add_sibling(_find)
+	slot.queue_free()
+	_find.bind(_output)
+	_find.dismissed.connect(func(): _input.grab_focus())
 
 	# Up and down in the input walk the history. Connected rather than given
 	# the LineEdit its own script: the history belongs to the session, not to
@@ -152,6 +168,14 @@ func _on_input_key(event: InputEvent) -> void:
 	if key.keycode == KEY_DOWN:
 		_input.text = _history.next(_input.text)
 		_input.caret_column = _input.text.length()
+		_input.accept_event()
+		return
+
+	# Ctrl+F from the input opens find. Handled here rather than as a global
+	# shortcut because the input is where the keyboard already is, and a global
+	# binding would fire while the player is typing `f` into a find box.
+	if key.ctrl_pressed and key.keycode == KEY_F:
+		_find.open()
 		_input.accept_event()
 
 
