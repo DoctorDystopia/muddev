@@ -13,9 +13,18 @@ with the decision it implements in
 > the decision record and ENG-0006 the plan.
 
 **This project renders through Compatibility (OpenGL 3.3 / WebGL 2.0), not
-Forward+.** The web export cannot use Forward+ at all, so the desktop build and
-the editor are held to the renderer the browser will actually use. See ENG-0006
-§4.
+Forward+.** The web export cannot use Forward+ at all — Forward+ and Mobile are
+unsupported on the web platform and Godot has no WebGPU backend as of 4.7 — so
+the desktop build and the editor are held to the renderer the browser will
+actually use. `renderer/rendering_method="gl_compatibility"`, under
+`[rendering]`; the key is *not* `rendering_method`, because the section header
+already supplies the `rendering/` prefix. There is no `rendering_method.web`
+override and none is needed. See ENG-0006 §4.
+
+> **Do not put explanation in `project.godot`.** It said all of the above in
+> `;` comments for about an hour, and opening the editor once rewrote the file
+> and stripped every one of them — which the file's own header warns it will
+> do. Setting values there is fine; the reasons have to live here.
 
 **Status: Phase 3 — control.** Text game on the left, the 3D world on the
 right: tile grids per map, the links between them, room-kind colours, a marker
