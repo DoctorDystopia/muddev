@@ -57,6 +57,19 @@ Description:
           as `[lb]MODTOOL[rb]`, which is the audit line every staff action
           writes.
 
+VERIFIED LIVE, 08/25/2026, against the running server on 4008:
+
+    keepalive : PING frame received at exactly 45.0s on an idle socket.
+                The contrib's protocol sends none, so its arrival is proof
+                this module is the one bound to the port.
+
+    escaping  : sending `look [color=red]INJECTED[/color] [img]...[/img]`
+                came back as
+                `look [lb]color=red]INJECTED[lb]/color] [lb]img]...`
+                -- and on an UNAUTHENTICATED session, because Evennia echoes
+                an unknown command back, so the vector is reachable before
+                anyone logs in.
+
 Author: Nick Hobar
 Creation date: 08/25/2026
 """
@@ -209,10 +222,19 @@ def start_plugin_services(portal) -> None:
     Author: Nick Hobar
     Creation date: 08/25/2026
     """
-    class GodotWebsocket(WebSocketServerFactory):
-        """Named for the Portal's service log, as the contrib does."""
+    class BlackoutGodotWebsocket(WebSocketServerFactory):
+        """
+        Named so the Portal log says WHICH Godot service started.
 
-    factory = GodotWebsocket()
+        The contrib's own factory is called `GodotWebsocket` with the comment
+        "Only here for better naming in logs" -- and twisted logs the FACTORY
+        CLASS name, not the service name set below. Reusing the contrib's name
+        here made the two indistinguishable in portal.log, so after a reboot
+        there was no way to tell whether the replacement had actually taken
+        without attaching to the port. Hence a different name.
+        """
+
+    factory = BlackoutGodotWebsocket()
     factory.noisy = False
     factory.protocol = BlackoutGodotWebSocketClient
     factory.sessionhandler = PORTAL_SESSIONS
