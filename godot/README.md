@@ -38,6 +38,8 @@ anything you land a hit on, and your aura ring.
 | **Left-click an item** | `get <name>` |
 | **Left-click a gathering node** | `cut <name>` — harvested where it stands, never pocketed |
 | **Left-click a player** | Nothing, deliberately — see rule 3 below |
+| **Drag an inventory cell** | Swap, equip or unequip — whichever the server named |
+| **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Right-drag** | Orbit the camera |
 | **Wheel** | Zoom |
 
@@ -79,7 +81,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All five are headless and exit non-zero on failure.
+All six are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -113,6 +115,12 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_state.tscn
 ```
 
+`test_inventory_view.tscn` needs nothing running either:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_view.tscn
+```
+
 `smoke_handshake.tscn` needs a running Evennia but no account —
 `blackout_subscribe` is answered on an unauthenticated session:
 
@@ -130,7 +138,9 @@ in the shape Godot's JSON parser produces:
 | `world/world_state.gd` | The world model. Chunk reassembly and the float boundary. |
 | `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
 | `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
-| `world/inventory_state.gd` | Carried grid and worn slots. Consumed; the grid that draws it is not built yet. |
+| `world/inventory_state.gd` | Carried grid and worn slots. |
+| `scenes/inventory/inventory_view.gd` | Draws the grid and the paper doll; turns a gesture into a command. |
+| `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |

@@ -21,6 +21,7 @@ const Const := preload("res://autoload/blackout_constants.gd")
 @onready var _output: RichTextLabel = %Output
 @onready var _input: LineEdit = %Input
 @onready var _hud: PanelContainer = %Hud
+@onready var _inventory: InventoryView = %Inventory
 
 var _channels := PackedStringArray()
 
@@ -48,6 +49,12 @@ func _ready() -> void:
 	_input.text_submitted.connect(_on_submitted)
 	_input.grab_focus()
 	_hud.bind(_char)
+	_inventory.bind(_items)
+
+	# The pane acts only through Evennia.command(), the same as a clicked tile:
+	# every command it emits was named by the server and is one a telnet player
+	# could type. There is no privileged path from this screen to the game.
+	_inventory.command_requested.connect(Evennia.command)
 
 	var err := Evennia.open()
 
