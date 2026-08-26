@@ -20,8 +20,16 @@ const Const := preload("res://autoload/blackout_constants.gd")
 
 @onready var _output: RichTextLabel = %Output
 @onready var _input: LineEdit = %Input
+@onready var _hud: PanelContainer = %Hud
 
 var _channels := PackedStringArray()
+
+## The observer's own state -- avatar, vitals, status.
+##
+## Owned here rather than by the HUD because it is a MODEL and the HUD is a
+## view: a second thing that needs to know your hp (a death screen, a combat
+## pane) binds to this, and does not have to reach through a widget to find it.
+var _char := CharState.new()
 
 
 func _ready() -> void:
@@ -31,6 +39,7 @@ func _ready() -> void:
 	Evennia.channel_received.connect(_on_channel)
 	_input.text_submitted.connect(_on_submitted)
 	_input.grab_focus()
+	_hud.bind(_char)
 
 	var err := Evennia.open()
 
@@ -66,6 +75,13 @@ func _on_submitted(line: String) -> void:
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:
 	if channel != Const.CH_SUBSCRIBED:
+		# The observer's own three channels. Offered to the model first, and it
+		# reports whether it wanted them -- so the channel names live in
+		# CharState next to the fields they fill, rather than being restated
+		# here in a second match that could disagree with it.
+		if _char.ingest(channel, _payload):
+			return
+
 		if not _channels.has(channel):
 			# Printed rather than shown: an outputfunc nobody handles is a
 			# developer's problem, and the left pane belongs to the player.

@@ -79,7 +79,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-Both are headless and exit non-zero on failure.
+All three are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -93,6 +93,12 @@ in the shape Godot's JSON parser produces:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_state.tscn
+```
+
+`test_char_state.tscn` needs nothing running either:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_char_state.tscn
 ```
 
 `smoke_handshake.tscn` needs a running Evennia but no account —
@@ -109,7 +115,9 @@ in the shape Godot's JSON parser produces:
 | `autoload/evennia.gd` | The socket. The only place that knows the `[name, args, kwargs]` wire format. |
 | `scenes/console.tscn` `.gd` | The shell: output, input, and the subscription handshake. |
 | `scenes/world.tscn` | The 3D scene: environment, light, islands, marker, camera rig. |
-| `world/world_state.gd` | The model. Chunk reassembly and the float boundary. |
+| `world/world_state.gd` | The world model. Chunk reassembly and the float boundary. |
+| `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
+| `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |
 | `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
