@@ -385,6 +385,55 @@ minimum bar for parity is: input + history, output with find, font size, a dock
 system, help, and clipboard paste. `hotbuttons`, `notifications` and
 `dual_input` are reasonable drops.
 
+### 6.3 Browser matrix — measured 08/25/2026
+
+The export was served over plain HTTP and driven in two engines. Firefox was
+run headless with a probe reporting from inside the page; Chromium was driven
+directly.
+
+| | Chromium | Firefox 154 |
+|---|---|---|
+| Godot boots | ✅ | ✅ |
+| Renderer | Compatibility / WebGL2 | Compatibility / WebGL2 |
+| `crossOriginIsolated` | false | false |
+| `SharedArrayBuffer` | absent | absent |
+| Canvas sized by engine | ✅ | ✅ 300×150 → 1366×683 |
+
+**Both boot with no COOP/COEP and no `SharedArrayBuffer`.** Firefox is not a
+risk for the export itself — its WebGL2 is solid, and it is Safari that carries
+the WebGL2 caveats. Firefox is only interesting for R1.
+
+**Where Firefox and Chromium genuinely differ is the clipboard**, which is R1 —
+the highest risk in this plan. `navigator.clipboard.readText` *exists* in both,
+which is exactly why an API-presence check would have been misleading. Calling
+it tells a different story:
+
+| | Chromium | Firefox 154 |
+|---|---|---|
+| `readText` exists | ✅ | ✅ |
+| Without user activation | `NotAllowedError` | `NotAllowedError: blocked due to lack of user activation` |
+| `permissions.query({name:'clipboard-read'})` | returns a state | **`TypeError` — unsupported** |
+| Persistent grant possible | **Yes** — promptable permission | **No** |
+
+So the two need different designs:
+
+- **Chromium** exposes `clipboard-read` as a real permission. Prompt once,
+  grant, and subsequent pastes work — a Godot `LineEdit` paste handler bridged
+  through `JavaScriptBridge` is viable.
+- **Firefox** has no such permission to grant. Since 127 it gates each read
+  behind an ephemeral "Paste" button the user must click, and 154 still refuses
+  without activation. **Every paste costs a click, forever.** There is no
+  configuration that makes it a one-time grant.
+
+**This sharpens R1 rather than resolving it.** A bridged paste is achievable but
+degrades in Firefox, and the affected moment is `connect <name> <password>` from
+a password manager — the first thing a new player does. The DOM-overlay fallback
+(real HTML inputs over the canvas for the credential fields only, where paste is
+native in both engines) now looks less like a fallback and more like the
+default, with the bridge as an enhancement for Chromium.
+
+Worth deciding before the login screen is designed, not after.
+
 ### 3.2 BBCode escaping — a real injection surface
 
 `parse_to_bbcode` builds BBCode from ANSI, but **`TextTag.__str__` returns its
@@ -609,7 +658,7 @@ favour of `main` rather than dropping the files.
 
 | # | Risk | Severity | Mitigation | Phase |
 |---|---|---|---|---|
-| R1 | **Clipboard paste broken at the login prompt** | **Highest** | `JavaScriptBridge` shim; prototype before Phase 4. Fallback: DOM overlay for credentials | 3 |
+| R1 | **Clipboard paste broken at the login prompt** | **Highest** | **Measured in both engines (§6.3).** Chromium: promptable permission, grantable once. Firefox: per-paste click, no persistent grant. Fallback: DOM overlay for credentials | 3 |
 | R2 | BBCode injection via names containing `[url=`/`[img]` | High | Adversarial round-trip test; escape before `parse_ansi` | 3 |
 | R3 | Text-client parity is under-scoped | High | §6's table; write the drop list down and agree it | 3 |
 | R4 | ~30 MB boot in front of a text game | Medium | **Measured: 6.7 MiB Brotli / 38.0 MiB raw, 99% engine.** Cloudflare CDN + Brotli | 4 ✅ |
@@ -619,7 +668,7 @@ favour of `main` rather than dropping the files.
 | R7 | Screen-reader regression | Medium | Record it explicitly as a known regression; revisit if AccessKit reaches web | 3 |
 | R8 | Colour code leaks into a payload — no conversion layer | Medium | The §5.2 test | 2 |
 | R9 | Godot not on PATH; `--import` needed before headless runs | Low | Already documented in `godot/README.md`; add to CI | 0 |
-| R10 | Safari WebGL2 issues | Low | Test on Safari; document a browser recommendation on `/play`. **Not yet tested** | 4 |
+| R10 | Safari WebGL2 issues | Low | Test on Safari; document a browser recommendation on `/play`. **Chromium and Firefox both verified booting (§6.3); Safari still untested** | 4 |
 
 ---
 
