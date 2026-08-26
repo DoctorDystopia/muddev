@@ -803,6 +803,123 @@ def audit_served_models():
     return problems
 
 
+# The manifest the CLIENT reads, rendered into the served tree. Distinct from
+# model_manifest.json, which is the BUILD input naming source directories.
+_CLIENT_MANIFEST_FILENAME = "manifest.json"
+
+
+def client_manifest_path():
+    """
+    Purpose: Name the manifest a graphical client fetches at startup.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        The absolute path of web/static/webclient/models/manifest.json.
+
+    Module Globals:
+        _GAME_DIR, _MODELS_RELATIVE_PATH, _CLIENT_MANIFEST_FILENAME read.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    return os.path.join(
+        _GAME_DIR, _MODELS_RELATIVE_PATH, _CLIENT_MANIFEST_FILENAME)
+
+
+def render_client_manifest():
+    """
+    Purpose: Build the asset-key -> served-path map a client needs.
+
+    Entry:
+        None. Reads the build manifest; touches nothing else.
+
+    Exit/Returns:
+        A dict of {asset_key: "family/asset_key.glb"}, sorted by key so the
+        rendered file is stable and a diff means a real change.
+
+    Module Globals:
+        _MODEL_EXTENSION read.
+
+    Methodology:
+        WHICH MODELS EXIST IS A BUILD FACT; HOW EACH IS ORIENTED IS NOT.
+        blackout_models.js carries both today -- the path and a rotation that
+        stands the sword up -- and CLAUDE.md is right that the second is the
+        client's own and must never be generated. Only the first is here.
+        A client still keeps its own table of rotations and scales, keyed by
+        the same asset keys, and that table is presentation.
+
+        This exists because a Godot web export CANNOT do what the browser
+        client does. blackout_models.js can afford a hardcoded list because it
+        fetches a .glb only when something needs drawing. Baked into a Godot
+        .pck the same art ships before the login prompt -- 12 MiB of it today,
+        10.9 of that one character. Fetching at runtime keeps the .pck small
+        and keeps "art never blocks content" true, and fetching needs a list of
+        what is fetchable.
+
+        Convention plus a 404 was the alternative and is what
+        blackout_models.js explicitly rejected: with 16 items in ITEM_DB and
+        one model between them, fifteen 404s are the NORMAL case on every pane
+        open, which buries a real one.
+
+    Notes/References:
+        Only entries whose .glb actually exists are listed. A manifest naming a
+        file that was never packed would send every client to a 404 -- exactly
+        what it is here to prevent.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    entries = {}
+
+    for source_dir, asset_key in load_manifest():
+        family = _served_family(source_dir)
+        served = model_output_path(asset_key, family)
+
+        if not os.path.exists(served):
+            continue
+
+        entries[asset_key] = "%s/%s%s" % (family, asset_key, _MODEL_EXTENSION)
+
+    return dict(sorted(entries.items()))
+
+
+def write_client_manifest():
+    """
+    Purpose: Write the client manifest into the served tree.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        Returns (path, entry_count). Creates the directory if needed.
+
+    Module Globals:
+        None written.
+
+    Methodology:
+        Rendered with sorted keys and a trailing newline so the committed file
+        is byte-stable; a test asserts the committed copy matches a fresh
+        render, the same guard clientexport.py's generated modules carry.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    entries = render_client_manifest()
+    path = client_manifest_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(entries, handle, indent=2, sort_keys=True)
+        handle.write(chr(10))   # trailing newline; POSIX text file
+
+    return path, len(entries)
+
+
 def _pack_all(edge):
     """
     Purpose: Repack every model the manifest names.
@@ -833,6 +950,9 @@ def _pack_all(edge):
             continue
 
         _describe(written, summary, rewritten)
+
+    path, count = write_client_manifest()
+    print("wrote %s (%d model(s))" % (os.path.basename(path), count))
 
     return failures
 

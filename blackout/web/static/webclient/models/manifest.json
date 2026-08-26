@@ -1,0 +1,6 @@
+{
+  "floating_eye": "npcs/floating_eye.glb",
+  "map_transition": "world_objects/map_transition.glb",
+  "player_character": "characters/player_character.glb",
+  "rusty_scrap_shortsword": "items/rusty_scrap_shortsword.glb"
+}

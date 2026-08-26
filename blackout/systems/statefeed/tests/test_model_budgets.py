@@ -23,6 +23,7 @@ Description: Guard the served 3D models against their family's budget.
              edit in this file.
 """
 
+import json
 import os
 import unittest
 
@@ -129,3 +130,68 @@ class ModelBudgetTests(unittest.TestCase):
                     asset_budgets.DEFAULT_BUDGET.max_texture_edge,
                     "%s is tighter than the default, so the default is no "
                     "longer the tightest tier the docstring claims" % family)
+
+
+class ClientModelManifestTests(unittest.TestCase):
+    """
+    The manifest a graphical client fetches to learn which assets have art.
+
+    WHY IT EXISTS. blackout_models.js can hardcode its list because it fetches
+    a .glb only when something needs drawing. A Godot web export cannot: art
+    baked into the .pck ships before the login prompt, and that is 12 MiB
+    today with 10.9 of it one character (ENG-0006 R11). Fetching at runtime
+    keeps the .pck small, and fetching needs a list of what is fetchable.
+
+    Convention-plus-404 was the alternative and blackout_models.js rejected it
+    for a reason that still holds: with 16 items in ITEM_DB and one model
+    between them, fifteen 404s are the NORMAL case on every pane open.
+    """
+
+    def test_the_committed_manifest_matches_a_fresh_render(self):
+        """
+        The same guard the generated client constants carry: a stale committed
+        file fails the suite rather than surviving quietly.
+        """
+        path = pack_model.client_manifest_path()
+
+        self.assertTrue(
+            os.path.exists(path),
+            "%s has never been rendered; run "
+            "`python assets/pack_model.py --all`" % os.path.basename(path))
+
+        with open(path, "r", encoding="utf-8") as handle:
+            committed = json.load(handle)
+
+        self.assertEqual(
+            committed, pack_model.render_client_manifest(),
+            "the committed model manifest is stale; re-run "
+            "`python assets/pack_model.py --all`")
+
+    def test_every_manifest_entry_points_at_a_file_that_exists(self):
+        """
+        A manifest naming a file that was never packed sends every client to a
+        404 -- precisely what it exists to prevent.
+        """
+        root = os.path.dirname(pack_model.client_manifest_path())
+
+        for asset_key, relative in pack_model.render_client_manifest().items():
+            with self.subTest(asset_key=asset_key):
+                self.assertTrue(
+                    os.path.exists(os.path.join(root, relative)),
+                    "%s -> %s does not exist" % (asset_key, relative))
+
+    def test_it_carries_paths_only_and_no_presentation(self):
+        """
+        WHICH models exist is a build fact; HOW each is oriented is not.
+        blackout_models.js rotates the sword +PI/2 so its tip points up, and
+        CLAUDE.md is explicit that the model registry -- meshes, rotations,
+        scales -- is the client's own and must never be generated. Only the
+        path is here, and this is what keeps it that way.
+        """
+        for asset_key, entry in pack_model.render_client_manifest().items():
+            with self.subTest(asset_key=asset_key):
+                self.assertIsInstance(
+                    entry, str,
+                    "a manifest entry must be a bare path; presentation "
+                    "(rotation, scale) belongs to the client")
+                self.assertTrue(entry.endswith(".glb"))

@@ -326,6 +326,52 @@ the contrib; the base order is load-bearing and tested. INFRA-0001 corrected.
 > before this change and still logs `GodotWebsocket starting on 4008` rather
 > than `BlackoutGodotWebSocket...`.
 
+### 2.0a R11 decided: art is fetched, never bundled
+
+The inventory port is where art delivery has to be settled, because porting
+first and deciding after means writing the loader twice.
+
+**Decision: the Godot client fetches `.glb` over HTTP at runtime and bundles
+none of it.** The `.pck` stays at ~44 KB and the engine `.wasm` remains ~99% of
+the download, exactly as measured in §7.
+
+What that needs, and what now exists:
+
+| | |
+|---|---|
+| A list of what is fetchable | `models/manifest.json`, rendered by `pack_model.py --all`, guarded by a stale-file test |
+| A client that reads it | `godot/world/model_registry.gd`, 11 headless cases |
+| Art small enough to fetch | The budget pipeline: 12.03 → 7.92 MiB |
+
+**The split that makes this legal under "one owner per fact."** CLAUDE.md says
+the model registry — meshes, rotations, scales — is the client's own and must
+never be generated. That stays true, because two different facts were being
+carried in one table:
+
+- **WHICH models exist, and their paths** is a BUILD fact. Adding a row to
+  `assets/model_manifest.json` and repacking is what makes a model exist. That
+  half is now generated into `models/manifest.json` and fetched.
+- **HOW each is oriented** is not. The sword's `+PI/2` is a judgement about how
+  a blade reads in an inventory cell. It stays hand-written, in
+  `ModelRegistry.PRESENTATION`, and a test asserts the served manifest carries
+  paths only.
+
+**Convention-plus-404 was rejected, again.** `blackout_models.js` already
+refused it: with sixteen items in ITEM_DB and one model between them, fifteen
+404s are the normal case on every pane open, and a real one has nowhere to
+stand out. A fetched manifest costs one request and removes the guesswork.
+
+**Degradation is preserved, which was the point.** An asset key with no entry
+is not an error — the caller draws its family's procedural mesh, as the browser
+pane does. The same holds before the manifest has arrived: `has_model` answers
+false, the first snapshot renders generics, and it sharpens when the art lands.
+Art still never blocks content.
+
+**Still outstanding:** attribute pruning on `player_character.glb`. It is
+6.3 MiB of which only 2.6 is texture; the rest carries `JOINTS_0`/`WEIGHTS_0`
+for `animations: 0`. Fetched lazily this no longer gates login, which is why it
+is a cleanup rather than a blocker — but it is still the single largest asset.
+
 ### 2.1 `char_items_list` is the real cost
 
 This is the 3D inventory / paper-doll feature — **1,376 lines** in
@@ -696,7 +742,7 @@ favour of `main` rather than dropping the files.
 | R2 | BBCode injection via names containing `[url=`/`[img]` | High | Adversarial round-trip test; escape before `parse_ansi` | 3 |
 | R3 | Text-client parity is under-scoped | High | §6's table; write the drop list down and agree it | 3 |
 | R4 | ~30 MB boot in front of a text game | Medium | **Measured: 6.7 MiB Brotli / 38.0 MiB raw, 99% engine.** Cloudflare CDN + Brotli | 4 ✅ |
-| R11 | **Art delivery inverts: `.pck` ships all 12 MiB of `.glb` up front, where three.js lazy-loads it** | **High** | Runtime `.glb` fetch via `GLTFDocument`, and compress `player_character.glb` (10.9 MiB alone) | 2 |
+| R11 | **Art delivery inverts: `.pck` ships all 12 MiB of `.glb` up front, where three.js lazy-loads it** | **High** | **DECIDED (§5.3): fetch at runtime from a served manifest, never bundle.** Art also standardised, 12.03 → 7.92 MiB | 2 ✅ |
 | R5 | No graceful degradation — renderer failure is total | Medium | Accepted cost of Option A. Keep a documented telnet-ish fallback path in mind | — |
 | R6 | Compatibility renderer changes the look | Medium | Screenshot diff against Forward+ baseline before proceeding | 1 |
 | R7 | Screen-reader regression | Medium | Record it explicitly as a known regression; revisit if AccessKit reaches web | 3 |
