@@ -41,10 +41,24 @@ from io import BytesIO
 
 from PIL import Image
 
-# Longest edge, in pixels, any packed texture keeps. An inventory cell is about
-# 70px and a world-pane item is smaller, so 512 is already generous; it is
-# headroom for models inspected close up, not a size anything resolves today.
-MAX_TEXTURE_EDGE = 512
+# Imported two ways, so spelled two ways. Run as a script
+# (`python assets/pack_model.py`) sys.path[0] is assets/ and the bare name
+# resolves; imported by a test as `assets.pack_model` it does not, and only the
+# package-qualified name does. Neither spelling covers both, and this module
+# has to stay usable from the command line AND assertable from the suite.
+try:
+    from assets.asset_budgets import (
+        FAMILY_BUDGETS, budget_for, describe_budget)
+except ImportError:                     # running as a script from assets/
+    from asset_budgets import FAMILY_BUDGETS, budget_for, describe_budget
+
+# The texture ceiling is NOT a constant here any more. It comes from the
+# model's FAMILY, via assets/asset_budgets.py, because a ceiling that lives in
+# an optional CLI argument is one nobody can check -- which is how
+# player_character.glb came to carry fifteen 1024-square textures for 10.4 MiB
+# while every other model obeyed 512 or less. `--edge` still overrides it, for
+# trying a temp asset at a different size during development, but the override
+# is now a deliberate act rather than the only way to say anything.
 
 # glTF-Binary container, per the spec's Chapter 4. Little-endian throughout.
 _GLB_MAGIC = 0x46546C67                 # "glTF"
@@ -583,14 +597,15 @@ def model_output_path(asset_key, family):
     return path
 
 
-def pack(source_dir, asset_key, max_edge=MAX_TEXTURE_EDGE):
+def pack(source_dir, asset_key, max_edge=None):
     """
     Purpose: Pack one source model directory into the served .glb.
 
     Entry:
         source_dir holds scene.gltf and everything it references, and lives
         under assets/<family>/. asset_key names the thing the model is for.
-        max_edge >= 1.
+        max_edge >= 1, or None to take the ceiling from the family's budget --
+        which is what every normal pack should do.
 
     Exit/Returns:
         Returns (output_path, report, converted): the texture rows _embed_images
@@ -606,6 +621,11 @@ def pack(source_dir, asset_key, max_edge=MAX_TEXTURE_EDGE):
     Creation date: 08/17/2026
     """
     family = _served_family(source_dir)
+
+    # The family decides, unless the caller deliberately said otherwise.
+    if max_edge is None:
+        max_edge = budget_for(family).max_texture_edge
+
     document = _read_source_gltf(source_dir)
     converted = _convert_spec_gloss(document)
     buffer_bytes = _read_source_buffer(source_dir, document)
@@ -652,22 +672,243 @@ def _describe(output_path, report, converted):
     print("  wrote %s (%d KB)" % (output_path, size // _BYTES_PER_KB))
 
 
-if __name__ == "__main__":
-    given = len(sys.argv)
-    accepted = (_EXPECTED_ARGUMENTS, _EXPECTED_ARGUMENTS + 1)
+# ─── Manifest ────────────────────────────────────────────────────────────────
 
-    if given not in accepted:
-        print(__doc__)
-        sys.exit(1)
+_MANIFEST_FILENAME = "model_manifest.json"
+_MANIFEST_KEY = "models"
 
-    edge = MAX_TEXTURE_EDGE
+
+def manifest_path():
+    """
+    Purpose: Name the manifest that decides which models exist.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        The absolute path to assets/model_manifest.json.
+
+    Module Globals:
+        _GAME_DIR, _ASSETS_DIRNAME, _MANIFEST_FILENAME read.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    return os.path.join(_GAME_DIR, _ASSETS_DIRNAME, _MANIFEST_FILENAME)
+
+
+def load_manifest():
+    """
+    Purpose: Read the source-directory -> asset-key rows.
+
+    Entry:
+        None. The manifest must exist and be valid JSON.
+
+    Exit/Returns:
+        A list of (source_dir, asset_key) pairs, source_dir absolute. Raises
+        PackError when the file is missing, unreadable, or a row is malformed.
+
+    Module Globals:
+        _GAME_DIR, _MANIFEST_KEY read.
+
+    Methodology:
+        Keys beginning with an underscore are ignored, which is what lets the
+        file carry its own explanation without a schema for comments. A row
+        missing either field raises rather than being skipped: a typo that
+        silently packed nothing is the failure this whole manifest exists to
+        prevent.
+
+    Notes/References:
+        Mirrors scripts/map_manifest.json, per CLAUDE.md.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    path = manifest_path()
 
     try:
-        if given > _EXPECTED_ARGUMENTS:
-            edge = int(sys.argv[_MAX_EDGE_ARGUMENT])
+        with open(path, "r", encoding="utf-8") as handle:
+            document = json.load(handle)
+    except OSError as failure:
+        raise PackError("cannot read %s: %s" % (path, failure))
+    except ValueError as failure:
+        raise PackError("%s is not valid JSON: %s" % (path, failure))
 
-        written, summary, rewritten = pack(sys.argv[1], sys.argv[2], edge)
-    except (PackError, OSError, ValueError) as failure:
+    rows = document.get(_MANIFEST_KEY, [])
+    pairs = []
+
+    for index, row in enumerate(rows):
+        source = row.get("source")
+        asset_key = row.get("asset_key")
+
+        if not source or not asset_key:
+            raise PackError(
+                "%s row %d needs both 'source' and 'asset_key'; got %r"
+                % (_MANIFEST_FILENAME, index, row))
+
+        pairs.append((os.path.join(_GAME_DIR, source), asset_key))
+
+    return pairs
+
+
+def audit_served_models():
+    """
+    Purpose: Report every manifest model that breaks its family's budget.
+
+    Entry:
+        None. Reads the served tree; writes nothing.
+
+    Exit/Returns:
+        A list of (asset_key, family, problem) for each violation, empty when
+        the served tree is within budget. A model the manifest names but which
+        has never been packed is reported as a violation too -- a missing model
+        is a registration pointing at a 404.
+
+    Module Globals:
+        None written.
+
+    Methodology:
+        Checks the FILE SIZE only, not texture dimensions. The packer is what
+        enforces the pixel ceiling, and re-decoding every embedded PNG to
+        re-check it here would make the audit slower than the pack. Size is the
+        property that actually costs a player something, and it is the one a
+        raw asset dropped in by hand gets wrong.
+
+    Notes/References:
+        Asserted by systems/statefeed/tests/test_model_budgets.py.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    problems = []
+
+    for source_dir, asset_key in load_manifest():
+        family = _served_family(source_dir)
+        budget = budget_for(family)
+        served = model_output_path(asset_key, family)
+
+        if not os.path.exists(served):
+            problems.append((asset_key, family, "never packed (%s missing)"
+                             % os.path.basename(served)))
+            continue
+
+        size = os.path.getsize(served)
+
+        if size > budget.max_bytes:
+            problems.append((asset_key, family,
+                             "%d KiB exceeds the %d KiB budget"
+                             % (size // _BYTES_PER_KB,
+                                budget.max_bytes // _BYTES_PER_KB)))
+
+    return problems
+
+
+def _pack_all(edge):
+    """
+    Purpose: Repack every model the manifest names.
+
+    Entry:
+        edge is a texture ceiling to force, or None to let each family decide.
+
+    Exit/Returns:
+        Returns the number of failures. Writes to stdout.
+
+    Module Globals:
+        None written.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    failures = 0
+
+    for source_dir, asset_key in load_manifest():
+        family = _served_family(source_dir)
+        print("%s (%s)" % (asset_key, describe_budget(family)))
+
+        try:
+            written, summary, rewritten = pack(source_dir, asset_key, edge)
+        except (PackError, OSError, ValueError) as failure:
+            print("  FAILED: %s" % failure)
+            failures += 1
+            continue
+
+        _describe(written, summary, rewritten)
+
+    return failures
+
+
+def _report_audit():
+    """
+    Purpose: Print the budget audit.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        Returns the number of violations. Writes to stdout.
+
+    Module Globals:
+        None written.
+
+    Author: Nick Hobar
+    Creation date: 08/25/2026
+    """
+    problems = audit_served_models()
+
+    for asset_key, family, problem in problems:
+        print("  OVER  %-26s [%s] %s" % (asset_key, family, problem))
+
+    if not problems:
+        print("  every model in the manifest is within its family budget")
+
+    return len(problems)
+
+
+_USAGE = """pack_model.py -- pack downloaded glTF into the served .glb
+
+  pack_model.py --all [--edge N]     repack every model in model_manifest.json
+  pack_model.py --check              audit the served tree against the budgets
+  pack_model.py --budgets            print the budget table
+  pack_model.py <source> <key> [N]   pack one model (N overrides the ceiling)
+
+The texture ceiling comes from the model's FAMILY (assets/asset_budgets.py).
+Override it only to try a temp asset at a different size."""
+
+
+if __name__ == "__main__":
+    arguments = sys.argv[1:]
+
+    if not arguments:
+        print(_USAGE)
+        sys.exit(1)
+
+    mode = arguments[0]
+
+    try:
+        if mode == "--budgets":
+            for name in sorted(FAMILY_BUDGETS):
+                print("  " + describe_budget(name))
+            print("  " + describe_budget("<anything else>"))
+            sys.exit(0)
+
+        if mode == "--check":
+            sys.exit(1 if _report_audit() else 0)
+
+        if mode == "--all":
+            forced = None
+
+            if "--edge" in arguments:
+                forced = int(arguments[arguments.index("--edge") + 1])
+
+            sys.exit(1 if _pack_all(forced) else 0)
+
+        if len(arguments) not in (2, 3):
+            print(_USAGE)
+            sys.exit(1)
+
+        override = int(arguments[2]) if len(arguments) == 3 else None
+        written, summary, rewritten = pack(arguments[0], arguments[1], override)
+    except (PackError, OSError, ValueError, IndexError) as failure:
         print("pack failed: %s" % failure)
         sys.exit(1)
 

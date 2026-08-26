@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "THE ONE FILE THAT DECIDES WHICH MODELS EXIST.",
+    "",
+    "Adding a row packs a new model on the next `pack_model.py --all`;",
+    "removing one stops it being rebuilt (the served .glb is not deleted for",
+    "you -- delete it yourself, so a removal is never silent data loss).",
+    "",
+    "Same shape and same reasoning as scripts/map_manifest.json, which",
+    "CLAUDE.md already describes as the one owner of which maps exist. Before",
+    "this file the source-directory -> asset-key mapping lived only in",
+    "whatever anyone last typed on the command line, which is why it could not",
+    "be rebuilt in a batch and why the texture ceiling drifted per model.",
+    "",
+    "  source    -- directory under assets/ holding scene.gltf. Its FIRST path",
+    "               component is the family, and the family decides the",
+    "               texture ceiling and byte budget (see asset_budgets.py).",
+    "  asset_key -- the statefeed asset key. Names the served file, because",
+    "               that is what blackout_models.js registers and what a Godot",
+    "               client will request.",
+    "",
+    "The served tree mirrors the source tree: assets/npcs/<x> -> models/npcs/.",
+    "There is deliberately no way to redirect that from here."
+  ],
+
+  "models": [
+    {
+      "source": "assets/characters/spider-man_-_smbnd_mcu",
+      "asset_key": "player_character"
+    },
+    {
+      "source": "assets/items/weapons/rusty_sword",
+      "asset_key": "rusty_scrap_shortsword"
+    },
+    {
+      "source": "assets/npcs/sus_eye",
+      "asset_key": "floating_eye"
+    },
+    {
+      "source": "assets/world_objects/sm_teleporter",
+      "asset_key": "map_transition"
+    }
+  ]
+}
