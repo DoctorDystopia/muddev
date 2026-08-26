@@ -1,7 +1,8 @@
 # ENG-0006 — Option A: Godot as the only client. Implementation plan.
 
-**Status:** **Phases 0–1 DONE**; **Phase 4 export pipeline proven** (08/25/2026).
-Phases 2, 3, 5 not started.
+**Status:** **Phases 0–1 DONE**; **Phase 4 export pipeline proven**; **Phase 2
+part-done** — both §11 spikes closed and 3 of 5 channels consumed (08/25/2026).
+Remaining: `char_summary`, `char_items_list`, then Phases 3 and 5.
 **Date:** 08/25/2026
 **Decision:** Option A from [ENG-0005](2026-08-25-ENG-0005-godot-vs-webclient.md),
 taken 08/25/2026. Godot becomes the only client. The Evennia webclient's 3D and
@@ -286,11 +287,44 @@ straight off the Python.
 
 | Channel | Payload | Godot work | Size |
 |---|---|---|---|
-| `char_vitals` | `payloads.py:173` | HP/resource bars. Rate-capped at 0.5s server-side | Small |
-| `char_status` | `payloads.py:183` | Status effects row. Capped 1.0s | Small |
-| `char_avatar` | `payloads.py:162` | The player's own asset key | Small |
+| `char_vitals` | `payloads.py:173` | **DONE** — `CharState` + HUD bar | Small |
+| `char_status` | `payloads.py:183` | **DONE** — combat flag, level line | Small |
+| `char_avatar` | `payloads.py:162` | **DONE** — `entity_id`, asset, family | Small |
 | `char_summary` | `payloads.py:204` | `panels: dict` — **arbitrary keys by design**; a panel legitimately reports nothing. Do not build a dataclass mirror; iterate | Medium |
 | `char_items_list` | `payloads.py:246` | The whole inventory + equipment. **The big one** | Large |
+
+### 2.0 What the spikes found — both were real bugs
+
+§11 said to spike R1 and R2 during Phase 2 because either could force a
+rethink. Neither did, but both turned up defects, and one was a latent outage.
+
+**R2 (BBCode) is confirmed and fixed.** `parse_to_bbcode` emits its text
+verbatim, so any `[` already in game text reaches the RichTextLabel as markup.
+Measured: `Bob[color=red]red[/color]` passes through untouched, and the URL
+auto-linker then *corrupts* an injected `[url=]` by rewriting inside it. Any
+object or account name is a vector. Fixed in
+`server/conf/godot_websocket.py` by escaping `[` → `[lb]` **before** the
+contrib converts — escaping its output instead would destroy the tags the
+client needs, and there is a test for that direction too.
+
+**A bug nobody was looking for: port 4008 had no keepalive.** INFRA-0001 §5.2
+claimed the 45s ping covered the Godot client. It did not.
+`WEBSOCKET_PROTOCOL_CLASS` is read only by `service.py`, which builds the main
+webclient service on **4002**; the contrib builds its own service and hardcodes
+the stock protocol. So a Godot socket behind Cloudflare would have been closed
+at ~100s idle — the exact failure measured in INFRA-0001 at 125.6/126.0/126.9s.
+
+It went unnoticed because 4008 has never been exposed through the tunnel, so no
+Godot socket has ever crossed the Cloudflare edge. **It would have failed on
+the first day it did, for every player**, since Option A has no second client
+to fall back to. Both fixes live in one protocol subclassing the keepalive and
+the contrib; the base order is load-bearing and tested. INFRA-0001 corrected.
+
+> **Requires a portal restart to take effect.**
+> `PORTAL_SERVICES_PLUGIN_MODULES` is read when the Portal starts, and
+> `evennia reload` restarts the Server only. The running portal was started
+> before this change and still logs `GodotWebsocket starting on 4008` rather
+> than `BlackoutGodotWebSocket...`.
 
 ### 2.1 `char_items_list` is the real cost
 
