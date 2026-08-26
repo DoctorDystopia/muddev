@@ -119,7 +119,7 @@ func _ready() -> void:
 
 
 func _on_opened() -> void:
-	_note("connected to %s:%d" % [Evennia.DEFAULT_HOST, Evennia.DEFAULT_PORT])
+	_note("connected to %s" % Evennia.url())
 
 	# Deliberately does NOT subscribe here. The socket is accepted by the
 	# Portal, which is up whenever the game is reachable at all -- but an

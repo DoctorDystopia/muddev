@@ -22,8 +22,11 @@ signal text_received(bbcode: String)
 ## (`room_info`, `blackout_map`, ...); see blackout/systems/statefeed/constants.py.
 signal channel_received(channel: String, payload: Dictionary)
 
-const DEFAULT_HOST := "127.0.0.1"
-const DEFAULT_PORT := 4008
+## Where this build connects, decided by [ServerEndpoint]: an explicit
+## override, else the dev server for a debug build and production for a release
+## one. Resolved once, on first use, so every log line and reconnect names the
+## same place.
+var _url := ""
 
 ## Evennia's `clean_senddata` stamps this key into EVERY outputfunc's kwargs.
 ## It is transport bookkeeping rather than payload, so it is dropped here once
@@ -40,13 +43,45 @@ func _ready() -> void:
 
 
 ## Open the connection. Returns OK, or the error that stopped it.
-func open(host: String = DEFAULT_HOST, port: int = DEFAULT_PORT) -> Error:
-	var err := _socket.connect_to_url("ws://%s:%d" % [host, port])
+##
+## Takes no host: WHICH server to reach is a property of the build and its
+## arguments, not of the caller, and threading it through every call site would
+## give that fact more than one owner.
+func open() -> Error:
+	var err := _socket.connect_to_url(url())
 
 	if err == OK:
 		set_process(true)
 
 	return err
+
+
+## The endpoint this client uses, resolved once and remembered.
+func url() -> String:
+	if _url.is_empty():
+		_url = ServerEndpoint.resolve(_override(), OS.is_debug_build())
+
+	return _url
+
+
+## An explicit endpoint from wherever this platform puts one.
+##
+## On the web that is the page's query string, which is how a tester points a
+## deployed build at a different server without a rebuild. On desktop it is the
+## command line. Neither exists on the other, so both are consulted and the
+## empty one costs nothing.
+func _override() -> String:
+	if OS.has_feature("web"):
+		# Explicitly Variant: eval() has no return type, and an inferred
+		# `:=` is a parse error under this project's warning settings.
+		var location: Variant = JavaScriptBridge.eval("window.location.search", true)
+
+		if typeof(location) == TYPE_STRING:
+			return ServerEndpoint.override_from_query(str(location))
+
+		return ""
+
+	return ServerEndpoint.override_from_args(OS.get_cmdline_args())
 
 
 func close() -> void:

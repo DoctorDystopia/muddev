@@ -55,6 +55,17 @@ your aura ring.
 Start the game server first — the client connects on load and reports the
 failure in the feed pane if nothing is listening.
 
+**Which server it reaches is decided by the BUILD, not by a constant somebody
+has to remember to flip.** `ServerEndpoint` keys off `OS.is_debug_build()`: the
+editor and a debug export reach `ws://127.0.0.1:4008`, a release export reaches
+`wss://game.playblackout.io/godot`. Verified by wrapping `WebSocket` in a real
+release web export and watching which URL it dialled.
+
+Point either at somewhere else with `--server=<url>` on the command line, or
+`?server=<url>` in the page's query string on the web. Only `ws://` and `wss://`
+are accepted — an override naming `http://` would fail in a way that looks
+exactly like the server being down.
+
 ```bash
 cd blackout && ../evenv/Scripts/evennia.exe start
 ```
@@ -93,7 +104,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All eleven are headless and exit non-zero on failure.
+All twelve are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -145,8 +156,9 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
 ```
 
-`test_command_history.tscn`, `test_client_settings.tscn` and
-`test_scrollback_find.tscn` need nothing running either:
+`test_command_history.tscn`, `test_client_settings.tscn`,
+`test_scrollback_find.tscn` and `test_server_endpoint.tscn` need nothing
+running either:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
@@ -177,6 +189,7 @@ in the shape Godot's JSON parser produces:
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
 | `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
 | `world/client_settings.gd` | Font size and UI scale, via ConfigFile under `user://`. |
+| `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
 | `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |
 | `scenes/help/help_view.gd` | What the CLIENT does. The game's own `help` covers the rest. |

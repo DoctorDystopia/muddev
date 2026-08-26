@@ -32,12 +32,37 @@ ingress:
       keepAliveTimeout: 1000s
       tcpKeepAlive: 90s
 
+  # Godot client websocket. ServerEndpoint.PRODUCTION_URL in
+  # godot/world/server_endpoint.gd points here.
+  #
+  # ABOVE THE CATCH-ALL, like the rule above it, or the client is handed HTML
+  # instead of a socket upgrade.
+  #
+  # The path prefix is what lets one hostname carry the webserver and two
+  # different sockets. Verified against the contrib rather than assumed:
+  # Evennia's websocket protocol has no onConnect and never reads
+  # request.path, and autobahn's WebSocketServerFactory accepts any path, so
+  # `/godot` is free to use as a routing label.
+  - hostname: game.playblackout.io
+    path: ^/godot
+    service: ws://localhost:4008
+    originRequest:
+      keepAliveTimeout: 1000s
+      tcpKeepAlive: 90s
+
   # Everything else -- the Evennia webserver (WEBSERVER_PORTS proxy port).
   - hostname: game.playblackout.io
     service: http://localhost:4001
 
   # Required catch-all.
   - service: http_status:404
+
+# NOTE ON 4008: it stays bound to 127.0.0.1 in
+# blackout/server/conf/settings.py and does NOT need widening. cloudflared runs
+# on this machine and dials localhost, so loopback is reachable by the tunnel
+# and by nothing else on the network. ENG-0006 §4.3 originally said to flip the
+# interface to 0.0.0.0; that was wrong, and would have exposed the port to the
+# LAN for no gain.
 
 # Logging. The key is `log-directory` -- kebab-case, matching the CLI flag.
 # `logDirectory` is NOT a recognised key. cloudflared ignores it silently and

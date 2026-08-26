@@ -2,4 +2,13 @@
 .godot/
 /android/
 /export/
-export_presets.cfg
+# export_presets.cfg is deliberately NOT ignored.
+#
+# Godot's shipped template ignores it because it can carry signing credentials
+# and store passwords. This project's carries none -- one Web preset with
+# thread_support off -- and ignoring it made the build unreproducible: a fresh
+# clone and any CI runner had no preset and could not export at all.
+#
+# If a preset ever gains a keystore path or a password, ignore it again and
+# move the secret out; do not leave both in one file.
+# export_presets.cfg
