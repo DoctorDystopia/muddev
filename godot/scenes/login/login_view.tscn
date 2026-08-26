@@ -1,0 +1,73 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/login/login_view.gd" id="1_login"]
+
+[node name="Login" type="PanelContainer"]
+custom_minimum_size = Vector2(340, 0)
+script = ExtResource("1_login")
+
+[node name="Margin" type="MarginContainer" parent="."]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="Column" type="VBoxContainer" parent="Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Margin/Column"]
+layout_mode = 2
+text = "Jack in"
+
+[node name="NameLabel" type="Label" parent="Margin/Column"]
+layout_mode = 2
+text = "Name"
+
+[node name="NameField" type="LineEdit" parent="Margin/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+caret_blink = true
+
+[node name="PasswordLabel" type="Label" parent="Margin/Column"]
+layout_mode = 2
+text = "Password"
+
+[node name="PasswordRow" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+
+; secret = true is the reason this form exists at all rather than reusing the
+; game input: a shared command line can never mask what is typed into it.
+[node name="PasswordField" type="LineEdit" parent="Margin/Column/PasswordRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+secret = true
+caret_blink = true
+
+[node name="PasteButton" type="Button" parent="Margin/Column/PasswordRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Paste"
+tooltip_text = "Read the clipboard. A click is the user gesture browsers require."
+
+[node name="Buttons" type="HBoxContainer" parent="Margin/Column"]
+layout_mode = 2
+
+[node name="ConnectButton" type="Button" parent="Margin/Column/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Connect"
+
+[node name="CreateButton" type="Button" parent="Margin/Column/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Create account"
+
+[node name="Message" type="Label" parent="Margin/Column"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2

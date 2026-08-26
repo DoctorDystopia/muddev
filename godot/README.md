@@ -63,11 +63,16 @@ itself named `...exe`, so the binary path repeats:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --path godot
 ```
 
-Log in by typing into the input field, the same as telnet:
+Log in through the form at the top of the text column, or by typing the same
+thing into the input field — they send the identical line:
 
 ```
 connect <name> <password>
 ```
+
+The form exists for the password field, which can be masked where a shared
+command line cannot be, and for the **Paste** button on web builds. See rule 6
+below.
 
 The client does **not** subscribe when the socket opens — that is a race it
 loses whenever the Server is still starting. It waits for the server to
@@ -84,7 +89,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All seven are headless and exit non-zero on failure.
+All eight are headless and exit non-zero on failure.
 
 > **After adding a `class_name`, run `--headless --path godot --import` once
 > before running anything headless.** Global class names live in
@@ -130,6 +135,12 @@ in the shape Godot's JSON parser produces:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_summary_state.tscn
 ```
 
+`test_login_view.tscn` needs nothing running either:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
+```
+
 `smoke_handshake.tscn` needs a running Evennia but no account —
 `blackout_subscribe` is answered on an unauthenticated session:
 
@@ -152,6 +163,7 @@ in the shape Godot's JSON parser produces:
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |
 | `world/summary_state.gd` | The dossier. Knows no panel names and must not learn any. |
 | `scenes/summary/summary_view.gd` | The sheet, a native `Window`. Iterates panels, never enumerates them. |
+| `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Whatever is standing in your room, and the hit flash. |
@@ -176,6 +188,16 @@ Four rules worth not rediscovering:
    opening combat on a person is not.
 4. **The output pane's monospace font is load-bearing**, not cosmetic. Godot's
    default theme font is proportional and the game draws ASCII art constantly.
+6. **On the web, Ctrl+V into a LineEdit may not paste, and the failure is
+   silent.** Godot's export listens for the DOM `paste` event, but its
+   `clipboard_get` reads `navigator.clipboard.readText()` -- the
+   permission-gated path -- and swallows a rejection in an empty `catch`, so a
+   refused read looks exactly like an empty clipboard. Without user activation
+   that read is refused in both engines, and Firefox does not support the
+   `clipboard-read` permission at all, so there is nothing to grant once. The
+   login form's **Paste button** is the floor: a click IS user activation, so
+   the read that fails from a keystroke succeeds from a button. Desktop is
+   unaffected -- Ctrl+V is native there.
 5. **Anything both panes draw must match.** The two get put side by side on the
    same character, so a difference has to mean a bug. That is why
    `WorldView.stable_hash` reimplements the JS string hash instead of calling

@@ -22,6 +22,7 @@ const Const := preload("res://autoload/blackout_constants.gd")
 @onready var _input: LineEdit = %Input
 @onready var _hud: PanelContainer = %Hud
 @onready var _inventory: InventoryView = %Inventory
+@onready var _login: LoginView = %Login
 
 var _channels := PackedStringArray()
 
@@ -58,6 +59,11 @@ func _ready() -> void:
 	# every command it emits was named by the server and is one a telnet player
 	# could type. There is no privileged path from this screen to the game.
 	_inventory.command_requested.connect(Evennia.command)
+
+	# Same rule as every other pane: it emits a line a telnet player could type
+	# and this sends it. The login form is not a privileged path.
+	_login.bind(_char)
+	_login.command_requested.connect(Evennia.command)
 
 	_sheet = SummaryView.new()
 	add_child(_sheet)

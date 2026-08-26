@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scenes/console.gd" id="1_console"]
 [ext_resource type="PackedScene" path="res://scenes/world.tscn" id="2_world"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_hud"]
 [ext_resource type="Script" path="res://scenes/inventory/inventory_view.gd" id="4_inv"]
+[ext_resource type="PackedScene" path="res://scenes/login/login_view.tscn" id="5_login"]
 
 ; The game's output is ASCII art as often as it is prose -- the xymap, the
 ; dossier's fixed-width rows, every section rule. Godot's default theme font is
@@ -32,6 +33,10 @@ grow_vertical = 2
 split_offset = 300
 
 [node name="Game" type="VBoxContainer" parent="Split"]
+layout_mode = 2
+
+[node name="Login" parent="Split/Game" instance=ExtResource("5_login")]
+unique_name_in_owner = true
 layout_mode = 2
 
 [node name="Hud" parent="Split/Game" instance=ExtResource("3_hud")]
