@@ -15,6 +15,7 @@ const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
 
 var _failures := 0
 var _view: InventoryView
+var _resolver: MeshResolver
 var _state: InventoryState
 
 
@@ -22,9 +23,14 @@ func _ready() -> void:
 	_state = InventoryState.new()
 	_state.ingest(_Const.CH_CHAR_ITEMS, _payload())
 
+	# An EMPTY registry, so every item resolves to its family shape and no HTTP
+	# happens -- the same state the real client is in before the manifest lands.
+	_resolver = MeshResolver.new(ModelRegistry.new(), "")
+	add_child(_resolver)
+
 	_view = InventoryView.new()
 	add_child(_view)
-	_view.bind(_state)
+	_view.bind(_state, _resolver)
 
 	_a_carried_to_carried_drag_swaps()
 	_a_drag_to_equipment_uses_the_servers_equip_command()
@@ -32,6 +38,9 @@ func _ready() -> void:
 	_a_gesture_the_server_named_nothing_for_sends_nothing()
 	_drop_legality_is_the_servers_answer()
 	_emitted_commands_reach_the_signal()
+	_only_occupied_cells_get_a_picture()
+	_every_cell_owns_a_different_rectangle()
+	_the_stage_does_not_share_the_game_world()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -40,6 +49,78 @@ func _ready() -> void:
 
 	print("PASS: inventory_view")
 	get_tree().quit(0)
+
+
+## An empty square is a square. Giving it a texture would draw whatever the
+## stage last left at that index, which is the previous bag's item.
+func _only_occupied_cells_get_a_picture() -> void:
+	var occupied := 0
+	var empty := 0
+
+	for cell: InventorySlotCell in _view._grid.get_children():
+		if cell.row().is_empty():
+			empty += 1
+			_expect(cell.art_texture() == null,
+				"empty carried square %s has no picture" % str(cell.key))
+		else:
+			occupied += 1
+			_expect(cell.art_texture() != null,
+				"carried item %s has a picture" % str(cell.key))
+
+	# The vacuity guard: a payload with nothing in it, or a grid that failed to
+	# build, would pass both branches above without checking anything.
+	_expect(occupied > 0, "the bag actually holds something to draw")
+	_expect(empty > 0, "and has an empty square to compare against")
+
+
+## Two cells showing the same rectangle would show the same item.
+##
+## The stage packs every item into one render target and hands out sub-rects, so
+## an index allocated twice is not a crash -- it is two slots quietly drawing one
+## object, which is exactly the bug worth a test rather than a comment.
+func _every_cell_owns_a_different_rectangle() -> void:
+	var seen: Array = []
+	var checked := 0
+
+	for container: Node in [_view._grid, _view._doll]:
+		for cell: InventorySlotCell in container.get_children():
+			var texture := cell.art_texture()
+
+			if texture == null:
+				continue
+
+			checked += 1
+			_expect(not seen.has(texture.region),
+				"cell %s has a rectangle of its own" % str(cell.key))
+			seen.append(texture.region)
+
+	_expect(checked > 1, "more than one cell was drawn, so this compares something")
+
+
+## The item meshes must not end up in the world the game is drawn in.
+##
+## `SubViewport.own_world_3d` defaults to FALSE, so a stage left at the default
+## shares its parent's World3D: every inventory item is added to the same 3D
+## world the map lives in, and the world pane's camera draws them as a grid of
+## swords floating in the sky. The stage's WorldEnvironment leaks the same way
+## and repaints the game's sky.
+##
+## Both happened. Neither is hinted at by anything else about the viewport,
+## which is why this is a test and not a comment.
+func _the_stage_does_not_share_the_game_world() -> void:
+	_expect(_view._stage.own_world_3d,
+		"the stage owns its own 3D world")
+
+	var stage_world := _view._stage.find_world_3d()
+	var outer_world := _view.get_viewport().find_world_3d()
+
+	_expect(stage_world != outer_world,
+		"so its items are not in the world the map is drawn in")
+
+	# The vacuity guard: two nulls compare equal-ish and would sail through the
+	# check above while proving nothing about isolation.
+	_expect(stage_world != null and outer_world != null,
+		"and both worlds actually exist to be compared")
 
 
 func _payload() -> Dictionary:

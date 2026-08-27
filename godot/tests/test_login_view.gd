@@ -21,6 +21,7 @@ func _ready() -> void:
 	_an_incomplete_form_sends_nothing()
 	_the_password_is_not_kept_after_submitting()
 	_it_hides_once_a_body_exists()
+	_it_comes_back_when_the_session_is_lost()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -108,6 +109,24 @@ func _it_hides_once_a_body_exists() -> void:
 
 	state.ingest(_Const.CH_CHAR_VITALS, {"hp": 40.0, "max_hp": 40.0})
 	_expect(not _view.visible, "vitals mean a body exists, so the form goes")
+
+
+## The form is a function of whether a body exists, not a one-way dismissal.
+##
+## A dropped socket ends the Evennia Session, so the reconnect lands on the
+## connection screen. If the form stayed hidden the player would have no route
+## back in but typing `connect` by hand -- which is the whole reason the form
+## exists on the web.
+func _it_comes_back_when_the_session_is_lost() -> void:
+	var state := CharState.new()
+	_view.show()
+	_view.bind(state)
+
+	state.ingest(_Const.CH_CHAR_VITALS, {"hp": 40.0, "max_hp": 40.0})
+	_expect(not _view.visible, "hidden while puppeted")
+
+	state.reset()
+	_expect(_view.visible, "and back once the session is gone")
 
 
 func _expect(passed: bool, what: String) -> void:

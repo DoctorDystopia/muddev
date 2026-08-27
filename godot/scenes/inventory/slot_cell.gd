@@ -47,6 +47,9 @@ const COLOR_LABEL := Color(0.75, 0.78, 0.82)
 ## small and a long name would push the grid around.
 const NAME_CLIP := 14
 
+## How tall the item's picture is, in pixels.
+const ART_HEIGHT := 44
+
 var kind := KIND_CARRIED
 var key: Variant = 0
 
@@ -55,6 +58,12 @@ var _row: Dictionary = {}
 var _title: Label
 var _detail: Label
 var _menu: PopupMenu
+
+## The item's picture: one rectangle of [ItemStage]'s shared render target.
+##
+## A TextureRect and not a viewport of its own -- see [ItemStage] on why forty
+## render targets for forty thumbnails is the build to avoid.
+var _art: TextureRect
 
 
 ## Built in _init, not _ready.
@@ -65,11 +74,21 @@ var _menu: PopupMenu
 ## what lets the view construct and bind in one pass.
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
-	custom_minimum_size = Vector2(96, 52)
+	custom_minimum_size = Vector2(96, ART_HEIGHT + 34)
 
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(column)
+
+	# ABOVE the labels: the picture is what a player scans for and the name is
+	# what they confirm with, so the art gets the top of the cell and the text
+	# stays a caption.
+	_art = TextureRect.new()
+	_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_art.custom_minimum_size = Vector2(0, ART_HEIGHT)
+	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	column.add_child(_art)
 
 	_title = Label.new()
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -85,6 +104,30 @@ func _init() -> void:
 	_menu = PopupMenu.new()
 	_menu.id_pressed.connect(_on_menu_id)
 	add_child(_menu)
+
+
+## The server row this cell is currently showing, or an empty dictionary.
+##
+## Read by the view to decide whether there is anything to draw on the stage.
+## Exposed rather than recomputed there: the cell already resolved which row it
+## holds, and asking the state a second time would be a second place that knows
+## how a carried index and a worn slot differ.
+func row() -> Dictionary:
+	return _row
+
+
+## Give this cell its picture. Called by the view, which owns the stage.
+##
+## Null is a normal argument: a cell with no art shows its labels alone, which
+## is what every cell did before the stage existed and what an empty frame still
+## does.
+func show_art(texture: AtlasTexture) -> void:
+	_art.texture = texture
+
+
+## The picture this cell is showing, or null. For tests and for the view.
+func art_texture() -> AtlasTexture:
+	return _art.texture as AtlasTexture
 
 
 ## Point this cell at a model and a frame, and draw it.

@@ -19,6 +19,43 @@ than deriving it from `location`.
 
 ---
 
+## The model tree must be deployed BESIDE the client
+
+**`wss://` is exempt from CORS. An HTTP fetch for a `.glb` is not**, and that is
+the one place the "different origins are fine" reasoning above does not reach.
+The Godot client fetches its art at runtime rather than bundling it (ENG-0006
+R11), so those are ordinary cross-origin requests when the page and the art sit
+on different hosts.
+
+Measured 08/26/2026:
+
+```
+$ curl -D - -H "Origin: https://playblackout.io" \
+    https://game.playblackout.io/static/webclient/models/manifest.json
+HTTP/1.1 200 OK
+Content-Type: application/json
+```
+
+No `Access-Control-Allow-Origin`. A web client served from the CDN and fetching
+art from the game origin would therefore be refused by the browser, and every
+entity in the game would silently fall back to its procedural family shape —
+a degradation with no error a player could report.
+
+So `ServerEndpoint.asset_origin()` returns **`""`** for a release web build: the
+request goes out relative to the page and never crosses an origin at all.
+
+**What that requires of this deploy:** whatever serves `index.html` must also
+serve the model tree at the path the client asks for, which is
+`ModelRegistry.MODEL_ROOT` — `/static/webclient/models/`, manifest included.
+Copy `blackout/web/static/webclient/models/` into the site's `dist/` under that
+path when publishing the export.
+
+The alternative — adding CORS headers to Evennia's static serving — was rejected
+for the same two reasons §4.2 gives above: every byte would cross `cloudflared`,
+and an `evennia reload` could interrupt an art fetch.
+
+---
+
 ## Build
 
 ```bash

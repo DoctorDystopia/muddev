@@ -34,6 +34,27 @@ const AURA_PULSE_ALPHA := 1.0
 ## How near the cursor an entity has to be, in pixels, to be what you clicked.
 const PICK_REACH_PIXELS := 24.0
 
+## How much of a tile YOU fill, and how far above its face you stand.
+##
+## Matches EntityPool's ENTITY_SCALE deliberately. The browser learned this the
+## hard way with two different lifts -- 0.22 for entities and 0.42 for the local
+## marker -- which was correct only while the marker was a cone half a tile tall,
+## and read as hovering over people the moment it was not. There is no lift
+## constant at all now: the avatar rests on the tile by measurement, exactly as
+## everything standing beside it does.
+const AVATAR_SCALE := EntityPool.ENTITY_SCALE
+
+## How much of a tile a prop drawn ON that tile covers.
+##
+## Bigger than an entity on purpose: a prop is part of the ground rather than
+## something standing on it, and the transition pad reads as a pad only when it
+## reaches the tile's edges.
+const TILE_PROP_SCALE := 0.9
+
+## How much brighter a hovered tile is drawn. A multiplier on its own room-kind
+## colour, so every kind lifts by the same amount and none needs its own entry.
+const HOVER_LIFT := 1.5
+
 const TILE_SIZE := 1.0
 const TILE_GAP := 0.18
 const TILE_HEIGHT := 0.16
@@ -100,11 +121,126 @@ var _offsets: Dictionary = {}      # z -> world X offset of that island
 var _tile_material: StandardMaterial3D
 var _link_material: StandardMaterial3D
 
+## Where every mesh in the pane comes from. OWNED BY THE CONSOLE and bound in,
+## not built here: the inventory draws meshes too now, and two resolvers would
+## mean two model caches, two fetches of the same `.glb`, and a sword that
+## arrives in the room before it arrives in the bag.
+var _meshes: MeshResolver
+
+## YOUR avatar, standing on the marker tile.
+##
+## A child of the marker rather than a replacement for it: the marker is what
+## the camera rig follows by NodePath and what every placement routine moves, so
+## it stays the anchor and this is what the anchor wears.
+var _avatar: Node3D
+
+## The observer's own state, bound by the console. Read for `asset` and
+## `family` and nothing else.
+##
+## Bound rather than ingested here. [CharState] already owns char_avatar, and a
+## second reader parsing the same channel would be the third module to own one
+## fact -- which is exactly how the android's dialogue came to print
+## `talk:tester: 0/True` at players.
+var _char: CharState
+
+## z -> the MultiMesh drawing that island's tiles, kept so one instance's colour
+## can be written for hover. Cleared and refilled by _relayout.
+var _tile_meshes: Dictionary = {}
+
+## Which tile is currently lit, and on which island. Empty z means none.
+var _hover_z := ""
+var _hover_cell := Vector2i.ZERO
+
 
 func _ready() -> void:
 	_tile_material = _vertex_coloured()
 	_link_material = _vertex_coloured()
+
 	Evennia.channel_received.connect(_on_channel)
+
+
+## Give the pane its mesh source. Called by the console, which owns it.
+##
+## Not done in _ready, because a child's _ready runs BEFORE its parent's -- so
+## at that point the console has not built the resolver yet and this pane would
+## bind null.
+func bind_meshes(resolver: MeshResolver) -> void:
+	_meshes = resolver
+	_entities.bind(_meshes, _locate_coords)
+	_meshes.refreshed.connect(_on_art_arrived)
+
+	# Something stands on the marker from the first frame, before char_avatar
+	# has said which asset you are. The generic character figure is the right
+	# placeholder: it is what every OTHER player in the room is drawn as, so you
+	# look like a person immediately and sharpen into your own model later.
+	_redraw_avatar()
+
+
+## Follow the observer's own state. Called by the console, which owns it.
+func bind_char(state: CharState) -> void:
+	_char = state
+	_char.changed.connect(_redraw_avatar)
+	_redraw_avatar()
+
+
+## Draw whoever you currently are on the marker tile.
+##
+## The marker's own box mesh is hidden the moment there is a figure to replace
+## it — it was never meant to be a character, only a stand-in for one.
+func _redraw_avatar() -> void:
+	if _meshes == null:
+		return
+
+	if _avatar != null:
+		_avatar.queue_free()
+
+	var asset := "" if _char == null else _char.asset
+	var family := Const.FAMILY_CHARACTER
+
+	if _char != null and not _char.family.is_empty():
+		family = _char.family
+
+	_avatar = _meshes.resolve_entity(asset, family)
+	_avatar.scale = Vector3.ONE * AVATAR_SCALE
+	# Rests on the tile by measurement, like everything standing beside it.
+	var bounds := ModelLoader.bounds_of(_avatar)
+	_avatar.position = Vector3(0.0, -bounds.position.y * AVATAR_SCALE, 0.0)
+	_marker.add_child(_avatar)
+
+	# The BOX goes, not the node. `visible = false` would take the avatar with
+	# it -- visibility is inherited in Godot -- and the marker itself has to
+	# stay: it is what the camera rig follows by NodePath and what
+	# _place_marker moves.
+	_marker.mesh = null
+
+
+## Redraw when art lands for something this pane is drawing.
+##
+## Two callers in one, because both are "the fallback is on screen and the real
+## thing has just arrived". The relayout terminates rather than looping: the
+## rebuild asks resolve_scenery again, which now answers from the cache and
+## starts no second fetch.
+func _on_art_arrived(asset_key: String) -> void:
+	if _char != null and _char.asset == asset_key:
+		_redraw_avatar()
+
+	if _any_tile_is_kind(asset_key):
+		_relayout()
+
+
+## Whether any island holds a tile of this room kind.
+##
+## Asked before relaying out, so art arriving for something not on screen -- an
+## item fetched for the room, a model the inventory wanted -- does not rebuild
+## every island for nothing.
+func _any_tile_is_kind(kind: String) -> bool:
+	for z: String in _state.levels:
+		var level: WorldState.Level = _state.levels[z]
+
+		if level.kinds.has(kind):
+			return true
+
+	return false
 
 
 func _on_channel(channel: String, payload: Dictionary) -> void:
@@ -139,6 +275,10 @@ func _on_channel(channel: String, payload: Dictionary) -> void:
 # ─── Clicking ────────────────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		_hover_at((event as InputEventMouseMotion).position)
+		return
+
 	if not (event is InputEventMouseButton):
 		return
 
@@ -146,6 +286,100 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if click.button_index == MOUSE_BUTTON_LEFT and click.pressed:
 		_act_on(click.position)
+
+
+## Where an entity's `coords` put it in the world, or null if not placeable yet.
+##
+## Handed to [EntityPool] as a callable, so the placement maths has one owner:
+## this pane already decides where a tile is, and a second copy in the pool
+## would be free to disagree with the tiles actually drawn.
+##
+## Null and not a fallback position. `STATEFEED_ENTITY_RADIUS` is 10, so the
+## feed names entities across a 441-room neighbourhood, and any island that has
+## not arrived yet has no honest place to put them. Guessing put the whole
+## neighbourhood on the observer's own tile, which is the bug this replaced.
+func _locate_coords(coords: Array) -> Variant:
+	if coords.size() < 3:
+		return null
+
+	var z := str(coords[2])
+
+	if not _offsets.has(z):
+		return null
+
+	# Every number in a parsed payload is a float; converted here, at the point
+	# of use, like every other coordinate in this client.
+	var cell := Vector2i(int(coords[0]), int(coords[1]))
+	var base := _tile_position(cell, _offsets[z])
+
+	return base + Vector3(0.0, TILE_HEIGHT * 0.5, 0.0)
+
+
+# ─── Hover ───────────────────────────────────────────────────────────────────
+
+## Light up whatever a click would act on.
+##
+## Answers the question the pane could not answer before: entities are a few
+## pixels across and picked by CURSOR DISTANCE rather than by a raycast, so
+## without feedback a player has no way to know which of two adjacent raiders
+## they are about to attack. The rule is deliberately the same one [method
+## _act_on] uses -- entity first, then tile -- so what lights up is exactly what
+## a click would take.
+func _hover_at(screen_point: Vector2) -> void:
+	var entity_id := _entities.pick(_camera, screen_point, PICK_REACH_PIXELS)
+
+	if entity_id != 0:
+		_clear_tile_hover()
+		_entities.hover(entity_id)
+		return
+
+	_entities.hover(0)
+	_hover_tile(_cell_under(screen_point))
+
+
+## Brighten one tile, and put the last one back.
+##
+## Written through the MultiMesh's instance colour rather than by tinting a
+## material: the tiles of one island are ONE mesh drawn many times, so there is
+## no per-tile material to write to. That is also why the previous tile has to be
+## restored by hand from the room kind -- nothing else remembers what it was.
+func _hover_tile(cell: Vector2i) -> void:
+	if cell == _hover_cell and _state.current_z == _hover_z:
+		return
+
+	_clear_tile_hover()
+
+	var multi: MultiMesh = _tile_meshes.get(_state.current_z)
+
+	if multi == null:
+		return
+
+	var level: WorldState.Level = _state.levels.get(_state.current_z)
+	var index := -1 if level == null else level.cells.find(cell)
+
+	if index < 0:
+		return
+
+	multi.set_instance_color(index, kind_colour(level.kinds[index]) * HOVER_LIFT)
+	_hover_cell = cell
+	_hover_z = _state.current_z
+
+
+func _clear_tile_hover() -> void:
+	if _hover_z.is_empty():
+		return
+
+	var multi: MultiMesh = _tile_meshes.get(_hover_z)
+	var level: WorldState.Level = _state.levels.get(_hover_z)
+
+	if multi != null and level != null:
+		var index := level.cells.find(_hover_cell)
+
+		if index >= 0:
+			multi.set_instance_color(index, kind_colour(level.kinds[index]))
+
+	_hover_z = ""
+	_hover_cell = Vector2i.ZERO
 
 
 ## Turn one click into one command a telnet player could have typed.
@@ -250,6 +484,11 @@ func _relayout() -> void:
 		_islands.remove_child(child)
 		child.queue_free()
 
+	# The MultiMeshes just freed are the ones hover writes through, so the
+	# bookkeeping goes with them. A stale entry here would be a write to a
+	# freed resource on the next mouse move.
+	_tile_meshes.clear()
+	_hover_z = ""
 	_offsets.clear()
 
 	var cursor := 0.0
@@ -299,10 +538,55 @@ func _draw_level(z: String, level: WorldState.Level, offset: float) -> void:
 	island.name = z
 	_islands.add_child(island)
 
-	island.add_child(_build_tiles(level, offset))
+	var tiles := _build_tiles(level, offset)
+
+	island.add_child(tiles)
+	_tile_meshes[z] = tiles.multimesh
 
 	if not level.links.is_empty():
 		island.add_child(_build_links(level, offset))
+
+	island.add_child(_build_props(level, offset))
+
+
+## Stand a model on every tile whose room kind has one.
+##
+## Deliberately NOT the entity path. An entity always gets a mesh, because
+## something nobody has modelled still has to be visible and clickable. A prop
+## is scenery: a tile whose kind has no art stays a plain coloured slab, which
+## is what every tile in the game was before this. [MeshResolver.resolve_scenery]
+## is that policy, in its name.
+##
+## The KEY IS THE ROOM KIND. `mapexport` names a transition node
+## "map_transition", the served manifest lists a `.glb` under that name, and
+## nothing in between has to be edited to give another room kind a prop.
+func _build_props(level: WorldState.Level, offset: float) -> Node3D:
+	var props := Node3D.new()
+
+	props.name = "Props"
+
+	for index: int in level.cells.size():
+		var prop := _meshes.resolve_scenery(level.kinds[index])
+
+		if prop == null:
+			continue
+
+		var base := _tile_position(level.cells[index], offset)
+
+		prop.scale = Vector3.ONE * TILE_PROP_SCALE
+		props.add_child(prop)
+
+		# Rest it ON the tile rather than through it. A normalised model fills
+		# the unit box on its LONGEST axis only -- the transition pad is far
+		# flatter than it is wide -- so half the prop's height is not half its
+		# scale, and the scaled copy has to be measured.
+		var bounds := ModelLoader.bounds_of(prop)
+		var top := base.y + (TILE_HEIGHT * 0.5)
+
+		prop.position = Vector3(base.x, top - (bounds.position.y * TILE_PROP_SCALE),
+			base.z)
+
+	return props
 
 
 func _build_tiles(level: WorldState.Level, offset: float) -> MultiMeshInstance3D:
@@ -367,6 +651,12 @@ static func link_transform(from: Vector3, to: Vector3) -> Transform3D:
 
 
 func _place_marker() -> void:
+	# BEFORE the early return. Entities are placed from their own coords now, so
+	# the ones standing on islands that HAVE arrived are drawable even while the
+	# observer's own map is still in flight -- and tying their placement to the
+	# marker's would hold all of them back for one missing island.
+	_entities.replace_positions()
+
 	if not _offsets.has(_state.current_z):
 		# The room arrived before its map did. The marker stays where it was
 		# until _relayout calls back here with the island in place.
@@ -375,8 +665,12 @@ func _place_marker() -> void:
 	var base := _tile_position(_state.current_cell, _offsets[_state.current_z])
 	var top := base + Vector3(0.0, TILE_HEIGHT * 0.5, 0.0)
 
-	_marker.position = top + Vector3(0.0, (_marker.mesh as BoxMesh).size.y * 0.5, 0.0)
-	_entities.set_anchor(top)
+	# Sits ON the tile's top face. It used to be lifted by half the box's height,
+	# which stopped being meaningful when the box was replaced by a figure --
+	# and would have crashed reading `.size.y` off a mesh that is now null. The
+	# avatar rests itself on the face instead, so the offset belongs to the
+	# thing being drawn rather than to the anchor.
+	_marker.position = top
 	_aura.position = top
 
 

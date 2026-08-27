@@ -30,6 +30,7 @@ const NO_DATA_TEXT := "--/--"
 @onready var _bar: ProgressBar = %HealthBar
 @onready var _hp_label: Label = %HealthLabel
 @onready var _state_label: Label = %StateLabel
+@onready var _world_button: Button = %WorldButton
 @onready var _sheet_button: Button = %SheetButton
 @onready var _options_button: Button = %OptionsButton
 @onready var _help_button: Button = %HelpButton
@@ -51,6 +52,14 @@ signal options_requested
 ## Emitted when the player asks for client help.
 signal help_requested
 
+## Emitted when the player shows or hides the 3D panes.
+##
+## The HUD does not own the panes and does not touch them -- it reports that a
+## toggle was pressed and the console decides what that means, the same
+## arrangement as the three buttons above. `shown` is the state being asked
+## for, not the one that was.
+signal world_toggled(shown: bool)
+
 
 ## Bind to a model. Called by the console, which owns the CharState.
 ##
@@ -62,8 +71,20 @@ func bind(state: CharState) -> void:
 	_sheet_button.pressed.connect(sheet_requested.emit)
 	_options_button.pressed.connect(options_requested.emit)
 	_help_button.pressed.connect(help_requested.emit)
+	_world_button.toggled.connect(world_toggled.emit)
 	_state.changed.connect(_redraw)
 	_redraw()
+
+
+## Show the toggle in a given position without reporting it as a press.
+##
+## `set_pressed_no_signal` and not `button_pressed`: the console calls this
+## while APPLYING the saved setting, and a plain assignment would emit `toggled`
+## straight back into the console, which would save it again. The loop would
+## terminate, but only by accident of the setter's early return -- which is a
+## bad thing to depend on and an easy one to break.
+func set_world_shown(shown: bool) -> void:
+	_world_button.set_pressed_no_signal(shown)
 
 
 func _redraw() -> void:

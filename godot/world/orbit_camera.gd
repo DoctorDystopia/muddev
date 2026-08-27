@@ -15,10 +15,10 @@ extends Node3D
 const ORBIT_SPEED := 0.006      # radians per pixel dragged
 const ZOOM_STEP := 1.12         # distance multiplier per wheel notch
 const DISTANCE_START := 14.0
-const DISTANCE_MIN := 3.5
+const DISTANCE_MIN := 0.5
 const DISTANCE_MAX := 60.0
 const PITCH_START := 0.63
-const PITCH_MIN := 0.12
+const PITCH_MIN := -0.5
 const PITCH_MAX := 1.45
 const YAW_START := 0.40
 const FOCUS_HEIGHT := 0.30      # aim above the marker's base, not at it

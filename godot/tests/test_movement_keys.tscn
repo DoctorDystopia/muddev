@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_movement_keys.gd" id="1_mk"]
+
+[node name="TestMovementKeys" type="Node"]
+script = ExtResource("1_mk")

@@ -46,6 +46,32 @@ const PRODUCTION_URL := "wss://game.playblackout.io/godot"
 ## `?server=<url>` query parameter.
 const OVERRIDE_KEY := "server"
 
+## ## Art travels over a different transport, and a different origin
+##
+## The state feed is a websocket; the `.glb` models are ordinary HTTP. That
+## distinction is load-bearing on the web, and it is the one thing §4.2's
+## "different origins are fine" reasoning does NOT cover: `wss://` is exempt
+## from CORS, an XHR for a model is not.
+##
+## Measured 08/26/2026: `game.playblackout.io/static/webclient/models/` serves
+## 200 with **no `Access-Control-Allow-Origin`**. So a client served from the
+## CDN and fetching art from the game origin would be refused by the browser,
+## silently as far as the player is concerned, and every entity would fall back
+## to its family shape. The answer is to fetch art from the SAME origin the page
+## came from, which on the web means asking for it relatively and never naming a
+## host at all.
+
+## Where a developer's art lives — Evennia's own webserver port.
+const ASSET_DEV_ORIGIN := "http://127.0.0.1:4001"
+
+## Where a release desktop build would fetch art from.
+##
+## Unreachable today: there is no desktop export preset, and this phase is web
+## only. Correct rather than absent, because a half-defined branch is worse than
+## one that is simply never taken — and desktop has no CORS to worry about, so
+## naming the game origin is right there even though it crosses the tunnel.
+const ASSET_DESKTOP_ORIGIN := "https://game.playblackout.io"
+
 ## Schemes an override may use. Anything else is refused rather than dialled:
 ## an override is a development convenience, and one that could point the
 ## client at `http://` or a file would fail in a way that looks like the server
@@ -64,6 +90,36 @@ static func resolve(override: String, is_debug: bool) -> String:
 		return wanted
 
 	return DEV_URL if is_debug else PRODUCTION_URL
+
+
+## Which origin this build fetches art from.
+##
+## `is_debug` is `OS.is_debug_build()` and `is_web` is `OS.has_feature("web")`,
+## both at the call site — parameters rather than reads, so every combination is
+## testable without four builds.
+##
+## Returns an ORIGIN to prefix a model path with, and "" is a real answer, not a
+## failure: an empty origin makes [method ModelRegistry.url_for] produce a
+## root-relative path, which the browser resolves against the page it loaded.
+## That is precisely how the web build avoids the CORS refusal above — it never
+## names a host, so there is no cross-origin request to refuse.
+##
+##     debug, anywhere   -> the local Evennia webserver
+##     release, web      -> "" — same origin as the page
+##     release, desktop  -> the game origin, since there is no page to be
+##                          relative to
+##
+## **The web case puts a requirement on the deploy**: whatever serves the client
+## must also serve the model tree at the same path this client asks for, which
+## is [constant ModelRegistry.MODEL_ROOT]. See `deploy/webexport/README.md`.
+static func asset_origin(is_debug: bool, is_web: bool) -> String:
+	if is_debug:
+		return ASSET_DEV_ORIGIN
+
+	if is_web:
+		return ""
+
+	return ASSET_DESKTOP_ORIGIN
 
 
 ## Is this a URL worth dialling?

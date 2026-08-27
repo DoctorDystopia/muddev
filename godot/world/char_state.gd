@@ -84,6 +84,31 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 	return true
 
 
+## Forget everything. Called when the socket drops.
+##
+## A websocket close ends the Evennia Session, so whatever this held describes a
+## character that is no longer puppeted — and a HUD still reading 87/100 beside
+## a dead socket is worse than one reading `--/--`, because only one of them is
+## true.
+##
+## Clearing `has_vitals` is also what brings the login form back: [LoginView]
+## treats its own visibility as a function of whether a body exists, so
+## "am I puppeted" keeps exactly one owner. Without this the player would
+## reconnect to a connection screen with the form still hidden and no way to
+## log in except typing the command by hand.
+func reset() -> void:
+	entity_id = 0
+	asset = ""
+	family = ""
+	hp = 0
+	max_hp = 0
+	in_combat = false
+	levels = {}
+	has_vitals = false
+
+	changed.emit()
+
+
 ## How hurt you are, from 0.0 to 1.0.
 ##
 ## Zero when max_hp is zero rather than dividing by it. A server that has not

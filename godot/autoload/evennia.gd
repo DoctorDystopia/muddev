@@ -15,7 +15,13 @@ extends Node
 ## Socket is up. Nothing has been sent yet.
 signal opened
 ## Socket is down. `code` is -1 when the close was not clean.
-signal closed(code: int, reason: String)
+##
+## `requested` distinguishes a close this client asked for from one the network
+## or the server did. It is the whole difference between "the player is leaving"
+## and "the player was dropped", and only the second should be reconnected —
+## a client that dialled back in after its own [method close] would be
+## impossible to shut down.
+signal closed(code: int, reason: String, requested: bool)
 ## One line of game output, already BBCode, ready for a RichTextLabel.
 signal text_received(bbcode: String)
 ## One structured state-feed message. `channel` is the outputfunc name
@@ -36,6 +42,10 @@ const _OPTIONS_KEY := "options"
 var _socket := WebSocketPeer.new()
 var _open := false
 
+## Set by [method close] and cleared by [method open], so the `closed` signal
+## can say which kind of close this was.
+var _close_requested := false
+
 
 func _ready() -> void:
 	# Nothing to poll until open() is called.
@@ -47,7 +57,17 @@ func _ready() -> void:
 ## Takes no host: WHICH server to reach is a property of the build and its
 ## arguments, not of the caller, and threading it through every call site would
 ## give that fact more than one owner.
+## Reconnecting is a supported call, not just a first one — see
+## [ReconnectPolicy]. A FRESH peer every time, because a WebSocketPeer that has
+## reached STATE_CLOSED carries the previous close code and reason, and reusing
+## one makes a failed redial report the reason the LAST socket died. Building a
+## new one costs nothing next to a TCP handshake and removes the whole class of
+## stale-state question.
 func open() -> Error:
+	_socket = WebSocketPeer.new()
+	_open = false
+	_close_requested = false
+
 	var err := _socket.connect_to_url(url())
 
 	if err == OK:
@@ -84,7 +104,9 @@ func _override() -> String:
 	return ServerEndpoint.override_from_args(OS.get_cmdline_args())
 
 
+## Close deliberately. The `closed` signal will report `requested = true`.
 func close() -> void:
+	_close_requested = true
 	_socket.close()
 
 
@@ -125,7 +147,8 @@ func _process(_delta: float) -> void:
 		WebSocketPeer.STATE_CLOSED:
 			set_process(false)
 			_open = false
-			closed.emit(_socket.get_close_code(), _socket.get_close_reason())
+			closed.emit(_socket.get_close_code(), _socket.get_close_reason(),
+				_close_requested)
 
 
 func _dispatch(raw: String) -> void:

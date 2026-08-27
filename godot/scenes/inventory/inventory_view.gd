@@ -44,6 +44,14 @@ var _heading: Label
 var _grid: GridContainer
 var _doll: HBoxContainer
 
+## Where every item's picture is drawn. One render target for the whole bag;
+## see [ItemStage].
+var _stage: ItemStage
+
+## Where meshes come from. The CONSOLE owns it, so the room and the bag share
+## one model cache and a `.glb` is fetched once for both.
+var _meshes: MeshResolver
+
 
 func _ready() -> void:
 	_heading = Label.new()
@@ -75,11 +83,25 @@ func _ready() -> void:
 	_doll = HBoxContainer.new()
 	add_child(_doll)
 
+	# A child of this pane so it is hidden with it -- the stage stops rendering
+	# when not visible, which is what makes text-only mode actually free.
+	_stage = ItemStage.new()
+	add_child(_stage)
 
-## Bind to a model and follow it.
-func bind(state: InventoryState) -> void:
+
+## Bind to a model and a mesh source, and follow them.
+func bind(state: InventoryState, resolver: MeshResolver) -> void:
 	_state = state
+	_meshes = resolver
 	_state.changed.connect(_rebuild)
+
+	# Art that arrives after the bag was drawn redraws it, the same way the
+	# world pane redraws a room when a model lands. Without it an item fetched
+	# on the first snapshot would show its family shape until the bag next
+	# changed.
+	if _meshes != null:
+		_meshes.refreshed.connect(func(_key: String): _rebuild())
+
 	_rebuild()
 
 
@@ -88,8 +110,18 @@ func _rebuild() -> void:
 		return
 
 	_heading.text = _heading_text()
-	_fill(_grid, _carried_cells())
-	_fill(_doll, _equipment_cells())
+
+	# Indices are allocated HERE and the layout is the stage's: carried slots
+	# first, then worn frames, so the two halves cannot claim the same pixels.
+	var carried := _carried_cells()
+	var worn := _equipment_cells()
+
+	_stage.reserve(carried.size() + worn.size())
+	_dress(carried, 0)
+	_dress(worn, carried.size())
+
+	_fill(_grid, carried)
+	_fill(_doll, worn)
 
 
 func _heading_text() -> String:
@@ -134,6 +166,26 @@ func _equipment_cells() -> Array:
 		cells.append(cell)
 
 	return cells
+
+
+## Draw each occupied cell's item onto the stage and hand it its rectangle.
+##
+## An EMPTY cell is given no texture at all rather than a blank one: the stage
+## has nothing at that index, so its rectangle is transparent either way, and
+## not asking says so.
+func _dress(cells: Array, first_index: int) -> void:
+	for offset: int in cells.size():
+		var cell: InventorySlotCell = cells[offset]
+		var row := cell.row()
+
+		if row.is_empty():
+			continue
+
+		var index := first_index + offset
+
+		_stage.place(index, str(row.get("asset", "")),
+			str(row.get("family", "")), _meshes)
+		cell.show_art(_stage.texture_for(index))
 
 
 func _cell() -> InventorySlotCell:

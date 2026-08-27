@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_reconnect_policy.gd" id="1_rp"]
+
+[node name="TestReconnectPolicy" type="Node"]
+script = ExtResource("1_rp")

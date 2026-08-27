@@ -58,6 +58,23 @@ const PRESENTATION := {
 	# and the guard down, matching the procedural weapon the pane's labels and
 	# tilt are aimed at.
 	"rusty_scrap_shortsword": {"rotation": Vector3(PI / 2.0, 0.0, 0.0)},
+
+	# An export can be WRONG ABOUT ITSELF in a way no measurement catches.
+	# Sketchfab's converter wrote the authoring tool's base-colour alpha into
+	# the glTF, so the eye's body arrives with alpha 0 against alphaMode BLEND:
+	# a fully transparent material on a mesh plainly meant to be seen. Nothing
+	# downstream recovers from that -- it loads, reports no error, and draws an
+	# invisible body around a floating eyeball.
+	#
+	# Verified in Godot 08/26/2026, and it is the same two surfaces the browser
+	# found: one at albedo alpha 0.0 with transparency ALPHA_DEPTH_PRE_PASS.
+	# `blackout_models.js` corrects it with `opaque: true` and this is that same
+	# correction, which README rule 5 requires -- a model solid in one pane and
+	# see-through in the other reads as a bug.
+	"floating_eye": {
+		"opaque": true,
+		"offset": Vector3(0.0, 0.16, 0.0),
+	},
 }
 
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.
@@ -134,6 +151,29 @@ func rotation_for(asset_key: String) -> Vector3:
 	var entry: Dictionary = PRESENTATION.get(asset_key, {})
 
 	return entry.get("rotation", Vector3.ZERO)
+
+
+## An extra nudge applied AFTER centring, in normalised units.
+##
+## For a model whose visible mass is not where its bounding box centre says. The
+## eye's pupil sits low in its own box, so centring the box leaves the eye
+## looking down through the floor.
+func offset_for(asset_key: String) -> Vector3:
+	var entry: Dictionary = PRESENTATION.get(asset_key, {})
+
+	return entry.get("offset", Vector3.ZERO)
+
+
+## Whether this model's materials should be forced solid.
+##
+## See the `floating_eye` entry: an export can declare itself transparent and be
+## wrong, and no measurement catches it because nothing about the file is
+## invalid. Only a person looking at it can tell, which is why this is a
+## hand-written correction and not something derived.
+func force_opaque(asset_key: String) -> bool:
+	var entry: Dictionary = PRESENTATION.get(asset_key, {})
+
+	return bool(entry.get("opaque", false))
 
 
 ## Every asset key the server has art for. Sorted, so callers that iterate are

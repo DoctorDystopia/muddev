@@ -66,9 +66,15 @@ func bind(state: CharState) -> void:
 	_state.changed.connect(_on_char_changed)
 
 
+## Visibility is a FUNCTION of whether a body exists, not a one-way dismissal.
+##
+## It used to only ever hide, which was right while a session could only be
+## gained. Now that a dropped socket is reconnected, the form has to come back
+## too: a new socket is a new Evennia Session at the connection screen, and a
+## player facing that with the form still hidden has no route to log in but
+## typing the command by hand. [method CharState.reset] is what clears the flag.
 func _on_char_changed() -> void:
-	if _state.has_vitals:
-		hide()
+	visible = not _state.has_vitals
 
 
 func _on_connect() -> void:
