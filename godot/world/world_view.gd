@@ -330,7 +330,15 @@ func _hover_at(screen_point: Vector2) -> void:
 
 	if entity_id != 0:
 		_clear_tile_hover()
-		_entities.hover(entity_id)
+
+		# An entity the server gave no `interact` STOPS the search rather than
+		# falling through to the tile beneath it, which is what _act_on does
+		# too -- so nothing lights and nothing happens. Falling through would
+		# mean a cursor aimed at another player lights the ground under them
+		# and a click walks you there.
+		var affords := _interaction(_entities.entity(entity_id))
+
+		_entities.hover(entity_id if not affords.is_empty() else 0)
 		return
 
 	_entities.hover(0)
@@ -398,31 +406,40 @@ func _act_on(screen_point: Vector2) -> void:
 
 
 func _act_on_entity(entity: Dictionary) -> void:
-	var target := str(entity.get("name", ""))
+	var command := _interaction(entity)
 
-	if target.is_empty():
+	if command.is_empty():
 		return
 
-	match str(entity.get("kind", "")):
-		"npc":
-			Evennia.command("attack %s" % target)
-		"item":
-			Evennia.command("get %s" % target)
-		"gatherable":
-			# Harvested where it stands, never pocketed -- a node carries
-			# `get:false()`, so offering `get` here proposes the one thing the
-			# object refuses.
-			#
-			# Every gathering node in the game today is a cutting node. When a
-			# second verb appears, the server should name it in the payload
-			# rather than this file growing a table of them: the verb belongs
-			# with GATHERABLE_REGISTRY, not with the renderer.
-			Evennia.command("cut %s" % target)
+	Evennia.command(command)
 
-	# A `character` is another player, and deliberately falls through to
-	# nothing. Everything else here is recoverable; opening combat on a person
-	# because of a stray click is not the sort of thing a misclick should be
-	# able to do.
+
+## The whole command the server said this entity affords, or "".
+##
+## THERE IS DELIBERATELY NO VERB TABLE HERE. `serialize_entity` names the
+## command in full -- "craft", "bank", "talk", "attack mutant raider" -- and
+## this pane sends it verbatim, which is the standing instruction in CLAUDE.md
+## and the reason `interact_command` exists on the server at all.
+##
+## This file kept a `kind`-to-verb match until 08/27/2026 -- the third writing
+## of that table across the two clients, and the third one to be wrong. It knew
+## three kinds, `npc`, `item` and `gatherable`, and so:
+##
+##   a Bank, a Foundry Furnace and an Anvil are `station`, which the match did
+##       not name at all, so clicking any of them silently did NOTHING;
+##   a Shopkeeper is `npc`, so clicking one sent `attack` at the man selling
+##       you things -- confidently, and with the wrong verb rather than none;
+##   a gathering node was sent `cut <name>`, when its verb takes no target at
+##       all because the node carries the cmdset.
+##
+## Every one of those was already correct in the payload. The pane simply was
+## not reading it.
+##
+## An empty answer means the entity affords nothing -- another player, or
+## anything the server has not given a verb -- and the pane leaves it unlit and
+## unclickable.
+static func _interaction(entity: Dictionary) -> String:
+	return str(entity.get("interact", ""))
 
 
 ## Send whatever the server said this tile affords.

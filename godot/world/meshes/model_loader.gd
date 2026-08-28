@@ -421,7 +421,7 @@ static func _mesh_bounds(root: Node3D) -> AABB:
 		var instance := node as MeshInstance3D
 
 		if instance != null and instance.mesh != null:
-			var box: AABB = to_root * instance.mesh.get_aabb()
+			var box := _instance_bounds(instance, to_root)
 
 			bounds = box if not found else bounds.merge(box)
 			found = true
@@ -434,6 +434,60 @@ static func _mesh_bounds(root: Node3D) -> AABB:
 				child_transform = to_root * spatial.transform
 
 			stack.append([child, child_transform])
+
+	return bounds
+
+
+## One mesh's extent in the root's space, read as tightly as it honestly can be.
+##
+## Two ways, and the MESH picks which -- not the caller, and not a cost budget.
+##
+## A STATIC mesh is measured VERTEX BY VERTEX. `to_root * mesh.get_aabb()`
+## measures the transformed BOX rather than the geometry inside it, and a
+## rotated box has corners its contents do not: the gatherable's rock is one
+## part tilted by (0.5, 0.3, 0.2) radians, and its box reaches 0.164 further
+## down than any vertex in it. Everything in this client rests on the BOTTOM of
+## this number, so that 0.164 was a gathering node hovering a twelfth of a tile
+## over its own ground -- measured 08/27/2026, and it was the reported bug.
+##
+## A SKINNED mesh is measured by its box, because its vertices are stored in
+## bind space and put where you see them by bones at draw time. Reading 38,000
+## of them precisely would be 38,000 precise readings of a pose nobody renders;
+## the crude box is all they support, and [method _skeleton_bounds] is what
+## corrects for it. See [method bounds_of].
+static func _instance_bounds(instance: MeshInstance3D,
+		to_root: Transform3D) -> AABB:
+	if instance.skin != null:
+		return to_root * instance.mesh.get_aabb()
+
+	var bounds := AABB()
+	var found := false
+
+	for surface: int in instance.mesh.get_surface_count():
+		var arrays: Array = instance.mesh.surface_get_arrays(surface)
+
+		if arrays.is_empty():
+			continue
+
+		var vertices: Variant = arrays[Mesh.ARRAY_VERTEX]
+
+		if typeof(vertices) != TYPE_PACKED_VECTOR3_ARRAY:
+			continue
+
+		for vertex: Vector3 in vertices as PackedVector3Array:
+			var point := to_root * vertex
+
+			if not found:
+				bounds = AABB(point, Vector3.ZERO)
+				found = true
+			else:
+				bounds = bounds.expand(point)
+
+	# A mesh that hands out no vertex array at all -- an ImmediateMesh, or one
+	# whose surfaces this build cannot read back. The box is wrong in the way
+	# described above and is still better than measuring nothing.
+	if not found:
+		return to_root * instance.mesh.get_aabb()
 
 	return bounds
 

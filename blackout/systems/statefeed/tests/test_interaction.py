@@ -25,6 +25,10 @@ Run from blackout/:
         systems.statefeed.tests.test_interaction
 """
 
+import os
+import re
+import unittest
+
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
@@ -42,6 +46,31 @@ from world.item_database import ITEM_DB
 
 # Non-stackable, so the spawn under test survives an inventory merge intact.
 TEST_ITEM_KEY = "rusty_scrap_spear"
+
+# The game dir (blackout/), four levels up from this file, and the repo root
+# one further up -- the Godot client is a sibling of the game dir rather than
+# inside it. Derived the same way test_client_constants derives them.
+_GAME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+_REPO_ROOT = os.path.dirname(_GAME_DIR)
+
+# Every 3D pane that turns a click on an entity into a command. A path that
+# does not exist is skipped, so a client can be removed without a test edit --
+# but the vacuity guard below refuses to let BOTH disappear silently.
+_ENTITY_CLICK_SOURCES: tuple = (
+    os.path.join(_GAME_DIR, "web", "static", "webclient", "js", "plugins",
+                 "blackout3d.js"),
+    os.path.join(_REPO_ROOT, "godot", "world", "world_view.gd"),
+)
+
+# A comment in either language, stripped before any of these files is read.
+# Both panes explain at length what they no longer do -- world_view.gd names
+# the deleted `attack %s` in the comment recording its removal -- and prose
+# describing a removed pattern must not read as the pattern.
+_COMMENT_RE = re.compile(r"/\*.*?\*/|(//|#).*?$", re.DOTALL | re.MULTILINE)
+
+# The field the server names the whole command in.
+_INTERACT_FIELD = "interact"
 
 
 class TestInteractionVerbs(EvenniaTest):
@@ -221,3 +250,82 @@ class TestEntityRadius(EvenniaTest):
         area = serializers.serialize_area([self.room1])
 
         self.assertEqual(sorted(contents[0]), sorted(area[0]))
+
+
+class TestNoClientKeepsItsOwnVerbTable(unittest.TestCase):
+    """
+    Purpose: Neither 3D pane decides what a click means. They forward the
+    command `interact_command` named, and they build none of their own.
+
+    The class above is a test per interactable TYPECLASS, added on 08/14/2026
+    to stop the third furnace bug. It did not, because the third one was not a
+    typeclass the server misread -- it was a CLIENT that never asked. The Godot
+    pane shipped with a `kind`-to-verb match of its own, so a Foundry Furnace,
+    a Bank and a Shopkeeper were all unclickable there while the server had
+    been naming their verbs correctly the whole time (fixed 08/27/2026).
+
+    So this is the guard one level up: read the panes as TEXT, which is what
+    lets one test cover two languages without importing either.
+
+    Plain unittest.TestCase, deliberately -- nothing here touches the database.
+
+    Author: Nick Hobar
+    Creation date: 08/27/2026
+    """
+
+    def _live_sources(self):
+        """Every pane that exists, as {path: source with comments removed}."""
+        found = {}
+
+        for path in _ENTITY_CLICK_SOURCES:
+            if not os.path.exists(path):
+                continue
+
+            with open(path, "r", encoding="utf-8") as handle:
+                found[path] = _COMMENT_RE.sub("", handle.read())
+
+        return found
+
+    def test_there_are_panes_to_read_at_all(self):
+        """Vacuity guard: every case below passes on an empty dict."""
+        self.assertTrue(
+            self._live_sources(),
+            "no 3D pane found at any of %s; the checks below are vacuous"
+            % (_ENTITY_CLICK_SOURCES,))
+
+    def test_every_pane_reads_the_interact_field(self):
+        """
+        The positive half. A pane that never names the field cannot be
+        forwarding what the server said, whatever else it is doing.
+        """
+        for path, source in self._live_sources().items():
+            with self.subTest(pane=os.path.basename(path)):
+                self.assertIn(
+                    _INTERACT_FIELD, source,
+                    "%s never reads the entity's `interact`, so it is "
+                    "deciding for itself what a click means"
+                    % os.path.basename(path))
+
+    def test_no_pane_builds_a_targeted_command_out_of_a_verb(self):
+        """
+        The negative half, and it looks for the SHAPE a verb table has rather
+        than for the verb: a targeted command is the verb, a space, and then
+        the entity's name substituted in. `"attack %s" % name` in GDScript,
+        `'attack ' + name` or a template literal in JS.
+
+        Derived from TARGETED_VERB_BY_KIND rather than listed, so a verb added
+        to the server is covered here with no edit.
+        """
+        for verb in const.TARGETED_VERB_BY_KIND.values():
+            # An opening quote, the verb, a space, then something being
+            # substituted -- a %s, a ${}, or a closing quote and a +.
+            pattern = re.compile(
+                r"""["'`]\s*%s\s+(%%s|\$\{|["'`]\s*\+)""" % re.escape(verb))
+
+            for path, source in self._live_sources().items():
+                with self.subTest(pane=os.path.basename(path), verb=verb):
+                    self.assertIsNone(
+                        pattern.search(source),
+                        "%s builds `%s <name>` itself; serialize_entity "
+                        "already sent the whole command in `interact`"
+                        % (os.path.basename(path), verb))

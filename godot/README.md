@@ -38,10 +38,8 @@ a fetched model where there is art, its family's silhouette where there is not.
 |---|---|
 | **Hover** | Lights whatever a click would take — the entity, else the tile |
 | **Left-click a tile** | Walks there, if it is adjacent and has an exit |
-| **Left-click an NPC** | `attack <name>` |
-| **Left-click an item** | `get <name>` |
-| **Left-click a gathering node** | `cut <name>` — harvested where it stands, never pocketed |
-| **Left-click a player** | Nothing, deliberately — see rule 3 below |
+| **Left-click an entity** | Sends the entity's `interact` command, verbatim — `attack mutant raider`, `bank`, `craft`, `talk`, `cut` |
+| **Left-click a player** | Nothing — an empty `interact`, which the server decides and this pane does not |
 | **Drag an inventory cell** | Swap, equip or unequip — whichever the server named |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Character button** | Opens the sheet — whatever panels `char_summary` sent |
@@ -77,8 +75,8 @@ One ladder, and [MeshResolver] is the only thing that knows the order:
 asset has art?    -- yes -->  the fetched model      tier 1
 	   | no
 family has parts? -- yes -->  the family's shape     tier 2
-       | no
-                              the generic block      tier 3
+	   | no
+							  the generic block      tier 3
 ```
 
 The server already sends this as one lookup — `serialize_entity` calls `asset`
@@ -142,6 +140,15 @@ the file loudly instead of silently drawing every weapon as a box.
 > the origin by a different amount, so each node is lifted by its own measured
 > bottom. The single `ENTITY_LIFT` constant this replaced could only ever be
 > right for one shape.
+
+> **A rotated part's BOX is not its shape**, and everything rests on the bottom
+> of that number. `bounds_of` used to transform each `mesh.get_aabb()`, which
+> measures the rotated box rather than the geometry inside it — and a box has
+> corners its contents do not. The gathering node's rock is tilted by
+> (0.5, 0.3, 0.2) radians, so its box reached **0.164 lower than any vertex in
+> it** and the whole node was lifted a twelfth of a tile clear of the ground
+> (measured 08/27/2026). Static meshes are now read vertex by vertex; skinned
+> ones keep the box, because their vertices describe a pose nobody renders.
 
 > **Headless prints `Parameter "material" is null` when freeing a fetched
 > model.** It comes from `servers/rendering/dummy/`, which only exists under
@@ -376,9 +383,12 @@ Four rules worth not rediscovering:
 3. **The client acts only through `Evennia.command()`**, which sends the same
    `text` a telnet player types. Clicking a tile sends `north` — never a
    position. There is no privileged client channel, so every lock, cooldown and
-   permission keeps working with nothing to re-audit. Clicking another player
-   is wired to do nothing on purpose: every other misclick is recoverable, and
-   opening combat on a person is not.
+   permission keeps working with nothing to re-audit. It also does not decide
+   WHICH command: `serialize_entity` names the whole thing in `interact` and
+   the pane forwards it. Clicking another player does nothing because the
+   server sends an empty `interact` for one — every other misclick is
+   recoverable, and opening combat on a person is not — and the pane learns
+   that rather than knowing it.
 4. **The output pane's monospace font is load-bearing**, not cosmetic. Godot's
    default theme font is proportional and the game draws ASCII art constantly.
 6. **On the web, Ctrl+V into a LineEdit may not paste, and the failure is
