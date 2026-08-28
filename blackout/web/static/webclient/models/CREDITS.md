@@ -49,4 +49,22 @@ Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
 ## `characters/player_character.glb`
 
-"Spider-man - SM:BND MCU" (https://skfb.ly/pMx9y) by YE YE is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+"Universal Base Characters" by Quaternius (https://quaternius.com) is released
+under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/),
+which asks for nothing. The row is here anyway, because a file with no row is
+indistinguishable from one whose licence nobody checked.
+
+- Source download: `assets/characters/quaternius_universal_male/` — the
+  `Base Characters/Godot - UE/` export of `Superhero_Male_FullBody`, with the
+  original `License_Standard.txt` kept alongside it as `license.txt`
+- Packed with `assets/pack_model.py`, textures resampled 2048² → 512²
+- Two of its seven texture `uri`s arrive with a `_png` suffix naming files the
+  download does not contain (`T_Hair_1_Normal_png.png`, `T_Eye_Normal_png.png`)
+  — an exporter slip, not a missing asset. `scene.gltf` is the one file edited
+  on the way in, and only those two strings, to point at the PNGs that are
+  actually there. Copying the images under the wrong names would have been the
+  other fix and costs 4 MiB of duplicate normal map to avoid a two-word edit.
+- A T-POSE, and a bald one. It replaces a Spider-Man model on 08/27/2026
+  because that model is 6.3 MiB and the R2-hosted client drew the fallback mesh
+  rather than it; this is 2.0 MiB. Both facts are temporary — it is a base
+  character kit, which is what a placeholder should look like.

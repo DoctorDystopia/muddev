@@ -91,25 +91,27 @@ FAMILY_BUDGETS: dict = {
     # times an npc to look at.
     #
     # THE BYTE BUDGET HERE IS A REGRESSION GUARD, NOT A TARGET, and the
-    # difference is worth stating so nobody reads 7 MiB as approval.
-    # Standardising textures took player_character.glb from 10.4 MiB to
-    # 6.3 MiB; of what is left, only 2.6 MiB is texture. The rest is vertex
-    # data, and it is carrying attributes the game does not use:
+    # difference is worth stating so nobody reads 3 MiB as approval. The
+    # Spider-Man placeholder this number was first written for packed to
+    # 6.3 MiB and was replaced on 08/27/2026 by a Quaternius base character at
+    # 2.0 MiB, of which 1.2 MiB is texture. The rest is vertex data for 8,483
+    # vertices, and it is carrying attributes the game does not use:
     #
     #     skins: 1, animations: 0
+    #     COLOR_0, COLOR_1, TEXCOORD_0..TEXCOORD_3
     #
     # So JOINTS_0 and WEIGHTS_0 -- the skinning attributes -- ship for
-    # animations that do not exist, alongside a second UV set (TEXCOORD_1)
-    # nothing samples. Dropping unused attributes is the next lever and should
-    # bring this near the 3 MiB that was originally written here; it is real
-    # glTF surgery (accessors and bufferViews have to be renumbered) rather
-    # than a resample, so it is tracked as its own piece of work.
+    # animations that do not exist, alongside two vertex-colour sets and three
+    # spare UV sets nothing samples. Dropping unused attributes is the next
+    # lever; it is real glTF surgery (accessors and bufferViews have to be
+    # renumbered) rather than a resample, so it is tracked as its own piece of
+    # work.
     #
     # Set just above today's packed size so a REGRESSION fails loudly while
     # that work is outstanding. Lower it when the attributes go.
     "characters": ModelBudget(
         max_texture_edge=512,
-        max_bytes=7 * _BYTES_PER_MIB,
+        max_bytes=3 * _BYTES_PER_MIB,
         reason="diorama figure on a tile; regression guard pending attribute pruning",
     ),
 

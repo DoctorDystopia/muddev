@@ -99,7 +99,7 @@ register("floating_eye", "npcs/floating_eye.glb", {
 
 // ─── Characters ─────────────────────────────────────────────────────────
 
-// "Spider-man - SM:BND MCU" by YE YE, CC-BY-4.0. See models/CREDITS.md.
+// "Universal Base Characters" by Quaternius, CC0. See models/CREDITS.md.
 //
 // The key is const.ASSET_KEY_CHARACTER in systems/statefeed/constants.py,
 // which _classify reports for every puppetable character — so this one
@@ -108,22 +108,26 @@ register("floating_eye", "npcs/floating_eye.glb", {
 // additionally told their own key on `char_avatar`, because the server
 // leaves an observer out of their own room_players list.
 //
-// NO ROTATION, and that is a measured claim rather than an omission. The
-// export carries the same Sketchfab Y-up-to-Z-up matrix the rusty sword
-// does, so the quarter turn that stands the SWORD up is the obvious thing
-// to write here — and it lays this one flat. Measured through resolve():
-// no rotation gives a figure 0.340 tall, which is ENTITY_SCALE exactly;
-// either quarter turn gives one 0.059 tall and 0.340 deep.
+// NO ROTATION, and still a measured claim rather than an omission. This
+// export carries no Sketchfab Y-up-to-Z-up matrix at all — unlike the
+// rusty sword, and unlike the Spider-Man placeholder this replaced on
+// 08/27/2026 — so it arrives standing along Y, which is the axis the
+// normalise and the pane both already assume. Measured through
+// ModelLoader.bounds_of in Godot 08/27/2026: 1.859 x 1.820 x 0.297, six
+// times taller than it is deep.
 //
-// The difference is that this model is rigged, and a rigged import has to
-// be measured with its world matrices current or it reads as lying down
-// when it is not. See measure() in blackout_meshes.js — that is where the
-// box worth believing comes from, and it is worth reading before adding a
-// rotation to any rigged model.
+// No scale bias either, but read the numbers above before adding one: the
+// figure is in a T-POSE, so its 1.859 of outstretched arms is very
+// slightly LONGER than its 1.820 of height. Normalising on the longest
+// axis therefore normalises on the arm span here, and the figure stands
+// 0.979 of a unit rather than 1.000. That 2% is not worth a correction,
+// but it is worth knowing that the longest axis stopped being the height
+// — a posed replacement puts it back, and a wider one moves it further.
 //
-// No scale bias either. It arrives 1.79 units tall against 1.32 of
-// outstretched arms, so normalising on the longest axis is normalising on
-// its height, which is what a figure wants.
+// It is rigged (one skin, zero animations), which is why measurement has
+// to go through measure() in blackout_meshes.js rather than a mesh AABB.
+// This particular bind pose happens to be honest, so the two agree; the
+// Spider-Man one did not, and that is the case the merge is there for.
 register(ASSET_KEY_CHARACTER,
     "characters/player_character.glb");
 

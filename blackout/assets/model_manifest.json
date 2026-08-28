@@ -25,7 +25,7 @@
 
   "models": [
     {
-      "source": "assets/characters/spider-man_-_smbnd_mcu",
+      "source": "assets/characters/quaternius_universal_male",
       "asset_key": "player_character"
     },
     {

@@ -538,6 +538,13 @@ const markSkinned = function (root) {
 // 1.790 deep on Z and 0.308 tall — a figure lying on its back — and
 // measured after this call it comes back upright, which is how it draws.
 //
+// Those numbers, and the rotation ones below, were taken on the Spider-Man
+// placeholder that `player_character.glb` carried until 08/27/2026. The
+// model behind the key is now a Quaternius base character and has not been
+// re-measured in a browser — the mechanism is a fact about GLTFLoader and
+// Box3 rather than about any one file, so it is unchanged, but treat the
+// figures as the case that proved it and not as today's dimensions.
+//
 // What that costs downstream is not a wrong SIZE. The scale is taken from
 // the longest axis and a person is as tall as they are long, so it lands
 // right by luck; it is the CENTRE that comes out of the wrong axis, and

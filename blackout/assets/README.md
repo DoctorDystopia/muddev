@@ -10,7 +10,7 @@ assets/
 ├── items/weapons/rusty_sword/        one download, as it arrived
 │   ├── scene.gltf  scene.bin  textures/  license.txt
 ├── npcs/sus_eye/
-├── characters/spider-man_-_smbnd_mcu/
+├── characters/quaternius_universal_male/
 └── world_objects/sm_teleporter/
 ```
 
@@ -23,7 +23,11 @@ mapping, so it cannot be typed inconsistently.
 ## Adding a model
 
 1. Drop the download in under `<family>/<name>/`, unmodified, licence file and
-   all.
+   all. The one exception is a download that is wrong about itself: the
+   Quaternius character's `scene.gltf` names two textures with a `_png` suffix
+   no file in the export carries, so those two `uri` strings were corrected on
+   the way in. Fix the reference, never the art, and say so in `CREDITS.md` —
+   an edit nobody recorded is one the next repack silently loses.
 2. Pack it, naming the **asset key** it is for — not the file it came from:
 
    ```bash
