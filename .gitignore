@@ -43,3 +43,8 @@ blackout/scripts/*.dan
 # were already committed before this rule; git ignores .gitignore for files it
 # already tracks. It only stops new ones being added by a wide `git add`.
 docs/
+
+# The Godot web export staged for upload to R2. A build artifact, 37.7 MiB of
+# it one file, rebuilt wholesale by every export. `deploy/webexport/publish.ps1`
+# reads it from here; nothing commits it.
+deploy/webexport/build/

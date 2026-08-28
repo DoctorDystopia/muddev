@@ -47,8 +47,8 @@ request goes out relative to the page and never crosses an origin at all.
 **What that requires of this deploy:** whatever serves `index.html` must also
 serve the model tree at the path the client asks for, which is
 `ModelRegistry.MODEL_ROOT` — `/static/webclient/models/`, manifest included.
-Copy `blackout/web/static/webclient/models/` into the site's `dist/` under that
-path when publishing the export.
+`publish.ps1` uploads both trees to the same bucket for exactly this reason, and
+`worker/index.ts` claims both prefixes on the site's own hostname.
 
 The alternative — adding CORS headers to Evennia's static serving — was rejected
 for the same two reasons §4.2 gives above: every byte would cross `cloudflared`,
@@ -58,8 +58,11 @@ and an `evennia reload` could interrupt an art fetch.
 
 ## Build
 
+Export into `build/` beside this README — gitignored, and the one place
+`publish.ps1` looks:
+
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot --export-release "Web" <out>/index.html
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot --export-release "Web" deploy/webexport/build/index.html
 ```
 
 The `Web` preset is committed in `godot/export_presets.cfg`. Its one load-bearing
@@ -81,28 +84,75 @@ Expect roughly:
 
 ## Deploy
 
-The export is **not committed** — to this repo or to `playblackout-site`. It is
-a build artifact of a known size, it changes wholesale on every build, and a
-40 MB binary in git history is permanent.
+**The export is not a static asset and cannot become one.** Cloudflare caps an
+individual static asset at **25 MiB**, on the Free plan and the Paid plan alike;
+`index.wasm` is **37.7 MiB**. `wrangler deploy` does not warn, it refuses:
 
-Copy the built files into the site's `public/` (so Astro passes them through to
-`dist/`) under a `play/` directory, then deploy the site as usual. The client
-then lives at `https://playblackout.io/play/`.
+```
+X [ERROR] Asset too large.
+  Cloudflare Workers supports assets with sizes of up to 25 MiB. We found a
+  file .../dist/client/index.wasm with a size of 37.7 MiB.
+```
 
-## `_headers`
+Nothing on the game side reaches that number either — `index.pck` is 205 KB of
+the export, so the weight is the Godot engine, not the game.
 
-Cloudflare's static asset serving reads a `_headers` file. `headers.template`
-beside this README is the block to include.
+So the client and the model tree live in the **`playblackout-assets` R2 bucket**
+and are served by `playblackout-site/worker/index.ts`. Two steps, in this order:
 
-**Do not add COOP/COEP.** They are only needed for a threaded export, this one
-is single-threaded, and adding them would additionally break any embedded
+```powershell
+.\deploy\webexport\publish.ps1          # -DryRun lists the keys first
+```
+
+```bash
+cd ../playblackout-site && npx wrangler deploy
+```
+
+From git bash, that first line is **`powershell`, not `pwsh`** — this machine has
+Windows PowerShell 5.1, and PowerShell 7 is not installed:
+
+```bash
+powershell -ExecutionPolicy Bypass -File deploy/webexport/publish.ps1
+```
+
+That 5.1 target is also why the script builds `[PSCustomObject]` rows rather than
+hashtables: `Measure-Object -Property Size` reads a property, and a hashtable key
+is not one under 5.1.
+
+The bucket is the origin and the site deploy is the router, so a publish with no
+deploy leaves the old client live, while a deploy with no publish 404s `/play`.
+**Publish first.**
+
+### Why a worker and not a bucket subdomain
+
+An R2 custom domain binds a **whole hostname** — `cdn.playblackout.io` is what
+it offers, and that is a different origin from the page. Everything in §2 above
+then comes back: the `.glb` fetches cross an origin, R2 needs CORS headers, and
+`asset_origin()` returning `""` stops being true. A worker binding is the only
+arrangement that puts a bucket at a **path** on the site's own hostname.
+
+Keys mirror URLs exactly — `client/index.wasm` in the bucket is
+`/client/index.wasm` on the site — which is the whole of the routing rule.
+
+## Response headers
+
+**The worker owns them**, in its `CONTENT_TYPES` table and `CACHE_CONTROL`
+constant. There is no `_headers` file: a `_headers` block applies to static
+assets, and none of these are static assets any more. `headers.template` used to
+live here and was deleted for that reason — it also still said `/play/`, which
+collides with the site's own `/play` marketing page.
+
+Two decisions carried over into the worker rather than lost with it:
+
+**No COOP/COEP.** They are only needed for a threaded export, this one is
+single-threaded, and adding them would additionally break any embedded
 third-party content on the site for no gain.
 
-The cache policy is deliberately modest. Godot's web export does **not**
-content-hash its filenames — every build produces `index.wasm` again — so a long
-`immutable` cache would serve a stale engine to returning players after a
-deploy. Revalidation plus Cloudflare's ETag is the right trade until the
-filenames carry a hash.
+**No `immutable`.** Godot's web export does not content-hash its filenames —
+every build produces `index.wasm` again — so a long cache would serve a stale
+engine to returning players after a deploy. `must-revalidate` plus R2's ETag
+makes the repeat visit a 304 with no body, which is the same win without the
+staleness.
 
 ## What still has to be true on the game side
 
