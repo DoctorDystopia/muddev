@@ -50,7 +50,6 @@ const KIND_STEP := "step"
 const KIND_WALK := "walk"
 const KIND_LOOK := "look"
 const KIND_CANCEL := "cancel"
-const KIND_NONE := "none"
 
 # Everything else.
 const SUBSCRIBE_ALL := "all"

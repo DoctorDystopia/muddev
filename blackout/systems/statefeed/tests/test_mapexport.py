@@ -280,15 +280,33 @@ class TestNodeActions(unittest.TestCase):
                     entry["action"]["command"],
                     "goto (%s,%s)" % (entry["x"], entry["y"]))
 
-    def test_a_transition_node_is_walkable_like_any_other(self):
+    def test_a_transition_node_carries_no_walk(self):
         """
-        A transition node is a tile you walk ONTO -- it is how oasis and
-        oasis_outskirts are joined -- so it affords the same walk as its
-        neighbours. Withholding an action would make the one tile leading off
-        the map the one tile that cannot be clicked.
+        A transition node spawns NO room -- that is the contrib's design for
+        it, and why get_spawn_xyz returns the target's coordinates instead of
+        its own. `goto` resolves a room BY coordinate, so `goto (9,10)` at a
+        transition answers "Could not find a room at (9,10)". Stamping one here
+        made the tile look clickable and do nothing.
+
+        The way onto a transition is the ordinary exit from the tile beside it,
+        which serializers.tile_actions names once the player is standing there.
         """
         chunks = build_map_chunks(_xymap([_transition_node(9, 10)]))
         node = chunks[0].nodes[0]
 
         self.assertEqual(node["room_kind"], const.ROOM_KIND_TRANSITION)
-        self.assertEqual(node["action"]["command"], "goto (9,10)")
+        self.assertNotIn("action", node)
+
+    def test_the_action_key_is_absent_rather_than_empty(self):
+        """
+        Asserted separately because the two clients differ in how forgiving
+        they are, and neither re-tests the command on this path: the browser
+        pane returns `tile.action || null` and Godot returns
+        `level.actions.get(cell, {})`. An empty action here would be SENT.
+        """
+        nodes = [_node(1, 1), _transition_node(9, 10)]
+        chunks = build_map_chunks(_xymap(nodes))
+
+        for entry in chunks[0].nodes:
+            with self.subTest(x=entry["x"], y=entry["y"]):
+                self.assertNotEqual(entry.get("action", None), {})

@@ -50,7 +50,6 @@ export const KIND_STEP = "step";
 export const KIND_WALK = "walk";
 export const KIND_LOOK = "look";
 export const KIND_CANCEL = "cancel";
-export const KIND_NONE = "none";
 
 // Everything else.
 export const SUBSCRIBE_ALL = "all";

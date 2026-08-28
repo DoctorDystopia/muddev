@@ -2,10 +2,11 @@
  * tileAction — what clicking a tile means.
  *
  * WHY THIS ONE. Every click a player makes in the world pane goes through
- * tileAction, and the rules it used to hold were wrong once already in a way no
- * screenshot showed: diagonal neighbours with no diagonal link were refused,
- * which left the eight tiles nearest the player the only ones in the pane that
- * could not be clicked. Those rules now live in Python and are tested there
+ * tileAction, and the rules it used to hold were wrong in a way no screenshot
+ * showed: neighbours with no direct link were refused, which left the tiles
+ * nearest the player the only ones in the pane that could not be clicked. That
+ * was true of diagonals here, and then of cardinals again after the rules moved
+ * to Python. They are tested there now
  * (systems/statefeed/tests/test_tile_actions.py); this is the other half —
  * that the CLIENT reads the server's answer correctly.
  *
@@ -59,10 +60,20 @@ pane.postInit();
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-// Exactly what serializers.tile_actions produces for an observer standing at
-// (4,6) on `oasis` with one real exit north. Kept in this shape deliberately:
-// if the payload changes, this fixture is what has to change with it, and the
-// Python tests are the source of truth for what the server actually sends.
+// What serializers.tile_actions produces for an observer standing at (4,6) on
+// `oasis` with one real exit north -- plus three entries the server no longer
+// sends at all.
+//
+// Those three carry an EMPTY command, which is the wire's way of saying "this
+// tile affords nothing". Until 08/28/2026 the server filled them in for every
+// cardinal neighbour reached by no exit, and that rule was removed for
+// refusing tiles the player could plainly walk to. The pane must still honour
+// an empty command if one ever arrives, so the case is kept and labelled
+// rather than deleted with its producer.
+//
+// Their `kind` is KIND_STEP on purpose: the COMMAND is what decides, and a
+// fixture that paired an empty command with a kind meaning "nothing" could
+// pass while the pane read the wrong field.
 const ROOM_INFO = {
     num: 1,
     name: "Oasis",
@@ -72,9 +83,9 @@ const ROOM_INFO = {
     tile_actions: {
         "4:6": { command: "look", kind: K.KIND_LOOK },
         "4:7": { command: "north", kind: K.KIND_STEP },
-        "5:6": { command: "", kind: K.KIND_NONE },
-        "3:6": { command: "", kind: K.KIND_NONE },
-        "4:5": { command: "", kind: K.KIND_NONE },
+        "5:6": { command: "", kind: K.KIND_STEP },
+        "3:6": { command: "", kind: K.KIND_STEP },
+        "4:5": { command: "", kind: K.KIND_STEP },
     },
     cancel_action: { command: "goto", kind: K.KIND_CANCEL },
 };
@@ -114,17 +125,17 @@ test("tileAction reads the server's answer", async (t) => {
             { command: "north", kind: K.KIND_STEP });
     });
 
-    await t.test("cardinal neighbour with no exit -> refused", () => {
-        // An EMPTY command, not an absent entry. This is the wall rule: a
-        // click on a visible barrier must not walk the player the long way
-        // around it.
+    await t.test("an empty command -> refused", () => {
+        // The command decides, not the kind: these three say KIND_STEP.
         assert.equal(pane.getTileAction(tile(5, 6)), null);
         assert.equal(pane.getTileAction(tile(4, 5)), null);
     });
 
-    await t.test("diagonal neighbour with no link -> walk", () => {
+    await t.test("neighbour with no exit -> walk", () => {
         // ABSENT from tile_actions, so it falls through to the node's own
-        // goto. This is the case the old client got wrong.
+        // goto. This is what an unlinked neighbour looks like now, cardinal
+        // or diagonal, and getting it wrong in either direction is what made
+        // the tiles nearest the player the ones that could not be clicked.
         assert.deepEqual(pane.getTileAction(tile(5, 7)), walk(5, 7));
     });
 

@@ -169,12 +169,15 @@ _ITEM_FAMILY_EXPORTS: tuple = (
 # What a tile action's `kind` can be. The client branches on these -- they
 # decide whether a click starts, ends or ignores a tracked walk -- so they are
 # the last thing that should be four string literals in a pane.
+#
+# Four, not five. KIND_NONE went with the wall markers on 08/28/2026; see the
+# tile-affordance section of constants.py for why nothing says "no" by kind any
+# more. A tile that affords nothing is one no client was told about.
 _TILE_KIND_EXPORTS: tuple = (
     ("KIND_STEP", const.TILE_ACTION_KIND_STEP),
     ("KIND_WALK", const.TILE_ACTION_KIND_WALK),
     ("KIND_LOOK", const.TILE_ACTION_KIND_LOOK),
     ("KIND_CANCEL", const.TILE_ACTION_KIND_CANCEL),
-    ("KIND_NONE", const.TILE_ACTION_KIND_NONE),
 )
 
 # Single-value exports that are neither a channel nor a vocabulary.

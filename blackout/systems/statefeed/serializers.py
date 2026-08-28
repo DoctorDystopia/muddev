@@ -273,6 +273,165 @@ def _mesh_family(entity, kind: str) -> str:
     return family
 
 
+def _parsed_map(room):
+    """
+    Purpose: Hand back the parsed XYMap the observer is standing on.
+
+    Entry:
+        room - the observer's room. Need not be an XYZRoom, and need not be a
+        room at all: a stand-in with no `xymap` is answered with None.
+
+    Exit/Returns:
+        Returns the XYMap, or None when there is no grid and no map.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        `XYZRoom.xymap` is a cached property that reaches the grid through the
+        contrib's get_xyzgrid(), so this costs one attribute read per move
+        after the first. It is wrapped rather than tested for, because the
+        property RAISES on a server whose grid has not been built -- a bare
+        getattr with a default would not catch that.
+
+    Notes/References:
+        Only tile_actions needs this, and only for the one thing an exit
+        cannot answer on its own: where on THIS map a doorway to another map
+        is drawn. Everything else here is read off the world objects.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    try:
+        xymap = getattr(room, "xymap", None)
+    except Exception:
+        return None
+
+    return xymap
+
+
+def _transition_tile(room, here: list, there: list) -> list:
+    """
+    Purpose: Name the tile on the OBSERVER's map that an exit leading to
+        another map is drawn as.
+
+    Entry:
+        room  - the observer's room.
+        here  - the observer's [x, y, z].
+        there - the destination room's [x, y, z], on a different map.
+
+    Exit/Returns:
+        Returns [x, y] on the observer's own map, or None when this map has no
+        transition node for that destination.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A map transition is a NODE on the observer's map (the `T` glyph) that
+        spawns no room: the contrib's TransitionMapNode.get_spawn_xyz returns
+        the TARGET's coordinates, so the exit Evennia builds points straight at
+        a room on the other map. Reading that destination the way an ordinary
+        exit is read therefore files the affordance under a tile key belonging
+        to a different map -- and on the oasis that key names a real, unrelated
+        tile, so the teleporter itself stayed unclickable while a tile across
+        the map quietly offered to walk through it.
+
+        The node is found by matching `target_map_xyz` against the destination
+        rather than by a grid delta, so a transition reached by a longer link
+        glyph resolves as exactly as an adjacent one, and a room carrying two
+        transitions files each under its own tile.
+
+    Notes/References:
+        Duck-typed on `target_map_xyz` for the same reason
+        mapexport._is_transition_node is: that attribute is what MAKES a node a
+        transition, and testing it costs no map-layer import here.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    xymap = _parsed_map(room)
+
+    if xymap is None:
+        return None
+
+    try:
+        node = xymap.get_node_from_coord((here[0], here[1]))
+    except Exception:
+        return None
+
+    if node is None:
+        return None
+
+    links = getattr(node, "links", None) or {}
+    target = tuple(there)
+
+    for end_node in links.values():
+        candidate = getattr(end_node, "target_map_xyz", None)
+
+        if not candidate:
+            continue
+
+        if tuple(candidate) != target:
+            continue
+
+        return [end_node.X, end_node.Y]
+
+    return None
+
+
+def _exit_tile(room, here: list, exit_obj) -> list:
+    """
+    Purpose: Say which tile on the observer's map one exit leads to.
+
+    Entry:
+        room     - the observer's room.
+        here     - the observer's [x, y, z].
+        exit_obj - one exit out of that room.
+
+    Exit/Returns:
+        Returns [x, y] on the observer's own map, or None for an exit no tile
+        can stand for.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Ordinarily the destination's own coordinates ARE the answer, and
+        nothing else needs saying. The exception is an exit onto another map:
+        its destination is a room over there, whose (x, y) means nothing here,
+        so the tile is the transition node this map draws in its place.
+
+        Split out of tile_actions rather than nested inside its loop so the
+        cross-map case is one branch a reader can see whole, and so the loop
+        stays a loop over exits instead of over coordinate arithmetic.
+
+    Notes/References:
+        A broken exit (no destination) and an off-grid destination are both
+        answered with None. The tile they would have named simply falls
+        through to the map node's own `goto`, which is a walk the pathfinder
+        will decline out loud if no route exists.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    destination = exit_obj.destination
+
+    if destination is None:
+        return None
+
+    there = room_coords(destination)
+
+    if not there:
+        return None
+
+    if there[-1] == here[-1]:
+        return [there[0], there[1]]
+
+    tile = _transition_tile(room, here, there)
+
+    return tile
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def interact_command(entity, kind: str) -> str:
@@ -801,14 +960,19 @@ def tile_actions(room) -> dict:
 
         An exit whose destination has no coordinates is skipped rather than
         guessed at; that is a room off the grid, which no tile can represent.
+        An exit whose destination is on ANOTHER map is not skipped and is not
+        read literally either -- see _transition_tile.
 
     Notes/References:
-        A cardinal neighbour with NO exit simply has no entry here, and picks
-        up the map node's `goto` instead -- which is the correction to the
-        client rule this replaces. The client refused those outright, treating
-        every unlinked neighbour as a wall; most maps are drawn with cardinal
-        links only, so the diagonal neighbours around a player are ordinarily
-        two steps away rather than walls.
+        A neighbour with no exit simply has no entry here and picks up the map
+        node's own `goto` instead. There are no wall markers: this used to
+        answer every cardinal neighbour with an empty command on the theory
+        that an unlinked neighbour is a barrier the player can see, and that
+        theory is false on any map drawn with diagonal links. On the oasis it
+        made (6,3) -- a tile linked to four diagonal neighbours and reachable
+        in two steps -- permanently unclickable from (6,2) directly below it.
+        A cell the map has no node for is not drawn by either client, so there
+        was never a click to refuse there either.
 
     Author: Nick Hobar
     Creation date: 08/23/2026
@@ -824,17 +988,12 @@ def tile_actions(room) -> dict:
     }
 
     for exit_obj in room.exits:
-        destination = exit_obj.destination
+        tile = _exit_tile(room, here, exit_obj)
 
-        if destination is None:
+        if not tile:
             continue
 
-        there = room_coords(destination)
-
-        if not there:
-            continue
-
-        key = tile_key(there[0], there[1])
+        key = tile_key(tile[0], tile[1])
 
         # The observer's own tile is already claimed by `look`, and an exit
         # looping back to its own room must not overwrite it.
@@ -843,21 +1002,5 @@ def tile_actions(room) -> dict:
 
         actions[key] = tile_action(
             str(exit_obj.key), const.TILE_ACTION_KIND_STEP)
-
-    # A cardinal neighbour no exit reached is a wall. Say so, rather than
-    # leaving it out: omission means "fall through to the node's own `goto`",
-    # and the pathfinder would route the player the long way around a barrier
-    # they can see. Diagonals are deliberately not checked -- see
-    # const.TILE_ACTION_KIND_NONE for why those two cases differ.
-    #
-    # A cardinal offset that is not on the map at all also lands here, and that
-    # is harmless: the client never draws a tile the map did not send, so the
-    # entry is four bytes nobody reads. Checking would mean giving this routine
-    # the parsed map for no gain.
-    for offset_x, offset_y in const.TILE_CARDINAL_OFFSETS:
-        key = tile_key(here[0] + offset_x, here[1] + offset_y)
-
-        if key not in actions:
-            actions[key] = tile_action("", const.TILE_ACTION_KIND_NONE)
 
     return actions

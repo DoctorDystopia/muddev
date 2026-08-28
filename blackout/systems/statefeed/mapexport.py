@@ -144,7 +144,8 @@ def _node_entries(xymap) -> list:
         xymap - a parsed XYMap.
 
     Exit/Returns:
-        One entry per node. `action` is the pathfinder walk to that node.
+        One entry per node. `action` is the pathfinder walk to that node, and
+        is ABSENT on a map-transition node, which is not a room to walk to.
 
     Module Globals:
         None.
@@ -165,10 +166,15 @@ def _node_entries(xymap) -> list:
     Notes/References:
         A node's action is valid only from within its own map. Blackout's maps
         are joined by transition NODES (the `T` glyph -- oasis and
-        oasis_outskirts each have one), which are walked onto like any other
-        tile; `goto` itself does not cross maps, and the server answers "target
-        outside of area" if asked to. A client therefore uses this only for a
-        tile on the map it is standing on.
+        oasis_outskirts each have one); `goto` itself does not cross maps, and
+        the server answers "target outside of area" if asked to. A client
+        therefore uses this only for a tile on the map it is standing on.
+
+        Both clients treat a node with no `action` as affording nothing, so the
+        transition tile is simply unlit until the player stands beside it.
+        Omitting the key is deliberate rather than sending an empty action: the
+        fall-through branch in each client returns the node's action verbatim
+        without re-testing its command, so an empty one there would be SENT.
 
     Author: Nick Hobar
     Creation date: 08/07/2026
@@ -182,12 +188,20 @@ def _node_entries(xymap) -> list:
 
     for node in index_map.values():
         kind = _node_room_kind(xymap, node)
-        entries.append({
-            "x": node.X,
-            "y": node.Y,
-            "room_kind": kind,
-            "action": serializers.goto_action(node.X, node.Y),
-        })
+        entry = {"x": node.X, "y": node.Y, "room_kind": kind}
+        transition = _is_transition_node(node)
+
+        # A transition node spawns NO room -- that is the contrib's whole
+        # design for it -- and `goto` resolves a room by coordinate, so
+        # `goto (0,2)` at the oasis teleporter answers "Could not find a room
+        # at (0,2)". Stamping one here made the tile look clickable while
+        # doing nothing. The way onto a transition is the ordinary exit from
+        # the tile beside it, which tile_actions names once the player is
+        # standing there.
+        if not transition:
+            entry["action"] = serializers.goto_action(node.X, node.Y)
+
+        entries.append(entry)
 
     return entries
 

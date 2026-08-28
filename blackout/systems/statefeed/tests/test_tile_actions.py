@@ -63,6 +63,50 @@ def _exit(key, destination):
     return SimpleNamespace(key=key, destination=destination)
 
 
+def _transition_node(x, y, target=(8, 10, "oasis_outskirts")):
+    """Return a stand-in MapTransitionNode -- a node that spawns no room."""
+    return SimpleNamespace(X=x, Y=y, target_map_xyz=target)
+
+
+def _mapped_room(x, y, z="oasis", exits=(), links=None):
+    """
+    Purpose: Return a stand-in room that also carries a parsed map.
+
+    Entry:
+        x, y, z - the room's grid position.
+        exits   - stand-in exits, as for _room.
+        links   - {direction: node} for the observer's OWN map node, which is
+                  where a transition node is found.
+
+    Exit/Returns:
+        A room whose `xymap` answers get_node_from_coord for its own tile.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Only the two things _transition_tile touches are modelled --
+        get_node_from_coord and the node's links -- for the same reason the
+        rooms here are namespaces: a real XYMap would need a grid, a Script and
+        a parse to answer one lookup.
+
+    Notes/References:
+        None
+    """
+    room = _room(x, y, z, exits)
+    node = SimpleNamespace(X=x, Y=y, links=links or {})
+
+    def _get_node_from_coord(xy, _node=node):
+        if tuple(xy) == (_node.X, _node.Y):
+            return _node
+
+        return None
+
+    room.xymap = SimpleNamespace(get_node_from_coord=_get_node_from_coord)
+
+    return room
+
+
 # ─── Test cases ──────────────────────────────────────────────────────────────
 
 class TileKeyTests(unittest.TestCase):
@@ -124,7 +168,6 @@ class TileActionShapeTests(unittest.TestCase):
             const.TILE_ACTION_KIND_WALK,
             const.TILE_ACTION_KIND_LOOK,
             const.TILE_ACTION_KIND_CANCEL,
-            const.TILE_ACTION_KIND_NONE,
         }
         produced = [
             serializers.goto_action(1, 1),
@@ -191,9 +234,8 @@ class TileActionsTests(unittest.TestCase):
     def test_a_broken_exit_contributes_no_step(self):
         """
         Asserted as "no step was produced" rather than as a census of the
-        returned keys: the cardinal wall markers are also in there, and a test
-        that counted them would have to be rewritten every time the shape of
-        the map changed rather than when its meaning did.
+        returned keys, so it says what it means rather than what the map
+        happened to contain on the day it was written.
         """
         room = _room(1, 1, exits=[_exit("north", None)])
         actions = serializers.tile_actions(room)
@@ -213,16 +255,17 @@ class TileActionsTests(unittest.TestCase):
 
         self.assertNotIn(const.TILE_ACTION_KIND_STEP, kinds)
 
-    def test_a_broken_exit_leaves_its_direction_walled(self):
+    def test_a_broken_exit_leaves_its_direction_absent(self):
         """
-        The other half of the same case. A north exit that leads nowhere must
-        not leave the tile north of here looking walkable -- it falls into the
-        cardinal sweep like any other unlinked neighbour.
+        The other half of the same case. A north exit leading nowhere names no
+        tile at all, so the tile north of here falls through to the map node's
+        own `goto` -- which is right: the room is still there, and the
+        pathfinder either finds another way in or declines out loud.
         """
         room = _room(1, 1, exits=[_exit("north", None)])
         actions = serializers.tile_actions(room)
 
-        self.assertEqual(actions["1:2"]["kind"], const.TILE_ACTION_KIND_NONE)
+        self.assertNotIn("1:2", actions)
 
     def test_an_exit_looping_back_does_not_overwrite_look(self):
         """
@@ -248,39 +291,30 @@ class TileActionsTests(unittest.TestCase):
 
         self.assertNotIn("5:7", actions)
 
-    def test_a_cardinal_with_no_exit_is_a_wall_said_out_loud(self):
+    def test_a_cardinal_with_no_exit_is_absent_too(self):
         """
-        Not absent -- absent would mean "walk there the long way round". This
-        is the client's old wall rule, moved rather than dropped: a click on a
-        visible barrier should not send the player around it.
+        The fix of 08/28/2026, and the same rule as the diagonal above rather
+        than an exception to it. This used to answer with an empty command
+        meaning "a wall you can see", on the theory that no direct link means
+        no way through. On the oasis, (6,3) carries the foundry furnace, is
+        joined to four DIAGONAL neighbours and to no cardinal one, and so the
+        theory made a tile two steps away, in plain view, permanently
+        unclickable from (6,2) directly below it.
         """
         room = _room(4, 6, exits=[_exit("north", _room(4, 7))])
         actions = serializers.tile_actions(room)
 
-        self.assertEqual(actions["5:6"], {
-            "command": "", "kind": const.TILE_ACTION_KIND_NONE})
+        self.assertNotIn("5:6", actions)
 
-    def test_a_cardinal_with_an_exit_is_not_marked_a_wall(self):
+    def test_a_cardinal_with_an_exit_is_still_a_step(self):
         """
-        The exit must win. Marking a real exit as a wall would make the one
-        direction the player can actually walk the one tile they cannot click.
+        The exit must win. The one direction the player can actually walk must
+        not be the one tile they cannot click.
         """
         room = _room(4, 6, exits=[_exit("north", _room(4, 7))])
         actions = serializers.tile_actions(room)
 
         self.assertEqual(actions["4:7"]["kind"], const.TILE_ACTION_KIND_STEP)
-
-    def test_every_cardinal_neighbour_is_accounted_for(self):
-        """
-        All four, or the rule has a hole: an unlisted cardinal falls through to
-        `goto` and the barrier becomes walkable again from one side only.
-        """
-        actions = serializers.tile_actions(_room(0, 0))
-
-        for key in ("0:1", "1:0", "0:-1", "-1:0"):
-            with self.subTest(tile=key):
-                self.assertEqual(
-                    actions[key]["kind"], const.TILE_ACTION_KIND_NONE)
 
     def test_the_map_stays_small(self):
         """
@@ -296,14 +330,75 @@ class TileActionsTests(unittest.TestCase):
                  _exit("northwest", _room(-1, 1))]
         actions = serializers.tile_actions(_room(0, 0, exits=exits))
 
-        # Eight exits plus the observer's own tile, and never more -- every
-        # cardinal is already claimed by an exit, so no wall markers are added.
+        # Eight exits plus the observer's own tile, and never more.
         self.assertEqual(len(actions), 9)
 
-    def test_the_worst_case_is_still_small(self):
+    def test_the_worst_case_is_one_entry(self):
         """
-        A room with no exits at all: its own tile plus four wall markers. That
-        is the ceiling for this field, and it is the number that justifies
-        sending it on a channel that fires every time anyone moves.
+        A room with no exits at all carries its own tile and nothing else --
+        the floor, now that the wall markers are gone. The eight above are
+        still the ceiling, and that is the number justifying a field sent every
+        time anyone moves.
         """
-        self.assertEqual(len(serializers.tile_actions(_room(0, 0))), 5)
+        self.assertEqual(len(serializers.tile_actions(_room(0, 0))), 1)
+
+
+class TransitionTileTests(unittest.TestCase):
+    """An exit onto ANOTHER map is drawn on this one, at the `T` node."""
+
+    def test_a_cross_map_exit_is_filed_under_the_transition_tile(self):
+        """
+        The oasis teleporter. Its exit's destination is a room at
+        (8,10,oasis_outskirts), because the contrib's TransitionMapNode hands
+        the builder the TARGET's coordinates -- the `T` itself spawns no room.
+        The tile the player clicks is therefore the `T` at (0,2) on THIS map.
+        """
+        far = _room(8, 10, z="oasis_outskirts")
+        node = _transition_node(0, 2)
+        room = _mapped_room(1, 2, exits=[_exit("west", far)],
+                            links={"w": node})
+        actions = serializers.tile_actions(room)
+
+        self.assertEqual(actions["0:2"], {
+            "command": "west", "kind": const.TILE_ACTION_KIND_STEP})
+
+    def test_a_cross_map_exit_claims_no_tile_on_this_map(self):
+        """
+        The other half, and the one that was actively wrong rather than merely
+        missing: read literally, the destination put a `west` step on the oasis
+        tile at (8,10) -- a real tile, nowhere near the teleporter.
+        """
+        far = _room(8, 10, z="oasis_outskirts")
+        node = _transition_node(0, 2)
+        room = _mapped_room(1, 2, exits=[_exit("west", far)],
+                            links={"w": node})
+        actions = serializers.tile_actions(room)
+
+        self.assertNotIn("8:10", actions)
+
+    def test_the_transition_matched_is_the_one_leading_there(self):
+        """
+        A room with two doorways off the map files each under its own tile.
+        Matched on target_map_xyz rather than on link order, because a link
+        dict has no order worth trusting.
+        """
+        far = _room(8, 10, z="oasis_outskirts")
+        wrong = _transition_node(0, 2, target=(1, 1, "neo_cairo"))
+        right = _transition_node(2, 3)
+        room = _mapped_room(1, 2, exits=[_exit("west", far)],
+                            links={"w": wrong, "ne": right})
+        actions = serializers.tile_actions(room)
+
+        self.assertIn("2:3", actions)
+        self.assertNotIn("0:2", actions)
+
+    def test_a_cross_map_exit_with_no_transition_node_is_skipped(self):
+        """
+        A room with no parsed map behind it must not guess. Guessing is what
+        put the teleporter's step on an arbitrary tile in the first place.
+        """
+        far = _room(8, 10, z="oasis_outskirts")
+        room = _room(1, 2, exits=[_exit("west", far)])
+        actions = serializers.tile_actions(room)
+
+        self.assertEqual(list(actions), ["1:2"])

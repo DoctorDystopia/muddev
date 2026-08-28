@@ -378,12 +378,12 @@ EQUIPMENT_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
 #
 # WHY THIS MOVED. The client used to work it out, and the rules it needed were
 # all facts about the map: that a different z is a different map and cannot be
-# walked to, that a cardinal neighbour with no exit is a wall, that a DIAGONAL
-# neighbour with no exit is not a wall but two cardinal steps, and a grid-delta
-# -> direction-name table to turn any of it into a command. Every one of those
-# is the server's to know, and the diagonal rule was got wrong once already --
-# refusing it left the eight tiles nearest the player the only ones in the pane
-# that could not be clicked.
+# walked to, which neighbours were walls, and a grid-delta -> direction-name
+# table to turn any of it into a command. Every one of those is the server's to
+# know, and the neighbour rule was got wrong TWICE -- first refusing every
+# diagonal, then, once it had moved here, refusing every unlinked cardinal.
+# Both times the symptom was the same: tiles the player could plainly reach
+# were the only ones in the pane that could not be clicked.
 #
 # It is the same argument that deleted the client's entity verb table, and it
 # is stronger here: a second client (godot/) has not yet reimplemented any of
@@ -397,28 +397,26 @@ TILE_ACTION_KIND_WALK: str = "walk"      # a pathfinder walk; starts tracking
 TILE_ACTION_KIND_LOOK: str = "look"      # no movement, no effect on tracking
 TILE_ACTION_KIND_CANCEL: str = "cancel"  # aborts the walk in progress
 
-# The tile affords NOTHING, said out loud rather than by omission.
+# THERE IS NO WALL MARKER, and the missing fifth kind is the point.
 #
-# Omission means "fall through to the map node's own `goto`", so a tile that
-# must NOT be walked to needs its own answer. It carries an empty command, the
-# same way an entity that affords nothing carries an empty `interact`.
+# A tile with no entry in tile_actions falls through to the map node's own
+# `goto`, and until 08/28/2026 the server pushed back against that for one
+# case: a CARDINAL neighbour reached by no exit was answered with an empty
+# command, so that a click on what looked like a barrier did not send the
+# player the long way around it.
 #
-# It exists for one case: a CARDINAL neighbour with no exit, which is a wall.
-# The pathfinder would happily route around it, and the client used to refuse
-# the click for exactly that reason -- so that a click on a visible barrier
-# does not send the player the long way around it. That is a real judgement
-# about how the pane should feel, and moving the rule to the server is not a
-# licence to drop it.
+# The premise is false on any map drawn with diagonal links. On the oasis,
+# (6,3) carries the foundry furnace and is joined to FOUR diagonal neighbours
+# and to no cardinal one, so standing at (6,2) -- directly below it, two steps
+# away -- the one tile the player was looking at was the one tile the pane
+# refused. The teleporter at (0,2) was refused the same way from (0,1).
 #
-# A DIAGONAL neighbour with no exit is NOT this. Most maps are drawn with
-# cardinal links only, so the diagonals around a player are ordinarily two
-# steps away rather than barriers; refusing those was a bug that left the tiles
-# nearest the player the only ones in the pane that could not be clicked.
-TILE_ACTION_KIND_NONE: str = "none"
-
-# The cardinal offsets checked for that wall case. Diagonals are deliberately
-# absent; see above.
-TILE_CARDINAL_OFFSETS: tuple = ((0, 1), (1, 0), (0, -1), (-1, 0))
+# Nor was anything gained where the premise held: a cell the map has no node
+# for is never DRAWN by either client, so there was no click there to refuse.
+# The rule could only ever fire on tiles that were real and reachable.
+#
+# An unreachable tile still answers out loud, just further down: `goto`
+# declines a route it cannot find, in words, in the text pane.
 
 # The command a client sends to look at where it already is.
 TILE_COMMAND_LOOK: str = "look"

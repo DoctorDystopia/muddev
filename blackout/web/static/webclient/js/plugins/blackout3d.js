@@ -1224,9 +1224,9 @@ const pickTile = function (event, rect) {
 // DIAGONAL neighbour with no exit is not a wall but two steps, and a
 // grid-delta -> direction-name table to name any of it. All of that was
 // knowledge about the map, held in the one place that cannot see the map,
-// and the diagonal rule was wrong for a while — it refused those tiles,
-// which left the eight nearest the player the only ones in the pane that
-// could not be clicked.
+// and the neighbour rule was wrong twice — first here, refusing every
+// diagonal; then on the server, refusing every unlinked cardinal. Both
+// times the tiles nearest the player were the ones the pane refused.
 //
 // The server now names the whole command and says what it does to a walk.
 // See serializers.tile_actions and mapexport._node_entries.
@@ -1251,9 +1251,11 @@ const tileAction = function (tile) {
         // An EMPTY command means the tile affords nothing — the same way
         // an entity with an empty `interact` does. It is not the same as
         // being absent: absent means "fall through to the node's own
-        // goto", and this is the server saying not to. It sends it for a
-        // cardinal neighbour with no exit, which is a wall the player can
-        // see, and walking the long way around one reads as a bug.
+        // goto". Nothing sends one today; the wall markers that used to
+        // are gone (they refused tiles that were plainly reachable — see
+        // the tile-affordance section of statefeed/constants.py). The
+        // branch stays because the field is a wire contract, and a client
+        // that sent an empty command would be walking on a typo.
         if (!near.command) {
             return null;
         }
@@ -1268,7 +1270,10 @@ const tileAction = function (tile) {
     }
 
     // Not a neighbour: the map node's own walk, if the server gave it one.
-    // A node with no action affords nothing and stays unlit.
+    // A node with no action affords nothing and stays unlit — a map
+    // TRANSITION is the case that has none, because it spawns no room for
+    // `goto` to resolve. You reach one by stepping onto it from beside it,
+    // which is a `near` action above.
     return tile.action || null;
 };
 

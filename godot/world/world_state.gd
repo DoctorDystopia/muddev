@@ -131,13 +131,19 @@ func ingest_room_info(payload: Dictionary) -> void:
 ##
 ## Two lookups and one distinction:
 ##
-##   near tile, EMPTY command -> {} . The server says no. It sends this for a
-##       cardinal neighbour with no exit -- a wall the player can SEE, and
-##       walking the long way around one reads as a bug.
+##   near tile, EMPTY command -> {} . The server says no.
 ##   near tile, ABSENT        -> fall through to the node's own `goto`.
 ##
-## The difference is the whole reason `tile_actions` carries wall markers at
-## all. Diagonals are deliberately absent: refusing those was the original bug.
+## Nothing on the server sends an empty command today. It used to, for every
+## cardinal neighbour reached by no exit, on the theory that an unlinked
+## neighbour is a wall the player can see -- and that theory made the foundry
+## tile at oasis (6,3), joined to four DIAGONAL neighbours and two steps from
+## (6,2) below it, permanently unclickable. The branch stays because the field
+## is a wire contract, not because anything fills it.
+##
+## A node the map gave no `action` affords nothing either, and a map TRANSITION
+## is that case: it spawns no room for `goto` to resolve, so it is reached by
+## stepping onto it from beside it -- a near action, not a fall-through.
 ##
 ## `cell` is resolved in the CURRENT island's coordinate space by
 ## WorldView._cell_under, so a click on another island lands on a cell this map
