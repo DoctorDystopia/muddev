@@ -98,28 +98,56 @@ static func resolve(override: String, is_debug: bool) -> String:
 ## both at the call site — parameters rather than reads, so every combination is
 ## testable without four builds.
 ##
-## Returns an ORIGIN to prefix a model path with, and "" is a real answer, not a
-## failure: an empty origin makes [method ModelRegistry.url_for] produce a
-## root-relative path, which the browser resolves against the page it loaded.
-## That is precisely how the web build avoids the CORS refusal above — it never
-## names a host, so there is no cross-origin request to refuse.
+## `page_origin` is what the page was served from, which only a web build can
+## know and only at runtime — [method page_origin] reads it. Passed in rather
+## than read here so this stays pure and every combination is testable; "" is
+## the right thing to pass from anywhere that is not a web build.
+##
+## Returns an ORIGIN to prefix a model path with.
 ##
 ##     debug, anywhere   -> the local Evennia webserver
-##     release, web      -> "" — same origin as the page
+##     release, web      -> the page's own origin, so the fetch is same-origin
 ##     release, desktop  -> the game origin, since there is no page to be
 ##                          relative to
+##
+## An empty answer for a web build means the page origin could not be read, and
+## it is a FAILURE rather than a shorthand for "relative" — see the class
+## docstring on why relative is not something HTTPRequest can do.
 ##
 ## **The web case puts a requirement on the deploy**: whatever serves the client
 ## must also serve the model tree at the same path this client asks for, which
 ## is [constant ModelRegistry.MODEL_ROOT]. See `deploy/webexport/README.md`.
-static func asset_origin(is_debug: bool, is_web: bool) -> String:
+static func asset_origin(is_debug: bool, is_web: bool,
+		page_origin: String = "") -> String:
 	if is_debug:
 		return ASSET_DEV_ORIGIN
 
 	if is_web:
-		return ""
+		return page_origin.rstrip("/")
 
 	return ASSET_DESKTOP_ORIGIN
+
+
+## The origin the page was served from, or "" anywhere that is not the web.
+##
+## The one impure routine in this file, and it is kept apart from the decision
+## above for exactly that reason: every branch of [method asset_origin] is
+## testable without a browser, and this is the single line that needs one.
+##
+## `JavaScriptBridge` exists on every platform and answers null off the web, so
+## the feature check is what draws the line rather than a missing symbol.
+static func page_origin() -> String:
+	if not OS.has_feature("web"):
+		return ""
+
+	var answer: Variant = JavaScriptBridge.eval("location.origin", true)
+
+	if answer == null:
+		push_warning("ServerEndpoint: the page would not name its origin, so "
+			+ "art cannot be fetched and everything will draw a family shape")
+		return ""
+
+	return str(answer)
 
 
 ## Is this a URL worth dialling?

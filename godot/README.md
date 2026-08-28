@@ -107,9 +107,13 @@ the file loudly instead of silently drawing every weapon as a box.
 > exempt from CORS; an HTTP fetch for a `.glb` is not, and
 > `game.playblackout.io/static/webclient/models/` serves no
 > `Access-Control-Allow-Origin` (measured 08/26/2026). `ServerEndpoint.asset_origin`
-> therefore returns `""` for a release web build, so the request is relative and
-> never crosses an origin. **The deploy has to put the model tree at the same
-> path** — see `deploy/webexport/README.md`.
+> therefore prefixes **the page's own origin** for a release web build, read off
+> `location.origin` through `JavaScriptBridge`. Same origin, no preflight.
+> **Not a relative path**: `HTTPRequest` parses the URL itself and refuses one
+> with no scheme, which is how a release client came to draw every entity as a
+> family shape while the art sat correctly deployed beside it (08/27/2026).
+> **The deploy has to put the model tree at the same path** — see
+> `deploy/webexport/README.md`.
 
 > **`STATEFEED_ENTITY_RADIUS` is 10, not 0** — a 21x21 neighbourhood, 441
 > rooms. So the feed names a great deal the text channel does not, and every
@@ -121,13 +125,24 @@ the file loudly instead of silently drawing every weapon as a box.
 > wrong.
 
 > **A rigged model's `mesh.get_aabb()` is its BIND POSE, not what renders.**
-> `player_character` measures 0.74 x **0.17** x 1.00 by its meshes — flat, as if
-> lying down — while its skeleton spans 1.04 tall. Normalising by the mesh box
-> alone made it about six times too big and left it floating. `bounds_of` merges
-> in the skeleton's rest bones, which is a floor on the real extent rather than
-> the whole of it. **The proper fix is baking the skinning out in
-> `assets/pack_model.py`** — these models carry skinning attributes for zero
-> animations, so the rig is dead weight that also breaks measurement.
+> The Spider-Man placeholder `player_character` carried until 08/27/2026
+> measured 0.74 x **0.17** x 1.00 by its meshes — flat, as if lying down — while
+> its skeleton spanned 1.04 tall. Normalising by the mesh box alone made it
+> about six times too big and left it floating. `bounds_of` merges in the
+> skeleton's rest bones, which is a floor on the real extent rather than the
+> whole of it. The base character that replaced it does not reproduce the bug —
+> its bind pose is the pose — so **do not read the merge as dead code**: nothing
+> about a file announces which kind it is. **The proper fix is baking the
+> skinning out in `assets/pack_model.py`** — these models carry skinning
+> attributes for zero animations, so the rig is dead weight that also breaks
+> measurement.
+
+> **The character is a T-POSE, so it is fractionally WIDER than it is tall.**
+> 1.859 of outstretched arms against 1.820 of height, which means the normalise
+> divides by the arm span and the figure stands 0.979 of a unit rather than
+> 1.000. Two percent is not worth correcting, but "the longest axis is the
+> height" stopped being true for characters and the smoke test says so in the
+> assertion it makes — uprightness is measured against DEPTH, not width.
 
 > **An export can be wrong about itself, and nothing downstream can tell.** The
 > eye's body arrives at albedo alpha 0 against `alphaMode: BLEND` — an invisible

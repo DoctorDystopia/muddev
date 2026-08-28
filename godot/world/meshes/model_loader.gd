@@ -60,8 +60,13 @@ const UNIT := 1.0
 ## reciprocal of that is an inf that propagates into the transform.
 const MIN_EXTENT := 0.0001
 
-## Where this build fetches art from. Empty means "relative to the page", which
-## is how the web build stays same-origin; see [method ServerEndpoint.asset_origin].
+## Where this build fetches art from, as an absolute origin — on the web that is
+## the page's own, which is how the fetch stays same-origin; see
+## [method ServerEndpoint.asset_origin].
+##
+## Empty is a FAILURE and not a shorthand for "relative": `HTTPRequest` parses
+## the URL and refuses one with no scheme, so an empty origin here means nothing
+## is ever fetched and every entity falls back to its family shape.
 var _origin := ""
 
 ## The registry that knows which keys have art and how each is oriented.
@@ -386,9 +391,15 @@ static func bounds_of(root: Node3D) -> AABB:
 	# SKINNED meshes measure wrong, and badly. A rigged model's vertices are
 	# stored in bind space and placed by bones at draw time, so `mesh.get_aabb()`
 	# describes the bind pose rather than anything you can see. Measured
-	# 08/26/2026: player_character's mesh box is 0.74 x **0.17** x 1.00 while its
-	# skeleton spans 1.04 tall. Normalising by the mesh box therefore made the
-	# character about six times too big, and centring that box left it floating.
+	# 08/26/2026 on the Spider-Man placeholder player_character carried until
+	# 08/27/2026: its mesh box is 0.74 x **0.17** x 1.00 while its skeleton spans
+	# 1.04 tall. Normalising by the mesh box therefore made the character about
+	# six times too big, and centring that box left it floating.
+	#
+	# The base character that replaced it does NOT reproduce that -- its bind
+	# pose is the pose, so the two boxes agree. The merge stays because the
+	# failure is a property of rigged glTF and not of one download, and because
+	# nothing about a file announces which kind it is.
 	#
 	# Bone origins are a floor on the real extent, not the whole of it -- the top
 	# of a head reaches past the head bone. It is an approximation, and a far

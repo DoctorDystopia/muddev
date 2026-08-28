@@ -95,10 +95,13 @@ func _ready() -> void:
 	_input.grab_focus()
 	# ServerEndpoint decides where art is fetched from, the same way it decides
 	# where the socket dials -- keyed off the build rather than a constant
-	# somebody has to remember to flip. See asset_origin() on why the web case
-	# deliberately names no host at all.
+	# somebody has to remember to flip. The page origin is read here rather than
+	# in there because it is the one input that needs a browser; see
+	# asset_origin() on why the web case names the page's own host and not a
+	# relative path.
 	_meshes = MeshResolver.new(ModelRegistry.new(),
-		ServerEndpoint.asset_origin(OS.is_debug_build(), OS.has_feature("web")))
+		ServerEndpoint.asset_origin(OS.is_debug_build(), OS.has_feature("web"),
+			ServerEndpoint.page_origin()))
 	add_child(_meshes)
 
 	_hud.bind(_char)
