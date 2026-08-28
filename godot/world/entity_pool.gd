@@ -37,6 +37,21 @@ extends Node3D
 ## That is the whole reason the ladder normalises: the browser spread the
 ## equivalent across ENTITY_SCALE, TILE_PROP_SCALE and ITEM_SCALE in three
 ## files, and they drifted.
+##
+## ## The observer occupies a tile this pool cannot see
+##
+## `emit_room_contents` excludes the observer from their OWN room_players list —
+## `CharAvatarPayload` says so in as many words — so the one tile that is never
+## empty is the one tile the feed describes as holding one fewer thing than it
+## does. Left at that, a ring of one sized itself to radius 0 and a single item
+## dropped at your feet was drawn exactly inside you, which is what "everything
+## sits in the middle of the tile" looked like from the outside.
+##
+## So [method stand] is told which tile that is, the observer takes slot 0 of
+## its ring, and [signal observer_slot_changed] hands the pane back the offset
+## to draw them at. The pane still owns the avatar — it hangs off the marker the
+## camera follows — and this pool still draws none of it. All that crosses is
+## where the ring left room.
 
 const ENTITY_RADIUS := 0.26     # smallest ring radius within one tile
 
@@ -57,7 +72,11 @@ const MAX_RING_RADIUS := 0.44
 ## small enough that four in a ring do not touch.
 const ENTITY_SCALE := 0.5
 
-const JITTER_SHARE := 0.35      # how far a slot may drift from its even share
+## How far a ring may be turned from slot 0 pointing at +X, as a share of one
+## slot. A ROTATION of the whole ring, not a per-occupant nudge -- see
+## [method _slot_position] for why that distinction is the difference between a
+## ring that spaces itself and one that only nearly does.
+const RING_TURN_SHARE := 0.35
 const HIT_FLASH_SECONDS := 0.32
 
 const COLOR_HIT_FLASH := Color.WHITE
@@ -68,9 +87,28 @@ const COLOR_HIT_FLASH := Color.WHITE
 const COLOR_HOVER_GLOW := Color(0.6, 0.7, 0.85)
 const HOVER_ENERGY := 0.6
 
+## Fired when the observer's own slot on their tile moves, as an offset from
+## the tile's centre.
+##
+## The pool does not draw the observer and must not start: the avatar hangs off
+## the marker the camera follows and the aura ring is anchored to it, so moving
+## the observer here would drag both off the tile. What crosses is an offset the
+## pane applies WITHIN the marker, leaving the anchor where it was.
+##
+## Emitted on every rebuild, including the one that finds the observer standing
+## alone again and hands back [constant Vector3.ZERO].
+signal observer_slot_changed(offset: Vector3)
+
 ## Which entity the cursor is over. Zero for none, safe because Evennia object
 ## ids start at 1.
 var _hovered := 0
+
+## The tile the observer is standing on, as a tile key, or empty before the
+## first room has arrived.
+##
+## Read only to decide whether a tile's ring has one more occupant than the feed
+## named. See the class docstring for why the feed cannot say so itself.
+var _observer_tile := ""
 
 ## Turns an entity's `coords` into a world position, or null when its map is not
 ## on screen yet.
@@ -111,6 +149,20 @@ func bind(resolver: MeshResolver, locate: Callable) -> void:
 ## island makes every entity standing on it drawable.
 func replace_positions() -> void:
 	_rebuild()
+
+
+## Record which tile the observer is standing on. Takes effect on the next
+## placement, which is why the world pane calls it immediately before
+## [method replace_positions] rather than instead of it.
+##
+## A pure setter on purpose. Every other route into this file rebuilds because
+## something it draws changed; this one changes something it does NOT draw, and
+## rebuilding here would mean two full rebuilds on every step the observer takes.
+##
+## `coords` arrives in the same shape an entity carries them, so both sides of
+## the comparison are spelled by [method _tile_key] and cannot drift.
+func stand(coords: Array) -> void:
+	_observer_tile = _tile_key(coords)
 
 
 ## Replace everything visible. `room_players` is the full list, sent on arrival
@@ -303,7 +355,8 @@ func _rebuild() -> void:
 	var by_tile: Dictionary = {}
 
 	for entity: Dictionary in _entities:
-		var where: Variant = _locate.call(entity.get("coords", []))
+		var coords: Array = entity.get("coords", [])
+		var where: Variant = _locate.call(coords)
 
 		# Drawn nowhere rather than somewhere wrong. Its map has not arrived, so
 		# there is no honest position to give it; the relayout that places the
@@ -311,26 +364,52 @@ func _rebuild() -> void:
 		if where == null:
 			continue
 
-		var key := str(entity.get("coords", []))
+		var key := _tile_key(coords)
 
 		if not by_tile.has(key):
 			by_tile[key] = {"origin": where, "entities": []}
 
 		by_tile[key]["entities"].append(entity)
 
+	var observer_offset := Vector3.ZERO
+
 	for key: String in by_tile:
 		var group: Dictionary = by_tile[key]
 		var here: Array = group["entities"]
+
+		# Sorted by id rather than left in arrival order. The slot INDEX is what
+		# keeps a thing in the same place between frames, and arrival order does
+		# not: removing the first of three entities used to shuffle the other
+		# two around the ring for no reason the player could see. Ids are stable
+		# and total, so the same occupants always produce the same ring.
+		here.sort_custom(_by_id)
+
+		# The observer is drawn by the world pane, not here, but they OCCUPY
+		# their tile -- so they take slot 0 and everything standing with them
+		# rings around from slot 1. Slot 0 and not their id's place in the sort,
+		# because this file is never told what their id is and does not need to
+		# be: one reserved slot is as stable as a sorted one.
+		var shared := key == _observer_tile
+		var occupants := here.size() + (1 if shared else 0)
+		var first := 1 if shared else 0
 
 		for index: int in here.size():
 			var entity: Dictionary = here[index]
 			var node := _build(entity)
 
 			node.position = _slot_position(
-				group["origin"], _id_of(entity), index, here.size())
+				group["origin"], key, first + index, occupants)
 			node.position.y += _rest_offset(node)
 			add_child(node)
 			_nodes[_id_of(entity)] = node
+
+		if shared:
+			# An OFFSET, so the origin is zero: the pane adds this inside the
+			# marker, which is already standing on the tile this ring is drawn
+			# around.
+			observer_offset = _slot_position(Vector3.ZERO, key, 0, occupants)
+
+	observer_slot_changed.emit(observer_offset)
 
 
 ## One entity's mesh, from the ladder.
@@ -348,28 +427,32 @@ func _build(entity: Dictionary) -> Node3D:
 	return node
 
 
-## Even slots around the ring, nudged by a hash of the id.
+## Even slots around the ring, the whole ring rotated by a hash of the TILE.
 ##
-## The nudge exists so two rooms holding the same number of things do not
-## produce identical rings. It is deliberately smaller than one slot, so the
-## slot ORDER -- which is what makes an entity stay put between frames -- still
-## comes from the index.
-func _slot_position(origin: Vector3, entity_id: int, index: int,
+## The rotation exists so two rooms holding the same number of things do not
+## produce identical rings. Seeded on the tile and applied once, so every
+## occupant turns together: it used to be hashed per entity, which let two
+## neighbours drift up to a third of a slot TOWARDS each other and undid the
+## spacing _ring_radius had just worked out — four things sized to stand 0.500
+## apart arrived 0.496 apart, which is a ring that overlaps for no reason but
+## its own decoration. A rigid turn buys the same variety and costs nothing.
+##
+## The slot ORDER, which is what keeps a thing in the same place between frames,
+## still comes from the index alone.
+func _slot_position(origin: Vector3, tile: String, index: int,
 		total: int) -> Vector3:
 	var spread := maxi(total, 1)
-	var jitter := float(WorldView.stable_hash(str(entity_id)) % 100) / 100.0
-	var angle := (float(index) + jitter * JITTER_SHARE) / float(spread) * TAU
+	var turn := float(WorldView.stable_hash(tile) % 100) / 100.0
+	var angle := (float(index) + turn * RING_TURN_SHARE) / float(spread) * TAU
+	var radius := _ring_radius(spread)
 
 	# No lift here: _rest_offset puts each node's bottom on the tile, per node,
 	# which one constant could never do for a normalised model, a procedural
 	# figure and a rigged character at once.
-	# No lift here: _rest_offset puts each node's bottom on the tile,
-	# per node, which one constant could never do for a normalised
-	# model, a procedural figure and a rigged character at once.
 	return origin + Vector3(
-		cos(angle) * _ring_radius(spread),
+		cos(angle) * radius,
 		0.0,
-		sin(angle) * _ring_radius(spread)
+		sin(angle) * radius
 	)
 
 
@@ -391,21 +474,29 @@ func _rest_offset(node: Node3D) -> float:
 	return -bounds.position.y * ENTITY_SCALE
 
 
-## How far out to place a ring of `total` entities.
+## How far out to place a ring of `total` occupants.
 ##
-## Grows with the count instead of being fixed. At the old constant radius the
-## ring's circumference is about 1.63 units, so four entities 0.34 across sit
-## comfortably and seven overlap into a pile — which is exactly what a busy tile
-## looked like. Widening keeps them separate, and is capped so a crowded tile
-## spreads within its own square rather than sprawling across its neighbours.
+## Grows with the count instead of being fixed, and the number it grows by is
+## the CHORD between neighbours rather than the circumference. Those are not the
+## same sum: `total * ENTITY_SCALE / TAU` measures the arc, which always
+## overstates how far apart two neighbours actually are, and it overstates it
+## worst on the small rings — it called a ring of three roomy while its
+## occupants sat 0.45 apart and 0.5 wide. Solving the chord instead
+## (`2r·sin(π/total) >= ENTITY_SCALE`) is the same intent done honestly, and it
+## is what lets five things share a tile without touching where the arc maths
+## started piling them up at three.
+##
+## Still capped, so a crowded tile spreads within its own square rather than
+## sprawling across its neighbours. Five is what fits inside that cap; a sixth
+## occupant starts the overlapping again — which is the honest outcome, because
+## the alternative is one room's occupants standing on the next room's floor.
 func _ring_radius(total: int) -> float:
 	if total <= 1:
 		return 0.0
 
-	# The circumference needed to give each entity its own width, converted back
-	# to a radius. maxf keeps a small ring at the authored spacing rather than
-	# letting two entities sit closer than the constant intends.
-	var needed := (float(total) * ENTITY_SCALE) / TAU
+	# maxf keeps a small ring at the authored spacing rather than letting two
+	# occupants sit closer than the constant intends.
+	var needed := ENTITY_SCALE / (2.0 * sin(PI / float(total)))
 
 	return minf(maxf(ENTITY_RADIUS, needed), MAX_RING_RADIUS)
 
@@ -423,8 +514,31 @@ func _on_art_arrived(asset_key: String) -> void:
 			return
 
 
+## The key one tile is grouped under.
+##
+## Rendered from ints rather than being `str(coords)`, because every number in a
+## parsed payload is a float: an entity's tile stringifies as
+## `[7.0, 1.0, "oasis"]` while the observer's, built from a Vector2i, would come
+## out as `[7, 1, "oasis"]`, and the two would never group together.
+##
+## Coords too short to name a tile — an off-grid room sends `[]` — key as the
+## empty string. No real tile can be that, so it never matches `_observer_tile`
+## in the window before the first room has arrived.
+static func _tile_key(coords: Array) -> String:
+	if coords.size() < 3:
+		return ""
+
+	return "%d:%d:%s" % [int(coords[0]), int(coords[1]), str(coords[2])]
+
+
+## Ring order. A named function because `sort_custom` takes a Callable and a
+## lambda here would be rebuilt for every tile on every rebuild.
+static func _by_id(first: Dictionary, second: Dictionary) -> bool:
+	return _id_of(first) < _id_of(second)
+
+
 ## Entity ids arrive as floats, like every other number Godot parses out of
 ## JSON. Converted here, at the point of use, because this is where they become
 ## dictionary keys -- and a key of 20743.0 never matches one written as 20743.
-func _id_of(entity: Dictionary) -> int:
+static func _id_of(entity: Dictionary) -> int:
 	return int(entity.get("id", 0))

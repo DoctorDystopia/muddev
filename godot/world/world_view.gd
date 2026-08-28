@@ -134,6 +134,15 @@ var _meshes: MeshResolver
 ## it stays the anchor and this is what the anchor wears.
 var _avatar: Node3D
 
+## Where on the marker tile the avatar stands, handed over by [EntityPool].
+##
+## The marker itself never moves off the tile's centre — it is what the camera
+## rig follows by NodePath and what the aura ring is anchored to, and both would
+## slide off the tile with it. Only the figure hanging on it shifts, into the
+## slot the ring left for it, so a dropped item is beside you rather than inside
+## you and a crowded tile reads as several people rather than one.
+var _avatar_offset := Vector3.ZERO
+
 ## The observer's own state, bound by the console. Read for `asset` and
 ## `family` and nothing else.
 ##
@@ -167,6 +176,7 @@ func _ready() -> void:
 func bind_meshes(resolver: MeshResolver) -> void:
 	_meshes = resolver
 	_entities.bind(_meshes, _locate_coords)
+	_entities.observer_slot_changed.connect(_on_observer_slot)
 	_meshes.refreshed.connect(_on_art_arrived)
 
 	# Something stands on the marker from the first frame, before char_avatar
@@ -202,9 +212,12 @@ func _redraw_avatar() -> void:
 
 	_avatar = _meshes.resolve_entity(asset, family)
 	_avatar.scale = Vector3.ONE * AVATAR_SCALE
-	# Rests on the tile by measurement, like everything standing beside it.
+	# Rests on the tile by measurement, like everything standing beside it, and
+	# stands in the ring slot the pool reserved -- which is the middle of the
+	# tile whenever nothing is sharing it.
 	var bounds := ModelLoader.bounds_of(_avatar)
-	_avatar.position = Vector3(0.0, -bounds.position.y * AVATAR_SCALE, 0.0)
+	_avatar.position = _avatar_offset + Vector3(
+		0.0, -bounds.position.y * AVATAR_SCALE, 0.0)
 	_marker.add_child(_avatar)
 
 	# The BOX goes, not the node. `visible = false` would take the avatar with
@@ -212,6 +225,25 @@ func _redraw_avatar() -> void:
 	# stay: it is what the camera rig follows by NodePath and what
 	# _place_marker moves.
 	_marker.mesh = null
+
+
+## Take the slot [EntityPool] left for the observer in their tile's ring.
+##
+## Written straight onto the avatar rather than through a redraw: the mesh is
+## unchanged, only where it stands is, and rebuilding it would throw away a
+## fetched model and re-resolve it on every step the player takes.
+##
+## The avatar can be null here -- the pool rebuilds the moment room_players
+## lands, which is before char_avatar has said who you are -- so the offset is
+## kept and applied by [method _redraw_avatar] when the figure does arrive.
+func _on_observer_slot(offset: Vector3) -> void:
+	_avatar_offset = offset
+
+	if _avatar == null:
+		return
+
+	_avatar.position.x = offset.x
+	_avatar.position.z = offset.z
 
 
 ## Redraw when art lands for something this pane is drawing.
@@ -672,6 +704,13 @@ func _place_marker() -> void:
 	# the ones standing on islands that HAVE arrived are drawable even while the
 	# observer's own map is still in flight -- and tying their placement to the
 	# marker's would hold all of them back for one missing island.
+	#
+	# stand() only RECORDS which tile is the observer's; the rebuild that acts
+	# on it is the line below. Two calls and not one, because the pool has to be
+	# free to rebuild for reasons that have nothing to do with the observer --
+	# an entity arriving, art landing -- and every one of those has to size the
+	# ring the same way.
+	_entities.stand(_observer_coords())
 	_entities.replace_positions()
 
 	if not _offsets.has(_state.current_z):
@@ -689,6 +728,15 @@ func _place_marker() -> void:
 	# thing being drawn rather than to the anchor.
 	_marker.position = top
 	_aura.position = top
+
+
+## The observer's own tile, in the shape an entity carries its coords.
+##
+## Built here rather than in [EntityPool] so the pool compares two keys spelled
+## by one routine. [WorldState] holds x and y as a Vector2i and z as the map
+## name, which is the same triple `serialize_entity` sends, only already parsed.
+func _observer_coords() -> Array:
+	return [_state.current_cell.x, _state.current_cell.y, _state.current_z]
 
 
 # ─── Aura ────────────────────────────────────────────────────────────────────

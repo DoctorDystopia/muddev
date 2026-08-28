@@ -13,6 +13,11 @@ var _failures := 0
 var _pool: EntityPool
 var _resolver: MeshResolver
 
+## The last offset the pool asked for the observer to be drawn at. The pool
+## draws no observer -- the world pane does -- so the signal is the whole of
+## what can be checked here.
+var _observer_offset := Vector3.ZERO
+
 ## Payloads in the shape `serialize_entity` produces, floats and all —
 ## `coords` included, because with STATEFEED_ENTITY_RADIUS at 10 the feed names
 ## entities across a 441-room neighbourhood and every one carries its own.
@@ -29,6 +34,10 @@ const SWORD := {"id": 20744.0, "name": "rusty scrap shortsword", "kind": "item",
 const ODDITY := {"id": 20745.0, "name": "a thing", "kind": "item",
 	"asset": "generic", "family": "no_such_family", "interact": "",
 	"coords": HERE}
+
+## A synthesised crowd, for the ring-spacing checks. Ids start well above the
+## named payloads' so the two never collide in one ring.
+const CROWD_FIRST_ID := 30000
 
 ## One room over, and one on a map the client has not drawn yet.
 const NEIGHBOUR := {"id": 20746.0, "name": "distant raider", "kind": "npc",
@@ -58,6 +67,8 @@ func _ready() -> void:
 	_pool = EntityPool.new()
 	add_child(_pool)
 	_pool.bind(_resolver, _locate)
+	_pool.observer_slot_changed.connect(
+		func(offset: Vector3) -> void: _observer_offset = offset)
 
 	_the_pool_was_actually_wired()
 	_entities_stand_on_their_own_tiles()
@@ -70,6 +81,11 @@ func _ready() -> void:
 	_a_flash_on_nothing_is_harmless()
 	_hover_lights_one_entity_at_a_time()
 	_hover_does_not_survive_a_rebuild()
+	_a_lone_thing_is_not_drawn_inside_the_observer()
+	_the_observer_takes_a_slot_in_their_own_ring()
+	_a_ring_leaves_room_between_its_neighbours()
+	_a_ring_stays_inside_its_own_tile()
+	_ring_order_comes_from_ids_not_from_arrival()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -265,6 +281,160 @@ func _hover_does_not_survive_a_rebuild() -> void:
 	_pool.hover(20743)
 
 	_expect(_is_lit(_node_for(20743)), "and can be lit again afterwards")
+
+
+## The bug the observer's slot replaced. `emit_room_contents` leaves the observer
+## out of their own room_players list, so a tile holding you and one dropped
+## sword arrives describing ONE thing -- a ring of one, radius zero, drawn dead
+## centre, which is exactly where the pane is drawing you.
+func _a_lone_thing_is_not_drawn_inside_the_observer() -> void:
+	_pool.stand(_here())
+	_pool.replace_all([SWORD])
+
+	var node := _node_for(20744)
+
+	_expect(node != null, "the item on the observer's tile is drawn")
+
+	if node == null:
+		return
+
+	_expect(_from_tile(node, HERE) >= EntityPool.ENTITY_RADIUS - 0.001,
+		"and it stands off the middle, where the observer is not")
+
+	# The same item one tile over has nobody to make room for.
+	_pool.replace_all([NEIGHBOUR])
+
+	_expect(_from_tile(_node_for(20746), NEXT_DOOR) < 0.001,
+		"while a lone entity on an empty tile keeps the middle")
+
+	_pool.stand([])
+
+
+## The observer is drawn by the world pane and never by this pool, so the only
+## thing that can cross is the offset. Zero when they are alone, because the
+## middle of an otherwise empty tile is where they belong.
+func _the_observer_takes_a_slot_in_their_own_ring() -> void:
+	_pool.stand(_here())
+	_pool.replace_all([RAIDER, SWORD])
+
+	_expect(_observer_offset.length() >= EntityPool.ENTITY_RADIUS - 0.001,
+		"sharing a tile moves the observer out of the middle")
+	_expect(_observer_offset.y == 0.0,
+		"and only sideways -- the marker owns how high they stand")
+
+	for entity_id: int in [20743, 20744]:
+		var node := _node_for(entity_id)
+
+		_expect(node != null and _apart(node.position, _observer_offset)
+			>= EntityPool.ENTITY_SCALE - 0.001,
+			"and nothing is drawn inside the slot left for them (%d)" % entity_id)
+
+	_pool.replace_all([])
+
+	_expect(_observer_offset == Vector3.ZERO,
+		"an emptied tile puts the observer back in the middle")
+
+	_pool.stand([])
+
+
+## What the ring is FOR. The old radius measured arc length rather than the
+## chord between neighbours, which reads a small ring as roomier than it is --
+## three entities 0.5 across sat 0.45 apart and overlapped.
+func _a_ring_leaves_room_between_its_neighbours() -> void:
+	for crowd: int in range(2, 6):
+		_pool.replace_all(_crowd(crowd))
+
+		var nearest := _closest_pair()
+
+		_expect(nearest >= EntityPool.ENTITY_SCALE - 0.001,
+			"%d on one tile stand clear of each other (%.3f apart)"
+			% [crowd, nearest])
+
+
+## The cap. Past six occupants they overlap again, and that is the intended
+## outcome: the alternative is one room's occupants standing on the next room's
+## floor, which is a worse lie than a crowd looking crowded.
+func _a_ring_stays_inside_its_own_tile() -> void:
+	_pool.replace_all(_crowd(9))
+
+	var furthest := 0.0
+
+	for child: Node in _pool.get_children():
+		furthest = maxf(furthest, _from_tile(child as Node3D, HERE))
+
+	_expect(furthest <= EntityPool.MAX_RING_RADIUS + 0.001,
+		"nine on one tile still spread within it (%.3f out)" % furthest)
+
+
+## Slot order used to be arrival order, so removing the first of three shuffled
+## the other two around the ring -- a thing moving because something else was
+## picked up. Ids are stable and total; the feed's ordering is neither.
+func _ring_order_comes_from_ids_not_from_arrival() -> void:
+	_pool.replace_all([RAIDER, SWORD, ODDITY])
+	var forwards := _positions()
+
+	_pool.replace_all([ODDITY, SWORD, RAIDER])
+
+	_expect(forwards == _positions(),
+		"the same occupants land in the same slots whatever order they arrive")
+
+
+## `count` interchangeable entities standing on the observer's tile.
+func _crowd(count: int) -> Array:
+	var made: Array = []
+
+	for index: int in count:
+		made.append({"id": float(CROWD_FIRST_ID + index), "name": "extra",
+			"kind": "npc", "asset": "generic", "family": "npc",
+			"interact": "", "coords": HERE})
+
+	return made
+
+
+## Every drawn entity's id and where it stands, for comparing two rebuilds.
+func _positions() -> Dictionary:
+	var found: Dictionary = {}
+
+	for child: Node in _pool.get_children():
+		found[(child as Node3D).position] = true
+
+	return found
+
+
+## The closest any two drawn entities stand, ignoring how tall they are.
+func _closest_pair() -> float:
+	var nodes := _pool.get_children()
+	var nearest := INF
+
+	for first: int in nodes.size():
+		for second: int in range(first + 1, nodes.size()):
+			nearest = minf(nearest, _apart(
+				(nodes[first] as Node3D).position,
+				(nodes[second] as Node3D).position))
+
+	return nearest
+
+
+## How far a node stands from the middle of a tile, across the ground only.
+##
+## The Y is deliberately dropped: _rest_offset lifts each node by its own
+## height, which has nothing to do with whether two of them overlap on the floor.
+func _from_tile(node: Node3D, coords: Array) -> float:
+	if node == null:
+		return INF
+
+	return _apart(node.position, _tile_positions[str(coords)])
+
+
+func _apart(first: Vector3, second: Vector3) -> float:
+	return Vector2(first.x - second.x, first.z - second.z).length()
+
+
+## The observer's own tile, spelled the way the world pane spells it: ints out
+## of a Vector2i, not the floats an entity's coords arrive as. The pool has to
+## key both through one routine or these would never group together.
+func _here() -> Array:
+	return [int(HERE[0]), int(HERE[1]), HERE[2]]
 
 
 ## The node the pool drew for one entity id.

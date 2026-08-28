@@ -41,14 +41,15 @@ extends RefCounted
 ## and vi keys with yubn diagonals. They share the same eight destinations, so
 ## a player who knows either finds the other already working.
 const BINDINGS := {
-	#KEY_W: "north",
-	#KEY_A: "west",
-	#KEY_S: "south",
-	#KEY_D: "east",
-	#KEY_Q: "northwest",
-	#KEY_E: "northeast",
-	#KEY_Z: "southwest",
-	#KEY_C: "southeast",
+	KEY_W: "north",
+	KEY_A: "west",
+	KEY_S: "south",
+	KEY_D: "east",
+	KEY_Q: "northwest",
+	KEY_E: "northeast",
+	KEY_Z: "southwest",
+	KEY_C: "southeast",
+	
 	KEY_KP_8: "north",
 	KEY_KP_4: "west",
 	KEY_KP_2: "south",

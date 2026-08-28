@@ -75,8 +75,8 @@ One ladder, and [MeshResolver] is the only thing that knows the order:
 asset has art?    -- yes -->  the fetched model      tier 1
        | no
 family has parts? -- yes -->  the family's shape     tier 2
-       | no
-                              the generic block      tier 3
+	   | no
+							  the generic block      tier 3
 ```
 
 The server already sends this as one lookup — `serialize_entity` calls `asset`
@@ -123,6 +123,17 @@ the file loudly instead of silently drawing every weapon as a box.
 > happen. It was invisible only while every entity was an identical small
 > sphere. An entity whose map has not arrived is drawn nowhere, never somewhere
 > wrong.
+
+> **You are the occupant the feed never mentions.** `emit_room_contents` leaves
+> the observer out of their own `room_players` list, so the one tile that is
+> never empty is described as holding one fewer thing than it does. The ring
+> sized itself from that count, and a lone item dropped at your feet came out at
+> radius 0 — dead centre, which is exactly where the pane draws you. The pane
+> now tells the pool which tile is yours (`EntityPool.stand`), you take slot 0
+> of its ring, and `observer_slot_changed` hands back the offset to draw the
+> avatar at. The **marker itself never moves off centre**: the camera rig
+> follows it by NodePath and the aura ring is anchored to it, so only the figure
+> hanging on it shifts.
 
 > **A rigged model's `mesh.get_aabb()` is its BIND POSE, not what renders.**
 > The Spider-Man placeholder `player_character` carried until 08/27/2026
