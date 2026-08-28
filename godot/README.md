@@ -4,9 +4,9 @@ Graphical client for the Blackout MUD. Talks to Evennia's `godotwebsocket`
 contrib port (`4008`, set in `blackout/server/conf/settings.py`).
 
 Plan, phases and design decisions:
-[docs/2026-08-25-ENG-0006-godot-option-a-plan.md](../docs/2026-08-25-ENG-0006-godot-option-a-plan.md),
+[docs/old/2026-08-25-ENG-0006-godot-option-a-plan.md](../docs/old/2026-08-25-ENG-0006-godot-option-a-plan.md),
 with the decision it implements in
-[docs/2026-08-25-ENG-0005-godot-vs-webclient.md](../docs/2026-08-25-ENG-0005-godot-vs-webclient.md).
+[docs/old/2026-08-25-ENG-0005-godot-vs-webclient.md](../docs/old/2026-08-25-ENG-0005-godot-vs-webclient.md).
 
 > This used to link `docs/2026-08-08-ENG-0005-godot-client-plan.md`, which was
 > never written — checked with `git log --all --diff-filter=A`. ENG-0005 is now
@@ -73,10 +73,10 @@ One ladder, and [MeshResolver] is the only thing that knows the order:
 
 ```
 asset has art?    -- yes -->  the fetched model      tier 1
-	   | no
+       | no
 family has parts? -- yes -->  the family's shape     tier 2
-	   | no
-							  the generic block      tier 3
+       | no
+                              the generic block      tier 3
 ```
 
 The server already sends this as one lookup — `serialize_entity` calls `asset`
