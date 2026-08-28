@@ -45,6 +45,6 @@ blackout/scripts/*.dan
 docs/
 
 # The Godot web export staged for upload to R2. A build artifact, 37.7 MiB of
-# it one file, rebuilt wholesale by every export. `deploy/webexport/publish.ps1`
+# it one file, rebuilt wholesale by every export. `deploy/webexport/publish.sh`
 # reads it from here; nothing commits it.
 deploy/webexport/build/

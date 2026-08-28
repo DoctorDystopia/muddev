@@ -41,13 +41,31 @@ art from the game origin would therefore be refused by the browser, and every
 entity in the game would silently fall back to its procedural family shape —
 a degradation with no error a player could report.
 
-So `ServerEndpoint.asset_origin()` returns **`""`** for a release web build: the
-request goes out relative to the page and never crosses an origin at all.
+So `ServerEndpoint.asset_origin()` prefixes **the page's own origin**, read off
+`location.origin` through `JavaScriptBridge`, for a release web build: the fetch
+is same-origin and there is nothing for a preflight to refuse.
+
+It returned **`""`** until 08/27/2026, on the reasoning that an empty origin
+makes a root-relative path the browser resolves against the page. That is right
+about CORS and wrong about `HTTPRequest`, which is not the browser's fetch — it
+parses the URL itself and refuses one with no scheme:
+
+```
+ERROR: Error parsing URL: '/static/webclient/models/manifest.json'
+   at: _parse_url (scene/main/http_request.cpp:61)
+WARNING: ModelLoader: manifest request refused: error 31
+```
+
+The manifest never arrived, so `has_model` answered false for every asset key
+and **every entity in the game drew its family shape** — which is indistinguish-
+able from art that was never packed, and was read as a broken model file for a
+day. `test_server_endpoint.gd` now asserts that whatever origin is chosen, the
+URL built from it can actually be dialled.
 
 **What that requires of this deploy:** whatever serves `index.html` must also
 serve the model tree at the path the client asks for, which is
 `ModelRegistry.MODEL_ROOT` — `/static/webclient/models/`, manifest included.
-`publish.ps1` uploads both trees to the same bucket for exactly this reason, and
+`publish.sh` uploads both trees to the same bucket for exactly this reason, and
 `worker/index.ts` claims both prefixes on the site's own hostname.
 
 The alternative — adding CORS headers to Evennia's static serving — was rejected
@@ -59,7 +77,7 @@ and an `evennia reload` could interrupt an art fetch.
 ## Build
 
 Export into `build/` beside this README — gitignored, and the one place
-`publish.ps1` looks:
+`publish.sh` looks:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot --export-release "Web" deploy/webexport/build/index.html
@@ -100,24 +118,25 @@ the export, so the weight is the Godot engine, not the game.
 So the client and the model tree live in the **`playblackout-assets` R2 bucket**
 and are served by `playblackout-site/worker/index.ts`. Two steps, in this order:
 
-```powershell
-.\deploy\webexport\publish.ps1          # -DryRun lists the keys first
+```bash
+./deploy/webexport/publish.sh          # --dry-run lists the keys first
 ```
 
 ```bash
 cd ../playblackout-site && npx wrangler deploy
 ```
 
-From git bash, that first line is **`powershell`, not `pwsh`** — this machine has
-Windows PowerShell 5.1, and PowerShell 7 is not installed:
+**It is a bash script and was a PowerShell one until 08/27/2026.** The shell in
+front of this repo is git bash, this machine has no `pwsh`, and what stood here
+was a `powershell -ExecutionPolicy Bypass -File` incantation explaining how to
+run a PowerShell script from a shell that is not PowerShell. One script for the
+shell that exists beats two that can drift.
 
-```bash
-powershell -ExecutionPolicy Bypass -File deploy/webexport/publish.ps1
-```
-
-That 5.1 target is also why the script builds `[PSCustomObject]` rows rather than
-hashtables: `Measure-Object -Property Size` reads a property, and a hashtable key
-is not one under 5.1.
+The one Windows-specific thing left in it is `cygpath`: `wrangler` is a native
+Windows binary and cannot open a POSIX path, so `--file` is translated on the way
+in. On a real POSIX box there is nothing to translate and the path passes
+through, which is the same shape `scripts/clean_and_reload_all_maps.sh` already
+uses for the virtualenv.
 
 The bucket is the origin and the site deploy is the router, so a publish with no
 deploy leaves the old client live, while a deploy with no publish 404s `/play`.
