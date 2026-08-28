@@ -22,7 +22,8 @@ const TIMEOUT_SECONDS := 25.0
 ## Served by Evennia, and named in models/manifest.json.
 const KNOWN_ASSET := "rusty_scrap_shortsword"
 
-## The RIGGED one. Carries a skeleton, which is what makes its mesh AABB lie.
+## The RIGGED one. Carries a skeleton, and is the model whose placement the
+## measurement ladder is most easily wrong about.
 const RIGGED_ASSET := "player_character"
 
 ## The one whose export declares itself transparent and is not.
@@ -35,6 +36,16 @@ const UNIT_TOLERANCE := 0.02
 
 var _failures := 0
 var _resolver: MeshResolver
+
+## The two models fetched last, until each has reported. The test finishes when
+## this empties, NOT when the first of them lands.
+##
+## Every fetch gets its own HTTPRequest, so they race, and the eye is the
+## smaller file -- so calling _finish() from whichever arrived first quietly
+## SKIPPED the character's checks on every run. A skipped assertion looks
+## exactly like a passing one in the output, which is the whole reason this
+## exists rather than an ordering assumption.
+var _outstanding := {}
 
 
 func _ready() -> void:
@@ -77,12 +88,13 @@ func _on_manifest(count: int) -> void:
 
 func _on_refreshed(asset_key: String) -> void:
 	if asset_key == RIGGED_ASSET:
-		_a_rigged_model_measures_by_its_skeleton()
+		_a_rigged_model_stands_up()
+		_reported(asset_key)
 		return
 
 	if asset_key == TRANSPARENT_ASSET:
 		_an_export_lying_about_transparency_is_corrected()
-		_finish()
+		_reported(asset_key)
 		return
 
 	if asset_key != KNOWN_ASSET:
@@ -149,6 +161,8 @@ func _on_refreshed(asset_key: String) -> void:
 	# would measure the FAMILY SHAPE, which is what the first version of this
 	# test did -- it passed while checking the procedural figure, because the
 	# tier-2 fallback is what a first ask returns.
+	_outstanding = {RIGGED_ASSET: true, TRANSPARENT_ASSET: true}
+
 	var pending := _resolver.resolve_entity(RIGGED_ASSET, "character")
 	pending.free()
 
@@ -156,47 +170,57 @@ func _on_refreshed(asset_key: String) -> void:
 	eye.free()
 
 
-## A rigged model's mesh AABB describes its BIND POSE, not what you see.
+## The character is measured standing up, whatever its bind pose claims.
 ##
-## Measured 08/26/2026: player_character's mesh box is 0.74 x **0.17** x 1.00 --
-## flat, as if lying down -- while its skeleton spans 1.04 tall. Normalising by
-## the mesh box alone made the character about six times too big and left it
-## floating, which is exactly how it looked in the client.
+## THE BUG THIS GUARDS. A rigged model's vertices are stored in bind space and
+## placed by bones at draw time, so `mesh.get_aabb()` describes a pose nobody
+## sees. The Spider-Man placeholder measured 0.74 x **0.17** x 1.00 that way --
+## flat, as if lying down -- against a skeleton spanning 1.04 tall, and
+## normalising by the mesh box made the character six times too big and left it
+## floating. `ModelLoader.bounds_of` merges the skeleton's box in for that
+## reason, and the placement uses it, so this assertion has to as well.
 ##
-## Asserted as a RATIO rather than against fixed numbers, so re-exporting the
-## model or pruning its rig does not fail this for the wrong reason. The real
-## fix is baking the skinning out in `assets/pack_model.py` -- these models carry
-## skinning attributes for zero animations -- and when that lands the mesh box
-## becomes honest on its own and this check simply keeps passing.
-func _a_rigged_model_measures_by_its_skeleton() -> void:
+## THE CURRENT ASSET DOES NOT REPRODUCE THAT, and the check is written knowing
+## it. Quaternius' base character (08/27/2026) is a T-pose whose bind pose is
+## the pose -- 1.859 x 1.820 x 0.297 as it comes out of the file -- so its mesh
+## box and its merged box agree, and no ratio between them can prove the
+## skeleton was read. Asserting they DISAGREE, as this did while the flat model
+## was the one served, would now fail on a model measured perfectly correctly.
+## (What this function measures is the model AFTER the normalise, so the numbers
+## it prints are that box divided by its own longest axis.)
+##
+## So what is asserted is the property that outlives either asset: the merged
+## box is never smaller than the meshes alone -- a merge cannot shrink a box, so
+## a violation means bounds_of stopped merging -- and the figure measures far
+## taller than it is DEEP. Depth, not width: the T-pose's 1.859 of outstretched
+## arms is fractionally wider than it is tall, so "taller than wide" is false
+## here for a model that is standing up perfectly straight.
+func _a_rigged_model_stands_up() -> void:
 	var rigged := _resolver.resolve_entity(RIGGED_ASSET, "character")
 
 	if rigged == null:
 		_expect(false, "the character model resolves")
 		return
 
-	# ModelLoader.bounds_of, NOT this file's mesh-only helper. That distinction
-	# is the entire point: a rigged model's mesh AABB is its bind pose, so
-	# measuring meshes alone reports the flat box that caused the bug. The
-	# placement uses bounds_of, so the assertion has to as well.
 	var bounds := ModelLoader.bounds_of(rigged)
 	var mesh_only := _bounds_of(rigged)
-	var tallness := bounds.size.y / maxf(bounds.size.x, bounds.size.z)
+	var uprightness := bounds.size.y / maxf(bounds.size.z, 0.0001)
 
 	print("player_character: bounds_of=(%.3f, %.3f, %.3f)  mesh only=(%.3f, %.3f, %.3f)"
 		% [bounds.size.x, bounds.size.y, bounds.size.z,
 			mesh_only.size.x, mesh_only.size.y, mesh_only.size.z])
 
-	_expect(tallness > 1.0,
-		"a person measures taller than they are wide (ratio %.2f)" % tallness)
+	_expect(uprightness > 2.0,
+		"a person measures far taller than they are deep (ratio %.2f)"
+		% uprightness)
 
-	# The two disagreeing is what proves the skeleton is being consulted. If they
-	# ever match, either the rig was baked out -- which is the real fix, in
-	# assets/pack_model.py -- or this stopped looking at the skeleton and the
-	# character is six times too big again.
-	_expect(bounds.size.y > mesh_only.size.y * 2.0,
-		"and by much more than its meshes alone claim (%.3f vs %.3f), which is "
-		% [bounds.size.y, mesh_only.size.y] + "the skeleton being read")
+	# A merge cannot make a box smaller. If bounds_of ever reports LESS than the
+	# meshes alone it has stopped merging something, which is the failure the
+	# skeleton box exists to prevent -- and it is the same assertion whether or
+	# not this particular bind pose happens to be honest.
+	_expect(bounds.size.y >= mesh_only.size.y - 0.001,
+		"and never less than its meshes alone claim (%.3f vs %.3f)"
+		% [bounds.size.y, mesh_only.size.y])
 
 	rigged.free()
 
@@ -267,6 +291,14 @@ func _scenery_draws_only_what_has_art() -> void:
 
 	_expect(_resolver.resolve_scenery(Const.ROOM_KIND_DEFAULT) == null,
 		"an ordinary tile kind never draws a prop, however long it waits")
+
+
+## Mark one of the last two fetches done, and finish once neither is left.
+func _reported(asset_key: String) -> void:
+	_outstanding.erase(asset_key)
+
+	if _outstanding.is_empty():
+		_finish()
 
 
 func _finish() -> void:

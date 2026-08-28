@@ -14,6 +14,7 @@ func _ready() -> void:
 	_command_line_overrides_are_read_both_ways()
 	_query_overrides_are_read_and_decoded()
 	_production_is_wss_not_ws()
+	_art_is_fetched_from_an_absolute_origin()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -92,6 +93,59 @@ func _production_is_wss_not_ws() -> void:
 	# webclient exactly this.
 	_expect(ServerEndpoint.PRODUCTION_URL.begins_with("wss://"),
 		"production is wss, or the browser blocks it as mixed content")
+
+
+## THE BUG THIS WOULD HAVE CAUGHT, and it went to production because nothing
+## here exercised asset_origin at all.
+##
+## The web branch used to return "", on the reasoning that an empty origin makes
+## `url_for` produce a root-relative path the browser resolves against the page.
+## The reasoning is right about CORS and wrong about HTTPRequest, which parses
+## the URL itself and refuses one with no scheme:
+##
+##     ERROR: Error parsing URL: '/static/webclient/models/manifest.json'
+##     WARNING: ModelLoader: manifest request refused: error 31
+##
+## The manifest never arrived, so `has_model` answered false for everything and
+## every entity in the game drew its family shape -- which looks exactly like
+## art that was never packed.
+##
+## So what is asserted is the property the whole path depends on: whatever
+## origin is chosen, the URL built from it can actually be dialled.
+func _art_is_fetched_from_an_absolute_origin() -> void:
+	var registry := ModelRegistry.new()
+	registry.ingest_manifest({"player_character": "characters/x.glb"})
+
+	var cases := {
+		"debug": ServerEndpoint.asset_origin(true, true, "https://page.example"),
+		"release web": ServerEndpoint.asset_origin(false, true,
+			"https://page.example"),
+		"release desktop": ServerEndpoint.asset_origin(false, false, ""),
+	}
+
+	for label: String in cases:
+		var url := registry.url_for(cases[label], "player_character")
+
+		_expect(url.begins_with("http://") or url.begins_with("https://"),
+			"%s builds a dialable url (%s)" % [label, url])
+
+	_expect(ServerEndpoint.asset_origin(true, true, "") ==
+		ServerEndpoint.ASSET_DEV_ORIGIN,
+		"a debug build ignores the page and uses the dev webserver")
+	_expect(ServerEndpoint.asset_origin(false, false, "https://page.example") ==
+		ServerEndpoint.ASSET_DESKTOP_ORIGIN,
+		"a desktop build ignores the page, having none")
+
+	# A trailing slash on the origin and a leading one on MODEL_ROOT would make
+	# `//static/...`, which is a protocol-relative URL and not the path meant.
+	_expect(ServerEndpoint.asset_origin(false, true, "https://page.example/") ==
+		"https://page.example",
+		"a trailing slash on the page origin is trimmed")
+
+	# Off the web there is no page to ask, and the answer must be the empty
+	# string rather than an error -- every non-web caller passes it straight in.
+	_expect(ServerEndpoint.page_origin().is_empty(),
+		"page_origin answers empty off the web")
 
 
 func _expect(passed: bool, what: String) -> void:
