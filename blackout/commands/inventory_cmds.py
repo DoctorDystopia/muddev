@@ -17,6 +17,15 @@ from systems.ui.colors import (
     SUCCESS_COLOR,
     TITLE_COLOR,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about your inventory, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 # ─── Public constant definitions ─────────────────────────────────────────────
@@ -113,15 +122,16 @@ def resolve_carried_item(caller, text: str):
         item = caller.inventory.get_slot_content(index)
 
         if item is None:
-            caller.msg(f"{ERROR_COLOR}Slot {text} is empty.{RESET_COLOR}")
+            caller.msg(
+                (f"{ERROR_COLOR}Slot {text} is empty.{RESET_COLOR}", _MSG_INVENTORY))
             return -1, None
 
         return index, item
 
     if text.isdigit():
         caller.msg(
-            f"{ERROR_COLOR}You only have {SLOTS_TOTAL} inventory "
-            f"slots.{RESET_COLOR}"
+            (f"{ERROR_COLOR}You only have {SLOTS_TOTAL} inventory "
+            f"slots.{RESET_COLOR}", _MSG_INVENTORY)
         )
         return -1, None
 
@@ -156,7 +166,9 @@ class CmdInventory(Command):
     def func(self):
         caller = self.caller
         if not hasattr(caller, "inventory"):
-            caller.msg(f"{ERROR_COLOR}You don't have an inventory.{RESET_COLOR}")
+            caller.msg(
+                (f"{ERROR_COLOR}You don't have an inventory.{RESET_COLOR}",
+                 _MSG_INVENTORY))
             return
 
         handler = caller.inventory
@@ -164,7 +176,7 @@ class CmdInventory(Command):
 
         title, grid_str = render_grid(handler)
         output = f"{TITLE_COLOR}--- {title} ---{RESET_COLOR}\n{grid_str}"
-        caller.msg(text=(output, {"type": "inventory"}))
+        caller.msg((output, _MSG_INVENTORY))
         feed.emit_inventory(caller)
 
 
@@ -192,13 +204,15 @@ class CmdSwap(Command):
         caller = self.caller
 
         if not hasattr(caller, "inventory"):
-            caller.msg(f"{ERROR_COLOR}You don't have an inventory.{RESET_COLOR}")
+            caller.msg(
+                (f"{ERROR_COLOR}You don't have an inventory.{RESET_COLOR}",
+                 _MSG_INVENTORY))
             return
 
         parts = self.args.split()
 
         if len(parts) != SWAP_ARGUMENT_COUNT:
-            caller.msg("Usage: swap <slot> <slot>")
+            caller.msg(("Usage: swap <slot> <slot>", _MSG_INVENTORY))
             return
 
         first = parse_slot_number(parts[0])
@@ -206,8 +220,8 @@ class CmdSwap(Command):
 
         if first < 0 or second < 0:
             caller.msg(
-                f"{ERROR_COLOR}Both slots must be numbers between 1 and "
-                f"{SLOTS_TOTAL}.{RESET_COLOR}"
+                (f"{ERROR_COLOR}Both slots must be numbers between 1 and "
+                f"{SLOTS_TOTAL}.{RESET_COLOR}", _MSG_INVENTORY)
             )
             return
 
@@ -217,16 +231,16 @@ class CmdSwap(Command):
         try:
             changed = handler.move_slot(first, second)
         except InventoryError as swap_err:
-            caller.msg(f"{ERROR_COLOR}{swap_err}{RESET_COLOR}")
+            caller.msg((f"{ERROR_COLOR}{swap_err}{RESET_COLOR}", _MSG_INVENTORY))
             return
 
         if not changed:
-            caller.msg("Nothing to move.")
+            caller.msg(("Nothing to move.", _MSG_INVENTORY))
             return
 
         caller.msg(
-            f"{SUCCESS_COLOR}Swapped slots {parts[0]} and "
-            f"{parts[1]}.{RESET_COLOR}"
+            (f"{SUCCESS_COLOR}Swapped slots {parts[0]} and "
+            f"{parts[1]}.{RESET_COLOR}", _MSG_INVENTORY)
         )
         feed.emit_inventory(caller)
 

@@ -13,13 +13,30 @@ from evennia import CmdSet
 from systems.menus.base_menu import start_blackout_menu
 from systems.progression.skills.registry import SKILL_REGISTRY
 from systems.ui.meters import build_xp_meter
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is progression, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_PROGRESSION = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_PROGRESSION}
 
 
 
 class CmdSkills(Command):
     """
-    Purpose: Displays the player's current skill levels and XP progress.
-    Can also target other players to view their skills.
+    Show your skills, one skill's full sheet, or another character's levels.
+
+    Usage:
+      skills                  open your skills panel
+      skills <skill>          read one skill: XP, progress and what it unlocks
+      skills <character>      another character's levels
+
+    Examples:
+      skills cutting
+      skills brain            a unique prefix is enough
     """
     key = "skills"
     aliases = ["skill", "sk"]
@@ -29,10 +46,13 @@ class CmdSkills(Command):
 
     SKILLS_MENU_PATH = "systems.menus.skills_menu"
 
+    OTHER_HEADER = "|c--- {name}'s Skills ---|n"
+    NO_SKILLS_MSG = "{name} has not acquired any skills yet."
+
 
     def func(self) -> None:
         """
-        Purpose: Executes the skills command, launching the skills menu.
+        Purpose: Executes the skills command.
 
         Entry:
             self.caller is a valid Evennia Character object
@@ -42,76 +62,137 @@ class CmdSkills(Command):
             No conditions
 
         Module Globals:
-            SKILL_REGISTRY read
             SKILLS_MENU_PATH read
 
         Methodology:
-            If arguments are provided, shows another player's skills
-            as a text summary. Otherwise, opens the interactive
-            skills panel menu for self-view.
+            Three readings of one argument, resolved in a fixed order.
+
+            A SKILL NAME WINS OVER A CHARACTER NAME, and that ordering is
+            deliberate rather than incidental. It takes nothing away: before
+            this branch existed, `skills cutting` searched the room for a
+            character called "cutting", failed, and printed "Could not find".
+            Every string the skill branch now claims is one that used to be an
+            error, so nothing that worked stopped working -- and a character
+            standing there actually named Cutting is the only collision, which
+            `look` and `profile` both still answer.
+
+            The feed publish happens FIRST, before the branch, because all
+            three readings answer the same question -- the player is asking
+            about skills -- and a graphical client's grid should be current
+            whichever one they meant. It pre-checks its subscription and costs
+            nothing on a telnet-only server, like every other feed call.
 
         Notes/References:
-            None
+            The per-skill sheet is rendered by
+            systems/progression/skills/detail.py, which is also what the menu
+            node prints and what CHANNEL_CHAR_SKILLS ships as data.
 
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
+        from systems.progression.skills import detail as skill_detail
+        from systems.statefeed import events as feed
+
         caller = self.caller
-        raw_args = self.args
-        clean_args = raw_args.strip()
-        has_args = bool(clean_args)
+        clean_args = self.args.strip()
 
-        if has_args:
-            # Show another player's skills as text
-            target = caller.search(clean_args, global_search=True)
-            target_not_found = target is None
+        feed.emit_skills(caller)
 
-            if target_not_found:
-                return
-
-            target_name = target.name
-            output_lines = [f"|c--- {target_name}'s Skills ---|n"]
-
-            skills_dict = target.db.skills
-
-            if not skills_dict:
-                caller.msg(f"{target_name} has not acquired any skills yet.")
-                return
-
-            for skill_key, skill_data in skills_dict.items():
-                is_valid_skill = skill_key in SKILL_REGISTRY
-
-                if is_valid_skill:
-                    skill_class = SKILL_REGISTRY[skill_key]
-                    skill_name = skill_class.name
-                    current_lvl = skill_data["level"]
-
-                    xp_tuple = target.skills.get_xp_level(skill_key)
-                    current_xp = xp_tuple[0]
-                    total_xp_needed = xp_tuple[1]
-
-                    xp_meter = build_xp_meter(current_xp, total_xp_needed)
-                    line_string = (
-                        f"|w{skill_name}:|n Level {current_lvl} {xp_meter}"
-                    )
-                    output_lines.append(line_string)
-
-            final_output = "\n".join(output_lines)
-            caller.msg(final_output)
-        else:
-            # Open interactive skills panel menu for self
+        if not clean_args:
             start_blackout_menu(
                 caller,
                 self.SKILLS_MENU_PATH,
                 startnode="start",
             )
+            return
+
+        skill_key = skill_detail.resolve_skill_key(clean_args)
+
+        if skill_key:
+            sheet = skill_detail.render_detail(caller, skill_key)
+            caller.msg((sheet, _MSG_PROGRESSION))
+            return
+
+        self._show_other(clean_args)
+
+
+    def _show_other(self, name: str) -> None:
+        """
+        Purpose: Print another character's skill levels.
+
+        Entry:
+            name is what the player typed, already stripped and known not to
+            name a skill.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            SKILL_REGISTRY read.
+            OTHER_HEADER, NO_SKILLS_MSG read.
+
+        Methodology:
+            Unchanged from the behaviour this command has always had, lifted
+            out of func so the three readings of the argument read as three
+            branches rather than as one branch and forty lines.
+
+            A failed search reports itself -- caller.search already told the
+            player -- so this returns silently rather than adding a second
+            complaint about the same miss.
+
+        Notes/References:
+            The levels shown are read through the target's own handler, so a
+            skill added since that character was created reports 0 rather than
+            being absent.
+
+        Author: Nick Hobar
+        Creation date: 06/02/2026
+        """
+        caller = self.caller
+        target = caller.search(name, global_search=True)
+
+        if target is None:
+            return
+
+        target_name = target.name
+        skills_dict = target.db.skills
+
+        if not skills_dict:
+            caller.msg((self.NO_SKILLS_MSG.format(name=target_name),
+                        _MSG_PROGRESSION))
+            return
+
+        output_lines = [self.OTHER_HEADER.format(name=target_name)]
+
+        for skill_key, skill_data in skills_dict.items():
+            if skill_key not in SKILL_REGISTRY:
+                continue
+
+            skill_class = SKILL_REGISTRY[skill_key]
+            current_xp, total_xp_needed, _remaining = (
+                target.skills.get_xp_level(skill_key))
+            xp_meter = build_xp_meter(current_xp, total_xp_needed)
+
+            output_lines.append(
+                f"|w{skill_class.name}:|n Level {skill_data['level']} {xp_meter}")
+
+        screen = "\n".join(output_lines)
+        caller.msg((screen, _MSG_PROGRESSION))
 
 
 
 class CmdScore(Command):
     """
-    Show your dossier: combat level, hitpoints, skills, holdings and progress
-    on one screen, with jumps into the panel that owns each number.
+    Show your dossier: combat level, hitpoints, readiness, holdings and
+    progress on one screen, with jumps into the panel that owns each number.
+
+    Skills are NOT on it. They were, until the roster outgrew a band: one line
+    per category with a level beside each name says less than the `skills`
+    screen already says, in more space, and a graphical client drawing a grid
+    of them had to reach into the dossier payload and pull one panel out by
+    name -- which is the one thing that payload's contract forbids. The
+    aggregate figures stay here (combat level, total level, total XP) and
+    `Skills panel` below is the jump into the roster.
 
     Usage:
       score
@@ -232,11 +313,11 @@ class CmdProfile(Command):
         has_skills = getattr(target, "skills", None) is not None
 
         if not has_skills:
-            caller.msg(self.NOT_A_CHARACTER_MSG)
+            caller.msg((self.NOT_A_CHARACTER_MSG, _MSG_PROGRESSION))
             return
 
         screen = render_public_summary(target)
-        caller.msg(screen)
+        caller.msg((screen, _MSG_PROGRESSION))
 
 
 class CmdAddXP(Command):
@@ -284,7 +365,8 @@ class CmdAddXP(Command):
         has_correct_args = arg_count == 3
         
         if not has_correct_args:
-            caller.msg("Usage: addxp <character> <skill_key> <amount>")
+            caller.msg(
+                ("Usage: addxp <character> <skill_key> <amount>", _MSG_PROGRESSION))
             return
             
         target_name = split_args[0]
@@ -301,13 +383,16 @@ class CmdAddXP(Command):
         is_valid_skill = skill_key in SKILL_REGISTRY
         
         if not is_valid_skill:
-            caller.msg(f"Error: '{skill_key}' is not a valid skill in the registry.")
+            caller.msg(
+                (f"Error: '{skill_key}' is not a valid skill in the registry.",
+                 _MSG_PROGRESSION))
             return
             
         is_numeric = amount_str.lstrip('-').isdigit()
         
         if not is_numeric:
-            caller.msg("Error: The XP amount must be a whole number.")
+            caller.msg(
+                ("Error: The XP amount must be a whole number.", _MSG_PROGRESSION))
             return
             
         amount = int(amount_str)
@@ -316,7 +401,7 @@ class CmdAddXP(Command):
         target_handler.add_xp(skill_key, amount)
         
         success_msg = f"Successfully granted {amount} XP to {target.name}'s {skill_key} skill."
-        caller.msg(success_msg)
+        caller.msg((success_msg, _MSG_PROGRESSION))
 
 
 

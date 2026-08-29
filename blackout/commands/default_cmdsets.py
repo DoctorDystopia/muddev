@@ -19,6 +19,7 @@ from evennia import default_cmds
 from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
 from commands.cleanup_cmds import CleanupCmdSet
+from commands.display_cmds import DisplayCmdSet
 from commands.combat_cmds import CombatCmdSet
 from commands.drop_cmds import DropCmdSet
 from commands.equipment_cmds import EquipmentCmdSet
@@ -57,6 +58,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         # CmdGoto rather than being overloaded by it.
         self.add(MovementCmdSet())
         self.add(CleanupCmdSet())
+        self.add(DisplayCmdSet())
 
         self.add(CombatCmdSet())
 

@@ -11,6 +11,15 @@ from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GATHERING
 from systems.progression.skills.registry import SKILL_REGISTRY
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is gathering, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_GATHERING = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_GATHERING}
 
 
 
@@ -83,7 +92,7 @@ class CmdGatherFromNode(Command):
                 f"{type(self).__name__}: skill_key {self.skill_key!r} is not in "
                 f"SKILL_REGISTRY."
             )
-            caller.msg("You don't know how to do that.")
+            caller.msg(("You don't know how to do that.", _MSG_GATHERING))
             return
 
         skill = skill_class()

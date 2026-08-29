@@ -16,6 +16,14 @@ from systems.tick import debug as tick_debug
 from systems.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
 from systems.combat.rules.introspect import describe_action_rules, describe_registry
 from systems.ui import colors
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is combat, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 
 
 # Argument that switches the active aura off rather than naming one to light.
@@ -37,7 +45,7 @@ class CmdAttack(Command):
 
         target_name = self.args.strip()
         if not target_name:
-            caller.msg("Attack what?")
+            caller.msg(("Attack what?", _MSG_COMBAT))
             return
 
         target = caller.search(target_name)
@@ -45,7 +53,7 @@ class CmdAttack(Command):
             return
 
         if not isinstance(target, Combatant):
-            caller.msg(f"You can't attack {target.key}.")
+            caller.msg((f"You can't attack {target.key}.", _MSG_COMBAT))
             return
 
         # Per twitch-tutorial combat_twitch.py:335, give EACH side its own
@@ -66,8 +74,8 @@ class CmdAttack(Command):
         style_key = active_combat_style_key(weapon) if weapon is not None else const.UNARMED_DEFAULT_COMBAT_STYLE
         style_name = (style_key or const.UNARMED_DEFAULT_COMBAT_STYLE).title()
         caller.msg(
-            f"|gYou begin attacking |w{target.key}|g with |w{weapon_name}|g "
-            f"using |w{style_name}|g style.|n"
+            (f"|gYou begin attacking |w{target.key}|g with |w{weapon_name}|g "
+            f"using |w{style_name}|g style.|n", _MSG_COMBAT)
         )
 
         # Opening HP readout. Without it the first bar the player sees is the
@@ -76,7 +84,7 @@ class CmdAttack(Command):
         opening_hp = combat_msg.format_hp_status(
             target.key, target.hp, target.max_hp
         )
-        caller.msg(opening_hp)
+        caller.msg((opening_hp, _MSG_COMBAT))
 
 
 class CmdHold(Command):
@@ -89,11 +97,11 @@ class CmdHold(Command):
         caller = self.caller
         handler = caller.combat
         if handler is None:
-            caller.msg("You aren't in combat.")
+            caller.msg(("You aren't in combat.", _MSG_COMBAT))
             return
 
         handler.queue_action({"kind": "hold"})
-        caller.msg("|xYou hold your attack.|n")
+        caller.msg(("|xYou hold your attack.|n", _MSG_COMBAT))
 
 
 class CmdFlee(Command):
@@ -107,11 +115,11 @@ class CmdFlee(Command):
         caller = self.caller
         handler = caller.combat
         if handler is None:
-            caller.msg("You aren't in combat.")
+            caller.msg(("You aren't in combat.", _MSG_COMBAT))
             return
 
         handler.queue_action({"kind": "flee"})
-        caller.msg("|xYou brace to flee on your next opening.|n")
+        caller.msg(("|xYou brace to flee on your next opening.|n", _MSG_COMBAT))
 
 
 class CmdWield(Command):
@@ -124,12 +132,14 @@ class CmdWield(Command):
         caller = self.caller
         handler = caller.combat
         if handler is None:
-            caller.msg("You aren't in combat, so just equip with the 'equip' command.")
+            caller.msg(
+                ("You aren't in combat, so just equip with the 'equip' command.",
+                 _MSG_COMBAT))
             return
 
         weapon_key = self.args.strip()
         if not weapon_key:
-            caller.msg("Usage: wield <weapon>")
+            caller.msg(("Usage: wield <weapon>", _MSG_COMBAT))
             return
 
         weapon = caller.search(weapon_key)
@@ -174,7 +184,7 @@ class CmdAura(Command):
         caller = self.caller
 
         if not AURA_REGISTRY:
-            caller.msg("You know of no auras.")
+            caller.msg(("You know of no auras.", _MSG_COMBAT))
             return
 
         handler = get_aura_handler_for(caller)
@@ -195,7 +205,7 @@ class CmdAura(Command):
 
             lines.append(f"  |y{aura.name}|n — {status}")
 
-        caller.msg("\n".join(lines))
+        caller.msg(("\n".join(lines), _MSG_COMBAT))
 
     def _extinguish(self) -> None:
         """Stop the caller's active aura, if any."""
@@ -203,14 +213,14 @@ class CmdAura(Command):
 
         handler = get_aura_handler_for(caller)
         if handler is None:
-            caller.msg("You have no aura burning.")
+            caller.msg(("You have no aura burning.", _MSG_COMBAT))
             return
 
         aura = handler.get_aura()
         handler.stop_aura()
 
         if aura is not None:
-            caller.msg(combat_msg.format_aura_deactivate(aura))
+            caller.msg((combat_msg.format_aura_deactivate(aura), _MSG_COMBAT))
 
     def _ignite(self, argument: str) -> None:
         """Resolve a name to an aura and switch it on."""
@@ -218,12 +228,12 @@ class CmdAura(Command):
 
         aura = find_aura(argument)
         if aura is None:
-            caller.msg(f"You know no aura called '{argument}'.")
+            caller.msg((f"You know no aura called '{argument}'.", _MSG_COMBAT))
             return
 
         allowed, reason = aura.can_activate(caller)
         if not allowed:
-            caller.msg(f"|r{reason}|n")
+            caller.msg((f"|r{reason}|n", _MSG_COMBAT))
             return
 
         # Re-lighting the aura already burning is a no-op rather than a silent
@@ -231,13 +241,13 @@ class CmdAura(Command):
         # pulse forever.
         handler = get_aura_handler_for(caller)
         if handler is not None and handler.get_aura() is aura:
-            caller.msg(f"{aura.name} is already burning.")
+            caller.msg((f"{aura.name} is already burning.", _MSG_COMBAT))
             return
 
         handler = ensure_aura_handler(caller)
         handler.activate(aura)
 
-        caller.msg(combat_msg.format_aura_activate(aura))
+        caller.msg((combat_msg.format_aura_activate(aura), _MSG_COMBAT))
 
 
 class CmdCombatRules(Command):
@@ -263,10 +273,10 @@ class CmdCombatRules(Command):
         argument = self.args.strip().lower()
 
         if argument == COMBAT_RULES_ALL_ARG:
-            caller.msg(describe_registry())
+            caller.msg((describe_registry(), _MSG_COMBAT))
             return
 
-        caller.msg(describe_action_rules(caller))
+        caller.msg((describe_action_rules(caller), _MSG_COMBAT))
 
 
 class CmdCombatOptions(Command):
@@ -336,7 +346,7 @@ class CmdTickDebug(Command):
 
         if argument == tick_debug.MODE_STATUS:
             report = tick_debug.snapshot(caller)
-            caller.msg(report)
+            caller.msg((report, _MSG_COMBAT))
             return
 
         if argument == tick_debug.MODE_OFF:
@@ -374,12 +384,12 @@ class CmdTickDebug(Command):
         caller = self.caller
 
         report = tick_debug.snapshot(caller)
-        caller.msg(report)
+        caller.msg((report, _MSG_COMBAT))
 
         tick_debug.attach(caller, mode)
         caller.msg(
-            f"{colors.SUCCESS_COLOR}Tick monitor on ({mode}). "
-            f"'tickdebug off' to stop.{colors.RESET_COLOR}"
+            (f"{colors.SUCCESS_COLOR}Tick monitor on ({mode}). "
+            f"'tickdebug off' to stop.{colors.RESET_COLOR}", _MSG_COMBAT)
         )
 
     def _stop(self) -> None:
@@ -388,10 +398,11 @@ class CmdTickDebug(Command):
         was_watching = tick_debug.detach(caller)
 
         if not was_watching:
-            caller.msg("The tick monitor isn't running.")
+            caller.msg(("The tick monitor isn't running.", _MSG_COMBAT))
             return
 
-        caller.msg(f"{colors.DIM_COLOR}Tick monitor off.{colors.RESET_COLOR}")
+        caller.msg(
+            (f"{colors.DIM_COLOR}Tick monitor off.{colors.RESET_COLOR}", _MSG_COMBAT))
 
     def _usage(self) -> None:
         """Report the accepted arguments, built from the module's own vocabulary."""
@@ -402,7 +413,7 @@ class CmdTickDebug(Command):
         modes.append(tick_debug.MODE_OFF)
 
         choices = "|".join(modes)
-        caller.msg(f"Usage: tickdebug [{choices}]")
+        caller.msg((f"Usage: tickdebug [{choices}]", _MSG_COMBAT))
 
 
 class CombatCmdSet(CmdSet):

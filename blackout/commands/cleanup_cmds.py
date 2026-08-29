@@ -8,6 +8,14 @@ Description: Admin cleanup commands for bulk item destruction.
 from commands.command import Command
 from commands.constants import HELP_CATEGORY_ADMIN
 from evennia import CmdSet
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is the server speaking as itself, so
+# the routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_SYSTEM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_SYSTEM}
 
 
 
@@ -72,16 +80,16 @@ class CmdDestroyItems(Command):
         clean_args = self.args.strip()
 
         if not clean_args:
-            caller.msg("Usage: destroy all [global] <item name>")
+            caller.msg(("Usage: destroy all [global] <item name>", _MSG_SYSTEM))
             return
 
         if not clean_args.lower().startswith("all "):
-            caller.msg("Usage: destroy all [global] <item name>")
+            caller.msg(("Usage: destroy all [global] <item name>", _MSG_SYSTEM))
             return
 
         rest = clean_args[4:].strip()
         if not rest:
-            caller.msg("Usage: destroy all [global] <item name>")
+            caller.msg(("Usage: destroy all [global] <item name>", _MSG_SYSTEM))
             return
 
         is_global = rest.lower().startswith("global ")
@@ -91,7 +99,7 @@ class CmdDestroyItems(Command):
             item_name = rest
 
         if not item_name:
-            caller.msg("Usage: destroy all [global] <item name>")
+            caller.msg(("Usage: destroy all [global] <item name>", _MSG_SYSTEM))
             return
 
         if is_global:
@@ -110,7 +118,8 @@ class CmdDestroyItems(Command):
                         count += 1
                 if count:
                     total += count
-            caller.msg(f"Globally destroyed {total} items named '{item_name}'.")
+            caller.msg(
+                (f"Globally destroyed {total} items named '{item_name}'.", _MSG_SYSTEM))
         else:
             count = 0
             for item in list(caller.contents):
@@ -122,7 +131,9 @@ class CmdDestroyItems(Command):
                     caller.equipment.remove(item)
                     item.delete()
                     count += 1
-            caller.msg(f"Destroyed {count} items named '{item_name}' from your inventory.")
+            caller.msg(
+                (f"Destroyed {count} items named '{item_name}' from your inventory.",
+                 _MSG_SYSTEM))
 
 
 

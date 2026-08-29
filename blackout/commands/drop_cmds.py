@@ -23,6 +23,15 @@ from evennia import default_cmds
 from evennia.commands.cmdset import CmdSet
 from evennia.utils import utils
 from systems.ui.colors import ERROR_COLOR, RESET_COLOR
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about your inventory, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 # Private constant definitions
 
@@ -152,7 +161,9 @@ class DropCmd(default_cmds.CmdDrop):
         item = inventory.get_slot_content(index)
 
         if item is None:
-            self.msg(f"{ERROR_COLOR}Slot {self.args} is empty.{RESET_COLOR}")
+            self.msg(
+                (f"{ERROR_COLOR}Slot {self.args} is empty.{RESET_COLOR}",
+                 _MSG_INVENTORY))
             return None
 
         return item
@@ -198,7 +209,7 @@ class DropCmd(default_cmds.CmdDrop):
         caller = self.caller
 
         if not self.args:
-            self.msg("Drop what?")
+            self.msg(("Drop what?", _MSG_INVENTORY))
             return
 
         by_slot = None
@@ -244,10 +255,11 @@ class DropCmd(default_cmds.CmdDrop):
                 obj.at_drop(caller)
 
         if not moved:
-            self.msg("That can't be dropped.")
+            self.msg(("That can't be dropped.", _MSG_INVENTORY))
         else:
             obj_name = moved[0].get_numbered_name(len(moved), caller, return_string=True)
-            caller.location.msg_contents(f"$You() $conj(drop) {obj_name}.", from_obj=caller)
+            caller.location.msg_contents(
+                (f"$You() $conj(drop) {obj_name}.", _MSG_INVENTORY), from_obj=caller)
 
 
 class DropCmdSet(CmdSet):

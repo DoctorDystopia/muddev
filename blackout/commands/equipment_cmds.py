@@ -25,6 +25,15 @@ from evennia import CmdSet
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
 from systems.ui.colors import ERROR_COLOR, RESET_COLOR, SUCCESS_COLOR
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about your inventory, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 # Public constant definitions
@@ -98,8 +107,8 @@ def _resolve_equipped_item(caller, text: str):
 
         if item is None:
             caller.msg(
-                f"{ERROR_COLOR}Nothing is equipped in your "
-                f"{slot.label}.{RESET_COLOR}"
+                (f"{ERROR_COLOR}Nothing is equipped in your "
+                f"{slot.label}.{RESET_COLOR}", _MSG_INVENTORY)
             )
             return None
 
@@ -116,15 +125,16 @@ def _resolve_equipped_item(caller, text: str):
 
     if not partial:
         caller.msg(
-            f"{ERROR_COLOR}You have nothing equipped called "
-            f"'{text}'.{RESET_COLOR}"
+            (f"{ERROR_COLOR}You have nothing equipped called "
+            f"'{text}'.{RESET_COLOR}", _MSG_INVENTORY)
         )
         return None
 
     if len(partial) > 1:
         names = ", ".join(item.key for item in partial)
         caller.msg(
-            f"{ERROR_COLOR}Which one? You are wearing: {names}.{RESET_COLOR}"
+            (f"{ERROR_COLOR}Which one? You are wearing: {names}.{RESET_COLOR}",
+             _MSG_INVENTORY)
         )
         return None
 
@@ -207,10 +217,11 @@ class CmdEquipment(Command):
         try:
             caller.equipment.equip(item)
         except EquipmentError as equip_err:
-            caller.msg(f"{ERROR_COLOR}{equip_err}{RESET_COLOR}")
+            caller.msg((f"{ERROR_COLOR}{equip_err}{RESET_COLOR}", _MSG_INVENTORY))
             return
 
-        caller.msg(f"{SUCCESS_COLOR}You equip {item.key}.{RESET_COLOR}")
+        caller.msg(
+            (f"{SUCCESS_COLOR}You equip {item.key}.{RESET_COLOR}", _MSG_INVENTORY))
 
 
 
@@ -270,11 +281,13 @@ class CmdUnequip(Command):
         target_text = self.args.strip()
 
         if not target_text:
-            caller.msg("Usage: unequip <slot or item>")
+            caller.msg(("Usage: unequip <slot or item>", _MSG_INVENTORY))
             return
 
         if not hasattr(caller, "equipment"):
-            caller.msg(f"{ERROR_COLOR}You cannot equip anything.{RESET_COLOR}")
+            caller.msg(
+                (f"{ERROR_COLOR}You cannot equip anything.{RESET_COLOR}",
+                 _MSG_INVENTORY))
             return
 
         item = _resolve_equipped_item(caller, target_text)
@@ -285,10 +298,11 @@ class CmdUnequip(Command):
         try:
             caller.equipment.unequip(item)
         except EquipmentError as unequip_err:
-            caller.msg(f"{ERROR_COLOR}{unequip_err}{RESET_COLOR}")
+            caller.msg((f"{ERROR_COLOR}{unequip_err}{RESET_COLOR}", _MSG_INVENTORY))
             return
 
-        caller.msg(f"{SUCCESS_COLOR}You remove {item.key}.{RESET_COLOR}")
+        caller.msg(
+            (f"{SUCCESS_COLOR}You remove {item.key}.{RESET_COLOR}", _MSG_INVENTORY))
 
 
 

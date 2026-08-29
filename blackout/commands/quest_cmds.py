@@ -17,6 +17,14 @@ from systems.ui.colors import (
     highlight as _hl,
     title as _title,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about a quest, so the routing tag
+# is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_QUEST = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_QUEST}
 
 
 
@@ -166,7 +174,7 @@ class CmdQuest(Command):
         completed = quests.completed_keys()
 
         if not active and not completed:
-            caller.msg(MSG_NO_QUESTS)
+            caller.msg((MSG_NO_QUESTS, _MSG_QUEST))
             return
 
         lines = []
@@ -190,7 +198,7 @@ class CmdQuest(Command):
             lines.append("")
             lines.append(MSG_HINT)
 
-        caller.msg("\n".join(lines))
+        caller.msg(("\n".join(lines), _MSG_QUEST))
 
 
     def _journal_entry(self, quests: object, quest_key: str) -> list:
@@ -255,7 +263,7 @@ class CmdQuest(Command):
         quest_key = _resolve_quest_key(caller, name)
 
         if quest_key is None:
-            caller.msg(MSG_UNKNOWN_QUEST.format(name=name))
+            caller.msg((MSG_UNKNOWN_QUEST.format(name=name), _MSG_QUEST))
             return
 
         blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
@@ -268,7 +276,7 @@ class CmdQuest(Command):
 
         if caller.quests.is_complete(quest_key):
             lines.append(f"{DIM_COLOR}Completed.{RESET_COLOR}")
-            caller.msg("\n".join(lines))
+            caller.msg(("\n".join(lines), _MSG_QUEST))
             return
 
         step = caller.quests.current_step(quest_key)
@@ -279,7 +287,7 @@ class CmdQuest(Command):
         for objective in caller.quests.objective_lines(quest_key):
             lines.append(f"  {objective}")
 
-        caller.msg("\n".join(lines))
+        caller.msg(("\n".join(lines), _MSG_QUEST))
 
 
     @staticmethod

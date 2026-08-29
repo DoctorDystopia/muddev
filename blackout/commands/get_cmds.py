@@ -10,6 +10,15 @@ crash the pickup announcement.
 from evennia import default_cmds
 from evennia.commands.cmdset import CmdSet
 from evennia.utils import utils
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about your inventory, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 # Private constant definitions
 
@@ -123,7 +132,7 @@ class GetCmd(default_cmds.CmdGet):
         caller = self.caller
 
         if not self.args:
-            self.msg("Get what?")
+            self.msg(("Get what?", _MSG_INVENTORY))
             return
 
         if not self.number:
@@ -139,15 +148,15 @@ class GetCmd(default_cmds.CmdGet):
         objs = utils.make_iter(objs)
 
         if len(objs) == 1 and caller == objs[0]:
-            self.msg("You can't get yourself.")
+            self.msg(("You can't get yourself.", _MSG_INVENTORY))
             return
 
         for obj in objs:
             if not obj.access(caller, "get"):
                 if obj.db.get_err_msg:
-                    self.msg(obj.db.get_err_msg)
+                    self.msg((obj.db.get_err_msg, _MSG_INVENTORY))
                 else:
-                    self.msg("You can't get that.")
+                    self.msg(("You can't get that.", _MSG_INVENTORY))
                 return
             if not obj.at_pre_get(caller):
                 return
@@ -161,9 +170,10 @@ class GetCmd(default_cmds.CmdGet):
                 obj.at_get(caller)
 
         if not moved:
-            self.msg("That can't be picked up.")
+            self.msg(("That can't be picked up.", _MSG_INVENTORY))
         else:
-            caller.location.msg_contents(f"$You() $conj(pick) up {obj_name}.", from_obj=caller)
+            caller.location.msg_contents(
+                (f"$You() $conj(pick) up {obj_name}.", _MSG_INVENTORY), from_obj=caller)
 
 
 class GetCmdSet(CmdSet):

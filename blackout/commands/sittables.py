@@ -4,6 +4,14 @@
 from evennia import Command
 from evennia import CmdSet
 from evennia import InterruptCommand
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about the room around you, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_ROOM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_ROOM}
 
 
 
@@ -50,18 +58,18 @@ class CmdSit2(Command):
     def parse(self):
         self.args = self.args.strip()
         if not self.args:
-            self.called.msg("Sit on what?")
+            self.called.msg(("Sit on what?", _MSG_ROOM))
             raise InterruptCommand()
 
     def func(self):
         sittable = self.caller.search(self.args)
         if not sittable:
-            self.caller.msg("You don't see that here.")
+            self.caller.msg(("You don't see that here.", _MSG_ROOM))
             return
         try:
             sittable.do_sit(self.caller)
         except AttributeError:
-            self.caller.msg("You can't sit on that!")
+            self.caller.msg(("You can't sit on that!", _MSG_ROOM))
 
 
 
@@ -110,7 +118,7 @@ class CmdStand2(Command):
         caller = self.caller
         sittable = caller.db.is_sitting
         if not sittable:
-            caller.msg("You are not sitting on anything!")
+            caller.msg(("You are not sitting on anything!", _MSG_ROOM))
         else:
             sittable.do_stand(caller)
 
@@ -126,9 +134,9 @@ class CmdNoSitStand(Command):
 
     def func(self):
         if self.cmdname =="sit":
-            self.msg("You have nothing to sit on!")
+            self.msg(("You have nothing to sit on!", _MSG_ROOM))
         else:
-            self.msg("You are not sitting on anything!")
+            self.msg(("You are not sitting on anything!", _MSG_ROOM))
 
 
 
