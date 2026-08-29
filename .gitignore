@@ -1,6 +1,7 @@
 # Environments
 evenv/
 .venv/
+.vscode/
 
 # Database and Cache
 *.db3
