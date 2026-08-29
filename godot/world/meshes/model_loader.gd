@@ -120,6 +120,20 @@ func can_load(asset_key: String) -> bool:
 	return _registry != null and _registry.has_model(asset_key)
 
 
+## How many fetches are in the air.
+##
+## Exists for [SessionReadiness], which has to answer "is the art finished"
+## and cannot do it from [signal loaded] alone: that signal says one model
+## arrived, never that another has just been asked for. A COUNT read on demand
+## cannot fall behind the way a tally kept by a listener would.
+##
+## Zero does not mean finished. Models are fetched lazily as things are drawn,
+## so the set empties between batches; see [constant
+## SessionReadiness.SETTLE_SECONDS].
+func in_flight_count() -> int:
+	return _in_flight.size()
+
+
 ## A copy of an already-loaded model, or null.
 ##
 ## Synchronous and never fetches. This is what a caller uses when it wants art

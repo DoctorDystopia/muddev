@@ -35,6 +35,7 @@ const REQUIRED := {
 	"Minimap": "Control",
 	"TextVitals": "MarginContainer",
 	"World": "Node3D",
+	"LoadingVeil": "PanelContainer",
 }
 
 var _failures := 0
@@ -53,6 +54,7 @@ func _ready() -> void:
 
 	_every_unique_name_resolves(console)
 	_the_theme_reached_the_tree(console)
+	_the_veil_is_drawn_over_the_pane_and_not_under_it(console)
 
 	console.queue_free()
 
@@ -88,6 +90,27 @@ func _the_theme_reached_the_tree(console: Node) -> void:
 		return
 
 	_expect(control.theme != null, "the console root carries the theme")
+
+
+## The veil has to be the LAST child of the world pane.
+##
+## Sibling order IS draw order for Controls, and the veil's whole job is to
+## stand in front of the 3D viewport, the minimap and the vitals. Authored
+## anywhere earlier it still exists, still resolves by unique name and still
+## reports the right phase -- and is drawn underneath an opaque
+## SubViewportContainer, so the screen it is meant to put up is simply never
+## seen. No other test can see that, and neither can a reader of `console.gd`.
+func _the_veil_is_drawn_over_the_pane_and_not_under_it(console: Node) -> void:
+	var pane: Node = console.get_node_or_null("%WorldPane")
+	var veil: Node = console.get_node_or_null("%LoadingVeil")
+
+	if pane == null or veil == null:
+		_fail("the pane and the veil are both in the scene")
+		return
+
+	var last: Node = pane.get_child(pane.get_child_count() - 1)
+
+	_expect(last == veil, "the veil is the last child of the world pane")
 
 
 func _expect(passed: bool, what: String) -> void:

@@ -62,6 +62,11 @@ const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
 ## [member _world_state], never a second copy of it.
 @onready var _minimap: MinimapView = %Minimap
 
+## Stands over the world pane between login and a drawable world. LAST child of
+## the pane in the scene, so it covers the map, the minimap and the vitals
+## rather than sitting under them.
+@onready var _veil: LoadingVeil = %LoadingVeil
+
 var _channels := PackedStringArray()
 
 ## The observer's own state -- avatar, vitals, status.
@@ -113,6 +118,14 @@ var _chat_tabs := ChatTabs.new()
 ## this is the move its comment said would be needed once the inventory drew
 ## meshes too.
 var _meshes: MeshResolver
+
+## Whether the player can actually play yet. A model like the others, and the
+## veil that draws it is a view -- so the rule ("a body, a place, a map, and the
+## art gone quiet") can be tested with no scene, no socket and no clock.
+##
+## Owned here because it is the only place that already holds all three of the
+## models it reads.
+var _readiness := SessionReadiness.new()
 
 ## What was typed, and where in it the player is. Not a widget: the rules are
 ## worth testing without a keyboard, and most of them are the sort that feel
@@ -207,6 +220,16 @@ func _ready() -> void:
 	# After both panes are bound, so the manifest landing finds consumers ready
 	# rather than arriving at a pane that has not been given the resolver yet.
 	_meshes.start()
+
+	# After _meshes, _char and _world_state all exist, and added to the tree
+	# because it owns a Timer -- the same reason MeshResolver is a Node.
+	_readiness.bind(_char, _world_state, _meshes)
+	add_child(_readiness)
+	_veil.bind(_readiness)
+
+	# The veil asks; it does not reach into the model. Same rule as every other
+	# view on this screen.
+	_veil.skip_requested.connect(_readiness.skip)
 
 	# The pane acts only through Evennia.command(), the same as a clicked tile:
 	# every command it emits was named by the server and is one a telnet player
@@ -323,6 +346,11 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_char.reset()
 	_quest_log.reset()
 	_skills.reset()
+
+	# A new socket is a new Evennia Session at the connection screen, so the
+	# next login has to be waited for again -- including the player's decision
+	# to skip, which was about the session that just ended.
+	_readiness.reset()
 
 	if requested:
 		return

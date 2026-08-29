@@ -9,6 +9,7 @@
 [ext_resource type="Script" path="res://scenes/panel/panel_view.gd" id="8_panel"]
 [ext_resource type="Script" path="res://scenes/vitals/vitals_bars.gd" id="9_vitals"]
 [ext_resource type="Script" path="res://scenes/minimap/minimap_view.gd" id="10_minimap"]
+[ext_resource type="Script" path="res://scenes/loading/loading_veil.gd" id="11_veil"]
 
 [node name="Console" type="Control" unique_id=1927313264]
 layout_mode = 3
@@ -110,6 +111,16 @@ offset_top = 8.0
 offset_right = 248.0
 offset_bottom = 72.0
 mouse_filter = 2
+
+[node name="LoadingVeil" type="PanelContainer" parent="Split/Right/WorldPane" unique_id=434837264]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("11_veil")
 
 [node name="Panel" type="TabContainer" parent="Split/Right" unique_id=1156632076]
 unique_name_in_owner = true

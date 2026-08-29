@@ -317,6 +317,110 @@ it.
 > viewport hints at it, which is why `test_inventory_view` asserts the two
 > worlds differ rather than trusting a comment.
 
+## Three screens cover the way in, and they hand off in order
+
+Logging in is not arriving, and until 08/29/2026 the client behaved as though it
+were.
+
+| Screen | Covers | Ends when |
+|---|---|---|
+| Godot's boot splash | the ENGINE loading | the first frame is drawn |
+| [LoginView] | no character yet | `char_vitals` lands — a body exists |
+| [LoadingVeil] | a body, but no world yet | the map is whole and the art has gone quiet |
+
+The third one was missing. `LoginView` dismisses itself the moment vitals arrive,
+because vitals are only sent for a PUPPETED character and that is the honest
+signal that a body exists — but a body is not a world. `blackout_map` is still
+arriving in chunks, `room_info` has not necessarily said where you are standing,
+and not one `.glb` has been fetched. For a second or three the player faced a
+pane that was empty, then half-built, then right, and **every click in that
+window was a real command about a world they could not see**.
+
+Godot's own splash cannot cover this: it is gone before the socket opens.
+
+### Four facts, and the phase is whichever is missing first
+
+    a body      char_vitals landed          CharState.has_vitals
+    a place     room_info named a map       WorldState.current_z
+    a map       every chunk of it arrived   Level.is_complete()
+    the art     nothing left in flight      MeshResolver.in_flight_count()
+
+They do complete in that order today. Nothing in `SessionReadiness` assumes it —
+each is tested independently, so a server that reorders them reports the truth
+rather than a stale label, and `test_session_readiness` asserts exactly that with
+a complete map arriving before the room that names it.
+
+> **An empty in-flight set is not a finished one.** Models are fetched lazily, as
+> whatever needs them is drawn, so the set legitimately empties between batches:
+> the map completes, the terrain layer asks for its tiles, and a moment later the
+> entity layer asks for the NPCs standing on them. Lifting on the first zero
+> raises the veil on a room with nobody in it. `SETTLE_SECONDS` is how long the
+> quiet has to hold, and it is the single most load-bearing constant here.
+
+**The rule is static and takes every input as an argument.** `phase_for()` is the
+whole decision and can be tested with no socket, no timer and no frame — the same
+split `ReconnectPolicy` makes. The node around it is only a stopwatch and four
+reads.
+
+> **It POLLS, and that is not laziness.** Three of the four facts announce
+> themselves; the fourth does not. A model going INTO flight emits nothing,
+> because `ModelLoader.request` is called from a draw and a signal there would
+> chatter on every entity rebuild. A readiness model bound only to the signals
+> that exist can be told art finished but never that more of it started — which
+> is precisely the case that must not be missed, since it is what a premature
+> "ready" looks like. So all four are read on a tick, and the tick runs only
+> while the veil is up.
+
+### It covers the world pane, not the window
+
+The main design decision, and the reason it is not the full-screen loading
+screen it sounds like.
+
+A full-window veil would hide the game log, which is the one thing that IS
+working: the greeting, the MOTD and any error explaining why the rest is slow all
+land there. Covering it would turn an informative wait into a blank one and take
+the text game away from a player who could already be playing it.
+
+What the veil buys is **the click**. The tile grid and the minimap both send real
+commands and both live under `%WorldPane`; a `PanelContainer` filling that pane
+with the default `MOUSE_FILTER_STOP` eats the misclick. The input, the log and its
+tabs stay live throughout.
+
+Turning the 3D pane off (Options → 3D) hides the veil with it, correctly and with
+no code: a player in text-only mode is waiting for nothing.
+
+> **Sibling order is draw order.** The veil must be the LAST child of
+> `%WorldPane`. Authored anywhere earlier it still exists, still resolves by
+> unique name and still reports the right phase — and is drawn underneath an
+> opaque `SubViewportContainer`, so the screen it is meant to put up is never
+> seen. `smoke_console` asserts the ordering, because nothing else can.
+
+### Nobody is ever trapped behind it
+
+Three independent exits, because every other way out of this screen depends on
+something arriving:
+
+- **The gate opens.** The normal case, and under a second on a warm cache.
+- **`CEILING_SECONDS` (30) expires.** A ceiling, not a timeout — nothing is
+  cancelled and nothing is reported failed. Checked BEFORE the missing-fact
+  branches, or a session that never receives a map would report `MAPPING` for
+  ever and the ceiling would be unreachable.
+- **The player presses "Enter anyway."** Offered after `SKIP_OFFER_SECONDS` (6),
+  late enough that a normal login never sees the button. One-way within a
+  session: having chosen to go in early, they are not asked again on the next
+  room. A dropped socket clears it, because that is a new session.
+
+### The mark
+
+`ui/blackout_mark.png` is the sigil, and it is the veil's centrepiece, the window
+icon (`config/icon`) and the boot splash (`boot_splash/image`, over
+`boot_splash/bg_color` #07080b — the same `--color-void` the website uses). One
+file for all three.
+
+The reasons live here rather than in `project.godot`, for the reason the top of
+this file already gives: opening the editor once rewrites that file and strips
+every comment in it.
+
 ## Reconnecting
 
 The socket redials itself on a drop: one second, then two, four, eight, capped
@@ -385,7 +489,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All thirty are headless and exit non-zero on failure. Twenty-seven need
+All thirty-two are headless and exit non-zero on failure. Twenty-nine need
 nothing running; three of the four `smoke_*` scenes need an Evennia, and none
 needs an account. `smoke_console` is the exception: it builds `console.tscn` for real and
 needs nothing, because the socket it opens is expected to fail.

@@ -101,6 +101,15 @@ func may_have_art(asset_key: String) -> bool:
 	return _loader.can_load(asset_key)
 
 
+## How many models are still being fetched, straight from the loader.
+##
+## Delegated rather than exposing `_loader`, so the resolver stays the one
+## thing a pane or a readiness model talks to. See
+## [method ModelLoader.in_flight_count] for why it is a count and not a signal.
+func in_flight_count() -> int:
+	return _loader.in_flight_count()
+
+
 ## Start fetching what the server has art for.
 ##
 ## Call once, when the client comes up. Until it completes [method may_have_art]
