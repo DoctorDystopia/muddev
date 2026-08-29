@@ -39,6 +39,14 @@
     {
       "source": "assets/world_objects/sm_teleporter",
       "asset_key": "map_transition"
+    },
+    {
+      "source": "assets/tiles/desert/center_h",
+      "asset_key": "tile_oasis"
+    },
+    {
+      "source": "assets/tiles/desert/center_b",
+      "asset_key": "tile_oasis_outskirts"
     }
   ]
 }

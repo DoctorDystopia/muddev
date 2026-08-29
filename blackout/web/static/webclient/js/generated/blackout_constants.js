@@ -22,6 +22,8 @@ export const CH_CHAR_VITALS = "char_vitals";
 export const CH_CHAR_STATUS = "char_status";
 export const CH_CHAR_SUMMARY = "char_summary";
 export const CH_CHAR_ITEMS = "char_items_list";
+export const CH_CHAR_QUESTS = "char_quests";
+export const CH_CHAR_SKILLS = "char_skills";
 export const CH_MAP = "blackout_map";
 export const CH_COMBAT = "blackout_combat";
 export const CH_AURA = "blackout_aura";
@@ -51,6 +53,31 @@ export const KIND_WALK = "walk";
 export const KIND_LOOK = "look";
 export const KIND_CANCEL = "cancel";
 
+// Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
+export const MESSAGE_TYPE_KEY = "type";
+export const MSG_GENERAL = "general";
+export const MSG_LOOK = "look";
+export const MSG_POSE = "pose";
+export const MSG_SAY = "say";
+export const MSG_WHISPER = "whisper";
+export const MSG_HELP = "help";
+export const MSG_EXAMINE = "examine";
+export const MSG_MOVE = "move";
+export const MSG_TELEPORT = "teleport";
+export const MSG_ROOM = "room";
+export const MSG_MAP = "xymap";
+export const MSG_COMBAT = "combat";
+export const MSG_VITALS = "vitals";
+export const MSG_PROGRESSION = "progression";
+export const MSG_INVENTORY = "inventory";
+export const MSG_CRAFTING = "crafting";
+export const MSG_GATHERING = "gathering";
+export const MSG_QUEST = "quest";
+export const MSG_COMMERCE = "commerce";
+export const MSG_DIALOGUE = "dialogue";
+export const MSG_CHANNEL = "channel";
+export const MSG_SYSTEM = "system";
+
 // Everything else.
 export const SUBSCRIBE_ALL = "all";
 export const ASSET_KEY_CHARACTER = "player_character";
@@ -61,5 +88,6 @@ export const TILE_KEY_TEMPLATE = "{x}:{y}";
 
 // Derived sets, so a client can iterate rather than
 // rebuild these from the names above.
-export const SUBSCRIBABLE_CHANNELS = ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_remove_player"];
+export const SUBSCRIBABLE_CHANNELS = ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_remove_player"];
 export const ITEM_FAMILIES = ["armor", "crafting_material", "crafting_tool", "currency", "jewellery", "weapon"];
+export const MESSAGE_TYPES = ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"];

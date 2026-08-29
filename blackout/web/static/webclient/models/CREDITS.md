@@ -68,3 +68,29 @@ indistinguishable from one whose licence nobody checked.
   because that model is 6.3 MiB and the R2-hosted client drew the fallback mesh
   rather than it; this is 2.0 MiB. Both facts are temporary — it is a base
   character kit, which is what a placeholder should look like.
+
+## `tiles/tile_oasis.glb`, `tiles/tile_oasis_outskirts.glb`
+
+"3D Tileset" (https://wizp.itch.io/3d-tileset) by wizp. **The licence is
+whatever that page states; the download carries no licence file.** Confirm the
+terms before this art ships anywhere public — a row that records the source but
+not the grant is half a licence obligation, and it is recorded that way here
+rather than guessed at.
+
+- Source download: `assets/tiles/desert/` — `Tileset.gltf` and
+  `ColorPalette.png` as they arrived. The `.dae` and `.fbx` from the same
+  download are the same 34 tiles in two other formats and were not kept; see
+  `assets/tiles/desert/SOURCE.md`.
+- These are TWO NODES out of that one file, split out by
+  `assets/split_tileset.py` into ordinary source directories and then packed
+  like any download. `tile_oasis` is the tileset's `center_h` (sand, rock
+  plates, one small water pool); `tile_oasis_outskirts` is `center_b` (open
+  sand with a few pebbles).
+- Packed with `assets/pack_model.py`, palette resampled 1024² → 512². The
+  ceiling is not about detail: the image is a chart of flat swatches and a
+  tile's UVs sit in an 11-pixel column of it, so the resample is bounded by how
+  much margin has to survive between one swatch and the next. See the `tiles`
+  entry in `assets/asset_budgets.py`.
+- **Temporary art.** They are placeholders for a real Blackout tileset, and the
+  desert set has no green in it at all — the only non-sand colour anywhere in
+  the 34 tiles is the water in five of them.

@@ -22,6 +22,8 @@ const CH_CHAR_VITALS := "char_vitals"
 const CH_CHAR_STATUS := "char_status"
 const CH_CHAR_SUMMARY := "char_summary"
 const CH_CHAR_ITEMS := "char_items_list"
+const CH_CHAR_QUESTS := "char_quests"
+const CH_CHAR_SKILLS := "char_skills"
 const CH_MAP := "blackout_map"
 const CH_COMBAT := "blackout_combat"
 const CH_AURA := "blackout_aura"
@@ -51,6 +53,31 @@ const KIND_WALK := "walk"
 const KIND_LOOK := "look"
 const KIND_CANCEL := "cancel"
 
+# Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
+const MESSAGE_TYPE_KEY := "type"
+const MSG_GENERAL := "general"
+const MSG_LOOK := "look"
+const MSG_POSE := "pose"
+const MSG_SAY := "say"
+const MSG_WHISPER := "whisper"
+const MSG_HELP := "help"
+const MSG_EXAMINE := "examine"
+const MSG_MOVE := "move"
+const MSG_TELEPORT := "teleport"
+const MSG_ROOM := "room"
+const MSG_MAP := "xymap"
+const MSG_COMBAT := "combat"
+const MSG_VITALS := "vitals"
+const MSG_PROGRESSION := "progression"
+const MSG_INVENTORY := "inventory"
+const MSG_CRAFTING := "crafting"
+const MSG_GATHERING := "gathering"
+const MSG_QUEST := "quest"
+const MSG_COMMERCE := "commerce"
+const MSG_DIALOGUE := "dialogue"
+const MSG_CHANNEL := "channel"
+const MSG_SYSTEM := "system"
+
 # Everything else.
 const SUBSCRIBE_ALL := "all"
 const ASSET_KEY_CHARACTER := "player_character"
@@ -61,5 +88,6 @@ const TILE_KEY_TEMPLATE := "{x}:{y}"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "crafting_material", "crafting_tool", "currency", "jewellery", "weapon"]
+const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]
