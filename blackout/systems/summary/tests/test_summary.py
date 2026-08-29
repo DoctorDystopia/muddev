@@ -3,7 +3,7 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/08/2026
 Description: Tests for the player summary screen -- the panel registry, the
-             fixed-width layout, the six panels, and the menu node contract.
+             fixed-width layout, the five panels, and the menu node contract.
 
 Two regressions are guarded here above all others:
 
@@ -25,7 +25,6 @@ from systems.summary import layout, service
 from systems.summary.panel_defs.holdings import HoldingsPanel
 from systems.summary.panel_defs.identity import IdentityPanel
 from systems.summary.panel_defs.readiness import ReadinessPanel
-from systems.summary.panel_defs.skills import SkillsPanel
 from systems.summary.panel_defs.vitals import VitalsPanel
 from systems.summary.panel_defs.world import WorldPanel
 from systems.summary.registry import PANEL_REGISTRY
@@ -41,7 +40,7 @@ class _SummaryTest(EvenniaTest):
 class TestRegistry(_SummaryTest):
 
     def test_every_panel_is_discovered(self):
-        expected = {"identity", "vitals", "readiness", "skills", "holdings", "world"}
+        expected = {"identity", "vitals", "readiness", "holdings", "world"}
 
         self.assertEqual(expected, set(PANEL_REGISTRY.keys()))
 
@@ -141,19 +140,6 @@ class TestPanels(_SummaryTest):
         text = strip_ansi("\n".join(ReadinessPanel.render(self.char1)))
 
         self.assertIn("bare hands", text)
-
-    def test_skills_lists_every_registered_skill(self):
-        from systems.progression.skills.registry import SKILL_REGISTRY
-
-        text = strip_ansi("\n".join(SkillsPanel.render(self.char1)))
-
-        for skill_class in SKILL_REGISTRY.values():
-            self.assertIn(skill_class.name, text)
-
-    def test_skills_names_the_closest_skill_to_levelling(self):
-        text = strip_ansi("\n".join(SkillsPanel.render(self.char1)))
-
-        self.assertIn("Closest", text)
 
     def test_holdings_reports_the_inventory_cap(self):
         from items.equipment.constants import MAX_INVENTORY_SLOTS
@@ -316,13 +302,33 @@ class TestPublicSummary(_SummaryTest):
         self.assertIn("Combat Level", screen)
         self.assertIn("Total Level", screen)
 
-    def test_public_view_shows_skill_levels(self):
-        from systems.progression.skills.registry import SKILL_REGISTRY
+    def test_no_view_of_the_dossier_carries_a_skill_roster(self):
+        """Skills left the dossier on 08/28/2026 for a screen of their own.
 
+        Asserted on the BAND rather than on skill names, and the difference is
+        the whole subtlety here. A skill name may legitimately appear on this
+        screen -- readiness prints "Earns XP: Strike, Fortitude", which is a
+        fact about the weapon in your hands and not a roster entry. What must
+        not come back is the band: a section listing every skill and its level.
+
+        Both views, and the registry itself, because the panel is what would
+        return. The aggregates stay -- combat level, total level and total XP
+        are the vitals panel's -- and the per-skill breakdown is what `skills`
+        and CHANNEL_CHAR_SKILLS own.
+        """
+        private = strip_ansi(service.render_summary(self.char1))
+        public = self._public()
+
+        self.assertNotIn("skills", PANEL_REGISTRY)
+        self.assertNotIn("SKILLS", private)
+        self.assertNotIn("SKILLS", public)
+        self.assertNotIn("Closest", private)
+
+    def test_the_public_view_keeps_the_aggregate_progress_figures(self):
         screen = self._public()
 
-        for skill_class in SKILL_REGISTRY.values():
-            self.assertIn(skill_class.name, screen)
+        self.assertIn("Total Level", screen)
+        self.assertIn("Total XP", screen)
 
     def test_public_view_hides_holdings_entirely(self):
         screen = self._public()
@@ -366,9 +372,9 @@ class TestPublicSummary(_SummaryTest):
 
     def test_public_render_defaults_to_the_full_render(self):
         """A panel that sets public without overriding render_public shows the
-        same lines in both views -- Skills is the live example."""
+        same lines in both views -- Identity is the live example."""
         self.assertEqual(
-            SkillsPanel.render(self.char1), SkillsPanel.render_public(self.char1)
+            IdentityPanel.render(self.char1), IdentityPanel.render_public(self.char1)
         )
 
     def test_a_new_panel_is_private_by_default(self):

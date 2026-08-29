@@ -52,9 +52,14 @@ PANEL_ERROR_TEXT: str = "(unavailable)"
 PANEL_ORDER_IDENTITY: int = 10
 PANEL_ORDER_VITALS: int = 20
 PANEL_ORDER_READINESS: int = 30
-PANEL_ORDER_SKILLS: int = 40
 PANEL_ORDER_HOLDINGS: int = 50
 PANEL_ORDER_WORLD: int = 60
+
+# 40 is deliberately vacant. It was the skills band, which left the dossier on
+# 08/28/2026 for a screen of its own -- CHANNEL_CHAR_SKILLS and the `skills`
+# command. The gap is not tidied away because the gaps are the point of this
+# scheme: a band that belongs between readiness and holdings still slots in
+# without renumbering anything after it.
 
 
 # ─── Character mode (forward hook) ───────────────────────────────────────────
