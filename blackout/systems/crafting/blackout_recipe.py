@@ -20,6 +20,14 @@ from .constants import (
     DEFAULT_CRAFT_SECONDS,
     TOOL_TAG_CATEGORY,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is crafting, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
 
@@ -131,7 +139,7 @@ class BlackoutRecipe(CraftingRecipe):
                         else tagkey.capitalize()
                     ),
                 )
-                self.msg(err)
+                self.msg((err, _MSG_CRAFTING))
                 raise CraftingValidationError(err)
 
         self.validated_tools = validated
@@ -178,7 +186,7 @@ class BlackoutRecipe(CraftingRecipe):
                         else tagkey.capitalize()
                     ),
                 )
-                self.msg(err)
+                self.msg((err, _MSG_CRAFTING))
                 raise CraftingValidationError(err)
 
         self.validated_consumables = validated
@@ -203,7 +211,7 @@ class BlackoutRecipe(CraftingRecipe):
         self._consumption_plan = {}
 
         if not self.unlock_requirement_check(crafter):
-            self.msg(self.error_locked)
+            self.msg((self.error_locked, _MSG_CRAFTING))
             raise CraftingValidationError
 
         if self.required_skill:
@@ -212,9 +220,9 @@ class BlackoutRecipe(CraftingRecipe):
             )
             if not meets_req:
                 self.msg(
-                    self.error_skill_too_low.format(
+                    (self.error_skill_too_low.format(
                         skill=self.required_skill, level=self.required_level
-                    )
+                    ), _MSG_CRAFTING)
                 )
                 raise CraftingValidationError
 
@@ -225,9 +233,9 @@ class BlackoutRecipe(CraftingRecipe):
 
     def post_craft(self, craft_result, **kwargs):
         if craft_result:
-            self.msg(self._format_message(self.success_message))
+            self.msg((self._format_message(self.success_message), _MSG_CRAFTING))
         elif self.failure_message:
-            self.msg(self._format_message(self.failure_message))
+            self.msg((self._format_message(self.failure_message), _MSG_CRAFTING))
 
         if craft_result or self.consume_on_fail:
             self._consume_inputs()
@@ -235,9 +243,9 @@ class BlackoutRecipe(CraftingRecipe):
         if craft_result and self.xp_reward > 0 and self.required_skill:
             self.crafter.skills.add_xp(self.required_skill, self.xp_reward)
             self.msg(
-                self.success_xp_message.format(
+                (self.success_xp_message.format(
                     xp=self.xp_reward, skill=self.required_skill
-                )
+                ), _MSG_CRAFTING)
             )
 
         return craft_result

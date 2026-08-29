@@ -34,6 +34,14 @@ from systems.ui.colors import (
     SUCCESS_COLOR,
     TITLE_COLOR,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is a shop or a bank, so the routing
+# tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMMERCE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMMERCE}
 
 
 SEPARATOR = "-" * 60
@@ -515,7 +523,7 @@ def _custom_qty_node(caller, flow, raw_string, **kwargs):
 
     items = _resolve_items(caller, flow, item_ids)
     if not items:
-        caller.msg(f"{ERROR_COLOR}{flow.gone_text}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{flow.gone_text}{RESET_COLOR}", _MSG_COMMERCE))
         return _select_node(caller, flow)
 
     text = _quantity_prompt(flow, items[0].key, max_qty, highlight=True)
@@ -536,7 +544,7 @@ def _custom_qty_node(caller, flow, raw_string, **kwargs):
     count, parse_error = parse_quantity(raw_string, max_qty)
 
     if parse_error is not None:
-        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{parse_error}{RESET_COLOR}", _MSG_COMMERCE))
         return text, custom_options
 
     _perform_transfer(caller, flow, item_ids, count)
@@ -580,7 +588,9 @@ def _perform_transfer(caller, flow, item_ids, count):
     items = _resolve_items(caller, flow, item_ids)
 
     if not items:
-        caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
+        caller.msg(
+            (f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}",
+             _MSG_COMMERCE))
         return
 
     max_qty = _available_quantity(items)
@@ -589,7 +599,7 @@ def _perform_transfer(caller, flow, item_ids, count):
     try:
         result = flow.execute(caller, items, quantity)
     except EquipmentError as err:
-        caller.msg(f"{ERROR_COLOR}{err}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{err}{RESET_COLOR}", _MSG_COMMERCE))
         return
 
     _report_transfer(caller, flow, result)
@@ -605,12 +615,12 @@ def _report_transfer(caller, flow, result) -> None:
     line = messages.format_transfer(result, flow.verb)
 
     if line and result.success:
-        caller.msg(line)
+        caller.msg((line, _MSG_COMMERCE))
     elif line:
-        caller.msg(f"{ERROR_COLOR}{line}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{line}{RESET_COLOR}", _MSG_COMMERCE))
 
     if result.success and result.error:
-        caller.msg(f"{ERROR_COLOR}{result.error}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{result.error}{RESET_COLOR}", _MSG_COMMERCE))
 
 
 def _make_execute_goto(flow):

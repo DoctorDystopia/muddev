@@ -3,6 +3,14 @@
 
 from typeclasses.objects import Object
 from commands.sittables import CmdSetSit
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about the room around you, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_ROOM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_ROOM}
 
 
 
@@ -26,16 +34,19 @@ class Sittable(Object):
 
         if current:
             if current == sitter:
-                sitter.msg(f"You are already sitting {preposition} {self.key}.")
+                sitter.msg(
+                    (f"You are already sitting {preposition} {self.key}.", _MSG_ROOM))
             else:
-                sitter.msg(f"You can't sit {preposition} {self.key}. It is already occupied by {current.key}.")
+                sitter.msg(
+                    (f"You can't sit {preposition} {self.key}. It is already occupied by {current.key}.",
+                     _MSG_ROOM))
             return
         
         self.db.sitter = sitter
         sitter.db.is_sitting = self
 
         sit_msg = self.db.msg_sitting_down or f"You sit {preposition} {self.key}."
-        sitter.msg(sit_msg)
+        sitter.msg((sit_msg, _MSG_ROOM))
 
 
     def do_stand(self, stander):
@@ -51,10 +62,10 @@ class Sittable(Object):
         current = self.db.sitter
 
         if not stander == current:
-            stander.msg(f"You are not sitting {preposition} {self.key}.")
+            stander.msg((f"You are not sitting {preposition} {self.key}.", _MSG_ROOM))
         else:
             self.db.sitter = None
             del stander.db.is_sitting
 
             stand_msg = self.db.msg_standing_up or f"You stand up from {self.key}."
-            stander.msg(stand_msg)
+            stander.msg((stand_msg, _MSG_ROOM))

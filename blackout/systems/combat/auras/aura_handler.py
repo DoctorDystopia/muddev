@@ -26,6 +26,14 @@ from systems.tick.tickable import TickableHandler, ensure_handler, register_tick
 from systems.tick.tickable import get_handler_for as _get_tickable_handler_for
 from .registry import AURA_REGISTRY
 from .targeting import hostiles_in_rooms, rooms_within_radius
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is combat, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 
 
 # ─── module constants ──────────────────────────────────────────────────────
@@ -153,12 +161,13 @@ class BlackoutAuraHandler(TickableHandler):
         # plus the target's post-hit bar, computed arithmetically for the
         # same reason -- at_damage below can delete target's row before
         # anything could read target.hp back.
-        caster.msg(combat_msg.format_aura_pulse(aura, target, dealt))
-        caster.msg(combat_msg.format_hp_status(target.key, hp_after, max_hp))
+        caster.msg((combat_msg.format_aura_pulse(aura, target, dealt), _MSG_COMBAT))
+        caster.msg(
+            (combat_msg.format_hp_status(target.key, hp_after, max_hp), _MSG_COMBAT))
 
         if room is not None:
             room.msg_contents(
-                combat_msg.format_aura_incoming(aura, target, dealt),
+                (combat_msg.format_aura_incoming(aura, target, dealt), _MSG_COMBAT),
                 exclude=(caster,),
             )
 
@@ -252,7 +261,7 @@ class BlackoutAuraHandler(TickableHandler):
             logger.log_trace()
             return
 
-        caster.msg(combat_msg.format_aura_xp(aura, award))
+        caster.msg((combat_msg.format_aura_xp(aura, award), _MSG_COMBAT))
 
     # ── tick loop ────────────────────────────────────────────────────────
 

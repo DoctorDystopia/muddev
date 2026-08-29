@@ -28,6 +28,14 @@ from systems.ui.colors import (
     HIGHLIGHT_COLOR,
     RESET_COLOR,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is something an NPC says, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_DIALOGUE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_DIALOGUE}
 
 
 # Public constant definitions
@@ -374,7 +382,7 @@ class BlackoutEvMenu(EvMenu):
             closing_text = self._resolve_closing_text()
 
             if closing_text:
-                self.msg(closing_text)
+                self.msg((closing_text, _MSG_DIALOGUE))
 
         super().close_menu()
 

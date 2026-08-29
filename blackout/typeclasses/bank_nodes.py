@@ -14,6 +14,14 @@ from systems.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import QUANTITY_ALL_KEYWORD, start_blackout_menu
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is a shop or a bank, so the routing
+# tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMMERCE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMMERCE}
 
 
 def _split_name_and_count(args):
@@ -119,21 +127,21 @@ class CmdDeposit(Command):
         args = self.args.strip()
 
         if not args:
-            caller.msg("What do you want to deposit?")
+            caller.msg(("What do you want to deposit?", _MSG_COMMERCE))
             return
 
         item_key, count = _split_name_and_count(args)
         targets = _find_carried_group(caller, item_key)
 
         if not targets:
-            caller.msg(f"You aren't carrying '{item_key}'.")
+            caller.msg((f"You aren't carrying '{item_key}'.", _MSG_COMMERCE))
             return
 
         result = caller.bank.deposit_many(targets, count)
         line = messages.format_transfer(result, messages.VERB_DEPOSIT)
 
         if line:
-            caller.msg(line)
+            caller.msg((line, _MSG_COMMERCE))
 
 
 class CmdWithdraw(Command):
@@ -159,12 +167,14 @@ class CmdWithdraw(Command):
         if not args:
             stored = caller.bank.list_items()
             if not stored:
-                caller.msg("Your bank account is empty. Nothing to withdraw.")
+                caller.msg(
+                    ("Your bank account is empty. Nothing to withdraw.", _MSG_COMMERCE))
                 return
             # dict.fromkeys, not set(): one entry per key, listing order kept.
             item_list = ", ".join(dict.fromkeys(obj.key for obj in stored))
-            caller.msg(f"Your bank contains: {item_list}")
-            caller.msg("Use |ywithdraw <item>|n to retrieve something.")
+            caller.msg((f"Your bank contains: {item_list}", _MSG_COMMERCE))
+            caller.msg(
+                ("Use |ywithdraw <item>|n to retrieve something.", _MSG_COMMERCE))
             return
 
         item_key, count = _split_name_and_count(args)
@@ -175,14 +185,14 @@ class CmdWithdraw(Command):
         # non-stackables come out in one command.
         items = caller.bank.find_items_by_name(item_key)
         if not items:
-            caller.msg(NOT_STORED_ERROR)
+            caller.msg((NOT_STORED_ERROR, _MSG_COMMERCE))
             return
 
         result = caller.bank.withdraw_many(items, count)
         line = messages.format_transfer(result, messages.VERB_WITHDRAW)
 
         if line:
-            caller.msg(line)
+            caller.msg((line, _MSG_COMMERCE))
 
 
 class CmdBalance(Command):
@@ -201,7 +211,7 @@ class CmdBalance(Command):
         items = caller.bank.list_items()
 
         if not items:
-            caller.msg("Your bank account is empty.")
+            caller.msg(("Your bank account is empty.", _MSG_COMMERCE))
             return
 
         count = caller.bank.count_items()
@@ -231,7 +241,7 @@ class CmdBalance(Command):
             amount = f" x{quantity}" if quantity > 1 else ""
             lines.append(f"  {label}{amount}")
 
-        caller.msg("\n".join(lines))
+        caller.msg(("\n".join(lines), _MSG_COMMERCE))
 
 
 class CmdBank(Command):

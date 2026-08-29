@@ -18,6 +18,7 @@ from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.menus import banking_menu
+from systems.statefeed.text import line_of
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.items import BaseItem
 
@@ -190,9 +191,9 @@ class TestGroupedTransfers(_BankingMenuTest):
         )
 
         deposit_lines = [
-            call.args[0]
+            line_of(call.args[0])
             for call in self.char1.msg.call_args_list
-            if call.args and "deposit" in str(call.args[0])
+            if call.args and "deposit" in line_of(call.args[0])
         ]
         self.assertEqual(len(deposit_lines), 1, deposit_lines)
         self.assertIn("(x5)", deposit_lines[0])

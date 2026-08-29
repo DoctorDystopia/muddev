@@ -54,6 +54,14 @@ from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 
 from . import states
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is the server speaking as itself, so
+# the routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_SYSTEM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_SYSTEM}
 
 # ─── Public constant definitions ────────────────────────────────────────────
 
@@ -305,7 +313,7 @@ def ensure_handler(owner, handler_cls):
 
         if errors:
             for err in errors:
-                owner.msg(f"|r{err}|n")
+                owner.msg((f"|r{err}|n", _MSG_SYSTEM))
             raise RuntimeError(
                 f"Could not create {handler_cls.__name__} for {owner}: {errors}"
             )

@@ -28,6 +28,14 @@ from world.npc_database import NPC_DB
 from world.maps.manifest import ManifestError, load_entries, zcoords_of
 
 from systems.devtools import constants as dev_constants
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is the server speaking as itself, so
+# the routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_SYSTEM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_SYSTEM}
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -874,7 +882,7 @@ def _move_to_room(actor, target, room, detail: str) -> tuple:
 
         return False, dev_constants.MSG_TELEPORT_FAILED.format(room=room.key)
 
-    target.msg(dev_constants.MSG_TELEPORT_ARRIVAL)
+    target.msg((dev_constants.MSG_TELEPORT_ARRIVAL, _MSG_SYSTEM))
     _audit(actor, dev_constants.ACTION_TELEPORT, target, f"{detail} -> {room.key}")
     message = dev_constants.MSG_TELEPORT_DONE.format(target=target.key, room=room.key)
 

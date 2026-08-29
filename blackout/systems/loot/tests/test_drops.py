@@ -17,6 +17,8 @@ from unittest import mock
 
 from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
 from evennia.utils.ansi import strip_ansi
+
+from systems.statefeed.text import line_of
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.loot.drops import award_drops, resolve_table
@@ -253,7 +255,7 @@ class TestAnnouncement(EvenniaTest):
         mocked = self._announce(table)
 
         mocked.assert_called_once()
-        line = strip_ansi(mocked.call_args[0][0])
+        line = strip_ansi(line_of(mocked.call_args[0][0]))
         self.assertIn("rusty metal chunk", line)
 
     def test_a_quantity_above_one_is_suffixed(self):
@@ -261,7 +263,7 @@ class TestAnnouncement(EvenniaTest):
 
         mocked = self._announce(table)
 
-        line = strip_ansi(mocked.call_args[0][0])
+        line = strip_ansi(line_of(mocked.call_args[0][0]))
         self.assertIn("credits (x12)", line)
 
     def test_a_single_item_carries_no_suffix(self):
@@ -269,7 +271,7 @@ class TestAnnouncement(EvenniaTest):
 
         mocked = self._announce(table)
 
-        line = strip_ansi(mocked.call_args[0][0])
+        line = strip_ansi(line_of(mocked.call_args[0][0]))
         self.assertNotIn("(x", line)
 
     def test_nothing_is_announced_when_nothing_dropped(self):

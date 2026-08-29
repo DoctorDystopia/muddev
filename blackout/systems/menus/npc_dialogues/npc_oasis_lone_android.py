@@ -39,6 +39,14 @@ from systems.ui.colors import (
     highlight as _hl,
     title as _line,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is something an NPC says, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_DIALOGUE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_DIALOGUE}
 
 
 # Public constant definitions
@@ -688,9 +696,12 @@ def _accept_oasis_quest(caller: object,
     accepted = caller.quests.accept_quest(OASIS_QUEST_KEY)
 
     if accepted:
-        caller.msg(f"{SUCCESS_COLOR}You agree to work the farm.{RESET_COLOR}")
+        caller.msg(
+            (f"{SUCCESS_COLOR}You agree to work the farm.{RESET_COLOR}", _MSG_DIALOGUE))
     else:
-        caller.msg(f"{HIGHLIGHT_COLOR}You have already taken this quest.{RESET_COLOR}")
+        caller.msg(
+            (f"{HIGHLIGHT_COLOR}You have already taken this quest.{RESET_COLOR}",
+             _MSG_DIALOGUE))
 
     return "node_step1_drainage_intro"
 
@@ -808,8 +819,8 @@ def node_step2_chores(caller: object, **kwargs) -> tuple:
 def _report_pipe(caller: object, raw_string: str, **kwargs) -> str:
     """Satisfy the drainage objective. Stands in for a world interaction."""
     _advance(caller, quest_constants.ACTION_INTERACT, "pipe")
-    caller.msg(f"{SUCCESS_COLOR}You dig the silt out of the drainage line."
-               f"{RESET_COLOR}")
+    caller.msg((f"{SUCCESS_COLOR}You dig the silt out of the drainage line."
+               f"{RESET_COLOR}", _MSG_DIALOGUE))
 
     return "start"
 
@@ -818,8 +829,8 @@ def _report_pipe(caller: object, raw_string: str, **kwargs) -> str:
 def _report_soil(caller: object, raw_string: str, **kwargs) -> str:
     """Satisfy the planting objective. Stands in for a world interaction."""
     _advance(caller, quest_constants.ACTION_INTERACT, "soil")
-    caller.msg(f"{SUCCESS_COLOR}You work the sample bed and press the seedling "
-               f"in.{RESET_COLOR}")
+    caller.msg((f"{SUCCESS_COLOR}You work the sample bed and press the seedling "
+               f"in.{RESET_COLOR}", _MSG_DIALOGUE))
 
     return "start"
 

@@ -35,6 +35,14 @@ from systems.shop.shop_service import (
     get_greeting,
     get_farewell,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is something an NPC says, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_DIALOGUE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_DIALOGUE}
 
 
 def _get_npc(caller):
@@ -95,7 +103,9 @@ def _select_ware_to_buy(caller, selection, **kwargs):
     entry = _find_entry_by_display(entries, selection, BUY_PRICE_ATTR)
 
     if entry is None:
-        caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
+        caller.msg(
+            (f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}",
+             _MSG_DIALOGUE))
         return (None, kwargs)
 
     kwargs["buy_entry"] = entry
@@ -116,7 +126,7 @@ def node_buy(caller, raw_string, **kwargs):
 def _parse_custom_buy_quantity(caller, raw_string, **kwargs):
     entry = kwargs.get("buy_entry")
     if not entry:
-        caller.msg(f"{ERROR_COLOR}Item not found.{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}Item not found.{RESET_COLOR}", _MSG_DIALOGUE))
         return ("node_buy", kwargs)
 
     credits = credits_count(caller)
@@ -126,7 +136,7 @@ def _parse_custom_buy_quantity(caller, raw_string, **kwargs):
     qty, parse_error = parse_quantity(raw_string, total_available)
 
     if parse_error is not None:
-        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{parse_error}{RESET_COLOR}", _MSG_DIALOGUE))
         return (None, kwargs)
 
     kwargs["buy_count"] = qty
@@ -296,13 +306,13 @@ def _report_trade(caller, result, verb, count):
     """Message the caller with the outcome of a completed trade."""
     if result.success:
         caller.msg(
-            f"{SUCCESS_COLOR}You {verb} {count} {result.item_name} "
-            f"for {result.total_price} credits.{RESET_COLOR}"
+            (f"{SUCCESS_COLOR}You {verb} {count} {result.item_name} "
+            f"for {result.total_price} credits.{RESET_COLOR}", _MSG_DIALOGUE)
         )
         return
 
-    caller.msg(f"{ERROR_COLOR}Transaction failed — {result.error}{RESET_COLOR}")
-
+    caller.msg((f"{ERROR_COLOR}Transaction failed — {result.error}{RESET_COLOR}")
+, _MSG_DIALOGUE)
 
 def _confirm_buy(caller, raw_string, **kwargs) -> str:
     npc = kwargs.get("npc", _get_npc(caller))
@@ -331,7 +341,9 @@ def _select_ware_to_sell(caller, selection, **kwargs):
     entries = get_sell_items(caller, npc)
     entry = _find_entry_by_display(entries, selection, SELL_PRICE_ATTR)
     if entry is None:
-        caller.msg(f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}")
+        caller.msg(
+            (f"{ERROR_COLOR}That item is no longer available.{RESET_COLOR}",
+             _MSG_DIALOGUE))
         return (None, kwargs)
     kwargs["sell_group"] = entry
     return ("node_sell_quantity", kwargs)
@@ -351,18 +363,20 @@ def node_sell(caller, raw_string, **kwargs):
 def _parse_custom_sell_quantity(caller, raw_string, **kwargs):
     entry = kwargs.get("sell_group")
     if not entry:
-        caller.msg(f"{ERROR_COLOR}Item not found.{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}Item not found.{RESET_COLOR}", _MSG_DIALOGUE))
         return ("node_sell", kwargs)
 
     available = max(0, count_available(entry))
     if available <= 0:
-        caller.msg(f"{ERROR_COLOR}No more of that item available.{RESET_COLOR}")
+        caller.msg(
+            (f"{ERROR_COLOR}No more of that item available.{RESET_COLOR}",
+             _MSG_DIALOGUE))
         return ("node_sell", kwargs)
 
     qty, parse_error = parse_quantity(raw_string, available)
 
     if parse_error is not None:
-        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{parse_error}{RESET_COLOR}", _MSG_DIALOGUE))
         return (None, kwargs)
 
     kwargs["sell_count"] = qty

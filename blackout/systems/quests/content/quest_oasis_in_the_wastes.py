@@ -19,6 +19,14 @@ from world.item_database import ITEM_DB
 
 from systems.quests.quests import QuestBlueprint, QuestStep
 from systems.ui.colors import highlight as _hl
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about a quest, so the routing tag
+# is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_QUEST = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_QUEST}
 
 
 
@@ -145,10 +153,10 @@ def award_rewards(character: object) -> None:
     for skill_key, amount in REWARD_XP.items():
         character.skills.add_xp(skill_key, amount)
 
-    character.msg(_hl(
+    character.msg((_hl(
         "The android transmits a route east, out of the sand and toward the "
         "lights. You leave knowing how to cut, to smelt, and to forge."
-    ))
+    ), _MSG_QUEST))
 
 
 

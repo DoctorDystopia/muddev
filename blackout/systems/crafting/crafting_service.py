@@ -33,6 +33,14 @@ from .constants import (
 from .registry import RECIPE_REGISTRY
 from systems.quests import constants as quest_constants
 from systems.quests.hooks import notify_quests
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is crafting, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
 def _iter_candidate_items(caller, include_location):
@@ -142,6 +150,27 @@ def get_recipes_in_category(category, facility=None):
     ]
 
 
+def recipe_order(pair):
+    """Sort key that lists recipes the way the skills sheet lists unlocks.
+
+    Skill first, then required level, then name -- so a facility spanning
+    two skills keeps each skill's ladder together and ascending, and a
+    single-skill list is a plain level ladder. One owner of "the order
+    recipes are listed in", shared by every reader below, because a player
+    reading the same recipes on the skills sheet and in the craft menu
+    should not have to re-find them.
+
+    Args:
+        pair: a (recipe_key, recipe_cls) tuple.
+
+    Returns:
+        tuple, suitable for list.sort(key=...).
+    """
+    _key, recipe_cls = pair
+
+    return (recipe_cls.required_skill, recipe_cls.required_level, recipe_cls.name)
+
+
 def get_recipes_for_facility(facility):
     """Get every recipe available at a facility, across all its categories.
 
@@ -151,18 +180,22 @@ def get_recipes_for_facility(facility):
             returned.
 
     Returns:
-        list of (recipe_key, recipe_cls) tuples.
+        list of (recipe_key, recipe_cls) tuples, in recipe_order.
     """
     allowed = getattr(facility, "allowed_categories", None)
 
     if allowed is None:
-        return list(RECIPE_REGISTRY.items())
+        matches = list(RECIPE_REGISTRY.items())
+    else:
+        matches = [
+            (key, cls)
+            for key, cls in RECIPE_REGISTRY.items()
+            if getattr(cls, "category", "Uncategorized") in allowed
+        ]
 
-    return [
-        (key, cls)
-        for key, cls in RECIPE_REGISTRY.items()
-        if getattr(cls, "category", "Uncategorized") in allowed
-    ]
+    matches.sort(key=recipe_order)
+
+    return matches
 
 
 def get_recipe_class(recipe_key):
@@ -177,8 +210,8 @@ def get_recipes_for_skill(skill_key):
         skill_key: Skill key to match against required_skill.
 
     Returns:
-        list of (recipe_key, recipe_cls) tuples, sorted by
-        (required_level, name).
+        list of (recipe_key, recipe_cls) tuples, in recipe_order -- which for
+        one skill is a plain (required_level, name) ladder.
     """
     matches = [
         (key, cls)
@@ -186,7 +219,7 @@ def get_recipes_for_skill(skill_key):
         if cls.required_skill == skill_key
     ]
 
-    matches.sort(key=lambda pair: (pair[1].required_level, pair[1].name))
+    matches.sort(key=recipe_order)
 
     return matches
 
@@ -327,7 +360,11 @@ def get_recipe_display_data(caller, recipe_key):
         return None
 
     material_details = []
-    for mat_tag in set(recipe_cls.consumable_tags):
+    # dict.fromkeys, not set(): a set is unordered, so the same recipe could
+    # list its materials in two different orders on two opens of the menu.
+    # This keeps the order the recipe declares them in, which is the order
+    # get_material_summary prints.
+    for mat_tag in dict.fromkeys(recipe_cls.consumable_tags):
         mat_name = (
             recipe_cls.consumable_names[recipe_cls.consumable_tags.index(mat_tag)]
             if recipe_cls.consumable_names
@@ -441,7 +478,9 @@ def _deliver_output(caller, obj):
         dropped = obj.move_to(room, quiet=True, move_type="drop")
 
         if dropped:
-            caller.msg(f"You have no room for {obj.key}; it falls to the ground.")
+            caller.msg(
+                (f"You have no room for {obj.key}; it falls to the ground.",
+                 _MSG_CRAFTING))
             return
 
     logger.log_err(

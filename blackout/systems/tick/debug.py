@@ -42,6 +42,14 @@ from evennia.utils import logger
 from systems.ui import colors
 
 from . import constants as const
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is the server speaking as itself, so
+# the routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_SYSTEM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_SYSTEM}
 
 
 # ─── Public constant definitions ─────────────────────────────────────────────
@@ -556,7 +564,7 @@ def _serve(engine, observer, is_late: bool) -> bool:
 
     if emit:
         line = _render_line(engine, observer, combat, aura, is_late)
-        character.msg(line)
+        character.msg((line, _MSG_SYSTEM))
 
     observer.last_combat = combat
     observer.last_aura = aura
@@ -566,8 +574,8 @@ def _serve(engine, observer, is_late: bool) -> bool:
         return True
 
     character.msg(
-        f"{colors.DIM_COLOR}Tick monitor expired after "
-        f"{const.TICK_DEBUG_AUTO_EXPIRE_TICKS} ticks.{colors.RESET_COLOR}"
+        (f"{colors.DIM_COLOR}Tick monitor expired after "
+        f"{const.TICK_DEBUG_AUTO_EXPIRE_TICKS} ticks.{colors.RESET_COLOR}", _MSG_SYSTEM)
     )
 
     return False

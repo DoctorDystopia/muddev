@@ -28,6 +28,14 @@ from systems.stat_tracker.handler import StatHandler
 from systems.statefeed import events as feed
 from systems.statefeed import resync
 from world.respawn import get_respawn_room
+from systems.statefeed import constants as feed_const
+
+# The routing tags this module sends, bound once rather than repeated at
+# every call site. The SERVER says what a line IS; the client decides which
+# tab shows it. See MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 
@@ -426,13 +434,15 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
         if room is None:
             self.msg(
-                "|rYou black out... and come to where you fell, barely "
-                "breathing but alive.|n"
+                ("|rYou black out... and come to where you fell, barely "
+                 "breathing but alive.|n", _MSG_COMBAT)
             )
             return
 
         if self.location is room:
-            self.msg("|rYou black out... and wake where you stand.|n")
+            self.msg(
+                ("|rYou black out... and wake where you stand.|n",
+                 _MSG_COMBAT))
             return
 
         try:
@@ -440,13 +450,15 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         except Exception as exc:
             logger.log_err(f"Character.respawn move to {room} failed: {exc!r}")
             self.msg(
-                "|rYou black out... and come to where you fell, barely "
-                "breathing but alive.|n"
+                ("|rYou black out... and come to where you fell, barely "
+                 "breathing but alive.|n", _MSG_COMBAT)
             )
             return
 
-        self.msg("|rYou black out.|n")
-        self.msg(f"|wYou wake up at {room.key}, your wounds closed over.|n")
+        self.msg(("|rYou black out.|n", _MSG_COMBAT))
+        self.msg(
+            (f"|wYou wake up at {room.key}, your wounds closed over.|n",
+             _MSG_COMBAT))
 
 
     def at_pre_object_receive(self, moved_obj, source_location, **kwargs):
@@ -490,7 +502,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Creation date: 08/16/2026
         """
         if hasattr(moved_obj, "is_stackable") and not self.inventory.can_accept(moved_obj):
-            self.msg("Your inventory is completely full.")
+            self.msg(("Your inventory is completely full.", _MSG_INVENTORY))
             return False
         parent_class = super()
         return parent_class.at_pre_object_receive(moved_obj, source_location, **kwargs)

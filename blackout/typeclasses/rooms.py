@@ -11,10 +11,18 @@ from evennia.utils import logger
 
 from systems.quests import constants as quest_constants
 from systems.quests.hooks import notify_quests
+from systems.statefeed import constants as feed_const
 from systems.statefeed import events as feed
 from systems.statefeed import subscriptions
 from .objects import ObjectParent
 from .spawners import SPAWNER_REGISTRY, load_all_spawners
+
+# The ASCII map this room prints on every look.
+#
+# Tagged `map` and not `xymap`: the tag names what the line IS to a player,
+# where `xymap` names the contrib that happens to render it -- which is a
+# detail no client should need to know to build a tab.
+_MSG_MAP = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_MAP}
 
 # Fallback map width when the looker has no session to measure. Same constant
 # the xyzgrid contrib falls back to in XYZRoom.return_appearance.
@@ -61,6 +69,14 @@ class GridTile(ObjectParent, XYZRoom):
             draw -- which is the overwhelmingly common case, so `look` pays only
             one attribute check for a feature most players are not using.
 
+            THE CONTRIB PRINTS THE MAP ITSELF, and that is why `automap` is
+            applied through _appearance_kwargs rather than inside
+            _send_tinted_map. It was inside it for a few hours on 08/28/2026,
+            which suppressed the map on the AURA path only -- so `automap off`
+            reported success and the map kept appearing on every step for every
+            player without an aura, which is nearly all of them. One decision,
+            taken once, applied to both branches.
+
             When there IS an aura, the contrib's own map block is suppressed by
             passing map_display=False, and a tinted map is built and sent in its
             place. Suppressing rather than post-processing matters because
@@ -77,12 +93,16 @@ class GridTile(ObjectParent, XYZRoom):
         Author: Nick Hobar
         Creation date: 08/03/2026
         """
+        kwargs = self._appearance_kwargs(looker, kwargs)
         radius = self._active_aura_radius(looker)
 
         if radius <= 0:
             return super().return_appearance(looker, **kwargs)
 
-        room_desc = super().return_appearance(looker, map_display=False, **kwargs)
+        # The tinted map replaces the contrib's, so the contrib's is always off
+        # on this branch whatever automap says.
+        kwargs["map_display"] = False
+        room_desc = super().return_appearance(looker, **kwargs)
 
         try:
             self._send_tinted_map(looker, radius, **kwargs)
@@ -107,6 +127,104 @@ class GridTile(ObjectParent, XYZRoom):
             return 0
 
         return aura.radius
+
+    def _appearance_kwargs(self, looker, kwargs: dict) -> dict:
+        """
+        Purpose: Turn the contrib's own map off when this looker does not want
+        it.
+
+        Entry:
+            looker - the character looking.
+            kwargs - whatever return_appearance was given.
+
+        Exit/Returns:
+            Returns a dict to pass to the contrib. A copy, always, so a
+            caller's own dict is never mutated under it.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            `map_display` is the contrib's own switch, read in
+            XYZRoom.return_appearance as
+            `kwargs.get("map_display", ...)`. Setting it False is the only way
+            to stop the contrib msg'ing the map, because it does that itself
+            rather than returning it.
+
+            An explicit `map_display` from the CALLER is overridden rather than
+            respected, and that is deliberate: `automap` is the player's
+            setting and a caller asking for a map the player has turned off is
+            asking on their behalf, wrongly. Nothing in the game passes it
+            except this class.
+
+            A no-op returns a copy too. Returning `kwargs` itself would make
+            the aura branch's `kwargs["map_display"] = False` write into the
+            caller's dictionary.
+
+        Notes/References:
+            Whether the looker wants it is _wants_ascii_map; the player sets it
+            with `automap`, in commands/display_cmds.py.
+
+        Author: Nick Hobar
+        Creation date: 08/28/2026
+        """
+        prepared = dict(kwargs)
+
+        if not self._wants_ascii_map(looker):
+            prepared["map_display"] = False
+
+        return prepared
+
+    def _wants_ascii_map(self, looker) -> bool:
+        """
+        Purpose: Decide whether this looker should be sent the text map.
+
+        Entry:
+            looker - the character looking.
+
+        Exit/Returns:
+            True when the map should be msg'd.
+
+        Module Globals:
+            feed_const.ASCII_MAP_ATTR, feed_const.GODOT_PROTOCOL_KEY read.
+
+        Methodology:
+            An explicit attribute wins in either direction. With none set, a
+            session on the Godot protocol is answered False -- it draws its own
+            minimap from `blackout_map` and does not need thirty lines of box
+            characters on every step -- and everything else is answered True.
+
+            ALL sessions must be graphical, not any. Under a multisession mode
+            that allowed two clients on one character, suppressing because one
+            of them is graphical would blank the map in the telnet window
+            beside it. A character with NO session is answered True, because
+            there is nobody to have a preference.
+
+        Notes/References:
+            The attribute is an override rather than a capability, so it is
+            per-character and not something the client announces. See
+            ASCII_MAP_ATTR in systems/statefeed/constants.py.
+
+        Author: Nick Hobar
+        Creation date: 08/28/2026
+        """
+        override = looker.attributes.get(feed_const.ASCII_MAP_ATTR, default=None)
+
+        if override is not None:
+            return bool(override)
+
+        sessions = looker.sessions.get()
+
+        if not sessions:
+            return True
+
+        for session in sessions:
+            key = getattr(session, "protocol_key", "")
+
+            if key != feed_const.GODOT_PROTOCOL_KEY:
+                return True
+
+        return False
 
     def _send_tinted_map(self, looker, radius: int, **kwargs) -> None:
         """Build the highlighted map and msg it, or fall back to the plain one.
@@ -165,7 +283,7 @@ class GridTile(ObjectParent, XYZRoom):
         separator = _option("map_separator_char", self.map_separator_char) * display_width
         framed = f"{separator}|n\n{map_display}\n{separator}"
 
-        looker.msg(text=(framed, {"type": "xymap"}), options=None)
+        looker.msg(text=(framed, _MSG_MAP), options=None)
 
     def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
         """

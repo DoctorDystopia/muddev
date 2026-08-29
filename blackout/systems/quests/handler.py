@@ -14,9 +14,73 @@ same handler.py / registry.py separation.
 from evennia.utils import logger
 
 from systems.quests import constants
+import functools as _functools
+
 from systems.quests.loader import GLOBAL_QUEST_REGISTRY
 from systems.quests.quests import normalize_target
+from systems.statefeed import constants as feed_const
 
+# Every line this module sends a player is about a quest, so the routing tag
+# is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_QUEST = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_QUEST}
+
+
+
+def _publishes(method):
+    """
+    Purpose: Publish the quest log after a method that may have changed it.
+
+    Entry:
+        method - an unbound QuestHandler method that writes db.active_quests
+                 or db.completed_quests.
+
+    Exit/Returns:
+        Returns the wrapped method, which returns whatever the original does.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        THE WHOLE POINT IS THAT THERE IS ONE IMPLEMENTATION AND SIX MARKERS.
+        `db.active_quests` is written at nine places inside this class, so a
+        `feed.emit_quests(...)` line at each would be nine copies of one rule --
+        exactly the shape CharItemsPayload's docstring calls out as the reason
+        its own channel is a snapshot: "the mutation points are many and
+        undisciplined, and a delta protocol would rot at the first one anybody
+        forgot". Marking the six PUBLIC entry points instead makes the list
+        visible in the class listing and reviewable at a glance, and
+        test_quest_feed.py drives every one of them.
+
+        `notify` is deliberately NOT marked. It is a fan-out that calls
+        `update_progress` once per active quest, and marking both would publish
+        the whole log twice for a single kill.
+
+        The import is inside the wrapper. systems.statefeed.events reaches the
+        payload builders, and this module is imported by typeclasses/characters
+        .py at startup -- a top-level import would close a ring that has left
+        GLOBAL_QUEST_REGISTRY empty once already.
+
+    Notes/References:
+        The channel is CHANNEL_CHAR_QUESTS; the payload is built entirely
+        through this class's public read API by systems/statefeed/quests.py.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    @_functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+
+        from systems.statefeed import events as _feed
+
+        _feed.emit_quests(self.obj)
+
+        return result
+
+    return wrapper
 
 
 class QuestHandler:
@@ -325,6 +389,7 @@ class QuestHandler:
 
     # ─── Lifecycle ──────────────────────────────────────────────────────────
 
+    @_publishes
     def accept_quest(self, quest_key: str) -> bool:
         """
         Purpose: Begin a quest for this character.
@@ -356,7 +421,8 @@ class QuestHandler:
         blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
 
         if blueprint is None:
-            self.obj.msg(constants.MSG_QUEST_UNKNOWN.format(quest_key=quest_key))
+            self.obj.msg(
+                (constants.MSG_QUEST_UNKNOWN.format(quest_key=quest_key), _MSG_QUEST))
             return False
 
         if not self.is_available(quest_key):
@@ -368,14 +434,15 @@ class QuestHandler:
             constants.FIELD_PROGRESS: {key: 0 for key in first_step.targets},
         }
 
-        self.obj.msg(constants.MSG_QUEST_ACCEPTED.format(
-            title=blueprint.title, description=blueprint.description))
+        self.obj.msg((constants.MSG_QUEST_ACCEPTED.format(
+            title=blueprint.title, description=blueprint.description), _MSG_QUEST))
 
         self._fire_step_hook(first_step, "on_enter")
 
         return True
 
 
+    @_publishes
     def abandon_quest(self, quest_key: str) -> bool:
         """
         Purpose: Drop an in-progress quest, discarding its progress.
@@ -407,7 +474,7 @@ class QuestHandler:
         title = getattr(blueprint, "title", None) or quest_key
 
         del self.obj.db.active_quests[quest_key]
-        self.obj.msg(constants.MSG_QUEST_ABANDONED.format(title=title))
+        self.obj.msg((constants.MSG_QUEST_ABANDONED.format(title=title), _MSG_QUEST))
 
         return True
 
@@ -420,6 +487,7 @@ class QuestHandler:
     # db.active_quests has exactly one owner. The same reasoning that put
     # skills.logic.set_level beside add_xp.
 
+    @_publishes
     def force_complete_quest(self, quest_key: str) -> bool:
         """
         Purpose: Mark a quest finished regardless of how far along it is.
@@ -467,6 +535,7 @@ class QuestHandler:
         return True
 
 
+    @_publishes
     def force_step(self, quest_key: str, step_key: str) -> bool:
         """
         Purpose: Move an active quest to a named step, forward or back.
@@ -527,14 +596,15 @@ class QuestHandler:
         }
         self.obj.db.active_quests[quest_key] = active_data
 
-        self.obj.msg(constants.MSG_STEP_SET.format(
-            description=target_step.description))
+        self.obj.msg((constants.MSG_STEP_SET.format(
+            description=target_step.description), _MSG_QUEST))
 
         self._fire_step_hook(target_step, "on_enter")
 
         return True
 
 
+    @_publishes
     def reset_quest(self, quest_key: str) -> bool:
         """
         Purpose: Return a quest to the not-started state, from anywhere.
@@ -583,7 +653,7 @@ class QuestHandler:
 
         blueprint = GLOBAL_QUEST_REGISTRY.get(quest_key)
         title = getattr(blueprint, "title", None) or quest_key
-        self.obj.msg(constants.MSG_QUEST_RESET.format(title=title))
+        self.obj.msg((constants.MSG_QUEST_RESET.format(title=title), _MSG_QUEST))
 
         return True
 
@@ -626,6 +696,7 @@ class QuestHandler:
             self.update_progress(quest_key, action, argument, amount=amount)
 
 
+    @_publishes
     def update_progress(self,
                         quest_key: str,
                         action: str,
@@ -735,8 +806,8 @@ class QuestHandler:
         }
         self.obj.db.active_quests[quest_key] = active_data
 
-        self.obj.msg(constants.MSG_STEP_ADVANCED.format(
-            description=next_step.description))
+        self.obj.msg((constants.MSG_STEP_ADVANCED.format(
+            description=next_step.description), _MSG_QUEST))
 
         self._fire_step_hook(next_step, "on_enter")
 
@@ -878,7 +949,8 @@ class QuestHandler:
         if quest_key not in self.obj.db.completed_quests:
             self.obj.db.completed_quests.append(quest_key)
 
-        self.obj.msg(constants.MSG_QUEST_COMPLETE.format(title=blueprint.title))
+        self.obj.msg(
+            (constants.MSG_QUEST_COMPLETE.format(title=blueprint.title), _MSG_QUEST))
 
         if blueprint.rewards_callback is None:
             return

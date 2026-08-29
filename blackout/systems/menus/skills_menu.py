@@ -4,19 +4,17 @@ Author: Nick Hobar
 Creation date: 07/13/2026
 Description: EvMenu nodes for the skills panel: category list, per-skill
              detail, and XP meters.
+
+             The per-skill SHEET is not written here. It lives in
+             systems/progression/skills/detail.py, because two other readers
+             need it without an EvMenu anywhere: the `skills <skill>` argument
+             form, and the CHANNEL_CHAR_SKILLS payload a graphical client
+             draws. What stays here is what a menu owns -- which node "back"
+             returns to, and what to print when a key names nothing.
 """
 
-from items.equipment.skill_requirements import get_equippables_for_skill
-from systems.combat.auras.registry import get_auras_for_skill
-from systems.crafting.crafting_service import (
-    get_material_summary,
-    get_recipes_for_skill,
-)
-from systems.progression.skills.gatherables import (
-    get_gatherable_item_name,
-    get_gatherables_for_skill,
-)
 from systems.menus.base_menu import back_option
+from systems.progression.skills import detail as skill_detail
 from systems.progression.skills.registry import SKILL_REGISTRY
 from systems.ui.colors import (
     HIGHLIGHT_COLOR,
@@ -194,188 +192,6 @@ def node_category_detail(caller: object, **kwargs) -> tuple:
 
 
 
-def _format_unlock_section(header: str, current_level: int, unlock_rows: list) -> str:
-    """
-    Purpose: Render one "<Header>:" block of skill-gated unlocks.
-
-    Entry:
-        header is the section title, e.g. "Gathering Unlocks".
-        current_level is the caller's level in the skill being displayed.
-        unlock_rows is a list of (display_name, required_level, extra_text)
-        tuples. extra_text may be "".
-
-    Exit/Returns:
-        Returns the formatted block as a string, or "" if unlock_rows is
-        empty.
-
-    Module Globals:
-        HIGHLIGHT_COLOR, SKILL_COLOR, SUCCESS_COLOR, RESET_COLOR read.
-
-    Methodology:
-        Shared by every unlock category (recipes, gathering, equipment,
-        abilities) so the menu renders all four identically instead of each
-        category hand-rolling its own loop.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 08/05/2026
-    """
-    if not unlock_rows:
-        return ""
-
-    lines = [f"\n\n{HIGHLIGHT_COLOR}{header}:{RESET_COLOR}"]
-
-    for display_name, required_level, extra_text in unlock_rows:
-        is_row_unlocked = current_level >= required_level
-        level_color = SUCCESS_COLOR if is_row_unlocked else HIGHLIGHT_COLOR
-
-        line = (
-            f"  {SKILL_COLOR}{display_name}{RESET_COLOR} "
-            f"({level_color}Level {required_level}{RESET_COLOR})"
-        )
-        if extra_text:
-            line += f" - {extra_text}"
-
-        lines.append(line)
-
-    return "\n".join(lines)
-
-
-def _build_recipe_rows(skill_key: str) -> list:
-    """
-    Purpose: Build unlock rows for every recipe this skill unlocks.
-
-    Entry:
-        skill_key is a valid skill key string.
-
-    Exit/Returns:
-        Returns a list of (name, required_level, extra_text) tuples, where
-        extra_text names the required materials, or "" if the recipe needs
-        none.
-
-    Module Globals:
-        None
-
-    Methodology:
-        One row per entry from crafting_service.get_recipes_for_skill.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 08/05/2026
-    """
-    rows = []
-
-    for _recipe_key, recipe_cls in get_recipes_for_skill(skill_key):
-        material_summary = get_material_summary(recipe_cls)
-        extra_text = f"requires {material_summary}" if material_summary else ""
-        row = (recipe_cls.name, recipe_cls.required_level, extra_text)
-        rows.append(row)
-
-    return rows
-
-
-def _build_gatherable_rows(skill_key: str) -> list:
-    """
-    Purpose: Build unlock rows for every gathering node this skill unlocks.
-
-    Entry:
-        skill_key is a valid skill key string.
-
-    Exit/Returns:
-        Returns a list of (name, required_level, extra_text) tuples, where
-        extra_text names the yielded item.
-
-    Module Globals:
-        None
-
-    Methodology:
-        One row per entry from gatherables.get_gatherables_for_skill.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 08/05/2026
-    """
-    rows = []
-
-    for gatherable_def in get_gatherables_for_skill(skill_key):
-        item_name = get_gatherable_item_name(gatherable_def)
-        extra_text = f"yields {item_name}"
-        row = (gatherable_def.node_name, gatherable_def.required_level, extra_text)
-        rows.append(row)
-
-    return rows
-
-
-def _build_equippable_rows(skill_key: str) -> list:
-    """
-    Purpose: Build unlock rows for every equippable item this skill unlocks.
-
-    Entry:
-        skill_key is a valid skill key string.
-
-    Exit/Returns:
-        Returns a list of (name, required_level, extra_text) tuples, with
-        extra_text always "".
-
-    Module Globals:
-        None
-
-    Methodology:
-        One row per entry from skill_requirements.get_equippables_for_skill.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 08/05/2026
-    """
-    rows = []
-
-    for item_def in get_equippables_for_skill(skill_key):
-        row = (item_def.name, item_def.req_level, "")
-        rows.append(row)
-
-    return rows
-
-
-def _build_aura_rows(skill_key: str) -> list:
-    """
-    Purpose: Build unlock rows for every ability/aura this skill unlocks.
-
-    Entry:
-        skill_key is a valid skill key string.
-
-    Exit/Returns:
-        Returns a list of (name, required_level, extra_text) tuples, with
-        extra_text always "".
-
-    Module Globals:
-        None
-
-    Methodology:
-        One row per entry from auras.registry.get_auras_for_skill.
-
-    Notes/References:
-        None
-
-    Author: Nick Hobar
-    Creation date: 08/05/2026
-    """
-    rows = []
-
-    for aura in get_auras_for_skill(skill_key):
-        row = (aura.name, aura.unlock_level, "")
-        rows.append(row)
-
-    return rows
-
-
 def node_skill_detail(caller: object, **kwargs) -> tuple:
     """
     Purpose: Shows detailed information for a specific skill.
@@ -388,82 +204,38 @@ def node_skill_detail(caller: object, **kwargs) -> tuple:
         Returns a tuple of (text, options) for the EvMenu node.
 
     Module Globals:
-        SKILL_COLOR read
-        TITLE_COLOR read
+        SKILL_REGISTRY read
         HIGHLIGHT_COLOR read
         RESET_COLOR read
-        SKILL_REGISTRY read
 
     Methodology:
-        Retrieves skill class and data. Formats level, XP progress
-        bar, description, and unlock status into a detailed display, then
-        appends one "Unlocks" section per skill-gated system (crafting
-        recipes, gathering nodes, equippable items, abilities/auras) via
-        _build_*_rows and _format_unlock_section.
+        The sheet itself is rendered by systems/progression/skills/detail.py,
+        which is also what `skills <skill>` prints and what
+        CHANNEL_CHAR_SKILLS ships as data. This node contributes the two
+        things a menu owns and the renderer cannot: where "back" goes, and
+        what to say when the key names nothing.
+
+        An empty render is the renderer's way of saying the key is unknown --
+        the same answer the registry lookup gave before -- so there is one
+        check here rather than a lookup followed by a render that repeats it.
 
     Notes/References:
-        None
+        The four unlock sections moved to detail.py on 08/28/2026, when the
+        text sheet stopped being reachable only from inside a menu.
 
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
     skill_key = kwargs.get("skill_key", "")
-    skill_class = SKILL_REGISTRY.get(skill_key)
+    text = skill_detail.render_detail(caller, skill_key)
 
-    if skill_class is None:
-        text = f"{HIGHLIGHT_COLOR}Skill '{skill_key}' not found.{RESET_COLOR}"
+    if not text:
+        missing = f"{HIGHLIGHT_COLOR}Skill '{skill_key}' not found.{RESET_COLOR}"
         options = (back_option("Back", "node_category_detail"),)
 
-        return text, options
+        return missing, options
 
-    skill_data = caller.db.skills.get(skill_key, {"level": 0, "xp": 0})
-    current_level = skill_data["level"]
-    current_xp = skill_data["xp"]
-
-    total_xp = caller.skills.get_total_xp(skill_key)
-
-    xp_tuple = caller.skills.get_xp_level(skill_key)
-    total_needed = xp_tuple[1]
-    remaining = xp_tuple[2]
-
-    next_level_at = total_xp + remaining
-
-    xp_bar = build_xp_meter(current_xp, total_needed)
-
-    skill_instance = skill_class()
-    is_unlocked = skill_instance.get_unlock_requirements(caller)
-
-    if is_unlocked:
-        unlock_status = f"{SUCCESS_COLOR}Unlocked{RESET_COLOR}"
-    else:
-        unlock_status = f"{HIGHLIGHT_COLOR}Locked{RESET_COLOR}"
-
-    text = (
-        f"{SKILL_COLOR}{skill_class.name}{RESET_COLOR}\n"
-        f"Category: {skill_class.category}\n"
-        f"Level: {TITLE_COLOR}{current_level}{RESET_COLOR}\n"
-        f"XP: {total_xp}\n"
-        f"Next level at: {next_level_at}\n"
-        f"Remaining: {remaining}\n"
-        f"Progress: {xp_bar}\n"
-        f"Status: {unlock_status}\n\n"
-        f"{skill_class.description}"
-    )
-
-    # Every skill-gated system (crafting, gathering, equipment, abilities)
-    # feeds this same renderer through its own row-builder, so adding a
-    # fifth category means adding one _build_x_rows helper and one line
-    # here -- not a fifth hand-rolled loop.
-    unlock_sections = (
-        ("Unlocks", _build_recipe_rows(skill_key)),
-        ("Gathering Unlocks", _build_gatherable_rows(skill_key)),
-        ("Equipment Unlocks", _build_equippable_rows(skill_key)),
-        ("Ability Unlocks", _build_aura_rows(skill_key)),
-    )
-
-    for header, unlock_rows in unlock_sections:
-        text += _format_unlock_section(header, current_level, unlock_rows)
-
+    skill_class = SKILL_REGISTRY[skill_key]
     options = (
         {"desc": "Back to skill list", "goto": "start"},
         back_option(

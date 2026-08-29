@@ -18,6 +18,14 @@ from systems.devtools import constants as dev_constants
 from systems.statefeed import events as feed
 
 from systems.stat_tracker import constants as stat_constants
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is combat, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 
 
 class CombatEntity:
@@ -195,6 +203,56 @@ class CombatEntity:
         Creation date: 07/26/2026
         """
         return self.db.max_hp or 0
+
+
+    @max_hp.setter
+    def max_hp(self, value: int) -> None:
+        """
+        Purpose: Setter for the HP cap, publishing the change to the feed.
+
+        Entry:
+            value - the new maximum. Negative is clamped to 0.
+
+        Exit/Returns:
+            No conditions. self.db.max_hp is written; self.db.hp is NOT
+            touched, so a raised cap does not heal and a lowered one does not
+            damage.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            This exists for the same reason the hp setter does, and it is the
+            other half of that decision: a graphical client draws `hp/max_hp`,
+            so a bar goes stale when EITHER number changes without a send.
+            Only hp had a choke point, and max_hp moves exactly once per
+            Fortitude level -- so levelling Fortitude raised the cap on the
+            server and the client's bar kept its old maximum until the next
+            regen tick happened to move hp and carry the new one along.
+
+            The send is FORCED past the channel's rate cap, which the hp
+            setter's is not, and the asymmetry is the point. hp is re-sent
+            every time it moves, so a capped send costs a beat and the next
+            one repairs it; max_hp changes a handful of times in a session and
+            nothing is scheduled to repeat it, so a dropped send is a bar that
+            is wrong until the player logs out. Inside a tick this changes
+            nothing -- the buffer coalesces the channel and flushes forced
+            anyway.
+
+        Notes/References:
+            Writes db.max_hp directly rather than reading it back through the
+            property, which returns 0 for an unset attribute and would hide a
+            genuine cap of zero.
+
+        Author: Nick Hobar
+        Creation date: 08/28/2026
+        """
+        if value < 0:
+            value = 0
+
+        self.db.max_hp = value
+
+        feed.emit_vitals(self, force=True)
 
 
     @property
@@ -456,7 +514,7 @@ class CombatEntity:
                 death_line = combat_msg.format_death(self, killer,
                                                      damage_type=damage_type,
                                                      self_inflicted=self_inflicted)
-                location.msg_contents(death_line, from_obj=self)
+                location.msg_contents((death_line, _MSG_COMBAT), from_obj=self)
             except Exception as exc:
                 logger.log_err(f"CombatEntity.at_death broadcast failed: {exc!r}")
 

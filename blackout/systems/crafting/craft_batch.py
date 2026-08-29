@@ -14,6 +14,14 @@ from evennia.utils.utils import delay
 
 from . import crafting_service
 from .constants import CRAFTING_BUSY_COOLDOWN_KEY
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is crafting, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
 
@@ -168,8 +176,8 @@ def _craft_one(caller, recipe_key) -> None:
     can_craft, reasons = crafting_service.check_craftable(caller, recipe_key)
     if not can_craft:
         caller.msg(
-            f"Crafting halted: {batch['crafted']}/{batch['total']} "
-            f"{recipe_cls.name} ({'; '.join(reasons)})."
+            (f"Crafting halted: {batch['crafted']}/{batch['total']} "
+            f"{recipe_cls.name} ({'; '.join(reasons)}).", _MSG_CRAFTING)
         )
         caller.attributes.remove(BATCH_ATTRIBUTE)
         return
@@ -182,8 +190,8 @@ def _craft_one(caller, recipe_key) -> None:
 
     if batch["remaining"] <= 0:
         caller.msg(
-            f"Crafting complete: {batch['crafted']}/{batch['total']} "
-            f"{recipe_cls.name}."
+            (f"Crafting complete: {batch['crafted']}/{batch['total']} "
+            f"{recipe_cls.name}.", _MSG_CRAFTING)
         )
         caller.attributes.remove(BATCH_ATTRIBUTE)
         return

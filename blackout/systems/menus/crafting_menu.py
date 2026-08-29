@@ -28,6 +28,14 @@ from systems.ui.colors import (
     SUCCESS_COLOR,
     TITLE_COLOR,
 )
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is crafting, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
 
@@ -36,6 +44,71 @@ RECIPE_SEPARATOR = "-" * 60
 # Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
 CLOSING_TEXT = "Closing crafting menu."
 
+
+
+def _skill_requirement(skill_key, required_level):
+    """Name a recipe's skill gate the way the skills sheet does.
+
+    Entry:
+        skill_key is a recipe's required_skill; "" for an ungated recipe.
+        required_level is its required_level.
+
+    Exit/Returns:
+        Returns e.g. "Metalsmith Lv.4", or "" for an ungated recipe.
+
+    Methodology:
+        The skill's DISPLAY name, not its key -- "Metalsmith Lv.4" is what a
+        player just read on the skills sheet, and "metalsmith Lv.4" is not.
+        The import is deferred because the skills registry has no business
+        being walked when this module is imported at startup.
+    """
+    if not skill_key:
+        return ""
+
+    from systems.progression.skills.registry import SKILL_REGISTRY
+
+    skill_class = SKILL_REGISTRY.get(skill_key)
+    skill_name = getattr(skill_class, "name", skill_key)
+
+    return f"{skill_name} Lv.{required_level}"
+
+
+def _recipe_line(recipe_cls):
+    """Render one recipe as a row of the facility's recipe list.
+
+    Entry:
+        recipe_cls is a BlackoutRecipe subclass.
+
+    Exit/Returns:
+        Returns e.g. "rusty scrap shortsword (Metalsmith Lv.4)
+        - requires 2x rusty scrap metal".
+
+    Methodology:
+        The shape the skills sheet prints an unlock in -- name, gate,
+        materials -- so the two screens describing the same recipe read the
+        same. The material half is get_material_summary's, which is what
+        collapses a repeated ingredient into "2x": listing the same scrap
+        three times told a player nothing the count does not.
+
+        No colour. Option descriptions land in an EvTable, which measures
+        columns with plain len(), so an ANSI code in one widens its row by
+        the length of the escape.
+    """
+    parts = [recipe_cls.name]
+    requirement = _skill_requirement(
+        recipe_cls.required_skill, recipe_cls.required_level
+    )
+
+    if requirement:
+        parts.append(f"({requirement})")
+
+    line = " ".join(parts)
+    materials = crafting_service.get_material_summary(recipe_cls)
+
+    if materials:
+        line += f" - requires {materials}"
+
+    return line
 
 
 def start(caller, **kwargs):
@@ -62,23 +135,10 @@ def start(caller, **kwargs):
             }
         )
 
-    for recipe_key, recipe_cls in sorted(recipes, key=lambda pair: pair[1].name):
-        mat_strings = []
-
-        for mat_tag in recipe_cls.consumable_tags:
-            mat_strings.append(
-                recipe_cls.consumable_names[
-                    recipe_cls.consumable_tags.index(mat_tag)
-                ]
-
-                if recipe_cls.consumable_names
-                else mat_tag
-            )
-        materials = ", ".join(mat_strings)
+    for recipe_key, recipe_cls in recipes:
         options.append(
             {
-                "desc": f"{recipe_cls.name} [{materials}]"
-                f" (Req: {recipe_cls.required_skill} Lv.{recipe_cls.required_level})",
+                "desc": _recipe_line(recipe_cls),
                 "goto": (
                     "node_recipe_detail",
                     {"recipe_key": recipe_key, "facility": facility},
@@ -102,18 +162,27 @@ def node_recipe_detail(caller, **kwargs):
     material_lines = []
 
     for md in display["material_details"]:
-        material_lines.append(f"  {md['name']} ({md['owned']} owned)")
+        # "2x rusty scrap metal", the spelling get_material_summary uses on
+        # the list and on the skills sheet -- a count is the fact, and a
+        # recipe needing three of something said so three times before.
+        if md["required"] > 1:
+            requirement = f"{md['required']}x {md['name']}"
+        else:
+            requirement = md["name"]
+
+        material_lines.append(f"  {requirement} ({md['owned']} owned)")
 
     materials_str = "\n".join(material_lines)
 
-    if display["required_skill"]:
+    requirement = _skill_requirement(
+        display["required_skill"], display["required_level"]
+    )
+
+    if requirement:
         if display["meets_skill"]:
-            skill_status = f"{SUCCESS_COLOR}Met{RESET_COLOR}"
+            skill_status = f"{requirement} ({SUCCESS_COLOR}Met{RESET_COLOR})"
         else:
-            skill_status = (
-                f"{ERROR_COLOR}Requires {display['required_skill']}"
-                f" Lv.{display['required_level']}{RESET_COLOR}"
-            )
+            skill_status = f"{ERROR_COLOR}Requires {requirement}{RESET_COLOR}"
     else:
         skill_status = "None"
 
@@ -193,7 +262,7 @@ def _start_batch_and_render(caller, recipe_key, facility, count):
     """
     started, message = craft_batch.start_batch(caller, recipe_key, count)
     color = SUCCESS_COLOR if started else ERROR_COLOR
-    caller.msg(f"{color}{message}{RESET_COLOR}")
+    caller.msg((f"{color}{message}{RESET_COLOR}", _MSG_CRAFTING))
 
     return start(caller, facility=facility)
 
@@ -294,7 +363,7 @@ def node_craft_custom_qty(caller, raw_string, **kwargs):
     recipe_cls = crafting_service.get_recipe_class(recipe_key)
 
     if not recipe_cls:
-        caller.msg(f"{ERROR_COLOR}Recipe not found.{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}Recipe not found.{RESET_COLOR}", _MSG_CRAFTING))
 
         return start(caller, facility=facility)
 
@@ -326,7 +395,7 @@ def node_craft_custom_qty(caller, raw_string, **kwargs):
     count, parse_error = parse_quantity(raw_string, max_qty)
 
     if parse_error is not None:
-        caller.msg(f"{ERROR_COLOR}{parse_error}{RESET_COLOR}")
+        caller.msg((f"{ERROR_COLOR}{parse_error}{RESET_COLOR}", _MSG_CRAFTING))
 
         return text, custom_options
 
@@ -410,7 +479,7 @@ def execute_craft_batch(caller, raw_string, **kwargs):
 
     started, message = craft_batch.start_batch(caller, recipe_key, count)
     color = SUCCESS_COLOR if started else ERROR_COLOR
-    caller.msg(f"{color}{message}{RESET_COLOR}")
+    caller.msg((f"{color}{message}{RESET_COLOR}", _MSG_CRAFTING))
 
     return "start", {"facility": facility}
 
@@ -420,7 +489,7 @@ def node_cancel_batch(caller, **kwargs):
     cancelled = craft_batch.cancel_batch(caller)
 
     if cancelled:
-        caller.msg(f"{SUCCESS_COLOR}Crafting cancelled.{RESET_COLOR}")
+        caller.msg((f"{SUCCESS_COLOR}Crafting cancelled.{RESET_COLOR}", _MSG_CRAFTING))
 
     return start(caller, facility=facility)
 

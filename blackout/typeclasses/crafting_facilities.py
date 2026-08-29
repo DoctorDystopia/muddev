@@ -13,6 +13,14 @@ from systems.menus.base_menu import start_blackout_menu
 from commands.constants import HELP_CATEGORY_CRAFTING
 from systems.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is crafting, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
 CRAFT_COMMAND_KEY = "craft"
@@ -80,7 +88,7 @@ class CmdCraft(Command):
         caller = self.caller
         facility = self.obj
 
-        caller.msg(f"(You approach the {facility.key}.)")
+        caller.msg((f"(You approach the {facility.key}.)", _MSG_CRAFTING))
 
         start_blackout_menu(
             caller,
@@ -114,7 +122,7 @@ class CmdToggleCraftConfirm(Command):
             current = True
         caller.db.craft_confirm = not current
         status = "ON" if caller.db.craft_confirm else "OFF"
-        caller.msg(f"Crafting confirmation turned {status}.")
+        caller.msg((f"Crafting confirmation turned {status}.", _MSG_CRAFTING))
 
 
 

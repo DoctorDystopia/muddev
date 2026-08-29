@@ -21,6 +21,7 @@ from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTest
 
 from commands.combat_cmds import CmdTickDebug
 from systems.tick import constants as const
+from systems.statefeed.text import line_of
 from systems.tick import debug as tick_debug
 from systems.combat.combat import ensure_combat_handler
 from systems.tick.engine import get_tick_engine
@@ -44,8 +45,14 @@ class TickDebugTestCase(EvenniaTest):
         super().tearDown()
 
     def _record(self, text="", **kwargs):
-        """Stand in for Character.msg, keeping the plain text of every line."""
-        stripped = strip_ansi(str(text))
+        """Stand in for Character.msg, keeping the plain text of every line.
+
+        `line_of` and not `str(text)`: every line the debug stream sends now
+        carries a routing tag, so the argument is a `(line, {tag})` pair and
+        stringifying the pair gave every assertion below a Python repr to
+        search. See systems/statefeed/text.py.
+        """
+        stripped = strip_ansi(line_of(text))
         self.lines.append(stripped)
 
     def _stream_lines(self):

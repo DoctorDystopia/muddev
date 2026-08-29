@@ -13,6 +13,14 @@ from systems.statefeed.constants import ASSET_KIND_NPC
 from typeclasses.objects import ObjectParent
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about the room around you, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_ROOM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_ROOM}
 
 
 # Public constant definitions
@@ -105,10 +113,10 @@ class CmdTalk(Command):
         menu_module_is_valid = bool(menu_module_path)
 
         if not menu_module_is_valid:
-            caller.msg(f"{npc.key} has nothing to say right now.")
+            caller.msg((f"{npc.key} has nothing to say right now.", _MSG_ROOM))
             return
 
-        caller.msg(f"(You walk up and talk to {npc.key}.)")
+        caller.msg((f"(You walk up and talk to {npc.key}.)", _MSG_ROOM))
 
         start_blackout_menu(
             caller,

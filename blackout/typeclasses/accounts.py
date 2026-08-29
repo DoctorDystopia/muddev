@@ -24,6 +24,7 @@ several more options for customizing the Guest account system.
 
 from evennia.accounts.accounts import DefaultAccount, DefaultGuest
 
+from systems.statefeed import constants as feed_const
 from world.respawn import get_respawn_room
 
 
@@ -137,6 +138,57 @@ class Account(DefaultAccount):
      - at_post_chnnel_msg(message, channel, senders=None, **kwargs)
 
     """
+
+    def channel_msg(self, message, channel, senders=None, **kwargs):
+        """
+        Purpose: Deliver a channel message with the routing tag a graphical
+        client needs to file it under Chat.
+
+        Entry:
+            message - the text, already prefixed and formatted by the channel.
+            channel - the Channel it came from.
+            senders - Accounts or Objects that sent it, or None for a
+                      broadcast.
+            kwargs  - whatever Channel.msg was given. Ignored, as upstream
+                      ignores it.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            feed_const.MESSAGE_TYPE_KEY, feed_const.MESSAGE_TYPE_CHANNEL read.
+
+        Methodology:
+            DefaultAccount.channel_msg stamps `from_channel` and no `type`, so
+            a client can tell WHICH channel a line came from but not that it is
+            a channel line at all -- and every tab rule in the Godot client is
+            written against `type`. This adds the tag and keeps `from_channel`
+            beside it, in the payload and in `options`, exactly as upstream
+            sends them.
+
+            Written out rather than calling super() and patching afterwards:
+            the parent has already handed the message to the session by the
+            time it returns, and there is nothing left to amend.
+
+        Notes/References:
+            The tag vocabulary is systems/statefeed/constants.py; see
+            MESSAGE_TYPES. This is one of only two places Blackout tags text
+            the ENGINE emits -- `say`, `whisper`, `pose`, `look` and `help`
+            already carry Evennia's own tags and need no override.
+
+        Author: Nick Hobar
+        Creation date: 08/28/2026
+        """
+        routing = {
+            feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CHANNEL,
+            "from_channel": channel.id,
+        }
+
+        self.msg(
+            text=(message, routing),
+            from_obj=senders,
+            options={"from_channel": channel.id},
+        )
 
     def create_character(self, *args, **kwargs):
         """

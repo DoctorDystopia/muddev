@@ -37,6 +37,23 @@ from .protocols import Combatant, XpEarner
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
 from .rules.pipeline import resolve_action
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is combat, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
+
+# An HP readout in prose, which is a different thing from a swing: a player
+# filtering to combat wants both, one filtering to vitals wants only this.
+#
+# ONE tag where there were two. `target_health` and `player_health` were two
+# names for one fact -- whose HP it is -- which the line itself already states
+# and which char_vitals already carries structurally.
+_MSG_VITALS = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_VITALS}
 
 
 
@@ -509,32 +526,32 @@ class ActionAttack(_Action):
 
         attacker.msg(
             (combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text),
-             {"type": "testing"},
+             _MSG_COMBAT,
             )
         )
         attacker.msg(
             (
                 combat_msg.format_hp_status(target.key, hp_after, max_hp),
-                {"type": "target_health"},
+                _MSG_VITALS,
             )
         )
 
         target.msg(
             (
                 combat_msg.format_incoming_hit(attacker, target, dmg),
-                {"type": "testing"},
+                _MSG_COMBAT,
             )
         )
         target.msg(
             (
                 combat_msg.format_hp_status(combat_msg.SELF_HP_LABEL, hp_after, max_hp),
-                {"type": "player_health"},
+                _MSG_VITALS,
             )
         )
 
         if room is not None:
             third_party = combat_msg.format_third_party_hit(attacker, target, dmg)
-            room.msg_contents(third_party, exclude=(attacker, target))
+            room.msg_contents((third_party, _MSG_COMBAT), exclude=(attacker, target))
 
         # Pay the XP before the damage so a level-up line reads next to the
         # award that caused it, rather than below the target's death.
@@ -629,13 +646,14 @@ class ActionAttack(_Action):
         max_hp = getattr(attacker, "max_hp", 0)
         killed = (hurt >= hp_before)
 
-        attacker.msg(combat_msg.format_backfire(attacker, context.weapon, hurt))
         attacker.msg(
-            combat_msg.format_hp_status(
+            (combat_msg.format_backfire(attacker, context.weapon, hurt), _MSG_COMBAT))
+        attacker.msg(
+            (combat_msg.format_hp_status(
                 combat_msg.SELF_HP_LABEL,
                 hp_after,
                 max_hp,
-            )
+            ), _MSG_COMBAT)
         )
 
         # TODO: update emit_swing name (e.g, emit_combat_action). Also, might be
@@ -732,19 +750,19 @@ class ActionAttack(_Action):
     def _announce_lost_target(self, attacker, target) -> None:
         """Tell the attacker why the combat action did not happen."""
         if target is None:
-            attacker.msg("Your target is gone.")
+            attacker.msg(("Your target is gone.", _MSG_COMBAT))
             return
 
         name = getattr(target, "key", "something")
-        attacker.msg(f"|x{name} is already dead.|n")
+        attacker.msg((f"|x{name} is already dead.|n", _MSG_COMBAT))
 
     def _announce_miss(self, attacker, target, context) -> None:
         """Broadcast a combat action that connected with nothing."""
         attacker.msg(
-            (combat_msg.format_outgoing_miss(attacker, target), {"type": "testing"})
+            (combat_msg.format_outgoing_miss(attacker, target), _MSG_COMBAT)
         )
         target.msg(
-            (combat_msg.format_incoming_miss(attacker, target), {"type": "testing"})
+            (combat_msg.format_incoming_miss(attacker, target), _MSG_COMBAT)
         )
         feed.emit_miss(context)
 
@@ -768,11 +786,11 @@ class ActionFlee(_Action):
 
     def resolve(self, handler):
         obj = handler.obj
-        obj.msg("|xYou scramble back and flee.|n")
+        obj.msg(("|xYou scramble back and flee.|n", _MSG_COMBAT))
         room = getattr(obj, "location", None)
 
         if room is not None:
-            room.msg_contents(f"|x{obj.key} flees!|n", exclude=obj)
+            room.msg_contents((f"|x{obj.key} flees!|n", _MSG_COMBAT), exclude=obj)
 
         # No teardown here: the event says the actor chose to stop, and the
         # transition table turns that into ENDING, which tick() acts on. This
@@ -796,12 +814,12 @@ class ActionWield(_Action):
     def resolve(self, handler):
         weapon = self._get_weapon()
         if weapon is None:
-            handler.obj.msg("|rYour weapon is gone.|n")
+            handler.obj.msg(("|rYour weapon is gone.|n", _MSG_COMBAT))
             return ActivityEvent.ACTION_RESOLVED
 
         equipment = getattr(handler.obj, "equipment", None)
         if equipment is None:
-            handler.obj.msg("|rYou can't wield anything.|n")
+            handler.obj.msg(("|rYou can't wield anything.|n", _MSG_COMBAT))
             return ActivityEvent.ACTION_RESOLVED
 
         # Call the handler directly rather than execute_cmd("equip ..."):
@@ -812,11 +830,11 @@ class ActionWield(_Action):
         try:
             equipment.equip(weapon)
         except EquipmentError as exc:
-            handler.obj.msg(f"|r{exc}|n")
+            handler.obj.msg((f"|r{exc}|n", _MSG_COMBAT))
             return ActivityEvent.ACTION_RESOLVED
 
         handler._refresh_weapon()
-        handler.obj.msg(f"|gYou ready your |w{weapon.key}|g.|n")
+        handler.obj.msg((f"|gYou ready your |w{weapon.key}|g.|n", _MSG_COMBAT))
 
         return ActivityEvent.ACTION_RESOLVED
 
@@ -1023,17 +1041,17 @@ class BlackoutCombatHandler(TickableHandler):
         enemies = [c for c in enemies if c.is_alive() and c.location is location]
 
         if not allies and not enemies:
-            self.obj.msg("|xThe combat is over. No one stands.|n")
+            self.obj.msg(("|xThe combat is over. No one stands.|n", _MSG_COMBAT))
             self.end_combat()
             return True
         
         if not allies:
-            self.obj.msg("|xThe combat is over. You lost.|n")
+            self.obj.msg(("|xThe combat is over. You lost.|n", _MSG_COMBAT))
             self.end_combat()
             return True
         
         if not enemies:
-            self.obj.msg("|xThe combat is over. You won!|n")
+            self.obj.msg(("|xThe combat is over. You won!|n", _MSG_COMBAT))
             self.end_combat()
             return True
         
@@ -1286,7 +1304,7 @@ class BlackoutCombatHandler(TickableHandler):
             return False
 
         if not target.is_alive():
-            self.obj.msg(f"|x{target.key} is already dead.|n")
+            self.obj.msg((f"|x{target.key} is already dead.|n", _MSG_COMBAT))
             return False
 
         return True

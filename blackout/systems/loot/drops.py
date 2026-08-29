@@ -27,6 +27,15 @@ from evennia.utils import logger
 from systems.combat import combat_msg
 from world.item_database import ITEM_DB
 from world.loot_database import LOOT_DB
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is about your inventory, so the
+# routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -290,6 +299,6 @@ def award_drops(npc, killer=None, rng=None) -> list:
         return []
 
     line = combat_msg.format_drops(npc, delivered)
-    room.msg_contents(line)
+    room.msg_contents((line, _MSG_INVENTORY))
 
     return delivered
