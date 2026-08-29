@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_map_terrain.gd" id="1_terrain"]
+
+[node name="TestMapTerrain" type="Node"]
+script = ExtResource("1_terrain")
