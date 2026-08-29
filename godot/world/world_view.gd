@@ -8,12 +8,16 @@ extends Node3D
 ##
 ## **Z is a map NAME, not an elevation.** Maps are disconnected islands laid out
 ## along world X. Their relative placement cannot be computed from the data, so
-## it is authored in Z_LAYOUT_ORDER; a map not listed still appears, after the
-## named ones.
+## it is authored in [constant MapPalette.Z_LAYOUT_ORDER]; a map not listed
+## still appears, after the named ones.
 ##
 ## **Room kinds not in the colour table are hashed to a stable hue.** A new room
-## type is visually distinct with no edit here, and is the same colour every
+## type is visually distinct with no edit anywhere, and is the same colour every
 ## session and for every player.
+##
+## Both tables live in [MapPalette] since 08/28/2026, because the minimap draws
+## the same map and a second copy of either is the failure this repo has already
+## paid for once.
 
 ## Every name the SERVER owns, generated from
 ## blackout/systems/statefeed/constants.py by systems/statefeed/clientexport.py.
@@ -55,6 +59,31 @@ const TILE_PROP_SCALE := 0.9
 ## colour, so every kind lifts by the same amount and none needs its own entry.
 const HOVER_LIFT := 1.5
 
+## How much of a tile the terrain surface covers.
+##
+## LESS THAN ONE ON PURPOSE, and this is the whole reason the terrain is a layer
+## on the slab rather than a replacement for it. At 1.0 the art would cover the
+## tile top exactly, and the two things the top was carrying would go with it:
+## the room kind's colour, which is how a bank tile is told from a clearing at a
+## glance, and the hover lift, which is written through the slab's instance
+## colour and would then only show on the sides -- edge-on, from the angle this
+## camera actually sits at. Leaving a rim shows both, and reads as a border
+## rather than as a mistake.
+const TERRAIN_SCALE := 0.86
+
+## How far ABOVE the slab's face the terrain is laid.
+##
+## Not a fudge factor. A terrain tile may legitimately have no thickness at all
+## -- `tile_oasis_outskirts` is a single plane and measures 0.000 -- and a plane
+## resting exactly ON the face it covers is coplanar with it, which is
+## z-fighting rather than a picture: the two surfaces flicker against each other
+## per pixel and per camera angle. Everything else in the pane rests on the face
+## by measurement and needs nothing, because everything else has volume.
+##
+## Small enough that nothing reads as floating at this camera distance, and
+## large enough to settle the depth test at it.
+const TERRAIN_LIFT := 0.004
+
 const TILE_SIZE := 1.0
 const TILE_GAP := 0.18
 const TILE_HEIGHT := 0.16
@@ -63,52 +92,11 @@ const Z_LEVEL_GAP := 4.0
 const LINK_WIDTH := 0.10
 const LINK_HEIGHT := 0.04
 
-const Z_LAYOUT_ORDER := ["oasis", "oasis_outskirts", "trade town sector 1"]
-
-const COLOR_TILE_DEFAULT := Color("2b3a4a")
+## Colours and island order live in [MapPalette] -- the minimap draws the same
+## map and a second copy of either table is the failure this repo has already
+## paid for once. `COLOR_LINK` stays because nothing but a 3D pane draws links.
 const COLOR_LINK := Color("2e4256")
 
-## Saturation and lightness the browser pane gives a hash-coloured room kind.
-## Named in ITS colour space -- HSL -- rather than pre-converted, so the pair
-## can be compared against blackout3d.js's `setHSL(hue, 0.42, 0.42)` by eye.
-const KIND_HSL_SATURATION := 0.42
-const KIND_HSL_LIGHTNESS := 0.42
-
-## Must colour the SAME set of room kinds as blackout3d.js, key for key --
-## ClientRoomKindTests asserts it in both directions. A key naming no map
-## prototype is dead configuration; a room kind with no key here is fine and
-## hashes to a stable hue.
-const ROOM_KIND_COLORS := {
-	"Bank": Color("4488ff"),
-	"Foundry Furnace Facility": Color("dd4422"),
-	"Metalsmith Anvil Facility": Color("aaaaaa"),
-	# Two clearings, not one, and they are told apart by what they yield:
-	# oasis grows rusty poles, oasis_outskirts grows metal ones. Coloured for
-	# the material rather than for the tile, so the map reads as a gradient
-	# from scrap to stock as the player moves out.
-	#
-	# This said "Pole clearing" until 08/25/2026 -- a key no map has ever
-	# declared, copied here from the browser pane before that pane was fixed.
-	# Both real clearings rendered the hash colour and nothing errored.
-	"Rusty pole clearing": Color("cc6633"),
-	"Metal pole clearing": Color("8899a6"),
-	"Shopkeeper": Color("ddcc44"),
-	"Mutant Raider Tile": Color("8fbf00"),
-	"Big Mutant Tile": Color("bf3f00"),
-	# Not a prototype key like the rest: the server synthesises this one for a
-	# node that spawns no room. It is the way OFF the map, so it is coloured
-	# whether or not the teleporter model is there to stand on it.
-	#
-	# A LITERAL, though Const.ROOM_KIND_TRANSITION holds the same string and
-	# blackout_models.js imports it. ClientRoomKindTests reads both clients as
-	# TEXT -- that is what lets one test cover two languages without importing
-	# either -- so a key written as a constant reference is invisible to it and
-	# reads as "this client colours nothing here". blackout3d.js spells it
-	# literally for the same reason. Making the scraper resolve constant
-	# references would let both use Const; until then the literal is what keeps
-	# the guard honest.
-	"map_transition": Color("35e0c0"),
-}
 
 @onready var _islands: Node3D = $Islands
 @onready var _marker: MeshInstance3D = $Marker
@@ -116,6 +104,9 @@ const ROOM_KIND_COLORS := {
 @onready var _aura: MeshInstance3D = $Aura
 @onready var _camera: Camera3D = $Camera/SpringArm3D/Camera3D
 
+## The world model. GIVEN by the console since 08/28/2026, not built here:
+## the minimap draws the same map, and one payload must not be reassembled
+## twice. See [method bind_world].
 var _state := WorldState.new()
 var _offsets: Dictionary = {}      # z -> world X offset of that island
 var _tile_material: StandardMaterial3D
@@ -142,6 +133,22 @@ var _avatar: Node3D
 ## slot the ring left for it, so a dropped item is beside you rather than inside
 ## you and a crowded tile reads as several people rather than one.
 var _avatar_offset := Vector3.ZERO
+
+## Which way the avatar is currently turned, in radians about Y.
+##
+## Held here rather than read back off the node, because [method _redraw_avatar]
+## frees and rebuilds that node every time `char_avatar` names a different asset
+## or art lands for the one it already named — and a player who walked north
+## before their model arrived should still be facing north after it does.
+var _avatar_yaw := 0.0
+
+## The tile the avatar was last placed on, and which island it was on.
+##
+## An empty z means no step has been watched yet, which is the state on login
+## and after a resync. A first sighting names no direction, so the avatar keeps
+## the yaw it has rather than snapping round to face north.
+var _facing_cell := Vector2i.ZERO
+var _facing_z := ""
 
 ## The observer's own state, bound by the console. Read for `asset` and
 ## `family` and nothing else.
@@ -186,6 +193,25 @@ func bind_meshes(resolver: MeshResolver) -> void:
 	_redraw_avatar()
 
 
+## Take the world model. Called by the console, which owns it.
+##
+## Not done in _ready for the reason bind_meshes gives: a child's _ready runs
+## before its parent's, so the console has not built anything yet.
+func bind_world(state: WorldState) -> void:
+	_state = state
+	_state.map_ready.connect(_on_map_ready)
+	_state.room_changed.connect(_place_marker)
+
+	# Whatever has already landed. The console binds after the socket is open,
+	# so a map that arrived during the handshake is not lost.
+	_relayout()
+	_place_marker()
+
+
+func _on_map_ready(_z: String) -> void:
+	_relayout()
+
+
 ## Follow the observer's own state. Called by the console, which owns it.
 func bind_char(state: CharState) -> void:
 	_char = state
@@ -218,6 +244,11 @@ func _redraw_avatar() -> void:
 	var bounds := ModelLoader.bounds_of(_avatar)
 	_avatar.position = _avatar_offset + Vector3(
 		0.0, -bounds.position.y * AVATAR_SCALE, 0.0)
+	# Re-applied rather than left at zero: this runs whenever the asset changes
+	# or its art finally lands, and both are things that happen mid-walk. A
+	# figure that snapped back to facing north the moment its model arrived
+	# would read as the model being wrong rather than as the yaw being lost.
+	_avatar.rotation.y = _avatar_yaw
 	_marker.add_child(_avatar)
 
 	# The BOX goes, not the node. `visible = false` would take the avatar with
@@ -256,7 +287,7 @@ func _on_art_arrived(asset_key: String) -> void:
 	if _char != null and _char.asset == asset_key:
 		_redraw_avatar()
 
-	if _any_tile_is_kind(asset_key):
+	if _any_tile_is_kind(asset_key) or _any_level_is_surfaced(asset_key):
 		_relayout()
 
 
@@ -275,18 +306,27 @@ func _any_tile_is_kind(kind: String) -> bool:
 	return false
 
 
+## Whether any island on screen is surfaced with this terrain.
+##
+## The second half of the same question [method _any_tile_is_kind] asks, and it
+## has to be asked separately because terrain is keyed by MAP and a prop by ROOM
+## KIND -- a key that is neither is art for something else entirely, and
+## rebuilding every island for it is what this pair is here to avoid.
+func _any_level_is_surfaced(asset_key: String) -> bool:
+	for z: String in _state.levels:
+		if MapPalette.tile_model(z) == asset_key:
+			return true
+
+	return false
+
+
 func _on_channel(channel: String, payload: Dictionary) -> void:
+	# CH_MAP and CH_ROOM_INFO are deliberately absent: the console ingests them
+	# into the shared WorldState and this pane redraws on its signals. Reading
+	# them here as well would be the second reassembly bind_world exists to
+	# prevent -- and it would run BEFORE the console's, because a child
+	# connects to Evennia in its own _ready and a child's _ready runs first.
 	match channel:
-		Const.CH_MAP:
-			var completed := _state.ingest_map_chunk(payload)
-
-			if not completed.is_empty():
-				_relayout()
-
-		Const.CH_ROOM_INFO:
-			_state.ingest_room_info(payload)
-			_place_marker()
-
 		Const.CH_ROOM_PLAYERS:
 			_entities.replace_all(payload.get("entities", []))
 
@@ -400,7 +440,8 @@ func _hover_tile(cell: Vector2i) -> void:
 	if index < 0:
 		return
 
-	multi.set_instance_color(index, kind_colour(level.kinds[index]) * HOVER_LIFT)
+	multi.set_instance_color(index,
+		_tile_colour(_state.current_z, level.kinds[index]) * HOVER_LIFT)
 	_hover_cell = cell
 	_hover_z = _state.current_z
 
@@ -416,7 +457,8 @@ func _clear_tile_hover() -> void:
 		var index := level.cells.find(_hover_cell)
 
 		if index >= 0:
-			multi.set_instance_color(index, kind_colour(level.kinds[index]))
+			multi.set_instance_color(index,
+				_tile_colour(_hover_z, level.kinds[index]))
 
 	_hover_z = ""
 	_hover_cell = Vector2i.ZERO
@@ -557,14 +599,14 @@ func _ordered_levels() -> Array:
 	var rest: Array = []
 
 	for z: String in _state.levels:
-		if Z_LAYOUT_ORDER.has(z):
+		if MapPalette.Z_LAYOUT_ORDER.has(z):
 			named.append(z)
 		else:
 			rest.append(z)
 
 	named.sort_custom(
 		func(a: String, b: String) -> bool:
-			return Z_LAYOUT_ORDER.find(a) < Z_LAYOUT_ORDER.find(b)
+			return MapPalette.Z_LAYOUT_ORDER.find(a) < MapPalette.Z_LAYOUT_ORDER.find(b)
 	)
 
 	return named + rest
@@ -587,15 +629,83 @@ func _draw_level(z: String, level: WorldState.Level, offset: float) -> void:
 	island.name = z
 	_islands.add_child(island)
 
-	var tiles := _build_tiles(level, offset)
+	var tiles := _build_tiles(z, level, offset)
 
 	island.add_child(tiles)
 	_tile_meshes[z] = tiles.multimesh
+
+	var terrain := _build_terrain(z, level, offset)
+
+	if terrain != null:
+		island.add_child(terrain)
 
 	if not level.links.is_empty():
 		island.add_child(_build_links(level, offset))
 
 	island.add_child(_build_props(level, offset))
+
+
+## Surface every tile of one island with that map's terrain art.
+##
+## Returns null for a map [MapPalette] names no terrain for, and for one whose
+## art has not landed yet -- both keep the plain coloured slab, and the second
+## sharpens into terrain when [signal MeshResolver.refreshed] brings the model
+## in. Same ladder the props use and the same reason: the ground has to be
+## walkable before it is drawn.
+##
+## ONE MultiMesh PER MESH IN THE MODEL, not one node per tile. A map is around
+## ninety cells and the terrain is the same mesh on every one of them, so this
+## is the one place in the pane where instancing is not an optimisation but the
+## difference between a scene of ninety nodes and a scene of one.
+func _build_terrain(z: String, level: WorldState.Level, offset: float) -> Node3D:
+	var asset_key := MapPalette.tile_model(z)
+
+	if asset_key.is_empty():
+		return null
+
+	var model := _meshes.resolve_scenery(asset_key)
+
+	if model == null:
+		return null
+
+	var terrain := Node3D.new()
+	var bottom := ModelLoader.bounds_of(model).position.y * TERRAIN_SCALE
+	var lift := (TILE_HEIGHT * 0.5) + TERRAIN_LIFT - bottom
+
+	terrain.name = "Terrain"
+
+	for part: Array in ModelLoader.mesh_parts(model):
+		terrain.add_child(_terrain_layer(level, offset, lift, part))
+
+	# The copy handed back by resolve_scenery is nobody's once its meshes have
+	# been read out of it, and it was never added to the tree -- so nothing else
+	# will ever free it. The same call MeshResolver makes on the copy its own
+	# signal carries.
+	model.queue_free()
+
+	return terrain
+
+
+## One mesh of the terrain model, stamped on every cell of the island.
+##
+## The instance transform is the placement TIMES the part's own transform, in
+## that order: the part transform is where this mesh sits inside its model, and
+## it has to be applied first or a model whose meshes are offset from each other
+## would collapse them all onto the tile centre.
+func _terrain_layer(level: WorldState.Level, offset: float, lift: float,
+		part: Array) -> MultiMeshInstance3D:
+	var mesh: Mesh = part[0]
+	var inside: Transform3D = part[1]
+	var multi := _new_multimesh(mesh, level.cells.size(), false)
+	var basis := Basis.IDENTITY.scaled(Vector3.ONE * TERRAIN_SCALE)
+
+	for index: int in level.cells.size():
+		var origin := _tile_position(level.cells[index], offset)
+		var placement := Transform3D(basis, origin + Vector3(0.0, lift, 0.0))
+
+		multi.set_instance_transform(index, placement * inside)
+
+	return _instance_of(multi)
 
 
 ## Stand a model on every tile whose room kind has one.
@@ -638,7 +748,8 @@ func _build_props(level: WorldState.Level, offset: float) -> Node3D:
 	return props
 
 
-func _build_tiles(level: WorldState.Level, offset: float) -> MultiMeshInstance3D:
+func _build_tiles(z: String, level: WorldState.Level,
+		offset: float) -> MultiMeshInstance3D:
 	var box := BoxMesh.new()
 
 	box.size = Vector3(TILE_SIZE, TILE_HEIGHT, TILE_SIZE)
@@ -650,9 +761,20 @@ func _build_tiles(level: WorldState.Level, offset: float) -> MultiMeshInstance3D
 		var origin := _tile_position(level.cells[index], offset)
 
 		multi.set_instance_transform(index, Transform3D(Basis.IDENTITY, origin))
-		multi.set_instance_color(index, kind_colour(level.kinds[index]))
+		multi.set_instance_color(index, _tile_colour(z, level.kinds[index]))
 
 	return _instance_of(multi)
+
+
+## What one tile's slab is coloured, on the island it is part of.
+##
+## TWO PALETTES, and which one applies is a property of the ISLAND rather than
+## of the tile: a bare map colour-codes every kind, a surfaced one colours only
+## the kinds somebody chose a colour for and leaves the rest neutral under the
+## art. Both the choice and the tables are [MapPalette]'s -- the minimap draws
+## the same map and asks the same pair of questions.
+func _tile_colour(z: String, kind: String) -> Color:
+	return MapPalette.tile_colour(kind, MapPalette.is_surfaced(z, _meshes))
 
 
 func _build_links(level: WorldState.Level, offset: float) -> MultiMeshInstance3D:
@@ -713,6 +835,12 @@ func _place_marker() -> void:
 	_entities.stand(_observer_coords())
 	_entities.replace_positions()
 
+	# BEFORE the early return as well, and for the same reason: which way the
+	# last step went is known from the coords alone, so a room that arrived
+	# ahead of its map still records the step. Holding it back would mean the
+	# island landing later replayed that step as a jump from nowhere.
+	_turn_avatar()
+
 	if not _offsets.has(_state.current_z):
 		# The room arrived before its map did. The marker stays where it was
 		# until _relayout calls back here with the island in place.
@@ -737,6 +865,57 @@ func _place_marker() -> void:
 ## name, which is the same triple `serialize_entity` sends, only already parsed.
 func _observer_coords() -> Array:
 	return [_state.current_cell.x, _state.current_cell.y, _state.current_z]
+
+
+# ─── Facing ──────────────────────────────────────────────────────────────────
+
+## Which way to turn a figure stepping from `from` to `to`, or `keep` when the
+## move names no direction worth facing.
+##
+## `atan2(dx, dz)`, not the `atan2(dz, dx)` a maths text would write. This is
+## the rotation that puts **+Z** along the direction of travel, and +Z is the
+## way both tiers of character are authored to face — the served `.glb` and the
+## procedural figure alike.
+##
+## The Z term is NEGATED because grid Y grows northward while world Z grows
+## southward: the same flip [method _tile_position] makes, and the reason a step
+## north answers PI rather than 0. Getting this wrong is silent — the figure
+## simply walks backwards — so `test_world_view` pins all eight compass steps.
+##
+## Only a step to a NEIGHBOURING tile turns anything. A teleport is not a walk
+## and has no direction in it, so a longer jump keeps the yaw rather than facing
+## wherever the destination happens to lie; so does arriving where you already
+## were, which is what a relayout and a resync each replay.
+static func yaw_towards(from: Vector2i, to: Vector2i, keep: float) -> float:
+	var delta := to - from
+
+	if delta == Vector2i.ZERO or absi(delta.x) > 1 or absi(delta.y) > 1:
+		return keep
+
+	return atan2(float(delta.x), float(-delta.y))
+
+
+## Face the way the last step went.
+##
+## Called from [method _place_marker] rather than from the `room_changed`
+## handler, so every path that moves the marker turns the figure with it — and
+## the paths that move it without a step (a relayout, an island arriving late)
+## hand [method yaw_towards] a zero-length move, which keeps the yaw.
+##
+## A change of island is not a step either. The two z values are compared before
+## the cells are, because cell (4,2) on the oasis and cell (4,2) in the wastes
+## are not neighbours however close their coordinates read.
+func _turn_avatar() -> void:
+	if _facing_z == _state.current_z:
+		_avatar_yaw = yaw_towards(_facing_cell, _state.current_cell, _avatar_yaw)
+
+	_facing_cell = _state.current_cell
+	_facing_z = _state.current_z
+
+	# Null until char_avatar has been answered and, on tier 1, until the .glb
+	# has landed. _redraw_avatar applies the yaw when the figure does arrive.
+	if _avatar != null:
+		_avatar.rotation.y = _avatar_yaw
 
 
 # ─── Aura ────────────────────────────────────────────────────────────────────
@@ -799,64 +978,19 @@ func _tile_position(cell: Vector2i, offset: float) -> Vector3:
 	return Vector3(offset + cell.x * STEP, 0.0, -cell.y * STEP)
 
 
-## The colour a room kind is drawn in.
+## A MultiMesh of one mesh, `count` times.
 ##
-## Static and public so the browser-parity claim above it can actually be
-## tested. Anything not in the table gets a stable hue, so a room type added to
-## the game is visually distinct with no edit here.
-static func kind_colour(kind: String) -> Color:
-	if kind.is_empty():
-		return COLOR_TILE_DEFAULT
-
-	if ROOM_KIND_COLORS.has(kind):
-		return ROOM_KIND_COLORS[kind]
-
-	var hue := float(stable_hash(kind) % 360) / 360.0
-
-	# Godot has no from_hsl, and HSV is not HSL -- feeding the browser's
-	# saturation and lightness straight into from_hsv would give a different
-	# colour for the same hue. This is the closed-form conversion, not a
-	# match by eye.
-	var value := KIND_HSL_LIGHTNESS + KIND_HSL_SATURATION * minf(
-		KIND_HSL_LIGHTNESS, 1.0 - KIND_HSL_LIGHTNESS
-	)
-
-	if value <= 0.0:
-		return Color.BLACK
-
-	return Color.from_hsv(hue, 2.0 * (1.0 - KIND_HSL_LIGHTNESS / value), value)
-
-
-## The browser pane's string hash, reproduced bit for bit.
-##
-## NOT Godot's `hash()`. Most of Blackout's room kinds are not in the colour
-## table above -- "Oasis", "Oasis Outskirts", "Trade Town Sector 1" -- so this
-## number is what colours most of the world, and the two panes are routinely
-## put side by side on the same character. Different hashes would mean two
-## differently coloured deserts and no way to tell a rendering bug from a
-## rendering difference.
-##
-## This is JS's classic 31-multiply (`(h << 5) - h + c`) with ToInt32 applied
-## every iteration, which is what `hashString` in blackout3d.js implements. The
-## mask reproduces that truncation; the fold at the end reproduces JS's SIGNED
-## result, which its Math.abs is applied to.
-static func stable_hash(text: String) -> int:
-	var value := 0
-
-	for code: int in text.to_utf8_buffer():
-		value = ((value << 5) - value + code) & 0xFFFFFFFF
-
-	if value >= 0x80000000:
-		value -= 0x100000000
-
-	return absi(value)
-
-
-func _new_multimesh(mesh: Mesh, count: int) -> MultiMesh:
+## `use_colors` is false for the terrain and true for everything else. It is not
+## a micro-optimisation: a MultiMesh with colours allocates a colour per
+## instance, and the terrain's material draws its own texture rather than a
+## vertex colour, so those bytes would sit there being ignored. It is also the
+## honest answer to "can this layer be tinted" -- it cannot, and the slab
+## underneath is what hover writes to.
+func _new_multimesh(mesh: Mesh, count: int, use_colors := true) -> MultiMesh:
 	var multi := MultiMesh.new()
 
 	multi.transform_format = MultiMesh.TRANSFORM_3D
-	multi.use_colors = true
+	multi.use_colors = use_colors
 	multi.mesh = mesh
 	multi.instance_count = count
 

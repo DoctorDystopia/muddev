@@ -43,6 +43,16 @@ class Level:
 		return seen >= expected
 
 
+## Emitted when one level has received every chunk and can be drawn.
+##
+## The 3D pane relays out the islands; the minimap redraws. Neither reaches for
+## the other, and neither ingests the feed itself -- see [method ingest].
+signal map_ready(z: String)
+
+## Emitted when the observer's own position, exits or tile actions change.
+signal room_changed
+
+
 ## z name -> Level. Z is a map NAME, not an elevation.
 var levels: Dictionary = {}
 
@@ -64,6 +74,34 @@ var current_tile_actions: Dictionary = {}
 ## because whether a walk IS running is the client's own tracking -- the client
 ## is what started it.
 var current_cancel_action: Dictionary = {}
+
+
+## Fold one feed message into this model.
+##
+## Returns true when the payload was one of ours, so the console can route
+## without restating the channel names in a second match -- the same contract
+## [CharState], [InventoryState] and [SummaryState] answer.
+##
+## **The CONSOLE calls this, not a pane.** The 3D world and the minimap draw
+## the same map, and a pane that ingested for itself would mean two chunk
+## reassemblies of one payload and, on a resync, two of them briefly
+## disagreeing about which tiles exist.
+func ingest(channel: String, payload: Dictionary) -> bool:
+	match channel:
+		_Const.CH_MAP:
+			var completed := ingest_map_chunk(payload)
+
+			if not completed.is_empty():
+				map_ready.emit(completed)
+
+		_Const.CH_ROOM_INFO:
+			ingest_room_info(payload)
+			room_changed.emit()
+
+		_:
+			return false
+
+	return true
 
 
 ## Fold one `blackout_map` chunk into the model.

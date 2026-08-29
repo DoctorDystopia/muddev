@@ -151,7 +151,7 @@ func _the_hash_matches_the_browser() -> void:
 
 	for text: String in vectors:
 		_expect(
-			WorldView.stable_hash(text) == vectors[text],
+			MapPalette.stable_hash(text) == vectors[text],
 			"stable_hash(%s) matches blackout3d.js" % text
 		)
 
@@ -165,12 +165,12 @@ func _the_hash_matches_the_browser() -> void:
 
 	for kind: String in colours:
 		_expect(
-			WorldView.kind_colour(kind).is_equal_approx(colours[kind]),
+			MapPalette.kind_colour(kind).is_equal_approx(colours[kind]),
 			"kind_colour(%s) matches blackout3d.js" % kind
 		)
 
 	_expect(
-		WorldView.kind_colour("Bank") == WorldView.ROOM_KIND_COLORS["Bank"],
+		MapPalette.kind_colour("Bank") == MapPalette.ROOM_KIND_COLORS["Bank"],
 		"a listed room kind uses its authored colour"
 	)
 
