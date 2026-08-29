@@ -139,6 +139,31 @@ FAMILY_BUDGETS: dict = {
         reason="tile prop; never inspected close up",
     ),
 
+    # The ground itself. One tile is drawn once per cell of a map, so this is
+    # the only family whose cost is multiplied by the world's size rather than
+    # by what is standing in it -- but it is ONE mesh in a MultiMesh, so that
+    # multiplication costs draw calls rather than bytes.
+    #
+    # THE TEXTURE CEILING HERE IS NOT ABOUT RENDER SIZE, which is why it is
+    # higher than world_objects despite a tile being smaller on screen than a
+    # prop standing on one. Tileset_desert is PALETTE-MAPPED art: the image is
+    # not a surface, it is a chart of flat swatches, and a tile's UVs sit in an
+    # 11-pixel-wide column of a 1024-square chart with about 10 pixels of
+    # margin to the next colour. Resampling scales the margin down with
+    # everything else, and once it is under a texel the filter starts mixing in
+    # the neighbouring swatch -- a tile that is subtly the wrong colour at the
+    # edges, with nothing anywhere reporting a problem. 512 halves the chart
+    # and leaves ~5 texels of margin, which is still comfortably clear.
+    #
+    # The byte budget is where the real saving is, and it is small because flat
+    # colour is what PNG compresses best: the whole palette costs tens of KB.
+    "tiles": ModelBudget(
+        max_texture_edge=512,
+        max_bytes=128 * _BYTES_PER_KIB,
+        reason="palette-mapped ground; the ceiling protects swatch margins, "
+               "not detail",
+    ),
+
     # Same role as world_objects: something you walk up to and harvest.
     "gathering_nodes": ModelBudget(
         max_texture_edge=256,
