@@ -134,6 +134,8 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_CHAR_STATUS", const.CHANNEL_CHAR_STATUS),
     ("CH_CHAR_SUMMARY", const.CHANNEL_CHAR_SUMMARY),
     ("CH_CHAR_ITEMS", const.CHANNEL_CHAR_ITEMS),
+    ("CH_CHAR_QUESTS", const.CHANNEL_CHAR_QUESTS),
+    ("CH_CHAR_SKILLS", const.CHANNEL_CHAR_SKILLS),
     ("CH_MAP", const.CHANNEL_MAP),
     ("CH_COMBAT", const.CHANNEL_COMBAT),
     ("CH_AURA", const.CHANNEL_AURA),
@@ -192,6 +194,39 @@ _SCALAR_EXPORTS: tuple = (
     ("ROOM_KIND_DEFAULT", const.ROOM_KIND_DEFAULT),
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
+)
+
+# What a line of game TEXT is about. Generated for the same reason the channel
+# names are: a client that retyped these would be free to disagree with the
+# server about what a tab contains, and nothing would check the copy.
+#
+# The KEY is exported too. A client reads `kwargs[MESSAGE_TYPE_KEY]`, and the
+# one string that has to agree with Evennia's outputfunc convention is the last
+# one worth typing twice.
+_MESSAGE_TYPE_EXPORTS: tuple = (
+    ("MESSAGE_TYPE_KEY", const.MESSAGE_TYPE_KEY),
+    ("MSG_GENERAL", const.MESSAGE_TYPE_GENERAL),
+    ("MSG_LOOK", const.MESSAGE_TYPE_LOOK),
+    ("MSG_POSE", const.MESSAGE_TYPE_POSE),
+    ("MSG_SAY", const.MESSAGE_TYPE_SAY),
+    ("MSG_WHISPER", const.MESSAGE_TYPE_WHISPER),
+    ("MSG_HELP", const.MESSAGE_TYPE_HELP),
+    ("MSG_EXAMINE", const.MESSAGE_TYPE_EXAMINE),
+    ("MSG_MOVE", const.MESSAGE_TYPE_MOVE),
+    ("MSG_TELEPORT", const.MESSAGE_TYPE_TELEPORT),
+    ("MSG_ROOM", const.MESSAGE_TYPE_ROOM),
+    ("MSG_MAP", const.MESSAGE_TYPE_MAP),
+    ("MSG_COMBAT", const.MESSAGE_TYPE_COMBAT),
+    ("MSG_VITALS", const.MESSAGE_TYPE_VITALS),
+    ("MSG_PROGRESSION", const.MESSAGE_TYPE_PROGRESSION),
+    ("MSG_INVENTORY", const.MESSAGE_TYPE_INVENTORY),
+    ("MSG_CRAFTING", const.MESSAGE_TYPE_CRAFTING),
+    ("MSG_GATHERING", const.MESSAGE_TYPE_GATHERING),
+    ("MSG_QUEST", const.MESSAGE_TYPE_QUEST),
+    ("MSG_COMMERCE", const.MESSAGE_TYPE_COMMERCE),
+    ("MSG_DIALOGUE", const.MESSAGE_TYPE_DIALOGUE),
+    ("MSG_CHANNEL", const.MESSAGE_TYPE_CHANNEL),
+    ("MSG_SYSTEM", const.MESSAGE_TYPE_SYSTEM),
 )
 
 _LANGUAGE_JS: str = "js"
@@ -348,14 +383,14 @@ def _render_body(syntax: dict, indent: str) -> str:
 
     Module Globals:
         _CHANNEL_EXPORTS, _KIND_EXPORTS, _ITEM_FAMILY_EXPORTS,
-        _SCALAR_EXPORTS read.
+        _TILE_KIND_EXPORTS, _MESSAGE_TYPE_EXPORTS, _SCALAR_EXPORTS read.
 
     Methodology:
-        Walk the four export tables in the order they are declared above,
+        Walk the export tables in the order they are declared above,
         writing a section comment before each so the generated file reads the
-        way constants.py does. Two derived lists follow: every subscribable
-        channel, and every item family, so a client can iterate rather than
-        rebuild the set by hand from the individual names.
+        way constants.py does. Three derived lists follow: every subscribable
+        channel, every item family and every message type, so a client can
+        iterate rather than rebuild the set by hand from the individual names.
 
     Notes/References:
         The section order mirrors constants.py deliberately; see
@@ -379,6 +414,8 @@ def _render_body(syntax: dict, indent: str) -> str:
     section("Item families.", _ITEM_FAMILY_EXPORTS)
     section("Tile action kinds -- what a click does to a walk in progress.",
             _TILE_KIND_EXPORTS)
+    section("Text routing -- what a line of game text is ABOUT. Which tab "
+            "shows it is the client's own.", _MESSAGE_TYPE_EXPORTS)
     section("Everything else.", _SCALAR_EXPORTS)
 
     lines.append("%s%s Derived sets, so a client can iterate rather than"
@@ -390,6 +427,9 @@ def _render_body(syntax: dict, indent: str) -> str:
     lines.append(indent + declare % (
         "ITEM_FAMILIES",
         _render_list(sorted(const.ITEM_FAMILIES), syntax)))
+    lines.append(indent + declare % (
+        "MESSAGE_TYPES",
+        _render_list(sorted(const.MESSAGE_TYPES), syntax)))
     lines.append("")
 
     return "\n".join(lines)

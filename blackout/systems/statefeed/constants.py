@@ -45,6 +45,46 @@ CHANNEL_CHAR_SUMMARY: str = "char_summary"            # -> Char.Summary
 # payload says inventory -- see ITEM_LOCATION_INVENTORY below.
 CHANNEL_CHAR_ITEMS: str = "char_items_list"           # -> Char.Items.List
 
+# Every quest the observer has taken, and where they are in it.
+#
+# GMCP has no standard name for a quest log, so this follows the vocabulary of
+# the Char.* channels above rather than being namespaced under blackout_: "what
+# my character is doing" is exactly what a Char.* channel is for, and a client
+# that understands Char.Vitals will look for it there.
+#
+# STRUCTURED, not rendered. `QuestHandler.objective_lines` already produces
+# prose for the telnet screen, and shipping that would have been the smaller
+# change -- but an objective is DATA: a description, a count and a requirement.
+# A client given the numbers can draw a progress bar, sort by completion and
+# grey out what is done; a client given "[x] Cut 3/5 poles" can only print it.
+# The payload is built beside `objective_lines` from the same handler reads, so
+# the two cannot disagree -- the arrangement CombatPayload uses to mirror
+# ActionResult.
+CHANNEL_CHAR_QUESTS: str = "char_quests"              # -> Char.Quests
+
+# Every skill the observer has, with its XP curve and everything it unlocks.
+#
+# Named beside the other Char.* channels for the reason CHANNEL_CHAR_SUMMARY
+# gives: "what my character can do" is exactly what a Char.* channel is for.
+#
+# IT IS NOT A SLICE OF char_summary, and the split is the point. The skills
+# band used to be a panel under systems/summary/panel_defs/, which meant a
+# client wanting a skills SCREEN had to reach into the dossier payload and pull
+# one key out of it by name -- and the dossier's whole contract, stated at
+# length on CharSummaryPayload, is that a client never names a panel. One
+# screen, one channel; the dossier no longer carries skills at all.
+#
+# STRUCTURED, NOT RENDERED, the same argument CHANNEL_CHAR_QUESTS makes. A
+# client given `{level, current_xp, needed_xp}` can draw a grid of meters and
+# sort by progress; a client given "Cutting 30 [====----]" can only print it.
+#
+# IT CARRIES THE UNLOCKS TOO, which is the one thing here that looks like too
+# much. It is static per skill -- what a recipe requires does not depend on who
+# is asking -- so it could have been a second request. Shipping it in the
+# snapshot is what makes clicking a skill instant instead of a round trip, and
+# the whole table is a few kilobytes for the entire roster.
+CHANNEL_CHAR_SKILLS: str = "char_skills"              # -> Char.Skills
+
 # Blackout-specific extensions.
 CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
@@ -63,6 +103,8 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
     CHANNEL_CHAR_ITEMS,
+    CHANNEL_CHAR_QUESTS,
+    CHANNEL_CHAR_SKILLS,
     CHANNEL_MAP,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
@@ -72,6 +114,218 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
 # name, and `clean_senddata` injects a key of the same name into every
 # outputfunc's kwargs. Named here so the guard in emit.py is not a bare string.
 RESERVED_CHANNEL_NAME: str = "options"
+
+
+# ─── Text routing ──────────────────────────────────────────────────
+
+# What a line of game TEXT is about, so a client can put it somewhere.
+#
+# WHY THESE LIVE HERE, beside the channel names. `send_text` and `send_default`
+# are two halves of one wire -- the client's dispatcher tells them apart by the
+# outputfunc name and nothing else -- and a `type` tag is categorically the same
+# thing as a channel name: a routing name the SERVER owns and a client reads.
+# The generator, its output paths, its banner and its staleness test all exist
+# here already, for exactly this kind of fact.
+#
+# HOW IT REACHES A CLIENT. `msg(text=(line, {"type": "combat"}))` becomes the
+# outputfunc `("text", (line,), {"type": "combat"})`; `clean_senddata` carries
+# the kwargs through untouched and the godotwebsocket contrib pops only
+# `options` before it serialises, so the tag arrives intact. Telnet and MSDP
+# ignore it, which is the point of putting it in kwargs rather than in the prose.
+#
+# WHAT OWNS WHAT, and this is the line that decides every argument about a tab:
+#
+#     The SERVER says what a line IS.       -- this table
+#     The CLIENT says which tab shows it.   -- and the player may override it
+#
+# There is no server fact naming a tab, and there must not be one. The
+# consequence, stated because it will otherwise be read as a bug: a type no tab
+# claims is NOT lost. It appears in the client's `All` tab, which is where the
+# player is by default -- the same degradation an item with no art gets from the
+# mesh ladder.
+#
+# UNTAGGED IS A REAL STATE AND IT IS FINE. EvMenu nodes, `page`, and a good deal
+# of Evennia's error prose carry no tag at all, and requiring every call site in
+# the game to be correct before anything renders would be the wrong order of
+# work. The client supplies MESSAGE_TYPE_GENERAL for a line that arrives without
+# one; nothing here defaults it, because a default applied server-side would make
+# "nobody has tagged this yet" indistinguishable from "this is general".
+
+# The kwarg key itself. Named so no call site types the string, and so the
+# scanner in tests/test_message_types.py has one thing to look for.
+MESSAGE_TYPE_KEY: str = "type"
+
+
+# Tags Evennia already sends.
+#
+# THESE ARE NOT INVENTED HERE AND NOTHING IN BLACKOUT WRITES THEM. Evennia's own
+# hooks and commands already tag a good deal of what a player reads, and the
+# values below are ITS spelling, read off the installed engine:
+#
+#     objects.py:at_say           -> "say" / "whisper"
+#     general.py:CmdPose          -> "pose"
+#     general.py:CmdLook,
+#       objects.py:at_post_puppet -> "look"
+#     help.py:CmdHelp             -> "help"
+#     building.py:CmdExamine      -> "examine"
+#     objects.py:announce_move_*  -> whatever `move_type` was passed
+#
+# So they are DECLARED, not implemented: a client tab may name them and the game
+# needs no override to produce them. Copying the engine's vocabulary rather than
+# inventing a parallel one is the same call the moderator egg makes when it types
+# Evennia's own `ban` through execute_cmd -- there is one owner of what a say is
+# called, and it is upstream.
+#
+# `whisper`, and not `tell`, for exactly that reason.
+MESSAGE_TYPE_LOOK: str = "look"
+MESSAGE_TYPE_POSE: str = "pose"
+MESSAGE_TYPE_SAY: str = "say"
+MESSAGE_TYPE_WHISPER: str = "whisper"
+MESSAGE_TYPE_HELP: str = "help"
+MESSAGE_TYPE_EXAMINE: str = "examine"
+
+# An arrival or a departure. `announce_move_from`/`_to` tag with whatever
+# `move_type` they were given, so the tag is the MOVE KIND rather than one fixed
+# name -- and Blackout passes `get`, `drop`, `buy`, `sell` and `craft` as well as
+# these two.
+#
+# Only the two that reach a player un-quieted are declared. The rest go with
+# `quiet=True` and announce nothing; if one ever stops being quiet it lands in
+# the client's `All` tab like any other unclaimed type, which is the documented
+# degradation and not a bug.
+MESSAGE_TYPE_MOVE: str = "move"
+MESSAGE_TYPE_TELEPORT: str = "teleport"
+
+
+# Tags Blackout sends itself.
+
+# The fallback a client applies to an untagged line. Never sent.
+MESSAGE_TYPE_GENERAL: str = "general"
+
+# Something happening in the room that Blackout narrates itself: sitting down,
+# standing up, an object reacting. Distinct from `look`, which is the engine
+# describing the room, and from `move`, which is somebody entering or leaving.
+MESSAGE_TYPE_ROOM: str = "room"
+
+# The ASCII map printed above a room description.
+#
+# `xymap`, and NOT the `map` this was renamed to for half a day. The xyzgrid
+# contrib msg's the map itself on the ordinary no-aura path -- see
+# XYZRoom.return_appearance, whose docstring says "the map is tagged with
+# type='xymap'" -- so the engine already owns this spelling and a second one
+# here would mean the two paths reached a client under different tags, with a
+# tab claiming only the rarer of them.
+#
+# It is the same rule as `say` and `look` above, learned the same way: where
+# Evennia already tags something, its spelling wins.
+MESSAGE_TYPE_MAP: str = "xymap"
+
+# One resolved swing: a hit, a miss, a death.
+#
+# This was `testing` until 08/28/2026 -- a placeholder that shipped, and the only
+# tag combat had.
+MESSAGE_TYPE_COMBAT: str = "combat"
+
+# An HP readout in prose.
+#
+# ONE tag, where there were two. `target_health` and `player_health` were two
+# names for one thing, distinguished only by whose HP it was -- which the line
+# itself already says and which `char_vitals` already carries structurally.
+MESSAGE_TYPE_VITALS: str = "vitals"
+
+# XP awards and level-ups.
+MESSAGE_TYPE_PROGRESSION: str = "progression"
+
+# The carried grid, and picking things up, dropping and wearing them. Shares the
+# engine's spelling: Evennia's own CmdInventory tags `inventory` too, and
+# Blackout's command overrides it.
+MESSAGE_TYPE_INVENTORY: str = "inventory"
+
+MESSAGE_TYPE_CRAFTING: str = "crafting"
+MESSAGE_TYPE_GATHERING: str = "gathering"
+MESSAGE_TYPE_QUEST: str = "quest"
+
+# Shops and banks. One tag for both: they are the same thing to a player reading
+# a log, and a client that wanted them apart could split on the command it sent
+# rather than on a tag.
+MESSAGE_TYPE_COMMERCE: str = "commerce"
+
+# What an NPC says, including every EvMenu node that renders as speech.
+MESSAGE_TYPE_DIALOGUE: str = "dialogue"
+
+# An Evennia Channel. The engine stamps `from_channel` on these and no `type`,
+# so Account.channel_msg adds one; see typeclasses/accounts.py.
+MESSAGE_TYPE_CHANNEL: str = "channel"
+
+# Connection notices, permission refusals, and anything the server says as itself
+# rather than as the world.
+MESSAGE_TYPE_SYSTEM: str = "system"
+
+# Every tag a client may be told about, whoever sends it.
+#
+# The guard test scans BLACKOUT's source as text for `"type": "..."` literals and
+# asserts each value is in here -- so a typo fails the suite instead of routing a
+# line to a tab that will never exist. It is a MEMBERSHIP set and never a census:
+# adding a type is one constant and one entry, and no test lists them.
+#
+# MESSAGE_TYPE_GENERAL is a member even though nothing sends it, because a client
+# names it when declaring which types its fallback tab shows.
+MESSAGE_TYPES: frozenset = frozenset((
+    MESSAGE_TYPE_LOOK,
+    MESSAGE_TYPE_POSE,
+    MESSAGE_TYPE_SAY,
+    MESSAGE_TYPE_WHISPER,
+    MESSAGE_TYPE_HELP,
+    MESSAGE_TYPE_EXAMINE,
+    MESSAGE_TYPE_MOVE,
+    MESSAGE_TYPE_TELEPORT,
+    MESSAGE_TYPE_GENERAL,
+    MESSAGE_TYPE_ROOM,
+    MESSAGE_TYPE_MAP,
+    MESSAGE_TYPE_COMBAT,
+    MESSAGE_TYPE_VITALS,
+    MESSAGE_TYPE_PROGRESSION,
+    MESSAGE_TYPE_INVENTORY,
+    MESSAGE_TYPE_CRAFTING,
+    MESSAGE_TYPE_GATHERING,
+    MESSAGE_TYPE_QUEST,
+    MESSAGE_TYPE_COMMERCE,
+    MESSAGE_TYPE_DIALOGUE,
+    MESSAGE_TYPE_CHANNEL,
+    MESSAGE_TYPE_SYSTEM,
+))
+
+
+# ─── Graphical clients ───────────────────────────────────────────────────────
+
+# The `protocol_key` the godotwebsocket contrib stamps on every session it
+# accepts.
+#
+# Named here rather than typed at the one place that reads it, because it is a
+# fact about the WIRE and this module owns those. The contrib sets it in its
+# own `__init__`; it is not configurable and not ours, so a mismatch would be
+# silent -- every Godot session would look like a telnet one and the map below
+# would keep being printed at a client already drawing it.
+GODOT_PROTOCOL_KEY: str = "godotclient/websocket"
+
+# Attribute on a Character deciding whether the ASCII map is msg'd on look.
+#
+# UNSET is the normal case and means "decide from the client": a session on the
+# protocol above draws its own minimap from `blackout_map`, so printing thirty
+# lines of box characters into its log on every step is noise nothing reads.
+# Everyone else gets the map, exactly as before.
+#
+# It is an OVERRIDE and not a switch, and the difference matters: a Godot player
+# who wants the text map can set it True and keep it, and a telnet player who is
+# tired of it can set it False. Neither is a client capability, which is why
+# this is a per-character attribute rather than something the client announces.
+#
+# WHY IT EXISTS AT ALL. `XYZRoom.return_appearance` msg's the map on every
+# `look`, and `look` runs on every room change -- so on a 95-node map the text
+# pane's dominant content was a picture the graphical client was already
+# drawing beside it. This is the single largest reduction in log noise
+# available, and it costs one attribute read.
+ASCII_MAP_ATTR: str = "show_ascii_map"
 
 
 # ─── Subscription ────────────────────────────────────────────────────────────
@@ -150,6 +404,12 @@ STATEFEED_ENTITY_RADIUS: int = 10
 #     player opens their dossier and on resync, nowhere else. Nothing is
 #     scheduled behind a dropped one, so a cap here would mean a player pressing
 #     `score` twice in a second and getting no answer the second time.
+#   - CHANNEL_CHAR_SKILLS is uncapped for the same reason as the summary, and
+#     it is worth stating separately because the channel LOOKS event-driven:
+#     combat awards XP on every hit. It is not published on an XP award. It
+#     fires when a level actually MOVES, when the player asks about skills, and
+#     on resync -- so its rate is bounded by the player, not by the tick, and a
+#     cap would only mean `skills` twice in a second answering once.
 #   - CHANNEL_CHAR_ITEMS is uncapped, and this is the one most likely to be
 #     "fixed" by someone reading only the first paragraph. It LOOKS like a
 #     continuous value -- a whole-grid snapshot, each superseding the last --
@@ -199,6 +459,7 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_VITALS,
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
+    CHANNEL_CHAR_SKILLS,
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,

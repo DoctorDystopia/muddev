@@ -22,7 +22,6 @@ from evennia.utils import logger
 
 from . import events, mapexport
 from .emit import emit
-from .payloads import CharStatusPayload, CharVitalsPayload
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -56,46 +55,22 @@ def _send_room(observer) -> int:
 def _send_self(observer) -> int:
     """Push the observer's own avatar, vitals and status.
 
+    Delegates to the same emitters the live paths use, forced past the rate
+    caps -- the choice _send_room already makes, for the reason given there.
+    Vitals and status were assembled here by hand until 08/28/2026, which made
+    this the second definition of both payloads and the only one that ran: no
+    live emitter for char_status existed at all, so the levels a client drew
+    were the ones it had at login for as long as it stayed connected.
+
     The avatar goes first, and it is the only ordering here that matters: it
     is the observer's identity, and vitals arriving before it describe a
     character the client cannot yet draw.
     """
     sent = events.emit_avatar(observer, force=True)
-
-    max_hp = getattr(observer, "max_hp", 0)
-    vitals = CharVitalsPayload(hp=getattr(observer, "hp", 0), max_hp=max_hp)
-
-    skills = getattr(observer, "skills", None)
-    levels = {}
-
-    if skills is not None:
-        levels = _read_levels(skills)
-
-    status = CharStatusPayload(
-        in_combat=bool(getattr(observer, "in_combat", False)),
-        levels=levels,
-    )
-
-    sent += emit(observer, vitals, force=True)
-    sent += emit(observer, status, force=True)
+    sent += events.emit_vitals(observer, force=True)
+    sent += events.emit_status(observer, force=True)
 
     return sent
-
-
-def _read_levels(skills) -> dict:
-    """Snapshot every combat skill level as a plain {key: int} dict.
-
-    Deliberately narrowed to the combat skills. The full skill table is a
-    menu's concern, and a 3D view has nothing to draw with a Cutting level.
-    """
-    from systems.progression.skills.constants import COMBAT_SKILL_KEYS
-
-    levels = {}
-
-    for skill_key in COMBAT_SKILL_KEYS:
-        levels[skill_key] = skills.get_level(skill_key)
-
-    return levels
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -122,11 +97,14 @@ def send_full_state(observer) -> int:
         that receives room_info before it has the grid has nowhere to put the
         highlight, and would either buffer or draw a floating tile.
 
-        The dossier and the inventory go last, and are the only sends here
-        that can decline to happen: both pre-check the subscription because
-        building them is expensive -- the summary reads every handler on the
-        character, and the inventory syncs the grid and walks every item's
-        tags. Everything above them is cheap enough to build unconditionally.
+        The dossier, the skill roster, the quest log and the inventory go last,
+        and are the only sends here that can decline to happen: all four
+        pre-check the subscription because building them is expensive -- the
+        summary reads every handler on the character, the roster walks four
+        unlock registries once per skill, the quest log walks every active
+        step's objectives, and the inventory syncs the grid and walks every
+        item's tags. Everything above them is cheap enough to build
+        unconditionally.
 
         Wrapped, like every other feed path. at_sync runs on every single
         session sync, including during server startup; a failure here must
@@ -146,6 +124,8 @@ def send_full_state(observer) -> int:
         sent += _send_room(observer)
         sent += _send_self(observer)
         sent += events.emit_summary(observer, force=True)
+        sent += events.emit_skills(observer, force=True)
+        sent += events.emit_quests(observer, force=True)
         sent += events.emit_inventory(observer, force=True)
 
         return sent

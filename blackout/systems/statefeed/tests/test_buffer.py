@@ -147,6 +147,9 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             const.CHANNEL_CHAR_VITALS,
             const.CHANNEL_CHAR_STATUS,
             const.CHANNEL_CHAR_SUMMARY,
+            # The whole roster in one message, so the newest carries every
+            # level and every XP curve the one before it did.
+            const.CHANNEL_CHAR_SKILLS,
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,

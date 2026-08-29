@@ -65,10 +65,29 @@ _WEBCLIENT_JS = os.path.join(
 # skipped; see the module docstring.
 _ROOM_KIND_TABLE_SOURCES: tuple = (
     os.path.join(_WEBCLIENT_JS, "plugins", "blackout3d.js"),
-    os.path.join(_REPO_ROOT, "godot", "world", "world_view.gd"),
+    # Both tables moved out of world_view.gd on 08/28/2026, when the minimap
+    # became a second pane drawing the same map. This path moved WITH them, in
+    # the same change, because a source this scanner cannot find is one it
+    # silently stops checking -- which is the whole reason for the vacuity
+    # guard further down.
+    os.path.join(_REPO_ROOT, "godot", "world", "map_palette.gd"),
 )
 
 _MAP_ORDER_SOURCES: tuple = _ROOM_KIND_TABLE_SOURCES
+
+# Which skill category is drawn in which colour. The Godot pane's only: the
+# browser client has no skills screen, and a table one client does not have is
+# not drift.
+_SKILL_CATEGORY_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "skill_palette.gd"),
+)
+
+# Which map is surfaced with which terrain model. The Godot pane's only, for
+# now: the browser pane still draws every tile as a plain coloured slab, and a
+# table one client does not have is not drift.
+_TERRAIN_TABLE_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "map_palette.gd"),
+)
 
 # The table assignment, in either language. JS writes
 # `const ROOM_KIND_COLORS = {`, GDScript writes `const ROOM_KIND_COLORS := {`;
@@ -78,6 +97,17 @@ _ROOM_KIND_TABLE_RE = re.compile(
 
 _MAP_ORDER_RE = re.compile(
     r"Z_LAYOUT_ORDER\s*:?=\s*\[(.*?)\]", re.DOTALL)
+
+_TERRAIN_TABLE_RE = re.compile(
+    r"TILE_MODELS\s*:?=\s*\{(.*?)\}", re.DOTALL)
+
+_SKILL_CATEGORY_TABLE_RE = re.compile(
+    r"SKILL_CATEGORY_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
+
+# `"map name": "asset_key"` -- both halves of a terrain row at once, because
+# the two are checked against DIFFERENT sources and a row read as two loose
+# lists could not say which map named the bad key.
+_TABLE_PAIR_RE = re.compile(r'"([^"]+)"\s*:\s*"([^"]+)"')
 
 # A double-quoted string that is a table KEY -- followed by a colon. This is
 # what keeps `Color("cc6633")` on the GDScript value side out of the key set.
@@ -203,6 +233,64 @@ def _extract_map_order(source):
     return _QUOTED_RE.findall(match.group(1))
 
 
+def _extract_terrain_rows(source):
+    """
+    Purpose: Pull the map -> terrain-asset rows out of a client's table.
+
+    Entry:
+        source - client source text, comments already stripped.
+
+    Exit/Returns:
+        A list of (map_name, asset_key) pairs, or None when the file declares
+        no table.
+
+    Module Globals:
+        _TERRAIN_TABLE_RE, _TABLE_PAIR_RE read.
+
+    Methodology:
+        Both halves are read together. They are checked against different
+        sources -- the map modules and the model manifest -- so a failure has
+        to be able to name the row it came from rather than the half.
+
+    Notes/References:
+        None
+    """
+    match = _TERRAIN_TABLE_RE.search(source)
+
+    if not match:
+        return None
+
+    return _TABLE_PAIR_RE.findall(match.group(1))
+
+
+def _packed_asset_keys():
+    """
+    Purpose: Every asset key the build manifest knows how to produce.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        A set of asset-key strings.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read from assets/model_manifest.json through pack_model, which CLAUDE.md
+        already names as the one file deciding which models exist. NOT from the
+        served tree: a key whose .glb has simply not been packed on this
+        machine yet is a build state, not a client typo, and failing on it
+        would make the check depend on whether someone had run the packer.
+
+    Notes/References:
+        assets/ is import-safe by design; see test_model_budgets.py.
+    """
+    from assets import pack_model
+
+    return {asset_key for _source, asset_key in pack_model.load_manifest()}
+
+
 def _map_modules():
     """
     Purpose: Import the map modules named above.
@@ -309,7 +397,98 @@ def _server_map_names():
     return names
 
 
+def _server_skill_categories():
+    """
+    Purpose: Every category a registered skill actually declares.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        A set of category name strings.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read off the skill classes, which are the one owner of a skill's
+        category -- the same relationship _server_room_kinds draws with the map
+        modules. Derived rather than listed, so a category introduced with a
+        new skill needs no edit here.
+
+    Notes/References:
+        The registry walks skill_defs/ at first touch. That package is safe to
+        import; blackout/scripts/ is the directory this file must never reach,
+        and it does not.
+    """
+    from systems.progression.skills.registry import SKILL_REGISTRY
+
+    return set(str(cls.category) for cls in SKILL_REGISTRY.values())
+
+
 # ─── Tests ───────────────────────────────────────────────────────────────────
+
+
+class ClientSkillCategoryTests(unittest.TestCase):
+    """Every skill category a client colours by name must be one that exists."""
+
+    def test_no_client_names_a_category_that_does_not_exist(self):
+        """
+        A key matching no skill's category is dead configuration: the band it
+        was meant to colour is silently drawing the fallback instead, which
+        looks like a styling choice rather than a typo. That is exactly how the
+        dead "Pole clearing" room kind survived in two clients.
+
+        The reverse is deliberately NOT checked. A category with no entry draws
+        the fallback and the grid is complete without it, which is what lets a
+        skill added on the server reach the pane with no client edit at all.
+        """
+        known = _server_skill_categories()
+
+        for path in _SKILL_CATEGORY_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            match = _SKILL_CATEGORY_TABLE_RE.search(source)
+
+            if match is None:
+                continue
+
+            for key in _TABLE_KEY_RE.findall(match.group(1)):
+                with self.subTest(client=os.path.basename(path), category=key):
+                    self.assertIn(
+                        key, known,
+                        "'%s' is coloured by %s but no skill declares it. "
+                        "Skills it was meant to band are falling through to "
+                        "the fallback hue." % (key, os.path.basename(path)))
+
+    def test_a_client_that_is_here_declares_the_table(self):
+        """
+        The vacuity guard for the check above, in the shape ClientTerrainTile
+        Tests uses: that check SKIPS a file whose table it cannot match, so
+        renaming SKILL_CATEGORY_COLORS would turn it green while checking
+        nothing.
+
+        A client file that is not here at all is still skipped -- the Godot
+        client lives on a branch, per the module docstring. What is caught is
+        the file being present and the table having moved out of it.
+        """
+        for path in _SKILL_CATEGORY_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertIsNotNone(
+                    _SKILL_CATEGORY_TABLE_RE.search(source),
+                    "%s exists but declares no SKILL_CATEGORY_COLORS table. "
+                    "Either it was renamed or the palette was removed; the "
+                    "drift check on it is now inert." % path)
+
+
 
 class ClientRoomKindTests(unittest.TestCase):
     """Every room kind a client colours by name must be a kind that exists."""
@@ -406,6 +585,90 @@ class ClientMapOrderTests(unittest.TestCase):
                         name, known,
                         "'%s' is placed by %s but no map module declares that "
                         "zcoord." % (name, os.path.basename(path)))
+
+
+class ClientTerrainTileTests(unittest.TestCase):
+    """Every map surfaced with terrain art must name a real map and real art."""
+
+    def _rows(self):
+        """Every terrain row every client present declares, with its file."""
+        rows = []
+
+        for path in _TERRAIN_TABLE_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            found = _extract_terrain_rows(source)
+
+            if found is None:
+                continue
+
+            for name, asset_key in found:
+                rows.append((os.path.basename(path), name, asset_key))
+
+        return rows
+
+    def test_a_client_that_is_here_declares_the_table(self):
+        """
+        The vacuity guard for the two checks below, in the shape this table
+        needs it: both skip a client whose table they cannot match, so renaming
+        TILE_MODELS would turn them green while checking nothing.
+
+        A client file that is not here at all is still skipped -- the Godot
+        client lives on a branch, per the module docstring.
+        """
+        for path in _TERRAIN_TABLE_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertIsNotNone(
+                    _extract_terrain_rows(source),
+                    "%s exists but declares no TILE_MODELS table. Either it "
+                    "was renamed or the terrain layer was removed; the drift "
+                    "checks on it are now inert." % path)
+
+    def test_no_client_surfaces_a_map_that_does_not_exist(self):
+        """
+        A key matching no map module is dead configuration of the worst kind
+        here: the map it meant to surface keeps the plain slab, which is
+        exactly what an unnamed map looks like, so nothing about the result
+        says the name was wrong.
+        """
+        known = _server_map_names()
+
+        for client, name, _asset_key in self._rows():
+            with self.subTest(client=client, map=name):
+                self.assertIn(
+                    name, known,
+                    "'%s' is surfaced by %s but no map module declares that "
+                    "zcoord, so nothing is drawn and nothing says so."
+                    % (name, client))
+
+    def test_every_terrain_asset_is_one_the_build_can_produce(self):
+        """
+        The other half, and it fails the same way round: an asset key with no
+        manifest row is never fetched, never 404s, and leaves the slab.
+
+        This is the direction the asymmetry in the module docstring does NOT
+        cover, and deliberately. A room kind with no colour entry is fine
+        because the fallback is a colour; a map naming art that cannot exist
+        has no fallback worth having -- it is simply a line that does nothing.
+        """
+        known = _packed_asset_keys()
+
+        for client, name, asset_key in self._rows():
+            with self.subTest(client=client, asset_key=asset_key):
+                self.assertIn(
+                    asset_key, known,
+                    "%s surfaces '%s' with '%s', which assets/"
+                    "model_manifest.json does not build. The map keeps its "
+                    "plain slab and nothing reports it."
+                    % (client, name, asset_key))
 
 
 class ClientTableDiscoveryTests(unittest.TestCase):

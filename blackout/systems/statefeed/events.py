@@ -27,6 +27,9 @@ from .payloads import (
     AuraPayload,
     CharAvatarPayload,
     CharItemsPayload,
+    CharQuestsPayload,
+    CharSkillsPayload,
+    CharStatusPayload,
     CharSummaryPayload,
     CharVitalsPayload,
     CombatPayload,
@@ -92,6 +95,59 @@ def _visible_rooms(room) -> list:
     from systems.combat.auras.targeting import rooms_within_radius
 
     return rooms_within_radius(room, const.STATEFEED_ENTITY_RADIUS)
+
+
+
+def _read_levels(skills) -> dict:
+    """
+    Purpose: Snapshot the observer's combat skill levels as {key: int}.
+
+    Entry:
+        skills - a SkillHandler, a StatBlockSkills, or None. None is the
+                 supported "this entity has no skills" case and returns {}.
+
+    Exit/Returns:
+        Returns a plain dict of skill key to integer level.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Deliberately narrowed to the COMBAT skills, and the narrowing is the
+        interesting part. char_status feeds the 3D view, which has nothing to
+        draw with a Cutting level; the full table with its XP curves is
+        char_summary's job, built by systems/summary/ from the same handler
+        reads that render the telnet screen. A skills TAB should read that
+        channel, not widen this one -- otherwise two channels carry the same
+        fact and the client gets to choose which is right.
+
+        Iterates COMBAT_SKILL_KEYS rather than db.skills, so a combat skill
+        added after this character was created reports 0 instead of being
+        silently absent from the table -- the same choice get_total_level
+        makes for the same reason.
+
+        The import is inside the routine. This module is imported by
+        typeclasses/mixins.py, which every Character and NPC pulls in at
+        startup, and the skills package walks its own registry at import time.
+
+    Notes/References:
+        Moved here from resync.py, which was its only caller until
+        emit_status existed. See that routine.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    if skills is None:
+        return {}
+
+    from systems.progression.skills.constants import COMBAT_SKILL_KEYS
+
+    levels = {}
+
+    for skill_key in COMBAT_SKILL_KEYS:
+        levels[skill_key] = skills.get_level(skill_key)
+
+    return levels
 
 
 
@@ -254,16 +310,81 @@ def emit_miss(context) -> int:
 
 
 
-def emit_vitals(entity) -> int:
+def emit_vitals(entity, force: bool = False) -> int:
     """Publish one entity's own health to its own sessions.
 
     Rate-capped by channel config, so calling this liberally on any HP change
     is safe -- the cap collapses a burst into one send.
+
+    `force` is for the half of this payload the cap cannot be trusted with. hp
+    moves constantly and is re-sent every time, so a dropped send repairs
+    itself on the next one; max_hp moves once per Fortitude level and nothing
+    repeats it, so its send must not be the one the cap happens to eat. See
+    CombatEntity's max_hp setter.
     """
     max_hp = getattr(entity, "max_hp", 0)
     payload = CharVitalsPayload(hp=getattr(entity, "hp", 0), max_hp=max_hp)
 
-    return emit(entity, payload)
+    return emit(entity, payload, force=force)
+
+
+
+def emit_status(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the observer's own non-vital state -- their combat skill
+    levels and whether they are fighting -- to the observer alone.
+
+    Entry:
+        observer - the puppeted Character, or anything exposing `skills` and
+                   `in_combat`. An entity with neither is supported and sends
+                   an empty level table rather than raising.
+        force    - True to bypass the channel's 1s rate cap. Used by resync.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        This routine is why the channel exists at all. Until it was written
+        char_status was built in exactly ONE place -- resync -- so a client
+        received its level table at login and never again: levelling a skill
+        moved every reader on the server while the graphical client kept
+        drawing the levels the character had when it connected. That is the
+        same defect the max_hp setter fixes on the vitals channel, one channel
+        over, and it is why resync now DELEGATES here instead of assembling
+        the payload itself. A resync that built its own copy would be a second
+        definition of "what a status message contains", agreeing with this one
+        only until somebody edited one of them.
+
+        The subscriber check happens FIRST, for the same reason emit_summary
+        does it. `_read_levels` calls get_level once per combat skill, and
+        get_level backfills a missing slot through ensure_skill -- a WRITE.
+        Cheap, idempotent and wanted when a client is listening; pure waste on
+        a server where none is.
+
+    Notes/References:
+        Deliberately does NOT carry the full skill table. See _read_levels.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharStatusPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    skills = getattr(observer, "skills", None)
+    payload = CharStatusPayload(
+        in_combat=bool(getattr(observer, "in_combat", False)),
+        levels=_read_levels(skills),
+    )
+
+    return emit(observer, payload, force=force)
 
 
 
@@ -371,6 +492,118 @@ def emit_summary(observer, force: bool = False) -> int:
 
     return emit(observer, payload, force=force)
 
+
+
+
+def emit_skills(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the observer's whole skill roster to the observer alone.
+
+    Entry:
+        observer - the puppeted Character. One with no skills handler is a
+                   supported no-op.
+        force    - True to bypass rate caps. The channel is uncapped, so this
+                   is a formality that keeps the resync call shape identical to
+                   every other send.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, and it matters more here than
+        anywhere else in this module. Building this payload walks the recipe
+        registry, the gatherable table, the equipment requirements and the aura
+        registry once per skill -- it is the most expensive payload in the feed
+        by some distance. emit() would discard the result for free, but only
+        after all of that work was already done.
+
+        WHERE IT IS CALLED FROM is the other half of that cost argument. Not on
+        an XP award: combat awards XP on every hit, and the roster's numbers
+        would be rebuilt several times a second for a screen nobody is looking
+        at. It fires when a level actually MOVES, when the player asks about
+        skills, and on resync -- so its rate is bounded by the player rather
+        than by the tick. See CHANNEL_MIN_INTERVAL_SECONDS on why that also
+        makes a rate cap the wrong tool here.
+
+        systems.statefeed.skills is imported inside the routine. It reaches
+        systems/progression/skills/detail.py, which reaches crafting, auras and
+        equipment; this module is imported by typeclasses/mixins.py, which
+        every Character and NPC pulls in at startup, so a top-level import
+        would drag all of that into typeclass import time.
+
+    Notes/References:
+        The payload is built by systems/statefeed/skills.py from the same
+        per-skill renderer the text sheet uses, so the grid and the sheet
+        cannot describe a skill differently.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    from . import skills as skills_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharSkillsPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    return emit(observer, skills_serializer.build_payload(observer),
+                force=force)
+
+
+def emit_quests(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the observer's quest log to the observer alone.
+
+    Entry:
+        observer - the puppeted Character. One with no quest handler is a
+                   supported no-op.
+        force    - True to bypass rate caps. The channel is uncapped, so this
+                   is a formality that keeps the resync call shape identical to
+                   every other send.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the same reason emit_summary
+        does it: building the log walks every active quest's current step and
+        every objective on it, and emit() would discard the result for free --
+        but only after the work was already done.
+
+        systems.statefeed.quests is imported inside the routine. It reaches the
+        quest loader, which imports every module under systems/quests/content/;
+        this module is imported by typeclasses/mixins.py, which every Character
+        and NPC pulls in at startup, so a top-level import would drag that walk
+        into typeclass import time and couple the two systems' import order.
+
+    Notes/References:
+        The payload is built by systems/statefeed/quests.py, entirely through
+        QuestHandler's public read API -- db.active_quests keeps one owner.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    from . import quests as quests_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharQuestsPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    return emit(observer, quests_serializer.build_payload(observer),
+                force=force)
 
 
 def emit_inventory(observer, force: bool = False, ignore=None) -> int:

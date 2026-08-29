@@ -207,6 +207,49 @@ class CharSummaryPayload(_Payload):
 
 
 @dataclass
+class CharSkillsPayload(_Payload):
+    """Every skill the observer has, and what each one opens. Char.Skills.
+
+    A SNAPSHOT of the whole roster rather than one message per skill. The
+    roster is small and fixed by SKILL_REGISTRY, and a skills SCREEN wants all
+    of it at once -- a client assembling a grid from eight arriving messages
+    would have to decide when it had them all.
+
+    `skills` is a LIST, not a dict keyed by skill key, and that is the whole
+    reason a client needs no ordering table. A dict would leave the client to
+    decide what comes first, and the only honest answer to that lives in the
+    registry -- so the order ships, and `categories` ships beside it so a grid
+    can be grouped without the client inventing category order either.
+
+    THE PAYLOAD IS PER-SKILL COMPLETE. Each row carries its level, its XP
+    curve, its description and its unlock ladder, so clicking a skill costs no
+    round trip. `current_xp` / `needed_xp` are progress INTO the level and that
+    level's own threshold; `total_xp` is cumulative. Both ship under names that
+    say which they are, because deriving one from the other is exactly the
+    mistake that once rendered a "1154 / 152" bar.
+
+    `command` on each row is the line a telnet player would type to read that
+    skill's sheet. The server names it for the reason serialize_entity names
+    `interact`: a client that composed it would be spelling a command, and a
+    client verb table has been deleted twice here for being wrong within a
+    week.
+
+    `closest` is the one fact no single skill can produce -- it is a comparison
+    across the roster -- and it is `{}` rather than absent when every skill
+    sits at the cap, which is a real state and not an error.
+    """
+
+    channel = const.CHANNEL_CHAR_SKILLS
+
+    skills: list = field(default_factory=list)      # [{key, name, level, ...}]
+    categories: list = field(default_factory=list)  # category names, in order
+    total_level: int = 0
+    total_xp: int = 0
+    max_level: int = 0
+    closest: dict = field(default_factory=dict)
+
+
+@dataclass
 class CharItemsPayload(_Payload):
     """The whole carried inventory and every equipment slot. Char.Items.List.
 
@@ -250,6 +293,34 @@ class CharItemsPayload(_Payload):
     items: list = field(default_factory=list)        # the carried grid
     equipped: list = field(default_factory=list)     # what is worn
     equip_slots: list = field(default_factory=list)  # every frame to draw
+
+
+@dataclass
+class CharQuestsPayload(_Payload):
+    """The observer's quest log. Char.Quests.
+
+    A SNAPSHOT, for the reason CharItemsPayload gives at length: the mutation
+    points are many -- accepting, every `notify_quests` fan-out, a step
+    completing, a forced jump from the moderator tool -- and a delta protocol
+    would rot at the first one anybody forgot. It is also small: a handful of
+    quests with a handful of objectives each.
+
+    `active` rows carry the CURRENT step only. A client showing the steps
+    already finished would be showing a history the handler does not keep, and
+    one showing the steps ahead would be spoiling the quest.
+
+    OBJECTIVES ARE STRUCTURED. Each is `{key, description, current, required,
+    counted, done}`. `required` is 1 for a one-shot objective rather than
+    absent, so a client can draw the same progress bar for both without a
+    branch; `counted` is what says whether to render "3/5" or a tickbox. The
+    prose form lives in QuestHandler.objective_lines and stays there -- it is
+    what the telnet screen prints.
+    """
+
+    channel = const.CHANNEL_CHAR_QUESTS
+
+    active: list = field(default_factory=list)     # [{key, title, step, ...}]
+    completed: list = field(default_factory=list)  # [{key, title}, ...]
 
 
 @dataclass
