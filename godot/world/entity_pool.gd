@@ -442,7 +442,7 @@ func _build(entity: Dictionary) -> Node3D:
 func _slot_position(origin: Vector3, tile: String, index: int,
 		total: int) -> Vector3:
 	var spread := maxi(total, 1)
-	var turn := float(WorldView.stable_hash(tile) % 100) / 100.0
+	var turn := float(MapPalette.stable_hash(tile) % 100) / 100.0
 	var angle := (float(index) + turn * RING_TURN_SHARE) / float(spread) * TAU
 	var radius := _ring_radius(spread)
 

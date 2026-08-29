@@ -75,6 +75,20 @@ const PRESENTATION := {
 		"opaque": true,
 		"offset": Vector3(0.0, 0.16, 0.0),
 	},
+
+	# The desert tileset's two materials both arrive with alphaMode BLEND, and
+	# its palette has no alpha below 255 anywhere in it -- Blender writes BLEND
+	# for any material with an RGBA image, whether or not the image uses the
+	# fourth channel. Harmless on a prop; not on the GROUND. A transparent
+	# surface goes into the sorted queue, and the ground is the one thing every
+	# entity, prop and marker in the pane is drawn on top of, so the sorting it
+	# would take part in is against everything.
+	#
+	# Verified 08/28/2026 by sampling the packed palette: the alpha channel is
+	# 255 across all 1024 squares. That is what makes this a correction rather
+	# than a change -- forcing it opaque removes nothing that was ever drawn.
+	"tile_oasis": {"opaque": true},
+	"tile_oasis_outskirts": {"opaque": true},
 }
 
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.

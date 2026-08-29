@@ -415,6 +415,47 @@ static func bounds_of(root: Node3D) -> AABB:
 	return bounds
 
 
+## Every mesh under a node, paired with where it sits in the ROOT's space.
+##
+## Returns an Array of `[Mesh, Transform3D]`. Empty for a model that draws
+## nothing, which a caller should treat the same way it treats no model at all.
+##
+## Public for the same reason [method bounds_of] is, and for the same caller:
+## the world pane draws the ground as a MultiMesh, and a MultiMesh takes a MESH
+## and a transform per instance rather than a scene to copy. Taking a model
+## apart is this file's business — it is the one that knows a glTF arrives as a
+## tree of MeshInstance3D wrapped in a normalising scale — and doing it in the
+## pane would put a second walker of that tree beside [method _mesh_bounds],
+## free to disagree with it about which space it is answering in.
+##
+## The ROOT's own transform is excluded, exactly as [method _mesh_bounds]
+## excludes it, so a part transform and a bounds measurement of the same model
+## describe the same space and can be used in one placement.
+static func mesh_parts(root: Node3D) -> Array:
+	var parts: Array = []
+	var stack: Array = [[root, Transform3D.IDENTITY]]
+
+	while not stack.is_empty():
+		var entry: Array = stack.pop_back()
+		var node: Node = entry[0]
+		var to_root: Transform3D = entry[1]
+		var instance := node as MeshInstance3D
+
+		if instance != null and instance.mesh != null:
+			parts.append([instance.mesh, to_root])
+
+		for child: Node in node.get_children():
+			var spatial := child as Node3D
+			var child_transform := to_root
+
+			if spatial != null:
+				child_transform = to_root * spatial.transform
+
+			stack.append([child, child_transform])
+
+	return parts
+
+
 ## Bounds of the meshes alone, in the root's space.
 static func _mesh_bounds(root: Node3D) -> AABB:
 	var bounds := AABB()
