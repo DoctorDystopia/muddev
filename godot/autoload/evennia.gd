@@ -23,7 +23,17 @@ signal opened
 ## impossible to shut down.
 signal closed(code: int, reason: String, requested: bool)
 ## One line of game output, already BBCode, ready for a RichTextLabel.
-signal text_received(bbcode: String)
+##
+## `kwargs` is the outputfunc's OWN keyword payload, and for `text` that is
+## where the routing tag lives: `msg(text=(line, {"type": "combat"}))` reaches
+## here as `{"type": "combat"}`. The contrib pops `options` server-side before
+## it sends, so what arrives is the game's own kwargs and nothing else.
+##
+## Emitted even when empty, so a consumer has one signature to bind rather than
+## two. What an absent `type` MEANS is the consumer's business -- see
+## [ChatLog], which supplies the default; a client that dropped an untagged
+## line would lose everything Evennia's own commands say.
+signal text_received(bbcode: String, kwargs: Dictionary)
 ## One structured state-feed message. `channel` is the outputfunc name
 ## (`room_info`, `blackout_map`, ...); see blackout/systems/statefeed/constants.py.
 signal channel_received(channel: String, payload: Dictionary)
@@ -160,16 +170,21 @@ func _dispatch(raw: String) -> void:
 
 	var func_name: String = frame[0]
 
+	var payload: Dictionary = frame[2]
+	payload.erase(_OPTIONS_KEY)
+
 	# `text` is the only outputfunc whose payload lives in args rather than
 	# kwargs. Blackout sends no `prompt` -- the char_vitals channel is what a
 	# graphical client draws a prompt from -- so one branch covers game output.
+	#
+	# The kwargs go out WITH the line rather than being dropped here. They were
+	# dropped until 08/28/2026, which is why the routing tag five call sites
+	# were already sending had never reached a pane.
 	if func_name == "text":
 		for line: Variant in frame[1]:
-			text_received.emit(str(line))
+			text_received.emit(str(line), payload)
 		return
 
-	var payload: Dictionary = frame[2]
-	payload.erase(_OPTIONS_KEY)
 	channel_received.emit(func_name, payload)
 
 

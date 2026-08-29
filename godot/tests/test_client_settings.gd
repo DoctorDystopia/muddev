@@ -18,6 +18,9 @@ func _ready() -> void:
 	_a_corrupt_file_falls_back_rather_than_failing()
 	_reset_restores_the_shipped_defaults()
 	_changed_fires_for_a_real_change_only()
+	_the_two_panes_toggle_independently()
+	_a_dragged_divider_is_remembered_and_clamped()
+	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 
 	_clean()
 
@@ -74,6 +77,10 @@ func _values_are_clamped_on_the_way_in() -> void:
 	_expect(is_equal_approx(s.ui_scale, ClientSettings.MAX_UI_SCALE),
 		"a runaway scale is clamped")
 
+	s.set_text_split(0)
+	_expect(s.text_split == ClientSettings.MIN_SPLIT,
+		"a divider dragged to nothing is clamped up")
+
 
 func _a_corrupt_file_falls_back_rather_than_failing() -> void:
 	# Clamping on READ, not only on write, is what makes an unusable client
@@ -104,6 +111,17 @@ func _reset_restores_the_shipped_defaults() -> void:
 	_expect(reloaded.font_size == ClientSettings.DEFAULT_FONT_SIZE,
 		"and the reset was written, not just held in memory")
 
+	s.set_show_inventory(false)
+	s.set_text_split(500)
+	s.set_skill_detail(ClientSettings.SKILL_DETAIL_LOG)
+	s.reset()
+	_expect(s.show_inventory == ClientSettings.DEFAULT_SHOW_INVENTORY,
+		"reset restores the pane toggles")
+	_expect(s.text_split == ClientSettings.DEFAULT_TEXT_SPLIT,
+		"and the dividers")
+	_expect(s.skill_detail == ClientSettings.DEFAULT_SKILL_DETAIL,
+		"and where skill detail is shown")
+
 
 func _changed_fires_for_a_real_change_only() -> void:
 	# Every consumer redraws on this signal; firing it for a no-op set would
@@ -119,6 +137,85 @@ func _changed_fires_for_a_real_change_only() -> void:
 
 	s.set_font_size(17)
 	_expect(count["n"] == 1, "a real change fires once")
+
+
+## The world pane and the inventory were one bool until 08/28/2026, so a player
+## who wanted the bag without the diorama could have neither.
+func _the_two_panes_toggle_independently() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	s.set_show_world(false)
+
+	_expect(not s.show_world, "the world can be turned off")
+	_expect(s.show_inventory, "without taking the inventory with it")
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(not reloaded.show_world and reloaded.show_inventory,
+		"and both survive a reload")
+
+
+## A divider that forgets where it was put is the state this replaced: both
+## offsets were authored in console.tscn as a literal 300.
+func _a_dragged_divider_is_remembered_and_clamped() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	s.set_text_split(420)
+	s.set_world_split(180)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.text_split == 420, "the text divider persists")
+	_expect(reloaded.world_split == 180, "and so does the world one")
+
+	# Clamped on READ, not only on write -- an offset saved from a much wider
+	# window can leave a pane at zero width, and a pane with no pixels has no
+	# divider to drag back.
+	var handle := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	handle.store_string("[display]\ntext_split=99999\nworld_split=-40\n")
+	handle.close()
+
+	var repaired := ClientSettings.new(TEST_PATH)
+	repaired.load_from_disk()
+	_expect(repaired.text_split == ClientSettings.MAX_SPLIT,
+		"an out-of-range saved offset is clamped down on load")
+	_expect(repaired.world_split == ClientSettings.MIN_SPLIT,
+		"and a negative one is clamped up")
+
+
+func _an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid() -> void:
+	# Clamped on READ as well as on write, which is the same rule the font size
+	# follows and for a sharper reason: a mode outside the three would leave
+	# every click in the skills grid doing nothing, and a grid that ignores
+	# clicks reads as broken rather than as a setting somebody can undo.
+	var config := ConfigFile.new()
+	config.set_value(ClientSettings.SECTION,
+		ClientSettings.KEY_SKILL_DETAIL, "somewhere_else")
+	config.save(TEST_PATH)
+
+	var s := ClientSettings.new(TEST_PATH)
+	s.load_from_disk()
+
+	_expect(s.skill_detail == ClientSettings.DEFAULT_SKILL_DETAIL,
+		"a mode written by hand or by an older build falls back")
+
+	s.set_skill_detail("nonsense")
+	_expect(s.skill_detail == ClientSettings.DEFAULT_SKILL_DETAIL,
+		"and so does one set through the setter")
+
+	s.set_skill_detail(ClientSettings.SKILL_DETAIL_LOG)
+	_expect(not s.skill_detail_in_pane(), "log mode opens no sheet")
+	_expect(s.skill_detail_in_log(), "and prints one")
+
+	s.set_skill_detail(ClientSettings.SKILL_DETAIL_PANE)
+	_expect(s.skill_detail_in_pane(), "pane mode opens a sheet")
+	_expect(not s.skill_detail_in_log(), "and prints none")
+
+	s.set_skill_detail(ClientSettings.SKILL_DETAIL_BOTH)
+	_expect(s.skill_detail_in_pane() and s.skill_detail_in_log(),
+		"and both does both")
+
+	_clean()
 
 
 func _expect(passed: bool, what: String) -> void:
