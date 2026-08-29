@@ -13,6 +13,15 @@ from . import constants as skill_constants
 from .constants import FORTITUDE_SKILL_KEY
 from systems.combat import constants as combat_constants
 from .registry import SKILL_REGISTRY
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is progression, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_PROGRESSION = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_PROGRESSION}
 
 
 def ensure_skill(obj: object, skill_key: str) -> None:
@@ -139,6 +148,69 @@ def get_level(obj: object, skill_key: str) -> int:
     return current_level
 
 
+def _publish_level_change(obj: object) -> None:
+    """
+    Purpose: Tell a graphical client that this character's levels moved.
+
+    Entry:
+        obj is the character whose level just changed. Anything without
+        sessions -- an NPC, a test fixture -- is a supported no-op.
+
+    Exit/Returns:
+        No conditions. Never raises; the feed swallows its own failures and
+        the two guards here cover the rest.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Called from the two places a level actually MOVES -- add_xp's level-up
+        loop and set_level -- and from nowhere else. Both already guard on the
+        level having changed, so this fires once per change rather than once
+        per XP award; a skill tab does not need to be told about a level that
+        stayed the same, and combat awards XP on every hit.
+
+        THREE channels, because they answer different questions and a client
+        may want any of them:
+
+          char_status  -- the combat level table the 3D view reads. Cheap.
+          char_summary -- the dossier, whose vitals band carries combat level,
+                          total level and total XP. All three move when a
+                          skill does.
+          char_skills  -- the roster a skills PANE draws: every level, every XP
+                          curve, every unlock. The most expensive payload in
+                          the feed, which is why it fires here -- on a level
+                          actually moving -- and not on an XP award.
+
+        The last two check for a subscriber before building anything, so both
+        cost nothing on a server with no graphical client attached.
+
+        Runs AFTER apply_level_up_side_effects at both call sites, and the
+        order is load-bearing: Fortitude's side effect is the one that moves
+        max_hp, and a summary built before it would carry the old HP cap into
+        the same payload that announces the new Fortitude level.
+
+        The import is deferred. systems.statefeed.events reaches the payload
+        builders and the summary registry, and this module is imported through
+        the skills package by typeclasses/characters.py at startup -- the same
+        ring QuestHandler._publishes keeps open by importing inside its
+        wrapper.
+
+    Notes/References:
+        in_combat rides along on char_status and is correct at the moment of
+        sending, but it is NOT published by its own transitions -- see
+        emit_status.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    from systems.statefeed import events as feed
+
+    feed.emit_status(obj)
+    feed.emit_summary(obj)
+    feed.emit_skills(obj)
+
+
 def set_level(obj: object, skill_key: str, level: int) -> int:
     """
     Purpose: Set a skill's level directly, bypassing the XP curve.
@@ -199,6 +271,7 @@ def set_level(obj: object, skill_key: str, level: int) -> int:
 
     if clamped != previous:
         apply_level_up_side_effects(obj, skill_key)
+        _publish_level_change(obj)
 
     return clamped
 
@@ -374,10 +447,11 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         skill_class = SKILL_REGISTRY[skill_key]
         skill_name = skill_class.name
         msg_string = f"|g[LEVEL_UP] Your {skill_name} skill increased to level {skill_data['level']}!|n"
-        obj.msg(msg_string)
+        obj.msg((msg_string, _MSG_PROGRESSION))
 
         # Refresh any state derived from this skill (Fortitude -> max_hp).
         apply_level_up_side_effects(obj, skill_key)
+        _publish_level_change(obj)
 
 
 def meets_prerequisite(obj: object, skill_key: str, required_level: int) -> bool:
@@ -534,8 +608,25 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
         None.
 
     Methodology:
-        Read the current fortitude level; set db.max_hp. Defensive against
-        missing fortitude (raises KeyError → caller decides).
+        Read the current fortitude level; assign through the CombatEntity
+        `max_hp` SETTER rather than writing db.max_hp behind it. That setter
+        is what publishes the new cap to a graphical client, and writing the
+        attribute directly is how a Fortitude level-up used to raise the cap
+        on the server while the client's health bar kept the old maximum --
+        every other reader agreed the character had 48 hit points and the bar
+        said 47 until an unrelated regen tick moved hp and carried the new
+        number along with it.
+
+        Unguarded, unlike seed_fortitude_on_creation's `hasattr(obj, "db")`,
+        because the two run on different populations. Creation seeds the skill
+        on anything with db.skills; this runs only as fortitude's registered
+        level-up side effect, and the only things that earn fortitude XP are
+        things that have been in a fight -- which is to say CombatEntity
+        hosts. apply_level_up_side_effects logs whatever this raises anyway,
+        so a host that somehow is not one fails loudly rather than by writing
+        a cap nothing reads.
+
+        Defensive against missing fortitude (raises KeyError → caller decides).
 
     Notes/References:
         Per design dialogue: max_hp == fortitude_level. OSRS Constitution
@@ -547,7 +638,7 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
     """
     fortitude_level = get_level(obj, FORTITUDE_SKILL_KEY)
     new_cap = fortitude_level * combat_constants.HP_PER_FORTITUDE_LEVEL
-    obj.db.max_hp = new_cap
+    obj.max_hp = new_cap
 
 
 # ─── Level-up side effects ──────────────────────────────────────────────────
