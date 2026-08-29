@@ -1,0 +1,101 @@
+[gd_resource type="Theme" load_steps=3 format=3]
+
+; The client's one Theme.
+;
+; Assigned on the root Control in scenes/console.tscn and inherited by every
+; Control under it. Nothing else in the client should carry a style.
+;
+; WHY THIS EXISTS. Until 08/28/2026 there were eighteen add_theme_*_override
+; calls spread across five scripts, plus a loose `const Color` beside each --
+; so "make the client look like one product" was a five-file edit, and it was
+; about to become a twelve-file one. See
+; docs/2026-08-28-DESIGN-0004-godot-ui-overhaul.md.
+;
+; WHAT DOES NOT BELONG HERE, and every exclusion is deliberate:
+;
+;   - `default_font_size` is NOT set. It would move every Button, Label and
+;     slider in the client off Godot's default in one step, which is a look
+;     change dressed as a refactor. The variations below carry the sizes that
+;     were already being applied by hand, so this file replaced them at equal
+;     value. Setting a project-wide default is a decision to take on its own.
+;
+;   - `default_font` is NOT set either. A SystemFont resolves differently in a
+;     web export than on desktop, so the one place a font is named is the
+;     ChatLog variation below, where it is load-bearing and where the fallback
+;     chain is written out.
+;
+;   - The health bar's colours are NOT here. They encode a THRESHOLD -- green
+;     above 60%, amber above 30%, red below -- which is a rule about the game
+;     rather than a look, and it lives with the code that tests the fraction.
+;
+;   - The player's chosen font SIZE is not here. It is a preference, applied by
+;     console.gd:_apply_settings, and a theme value would be a second owner of
+;     it that the slider could not move.
+
+; One frame in the skills grid.
+;
+; A cell needs to read as a CELL -- the grid was a wrapped run of labels
+; without it, which is the shape the whole pane exists to replace. The padding
+; is here rather than as a MarginContainer inside every cell, which would be a
+; second control per skill for something a StyleBox already does.
+[sub_resource type="StyleBoxFlat" id="StyleBox_skill_cell"]
+content_margin_left = 6.0
+content_margin_top = 4.0
+content_margin_right = 6.0
+content_margin_bottom = 4.0
+bg_color = Color(0.15, 0.17, 0.2, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.27, 0.3, 0.35, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[sub_resource type="SystemFont" id="SystemFont_mono"]
+font_names = PackedStringArray("Consolas", "Cascadia Mono", "DejaVu Sans Mono", "monospace")
+
+[resource]
+CellDetail/base_type = &"Label"
+CellDetail/colors/font_color = Color(0.7, 0.74, 0.79, 1)
+CellDetail/font_sizes/font_size = 10
+CellTitle/base_type = &"Label"
+CellTitle/font_sizes/font_size = 11
+ChatLog/base_type = &"RichTextLabel"
+ChatLog/colors/default_color = Color(0.85, 0.85, 0.85, 1)
+ChatLog/constants/line_separation = 3
+ChatLog/fonts/bold_font = SubResource("SystemFont_mono")
+ChatLog/fonts/italics_font = SubResource("SystemFont_mono")
+ChatLog/fonts/mono_font = SubResource("SystemFont_mono")
+ChatLog/fonts/normal_font = SubResource("SystemFont_mono")
+FormColumn/base_type = &"VBoxContainer"
+FormColumn/constants/separation = 6
+FormGrid/base_type = &"GridContainer"
+FormGrid/constants/h_separation = 12
+FormGrid/constants/v_separation = 6
+PaneMargin/base_type = &"MarginContainer"
+PaneMargin/constants/margin_bottom = 12
+PaneMargin/constants/margin_left = 12
+PaneMargin/constants/margin_right = 12
+PaneMargin/constants/margin_top = 12
+PanelHeading/base_type = &"Label"
+PanelHeading/colors/font_color = Color(1, 1, 1, 1)
+PanelHeading/font_sizes/font_size = 13
+RowKey/base_type = &"Label"
+RowKey/colors/font_color = Color(0.7, 0.74, 0.79, 1)
+RowKey/font_sizes/font_size = 12
+RowValue/base_type = &"Label"
+RowValue/colors/font_color = Color(1, 1, 1, 1)
+RowValue/font_sizes/font_size = 12
+SkillCell/base_type = &"PanelContainer"
+SkillCell/styles/panel = SubResource("StyleBox_skill_cell")
+SkillGrid/base_type = &"GridContainer"
+SkillGrid/constants/h_separation = 6
+SkillGrid/constants/v_separation = 6
+SkillLevel/base_type = &"Label"
+SkillLevel/colors/font_color = Color(1, 1, 1, 1)
+SkillLevel/font_sizes/font_size = 15
+SectionHeading/base_type = &"Label"
+SectionHeading/font_sizes/font_size = 12
