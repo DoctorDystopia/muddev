@@ -51,6 +51,14 @@ guard, and code that needs its output should import
 lives in `clientexport.py` rather than in the script: the test that checks the
 generated files are current cannot import this directory.
 
+**Nothing outside this directory may name a module inside it.** A typeclass
+path is the trap, because it is persisted in a database row rather than written
+in an import statement: `ShopkeepCleanup` lived here until 08/28/2026 and its
+path sat in 34 `ScriptDB` rows, so every server start imported out of the
+import-unsafe directory to resolve them. It now lives beside its only user in
+`typeclasses/npcs.py`, and `ShopkeepNPC.ensure_cleanup_script` re-points a
+shopkeep persisted under the old path on the next map rebuild.
+
 Maps are regenerable from `world/maps/*.py` via
 `scripts/clean_and_reload_all_maps.ps1`; accounts and characters are not stored
 there.
@@ -61,6 +69,37 @@ next rebuild. The manifest is parsed by `world/maps/manifest.py` (importable,
 tested) and applied by `scripts/map_sync.py`; the `.ps1`/`.sh` rebuild scripts
 are thin wrappers around it. `scripts/clean_and_reload_all_maps.ps1 -DryRun`
 (`--dry-run` for the `.sh`) reports the diff without touching anything.
+
+**`map_sync.py` reconciles against the DATABASE, not against the grid Script.**
+Diffing `grid.db.map_data` alone left a whole class of map permanently
+invisible: one dropped from the manifest while the grid had already forgotten
+it is in neither list, so nothing ever reaped it. `trade town sector 1` sat in
+the dev database as 59 live rooms and 144 exits, belonging to no map,
+unreachable by any rebuild, until this was fixed on 08/28/2026.
+
+The rebuild also spawns in-process rather than shelling out to
+`evennia xyzgrid spawn`, which asks for confirmation on stdin with no way to
+decline the question — so the rebuild could not run unattended, and its exit
+code was never checked.
+
+**Destroying a room destroys what is standing on it.** `systems/spawning/
+teardown.py` owns that rule and `GridTile.at_object_delete` is where it runs.
+Evennia's `clear_contents` does not delete a room's contents — it moves them to
+their home, rewriting that home to `settings.DEFAULT_HOME` when the home IS the
+room being deleted — so every rebuild used to *exile* the whole grid's NPCs,
+nodes and facilities to Limbo rather than destroy them. By 08/28/2026 that was
+623 objects standing there with 197 more nested inside them, against 23 real
+ones on the live grid. `scripts/reap_orphans.py` drains a backlog (it reports
+by default and needs `--apply`); the hook is what stops one accumulating.
+
+The hook, not the script, is the seam, because it is the only point common to
+every way a tile dies — the manifest purge, `XYZGrid.remove_map`, and the
+contrib deleting a tile that fell off the map in `XYMap.spawn_nodes`, which no
+operator script can reach. Two rules it encodes: **player characters are spared
+at every nesting level** and go home as they always have; and demolition is
+**depth-first**, because `delete()` on a container runs the same
+`clear_contents` on its own contents — deleting a shopkeep first evicts its
+stock to Limbo instead of destroying it.
 
 ## Testing
 

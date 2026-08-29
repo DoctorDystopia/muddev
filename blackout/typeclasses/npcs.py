@@ -7,10 +7,12 @@ Description: Talkative and shopkeeper NPC typeclasses, plus the talk command.
 
 from evennia import Command, CmdSet
 from evennia import DefaultObject
+from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GENERAL
 from systems.statefeed.constants import ASSET_KIND_NPC
 from typeclasses.objects import ObjectParent
+from .scripts import Script
 from .spawners import register_spawner, spawn_once
 from systems.menus.base_menu import start_blackout_menu
 from systems.statefeed import constants as feed_const
@@ -30,7 +32,7 @@ TALK_CMD_SET_KEY = "npc_talk_cmdset"
 TALK_CMD_SET_PRIORITY = 10
 
 SHOPKEEP_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_shopkeep"
-OASIS_GUIDE_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_oasis_guide"
+LONE_ANDROID_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_oasis_lone_android"
 
 # The oasis quest giver. The key must match the room key of the "Lone Android"
 # prototype in world/maps/oasis.py, because that key is what SPAWNER_REGISTRY
@@ -41,7 +43,25 @@ LONE_ANDROID_DESC = (
     "primer and one knee joint whines when it moves. It is bent over a "
     "datapad, writing, and does not appear to have noticed you."
 )
-SHOPKEEP_CLEANUP_SCRIPT = "scripts.shopkeep_inventory_cleanup.ShopkeepCleanup"
+# The periodic trim that keeps player sales from filling a shopkeep's pockets
+# forever, and how much it leaves behind.
+#
+# The class lives in THIS module rather than in blackout/scripts/, where it sat
+# until 08/28/2026. That directory acts on the live database and CLAUDE.md
+# calls it import-unsafe -- yet this path was persisted in 34 ScriptDB rows, so
+# every server start imported out of it. It has one user, twenty lines below
+# it, and belongs beside that user.
+SHOPKEEP_CLEANUP_SCRIPT = "typeclasses.npcs.ShopkeepCleanup"
+SHOPKEEP_CLEANUP_KEY = "shopkeep_cleanup"
+SHOPKEEP_CLEANUP_DESC = "Periodically removes excess items from this shopkeep"
+SHOPKEEP_CLEANUP_INTERVAL = 86400
+SHOPKEEP_MAX_HELD_ITEMS = 20
+
+# Paths this script has been persisted under before. A shopkeep carrying one is
+# re-pointed the next time its tile is spawned; see ensure_cleanup_script.
+LEGACY_SHOPKEEP_CLEANUP_SCRIPTS = (
+    "scripts.shopkeep_inventory_cleanup.ShopkeepCleanup",
+)
 
 
 
@@ -257,6 +277,63 @@ class TalkativeNPC(ObjectParent, DefaultObject):
         self.db.menu_module = None
 
 
+class ShopkeepCleanup(Script):
+    """
+    Purpose: Trim a shopkeep's holdings back to its cap, so that items sold to
+             it by players do not accumulate without bound.
+
+    Entry:
+        Attached to a ShopkeepNPC. `self.obj` is that NPC.
+
+    Exit/Returns:
+        No conditions.
+
+    Module Globals:
+        SHOPKEEP_CLEANUP_KEY, SHOPKEEP_CLEANUP_DESC read.
+        SHOPKEEP_CLEANUP_INTERVAL, SHOPKEEP_MAX_HELD_ITEMS read.
+
+    Methodology:
+        Once a day, drop the oldest holdings until the cap is met.
+
+    Notes/References:
+        The cap falls back to SHOPKEEP_MAX_HELD_ITEMS, the same constant
+        at_object_creation stamps on the NPC -- previously both this fallback
+        and that stamp were a literal 20 in two files, which is the
+        "Metalsmith vs Metalsmithing" shape CLAUDE.md warns about.
+
+    Author: Nick Hobar
+    Creation date: 07/13/2026
+    """
+
+    def at_script_creation(self) -> None:
+        """Name the script and set it repeating once a day, persistently."""
+        self.key = SHOPKEEP_CLEANUP_KEY
+        self.desc = SHOPKEEP_CLEANUP_DESC
+        self.interval = SHOPKEEP_CLEANUP_INTERVAL
+        self.persistent = True
+
+    def at_repeat(self) -> None:
+        """Delete the oldest holdings above the cap, or stop if orphaned."""
+        shopkeep = self.obj
+
+        if not shopkeep:
+            self.stop()
+            return
+
+        max_items = shopkeep.db.max_held_items or SHOPKEEP_MAX_HELD_ITEMS
+        contents = list(shopkeep.contents)
+        excess = len(contents) - max_items
+
+        if excess <= 0:
+            return
+
+        for item in contents[:excess]:
+            try:
+                item.delete()
+            except Exception:
+                logger.log_trace()
+
+
 class ShopkeepNPC(TalkativeNPC):
     """
     An NPC that buys and sells items. Extends TalkativeNPC with
@@ -270,8 +347,72 @@ class ShopkeepNPC(TalkativeNPC):
         self.db.menu_module = SHOPKEEP_DIALOGUE_MODULE
         self.db.shopdef_key = "oasis_shop"
         self.db.desc = "A shopkeeper attending a stall of salvaged goods."
-        self.db.max_held_items = 20
-        self.scripts.add(SHOPKEEP_CLEANUP_SCRIPT)
+        self.db.max_held_items = SHOPKEEP_MAX_HELD_ITEMS
+        self.ensure_cleanup_script()
+
+    def ensure_cleanup_script(self) -> None:
+        """
+        Purpose: Guarantee this shopkeep carries exactly one cleanup script,
+                 under the current typeclass path.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns nothing. Stops any script found under a legacy path and
+            adds the current one if it is missing.
+
+        Module Globals:
+            SHOPKEEP_CLEANUP_SCRIPT, LEGACY_SHOPKEEP_CLEANUP_SCRIPTS read.
+
+        Methodology:
+            Walk the attached scripts once, classifying each as legacy,
+            current, or neither; delete the legacy ones and add the current
+            one only if the walk did not find it.
+
+        Notes/References:
+            This is the migration for the 34 rows persisted under the old
+            blackout/scripts/ path. Doing it here rather than in a one-shot
+            operator script means it rides the map rebuild the operator is
+            already running, in the same shape spawn_shopkeep uses to re-stamp
+            `desc` and `shopdef_key` on an NPC that already exists.
+
+            It is also a dedupe. ScriptHandler.add creates unconditionally --
+            it has no presence check -- so anything that called it twice on
+            one NPC would leave two daily timers trimming the same pockets.
+
+            `delete()`, not `stop()`. In Evennia 6 `stop()` only halts the
+            timer component and leaves the row standing
+            (evennia/scripts/scripts.py:582), so a migration written with it
+            would faithfully re-point every shopkeep and leave the stale row
+            behind for the boot log to complain about anyway.
+
+            A legacy row's typeclass no longer imports, so Evennia has already
+            fallen the instance back to DefaultScript by the time this reads
+            it. `typeclass_path` is a plain database field and still reports
+            the stale path, which is exactly what makes it matchable.
+
+        Author: Nick Hobar
+        Creation date: 08/28/2026
+        """
+        found_current = False
+        attached = list(self.scripts.all())
+
+        for script in attached:
+            path = script.typeclass_path
+
+            if path in LEGACY_SHOPKEEP_CLEANUP_SCRIPTS:
+                script.delete()
+                continue
+
+            if path == SHOPKEEP_CLEANUP_SCRIPT:
+                if found_current:
+                    script.delete()
+                    continue
+                found_current = True
+
+        if not found_current:
+            self.scripts.add(SHOPKEEP_CLEANUP_SCRIPT)
 
 
 @register_spawner("Shopkeeper")
@@ -288,6 +429,13 @@ def spawn_shopkeep(room):
     shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
     shopkeep.db.shopdef_key = "oasis_shop"
 
+    # Same reasoning, applied to the cleanup script rather than an attribute:
+    # this is what re-points a shopkeep persisted under the old
+    # blackout/scripts/ typeclass path.
+    shopkeep.ensure_cleanup_script()
+
+    return shopkeep
+
 
 class LoneAndroidNPC(TalkativeNPC):
     """
@@ -301,7 +449,7 @@ class LoneAndroidNPC(TalkativeNPC):
         No conditions.
 
     Module Globals:
-        OASIS_GUIDE_DIALOGUE_MODULE read.
+        LONE_ANDROID_DIALOGUE_MODULE read.
 
     Methodology:
         A TalkativeNPC that knows which dialogue module it speaks from. It
@@ -325,7 +473,7 @@ class LoneAndroidNPC(TalkativeNPC):
         parent_class = super()
         parent_class.at_object_creation()
 
-        self.db.menu_module = OASIS_GUIDE_DIALOGUE_MODULE
+        self.db.menu_module = LONE_ANDROID_DIALOGUE_MODULE
         self.db.desc = LONE_ANDROID_DESC
 
 
@@ -343,7 +491,7 @@ def spawn_lone_android(room):
 
     Module Globals:
         LONE_ANDROID_KEY, LONE_ANDROID_DESC read.
-        OASIS_GUIDE_DIALOGUE_MODULE read.
+        LONE_ANDROID_DIALOGUE_MODULE read.
 
     Methodology:
         world/maps/oasis.py has carried a "Lone Android" tile at (2, 0) since
@@ -370,6 +518,6 @@ def spawn_lone_android(room):
     )
 
     android.db.desc = LONE_ANDROID_DESC
-    android.db.menu_module = OASIS_GUIDE_DIALOGUE_MODULE
+    android.db.menu_module = LONE_ANDROID_DIALOGUE_MODULE
 
     return android
