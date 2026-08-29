@@ -11,6 +11,7 @@ from evennia.utils import logger
 
 from systems.quests import constants as quest_constants
 from systems.quests.hooks import notify_quests
+from systems.spawning import teardown
 from systems.statefeed import constants as feed_const
 from systems.statefeed import events as feed
 from systems.statefeed import subscriptions
@@ -382,6 +383,53 @@ class GridTile(ObjectParent, XYZRoom):
             feed.emit_entity_left(self, departing_id, exclude=(moved_obj,))
         except Exception:
             logger.log_trace()
+
+    def at_object_delete(self):
+        """
+        Purpose: Destroy what this tile owns before Evennia empties it.
+
+        Entry:
+            No conditions. Called by DefaultObject.delete() on this room.
+
+        Exit/Returns:
+            Returns True to let the deletion proceed, or False if a parent
+            class vetoed it -- in which case nothing is destroyed.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Ask the parent first, then hand the room to
+            systems.spawning.teardown, which destroys the NPCs, nodes,
+            facilities and floor litter depth-first and leaves player
+            characters and exits alone. Evennia's own clear_exits and
+            clear_contents then run on what is left.
+
+        Notes/References:
+            This hook, not map_sync.py, is where the teardown belongs, because
+            it is the only point common to every way a tile dies: the manifest
+            purge, XYZGrid.remove_map, and the contrib deleting a tile that
+            fell off the map in XYMap.spawn_nodes -- the last of which no
+            operator script can reach.
+
+            Wrapped, because a failed teardown must not be able to strand a
+            half-deleted room in the middle of a rebuild. Leaking an object is
+            recoverable by running the reaper; aborting a deletion here is not.
+
+        Author: Nick Hobar
+        Creation date: 08/28/2026
+        """
+        proceed = super().at_object_delete()
+
+        if not proceed:
+            return False
+
+        try:
+            teardown.demolish_contents(self)
+        except Exception:
+            logger.log_trace()
+
+        return True
 
     def at_object_post_spawn(self, prototype=None):
         """

@@ -656,7 +656,7 @@ def node_quest_offer(caller: object, **kwargs) -> tuple:
     options = (
         {
             "desc": f"Accept: {blueprint.title}",
-            "goto": "_accept_oasis_quest",
+            "goto": _accept_oasis_quest,
         },
         {"desc": "Not yet.", "goto": "node_goodbye"},
     )
@@ -793,13 +793,13 @@ def node_step2_chores(caller: object, **kwargs) -> tuple:
     if progress.get("interact:pipe") is not True:
         options_list.append({
             "desc": "[stub] Clear the sand from the drainage line.",
-            "goto": "_report_pipe",
+            "goto": _report_pipe,
         })
 
     if progress.get("interact:soil") is not True:
         options_list.append({
             "desc": "[stub] Prepare the soil and plant the varietal.",
-            "goto": "_report_soil",
+            "goto": _report_soil,
         })
 
     options_list.append({"desc": '"Later."', "goto": "node_goodbye"})
@@ -997,7 +997,7 @@ def node_step5_resolution(caller: object, **kwargs) -> tuple:
     options = (
         {
             "desc": '"Thank you."',
-            "goto": "_finish_oasis_quest",
+            "goto": _finish_oasis_quest,
         },
     )
 

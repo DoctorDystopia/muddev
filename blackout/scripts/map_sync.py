@@ -7,9 +7,8 @@ Description: Operator script. Reconciles the live XYZ grid with
              whole of adding or removing a map:
 
                - a map listed in the manifest is loaded from its module, its
-                 old objects are wiped, and it is (re)registered on the grid,
-                 ready for `evennia xyzgrid spawn`;
-               - a map still registered on the grid but no longer listed is
+                 old objects are wiped, and it is (re)registered and spawned;
+               - a map still present in the world but no longer listed is
                  removed outright, along with its rooms and exits.
 
              The removal half is what the manifest could not do before. The
@@ -17,6 +16,23 @@ Description: Operator script. Reconciles the live XYZ grid with
              `xyzgrid add`, so dropping a manifest row used to leave the map
              registered and spawning; its surviving rooms then collided with
              the respawn ("XYRoom XYZ=(...) already exists").
+
+             The DATABASE, not the grid Script, is what this reconciles
+             against. Diffing `grid.db.map_data` alone left a whole class of
+             map permanently invisible: one dropped from the manifest while
+             the grid had already forgotten it is in neither list, so nothing
+             ever reaped it. That was not theoretical -- 'trade town sector 1'
+             sat in the development database as 59 live rooms and 144 exits,
+             belonging to no map, unreachable by any rebuild, until this was
+             fixed on 08/28/2026.
+
+             The spawn is run here rather than by the calling shell script.
+             `evennia xyzgrid spawn` asks for confirmation on stdin
+             (contrib/grid/xyzgrid/launchcmd.py) and offers no way to decline
+             the question, so the rebuild could not run unattended; and its
+             exit code was never checked, so a failed spawn still printed
+             "Done". Doing it in-process also means Evennia is bootstrapped
+             once instead of twice.
 
              DESTRUCTIVE. Run deliberately, never import. Everything is behind
              an `if __name__ == "__main__"` guard: anything that merely
@@ -45,6 +61,9 @@ _DRY_RUN_FLAG = "--dry-run"
 _DRY_RUN_PREFIX = "[dry run] "
 _LIVE_PREFIX = ""
 
+# The Tag.db_model value Evennia files object tags under.
+_OBJECT_TAG_MODEL = "objectdb"
+
 
 def _bootstrap_evennia():
     """Bring Django/Evennia up so ObjectDB and the grid Script are usable."""
@@ -70,6 +89,70 @@ def _get_grid():
     grid.log = print
 
     return grid
+
+
+def _objects_tagged_zcoord(zcoord):
+    """Every object carrying `zcoord` as its xyzgrid map z-tag, as a queryset."""
+    from evennia.contrib.grid.xyzgrid.xyzroom import MAP_Z_TAG_CATEGORY
+    from evennia.objects.models import ObjectDB
+
+    return ObjectDB.objects.filter(
+        db_tags__db_key__iexact=zcoord,
+        db_tags__db_category=MAP_Z_TAG_CATEGORY,
+    )
+
+
+def _total_object_count():
+    """The number of rows in ObjectDB, for reporting a rebuild's net effect."""
+    from evennia.objects.models import ObjectDB
+
+    return ObjectDB.objects.count()
+
+
+def zcoords_in_world(grid):
+    """
+    Purpose: Every z-coordinate the world still knows about, from either the
+             grid's registry or the database itself.
+
+    Entry:
+        grid is the XYZGrid Script.
+
+    Exit/Returns:
+        Returns a sorted list of z-coordinate strings.
+
+    Module Globals:
+        _OBJECT_TAG_MODEL read.
+
+    Methodology:
+        Union the grid's stored map_data keys with the z-tag values that live
+        objects actually carry, so neither source can hide a map from the
+        prune on its own.
+
+    Notes/References:
+        Candidate tags come from the Tag table and are then confirmed against
+        ObjectDB, because Evennia never garbage-collects a Tag row -- a tag
+        with no objects left would otherwise be reported as a map to remove.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    from evennia.contrib.grid.xyzgrid.xyzroom import MAP_Z_TAG_CATEGORY
+    from evennia.typeclasses.tags import Tag
+
+    found = set(grid.db.map_data or {})
+
+    candidates = Tag.objects.filter(
+        db_category=MAP_Z_TAG_CATEGORY,
+        db_model=_OBJECT_TAG_MODEL,
+    ).values_list("db_key", flat=True)
+
+    for zcoord in candidates:
+        tagged = _objects_tagged_zcoord(zcoord)
+        in_use = tagged.exists()
+        if in_use:
+            found.add(zcoord)
+
+    return sorted(found)
 
 
 def load_map_data(grid, entries):
@@ -143,17 +226,26 @@ def prune_unlisted_maps(grid, wanted_zcoords, dry_run):
         _DRY_RUN_PREFIX, _LIVE_PREFIX read
 
     Methodology:
-        Diff the grid's stored map_data keys against the manifest, then call
-        XYZGrid.remove_map on each survivor of the diff.
+        Diff every z-coordinate the world knows about -- registered on the
+        grid OR merely tagged on live objects -- against the manifest, then
+        call XYZGrid.remove_map on each survivor of the diff.
 
     Notes/References:
+        remove_map finds its rooms with a database query rather than through
+        map_data, so it removes a map the grid has already forgotten just as
+        happily as one it still holds. That is what lets the union above be
+        acted on with a single call.
+
         `evennia xyzgrid delete <zcoord>` is not usable here: launchcmd's
         _option_delete builds its zcoords as a generator, exhausts it while
         validating, and then unpacks the spent generator into remove_map --
         so it deletes nothing. Calling remove_map directly avoids that.
 
-        Objects and characters standing in a removed room are sent to their
-        home locations by the contrib, not deleted.
+        Characters standing in a removed room are sent to their home
+        locations; everything else on the tile is destroyed with it. That
+        split lives in systems/spawning/teardown.py, reached through
+        GridTile.at_object_delete -- not here, because the contrib deletes
+        rooms by two other paths this script cannot see.
 
     Author: Nick Hobar
     Creation date: 08/14/2026
@@ -162,11 +254,13 @@ def prune_unlisted_maps(grid, wanted_zcoords, dry_run):
     if dry_run:
         prefix = _DRY_RUN_PREFIX
 
-    stored_zcoords = list(grid.db.map_data or {})
-    unlisted = [zcoord for zcoord in stored_zcoords if zcoord not in wanted_zcoords]
+    known_zcoords = zcoords_in_world(grid)
+    unlisted = [zcoord for zcoord in known_zcoords if zcoord not in wanted_zcoords]
 
     for zcoord in unlisted:
-        print(f"  {prefix}removing unlisted map '{zcoord}' and every object on it")
+        tagged = _objects_tagged_zcoord(zcoord)
+        count = tagged.count()
+        print(f"  {prefix}removing unlisted map '{zcoord}' ({count} tagged objects)")
 
         if not dry_run:
             grid.remove_map(zcoord, remove_objects=True)
@@ -194,16 +288,23 @@ def purge_zcoords(zcoords, dry_run):
         match, reporting failures without aborting the run.
 
     Notes/References:
-        Runs between `evennia stop` and `evennia xyzgrid spawn`, driven by
-        scripts/clean_and_reload_all_maps.ps1 and .sh. The tag query catches
-        exits as well as rooms, since both carry the z-tag.
+        Runs between `evennia stop` and the spawn. The tag query catches exits
+        as well as rooms, since both carry the z-tag.
+
+        Deleting a room now takes its NPCs, nodes, facilities and floor litter
+        with it -- see GridTile.at_object_delete and
+        systems/spawning/teardown.py. Those are not counted here: the tally is
+        of tagged objects this loop asked to delete, and the run's true effect
+        is reported as an ObjectDB delta by _sync.
+
+        The count is of deletions that actually happened, not of attempts.
+        Deleting a room destroys the exits standing in it, so by the time the
+        loop reaches one of those its `delete()` returns False without raising
+        -- which the old unconditional `deleted += 1` reported as a deletion.
 
     Author: Nick Hobar
     Creation date: 06/17/2026
     """
-    from evennia.contrib.grid.xyzgrid.xyzroom import MAP_Z_TAG_CATEGORY
-    from evennia.objects.models import ObjectDB
-
     prefix = _LIVE_PREFIX
     if dry_run:
         prefix = _DRY_RUN_PREFIX
@@ -211,23 +312,21 @@ def purge_zcoords(zcoords, dry_run):
     deleted = 0
 
     for zcoord in zcoords:
-        rooms = ObjectDB.objects.filter(
-            db_tags__db_key__iexact=zcoord,
-            db_tags__db_category=MAP_Z_TAG_CATEGORY,
-        )
-        count = rooms.count()
+        tagged = _objects_tagged_zcoord(zcoord)
+        count = tagged.count()
         print(f"  {prefix}purging {count} objects tagged '{zcoord}'")
 
         if dry_run:
             deleted += count
             continue
 
-        for room in rooms:
+        for obj in tagged:
             try:
-                room.delete()
-                deleted += 1
+                removed = obj.delete()
+                if removed:
+                    deleted += 1
             except Exception as exc:
-                print(f"    skipping #{room.id} '{room.key}': {exc}")
+                print(f"    skipping #{obj.id} '{obj.key}': {exc}")
 
     return deleted
 
@@ -277,6 +376,48 @@ def register_maps(grid, map_data_list, dry_run):
         raise RuntimeError(f"Maps missing from the grid after add_maps: {missing}")
 
 
+def spawn_maps(grid, dry_run):
+    """
+    Purpose: Build the in-game rooms and exits for every registered map.
+
+    Entry:
+        grid is the XYZGrid Script, already carrying the manifest's maps;
+        dry_run suppresses the spawn.
+
+    Exit/Returns:
+        Returns None. Propagates whatever the contrib raises.
+
+    Module Globals:
+        _DRY_RUN_PREFIX, _LIVE_PREFIX read
+
+    Methodology:
+        Call XYZGrid.spawn over the full wildcard coordinate, which creates
+        missing rooms, updates existing ones from their prototypes and deletes
+        any that no longer appear on their map.
+
+    Notes/References:
+        This is what `evennia xyzgrid spawn` does once its confirmation prompt
+        is answered. Calling the grid directly is not a shortcut around an
+        operator safeguard -- the prompt guards an interactive typo, and this
+        script has already read a manifest, validated every module and printed
+        what it is about to do. It IS the safeguard, and unlike the prompt it
+        also works when nothing is attached to stdin.
+
+    Author: Nick Hobar
+    Creation date: 08/28/2026
+    """
+    prefix = _LIVE_PREFIX
+    if dry_run:
+        prefix = _DRY_RUN_PREFIX
+
+    print(f"  {prefix}spawning rooms and exits for every registered map")
+
+    if dry_run:
+        return
+
+    grid.spawn()
+
+
 def _sync(dry_run):
     """
     Purpose: Run the whole manifest-to-grid reconciliation.
@@ -292,11 +433,17 @@ def _sync(dry_run):
 
     Methodology:
         Read and validate the manifest, load every listed module, then prune
-        the unlisted maps, purge the listed ones, and register them.
+        the unlisted maps, purge the listed ones, register them and spawn.
 
     Notes/References:
         Loading comes first on purpose: nothing is deleted until every listed
         module has proven it exists and declares the promised z-coordinate.
+
+        The net ObjectDB delta is reported because the per-step tallies no
+        longer describe the run. A purged room now destroys everything
+        standing on it, and those objects are counted by neither loop -- a
+        rebuild that says "purged 945 objects" while removing 1013 rows is
+        telling an operator something they cannot act on.
 
     Author: Nick Hobar
     Creation date: 08/14/2026
@@ -310,6 +457,7 @@ def _sync(dry_run):
     zcoords = map_manifest.zcoords_of(entries)
     grid = _get_grid()
     map_data_list = load_map_data(grid, entries)
+    objects_before = _total_object_count()
 
     print(f"Manifest lists {len(entries)} map(s): {', '.join(zcoords)}")
 
@@ -324,7 +472,14 @@ def _sync(dry_run):
     print("=== Registering listed maps ===")
     register_maps(grid, map_data_list, dry_run)
 
-    print(f"Removed {len(pruned)} map(s), purged {purged} object(s).")
+    print("=== Spawning rooms and exits ===")
+    spawn_maps(grid, dry_run)
+
+    objects_after = _total_object_count()
+    net = objects_after - objects_before
+
+    print(f"Removed {len(pruned)} map(s), purged {purged} tagged object(s).")
+    print(f"ObjectDB: {objects_before} -> {objects_after} ({net:+d}).")
 
 
 def main(argv):

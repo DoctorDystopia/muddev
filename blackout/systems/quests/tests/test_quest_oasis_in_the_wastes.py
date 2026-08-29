@@ -118,14 +118,14 @@ class LoneAndroidSpawnerTests(EvenniaTest):
 
     def test_the_spawner_places_a_talkable_android(self):
         from typeclasses.npcs import (
+            LONE_ANDROID_DIALOGUE_MODULE,
             LONE_ANDROID_KEY,
-            OASIS_GUIDE_DIALOGUE_MODULE,
         )
 
         android = SPAWNER_REGISTRY[LONE_ANDROID_KEY](self.room1)
 
         self.assertIsNotNone(android)
-        self.assertEqual(android.db.menu_module, OASIS_GUIDE_DIALOGUE_MODULE)
+        self.assertEqual(android.db.menu_module, LONE_ANDROID_DIALOGUE_MODULE)
         self.assertIn(android, self.room1.contents)
 
 

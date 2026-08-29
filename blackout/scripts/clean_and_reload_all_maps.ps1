@@ -1,5 +1,10 @@
 # Full map rebuild, driven entirely by scripts/map_manifest.json:
-# stop -> sync grid to manifest -> spawn -> reload.
+# stop -> sync grid to manifest (prune, purge, register, spawn) -> reload.
+#
+# The spawn is inside map_sync.py, not a separate `evennia xyzgrid spawn` step.
+# That command asks for confirmation on stdin and has no way to decline the
+# question, so a rebuild could not run unattended -- and its exit code was
+# never checked here, so a failed spawn still reached "Done".
 #
 # Pass -DryRun to report what a rebuild would add and remove without touching
 # the database or the running server.
@@ -29,14 +34,15 @@ Write-Host "=== Stopping Evennia ==="
 Write-Host "=== Syncing grid to map manifest ==="
 & $Python $MapSync
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Map sync failed; grid not spawned"
+    Write-Error "Map sync failed; server left stopped"
     exit 1
 }
 
-Write-Host "=== Spawning maps ==="
-& $Evennia xyzgrid spawn
-
 Write-Host "=== Reloading Evennia ==="
 & $Evennia reload
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Reload failed; the grid is rebuilt but the server is down"
+    exit 1
+}
 
 Write-Host "=== Done ==="
