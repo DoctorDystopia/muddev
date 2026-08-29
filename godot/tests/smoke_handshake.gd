@@ -34,10 +34,12 @@ func _on_opened() -> void:
 	print("connected; waiting for the server to announce")
 
 
-func _on_text(bbcode: String) -> void:
+func _on_text(bbcode: String, kwargs: Dictionary) -> void:
 	# The login banner proves the text path and the contrib's ANSI-to-BBCode
-	# conversion in one go.
-	print("text: %s" % bbcode)
+	# conversion in one go. The kwargs are printed because that is where the
+	# routing tag rides, and a banner that arrives untagged is the normal case
+	# rather than a fault.
+	print("text %s: %s" % [JSON.stringify(kwargs), bbcode])
 
 
 func _on_channel(channel: String, payload: Dictionary) -> void:

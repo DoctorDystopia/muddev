@@ -39,9 +39,17 @@ signal dropped(from_kind: String, from_key: Variant, to_kind: String, to_key: Va
 ## Emitted when the player picks one of the server's named actions.
 signal action_chosen(command: String)
 
+## The client's Theme, preloaded for ONE use: the drag preview.
+##
+## Every other Control in this file inherits the theme down the tree from the
+## console's root. `set_drag_preview` does not -- Godot parents the preview into
+## the viewport's own drag layer, which is not under our root, so a variation
+## named there would resolve to nothing. Assigning the theme explicitly is what
+## keeps the caption's size in the theme rather than back in a literal here.
+const _THEME := preload("res://ui/blackout_theme.tres")
+
 const COLOR_EMPTY := Color(1, 1, 1, 0.25)
 const COLOR_FILLED := Color(1, 1, 1, 0.9)
-const COLOR_LABEL := Color(0.75, 0.78, 0.82)
 
 ## Widest an item name may draw before it is clipped, in characters. Frames are
 ## small and a long name would push the grid around.
@@ -92,13 +100,12 @@ func _init() -> void:
 
 	_title = Label.new()
 	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_title.add_theme_font_size_override("font_size", 11)
+	_title.theme_type_variation = &"CellTitle"
 	column.add_child(_title)
 
 	_detail = Label.new()
 	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_detail.add_theme_font_size_override("font_size", 10)
-	_detail.add_theme_color_override("font_color", COLOR_LABEL)
+	_detail.theme_type_variation = &"CellDetail"
 	column.add_child(_detail)
 
 	_menu = PopupMenu.new()
@@ -212,7 +219,8 @@ func _get_drag_data(_at: Vector2) -> Variant:
 func _preview() -> Control:
 	var preview := Label.new()
 	preview.text = _clip(str(_row.get("name", "")))
-	preview.add_theme_font_size_override("font_size", 11)
+	preview.theme = _THEME
+	preview.theme_type_variation = &"CellTitle"
 
 	return preview
 

@@ -21,19 +21,46 @@ const Const := preload("res://autoload/blackout_constants.gd")
 ## Shown in the input while the map has the keyboard. See [method _set_typing].
 const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
 
-@onready var _output: RichTextLabel = %Output
+## The game log. Tabbed, and the tabs are the client's own -- see
+## [ChatTabs] on why the server names what a line IS and never where it
+## goes.
+@onready var _chat: ChatView = %Chat
 @onready var _input: LineEdit = %Input
-@onready var _hud: PanelContainer = %Hud
 @onready var _inventory: InventoryView = %Inventory
 @onready var _login: LoginView = %Login
 
-## The whole 3D half. Hidden as one branch by the text-only setting; see
-## [method _apply_settings].
+## The two dividers, so a dragged one can be remembered. See
+## [method _on_split_dragged].
+@onready var _split: HSplitContainer = %Split
+
+## Where the vitals bars sit, and there are two because one of them can be
+## hidden. See [method _place_vitals].
+@onready var _world_vitals: MarginContainer = %WorldVitals
+@onready var _text_vitals: MarginContainer = %TextVitals
+
+## The whole right column: the 3D world above, the control panel below.
+##
+## ALWAYS VISIBLE, and that is a decision rather than an oversight. It used to
+## hide when both panes in it were off -- but the panel now holds Options, and a
+## setting that can hide the screen you change it on is a trap. A player who
+## wants text only drags the divider instead, and the divider is remembered.
 @onready var _right: VSplitContainer = %Right
 
-## The 3D pane, reached for one thing only: to give it the character model so it
-## can draw your avatar. Everything else it needs it reads off the feed itself.
+## The control panel. Inventory, character sheet, options, help.
+@onready var _panel: PanelView = %Panel
+
+## The world pane and everything drawn over it, hidden as one. The 3D world
+## and the inventory used to share one setting, which meant a player who wanted
+## the bag without the diorama could have neither.
+@onready var _world_pane: Control = %WorldPane
+
+## The 3D pane. Given the models it draws; it reads the entity, combat and
+## aura channels off the feed itself.
 @onready var _world: Node3D = %World
+
+## The map, drawn small over the corner of the world pane. A second VIEW of
+## [member _world_state], never a second copy of it.
+@onready var _minimap: MinimapView = %Minimap
 
 var _channels := PackedStringArray()
 
@@ -48,8 +75,35 @@ var _char := CharState.new()
 ## it is a model, and the grid that draws it is a view.
 var _items := InventoryState.new()
 
-## The dossier. A model like the others; the window that draws it is a view.
+## The dossier. A model like the others; the tab that draws it is a view.
 var _summary := SummaryState.new()
+
+## Every skill, its XP curve and what it unlocks. A SEPARATE model from the
+## dossier rather than a slice of it: the summary payload's contract is that a
+## client iterates panels and never names one, so pulling a skills band out of
+## it by key would have broken the rule the dossier is built on. The server
+## split the band onto its own channel; this is the other end of that.
+var _skills := SkillsState.new()
+
+## What you have taken and how far through it you are. A model like the others.
+var _quest_log := QuestState.new()
+
+## The world: every island's grid, the links, and where you are standing.
+##
+## Owned here rather than by the 3D pane, which built its own until 08/28/2026.
+## Two panes now draw the same map, and `blackout_map` arrives in CHUNKS -- so a
+## second model would mean reassembling one payload twice and, on a resync, two
+## reassemblies briefly disagreeing about which tiles exist. It is the same
+## argument the comment on `_char` above makes, with a worse failure.
+var _world_state := WorldState.new()
+
+## Which tab a line of game text belongs in, and which tabs have unread lines.
+##
+## A model like the others, owned here rather than by the tab strip that draws
+## it. It holds no text: the lines live in the strip's RichTextLabels, because
+## a log big enough to matter must be appended to rather than reassigned, and a
+## model that also kept a copy would store every line twice to save nothing.
+var _chat_tabs := ChatTabs.new()
 
 ## Where every mesh in the client comes from, for BOTH 3D panes.
 ##
@@ -78,12 +132,30 @@ var _reconnect := ReconnectPolicy.new()
 ## the working one.
 var _retry_timer: Timer
 
-## Windows, created in code because they are Windows rather than Controls and
-## have no place in the console's layout tree.
+## Debounce for a dragged divider.
+##
+## `dragged` fires every frame of the gesture, and every ClientSettings setter
+## writes the file -- so persisting the raw signal would be sixty ConfigFile
+## saves a second, which on the web means sixty IndexedDB writes. The offset is
+## held here and committed once, shortly after the player lets go. Wanting the
+## write DEBOUNCED is not a reason to give ClientSettings a dirty flag: every
+## other setter persists, and the gesture is what is chatty.
+var _split_timer: Timer
+const SPLIT_SAVE_DELAY := 0.4
+
+## Panel bodies, built here because their CONTENTS depend on nothing in the
+## scene -- the sheet's rows come from `char_summary`, the options' bounds from
+## [ClientSettings] -- and handed to [PanelView], which owns where they sit.
 var _sheet: SummaryView
+var _skill_grid: SkillsView
 var _options: OptionsView
 var _help: HelpView
+var _quests: QuestsView
 var _find: FindBar
+
+## Your hit points, and whatever resources follow them. ONE control, moved
+## between two slots -- see [method _place_vitals].
+var _vitals: VitalsBars
 
 
 func _ready() -> void:
@@ -104,7 +176,14 @@ func _ready() -> void:
 			ServerEndpoint.page_origin()))
 	add_child(_meshes)
 
-	_hud.bind(_char)
+	# Before anything can be printed: _note() below writes into it, and the
+	# very first thing this method does after binding is open a socket.
+	_chat.bind(_chat_tabs)
+	_chat.active_log_changed.connect(_on_active_log_changed)
+
+	_vitals = VitalsBars.new()
+	_vitals.bind(_char)
+
 	_inventory.bind(_items, _meshes)
 
 	# The world pane draws YOU, so it needs the model that knows which asset you
@@ -113,6 +192,17 @@ func _ready() -> void:
 	# came to own db.active_quests.
 	_world.bind_char(_char)
 	_world.bind_meshes(_meshes)
+	_world.bind_world(_world_state)
+
+	# The resolver as well as the state: the minimap draws no meshes, but it
+	# does have to know whether this map's ground is drawn as art, and asking
+	# the shared resolver is what keeps its palette and the 3D pane's the same.
+	_minimap.bind(_world_state, _meshes)
+
+	# Same rule as every other pane: it emits a whole line a telnet player could
+	# type, and this sends it. Clicking a minimap cell is the same
+	# `WorldState.tile_action` lookup a click on the 3D pane makes.
+	_minimap.command_requested.connect(Evennia.command)
 
 	# After both panes are bound, so the manifest landing finds consumers ready
 	# rather than arriving at a pane that has not been given the resolver yet.
@@ -128,25 +218,53 @@ func _ready() -> void:
 	_login.bind(_char)
 	_login.command_requested.connect(Evennia.command)
 
+	# Built, bound, then handed over. The panel adds them to the tree, so
+	# nothing here is parented twice.
 	_sheet = SummaryView.new()
-	add_child(_sheet)
 	_sheet.bind(_summary)
-	_hud.sheet_requested.connect(_sheet.toggle)
+	_panel.add_panel(PanelView.TAB_CHARACTER, _sheet)
+
+	# Given the settings as well as the roster: WHERE a clicked skill's detail
+	# is shown -- this pane, the game log, or both -- is a presentation choice,
+	# and this is the control that acts on it.
+	_skill_grid = SkillsView.new()
+	_skill_grid.bind(_skills, _settings)
+	_panel.add_panel(PanelView.TAB_SKILLS, _skill_grid)
+
+	# Same rule as every other pane: it emits a whole line a telnet player
+	# could type -- the `skills <skill>` command the SERVER named on each row --
+	# and this sends it. There is no privileged path from this screen to the
+	# game.
+	_skill_grid.command_requested.connect(Evennia.command)
+
+	_quests = QuestsView.new()
+	_quests.bind(_quest_log)
+	_panel.add_panel(PanelView.TAB_QUESTS, _quests)
 
 	_options = OptionsView.new()
-	add_child(_options)
 	_options.bind(_settings)
-	_hud.options_requested.connect(_options.toggle)
+	_panel.add_panel(PanelView.TAB_OPTIONS, _options)
+
+	# The Game half of the options pane is the SERVER's, so it asks rather than
+	# writes -- the same path a clicked tile and an inventory drag use.
+	_options.command_requested.connect(Evennia.command)
 
 	_help = HelpView.new()
-	add_child(_help)
-	_hud.help_requested.connect(_help.toggle)
-	_hud.world_toggled.connect(_settings.set_show_world)
+	_panel.add_panel(PanelView.TAB_HELP, _help)
+
 
 	_retry_timer = Timer.new()
 	_retry_timer.one_shot = true
 	_retry_timer.timeout.connect(_redial)
 	add_child(_retry_timer)
+
+	_split_timer = Timer.new()
+	_split_timer.one_shot = true
+	_split_timer.timeout.connect(_save_splits)
+	add_child(_split_timer)
+
+	_split.dragged.connect(_on_split_dragged)
+	_right.dragged.connect(_on_split_dragged)
 
 	# The find bar replaces the placeholder node the scene reserves for it, so
 	# the layout slot is authored and the widget is built in code like the
@@ -155,7 +273,7 @@ func _ready() -> void:
 	var slot: Node = %FindBar
 	slot.add_sibling(_find)
 	slot.queue_free()
-	_find.bind(_output)
+	_find.bind(_chat.active_log())
 	_find.dismissed.connect(func(): _set_typing(true))
 
 	# Up and down in the input walk the history. Connected rather than given
@@ -203,6 +321,8 @@ func _on_opened() -> void:
 func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_note("disconnected (%d) %s" % [code, reason])
 	_char.reset()
+	_quest_log.reset()
+	_skills.reset()
 
 	if requested:
 		return
@@ -232,9 +352,25 @@ func _redial() -> void:
 	_retry_timer.start(delay)
 
 
-func _on_text(bbcode: String) -> void:
+## One line of game output.
+##
+## The routing tag rides in the outputfunc's kwargs -- `msg(text=(line,
+## {"type": "combat"}))` on the server reaches here as `{"type": "combat"}` --
+## and an ABSENT tag is the normal case for everything Evennia says on its own
+## behalf. Read as "" and resolved by [ChatTabs]; nothing is dropped.
+func _on_text(bbcode: String, kwargs: Dictionary) -> void:
 	# Evennia sends one message per line without a trailing newline.
-	_output.append_text(bbcode + "\n")
+	_chat.append(bbcode, str(kwargs.get(Const.MESSAGE_TYPE_KEY, "")))
+
+
+## Ctrl+F follows the tab the player is looking at.
+##
+## Rebound rather than searching every tab: a find that spanned tabs would have
+## to scroll one the player cannot see, and "3 of 40" would count matches in
+## logs they are not reading.
+func _on_active_log_changed(pane: RichTextLabel) -> void:
+	if _find != null:
+		_find.bind(pane)
 
 
 func _on_submitted(line: String) -> void:
@@ -279,6 +415,14 @@ func _on_input_key(event: InputEvent) -> void:
 		_input.accept_event()
 		return
 
+	# Ctrl+Tab walks the chat tabs WITHOUT leaving the input, which is the
+	# whole point of binding it here as well as below: a player mid-sentence
+	# can check the combat log and keep typing.
+	if key.ctrl_pressed and key.keycode == KEY_TAB:
+		_chat.cycle(not key.shift_pressed)
+		_input.accept_event()
+		return
+
 	# Escape hands the keyboard to the map. See [method _set_typing].
 	if key.keycode == KEY_ESCAPE:
 		_set_typing(false)
@@ -303,6 +447,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	if key.ctrl_pressed and key.keycode == KEY_F:
 		_find.open()
+		get_viewport().set_input_as_handled()
+		return
+
+	if key.ctrl_pressed and key.keycode == KEY_TAB:
+		_chat.cycle(not key.shift_pressed)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -363,24 +512,74 @@ func _set_typing(typing: bool) -> void:
 func _apply_settings() -> void:
 	var size_px := _settings.font_size
 
-	for control: Control in [_output, _input]:
-		control.add_theme_font_size_override("font_size", size_px)
+	_input.add_theme_font_size_override("font_size", size_px)
 
-	# RichTextLabel keeps a font size per style, so setting only `font_size`
-	# leaves bold and italic text at the default and the log ends up ragged.
-	for style: String in ["normal_font_size", "bold_font_size",
-			"italics_font_size", "mono_font_size"]:
-		_output.add_theme_font_size_override(style, size_px)
+	# Every tab, and every font style within each -- see
+	# [method ChatView.apply_font_size] on why one property is not enough.
+	_chat.apply_font_size(size_px)
 
 	get_window().content_scale_factor = _settings.ui_scale
 
-	# Hiding the branch rather than each pane: a hidden Control is not drawn and
-	# its SubViewport stops rendering, which is the point of the setting on a
-	# machine that is struggling. Nothing unsubscribes -- the models keep
-	# ingesting, so turning the panes back on shows the current world rather
-	# than an empty one waiting for the next snapshot.
-	_right.visible = _settings.show_world
-	_hud.set_world_shown(_settings.show_world)
+	# A hidden Control is not drawn and its SubViewport stops rendering, which is
+	# the point of the world setting on a machine that is struggling. Nothing
+	# unsubscribes -- the models keep ingesting, so turning the pane back on
+	# shows the current world rather than an empty one waiting for a snapshot.
+	#
+	# The INVENTORY setting is now about clutter rather than cost: a
+	# TabContainer draws only its current tab, so the item stage already stops
+	# rendering whenever the player is looking at another tab. What the setting
+	# buys is a strip without a tab you never use.
+	_world_pane.visible = _settings.show_world
+	_panel.set_panel_hidden(
+		PanelView.TAB_INVENTORY, not _settings.show_inventory)
+	_place_vitals()
+
+	# Assigning an offset does not emit `dragged`, so this cannot loop back into
+	# the debounce below.
+	_split.split_offset = _settings.text_split
+	_right.split_offset = _settings.world_split
+
+
+## Put the vitals bars wherever the player can still see them.
+##
+## Over the world pane when it is drawn, and in a strip above the log when it is
+## not. ONE control moved between two slots rather than two views of one model:
+## the bars are the same bars, and a second copy would be a second thing to keep
+## in step with a resource added later.
+##
+## This is not tidiness. `show_world` hides the whole world branch, so bars
+## simply parented to the pane they overlay would vanish with it -- and hit
+## points are the one number a MUD player cannot play without. A player turning
+## the 3D off on a struggling machine would have lost them.
+func _place_vitals() -> void:
+	var target := _world_vitals if _settings.show_world else _text_vitals
+
+	# The strip above the log takes no space at all when the bars are not in
+	# it, so the log keeps every pixel it had.
+	_text_vitals.visible = not _settings.show_world
+
+	if _vitals.get_parent() == target:
+		return
+
+	if _vitals.get_parent() != null:
+		_vitals.get_parent().remove_child(_vitals)
+
+	target.add_child(_vitals)
+
+
+## A divider was dragged. Remember it, shortly.
+##
+## Both dividers share one handler and one timer, and the offset is READ back
+## off the containers when the timer fires rather than carried in the signal:
+## the player may drag one, then the other, inside the same window, and a
+## handler that trusted its argument would save whichever fired last twice.
+func _on_split_dragged(_offset: int) -> void:
+	_split_timer.start(SPLIT_SAVE_DELAY)
+
+
+func _save_splits() -> void:
+	_settings.set_text_split(_split.split_offset)
+	_settings.set_world_split(_right.split_offset)
 
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:
@@ -396,6 +595,15 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _summary.ingest(channel, _payload):
+			return
+
+		if _skills.ingest(channel, _payload):
+			return
+
+		if _quest_log.ingest(channel, _payload):
+			return
+
+		if _world_state.ingest(channel, _payload):
 			return
 
 		if not _channels.has(channel):
@@ -419,5 +627,11 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 	_note("subscribed: %d channels" % _channels.size())
 
 
+## The CLIENT talking, rather than the game.
+##
+## Tagged as the server would tag it, so connection notices file under System
+## beside the server's own. This is the one place the client writes into the
+## log at all, and it names a generated constant rather than a literal for the
+## same reason every call site on the server does.
 func _note(message: String) -> void:
-	_output.append_text("[i][color=gray]-- %s[/color][/i]\n" % message)
+	_chat.append("[i][color=gray]-- %s[/color][/i]" % message, Const.MSG_SYSTEM)

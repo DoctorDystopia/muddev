@@ -34,8 +34,6 @@ const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
 ## never how they are arranged.
 const COLUMNS := 8
 
-const HEADING_FONT_SIZE := 12
-
 ## Floor on the carried grid, in pixels: roughly two rows of cells.
 const MIN_GRID_HEIGHT := 120
 
@@ -55,7 +53,7 @@ var _meshes: MeshResolver
 
 func _ready() -> void:
 	_heading = Label.new()
-	_heading.add_theme_font_size_override("font_size", HEADING_FONT_SIZE)
+	_heading.theme_type_variation = &"SectionHeading"
 	add_child(_heading)
 
 	# A minimum height, not just EXPAND_FILL. Inside a VSplitContainer the
@@ -77,7 +75,7 @@ func _ready() -> void:
 
 	var doll_heading := Label.new()
 	doll_heading.text = "Worn"
-	doll_heading.add_theme_font_size_override("font_size", HEADING_FONT_SIZE)
+	doll_heading.theme_type_variation = &"SectionHeading"
 	add_child(doll_heading)
 
 	_doll = HBoxContainer.new()

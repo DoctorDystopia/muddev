@@ -2,12 +2,13 @@
 
 [ext_resource type="Script" uid="uid://ilg2bfd21muq" path="res://scenes/console.gd" id="1_console"]
 [ext_resource type="PackedScene" uid="uid://rtvla3fixdrj" path="res://scenes/world.tscn" id="2_world"]
-[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_hud"]
 [ext_resource type="Script" uid="uid://cccs67m27yb6v" path="res://scenes/inventory/inventory_view.gd" id="4_inv"]
 [ext_resource type="PackedScene" path="res://scenes/login/login_view.tscn" id="5_login"]
-
-[sub_resource type="SystemFont" id="SystemFont_mono"]
-font_names = PackedStringArray("Consolas", "Cascadia Mono", "DejaVu Sans Mono", "monospace")
+[ext_resource type="Theme" path="res://ui/blackout_theme.tres" id="6_theme"]
+[ext_resource type="Script" path="res://scenes/chat/chat_view.gd" id="7_chat"]
+[ext_resource type="Script" path="res://scenes/panel/panel_view.gd" id="8_panel"]
+[ext_resource type="Script" path="res://scenes/vitals/vitals_bars.gd" id="9_vitals"]
+[ext_resource type="Script" path="res://scenes/minimap/minimap_view.gd" id="10_minimap"]
 
 [node name="Console" type="Control" unique_id=1927313264]
 layout_mode = 3
@@ -16,9 +17,11 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("6_theme")
 script = ExtResource("1_console")
 
 [node name="Split" type="HSplitContainer" parent="." unique_id=555808243]
+unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -35,23 +38,15 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Hud" parent="Split/Game" unique_id=1285690127 instance=ExtResource("3_hud")]
+[node name="TextVitals" type="MarginContainer" parent="Split/Game" unique_id=1285690127]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Output" type="RichTextLabel" parent="Split/Game" unique_id=2037561856]
+[node name="Chat" type="TabContainer" parent="Split/Game" unique_id=2037561856]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
-focus_mode = 2
-theme_override_colors/default_color = Color(0.85, 0.85, 0.85, 1)
-theme_override_constants/line_separation = 3
-theme_override_fonts/normal_font = SubResource("SystemFont_mono")
-theme_override_fonts/bold_font = SubResource("SystemFont_mono")
-theme_override_fonts/italics_font = SubResource("SystemFont_mono")
-bbcode_enabled = true
-scroll_following = true
-selection_enabled = true
+script = ExtResource("7_chat")
 
 [node name="FindBar" type="PanelContainer" parent="Split/Game" unique_id=688487204]
 unique_name_in_owner = true
@@ -70,20 +65,58 @@ size_flags_horizontal = 3
 split_offsets = PackedInt32Array(300)
 split_offset = 300
 
-[node name="WorldView" type="SubViewportContainer" parent="Split/Right" unique_id=434837260]
+[node name="WorldPane" type="Control" parent="Split/Right" unique_id=434837261]
+unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 3
+
+[node name="WorldView" type="SubViewportContainer" parent="Split/Right/WorldPane" unique_id=434837260]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 stretch = true
 
-[node name="SubViewport" type="SubViewport" parent="Split/Right/WorldView" unique_id=387407251]
+[node name="SubViewport" type="SubViewport" parent="Split/Right/WorldPane/WorldView" unique_id=387407251]
 handle_input_locally = false
 size = Vector2i(882, 708)
 render_target_update_mode = 4
 
-[node name="World" parent="Split/Right/WorldView/SubViewport" unique_id=1811063871 instance=ExtResource("2_world")]
+[node name="World" parent="Split/Right/WorldPane/WorldView/SubViewport" unique_id=1811063871 instance=ExtResource("2_world")]
 unique_name_in_owner = true
 
-[node name="Inventory" type="VBoxContainer" parent="Split/Right" unique_id=1156632075]
+[node name="Minimap" type="Control" parent="Split/Right/WorldPane" unique_id=434837263]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -166.0
+offset_top = 8.0
+offset_right = -8.0
+offset_bottom = 166.0
+grow_horizontal = 0
+script = ExtResource("10_minimap")
+
+[node name="WorldVitals" type="MarginContainer" parent="Split/Right/WorldPane" unique_id=434837262]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 0
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 248.0
+offset_bottom = 72.0
+mouse_filter = 2
+
+[node name="Panel" type="TabContainer" parent="Split/Right" unique_id=1156632076]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("8_panel")
+
+[node name="Inventory" type="VBoxContainer" parent="Split/Right/Panel" unique_id=1156632075]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("4_inv")

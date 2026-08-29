@@ -1,14 +1,16 @@
 class_name SummaryView
-extends Window
+extends Control
 ## The character sheet, drawn from [SummaryState].
 ##
-## ## A Window, because Godot has one
+## ## A tab, and it used to be a Window
 ##
-## The webclient's answer to a screen like this was a GoldenLayout pane, which
-## meant a layout engine, a registration, a teardown path and a saved-config
-## entry. Godot has `Window`: it floats, it is movable and resizable, the engine
-## draws the chrome, and closing it is a signal. That is the native answer and
-## it is most of the reason this file is short.
+## The webclient's answer to a screen like this was a GoldenLayout pane -- a
+## layout engine, a registration, a teardown path and a saved-config entry.
+## Godot's `Window` replaced all of that and was right on the desktop; on the
+## web it is an embedded subwindow inside the game canvas that cannot be moved
+## beside the game, remembers no position, and has no keyboard route to it. It
+## is a body in [PanelView] now, and what is left here is what was always the
+## point: iterate the panels, name none of them.
 ##
 ## ## It knows no panel names, and must not learn any
 ##
@@ -21,12 +23,6 @@ extends Window
 ## **a panel this client has never heard of renders correctly**, and a panel
 ## that stops being sent simply disappears. Neither needs an edit here.
 
-const TITLE := "Character"
-
-const PANEL_FONT_SIZE := 13
-const ROW_FONT_SIZE := 12
-const LABEL_COLOR := Color(0.62, 0.66, 0.72)
-
 ## Shown when the server has sent nothing yet. Distinguished from a character
 ## with empty panels, which is a real and different thing.
 const NO_DATA_TEXT := "No character sheet yet."
@@ -36,18 +32,9 @@ var _body: VBoxContainer
 
 
 func _init() -> void:
-	title = TITLE
-	size = Vector2i(360, 480)
-	# The engine owns the close button; this is just what it does.
-	close_requested.connect(hide)
-	hide()
-
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left", 10)
-	margin.add_theme_constant_override("margin_right", 10)
-	margin.add_theme_constant_override("margin_top", 8)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.theme_type_variation = &"PaneMargin"
 	add_child(margin)
 
 	var scroller := ScrollContainer.new()
@@ -66,15 +53,6 @@ func bind(state: SummaryState) -> void:
 	_rebuild()
 
 
-## Show or hide. The console wires this to a button.
-func toggle() -> void:
-	if visible:
-		hide()
-		return
-
-	popup_centered()
-
-
 func _rebuild() -> void:
 	if _state == null:
 		return
@@ -84,7 +62,7 @@ func _rebuild() -> void:
 		child.free()
 
 	if not _state.has_data:
-		_body.add_child(_row_label(NO_DATA_TEXT, LABEL_COLOR, ROW_FONT_SIZE))
+		_body.add_child(_row_label(NO_DATA_TEXT, &"RowKey"))
 		return
 
 	for panel_key: String in _state.panel_keys():
@@ -99,24 +77,30 @@ func _rebuild() -> void:
 ## that was removed.
 func _add_panel(panel_key: String) -> void:
 	_body.add_child(_row_label(
-		SummaryState.humanise(panel_key), Color.WHITE, PANEL_FONT_SIZE))
+		SummaryState.humanise(panel_key), &"PanelHeading"))
 
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 12)
+	grid.theme_type_variation = &"FormGrid"
 	_body.add_child(grid)
 
 	for row: Array in _state.rows_for(panel_key):
-		grid.add_child(_row_label(str(row[0]), LABEL_COLOR, ROW_FONT_SIZE))
-		grid.add_child(_row_label(str(row[1]), Color.WHITE, ROW_FONT_SIZE))
+		grid.add_child(_row_label(str(row[0]), &"RowKey"))
+		grid.add_child(_row_label(str(row[1]), &"RowValue"))
 
 	_body.add_child(HSeparator.new())
 
 
-func _row_label(text: String, colour: Color, size_px: int) -> Label:
+## One label, styled by NAMING a variation rather than by carrying a size and a
+## colour of its own.
+##
+## The three names this passes -- PanelHeading, RowKey, RowValue -- are declared
+## in `ui/blackout_theme.tres` and asserted to exist by `test_theme.gd`, which
+## reads this file as text. A name with no entry in the theme is a bug and is
+## caught; an entry nobody names is merely unused.
+func _row_label(text: String, variation: StringName) -> Label:
 	var label := Label.new()
 	label.text = text
-	label.add_theme_font_size_override("font_size", size_px)
-	label.add_theme_color_override("font_color", colour)
+	label.theme_type_variation = variation
 
 	return label
