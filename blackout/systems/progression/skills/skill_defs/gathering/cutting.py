@@ -16,6 +16,15 @@ from systems.progression.skills.skill_defs.base_skill import BaseSkill
 from systems.progression.skills.gatherables import GATHERABLE_REGISTRY
 from world.item_database import ITEM_DB
 from systems.stat_tracker import constants as stat_constants
+from systems.statefeed import constants as feed_const
+
+# Every line this module sends a player is gathering, so the routing tag is
+# bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/statefeed/constants.py.
+_MSG_GATHERING = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_GATHERING}
 
 
 _MIN_HARVEST_COOLDOWN = 2.0
@@ -205,10 +214,10 @@ class Cutting(BaseSkill):
         # always answers "fine".
         survives = character.hp > _BARE_HAND_HP_COST
 
-        character.msg(_MSG_BARE_HANDS.format(node=target.key))
+        character.msg((_MSG_BARE_HANDS.format(node=target.key), _MSG_GATHERING))
         delta = character.at_damage(_BARE_HAND_HP_COST, attacker=character,
                                     source=target)
-        character.msg(_MSG_BARE_HAND_COST.format(amount=delta))
+        character.msg((_MSG_BARE_HAND_COST.format(amount=delta), _MSG_GATHERING))
 
         return survives
 
@@ -271,7 +280,7 @@ class Cutting(BaseSkill):
                 logger.log_err(f"Cutting._execute_gathering {stat_constants.CUTTING_TOTALS_STAT_KEY} stat update failed: {exc!r}")
         
         success_msg = f"You successfully cut the {target.key} and receive a {item_name} for {xp_reward} XP."
-        character.msg(success_msg)
+        character.msg((success_msg, _MSG_GATHERING))
 
 
 
@@ -314,11 +323,16 @@ class Cutting(BaseSkill):
             # Use Evennia's native inheritance check instead of hasattr
             if target.is_typeclass("typeclasses.characters.Character", exact=False):
                 if target.key == character.key:
-                    character.msg("You cannot cut yourself for materials.")
+                    character.msg(
+                        ("You cannot cut yourself for materials.", _MSG_GATHERING))
                     return
-                character.msg(f"You cannot cut {target.key} for materials. They're a person! Unless..")
+                character.msg(
+                    (f"You cannot cut {target.key} for materials. They're a person! Unless..",
+                     _MSG_GATHERING))
                 return
-            character.msg(f"The {target.key} is not something you can cut for materials.")
+            character.msg(
+                (f"The {target.key} is not something you can cut for materials.",
+                 _MSG_GATHERING))
             return
 
         # 2. Accumulate all missing requirements
@@ -347,18 +361,22 @@ class Cutting(BaseSkill):
 
         if missing_reqs:
             reqs_string = ", ".join(missing_reqs)
-            character.msg(f"To cut the {target.key}, you require: {reqs_string}.")
+            character.msg(
+                (f"To cut the {target.key}, you require: {reqs_string}.",
+                 _MSG_GATHERING))
             return
 
         # 3. Check Cooldowns
         if not self.is_off_cooldown(character):
-            character.msg("You are already busy gathering.")
+            character.msg(("You are already busy gathering.", _MSG_GATHERING))
             return
 
         # 4. Proceed with Gathering
         item_key, item_name, xp_reward = self._get_loot_info(target)
         if item_key is None:
-            character.msg(f"Something is wrong with the {target.key}. Tell a builder.")
+            character.msg(
+                (f"Something is wrong with the {target.key}. Tell a builder.",
+                 _MSG_GATHERING))
             return
 
         if bare_handed:
