@@ -7,11 +7,15 @@ those files were built from, and nothing here is served to anyone.
 ```
 assets/
 ├── pack_model.py                     the one build step
+├── split_tileset.py                  the step in FRONT of it, for tilesets
 ├── items/weapons/rusty_sword/        one download, as it arrived
 │   ├── scene.gltf  scene.bin  textures/  license.txt
 ├── npcs/sus_eye/
 ├── characters/quaternius_universal_male/
-└── world_objects/sm_teleporter/
+├── world_objects/sm_teleporter/
+└── tiles/desert/                     one download holding 34 tiles
+    ├── Tileset.gltf  ColorPalette.png  SOURCE.md
+    └── center_h/  center_b/           split out of it, one per tile
 ```
 
 The **top directory** a download sits in — `items`, `npcs`, `characters`,
@@ -38,7 +42,10 @@ mapping, so it cannot be typed inconsistently.
    teleporter is packed at 256 because it is drawn flat on a single tile; at
    512 its six maps came to 1.1 MB of detail the tile cannot show.
 
-3. Register the key in `web/static/webclient/js/blackout_models.js`.
+3. Register the key in `web/static/webclient/js/blackout_models.js`. A
+   TERRAIN tile is registered in `godot/world/map_palette.gd`
+   (`TILE_MODELS`) instead, against the map it surfaces — the browser pane
+   has no terrain layer to register it with.
 4. Add the credit to `web/static/webclient/models/CREDITS.md`, in the same
    commit. For CC-BY work this is the licence term, not politeness.
 5. `evennia reload`, which runs `collectstatic`. A browser refresh alone will
@@ -49,6 +56,47 @@ its family's procedural mesh, so a missing step 3 is invisible rather than
 broken — check the item actually changed shape before believing it worked. A
 TILE prop is the exception: a room kind with nothing registered draws no prop
 at all, so there the missing step is simply nothing appearing.
+
+## Splitting a tileset
+
+A tileset is not a download in the sense the step above means. `Tileset.gltf`
+in `tiles/desert/` is **34 tiles in one file** sharing one palette image, and
+there is no download boundary between them — so `pack_model.py`, which packs a
+directory, has nothing to be pointed at. Packing the whole file as one model is
+not a workaround either: the bounding box would be the whole set, and the
+normalise in the client would leave a single tile under a millimetre across.
+
+`split_tileset.py` is the step in front, and all it does is manufacture the
+shape the pipeline already takes:
+
+```bash
+../evenv/Scripts/python.exe assets/split_tileset.py \n    assets/tiles/desert/Tileset.gltf assets/tiles/desert center_h center_b
+```
+
+That writes `assets/tiles/desert/center_h/` and `.../center_b/` as ordinary
+source directories — `scene.gltf`, `scene.bin`, `textures/` — and from there
+every step above applies unchanged: a manifest row, a pack, a credit.
+
+Run it with a node name the file does not hold and it prints every name that IS
+in there, which is the fastest way to see what a tileset contains.
+
+- **The tileset itself is never written to.** Re-running produces the same
+  bytes, exactly as re-packing does.
+- **The image comes out as a file, not embedded.** That is the one place the
+  output is not a subset of the input, and it is deliberate: `pack_model.py`
+  resamples an image it finds at a `uri` and leaves an embedded one alone, so a
+  tile split with its palette still inside the buffer would be served at the
+  tileset's authoring resolution whatever its family budget says.
+- **Materials, textures and samplers are copied whole**, so indices inside the
+  surviving mesh stay valid with no remapping. Right for a palette atlas, where
+  one image serves every tile; a tileset with a texture per tile would want them
+  pruned too, and `_split_document` is where that goes.
+- **A tile has to come out a unit SQUARE.** The client normalises by the longest
+  axis, so a tile with a decorative lip hanging past its edge — `block_a` reaches
+  0.28 past its south side — normalises its 2x2 footprint down to 0.877 and
+  leaves a gap between every pair of tiles in the world. Nothing about the file
+  is wrong and nothing reports it. `godot/tests/smoke_model_load.gd` measures
+  the footprint of every terrain tile for that reason.
 
 ## What packing does, and why
 

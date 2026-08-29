@@ -133,6 +133,16 @@ Write the message about the change: what moved, and why it had to. The existing
 history is the model — a subject line naming the thing that changed, then prose
 explaining the decision, not a list of files.
 
+## Writing files
+
+For anything beyond a small edit, write the content with the Write tool
+instead of a shell heredoc. A heredoc's quoting rules fight with the
+PowerShell-flavored commands and code snippets this repo is full of — `$`,
+backticks, and nested quotes inside a heredoc body silently break the write
+or the shell invocation around it. A short one- or two-line append or a
+trivial inline edit is fine as a heredoc; anything larger goes through Write
+(or Edit for existing files).
+
 ## Code conventions
 
 **`style.md` is the contract.** Docstrings carry Purpose / Entry /
@@ -232,12 +242,17 @@ browser is not worth its cost.
 
 ### Client-side facts that cannot be generated
 
-`ROOM_KIND_COLORS` and `Z_LAYOUT_ORDER` mix a server fact (which room kinds and
-maps exist) with a client one (what colour, what order). They are guarded
-instead of generated, by `systems/statefeed/tests/test_client_constants.py`.
-The asymmetry is deliberate: **a client key naming nothing is a bug; a server
-fact with no client entry is fine** — both tables document a fallback, so
+`ROOM_KIND_COLORS`, `Z_LAYOUT_ORDER` and `SKILL_CATEGORY_COLORS` mix a server
+fact (which room kinds, maps and skill categories exist) with a client one
+(what colour, what order). They are guarded instead of generated, by
+`systems/statefeed/tests/test_client_constants.py`. The asymmetry is
+deliberate: **a client key naming nothing is a bug; a server fact with no
+client entry is fine** — every one of those tables documents a fallback, so
 adding content must never require a client edit.
+
+The guard earns its keep on contact: `SKILL_CATEGORY_COLORS` shipped with a
+`General` entry, which is `BaseSkill`'s default category and which no skill in
+the game declares. The test caught it on the run that introduced it.
 
 ### An item may belong to several families
 
@@ -356,6 +371,36 @@ Progression hooks currently live in `typeclasses/mixins.py` (`kill`),
 `skill_defs/gathering/cutting.py` (`cut`, `gather`) and `typeclasses/rooms.py`
 (`visit`, opt-in per room via `db.quest_visit_key`). `talk` is fired by
 dialogue nodes, not by `CmdTalk` — one NPC can be two different targets.
+
+## Skills are not on the dossier
+
+They were a band under `systems/summary/panel_defs/` until 08/28/2026, and the
+band is gone — from `score` and from `profile` both. `PANEL_ORDER_SKILLS` is a
+deliberate gap at 40.
+
+**The reason is the dossier's contract, not the screen's looks.** A graphical
+client iterates `char_summary`'s panels and never names one, which is what lets
+a band added on the server appear with no client edit. A skills GRID would have
+had to reach in and pull one key out by name, and the first client to do that
+makes the contract a suggestion. One screen, one channel:
+`CHANNEL_CHAR_SKILLS`, built by `systems/statefeed/skills.py`.
+
+**`systems/progression/skills/detail.py` owns what a skill IS**, and three
+readers share it: the EvMenu node, `skills <skill>`, and the feed. The text
+sheet is rendered FROM the structured form rather than from a second set of
+handler reads, so the two cannot describe a skill differently — the arrangement
+`statefeed/quests.py` uses beside `objective_lines`. Its four unlock sections
+are a table; a fifth skill-gated system is one row plus one row builder, and it
+reaches both outputs at once.
+
+**`emit_skills` fires on a level change, on the `skills` command and on resync
+— never on an XP award.** It walks four unlock registries per skill and is the
+most expensive payload in the feed; combat awards XP on every hit. That is also
+why the channel is uncapped: its rate is bounded by the player, not the tick.
+
+`skills <arg>` reads its argument three ways in a fixed order — skill key,
+skill name or unique prefix, then character name. That took nothing away: every
+string the skill branch claims used to be a failed `caller.search`.
 
 ## The moderator egg
 

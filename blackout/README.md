@@ -153,8 +153,13 @@ ITEMS = {
 ```
 
 Aliases: `sc`, `dossier`, `char`. Opens the dossier — one screen holding
-combat level, hitpoints, the whole skill roster, combat readiness, holdings
-and world state, with numbered jumps into the panel that owns each number.
+combat level, hitpoints, combat readiness, holdings and world state, with
+numbered jumps into the panel that owns each number.
+
+**Skills are not on it.** The band left on 08/28/2026 for a screen of its own;
+see [Skill sheets](#skill-sheets-skills-skill) below for where it went and why.
+The aggregates stay here — combat level, total level and total XP are the
+vitals panel's — and `Skills panel` is the first drill-down.
 
 ```
 ============================================================
@@ -173,10 +178,8 @@ COMBAT READINESS
    Attack        crush +0      Strength      +0
    Defence       stab +0  slash +0  crush +0
 ------------------------------------------------------------
-SKILLS
-   Combat        Brawn 36  Defense 27  Fortitude 32
-                 Strike 32
-   Gathering     Brain Farming 0  Cutting 52
+HOLDINGS
+   Credits       1,204         Banked        18,000
    ...
 ```
 
@@ -231,9 +234,14 @@ band" and "how much of it" are different questions:
 | Identity | yes | name, path, hardcore flag |
 | Vitals → "Standing" | yes | combat level, total level, total XP — **not** current HP, combat state or active aura |
 | Combat Readiness | **no** | — your loadout is tactical information |
-| Skills | yes | everything, same as your own view |
 | Holdings | **no** | — |
 | World | yes | quests completed, playtime, created — **not** your location or active quests |
+
+Skills are absent from this table because they are absent from the dossier
+entirely — the band moved out on 08/28/2026. `skills <character>` is what
+exposes another character's levels, and it always did; what a profile now
+carries about progress is the three aggregate figures, which is the same split
+OSRS makes between a hiscores entry and a full stat page.
 
 `public` defaults to **False**, so a newly added panel is private until its
 author says otherwise. The location omission is the load-bearing one: a profile
@@ -294,6 +302,46 @@ Cutting: Level 7 (1240/1823 XP until next level)
 Foundry: Level 3 (240/425 XP until next level)
 Metalsmith: Level 1 (0/83 XP until next level)
 ```
+
+### Skill sheets (`skills <skill>`)
+
+```bash
+> skills cutting
+> skills brain          # a unique prefix is enough
+```
+
+One skill in full: its level, the XP curve, and **everything it unlocks** —
+recipes, gathering nodes, equippable items and abilities, each with the level
+it needs and coloured by whether you have reached it.
+
+The argument has **three readings, resolved in this order**: a skill key, a
+skill's display name (or a unique prefix of either), then a character name.
+A skill name winning over a character name takes nothing away — before this
+branch existed, `skills cutting` searched for a character called "cutting",
+failed, and printed "Could not find". Every string the skill branch claims is
+one that used to be an error.
+
+| Owns | Lives in |
+|---|---|
+| The sheet, as text *and* as data; the unlock section table | `systems/progression/skills/detail.py` |
+| The `char_skills` payload | `systems/statefeed/skills.py` |
+| The menu node's back-navigation, and nothing else | `systems/menus/skills_menu.py` |
+
+**One description, three readers.** The sheet used to be written inline in the
+EvMenu, which meant the only way to see what a skill unlocked was to be inside a
+menu. Three readers now share `detail.py` — the menu node, this command, and the
+`char_skills` channel — and the text is rendered *from* the structured form
+rather than from a second set of handler reads, so the grid a graphical client
+draws and the sheet a telnet player reads cannot describe a skill differently.
+Adding a fifth skill-gated system is one row in `_UNLOCK_SECTIONS` plus its row
+builder, and it reaches both outputs at once.
+
+Typing `skills` in any form also publishes the roster on the `char_skills`
+state-feed channel (GMCP `Char.Skills`), alongside the level-change and resync
+publishes. It is **not** published on an XP award — combat awards XP on every
+hit, and the payload walks four unlock registries per skill, so it is the most
+expensive thing in the feed. That is also why it is uncapped: its rate is
+bounded by the player, not by the tick.
 
 ### Check skill levels (Python)
 
