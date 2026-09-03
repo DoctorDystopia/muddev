@@ -8,8 +8,8 @@ Description: Movement command overrides.
              either a room name or an (X,Y) coordinate, but gates the
              coordinate form behind a Builder lock. Blackout un-gates it,
              because a graphical client addresses tiles by coordinate and
-             nothing else -- see the click-to-move section of
-             web/static/webclient/js/plugins/blackout3d.js.
+             nothing else -- see the click-to-move handling in
+             godot/world/world_view.gd.
 """
 
 from evennia.commands.cmdset import CmdSet

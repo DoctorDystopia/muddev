@@ -2,7 +2,7 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/23/2026
-Description: Drift guards for the facts a graphical client retypes.
+Description: Drift guards for the facts the Godot client retypes.
 
              A client cannot import Python, so a handful of facts the server
              owns -- which room kinds exist, which maps exist -- are spelled out
@@ -10,8 +10,10 @@ Description: Drift guards for the facts a graphical client retypes.
              they have already drifted: `ROOM_KIND_COLORS` named a room kind
              ("Pole clearing") that no map has ever declared, so both the metal
              and the rusty pole clearings silently rendered a hash colour rather
-             than the authored one. The same dead key had already been copied
-             into the Godot client.
+             than the authored one. The dead key had also been copied into the
+             now-retired browser webclient (archive/webclient-js/), which is
+             exactly the kind of drift this module exists to catch regardless
+             of which client is asking.
 
              The asymmetry below is deliberate and is the whole design:
 
@@ -27,14 +29,13 @@ Description: Drift guards for the facts a graphical client retypes.
                  trains people to edit it rather than read it.
 
              Reads the client sources as TEXT. That is not laziness: parsing is
-             cheap and total here, whereas executing JavaScript or GDScript from
-             a Django test would mean a runtime dependency for a check whose
-             whole value is that it costs nothing to keep running.
+             cheap and total here, whereas executing GDScript from a Django
+             test would mean a runtime dependency for a check whose whole
+             value is that it costs nothing to keep running.
 
-             The Godot client lives on a branch. Every table below is looked up
-             in whatever client files are present, and a missing file is skipped
-             rather than failed, so this module passes on `main` and starts
-             guarding the Godot copies the moment that branch lands. The vacuity
+             Every table below is looked up in whatever client files are
+             present, and a missing file is skipped rather than failed -- so a
+             client can gain or lose a screen with no edit here. The vacuity
              guard in `test_at_least_one_client_table_was_found` is what stops
              "skipped everything" from reading as "passed".
 """
@@ -58,13 +59,9 @@ _GAME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
 # game dir rather than inside it.
 _REPO_ROOT = os.path.dirname(_GAME_DIR)
 
-_WEBCLIENT_JS = os.path.join(
-    _GAME_DIR, "web", "static", "webclient", "js")
-
 # Where each client spells out the two tables. A path that does not exist is
 # skipped; see the module docstring.
 _ROOM_KIND_TABLE_SOURCES: tuple = (
-    os.path.join(_WEBCLIENT_JS, "plugins", "blackout3d.js"),
     # Both tables moved out of world_view.gd on 08/28/2026, when the minimap
     # became a second pane drawing the same map. This path moved WITH them, in
     # the same change, because a source this scanner cannot find is one it
@@ -519,40 +516,6 @@ class ClientRoomKindTests(unittest.TestCase):
                         "Rooms it was meant to colour are falling through to "
                         "the hashed hue." % (key, os.path.basename(path)))
 
-    def test_clients_agree_with_each_other_on_room_kinds(self):
-        """
-        Two clients drawing the same world from the same feed should not
-        disagree about which room kinds are worth colouring. This is a weaker
-        claim than "identical palettes" on purpose -- the colours themselves
-        are each client's own business -- but a kind one client knows and the
-        other does not is a copy that has been updated once.
-        """
-        tables = {}
-
-        for path in _ROOM_KIND_TABLE_SOURCES:
-            source = _read_source(path)
-
-            if source is None:
-                continue
-
-            keys = _extract_room_kind_keys(source)
-
-            if keys is not None:
-                tables[os.path.basename(path)] = set(keys)
-
-        if len(tables) < 2:
-            self.skipTest("only one client present; nothing to compare")
-
-        names = sorted(tables)
-        first = names[0]
-
-        for other in names[1:]:
-            with self.subTest(clients="%s vs %s" % (first, other)):
-                self.assertEqual(
-                    tables[first], tables[other],
-                    "%s and %s colour different sets of room kinds."
-                    % (first, other))
-
 
 class ClientMapOrderTests(unittest.TestCase):
     """Every map a client places by name must be a map that exists."""
@@ -698,19 +661,6 @@ class ClientTableDiscoveryTests(unittest.TestCase):
             "moved or the table was renamed; every drift check in this module "
             "is now inert.")
 
-    def test_the_webclient_is_one_of_them(self):
-        """
-        The Godot client is optional here -- it lives on a branch. The
-        webclient is not: it is the source of truth for client behaviour, so
-        its absence is a broken path rather than a branch that has not landed.
-        """
-        path = os.path.join(_WEBCLIENT_JS, "plugins", "blackout3d.js")
-
-        self.assertTrue(
-            os.path.isfile(path),
-            "blackout3d.js is not at %s; the drift checks cannot see the "
-            "webclient." % path)
-
 
 class GeneratedConstantsTests(unittest.TestCase):
     """The committed generated modules must match a fresh render."""
@@ -741,9 +691,10 @@ class GeneratedConstantsTests(unittest.TestCase):
 
     def test_committed_files_match_a_fresh_render(self):
         """
-        The generated files are committed, because the webclient has no build
-        step and must not acquire one just to load. That trade only holds if a
-        stale copy fails loudly, which is this test.
+        The generated file is committed, because the client has no build step
+        of its own for it and must not acquire one just to load a constant.
+        That trade only holds if a stale copy fails loudly, which is this
+        test.
         """
         for language, path in _GENERATED_OUTPUTS.items():
             with self.subTest(language=language):
@@ -760,10 +711,3 @@ class GeneratedConstantsTests(unittest.TestCase):
                     "%s is out of date with systems/statefeed/constants.py. "
                     "Run:\n    python scripts/export_client_constants.py"
                     % os.path.basename(path))
-
-    # The "does anything actually load this?" check moved to
-    # test_client_assets.ModuleGraphTests.test_the_generated_constants_are_
-    # reachable. It used to look for the filename in base.html, which stopped
-    # being answerable when the webclient became a module graph: nothing but
-    # the entry point is named in the template any more, so the question is
-    # reachability from blackout_main.js rather than presence in the markup.

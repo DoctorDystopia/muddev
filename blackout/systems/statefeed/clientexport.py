@@ -7,17 +7,19 @@ Description: Render the facts a graphical client must know as source that
 
              THE PROBLEM. A client cannot import Python. Every channel name,
              asset kind and item family therefore gets retyped in the client's
-             own language, and nothing checks the copy. `blackout3d.js` alone
-             restates twelve channel names; `blackout_inventory.js` restates
-             one more; the Godot client on `godot-client-prototype` restates
-             seven again in GDScript. Three copies of one fact, none checked.
+             own language, and nothing checks the copy. The Godot client
+             restates a dozen-plus names in GDScript -- one copy of each fact,
+             but still a copy, and still worth generating rather than trusting.
 
-             It has already cost something. `ROOM_KIND_COLORS` named a room
-             kind no map declares, both real clearings quietly rendered the
-             fallback hue, and the dead key had been copied into the Godot
-             client before anyone noticed -- so the second client inherited the
-             bug rather than exposing it. See
-             tests/test_client_constants.py, which is the guard for the tables
+             This has already cost something, and with more than one client to
+             boot. `ROOM_KIND_COLORS` named a room kind no map declares, so
+             every client hand-typing that table quietly rendered the fallback
+             hue -- and the dead key had been copied from one client into the
+             other before anyone noticed. The two-client era that produced that
+             incident is over (the three.js/GoldenLayout webclient is retired;
+             see archive/webclient-js/), but the lesson survives it: a fact
+             that CAN be generated should be, so there is nothing left to copy
+             wrong. See tests/test_client_constants.py, which guards the tables
              that CANNOT be generated because they mix a server fact (which
              room kinds exist) with a client one (what colour each should be).
 
@@ -41,10 +43,9 @@ Description: Render the facts a graphical client must know as source that
              what lets the whole thing be tested without a filesystem and keeps
              this module safe to import from anywhere.
 
-             The GDScript renderer is written now, while there is one client
-             using it, rather than when the Godot branch lands. The two differ
-             only in punctuation, and writing the second one alongside the
-             first is what proves the shared part is actually shared.
+             _SYNTAX_BY_LANGUAGE stays a table, not a single hardcoded
+             renderer, even with one language in it now: a future client is a
+             row here, not a rewrite of this module.
 """
 
 import os as _os
@@ -78,34 +79,10 @@ _HEADER_LINES: tuple = (
 
 # What each language spells the pieces of a constant declaration with.
 #
-# A table rather than two renderers, because the two languages differ only in
-# punctuation and the SHAPE of the file is the part worth having one copy of.
-# A third client is a row here.
-#
-# JavaScript is emitted as an ES MODULE: a flat file of `export const`, with no
-# wrapper and no global.
-#
-# It was an IIFE publishing `window.blackoutConstants`, which is what a plain
-# `<script>` needs -- and that is exactly what the webclient stopped being. A
-# module's exports ARE its interface, so the wrapper, the `"use strict"` (module
-# code is always strict) and the window publish were all ceremony around
-# nothing. It also means importing a name this file does not export is a
-# LOAD-TIME error naming the symbol, where reading a missing key off a global
-# was silently `undefined`.
-_JS_SYNTAX: dict = {
-    "comment": "//",
-    "open": "",
-    "close": "",
-    "indent": "",
-    "declare": "export const %s = %s;",
-    "publish": "",
-    "list_open": "[",
-    "list_close": "]",
-    "map_open": "{",
-    "map_close": "}",
-    "pair": "%s: %s",
-}
-
+# A table rather than a single hardcoded renderer, so a second client is a row
+# here rather than a second copy of this whole module. There was a JS entry
+# too, for the three.js/GoldenLayout webclient -- see archive/webclient-js/ --
+# removed when that client was retired in favour of Godot as the sole client.
 _GD_SYNTAX: dict = {
     "comment": "#",
     "open": "",
@@ -142,7 +119,7 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_SUBSCRIBED", const.CHANNEL_SUBSCRIBED_ACK),
 )
 
-# Asset kinds, as the client's `family` vocabulary. blackout3d.js needs
+# Asset kinds, as the client's `family` vocabulary. world_view.gd needs
 # FAMILY_CHARACTER on its own behalf -- it asks for the local player's mesh
 # rather than passing a payload's key through -- and the rest are here so the
 # set is complete rather than "the one that was needed first".
@@ -156,7 +133,7 @@ _KIND_EXPORTS: tuple = (
     ("FAMILY_GENERIC", const.ASSET_KEY_GENERIC),
 )
 
-# Item families, in the order blackout_meshes.js builds procedural meshes for
+# Item families, in the order family_shapes.gd builds procedural meshes for
 # them, so the generated list reads alongside the file that consumes it.
 _ITEM_FAMILY_EXPORTS: tuple = (
     ("ITEM_FAMILY_WEAPON", const.ITEM_FAMILY_WEAPON),
@@ -184,8 +161,8 @@ _TILE_KIND_EXPORTS: tuple = (
 
 # Single-value exports that are neither a channel nor a vocabulary.
 #
-# SUBSCRIBE_ALL is what the handshake sends; ASSET_KEY_CHARACTER is the key
-# blackout_models.js registers the player model against and the one string that
+# SUBSCRIBE_ALL is what the handshake sends; ASSET_KEY_CHARACTER is the model
+# key the player's own avatar is registered against, and the one string that
 # has to agree with the server or every character in the game loses its art.
 _SCALAR_EXPORTS: tuple = (
     ("SUBSCRIBE_ALL", const.SUBSCRIBE_ALL),
@@ -240,11 +217,9 @@ _MESSAGE_TYPE_EXPORTS: tuple = (
     ("MSG_SYSTEM", const.MESSAGE_TYPE_SYSTEM),
 )
 
-_LANGUAGE_JS: str = "js"
 _LANGUAGE_GD: str = "gd"
 
 _SYNTAX_BY_LANGUAGE: dict = {
-    _LANGUAGE_JS: _JS_SYNTAX,
     _LANGUAGE_GD: _GD_SYNTAX,
 }
 
@@ -259,24 +234,11 @@ _REPO_ROOT: str = _os.path.dirname(_GAME_DIR)
 #
 # THIS LIVES HERE, not in scripts/export_client_constants.py, even though the
 # script is the only thing that writes them. Two callers need the table -- the
-# script, and the test that asserts the committed copies are current -- and
+# script, and the test that asserts the committed copy is current -- and
 # CLAUDE.md marks blackout/scripts/ import-unsafe, so the test cannot read it
 # from there. Putting it in the pure module gives it one owner that both can
 # import, and leaves the script genuinely thin.
-#
-# The JavaScript file lands in a `generated/` directory of its own rather than
-# beside the hand-written ones, so "is this file authored?" is answerable from
-# the path. It still has to be named in web/templates/webclient/base.html to
-# reach the browser, and must load BEFORE any plugin that reads it.
-#
-# The GDScript file is written on `main` even though the Godot client lives on
-# `godot-client-prototype`. That is the point: the branch merges main and finds
-# its constants already generated, rather than growing a third hand-typed copy
-# while it waits.
 _OUTPUT_PATHS: dict = {
-    _LANGUAGE_JS: _os.path.join(
-        _GAME_DIR, "web", "static", "webclient", "js", "generated",
-        "blackout_constants.js"),
     _LANGUAGE_GD: _os.path.join(
         _REPO_ROOT, "godot", "autoload", "blackout_constants.gd"),
 }
@@ -299,7 +261,7 @@ def _quote(value) -> str:
 
     Methodology:
         Strings are double-quoted with backslashes and quotes escaped; numbers
-        are passed through. JavaScript and GDScript agree on all three forms,
+        are passed through. Every target language agrees on all three forms,
         which is why there is one routine rather than one per language.
 
         A value this cannot render raises rather than guessing. Everything
@@ -453,7 +415,7 @@ def render(language: str) -> str:
     Purpose: Render the client constants module for one target language.
 
     Entry:
-        language - "js" or "gd".
+        language - "gd".
 
     Exit/Returns:
         The complete file contents, newline-terminated. Writes nothing.
@@ -462,19 +424,14 @@ def render(language: str) -> str:
         _SYNTAX_BY_LANGUAGE read.
 
     Methodology:
-        Banner, then the language's module wrapper around the shared body. The
-        JavaScript form is an IIFE publishing one global, matching how
-        blackout_channels.js and blackout_meshes.js already present themselves,
-        and publishes on `window` explicitly for the reason blackout_channels.js
-        documents: a top-level `const` makes a lexical binding but no property
-        on the global object, so a guard on `window.x` would read undefined.
-
+        Banner, then the language's module wrapper around the shared body.
         The GDScript form is a bare `const` block, which is what a Godot
         autoload or a preloaded script wants; it has no wrapper to add.
 
     Notes/References:
         Raises ValueError for an unknown language rather than defaulting, so a
-        typo in the export script is not silently rendered as JavaScript.
+        typo in the export script fails loudly instead of rendering nothing
+        useful.
     """
     syntax = _SYNTAX_BY_LANGUAGE.get(language)
 

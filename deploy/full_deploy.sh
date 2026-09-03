@@ -72,9 +72,7 @@ else
     echo "stale -- regenerating"
     ( cd "$REPO_ROOT/blackout" && run "$PYTHON" scripts/export_client_constants.py )
     echo "regenerated -- review and commit:"
-    git -C "$REPO_ROOT" diff --stat -- \
-        blackout/web/static/webclient/js/generated/blackout_constants.js \
-        godot/autoload/blackout_constants.gd
+    git -C "$REPO_ROOT" diff --stat -- godot/autoload/blackout_constants.gd
 fi
 
 # --- 2. Server: map rebuild or plain reload ----------------------------------

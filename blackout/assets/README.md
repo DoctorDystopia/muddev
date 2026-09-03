@@ -1,8 +1,8 @@
 # Model sources
 
-The **authoring** side of the webclient's 3D art. What the game actually serves
-lives in `web/static/webclient/models/`; this directory holds the downloads
-those files were built from, and nothing here is served to anyone.
+The **authoring** side of the Godot client's 3D art. What the game actually
+serves lives in `web/static/webclient/models/`; this directory holds the
+downloads those files were built from, and nothing here is served to anyone.
 
 ```
 assets/
@@ -42,10 +42,11 @@ mapping, so it cannot be typed inconsistently.
    teleporter is packed at 256 because it is drawn flat on a single tile; at
    512 its six maps came to 1.1 MB of detail the tile cannot show.
 
-3. Register the key in `web/static/webclient/js/blackout_models.js`. A
-   TERRAIN tile is registered in `godot/world/map_palette.gd`
-   (`TILE_MODELS`) instead, against the map it surfaces — the browser pane
-   has no terrain layer to register it with.
+3. Nothing to register for an ITEM, NPC or CHARACTER model — the client's
+   `ModelRegistry` ingests `models/manifest.json` (step 2's output) directly,
+   so any asset key packed is one it can resolve. A TERRAIN tile is the
+   exception: it has no per-entity asset key to send, so it is registered by
+   map instead, in `godot/world/map_palette.gd` (`TILE_MODELS`).
 4. Add the credit to `web/static/webclient/models/CREDITS.md`, in the same
    commit. For CC-BY work this is the licence term, not politeness.
 5. `evennia reload`, which runs `collectstatic`. A browser refresh alone will

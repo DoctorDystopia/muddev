@@ -71,9 +71,10 @@ command. Both `TabContainer`s and both their internal `TabBar`s are
 
 ## Two modes, and why there have to be two
 
-The webclient binds sixteen movement keys and can afford to, because its input
-is one DOM element among many and focus leaves it constantly — `hotkeys.js`
-just asks "is the player typing?" Here the text input owns the keyboard: the
+The retired browser webclient bound sixteen movement keys and could afford
+to, because its input was one DOM element among many and focus left it
+constantly — `hotkeys.js` just asked "is the player typing?" Here the text
+input owns the keyboard: the
 console grabs it on ready and nothing takes it away, so the same question would
 answer "yes" forever and every movement key would be dead code.
 
@@ -280,18 +281,18 @@ landmarks on it is what a minimap is for.
 > `ModelRegistry.PRESENTATION`, and `test_map_terrain` asserts every terrain key
 > does.
 
-> **The browser pane has no terrain layer**, so there is nothing to keep in step
-> with `blackout_models.js` here — the parity rule above applies to a model both
-> panes draw, and neither pane draws a tile the other does not. The served
-> manifest names the tile keys; the browser simply never asks for them.
+> **The retired browser pane had no terrain layer**, so there was nothing to
+> keep in step with `blackout_models.js` there — the parity rule above applied
+> to a model both panes drew, and neither drew a tile the other did not. The
+> served manifest still names the tile keys either way.
 
 ## The inventory draws in 3D without giving up drag and drop
 
-The browser gives the inventory a whole second three.js scene, camera and
-renderer, and hit-tests meshes to work out what was clicked. Here the cells stay
-`Control`s — so Godot's own drag and drop keeps working, which is the single
-largest thing the engine buys on this screen — and `ItemStage` supplies each
-cell nothing but a picture.
+The retired browser client gave the inventory a whole second three.js scene,
+camera and renderer, and hit-tested meshes to work out what was clicked. Here
+the cells stay `Control`s — so Godot's own drag and drop keeps working, which
+is the single largest thing the engine buys on this screen — and `ItemStage`
+supplies each cell nothing but a picture.
 
 **One viewport, not one per cell.** The obvious build is a `SubViewport` per
 cell: with 32 carried slots and a dozen worn frames that is forty-odd render
@@ -429,7 +430,8 @@ what the `requested` flag on `Evennia.closed` is for.
 
 **A reconnect does not restore the session.** A websocket close ends the Evennia
 Session, so the new socket lands on the connection screen and the player logs in
-again — exactly what the webclient does. `CharState.reset()` is what makes that
+again — the same behaviour Evennia's own browser webclient has always had.
+`CharState.reset()` is what makes that
 coherent: it clears the character, so the HUD stops claiming 87/100 beside a
 dead socket and the login form comes back. The form's visibility is a *function*
 of whether a body exists rather than a one-way dismissal, which keeps "am I

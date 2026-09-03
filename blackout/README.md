@@ -208,15 +208,17 @@ screen shows. It is also part of the full resync snapshot. The channel is
 uncapped — it is request-driven, so a cap would mean pressing `score` twice in
 a second and getting no answer the second time.
 
-> **Adding a state-feed channel used to break the webclient.** A client that
-> subscribed with `channels: "all"` would start receiving a channel its plugin
-> had no listener for, and Evennia's `default_out.js` claims every unhandled
-> outputfunc and prints the raw JSON at the player as
-> `Error or Unhandled event`. `blackout3d.js` now binds its listeners from the
-> server's own `blackout_subscribed` acknowledgement, so it claims (and
-> silently drops) any channel it has no use for. Its hardcoded `CHANNELS` list
-> is only a seed for the handshake. **A browser hard-refresh is needed to pick
-> up plugin changes** — `evennia reload` does not touch static JS.
+> **Adding a state-feed channel can break a client that isn't ready for it.**
+> A client that subscribes with `channels: "all"` starts receiving every
+> channel the server offers, including ones its own code has no listener for.
+> The Godot client (`godot/scenes/console.gd`) subscribes off the server's own
+> `blackout_subscribed` acknowledgement rather than a hardcoded list, and
+> offers each incoming message to every model, which reports whether it wanted
+> it — so an unclaimed channel is silently dropped rather than erroring. A
+> retired browser webclient used to hit this differently: Evennia's stock
+> `default_out.js` claims every unhandled outputfunc and would print the raw
+> JSON at the player as `Error or Unhandled event` if a plugin didn't bind a
+> listener for a new channel.
 
 ### Public profile (`profile`)
 

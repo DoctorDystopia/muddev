@@ -7,13 +7,14 @@ extends RefCounted
 ## swapped, a vi key missing — and reads as fine until somebody walks the wrong
 ## way in a fight.
 ##
-## ## This is the webclient's table, on purpose
+## ## This binding is a promise made on the website, not just in code
 ##
-## `web/static/webclient/js/plugins/hotkeys.js` binds these sixteen keys, and
 ## `playblackout-site`'s /play page tells every new player "WASDQEZC keys and
-## click for movement". Changing the bindings here would make the page wrong
-## for whichever client the player happens to be using, so the two halves of
-## the compass rose are copied rather than redesigned.
+## click for movement". Changing the bindings here without updating that page
+## makes it wrong. (Before the retired browser webclient's Godot-only cutover
+## on 2026-09-03, the same sixteen keys were also bound in
+## `archive/webclient-js/js/plugins/hotkeys.js`, and the two tables were kept
+## in lockstep for the same reason.)
 ##
 ## ## Why the command is a bare direction string
 ##

@@ -93,11 +93,27 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
+# The three.js/GoldenLayout browser webclient is retired -- see
+# archive/webclient-js/README.md. Godot (server/conf/godot_websocket.py,
+# port 4008 below) is the sole client now, on every platform including the
+# public website. This is Evennia's own gate: it 404s the Django /webclient/
+# route and removes the "Play in the browser!"/"Play Online" links from the
+# stock homepage and nav templates, since both are already wrapped in
+# `{% if webclient_enabled %}` there.
+WEBCLIENT_ENABLED = False
+
 # The webclient template falls back to `"ws://" + hostname + ":4002"` when
 # this is None (evennia/web/templates/webclient/base.html). Over HTTPS the
 # browser blocks that as mixed content and the client silently never
 # connects, so the wss:// URL must be stated explicitly. No query string -
 # evennia.js appends its own session parameters.
+#
+# Left set even though WEBCLIENT_ENABLED is False above: this only gates the
+# Django view/template, not the browser websocket service itself, which
+# stays registered. Tearing that out means also editing the LIVE
+# deploy/cloudflared/config.yml (a template here; the deployed copy is
+# elsewhere) and restarting the tunnel service -- a live-infra change,
+# deliberately not bundled into the webclient retirement.
 WEBSOCKET_CLIENT_URL = "wss://game.playblackout.io/ws"
 
 # Cloudflare closes a proxied websocket after ~100s with no traffic either

@@ -34,6 +34,13 @@ Description: Operator script. Reconciles the live XYZ grid with
              "Done". Doing it in-process also means Evennia is bootstrapped
              once instead of twice.
 
+             A character standing on a purged room falls through to its
+             `home`, which is Limbo for every character in this game --
+             see relocate_stranded_characters. This script walks every
+             character afterwards and moves anyone left off the grid to
+             world.respawn's respawn room, so a rebuild never strands a
+             player somewhere with no way back to the game world.
+
              DESTRUCTIVE. Run deliberately, never import. Everything is behind
              an `if __name__ == "__main__"` guard: anything that merely
              imports a module in this directory -- a linter, a doc generator,
@@ -418,6 +425,77 @@ def spawn_maps(grid, dry_run):
     grid.spawn()
 
 
+def relocate_stranded_characters(dry_run):
+    """
+    Purpose: Move every player character left off the grid to the respawn
+             room, after a rebuild has purged and respawned the maps.
+
+    Entry:
+        dry_run is True to report without moving anyone.
+
+    Exit/Returns:
+        Returns the number of characters relocated (or that would be).
+
+    Module Globals:
+        _DRY_RUN_PREFIX, _LIVE_PREFIX read
+
+    Methodology:
+        A character standing in a purged room falls through
+        GridTile.at_object_delete -> clear_contents to its `home`, which is
+        Limbo (settings.DEFAULT_HOME) for every character in this game --
+        nothing in typeclasses/characters.py sets Character.home to anything
+        else. So once purge_zcoords and spawn_maps have run, any character
+        not standing on a live grid room is one this rebuild displaced. Move
+        it to world.respawn's respawn room and re-home it there too, so the
+        next rebuild does not send it back to Limbo either.
+
+    Notes/References:
+        isinstance(location, XYZRoom), not a Limbo dbref comparison, is what
+        catches a character with no location at all as well as one sitting
+        in Limbo -- both read as "not on the grid".
+
+        Runs after spawn_maps so the respawn room already exists.
+        get_respawn_room degrades to None rather than raising if it does
+        not, and this function reports that and does nothing rather than
+        aborting a rebuild that otherwise succeeded.
+
+    Author: Nick Hobar
+    Creation date: 09/03/2026
+    """
+    from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
+
+    from typeclasses.characters import Character
+    from world.respawn import get_respawn_room
+
+    prefix = _LIVE_PREFIX
+    if dry_run:
+        prefix = _DRY_RUN_PREFIX
+
+    respawn_room = get_respawn_room()
+    if respawn_room is None:
+        print(f"  {prefix}no respawn room found; leaving stranded characters where they are")
+        return 0
+
+    relocated = 0
+
+    for char in Character.objects.all():
+        on_grid = isinstance(char.location, XYZRoom)
+        if on_grid:
+            continue
+
+        print(f"  {prefix}relocating '{char.key}' to the respawn room")
+
+        if dry_run:
+            relocated += 1
+            continue
+
+        char.move_to(respawn_room, quiet=True, move_type="teleport")
+        char.home = respawn_room
+        relocated += 1
+
+    return relocated
+
+
 def _sync(dry_run):
     """
     Purpose: Run the whole manifest-to-grid reconciliation.
@@ -475,10 +553,18 @@ def _sync(dry_run):
     print("=== Spawning rooms and exits ===")
     spawn_maps(grid, dry_run)
 
+    print("=== Relocating stranded player characters ===")
+    relocated = relocate_stranded_characters(dry_run)
+    if not relocated:
+        print("  none")
+
     objects_after = _total_object_count()
     net = objects_after - objects_before
 
-    print(f"Removed {len(pruned)} map(s), purged {purged} tagged object(s).")
+    print(
+        f"Removed {len(pruned)} map(s), purged {purged} tagged object(s), "
+        f"relocated {relocated} character(s)."
+    )
     print(f"ObjectDB: {objects_before} -> {objects_after} ({net:+d}).")
 
 

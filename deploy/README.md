@@ -11,10 +11,10 @@ one layer and none of them tells you which layers a given change touches:
 | [`docs/old/2026-08-21-INFRA-0001-public-hosting.md`](../docs/old/2026-08-21-INFRA-0001-public-hosting.md) | Why the architecture is shaped this way |
 
 **The mental model that makes the table below make sense:** this machine *is*
-production for the game server. There is no push/build/upload step for Python
-or for the webclient's JS — `cloudflared` tunnels straight into whatever is
-running and being served from disk on this box. The Godot client is the one
-genuine exception: it is a ~38 MiB binary that cannot live on Evennia's
+production for the game server. There is no push/build/upload step for
+Python — `cloudflared` tunnels straight into whatever is running and being
+served from disk on this box. The Godot client is the one genuine exception:
+it is a ~38 MiB binary that cannot live on Evennia's
 webserver or as a Cloudflare static asset (25 MiB cap either way), so it alone
 has a real build → publish → deploy pipeline into R2 and a Worker in the
 sibling `playblackout-site` repo.
@@ -28,8 +28,7 @@ That asymmetry is the whole reason "deploy" doesn't mean one thing here.
 | Game logic (`systems/`, `typeclasses/`, `commands/`, `items/`, `world/*.py` other than maps) | `evennia reload` from `blackout/` |
 | A `server/conf/*.py` module named in `PORTAL_SERVICES_PLUGIN_MODULES` (e.g. `godot_websocket.py`) | `evennia reboot`, not `reload` — Portal plugins are only read at Portal start, and `reload` restarts the Server process only |
 | Maps (`world/maps/*.py`, `scripts/map_manifest.json`) | `scripts/clean_and_reload_all_maps.ps1` / `.sh` — stops Evennia, syncs the grid, spawns, reloads, all in one |
-| `systems/statefeed/constants.py` | Regenerate the generated client files **before** anything else touches them — see below |
-| Webclient JS (`web/static/webclient/js/**`, not `generated/`) | Nothing to build — edits are live on save. Tell players to hard-refresh; `evennia reload` does not touch static JS and browsers cache it |
+| `systems/statefeed/constants.py` | Regenerate the generated client file **before** anything else touches it — see below |
 | Godot client (`godot/**`) | The full export → publish → deploy pipeline — see below |
 | `deploy/cloudflared/config.yml` | Manual, rare, needs an elevated shell — copy to `C:\ProgramData\cloudflared\`, substitute the tunnel id, `Restart-Service Cloudflared`. Not part of routine deploys; see the cloudflared README |
 | Django templates / non-plugin settings (`web/templates/`, most of `server/conf/settings.py`) | `evennia reload` |
@@ -37,17 +36,16 @@ That asymmetry is the whole reason "deploy" doesn't mean one thing here.
 ## Regenerating client constants
 
 Anything that adds, renames, or removes a name in `systems/statefeed/constants.py`
-has to be re-rendered into both client languages before either client can be
-trusted:
+has to be re-rendered before the client can be trusted:
 
 ```bash
 python scripts/export_client_constants.py
 ```
 
-This writes both `web/static/webclient/js/generated/blackout_constants.js`
-**and** `godot/autoload/blackout_constants.gd` from the one Python source.
-Both are committed — the webclient has no build step and must not acquire one
-just to load, so the committed copy is the artifact it actually reads.
+This writes `godot/autoload/blackout_constants.gd` from the one Python
+source. It's committed — the client has no build step of its own for it and
+must not acquire one just to load a constant, so the committed copy is the
+artifact it actually reads.
 
 ```bash
 python scripts/export_client_constants.py --check
@@ -117,9 +115,7 @@ as a no-op if its inputs didn't change.
    cause.
 4. If `godot/**` changed, or step 1 regenerated `blackout_constants.gd`:
    export → `publish.sh` → `wrangler deploy`, in that order (see above).
-5. If `web/static/webclient/js/**` changed: nothing to run — just know
-   players need a hard refresh to see it.
-6. Verify (below).
+5. Verify (below).
 
 ## Verifying it actually landed
 

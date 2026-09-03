@@ -56,10 +56,8 @@ _REPO_ROOT = os.path.dirname(_GAME_DIR)
 
 # Every 3D pane that turns a click on an entity into a command. A path that
 # does not exist is skipped, so a client can be removed without a test edit --
-# but the vacuity guard below refuses to let BOTH disappear silently.
+# but the vacuity guard below refuses to let all of them disappear silently.
 _ENTITY_CLICK_SOURCES: tuple = (
-    os.path.join(_GAME_DIR, "web", "static", "webclient", "js", "plugins",
-                 "blackout3d.js"),
     os.path.join(_REPO_ROOT, "godot", "world", "world_view.gd"),
 )
 

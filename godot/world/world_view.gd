@@ -2,9 +2,10 @@ class_name WorldView
 extends Node3D
 ## The 3D world pane: tile grids, the links between them, and where you stand.
 ##
-## Layout and colour rules are ported from the browser pane
-## (web/static/webclient/js/plugins/blackout3d.js) rather than re-derived. Two
-## of them are load-bearing and not obvious:
+## Layout and colour rules were ported from the browser pane's `blackout3d.js`
+## rather than re-derived, back when that client was still live. It's retired
+## now (archive/webclient-js/js/plugins/blackout3d.js), but the values it
+## helped pin down still hold. Two of them are load-bearing and not obvious:
 ##
 ## **Z is a map NAME, not an elevation.** Maps are disconnected islands laid out
 ## along world X. Their relative placement cannot be computed from the data, so

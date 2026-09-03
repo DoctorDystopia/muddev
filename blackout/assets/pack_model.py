@@ -582,7 +582,8 @@ def model_output_path(asset_key, family):
     Exit/Returns:
         Returns the absolute path the packed model belongs at. The file is
         named for the ASSET KEY rather than for the download it came from,
-        because the asset key is what blackout_models.js registers.
+        because the asset key is what the client's manifest and
+        `ModelRegistry` key models by.
 
     Module Globals:
         _GAME_DIR, _MODELS_RELATIVE_PATH, _MODEL_EXTENSION read.
@@ -843,25 +844,27 @@ def render_client_manifest():
         _MODEL_EXTENSION read.
 
     Methodology:
-        WHICH MODELS EXIST IS A BUILD FACT; HOW EACH IS ORIENTED IS NOT.
-        blackout_models.js carries both today -- the path and a rotation that
-        stands the sword up -- and CLAUDE.md is right that the second is the
-        client's own and must never be generated. Only the first is here.
-        A client still keeps its own table of rotations and scales, keyed by
-        the same asset keys, and that table is presentation.
+        WHICH MODELS EXIST IS A BUILD FACT; HOW EACH IS ORIENTED IS NOT. The
+        retired browser webclient's `blackout_models.js` (archived at
+        `archive/webclient-js/js/blackout_models.js`) carried both -- the path
+        and a rotation that stands the sword up -- and CLAUDE.md is right that
+        the second is the client's own and must never be generated. Only the
+        first is here. The Godot client still keeps its own table of
+        rotations and scales, keyed by the same asset keys, and that table is
+        presentation.
 
-        This exists because a Godot web export CANNOT do what the browser
-        client does. blackout_models.js can afford a hardcoded list because it
-        fetches a .glb only when something needs drawing. Baked into a Godot
-        .pck the same art ships before the login prompt -- 12 MiB of it today,
-        10.9 of that one character. Fetching at runtime keeps the .pck small
-        and keeps "art never blocks content" true, and fetching needs a list of
+        This exists because a Godot web export CANNOT do what that browser
+        client did. Fetching a .glb only when something needs drawing worked
+        for a script tag with no build step; baked into a Godot .pck the same
+        art would ship before the login prompt -- 12 MiB of it today, 10.9 of
+        that one character. Fetching at runtime keeps the .pck small and
+        keeps "art never blocks content" true, and fetching needs a list of
         what is fetchable.
 
-        Convention plus a 404 was the alternative and is what
-        blackout_models.js explicitly rejected: with 16 items in ITEM_DB and
-        one model between them, fifteen 404s are the NORMAL case on every pane
-        open, which buries a real one.
+        Convention plus a 404 was the alternative and is what the retired
+        client's registration explicitly rejected: with 16 items in ITEM_DB
+        and one model between them, fifteen 404s are the NORMAL case on every
+        pane open, which buries a real one.
 
     Notes/References:
         Only entries whose .glb actually exists are listed. A manifest naming a
