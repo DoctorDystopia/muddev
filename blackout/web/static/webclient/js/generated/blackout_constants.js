@@ -85,6 +85,12 @@ export const ROOM_KIND_TRANSITION = "map_transition";
 export const ROOM_KIND_DEFAULT = "default";
 export const INVENTORY_SWAP_TEMPLATE = "swap {source} {target}";
 export const TILE_KEY_TEMPLATE = "{x}:{y}";
+export const ACTION_AMOUNT_PLACEHOLDER = "{amount}";
+export const ACTION_INPUT_KIND_QUANTITY = "quantity";
+export const ACTION_INPUT_KIND_KEY = "kind";
+export const ACTION_INPUT_MIN_KEY = "min";
+export const ACTION_INPUT_MAX_KEY = "max";
+export const ACTION_INPUT_LABEL_KEY = "label";
 
 // Derived sets, so a client can iterate rather than
 // rebuild these from the names above.

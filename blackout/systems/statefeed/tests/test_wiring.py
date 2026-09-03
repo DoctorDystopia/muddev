@@ -26,6 +26,8 @@ from server.conf.serversession import ServerSession as BlackoutServerSession
 from systems.statefeed import constants as const
 from systems.statefeed import subscriptions
 from typeclasses.characters import Character as BlackoutCharacter
+from typeclasses.items import BaseItem
+from typeclasses.npcs import ShopkeepNPC
 from typeclasses.rooms import GridTile
 
 
@@ -268,3 +270,95 @@ class TestMovementHooks(EvenniaTest):
 
         self.assertTrue(moved)
         self.assertEqual(self.char1.location, self.destination)
+
+
+class TestCommerceContextRepublishes(EvenniaTest):
+    """What a carried item AFFORDS is a fact about the room.
+
+    Sell and Deposit appear on a row because a counterparty is standing here,
+    so the snapshot has to be rebuilt whenever that changes -- otherwise the
+    context menu is right only until somebody moves. Two directions, and both
+    are needed: the player walks to the shop, and the shop walks to the
+    player.
+    """
+
+    character_typeclass = BlackoutCharacter
+    room_typeclass = GridTile
+
+    def setUp(self):
+        super().setUp()
+        self.destination = create_object(GridTile, key="Destination", nohome=True)
+
+    def test_arriving_republishes_the_movers_own_inventory(self):
+        with mock.patch("typeclasses.rooms.subscriptions.has_subscribers",
+                        return_value=True):
+            with mock.patch("typeclasses.rooms.feed") as mocked:
+                self.char1.move_to(self.destination, quiet=True)
+
+        self.assertTrue(mocked.emit_inventory.called)
+
+    def test_an_unsubscribed_mover_costs_no_inventory_snapshot(self):
+        # The same gate the room snapshot is behind, and it matters more here:
+        # an inventory payload walks 32 slots and reads the tags on every item.
+        with mock.patch("typeclasses.rooms.feed") as mocked:
+            self.char1.move_to(self.destination, quiet=True)
+
+        self.assertFalse(mocked.emit_inventory.called)
+
+    def test_a_counterparty_arriving_republishes_for_everyone_here(self):
+        keep = create_object(ShopkeepNPC, key="Shopkeeper", nohome=True)
+
+        with mock.patch("typeclasses.rooms.subscriptions.has_subscribers",
+                        return_value=True):
+            with mock.patch("typeclasses.rooms.feed") as mocked:
+                keep.move_to(self.char1.location, quiet=True)
+
+        published = [call.args[0] for call in mocked.emit_inventory.call_args_list]
+        self.assertIn(self.char1, published)
+
+    def test_a_counterparty_leaving_republishes_for_everyone_left_behind(self):
+        keep = create_object(
+            ShopkeepNPC, key="Shopkeeper", location=self.char1.location)
+
+        with mock.patch("typeclasses.rooms.subscriptions.has_subscribers",
+                        return_value=True):
+            with mock.patch("typeclasses.rooms.feed") as mocked:
+                keep.move_to(self.destination, quiet=True)
+
+        published = [call.args[0] for call in mocked.emit_inventory.call_args_list]
+        self.assertIn(self.char1, published)
+
+    def test_a_departing_counterparty_is_not_published_to_itself(self):
+        # at_object_leave fires BEFORE the location changes, so the mover is
+        # still in the room's contents and would otherwise be sent a payload
+        # describing a room it is halfway out of.
+        #
+        # The hook is called directly rather than through move_to, because a
+        # whole move also runs the DESTINATION's arrival hook -- which sends
+        # the mover its own snapshot, correctly, and would make this assertion
+        # about the wrong half of the journey.
+        room = self.char1.location
+        keep = create_object(ShopkeepNPC, key="Shopkeeper", location=room)
+
+        with mock.patch("typeclasses.rooms.subscriptions.has_subscribers",
+                        return_value=True):
+            with mock.patch("typeclasses.rooms.feed") as mocked:
+                room.at_object_leave(keep, self.destination)
+
+        published = [call.args[0] for call in mocked.emit_inventory.call_args_list]
+        self.assertNotIn(keep, published)
+        self.assertIn(self.char1, published)
+
+    def test_an_ordinary_object_moving_republishes_nothing_for_others(self):
+        # is_counterparty is one getattr, and it is false for every rock
+        # dropped and every raider that wanders a tile. That is what keeps
+        # this off the movement path in the common case.
+        rock = create_object(BaseItem, key="rock", nohome=True)
+
+        with mock.patch("typeclasses.rooms.subscriptions.has_subscribers",
+                        return_value=True):
+            with mock.patch("typeclasses.rooms.feed") as mocked:
+                rock.move_to(self.char1.location, quiet=True)
+
+        published = [call.args[0] for call in mocked.emit_inventory.call_args_list]
+        self.assertNotIn(self.char1, published)

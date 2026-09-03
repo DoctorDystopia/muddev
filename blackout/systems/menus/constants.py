@@ -59,3 +59,16 @@ HELP_HINT_LABEL = "help"
 
 # Rendered between footer hints.
 FOOTER_GAP = "   "
+
+# What a node says to input that matched no option.
+#
+# Mirrors EvMenu's own _HELP_NO_OPTION_MATCH, and exists because arming a
+# `_default` option SUPPRESSES that line: parse_input reaches the default
+# branch instead of the else that prints it. A node arming one to catch a
+# specific typed verb -- the sell and deposit nodes do, so a graphical client
+# can act while the menu holds the cmdset -- therefore has to say this itself
+# for everything else, or a typo silently redraws the screen.
+#
+# Restated here rather than imported out of evmenu because the name there is
+# private and its value is ours to word.
+NO_OPTION_MATCH = "Choose an option or try 'help'."

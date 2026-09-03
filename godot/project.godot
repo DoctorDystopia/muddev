@@ -15,10 +15,10 @@ config/description="Graphical client for the Blackout MUD. Talks to Evennia's
 godotwebsocket port; see docs/old/2026-08-25-ENG-0006-godot-option-a-plan.md."
 run/main_scene="res://scenes/console.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
-config/icon="res://ui/blackout_mark.png"
 boot_splash/bg_color=Color(0.027451, 0.031373, 0.043137, 1)
+boot_splash/stretch_mode=0
 boot_splash/image="res://ui/blackout_mark.png"
-boot_splash/fullsize=false
+config/icon="res://ui/blackout_mark.png"
 
 [autoload]
 

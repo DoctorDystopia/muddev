@@ -13,6 +13,16 @@ from typeclasses.items import CurrencyItem
 from world.item_database import ITEM_DB
 from world.shop_defs import SHOP_DB, ShopDef
 from systems.stat_tracker import constants as stat_constants
+from systems.statefeed import constants as feed_const
+
+# Every line perform_sell sends a player is a completed or refused trade, so
+# the routing tag is bound once here rather than repeated at every call site.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. A
+# trade RESULT is commerce, not dialogue -- what the shopkeeper says in their
+# own voice is what carries MESSAGE_TYPE_DIALOGUE. See MESSAGE_TYPES in
+# systems/statefeed/constants.py.
+_MSG_COMMERCE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMMERCE}
 
 _ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 
@@ -21,9 +31,21 @@ _ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 CREDITS_ITEM_KEY = "credits"
 
 # Why a purchase delivered nothing. Both are shown to the player through
-# npc_shopkeep._report_trade, which prefixes them with "Transaction failed".
+# messages.format_trade, which prefixes them with "Transaction failed".
 _NO_ROOM_ERROR = "Your inventory is full."
 _OUT_OF_STOCK_ERROR = "That is no longer in stock."
+
+# Pricing for a shopkeeper carrying no ShopDef. Named rather than typed at each
+# of the three call sites, because a shop that lost its def and one that
+# declares these numbers must price identically -- and 0.5 appearing twice is
+# how the two would drift.
+_DEFAULT_UPSELL_FACTOR = 1.5
+_DEFAULT_MISER_FACTOR = 0.5
+
+# Smallest sale that is a sale. Named for the same reason base_menu.MIN_QUANTITY
+# is: zero and negatives are refused rather than silently clamped up, because
+# selling one thing after asking for zero is surprising.
+_MIN_SELL_COUNT = 1
 
 
 def _is_currency(item, currency_key: str = CREDITS_ITEM_KEY) -> bool:
@@ -77,12 +99,12 @@ def _get_shop_def(shopkeep) -> ShopDef | None:
 
 def get_upsell_factor(shopkeep) -> float:
     shop_def = _get_shop_def(shopkeep)
-    return shop_def.upsell_factor if shop_def else 1.5
+    return shop_def.upsell_factor if shop_def else _DEFAULT_UPSELL_FACTOR
 
 
 def get_miser_factor(shopkeep) -> float:
     shop_def = _get_shop_def(shopkeep)
-    return shop_def.miser_factor if shop_def else 0.5
+    return shop_def.miser_factor if shop_def else _DEFAULT_MISER_FACTOR
 
 
 def get_buy_list(shopkeep) -> list[str]:
@@ -195,23 +217,243 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
     return [groups[k] for k in group_order]
 
 
+def _is_sellable(obj) -> bool:
+    """
+    Purpose: Report whether the shop will buy one object at all.
+
+    Entry:
+        obj - a carried object.
+
+    Exit/Returns:
+        True when the shop would take it, False otherwise.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Extracted from the filter that used to sit inline in get_sell_items,
+        rather than copied, because there are now two readers of this fact:
+        the shop's own sell list, and the per-slot Sell action the state feed
+        offers a graphical client. Copied, the two would eventually disagree
+        about what the shop buys, and the pane would offer a sale the
+        shopkeeper refuses.
+
+        Currency is excluded first because selling credits for credits is the
+        one case that is nonsense rather than merely unprofitable.
+
+    Notes/References:
+        systems/statefeed/tests/test_inventory.py asserts the payload's Sell
+        action against THIS routine rather than against a list of item keys,
+        so content added tomorrow is covered without an edit.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    if obj is None:
+        return False
+
+    if obj.is_typeclass(CurrencyItem, exact=False):
+        return False
+
+    tradeable = obj.attributes.get("tradeable", default=True)
+
+    if not tradeable:
+        return False
+
+    value = obj.attributes.get("value", default=0)
+
+    return value > 0
+
+
+def sell_entry_for(caller, npc, item) -> SellEntry | None:
+    """
+    Purpose: Build a SellEntry describing ONE object, so a sale can name a
+             single inventory slot.
+
+    Entry:
+        caller - the selling Character. Present for symmetry with
+                 get_sell_items and so a future per-player price has somewhere
+                 to read from; unused today.
+        npc    - the shopkeeper, whose miser factor sets the price.
+        item   - the carried object being offered.
+
+    Exit/Returns:
+        Returns a SellEntry whose `items` list holds only `item`, or None when
+        _is_sellable refuses it.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        This is the whole reason `sell 7` sells slot 7 rather than every
+        chunk in the bag. get_sell_items groups by key, which is right for a
+        menu the player reads and wrong for a slot the player clicked --
+        eight identical rusty metal chunks are a real inventory, and the pane
+        knows which one it means.
+
+        Priced by the same miser factor the grouped entry uses, read through
+        get_miser_factor rather than recomputed, so a slot sale and a menu
+        sale of the same object pay the same.
+
+    Notes/References:
+        execute_sell already takes an explicit `items` list, so nothing in
+        the transaction needed changing to support this.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    return _sell_entry_over(caller, npc, [item])
+
+
+def _sell_entry_over(caller, npc, items) -> SellEntry | None:
+    """Build a SellEntry over an explicit, already-ordered list of objects.
+
+    The shared half of sell_entry_for and sell_entry_for_group. Priced from
+    the FIRST member, which is why the caller's ordering matters: the group
+    forms are slot-ascending, so the price quoted is the price of the copy the
+    sale starts with.
+    """
+    if not items:
+        return None
+
+    head = items[0]
+
+    if not _is_sellable(head):
+        return None
+
+    miser_factor = get_miser_factor(npc) if npc else _DEFAULT_MISER_FACTOR
+    value = head.attributes.get("value", default=0)
+    unit_price = max(1, int(value * miser_factor))
+    stackable = head.attributes.get("stackable", default=False)
+
+    entry = SellEntry(
+        items=list(items),
+        name=head.key,
+        unit_price=unit_price,
+        count=0,
+        is_stackable=stackable,
+    )
+    entry.count = count_available(entry)
+
+    return entry
+
+
+def sell_entry_for_group(caller, npc, item) -> SellEntry | None:
+    """
+    Purpose: Build a SellEntry over every carried copy of one item, lowest
+             slot first.
+
+    Entry:
+        caller - the selling Character.
+        npc    - the shopkeeper, whose miser factor sets the price.
+        item   - a carried object naming the group.
+
+    Exit/Returns:
+        Returns a SellEntry whose `items` are slot-ascending, or None when the
+        shop refuses the item.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        THIS IS WHAT MAKES 1 / X / ALL MEAN ANYTHING FOR A NON-STACKABLE.
+        Eight rusty metal chunks are eight objects in eight slots, so a stack
+        size of one is the wrong bound for "how many can I sell" -- the answer
+        is eight, and it is spread across the grid.
+
+        Slot-ascending, because execute_sell walks `items` in order and stops
+        at the count. That ordering IS the "lowest number first" rule: sell
+        three of eight and the three lowest-numbered copies go.
+
+    Notes/References:
+        commands/inventory_cmds.carried_group owns the ordering and the
+        grouping rule, shared with the deposit side so the two verbs cannot
+        come to disagree about what "all of them" means.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    from commands.inventory_cmds import carried_group
+
+    return _sell_entry_over(caller, npc, carried_group(caller, item))
+
+
+def _entry_for_request(caller, npc, item, count):
+    """
+    Purpose: Choose between the one-slot entry and the whole-group entry.
+
+    Entry:
+        count - an int, QUANTITY_ALL_KEYWORD, or None for an omitted quantity.
+
+    Exit/Returns:
+        Returns a SellEntry. Never None: the caller has already established
+        that the shop will buy this item.
+
+    Module Globals:
+        _MIN_SELL_COUNT read.
+
+    Methodology:
+        THE CLICKED SLOT WINS FOR ONE, THE GROUP WINS FOR MORE.
+
+        An omitted quantity and an explicit 1 both mean "what is in that
+        slot" -- one object for a non-stackable, the whole stack for a
+        stackable. That is the rule slot addressing exists for: right-clicking
+        the eighth chunk and choosing Sell 1 must sell the eighth, not the
+        first, which was a live bug until 08/17/2026.
+
+        Anything larger, and `all`, reach the whole group from the lowest slot
+        up. A player asking for three of eight is not naming three slots, and
+        the only ordering they can predict is the one `inventory` prints.
+
+    Notes/References:
+        The asymmetry is deliberate and was chosen over two alternatives: a
+        group that always starts at the lowest (which reinstates the 08/17
+        bug for Sell 1) and one that climbs from the clicked slot (consistent,
+        but makes "sell 3" mean different objects depending on which copy was
+        right-clicked).
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    from systems.menus.base_menu import QUANTITY_ALL_KEYWORD
+
+    single = count is None or count == _MIN_SELL_COUNT
+
+    if single and count != QUANTITY_ALL_KEYWORD:
+        return sell_entry_for(caller, npc, item)
+
+    return sell_entry_for_group(caller, npc, item)
+
+
+def _requested_count(count, available: int) -> int:
+    """Turn a parsed quantity into the number of units to move.
+
+    None means "whatever the chosen entry holds", which is the whole slot for
+    the single form. QUANTITY_ALL_KEYWORD means the same for the group form.
+    An integer is clamped down, never up: asking for more than is there is a
+    reasonable way to say "all of it", whereas asking for zero is not a
+    quantity at all and is refused by the caller.
+    """
+    from systems.menus.base_menu import QUANTITY_ALL_KEYWORD
+
+    if count is None or count == QUANTITY_ALL_KEYWORD:
+        return available
+
+    return min(count, available)
+
+
 def get_sell_items(caller, npc=None) -> list[SellEntry]:
     if npc is None and caller.ndb._evmenu:
         npc = caller.ndb._evmenu.npc
-    miser_factor = get_miser_factor(npc) if npc else 0.5
+    miser_factor = get_miser_factor(npc) if npc else _DEFAULT_MISER_FACTOR
     groups = {}
     group_order = []
 
     for obj in list(caller.contents):
-        if obj.is_typeclass(CurrencyItem, exact=False):
-            continue
-        tradeable = obj.attributes.get("tradeable", default=True)
-        if not tradeable:
-            continue
-        value = obj.attributes.get("value", default=0)
-        if value <= 0:
+        if not _is_sellable(obj):
             continue
 
+        value = obj.attributes.get("value", default=0)
         key = obj.key.lower()
         if key not in groups:
             unit_price = max(1, int(value * miser_factor))
@@ -602,3 +844,89 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
         total_price=total_price,
         item_name=entry.name,
     )
+
+
+def perform_sell(caller, npc, args: str) -> bool:
+    """
+    Purpose: Parse, execute and report one slot- or name-addressed sale.
+
+    Entry:
+        caller - the selling Character.
+        npc    - the shopkeeper being sold to.
+        args   - the raw argument, e.g. "7", "7 3", "7 all", "rusty spear 2".
+
+    Exit/Returns:
+        Returns True when anything was sold. Messages the caller on every
+        exit, successful or not, so no caller needs a second refusal line.
+
+    Module Globals:
+        _MSG_COMMERCE read.
+
+    Methodology:
+        THIS ROUTINE EXISTS BECAUSE THERE ARE TWO WAYS IN. EvMenuCmdSet is
+        `mergetype="Replace"` with `no_objs=True`, so while the shopkeep menu
+        is open NOTHING reaches the command parser -- not even a command
+        hosted on the shopkeep itself. A graphical client that opened the menu
+        by clicking the merchant and then right-clicked an item would have hit
+        "Invalid choice". So `sell` is reachable two ways, from one routine:
+        CmdSell on the shopkeep's cmdset, and a `_default` option on the
+        menu's sell node. Both parse and report identically because neither
+        of them parses or reports.
+
+        Resolution is resolve_carried_item, which is slot-first and messages
+        its own failures -- the same route `equip` and `drop` take, and the
+        reason `sell 7` sells slot 7 rather than the lowest-numbered copy of
+        whatever is in it.
+
+        An omitted quantity means the whole stack, matching what None has
+        always meant to the banking transfers. A quantity above the stack is
+        clamped rather than refused, which is parse_quantity's rule too:
+        asking for more than is there is a reasonable way to say "all of it".
+
+    Notes/References:
+        No confirmation step, and that is a deliberate difference from the
+        menu. The menu confirms because it targets a name GROUP -- "sell rusty
+        metal chunk" can mean eight objects the player never counted. A slot
+        bounds the blast radius to one stack, and the report names the price.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    from commands.inventory_cmds import resolve_carried_item, split_item_and_count
+
+    from . import messages
+
+    item_text, count = split_item_and_count(args.strip())
+
+    if not item_text:
+        caller.msg((messages.NOTHING_NAMED, _MSG_COMMERCE))
+        return False
+
+    _index, item = resolve_carried_item(caller, item_text)
+
+    if item is None:
+        return False
+
+    if not _is_sellable(item):
+        line = messages.format_not_wanted(str(npc.key), str(item.key))
+        caller.msg((line, _MSG_COMMERCE))
+        return False
+
+    entry = _entry_for_request(caller, npc, item, count)
+    available = count_available(entry)
+
+    if available < _MIN_SELL_COUNT:
+        caller.msg((messages.NOTHING_TO_SELL, _MSG_COMMERCE))
+        return False
+
+    sell_count = _requested_count(count, available)
+
+    if sell_count < _MIN_SELL_COUNT:
+        caller.msg((messages.NOTHING_TO_SELL, _MSG_COMMERCE))
+        return False
+
+    result = execute_sell(caller, npc, entry, sell_count)
+    line = messages.format_trade(result, messages.VERB_SOLD, result.sold_count)
+    caller.msg((line, _MSG_COMMERCE))
+
+    return result.success

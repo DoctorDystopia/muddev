@@ -23,6 +23,18 @@ from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.items import BaseItem
 
 
+def _visible_descs(options):
+    """The descs a player would actually see on a node.
+
+    Options with no `desc` are the hidden ones -- EvMenu's `_default`, which
+    node_deposit_select arms so that a slot-addressed `deposit` typed (or
+    right-clicked) while the menu holds the cmdset still reaches the server.
+    A hidden option has nothing to display and is not part of the list any of
+    these tests are describing.
+    """
+    return [opt["desc"] for opt in options if "desc" in opt]
+
+
 class _BankingMenuTest(EvenniaTest):
     """Shared fixture: a Blackout character with a real bank handler."""
 
@@ -56,7 +68,7 @@ class TestSelectNodes(_BankingMenuTest):
 
         text, options = banking_menu.node_deposit_select(self.char1)
 
-        descs = [opt["desc"] for opt in options]
+        descs = _visible_descs(options)
         self.assertTrue(any(item.key in d for d in descs), descs)
 
 
@@ -111,7 +123,7 @@ class TestGroupedTransfers(_BankingMenuTest):
 
         _text, options = banking_menu.node_deposit_select(self.char1)
 
-        descs = [opt["desc"] for opt in options]
+        descs = _visible_descs(options)
         matching = [d for d in descs if "rusty scrap metal" in d]
         self.assertEqual(len(matching), 1, descs)
         self.assertIn("(x5)", matching[0])
@@ -122,7 +134,7 @@ class TestGroupedTransfers(_BankingMenuTest):
 
         _text, options = banking_menu.node_deposit_select(self.char1)
 
-        descs = [opt["desc"] for opt in options]
+        descs = _visible_descs(options)
         self.assertTrue(any("rusty scrap metal (x2)" in d for d in descs), descs)
         self.assertTrue(any("rusty metal chunk" in d for d in descs), descs)
 
@@ -132,7 +144,7 @@ class TestGroupedTransfers(_BankingMenuTest):
 
         text, options = banking_menu.node_deposit_quantity(self.char1, item_ids=ids)
 
-        descs = [opt["desc"] for opt in options]
+        descs = _visible_descs(options)
         self.assertIn("You have 4.", text)
         self.assertIn("All (4)", descs)
         # Nothing moved just by asking how many.
@@ -206,7 +218,7 @@ class TestQuantityPrompting(_BankingMenuTest):
 
         text, options = banking_menu.node_deposit_quantity(self.char1, item_id=item.id)
 
-        descs = [opt["desc"] for opt in options]
+        descs = _visible_descs(options)
         self.assertIn("1", descs)
         self.assertIn("All (10)", descs)
         self.assertIn("You have 10.", text)

@@ -11,6 +11,8 @@ display formatting and navigation flow.
 from dataclasses import dataclass
 from typing import Callable
 
+from evennia.utils.evmenu import EvMenuGotoAbortMessage
+
 from items.equipment.handler import EquipmentError
 from systems.banking import messages
 from items.equipment.constants import MAX_INVENTORY_SLOTS
@@ -21,6 +23,7 @@ from systems.menus.base_menu import (
     parse_quantity,
 )
 from systems.menus.constants import (
+    NO_OPTION_MATCH,
     QUANTITY_ALL_KEYS,
     QUANTITY_CUSTOM_DESC,
     QUANTITY_CUSTOM_KEYS,
@@ -48,6 +51,11 @@ SEPARATOR = "-" * 60
 
 # Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
 CLOSING_TEXT = "Closing banking menu."
+
+# This menu is bound to the room the terminal stands in. Read by base_menu
+# through the same module-attribute route as CLOSING_TEXT, and acted on by
+# Character.at_post_move: walking away closes the vault.
+ROOM_BOUND = True
 
 
 def _format_item_details(item):
@@ -333,17 +341,40 @@ class _TransferFlow:
 
 
 def _find_carried(caller, item_id):
-    """Locate a carried object by dbid."""
-    for obj in caller.contents:
+    """Locate a bankable object by dbid, carried or worn.
+
+    The same candidate list _list_carried draws its rows from. Searching
+    caller.contents alone would list an equipped item and then fail to
+    re-resolve it a node later, which reads to the player as the item
+    vanishing between two screens.
+    """
+    from typeclasses.bank_nodes import _bankable_candidates
+
+    for obj in _bankable_candidates(caller):
         if obj.id == item_id:
             return obj
+
     return None
 
 
 def _list_carried(caller):
-    """Selectable items on the character, with the slot map resynced first."""
+    """Everything on the character a deposit may reach, carried or worn.
+
+    WORN ITEMS ARE IN THIS LIST, and _equipped_marker is why you can tell.
+    That marker decorated a list that could never contain an equipped item
+    until 09/02/2026: EquipmentHandler.equip holds an equipped object at
+    location=None, so `caller.contents` has never held one and the decorator
+    was dead code beside a CmdDeposit docstring making the same false claim.
+
+    _bankable_candidates is the same list the deposit COMMAND resolves
+    against, shared rather than restated, so the menu and the command cannot
+    come to disagree about what is bankable.
+    """
+    from typeclasses.bank_nodes import _bankable_candidates
+
     caller.inventory.sync()
-    return list(caller.contents)
+
+    return _bankable_candidates(caller)
 
 
 def _equipped_marker(caller, item):
@@ -356,8 +387,17 @@ def _equipped_marker(caller, item):
 def _do_deposit(caller, items, quantity):
     """Move `quantity` units drawn from `items` into the bank.
 
+    Anything equipped leaves its slot first, through the same routine the
+    `deposit` command uses -- so a worn item banked from this menu and one
+    banked by typing the command end in the same state. Skipping it here
+    would bank the object while the equipment slot went on pointing at it.
+
     Returns the handler's TransferResult; _perform_transfer renders it.
     """
+    from typeclasses.bank_nodes import _release_for_deposit
+
+    _release_for_deposit(caller, items)
+
     return caller.bank.deposit_many(items, quantity)
 
 
@@ -643,8 +683,59 @@ DEPOSIT_FLOW.execute_goto = _make_execute_goto(DEPOSIT_FLOW)
 WITHDRAW_FLOW.execute_goto = _make_execute_goto(WITHDRAW_FLOW)
 
 
+def _parse_deposit_request(caller, raw_string, **kwargs):
+    """
+    Purpose: Serve a slot-addressed `deposit` typed -- or clicked -- while
+             this menu is open.
+
+    Entry:
+        raw_string is whatever reached the menu unmatched, e.g. "deposit 7 3".
+
+    Exit/Returns:
+        Returns the deposit picker's node name, so the list re-renders with
+        the item gone or its count reduced.
+
+    Module Globals:
+        DEPOSIT_COMMAND_KEY read.
+
+    Methodology:
+        The mirror of npc_shopkeep._parse_sell_request, and it exists for the
+        same reason: EvMenuCmdSet replaces the caller's cmdset and excludes
+        object cmdsets, so CmdDeposit on the terminal that opened this menu
+        is unreachable from inside it. Without this, a graphical client that
+        clicked the terminal and then right-clicked an item would be told
+        "Invalid choice".
+
+        Input that is not this verb raises EvMenuGotoAbortMessage carrying
+        EvMenu's own no-match line, because arming a `_default` at all
+        suppresses the line parse_input would otherwise print.
+
+    Notes/References:
+        typeclasses/bank_nodes.perform_deposit does the parsing, the transfer
+        and the reporting. Nothing here duplicates any of it.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    from typeclasses.bank_nodes import DEPOSIT_COMMAND_KEY, perform_deposit
+
+    typed = (raw_string or "").strip()
+    verb, _sep, args = typed.partition(" ")
+
+    if verb.lower() != DEPOSIT_COMMAND_KEY:
+        raise EvMenuGotoAbortMessage(NO_OPTION_MATCH)
+
+    perform_deposit(caller, args)
+
+    return DEPOSIT_FLOW.select_node, kwargs
+
+
 def node_deposit_select(caller, **kwargs):
-    return _select_node(caller, DEPOSIT_FLOW)
+    text, options = _select_node(caller, DEPOSIT_FLOW)
+    options = list(options)
+    options.insert(0, {"key": "_default", "goto": _parse_deposit_request})
+
+    return text, options
 
 
 def node_deposit_quantity(caller, **kwargs):

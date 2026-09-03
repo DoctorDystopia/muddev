@@ -48,6 +48,11 @@ signal action_chosen(command: String)
 ## keeps the caption's size in the theme rather than back in a literal here.
 const _THEME := preload("res://ui/blackout_theme.tres")
 
+## The generated server constants, for the keys of a prompted action's `input`
+## block. Preloaded rather than reached through the autoload so this control
+## can be built in a headless test with no scene tree above it.
+const _CONST := preload("res://autoload/blackout_constants.gd")
+
 const COLOR_EMPTY := Color(1, 1, 1, 0.25)
 const COLOR_FILLED := Color(1, 1, 1, 0.9)
 
@@ -297,7 +302,16 @@ func _on_menu_id(index: int) -> void:
 		return
 
 	var action: Dictionary = actions[index]
-	var command := str(action.get("command", ""))
+	var prompt := _state.action_prompt(action)
+
+	# Checked BEFORE the empty-command guard below, because a prompted action
+	# is deliberately shipped with an empty command — that is what makes it do
+	# nothing on a client that never learned to ask. This one asks.
+	if not prompt.is_empty():
+		_ask_amount(action, prompt)
+		return
+
+	var command := _state.action_command(action)
 
 	# An empty command is the server declining, exactly as an empty tile action
 	# is. Never substituted into, never guessed at.
@@ -305,3 +319,44 @@ func _on_menu_id(index: int) -> void:
 		return
 
 	action_chosen.emit(command)
+
+
+## Ask for the one value the server left blank, then send.
+##
+## The server named the verb, the bounds and the question; this builds a box
+## for them and substitutes through [method InventoryState.action_command],
+## which owns the placeholder. There is no verb here and no arithmetic — the
+## maximum is the row's own quantity as the server counted it.
+##
+## Built per prompt and freed on close rather than kept as a member: a stale
+## dialog bound to an action from a snapshot ago is a click that sells the
+## wrong thing, and a cell is rebound whenever the payload changes.
+func _ask_amount(action: Dictionary, prompt: Dictionary) -> void:
+	var minimum := int(prompt.get(_CONST.ACTION_INPUT_MIN_KEY, 1))
+	var maximum := int(prompt.get(_CONST.ACTION_INPUT_MAX_KEY, minimum))
+
+	var spin := SpinBox.new()
+	spin.min_value = minimum
+	spin.max_value = maximum
+	spin.value = minimum
+	spin.step = 1
+	spin.select_all_on_focus = true
+
+	var dialog := AcceptDialog.new()
+	dialog.title = str(action.get("label", ""))
+	dialog.dialog_text = str(prompt.get(_CONST.ACTION_INPUT_LABEL_KEY, ""))
+	dialog.theme = _THEME
+	dialog.add_child(spin)
+	dialog.confirmed.connect(func() -> void:
+		var command := _state.action_command(action, int(spin.value))
+
+		if not command.is_empty():
+			action_chosen.emit(command)
+	)
+	# QUEUE_FREE on close, not hide: the dialog is bound to one action from one
+	# snapshot, and the next payload replaces the row it describes.
+	dialog.close_requested.connect(dialog.queue_free)
+	dialog.confirmed.connect(dialog.queue_free)
+
+	add_child(dialog)
+	dialog.popup_centered()

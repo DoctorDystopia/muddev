@@ -60,13 +60,13 @@ NPC_DESC = (
 # This NPC keeps its dialogue in this module rather than on the object, so its
 # parting line is a constant here. It is still PRINTED only by
 # BlackoutEvMenu.close_menu, via CLOSING_TEXT at the foot of this module.
-NPC_FAREWELL = '"Good sunlight to you, [82% human]."'
+NPC_FAREWELL = '"Don\'t die!, [82% human]."'
 
 # Player-customization (name, appearance) is meant to happen inside the
 # opening conversation -- see the vault doc's DCT.3 rows. There is no
 # customization system yet, so the beat is written and the handoff is not.
 _STUB_CUSTOMIZATION = (
-    "|x[The android waits, stylus poised. Character customization goes here.]|n"
+    "|xThe android waits, stylus poised. [Character customization goes here.]|n"
 )
 
 
@@ -259,8 +259,7 @@ def node_hello_twice(caller: object, **kwargs) -> tuple:
     Creation date: 08/25/2026
     """
     text = (
-        "The stylus speeds up. Whatever it is recording has apparently "
-        "become urgent."
+        "The stylus speeds up. Whatever it is recording must be urgent."
     )
 
     options = (
@@ -297,9 +296,8 @@ def node_shoulder_tap(caller: object, **kwargs) -> tuple:
     Creation date: 08/25/2026
     """
     text = (
-        "The android straightens with a whine of servos and looks at you. "
-        "Its face is a matte plate with two photoreceptors in it. It does "
-        "not blink, because it cannot."
+        "With a whine of servos, the android straightens and looks at you with a welcoming smile. "
+        "Its weathered, chrome face stares at you, the two photoreceptors unblinking."
     )
 
     options = (
@@ -480,8 +478,7 @@ def node_customization(caller: object, **kwargs) -> tuple:
         _STUB_CUSTOMIZATION,
         "",
         _dialog(
-            '"Recorded. Retention is poor in [82% human]. This unit '
-            'sympathizes; this unit has also lost things."'
+            '"Recorded. Retention is poor in [82% human]."'
         ),
     ])
 
@@ -520,9 +517,7 @@ def node_who_are_you(caller: object, **kwargs) -> tuple:
     """
     text = "\n".join([
         _dialog(
-            '"This is the farm. I am the farm hand. I was assigned here '
-            "before the Blackout. Nobody has rescinded the assignment, so I "
-            'have continued."'
+            '"Welcome to [redacted deceased owner\'s name] farm. I am C.L.A.R.K. unit."'
         ),
         "",
         _dialog(
@@ -580,7 +575,7 @@ def node_android_lore(caller: object, **kwargs) -> tuple:
         ),
         "",
         _dialog(
-            '"If you mean the other thing -- you are the first entity to '
+            '"If you mean the other thing, you are the first entity to '
             "speak to this unit in four hundred and eleven days. This unit "
             'logged it.\"'
         ),
@@ -646,8 +641,8 @@ def node_quest_offer(caller: object, **kwargs) -> tuple:
         "",
         _dialog(
             '"This unit will transmit it in exchange for one day of labor. '
-            "The drainage line is silted. The soil sample is unprepared. And "
-            'there are things in the dunes that will come for the green."'
+            "The drainage line is silted. The soil sample is unprepared. "
+            'Many tasks to do."'
         ),
         "",
         _hl(f"Accept the quest '{blueprint.title}'?"),
@@ -876,7 +871,7 @@ def node_step3_craft(caller: object, **kwargs) -> tuple:
         _dialog(
             '"There are rusty poles standing in the sand. Take metal from '
             "one. You do not have an axe, so it will take metal from you as "
-            'well. This is acceptable and will teach you why axes exist."'
+            'well."'
         ),
         "",
         _dialog(
@@ -930,11 +925,11 @@ def node_step4_defend(caller: object, **kwargs) -> tuple:
     text = "\n".join([
         _dialog(
             '"Movement in the dunes. Heat signature, bipedal, approaching '
-            'the green. Probability of [mutant raider] = [96%]."'
+            'the farm. Probability of [mutant raider] = [96%]."'
         ),
         "",
         _dialog(
-            '"This unit is a farm hand. This unit has no combat protocols '
+            '"This unit is a farm hand. This unit no longer has no combat protocols '
             "and would be disassembled. You have a blade now. This unit "
             'calculates that this is your task."'
         ),
@@ -983,7 +978,7 @@ def node_step5_resolution(caller: object, **kwargs) -> tuple:
     """
     text = "\n".join([
         _dialog(
-            '"Threat resolved. The green is intact. This unit had assigned '
+            '"Threat resolved. The farm is intact. This unit had assigned '
             'a low probability to that outcome."'
         ),
         "",
@@ -1061,7 +1056,8 @@ def node_post_quest(caller: object, **kwargs) -> tuple:
     text = "\n".join([
         _dialog(
             '"You are still here. This unit has logged the visit. Iteration '
-            'seventy-three point two eight five is not dead yet."'
+            'seventy-three point two eight five is dead. Iteration '
+            'seventy-three point two eight six is sure to live."'
         ),
         "",
         _dialog('"East, [82% human]. Follow the pylons. Do not sleep in the open."'),

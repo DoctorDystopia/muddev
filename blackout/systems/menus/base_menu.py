@@ -50,6 +50,17 @@ SEPARATOR_WIDTH = 60
 # for a line that depends on live state.
 CLOSING_TEXT_ATTR = "CLOSING_TEXT"
 
+# Module-level attribute a menu module sets truthy to declare that it belongs
+# to the room the player opened it in. Character.at_post_move closes one on the
+# way out: a shop counter and a bank vault are things you STAND at, and a menu
+# that survives the walk is one whose prices, stock and item list describe
+# somewhere the player is no longer standing.
+#
+# Declared as a module attribute rather than as a launcher argument for the
+# reason CLOSING_TEXT_ATTR gives: the fact belongs beside the nodes it is true
+# of, so no launcher has to know what kind of menu it is opening.
+ROOM_BOUND_ATTR = "ROOM_BOUND"
+
 # Typed input meaning "as many as are available". Shopkeep already exposes this
 # as a menu option key; banking's custom-quantity node arms only _default, so
 # without this the word is rejected there.
@@ -189,25 +200,33 @@ def cancel_option(goto: object) -> dict:
     return option
 
 
-def _module_closing_text(menudata: object) -> object:
+def _module_attribute(menudata: object, name: str, default: object = None) -> object:
     """
-    Purpose: Read a menu module's declared closing text, if it declares one.
+    Purpose: Read one declared attribute off a menu module, if it declares
+             one.
 
     Entry:
         menudata is whatever was handed to the menu: a python path string, an
         already-imported module, or a dict of nodes.
+        name is the module-level attribute to read.
+        default is what a menu that declares none gets.
 
     Exit/Returns:
-        Returns the module's CLOSING_TEXT (a string or a callable), or None
-        when the menu declares none or was built from a dict.
+        Returns the module's value for `name`, or `default`.
 
     Module Globals:
-        CLOSING_TEXT_ATTR read.
+        None.
 
     Methodology:
         Resolves a string path through mod_import, which is the same call
         EvMenu._parse_menudata makes moments later; importlib caches, so the
         module is not loaded twice.
+
+        Generic over the attribute NAME rather than one reader per fact,
+        because there are now two -- the closing line and whether the menu is
+        bound to a room -- and a second copy of the import-and-getattr dance
+        would be the point at which the two could resolve menudata
+        differently.
 
     Notes/References:
         This imports exactly ONE named module, the one the caller already
@@ -218,16 +237,29 @@ def _module_closing_text(menudata: object) -> object:
     Creation date: 08/20/2026
     """
     if isinstance(menudata, dict):
-        return None
+        return default
 
     module = mod_import(menudata) if isinstance(menudata, str) else menudata
 
     if module is None:
-        return None
+        return default
 
-    closing_text = getattr(module, CLOSING_TEXT_ATTR, None)
+    return getattr(module, name, default)
 
-    return closing_text
+
+def _module_closing_text(menudata: object) -> object:
+    """Read a menu module's declared closing text, or None."""
+    return _module_attribute(menudata, CLOSING_TEXT_ATTR)
+
+
+def _module_room_bound(menudata: object) -> bool:
+    """Report whether a menu module declares itself bound to a room.
+
+    A room-bound menu is one whose counterparty stands somewhere: the shop
+    and the bank vault. Walking away closes it, which
+    Character.at_post_move performs -- see ROOM_BOUND_ATTR.
+    """
+    return bool(_module_attribute(menudata, ROOM_BOUND_ATTR, False))
 
 
 
@@ -303,6 +335,7 @@ class BlackoutEvMenu(EvMenu):
         Creation date: 08/20/2026
         """
         self.close_text = close_text if close_text is not None else _module_closing_text(menudata)
+        self.room_bound = _module_room_bound(menudata)
         self._back_offered = False
 
         super().__init__(caller, menudata, **kwargs)

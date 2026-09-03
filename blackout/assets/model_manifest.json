@@ -25,7 +25,7 @@
 
   "models": [
     {
-      "source": "assets/characters/quaternius_universal_male",
+      "source": "assets/characters/old_school_runescape_models",
       "asset_key": "player_character"
     },
     {

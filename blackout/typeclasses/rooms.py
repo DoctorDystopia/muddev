@@ -12,6 +12,7 @@ from evennia.utils import logger
 from systems.quests import constants as quest_constants
 from systems.quests.hooks import notify_quests
 from systems.spawning import teardown
+from systems.statefeed import commerce
 from systems.statefeed import constants as feed_const
 from systems.statefeed import events as feed
 from systems.statefeed import subscriptions
@@ -343,8 +344,13 @@ class GridTile(ObjectParent, XYZRoom):
             if subscriptions.has_subscribers(moved_obj):
                 feed.emit_room_info(moved_obj)
                 feed.emit_room_contents(moved_obj)
+                feed.emit_inventory(moved_obj)
 
             feed.emit_entity_arrived(self, moved_obj)
+            # The mover is excluded here as it is on the leave path, though for
+            # the opposite reason: it IS legitimately in contents now, and the
+            # line above has already published its snapshot.
+            self._republish_for_counterparty(moved_obj, exclude=(moved_obj,))
         except Exception:
             logger.log_trace()
 
@@ -381,8 +387,65 @@ class GridTile(ObjectParent, XYZRoom):
         try:
             departing_id = moved_obj.id
             feed.emit_entity_left(self, departing_id, exclude=(moved_obj,))
+            self._republish_for_counterparty(moved_obj, exclude=(moved_obj,))
         except Exception:
             logger.log_trace()
+
+    def _republish_for_counterparty(self, moved_obj, exclude=()):
+        """
+        Purpose: Refresh everyone's inventory when a shopkeeper or a bank
+                 terminal walks in or out.
+
+        Entry:
+            moved_obj - the object that arrived or is leaving.
+            exclude   - objects to skip. Both callers pass the mover, for
+                        opposite reasons: on the leave path it is still in
+                        contents and has not actually moved yet, and on the
+                        arrival path its own snapshot has just been sent.
+
+        Exit/Returns:
+            Returns nothing. Callers wrap; this does not.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            What a carried item AFFORDS is a fact about the room, so the
+            snapshot has to be rebuilt when the room changes -- otherwise the
+            context menu is right only until somebody moves.
+
+            The mover being a CHARACTER is handled by the caller, which
+            already emits that character's own snapshot. This handles the
+            other direction: the counterparty is what moved, and every
+            character standing here is now looking at a stale menu.
+
+            Cheap in the common case. is_counterparty is one getattr, and it
+            is false for every rock dropped and every raider that wanders a
+            tile, which is what stops this walking the room's contents on the
+            movement path for nothing.
+
+        Notes/References:
+            Unnecessary for today's static spawns, where no counterparty ever
+            moves. It is the one line that stops a wandering shopkeeper from
+            becoming a bug report, and it uses the same predicate
+            commerce.build_context filters on, so the thing that turns an
+            action on and the thing that republishes when it should cannot
+            disagree.
+
+        Author: Nick Hobar
+        Creation date: 09/02/2026
+        """
+        if not commerce.is_counterparty(moved_obj):
+            return
+
+        for obj in self.contents:
+            if obj in exclude:
+                continue
+
+            if not subscriptions.has_subscribers(obj):
+                continue
+
+            feed.emit_inventory(obj)
 
     def at_object_delete(self):
         """

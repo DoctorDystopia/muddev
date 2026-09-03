@@ -708,3 +708,104 @@ TILE_KEY_TEMPLATE: str = "{x}:{y}"
 # Slot numbers are 1-BASED, matching what the text grid prints, what CmdSwap
 # parses, and what serialize_inventory converts to for the per-item actions.
 INVENTORY_SWAP_TEMPLATE: str = "swap {source} {target}"
+
+
+# ─── Commerce ────────────────────────────────────────────────────────────────
+
+# What a nearby object lets you do with what you are carrying.
+#
+# Declared on the TYPECLASS as `commerce_role` and read with getattr, exactly
+# the way `asset_kind` and `interact_verb` already are, and for the same three
+# reasons: nothing about an object's storage distinguishes a shopkeeper from a
+# dropped sword, a class attribute reaches every instance already in the
+# database without a migration, and the state feed stays out of the typeclass
+# layer.
+#
+# A new counterparty -- a fence, a pawnbroker, a second bank -- opts in with
+# one class attribute and reaches both clients' context menus with no edit in
+# systems/statefeed/ and none in either client.
+COMMERCE_ROLE_SHOP: str = "shop"
+COMMERCE_ROLE_BANK: str = "bank"
+
+COMMERCE_ROLES: frozenset = frozenset((
+    COMMERCE_ROLE_SHOP,
+    COMMERCE_ROLE_BANK,
+))
+
+# The verbs a carried item affords when the matching counterparty is standing
+# in the room, as (label, command template) -- the same shape and the same
+# `{slot}` substitution INVENTORY_ACTION_* above use.
+#
+# THE LABELS CARRY NO PRICE. The server is the only thing that knows the miser
+# factor, so putting it here was tempting, and it is wrong for one reason: a
+# label is drawn once, when the snapshot is built, and a stack drains. "Sell
+# All (24cr)" on a stack that is now eight units is a lie the player acts on.
+# The line messages.format_trade prints after the sale describes a trade that
+# has already happened and cannot go stale, which is where the money belongs.
+INVENTORY_ACTION_SELL: tuple = ("Sell", "sell {slot}")
+INVENTORY_ACTION_SELL_ONE: tuple = ("Sell 1", "sell {slot} 1")
+INVENTORY_ACTION_SELL_ALL: tuple = ("Sell All", "sell {slot} all")
+
+INVENTORY_ACTION_DEPOSIT: tuple = ("Deposit", "deposit {slot}")
+INVENTORY_ACTION_DEPOSIT_ONE: tuple = ("Deposit 1", "deposit {slot} 1")
+INVENTORY_ACTION_DEPOSIT_ALL: tuple = ("Deposit All", "deposit {slot} all")
+
+# An equipped row has no grid position, so it is addressed the way
+# EQUIPMENT_ACTION_UNEQUIP is -- by the slot it occupies. `deposit` resolves
+# that through the equipment handler and unequips before banking.
+#
+# There is no equipped SELL, and the asymmetry is deliberate. An unequipped
+# deposit is undone by `withdraw`; a sale at the miser factor is not, and worn
+# gear is exactly what a misclick most wants back.
+EQUIPMENT_ACTION_DEPOSIT: tuple = ("Deposit", "deposit {name}")
+
+# The quantity prompt's spelling, for the one action the server cannot name
+# outright.
+#
+# Sell 1 and Sell All are whole commands. Sell X is not: the amount is a
+# GESTURE, something only the client holds, the same way a drag holds two slot
+# endpoints and the server holds neither. INVENTORY_SWAP_TEMPLATE above is the
+# established answer to that case -- the server owns the spelling, the client
+# composes the one value it has.
+INVENTORY_SELL_SOME_TEMPLATE: str = "sell {slot} {amount}"
+INVENTORY_DEPOSIT_SOME_TEMPLATE: str = "deposit {slot} {amount}"
+
+# The token a prompted action's `template` carries where the client's answer
+# goes, and the kind of prompt to open.
+#
+# A PROMPTED ACTION SENDS AN EMPTY `command`, which both clients already read
+# as "the server declines". That is what makes this degrade safely: a client
+# that has not learned about `input` shows the entry and does nothing, rather
+# than sending a literal "{amount}" at the parser. The rejected alternative
+# was a non-empty command carrying the placeholder -- it reads better and it
+# fails worse.
+#
+# Exported to the clients so the substitution has one owner; the templates
+# themselves are not, because they arrive per action.
+ACTION_AMOUNT_PLACEHOLDER: str = "{amount}"
+ACTION_INPUT_KIND_QUANTITY: str = "quantity"
+
+# Keys on a prompted action's `input` block. Named so neither the builder nor
+# a test spells one as a literal.
+ACTION_INPUT_KIND_KEY: str = "kind"
+ACTION_INPUT_MIN_KEY: str = "min"
+ACTION_INPUT_MAX_KEY: str = "max"
+ACTION_INPUT_LABEL_KEY: str = "label"
+
+# What a quantity prompt asks. The server words it because the server is what
+# knows the verb; the client draws the box.
+ACTION_PROMPT_SELL: str = "Sell how many?"
+ACTION_PROMPT_DEPOSIT: str = "Deposit how many?"
+
+# The label on a prompted action's menu entry.
+INVENTORY_ACTION_SELL_SOME_LABEL: str = "Sell X"
+INVENTORY_ACTION_DEPOSIT_SOME_LABEL: str = "Deposit X"
+
+# Smallest amount a quantity prompt may be set to. One, not zero: an action
+# that does nothing is not an action, and base_menu.MIN_QUANTITY refuses zero
+# on the typed path for the same reason.
+ACTION_INPUT_MIN_AMOUNT: int = 1
+
+# Above this many units a row offers the three-verb group (1 / X / All);
+# at or below it, one bare verb. Nobody wants "Sell All" on one sword.
+ACTION_QUANTITY_SINGLE: int = 1

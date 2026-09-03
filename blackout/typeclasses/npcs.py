@@ -10,7 +10,7 @@ from evennia import DefaultObject
 from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GENERAL
-from systems.statefeed.constants import ASSET_KIND_NPC
+from systems.statefeed.constants import ASSET_KIND_NPC, COMMERCE_ROLE_SHOP
 from typeclasses.objects import ObjectParent
 from .scripts import Script
 from .spawners import register_spawner, spawn_once
@@ -30,6 +30,14 @@ TALK_COMMAND_KEY = "talk"
 TALK_COMMAND_LOCKS = "cmd:all()"
 TALK_CMD_SET_KEY = "npc_talk_cmdset"
 TALK_CMD_SET_PRIORITY = 10
+
+# The shopkeeper's own verb, on the shopkeeper's own cmdset, for the reason
+# CmdBank sits on the bank terminal: the object the cmdset hangs on IS the
+# counterparty, so there is no shop to name and none to disambiguate.
+SELL_COMMAND_KEY = "sell"
+SELL_COMMAND_LOCKS = "cmd:all()"
+SHOPKEEP_CMD_SET_KEY = "npc_shopkeep_cmdset"
+SHOPKEEP_CMD_SET_PRIORITY = 10
 
 SHOPKEEP_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_shopkeep"
 LONE_ANDROID_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_oasis_lone_android"
@@ -334,6 +342,98 @@ class ShopkeepCleanup(Script):
                 logger.log_trace()
 
 
+class CmdSell(Command):
+    """
+    Sell something you are carrying to the shopkeeper standing here.
+
+    Usage:
+        sell <slot>
+        sell <slot> <quantity>
+        sell <slot> all
+        sell <item name> [quantity|all]
+
+    Slot numbers are the ones `inventory` prints. Without a quantity the whole
+    stack in that slot is sold. There is no confirmation: a slot is one stack,
+    and the reply names what you were paid.
+    """
+    key = SELL_COMMAND_KEY
+    locks = SELL_COMMAND_LOCKS
+    help_category = HELP_CATEGORY_GENERAL
+
+    def func(self) -> None:
+        """
+        Purpose: Hand the raw argument to the shared sell routine.
+
+        Entry:
+            self.caller is a puppeted Character; self.obj is the shopkeeper
+            this cmdset hangs on.
+
+        Exit/Returns:
+            None. shop_service.perform_sell messages every outcome.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            No parsing, no pricing and no reporting happen here, because none
+            of them may differ between this command and the sell node's
+            `_default` option -- see perform_sell on why there are two ways
+            in. This method exists to name the counterparty, which is the one
+            thing the cmdset's owner knows and the menu reads off the menu
+            instance.
+
+        Notes/References:
+            The import is function-level to keep the shop service out of the
+            typeclass module's import graph at load time; shop_service pulls
+            in ITEM_DB and SHOP_DB, and this module is imported to resolve a
+            persisted typeclass path on every server start.
+
+        Author: Nick Hobar
+        Creation date: 09/02/2026
+        """
+        from systems.shop.shop_service import perform_sell
+
+        perform_sell(self.caller, self.obj, self.args)
+
+
+class ShopkeepCmdSet(CmdSet):
+    """
+    Purpose: Stores the sell command for a shopkeeper.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        No conditions.
+
+    Module Globals:
+        SHOPKEEP_CMD_SET_KEY read.
+        SHOPKEEP_CMD_SET_PRIORITY read.
+
+    Methodology:
+        A cmdset of its own rather than more commands on TalkCmdSet, because
+        TalkCmdSet is what every TalkativeNPC carries and the quest-giving
+        android has nothing to sell.
+
+    Notes/References:
+        Added with `add`, not `add_default`: TalkativeNPC already claims the
+        default slot for TalkCmdSet, and a second add_default would displace
+        `talk` on every shopkeeper.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    key = SHOPKEEP_CMD_SET_KEY
+    priority = SHOPKEEP_CMD_SET_PRIORITY
+    duplicates = True
+
+
+    def at_cmdset_creation(self) -> None:
+        """Populate the cmdset with the sell command."""
+        sell_command = CmdSell()
+        self.add(sell_command)
+
+
 class ShopkeepNPC(TalkativeNPC):
     """
     An NPC that buys and sells items. Extends TalkativeNPC with
@@ -342,8 +442,16 @@ class ShopkeepNPC(TalkativeNPC):
 
     asset_key = "shopkeeper"
 
+    # What standing near this NPC lets you do with what you are carrying. Read
+    # by systems/statefeed/commerce.py through getattr, the same route
+    # `asset_kind` and `interact_verb` above take -- so every shopkeeper
+    # already in the database gains the Sell action with no migration and no
+    # respawn.
+    commerce_role = COMMERCE_ROLE_SHOP
+
     def at_object_creation(self) -> None:
         super().at_object_creation()
+        self.cmdset.add(ShopkeepCmdSet, persistent=True)
         self.db.menu_module = SHOPKEEP_DIALOGUE_MODULE
         self.db.shopdef_key = "oasis_shop"
         self.db.desc = "A shopkeeper attending a stall of salvaged goods."
@@ -428,6 +536,12 @@ def spawn_shopkeep(room):
     # an already-placed NPC in step with edits to these values.
     shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
     shopkeep.db.shopdef_key = "oasis_shop"
+
+    # Same reasoning, applied to the cmdset rather than an attribute:
+    # at_object_creation runs once, so a shopkeep placed before ShopkeepCmdSet
+    # existed carries `talk` and no `sell`. Adding an already-present cmdset is
+    # a no-op, so this is safe to run on every rebuild.
+    shopkeep.cmdset.add(ShopkeepCmdSet, persistent=True)
 
     # Same reasoning, applied to the cleanup script rather than an attribute:
     # this is what re-points a shopkeep persisted under the old

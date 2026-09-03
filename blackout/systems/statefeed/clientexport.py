@@ -194,6 +194,17 @@ _SCALAR_EXPORTS: tuple = (
     ("ROOM_KIND_DEFAULT", const.ROOM_KIND_DEFAULT),
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
+    # The token a prompted action's `template` carries where the client's
+    # answer goes, and the kind of box to open for it. These two are exported
+    # and the templates are NOT: a template arrives per action, but the
+    # substitution has to have one owner or two clients hold two spellings of
+    # the same placeholder.
+    ("ACTION_AMOUNT_PLACEHOLDER", const.ACTION_AMOUNT_PLACEHOLDER),
+    ("ACTION_INPUT_KIND_QUANTITY", const.ACTION_INPUT_KIND_QUANTITY),
+    ("ACTION_INPUT_KIND_KEY", const.ACTION_INPUT_KIND_KEY),
+    ("ACTION_INPUT_MIN_KEY", const.ACTION_INPUT_MIN_KEY),
+    ("ACTION_INPUT_MAX_KEY", const.ACTION_INPUT_MAX_KEY),
+    ("ACTION_INPUT_LABEL_KEY", const.ACTION_INPUT_LABEL_KEY),
 )
 
 # What a line of game TEXT is about. Generated for the same reason the channel

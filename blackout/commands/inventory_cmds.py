@@ -145,6 +145,167 @@ def resolve_carried_item(caller, text: str):
     return slot, found
 
 
+def split_item_and_count(args: str) -> tuple:
+    """
+    Purpose: Split "<item> [quantity|all]" into its two halves, so a
+             multi-word item key survives a trailing number.
+
+    Entry:
+        args - a raw argument string, already stripped. May be empty.
+
+    Exit/Returns:
+        Returns an (item_text, count) pair. `count` is an int, the string
+        QUANTITY_ALL_KEYWORD for an explicit "all", or None for an omitted
+        quantity. `item_text` is "" for empty input, which every caller reports
+        in its own words.
+
+    Module Globals:
+        QUANTITY_ALL_KEYWORD read.
+
+    Methodology:
+        A trailing integer is the quantity and everything before it is the
+        name, so "rusty scrap metal 5" parses correctly. A trailing "all" is
+        spelled out by players often enough to accept explicitly.
+
+        "ALL" AND AN OMITTED QUANTITY ARE NO LONGER THE SAME ANSWER, and the
+        distinction is why the count is three-valued. An omitted quantity means
+        "what is in that slot" -- one object for a non-stackable, the whole
+        stack for a stackable. `all` means "every unit of this you are
+        carrying", which for eight separate rusty metal chunks is eight
+        objects in seven other slots. A caller that wants the old
+        "as many as there are" reading maps QUANTITY_ALL_KEYWORD to None
+        itself; `withdraw` does, because a vault has no slots to distinguish.
+
+        The single-token case is left whole on purpose: "7" is a slot number
+        and not a quantity, which is what lets `deposit 7` and `sell 7` mean
+        slot seven rather than seven of nothing.
+
+    Notes/References:
+        This lived as _split_name_and_count in typeclasses/bank_nodes.py until
+        09/02/2026, when `sell` needed the identical split. It belongs beside
+        resolve_carried_item, which is what the name half is fed to -- one
+        owner for how a player names an item and a quantity, rather than one
+        copy per commanding system.
+
+    Author: Nick Hobar
+    Creation date: 08/14/2026
+    """
+    from systems.menus.base_menu import QUANTITY_ALL_KEYWORD
+
+    parts = args.split()
+    count = None
+
+    if len(parts) > 1 and parts[-1].isdigit():
+        count = int(parts[-1])
+        parts = parts[:-1]
+    elif len(parts) > 1 and parts[-1].lower() == QUANTITY_ALL_KEYWORD:
+        count = QUANTITY_ALL_KEYWORD
+        parts = parts[:-1]
+
+    item_text = " ".join(parts)
+
+    return item_text, count
+
+
+def carried_group(caller, item) -> list:
+    """
+    Purpose: List every carried object a player would call the same thing as
+             `item`, in slot order.
+
+    Entry:
+        caller - the puppeted Character.
+        item   - a carried object naming the group.
+
+    Exit/Returns:
+        Returns a list of objects, LOWEST SLOT FIRST, always containing `item`
+        itself. Returns [item] when the character has no inventory handler.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        SLOT ORDER IS THE WHOLE POINT. Eight separate rusty metal chunks are
+        eight objects in eight slots, and "sell three of them" has to name
+        three particular ones. Ascending slot order is the only ordering the
+        player can see and predict -- it is what `inventory` prints -- so a
+        group verb consumes from the lowest number up and the same command
+        twice does the same thing.
+
+        Read from InventoryHandler.all_items rather than caller.contents,
+        because contents comes back in database order and carries no slot at
+        all. Equipped objects are held at location=None and are correctly
+        absent: a group verb reached from a carried slot must not silently
+        strip what the player is wearing.
+
+        Grouped on the lowercased key alone, matching what
+        shop_service.get_sell_items and bank_nodes._find_carried_group already
+        do. Two objects a player would name identically are interchangeable to
+        every one of those readers, and a fourth rule here would be a fourth
+        answer to one question.
+
+    Notes/References:
+        `item` itself is guaranteed present even when the handler has not yet
+        slotted it, so a caller can always act on at least what was clicked.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    handler = getattr(caller, "inventory", None)
+
+    if handler is None:
+        return [item]
+
+    wanted = str(item.key).lower()
+    group = []
+
+    for _slot_index, carried in handler.all_items():
+        if carried is not None and str(carried.key).lower() == wanted:
+            group.append(carried)
+
+    if item not in group:
+        group.append(item)
+
+    return group
+
+
+def group_units(caller, item) -> int:
+    """
+    Purpose: Count every unit of `item` the character is carrying, across all
+             its slots.
+
+    Entry:
+        caller - the puppeted Character.
+        item   - a carried object naming the group.
+
+    Exit/Returns:
+        Returns the total: a stack's size for a stackable, one per object for
+        a non-stackable, summed over the whole group.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        THIS IS NOT THE ROW'S `quantity`, and conflating the two is the trap.
+        A row's quantity is what the pane draws in the corner of that frame,
+        and for one of eight chunks it is 1 -- printing 8 on all eight cells
+        would say the player has sixty-four. This is what a group VERB can
+        reach, which is the bound a "how many?" prompt needs.
+
+    Notes/References:
+        Reads the same group carried_group builds, so what the prompt offers
+        and what the command consumes cannot disagree.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    total = 0
+
+    for member in carried_group(caller, item):
+        total += max(0, int(getattr(member, "quantity", 1) or 1))
+
+    return total
+
+
 # ─── Public routines / Classes ───────────────────────────────────────────────
 
 class CmdInventory(Command):

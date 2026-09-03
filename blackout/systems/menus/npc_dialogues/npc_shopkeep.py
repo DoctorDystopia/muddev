@@ -5,17 +5,19 @@ Creation date: 07/13/2026
 Description: Dialogue nodes for shopkeeper NPCs: the buy and sell flows.
 """
 
-from evennia.utils.evmenu import list_node
+from evennia.utils.evmenu import EvMenuGotoAbortMessage, list_node
 
 from systems.menus.base_menu import back_option, cancel_option, parse_quantity
 from systems.menus.constants import (
     CONFIRM_NO_KEYS,
     CONFIRM_YES_KEYS,
+    NO_OPTION_MATCH,
     QUANTITY_ALL_KEYS,
     QUANTITY_CUSTOM_KEYS,
     QUANTITY_ONE_KEYS,
 )
 from systems.menus.dialogue import resolve_farewell
+from typeclasses.npcs import SELL_COMMAND_KEY
 
 from systems.ui.colors import (
     ERROR_COLOR,
@@ -25,11 +27,13 @@ from systems.ui.colors import (
     highlight as _hl,
     title as _line,
 )
+from systems.shop import messages as shop_messages
 from systems.shop.shop_service import (
     get_buy_items,
     get_sell_items,
     execute_buy,
     execute_sell,
+    perform_sell,
     credits_count,
     count_available,
     get_greeting,
@@ -37,12 +41,20 @@ from systems.shop.shop_service import (
 )
 from systems.statefeed import constants as feed_const
 
-# Every line this module sends a player is something an NPC says, so the
-# routing tag is bound once here rather than repeated at every call site.
+# Two routing tags, because this module sends two kinds of line and they are
+# not the same kind of thing. What the shopkeeper SAYS is dialogue; what a
+# trade DID is commerce. Bound once here rather than repeated at every call
+# site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
 # MESSAGE_TYPES in systems/statefeed/constants.py.
 _MSG_DIALOGUE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_DIALOGUE}
+_MSG_COMMERCE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMMERCE}
+
+# This menu is bound to the room the shopkeeper stands in. Read by
+# base_menu through the same module-attribute route as CLOSING_TEXT, and
+# acted on by Character.at_post_move: walking away closes the shop.
+ROOM_BOUND = True
 
 
 def _get_npc(caller):
@@ -303,16 +315,24 @@ def node_confirm_buy(caller, raw_string, **kwargs) -> tuple:
 
 
 def _report_trade(caller, result, verb, count):
-    """Message the caller with the outcome of a completed trade."""
+    """Message the caller with the outcome of a completed trade.
+
+    The sentence itself comes from systems/shop/messages.py, which is shared
+    with `sell <slot>` -- a sale must not read differently depending on which
+    route the player took. This routine owns only the colour and the routing
+    tag, which are the two things a command legitimately does differently.
+
+    Tagged COMMERCE rather than DIALOGUE: a completed trade is not something
+    the shopkeeper SAYS. The greeting and the farewell are, and they keep the
+    dialogue tag.
+    """
+    line = shop_messages.format_trade(result, verb, count)
+
     if result.success:
-        caller.msg(
-            (f"{SUCCESS_COLOR}You {verb} {count} {result.item_name} "
-            f"for {result.total_price} credits.{RESET_COLOR}", _MSG_DIALOGUE)
-        )
+        caller.msg((f"{SUCCESS_COLOR}{line}{RESET_COLOR}", _MSG_COMMERCE))
         return
 
-    caller.msg((f"{ERROR_COLOR}Transaction failed — {result.error}{RESET_COLOR}")
-, _MSG_DIALOGUE)
+    caller.msg((f"{ERROR_COLOR}{line}{RESET_COLOR}", _MSG_COMMERCE))
 
 def _confirm_buy(caller, raw_string, **kwargs) -> str:
     npc = kwargs.get("npc", _get_npc(caller))
@@ -349,6 +369,72 @@ def _select_ware_to_sell(caller, selection, **kwargs):
     return ("node_sell_quantity", kwargs)
 
 
+def _parse_sell_request(caller, raw_string, **kwargs):
+    """
+    Purpose: Serve a slot-addressed `sell` typed -- or clicked -- while this
+             menu is open.
+
+    Entry:
+        raw_string is whatever reached the menu unmatched, e.g. "sell 7 3".
+        kwargs carries the menu's own state; only `npc` is read.
+
+    Exit/Returns:
+        Returns "node_sell", so the list re-renders with the new counts and
+        the new credit total.
+
+    Module Globals:
+        SELL_COMMAND_KEY read.
+
+    Methodology:
+        THIS IS THE ONLY WAY A GRAPHICAL CLIENT CAN SELL WHILE THE MENU IS
+        OPEN. EvMenuCmdSet replaces the caller's cmdset and excludes object
+        cmdsets (`no_objs=True`), so CmdSell on the shopkeep is unreachable
+        from here -- a player who clicked the merchant to open this menu and
+        then right-clicked an item would have got "Invalid choice".
+
+        It cannot collide with the numbered list above it. EvMenu matches
+        explicit options before `_default`, so a bare "7" still selects the
+        seventh ware; only input that matched nothing arrives here, and this
+        answers just the input that starts with the verb.
+
+        Anything else raises EvMenuGotoAbortMessage carrying EvMenu's OWN
+        no-match line, which is the sanctioned way for a goto callable to say
+        something and leave the player where they are. Arming a `_default` at
+        all otherwise SUPPRESSES that line -- parse_input reaches the default
+        branch instead of the else -- so a typo would silently redraw the
+        list, and claiming the option would have made the menu worse for the
+        telnet player it exists for.
+
+        The re-render is deliberate rather than incidental: a telnet player
+        reading the list needs it to reflect the sale, and the alternative --
+        a quiet result line over a stale list -- is wrong for exactly the
+        player this node is drawn for.
+
+    Notes/References:
+        systems/shop/shop_service.perform_sell does the parsing, the sale and
+        the reporting. Nothing here duplicates any of it.
+
+    Author: Nick Hobar
+    Creation date: 09/02/2026
+    """
+    typed = (raw_string or "").strip()
+    verb, _sep, args = typed.partition(" ")
+
+    if verb.lower() != SELL_COMMAND_KEY:
+        raise EvMenuGotoAbortMessage(NO_OPTION_MATCH)
+
+    npc = kwargs.get("npc", _get_npc(caller))
+    perform_sell(caller, npc, args)
+
+    # list_node injects the CURRENT page's choices into every goto's kwargs.
+    # Handing them back to the node would re-seed the next render with a page
+    # built before the sale, and its own `{"available_choices": page,
+    # **kwargs}` merge lets the stale list win.
+    kwargs.pop("available_choices", None)
+
+    return "node_sell", kwargs
+
+
 @list_node(_sell_option_generator, select=_select_ware_to_sell, pagesize=20)
 def node_sell(caller, raw_string, **kwargs):
     credits = credits_count(caller)
@@ -356,7 +442,10 @@ def node_sell(caller, raw_string, **kwargs):
         f'{_dialog("Let me see what you have.")}\n\n'
         f"{_hl(f'Your credits: {credits}')}"
     )
-    extra_options = [back_option("Back", "start")]
+    extra_options = [
+        {"key": "_default", "goto": _parse_sell_request},
+        back_option("Back", "start"),
+    ]
     return text, extra_options
 
 

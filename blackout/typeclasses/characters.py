@@ -536,6 +536,55 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         self._publish_inventory(ignore=moved_obj)
 
 
+    def at_post_move(self, source_location, move_type="move", **kwargs):
+        """
+        Purpose: Close a room-bound menu the moment its room is behind you.
+
+        Entry:
+            Called by Evennia after this character has finished moving.
+
+        Exit/Returns:
+            None. Never raises -- a menu that refuses to close must not also
+            refuse the move that closed it.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A shop counter and a bank vault are things you STAND at. A menu
+            that survives the walk lists stock, prices and a vault belonging
+            to somewhere the player is no longer standing, and every option
+            on it is a lie by the time it is read.
+
+            WHICH menus those are is declared by the menu module itself, as
+            ROOM_BOUND, and read once at launch onto the instance -- see
+            base_menu.ROOM_BOUND_ATTR. This hook names no menu, so a menu
+            added tomorrow opts in with one line beside its own nodes.
+
+            close_menu, not a raw teardown: BlackoutEvMenu.close_menu is the
+            one place a menu says goodbye, and the shopkeeper's farewell
+            belongs to the closing of the conversation however it ends.
+
+        Notes/References:
+            ndb._evmenu is EvMenu's own handle on the open menu; a menu that
+            is not a BlackoutEvMenu carries no room_bound and is left alone.
+
+        Author: Nick Hobar
+        Creation date: 09/02/2026
+        """
+        super().at_post_move(source_location, move_type=move_type, **kwargs)
+
+        menu = self.ndb._evmenu
+
+        if menu is None or not getattr(menu, "room_bound", False):
+            return
+
+        try:
+            menu.close_menu()
+        except Exception:
+            logger.log_trace()
+
+
     def _publish_inventory(self, ignore=None) -> None:
         """
         Purpose: Push a fresh inventory snapshot to this character's graphical

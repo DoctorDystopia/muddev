@@ -21,7 +21,7 @@ MAX_BASE_SKILL_LEVEL: int = 127
 
 # a character spawns exactly on the level-10 threshold and
 # logic.calculate_xp_needed owns what that threshold costs.
-FORTITUDE_START_LEVEL: int = 10
+FORTITUDE_START_LEVEL: int = 1
 MAX_FORTITUDE_LEVEL: int = MAX_BASE_SKILL_LEVEL
 
 # ─── Fortitude -> max HP scaling ──────────────────────────────────────────────

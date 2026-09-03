@@ -85,6 +85,12 @@ const ROOM_KIND_TRANSITION := "map_transition"
 const ROOM_KIND_DEFAULT := "default"
 const INVENTORY_SWAP_TEMPLATE := "swap {source} {target}"
 const TILE_KEY_TEMPLATE := "{x}:{y}"
+const ACTION_AMOUNT_PLACEHOLDER := "{amount}"
+const ACTION_INPUT_KIND_QUANTITY := "quantity"
+const ACTION_INPUT_KIND_KEY := "kind"
+const ACTION_INPUT_MIN_KEY := "min"
+const ACTION_INPUT_MAX_KEY := "max"
+const ACTION_INPUT_LABEL_KEY := "label"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
