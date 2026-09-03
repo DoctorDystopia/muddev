@@ -10,7 +10,7 @@ Run from blackout/:
 
 from evennia import create_object
 from evennia.scripts.models import ScriptDB
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.combat import constants as const
 from systems.combat.auras.aura_handler import (
@@ -26,7 +26,7 @@ from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npc_combat import HostileNPC
 
 
-class TestAuraRegistry(EvenniaTest):
+class TestAuraRegistry(EvenniaTestCase):
     """Auto-discovery and name resolution."""
 
     def test_righteous_fire_is_discovered(self):
@@ -87,7 +87,7 @@ class TestAuraDamageScaling(EvenniaTest):
         self.assertEqual(first, second)
 
 
-class TestAuraExperience(EvenniaTest):
+class TestAuraExperience(EvenniaTestCase):
     """XP uses the same per-damage rate table as the melee swing path."""
 
     def setUp(self):

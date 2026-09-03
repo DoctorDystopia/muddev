@@ -20,7 +20,7 @@ from unittest import mock
 from evennia import create_object
 from evennia.scripts.models import ScriptDB
 from evennia.utils.dbserialize import dbserialize, dbunserialize
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.spawning.respawn import (
     RESPAWN_MANAGER_KEY,
@@ -40,7 +40,7 @@ def _raiders_in(room):
     return [obj for obj in room.contents if obj.attributes.get("npc_key") == RAIDER_KEY]
 
 
-class TestRespawnManagerWiring(EvenniaTest):
+class TestRespawnManagerWiring(EvenniaTestCase):
     """The global queue Script itself."""
 
     def test_manager_is_a_singleton(self):

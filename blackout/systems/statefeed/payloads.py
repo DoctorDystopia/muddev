@@ -17,7 +17,7 @@ Description: One dataclass per state-feed channel.
              what turns live objects into the plain values these hold.
 """
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field, fields
 
 from . import constants as const
 
@@ -54,8 +54,59 @@ class _Payload:
     channel: str = ""
 
     def to_dict(self) -> dict:
-        """Return this payload as plain JSON-safe values."""
-        body = asdict(self)
+        """
+        Purpose: Return this payload as plain JSON-safe values.
+
+        Entry:
+            The subclass must be a dataclass whose every field already holds a
+            JSON-safe value -- which the module docstring above requires of
+            every payload, and which serializers.py is what guarantees.
+
+        Exit/Returns:
+            Returns a new dict of {field name: value}. The dict is new; the
+            VALUES are the payload's own objects, not copies.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A shallow walk over `fields(self)`, not `dataclasses.asdict`.
+
+            asdict recurses into every nested list and dict and deep-copies as
+            it goes. That recursion buys nothing here: the module docstring
+            already forbids a payload from holding anything but JSON-safe
+            values, so there are no nested dataclasses to convert -- and the
+            copy is charged per element on the largest payloads the feed sends.
+            Measured with systems/profiling (scripts/profile_pipeline.py
+            --layer statefeed):
+
+                                          asdict        shallow walk
+                MapChunkPayload   3.343 ms / 35,229    0.001 ms / 17
+                  (1,600 nodes + 1,600 links)
+                CharItemsPayload  0.097 ms /  1,170    0.001 ms / 17
+                  (60 rows)
+
+            The call count is the tell: 17 regardless of payload size, because
+            nothing here walks into a value.
+
+            The aliasing that a shallow copy allows is safe here because
+            to_dict has exactly one production caller -- emit.py, which hands
+            the body straight to msg() to be encoded and then drops it. Nothing
+            mutates the returned dict, and a payload is built fresh per emit
+            rather than shared.
+
+        Notes/References:
+            If a payload ever does need to hold a nested dataclass, this is the
+            routine that has to learn about it -- and the module docstring's
+            rule is what should stop that happening.
+
+        Author: Nick Hobar
+        Creation date: 08/07/2026
+        """
+        body = {}
+
+        for entry in fields(self):
+            body[entry.name] = getattr(self, entry.name)
 
         return body
 

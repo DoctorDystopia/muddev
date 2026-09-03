@@ -8,13 +8,13 @@ Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings settings.py systems.banking
 """
 
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.banking import messages
 from systems.banking.handler import VAULT_FULL_ERROR, TransferResult
 
 
-class TestTransferMessages(EvenniaTest):
+class TestTransferMessages(EvenniaTestCase):
     """The wording both consumers share."""
 
     def test_a_single_unit_is_named_without_a_multiplier(self):

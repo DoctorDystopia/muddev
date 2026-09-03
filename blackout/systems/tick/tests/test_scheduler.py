@@ -12,7 +12,7 @@ Run from blackout/:
 import unittest
 from unittest import mock
 
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.tick import constants as const
 from systems.tick.engine import get_tick_engine
@@ -205,7 +205,7 @@ class TestIntrospection(unittest.TestCase):
         self.assertIsNone(self.scheduler.next_due_tick())
 
 
-class TestEngineIntegration(EvenniaTest):
+class TestEngineIntegration(EvenniaTestCase):
     """The engine advances the scheduler once per tick."""
 
     def setUp(self):

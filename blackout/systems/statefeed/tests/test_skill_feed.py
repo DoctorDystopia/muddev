@@ -26,7 +26,7 @@ Run from blackout/:
 import json
 
 from evennia.utils.ansi import strip_ansi
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.progression.skills import detail as skill_detail
 from systems.progression.skills.registry import SKILL_REGISTRY
@@ -222,7 +222,7 @@ class TestPerSkillDetail(_SkillFeedTest):
         self.assertEqual("", skill_detail.render_detail(self.char1, "no_such"))
 
 
-class TestResolveSkillKey(EvenniaTest):
+class TestResolveSkillKey(EvenniaTestCase):
     """What a player may type and have it understood as a skill."""
 
     character_typeclass = BlackoutCharacter

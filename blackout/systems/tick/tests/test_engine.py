@@ -18,7 +18,7 @@ wall-clock dependent.
 from unittest import mock
 
 from evennia.scripts.models import ScriptDB
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.tick import constants as const
 from systems.combat.combat import ensure_combat_handler
@@ -219,7 +219,7 @@ class TestDeadRowHandling(_RotationTestCase):
         self.assertNotIn(handler_id, strikes)
 
 
-class TestStaleTypeclassPath(EvenniaTest):
+class TestStaleTypeclassPath(EvenniaTestCase):
     """The engine row records its typeclass as an import path, so moving the
     module leaves a row Evennia loads as a plain DefaultScript. Every attack
     then died on ``'DefaultScript' object has no attribute '_ensure_loop'``

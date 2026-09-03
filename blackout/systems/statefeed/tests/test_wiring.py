@@ -19,7 +19,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from evennia import create_object
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from server.conf import inputfuncs
 from server.conf.serversession import ServerSession as BlackoutServerSession
@@ -47,7 +47,7 @@ class _FakeSession:
 
 # ─── Test cases ──────────────────────────────────────────────────────────────
 
-class TestSubscribeInputfunc(EvenniaTest):
+class TestSubscribeInputfunc(EvenniaTestCase):
     """The handshake a graphical client performs on connect."""
 
     character_typeclass = BlackoutCharacter
@@ -125,7 +125,7 @@ class TestSubscribeInputfunc(EvenniaTest):
         self.assertTrue(True)
 
 
-class TestAnnounce(EvenniaTest):
+class TestAnnounce(EvenniaTestCase):
     """The message that lets a client recover a lost subscription.
 
     Both ways a subscription goes missing are silent from the client's side:

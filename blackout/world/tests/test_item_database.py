@@ -13,7 +13,7 @@ Run with:
 
 
 from evennia.prototypes.spawner import spawn
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.statefeed.constants import ITEM_FAMILIES, ITEM_FAMILY_WEAPON
 from typeclasses.characters import Character as BlackoutCharacter
@@ -34,7 +34,7 @@ _TAG_TUPLE_LENGTH = 2
 
 
 
-class TestCreatePrototypeParity(EvenniaTest):
+class TestCreatePrototypeParity(EvenniaTestCase):
     """create() must add nothing beyond what the prototype declares.
 
     The old drift -- create() writing tier/req_level even when zero and a
@@ -86,7 +86,7 @@ class TestCreatePrototypeParity(EvenniaTest):
 
 
 
-class TestSpawnedAttributesMatchDefinition(EvenniaTest):
+class TestSpawnedAttributesMatchDefinition(EvenniaTestCase):
     """Every ItemDef field must survive the round trip onto a real object.
 
     This is the non-tautological half: it compares a spawned object against
@@ -268,7 +268,7 @@ class TestSpawnedAttributesMatchDefinition(EvenniaTest):
 
 
 
-class TestPrototypeContent(EvenniaTest):
+class TestPrototypeContent(EvenniaTestCase):
     """What a rendered prototype must carry."""
 
     character_typeclass = BlackoutCharacter

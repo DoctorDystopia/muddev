@@ -24,7 +24,7 @@ Inside `blackout/`:
 
 | Directory | Holds |
 |---|---|
-| `systems/` | Game systems: `combat/`, `crafting/`, `progression/skills/`, `banking/`, `shop/`, `quests/`, `menus/`, `spawning/`, `ui/` |
+| `systems/` | Game systems: `combat/`, `crafting/`, `progression/skills/`, `banking/`, `shop/`, `quests/`, `menus/`, `spawning/`, `ui/`. Plus `profiling/`, which is NOT a game system — see "The profiling harness" below |
 | `items/` | `equipment/` and `inventory/` handlers + slot constants |
 | `typeclasses/` | Evennia typeclasses; `mixins.py` holds `CombatEntity` |
 | `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `shop_defs/`, `maps/` |
@@ -106,10 +106,19 @@ stock to Limbo instead of destroying it.
 
 ## Testing
 
-**Always pass `--settings test_settings.py`, never `settings.py`.** The only
-thing it changes is the password hasher, and that alone is the difference
-between a 6-minute suite and a 20-minute one — see
-[docs/old/2026-08-23-TEST-0001-suite-audit.md](docs/old/2026-08-23-TEST-0001-suite-audit.md).
+**Always pass `--settings test_settings.py`, never `settings.py`.** It changes
+two things and both are large: the password hasher (a 20-minute suite becomes a
+6-minute one — see
+[docs/old/2026-08-23-TEST-0001-suite-audit.md](docs/old/2026-08-23-TEST-0001-suite-audit.md))
+and the test runner, which applies `gc.freeze()` after setup. Evennia's
+idmapper `flush_cache()` ends in an unconditional `gc.collect()` and
+`EvenniaTestMixin.tearDown` calls it after every test method, so the suite was
+rescanning ~259,000 permanently-live objects 1,857 times. Freezing them out of
+the scanned generations takes ~41 ms off every test — 77s of the suite — and
+changes no isolation guarantee, because the idmapper caches are still cleared
+and anything created after the freeze is still collected. See
+`server/conf/testrunner.py` and
+[docs/2026-09-03-PERF-0001-pipeline-audit.md](docs/2026-09-03-PERF-0001-pipeline-audit.md).
 
 **During development:** run only the modules you changed (seconds):
 
@@ -117,7 +126,7 @@ between a 6-minute suite and a 20-minute one — see
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
 ```
 
-**Before merging or major changes:** run the full suite (1324 tests, ~6.6 min):
+**Before merging or major changes:** run the full suite (1857 tests, ~8.7 min):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world
@@ -137,14 +146,34 @@ Details:
 - **`--parallel` does not work.** Django's cloned worker databases do not
   carry the dbrefs `EvenniaTestMixin` assumes, so every worker dies in setUp
   on `settings.DEFAULT_HOME (= '#2') does not exist`. Don't spend time on it.
+  The same error is what a test runner that is NOT Evennia's produces, for the
+  same underlying reason: `EvenniaTestSuiteRunner.setup_test_environment` is
+  what calls `evennia._init()` and puts object #2 in place, so anything
+  replacing that runner rather than extending it breaks every `create_object`
+  in the suite.
+- **Profiling the suite is a flag, not a branch.** `BLACKOUT_PROFILE_TESTS=1`
+  in front of any `evennia test` invocation prints the slowest tests, the
+  costliest classes and the per-base-class floor; add
+  `BLACKOUT_PROFILE_TESTS_OUTPUT=run.timings.csv` for per-test rows. Off by
+  default and inert when off. See `systems/profiling/README.md`.
 
 ### Writing tests
 
 - **Inherit the cheapest base class that works.** `EvenniaTest` builds two
   accounts, two rooms, two objects, two characters, an exit, a script and a
   session *per test method*. If a test never touches `self.char1` and friends,
-  it is paying ~0.2s for nothing — use `EvenniaTestCase` (DB, no fixtures) or
-  plain `unittest.TestCase` (no DB).
+  it is paying for nothing — use `EvenniaTestCase` (DB, no fixtures) or plain
+  `unittest.TestCase` (no DB). Measured steady-state, per test method:
+
+  | Base class | ms/test |
+  |---|---|
+  | `unittest.TestCase` | 0.01 |
+  | `EvenniaTestCase` | 23.8 |
+  | `EvenniaTest` | 138.4 |
+  | `EvenniaCommandTest` | 151.1 |
+
+  Half of `EvenniaTest`'s cost is `create_chars` alone: two Characters, each
+  building the full 13-cmdset `CharacterCmdSet`.
 - **Never assert a census of a registry.** `assertEqual(sorted(RECIPE_REGISTRY),
   [six literal names])` fails when someone adds a seventh recipe as intended,
   which trains everyone to edit the test rather than read it. Derive the
@@ -159,6 +188,49 @@ Details:
   `assertIn("aren't carrying", response.lower())` survives a copy edit.
 - Inject a seeded `random.Random(...)` or a scripted stub; never let a test
   read the global RNG.
+
+## The profiling harness
+
+`systems/profiling/` measures the pipeline end to end — Database → Evennia →
+Statefeed → Protocol → Web — and the test suite. It is **not a game system**;
+it sits under `systems/` because that is where packages live, and everything
+else about it points the other way.
+
+```bash
+python scripts/profile_pipeline.py            # everything
+python scripts/profile_pipeline.py --list     # what is registered
+python scripts/profile_pipeline.py --layer statefeed --show-profile
+```
+
+Artefacts land in `blackout/profiling_out/` (gitignored): a text report, the
+same run as JSON, and one `.prof` per scenario. Exits non-zero when the worst
+row is `critical`, so CI can gate on it.
+
+**Nothing in the game may import it.** The arrow points profiling → game and
+never back: the package pulls in `cProfile`, `django.test` and Evennia's test
+resources, and one convenient import of a timing decorator into a serialiser
+loads the test framework into a running server.
+`systems/profiling/tests/test_isolation.py` fails if that ever happens, with
+one exemption (`server/conf/testrunner.py`) that the same test checks still
+exists. To profile production code, attach to a seam that is already there —
+`register_phase_hook` in `systems/tick/engine.py` is the one built for it, and
+`systems/tick/debug.py` is the model for how a bystander to the tick behaves.
+
+**It cannot touch the live database.** Every scenario runs inside a Django test
+database created for the run and destroyed after it, because the run happens
+inside a `TestCase`. That is structural rather than careful, and it is the
+reason a tool that spawns characters hundreds of times is safe to keep in
+`scripts/` beside the ones that are not.
+
+**Adding a scenario is one decorated function** in one module under
+`scenarios/` — the `@register_spawner` arrangement again. The function receives
+the world fixture and RETURNS the callable to measure; everything before that
+`return` is setup and is excluded from every number.
+
+`README.md` beside the package is the source of truth for the rest: why timing
+and profiling are separate passes, why severity is banded on duration and query
+count independently, and the two Evennia traps the harness was built through
+(the flat API is empty at import time; the test runner is not interchangeable).
 
 ## Commits
 

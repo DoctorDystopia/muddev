@@ -13,7 +13,7 @@ Run from blackout/:
 import math
 
 from evennia import create_object
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.combat import constants as const
 from systems.combat.combat_level.branch_defs.base_branch import CombatBranch
@@ -25,7 +25,7 @@ from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npc_combat import HostileNPC
 
 
-class TestCombatBranchRegistry(EvenniaTest):
+class TestCombatBranchRegistry(EvenniaTestCase):
     """Auto-discovery mirrors AURA_REGISTRY / SKILL_REGISTRY."""
 
     def test_melee_branch_is_discovered(self):
@@ -38,7 +38,7 @@ class TestCombatBranchRegistry(EvenniaTest):
         self.assertNotIn("base", COMBAT_BRANCH_REGISTRY)
 
 
-class TestCombatBranchScoreShapes(EvenniaTest):
+class TestCombatBranchScoreShapes(EvenniaTestCase):
     """compute_score's default covers both a solo skill and a paired sum."""
 
     def test_paired_skills_sum_raw(self):

@@ -15,7 +15,7 @@ player commands, so an NPC's handler ticked forever and returned at
 
 from unittest import mock
 
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.ai.behaviors import aggressive_melee
 from systems.ai.constants import (
@@ -34,7 +34,7 @@ from systems.tick.engine import bootstrap_tick, get_tick_engine
 from typeclasses.npc_combat import spawn_mutant_raider
 
 
-class TestBehaviorRegistry(EvenniaTest):
+class TestBehaviorRegistry(EvenniaTestCase):
     """The decorator registry, modelled on SPAWNER_REGISTRY."""
 
     def test_the_melee_behavior_is_registered_under_its_constant(self):

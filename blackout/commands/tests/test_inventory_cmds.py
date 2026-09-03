@@ -13,7 +13,7 @@ Run with:
     evennia test --settings settings.py commands.tests.test_inventory_cmds
 """
 
-from evennia.utils.test_resources import EvenniaCommandTest
+from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTestCase
 
 from commands.equipment_cmds import CmdEquipment, CmdUnequip
 from commands.inventory_cmds import CmdSwap, parse_slot_number
@@ -30,7 +30,7 @@ PLAIN_KEY = "rusty_metal_chunk"
 OTHER_PLAIN_KEY = "rusty_scrap_metal"
 
 
-class TestParseSlotNumber(EvenniaCommandTest):
+class TestParseSlotNumber(EvenniaTestCase):
     """The 1-based to 0-based conversion every slot argument goes through."""
 
     character_typeclass = BlackoutCharacter

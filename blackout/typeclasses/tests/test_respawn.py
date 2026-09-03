@@ -15,7 +15,7 @@ punching bag until they walked away. Every case below pins one part of the fix.
 
 from unittest import mock
 
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.combat.combat import ensure_combat_handler, get_handler_for
 from typeclasses.npc_combat import spawn_mutant_raider
@@ -36,7 +36,7 @@ def _make_respawn_room() -> GridTile:
     return room
 
 
-class TestRespawnRoomResolution(EvenniaTest):
+class TestRespawnRoomResolution(EvenniaTestCase):
     """world/respawn.py — the one owner of 'where does a dead player go'."""
 
     def test_resolves_the_room_at_the_named_coordinate(self):

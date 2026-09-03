@@ -49,3 +49,13 @@ docs/
 # it one file, rebuilt wholesale by every export. `deploy/webexport/publish.sh`
 # reads it from here; nothing commits it.
 deploy/webexport/build/
+
+# Profiling run artefacts: the text and JSON audit reports plus one .prof per
+# scenario. Machine-specific by definition -- the numbers are this laptop's,
+# not the project's -- so a committed run is a diff nobody can review and a
+# baseline nobody should trust. `scripts/profile_pipeline.py` rebuilds the
+# whole directory on every run.
+blackout/profiling_out/
+
+# Per-test timing CSVs from BLACKOUT_PROFILE_TESTS_OUTPUT. Same reasoning.
+*.timings.csv

@@ -9,7 +9,7 @@ Run from blackout/:
 """
 
 from evennia.utils.ansi import strip_ansi
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.combat.rules.introspect import (
     describe_registry,
@@ -20,7 +20,7 @@ from typeclasses.characters import Character as BlackoutCharacter
 from world.item_database import ITEM_DB
 
 
-class TestDescribeRegistry(EvenniaTest):
+class TestDescribeRegistry(EvenniaTestCase):
     """The catalogue view."""
 
     def test_every_registered_rule_is_listed(self):

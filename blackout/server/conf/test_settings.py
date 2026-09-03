@@ -38,3 +38,20 @@ from server.conf.settings import *
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
+
+# Evennia's own runner, plus this project's gc policy and an opt-in per-test
+# instrument. The runner EXTENDS EvenniaTestSuiteRunner rather than replacing
+# it, because that class's setup_test_environment is what calls evennia._init()
+# and puts object #2 in place -- replacing it is how a suite ends up failing
+# every create_object with "settings.DEFAULT_HOME (= '#2') does not exist".
+#
+# The gc policy is the second-largest saving in this file after the hasher
+# above: gc.freeze() after setup takes ~41 ms off every test, roughly 77s of a
+# 604s suite. See server/conf/testrunner.py for the measurement and the reason
+# it is safe.
+#
+# The instrument is INERT unless BLACKOUT_PROFILE_TESTS is set in the
+# environment, which is why it is safe to point at unconditionally rather than
+# asking every developer to remember a second --settings file. See
+# systems/profiling/testrunner.py for what it records.
+TEST_RUNNER = "server.conf.testrunner.BlackoutTestSuiteRunner"

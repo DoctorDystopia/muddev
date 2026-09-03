@@ -11,7 +11,7 @@ Run with the Evennia/Django test runner from the game dir:
 """
 
 from evennia.scripts.models import ScriptDB
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.combat import constants as const
 from systems.combat.combat import ensure_combat_handler
@@ -25,7 +25,7 @@ from systems.combat.hp_regen import (
 from typeclasses.npc_combat import spawn_mutant_raider
 
 
-class TestRegenManagerWiring(EvenniaTest):
+class TestRegenManagerWiring(EvenniaTestCase):
     """The global sweep Script itself."""
 
     def test_manager_is_a_singleton(self):

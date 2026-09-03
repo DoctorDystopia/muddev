@@ -18,7 +18,7 @@ import io
 import os
 import re
 
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.tick import tickable
 from systems.combat.auras.aura_handler import BlackoutAuraHandler
@@ -59,7 +59,7 @@ def _declared_tickable_class_names() -> set:
     return found
 
 
-class TestRegistryIsComplete(EvenniaTest):
+class TestRegistryIsComplete(EvenniaTestCase):
     """The guard that replaces the old "must be added HERE" comment."""
 
     def test_every_declared_handler_is_registered(self):
@@ -96,7 +96,7 @@ class TestRegistryIsComplete(EvenniaTest):
         self.assertIn(BlackoutAuraHandler.HANDLER_KEY, keys)
 
 
-class TestHandlerContract(EvenniaTest):
+class TestHandlerContract(EvenniaTestCase):
     """What a subclass must declare, and what the base guarantees."""
 
     def test_every_handler_declares_a_key_and_an_accessor(self):
@@ -197,7 +197,7 @@ class TestEnsureHandler(EvenniaTest):
         )
 
 
-class TestManagerRegistry(EvenniaTest):
+class TestManagerRegistry(EvenniaTestCase):
     """The other hand-maintained dispatch list step 4 removed: three
     bootstrap_*() calls in server/conf/at_server_startstop.py, which had to be
     edited to add any global system and said nothing when it wasn't."""
