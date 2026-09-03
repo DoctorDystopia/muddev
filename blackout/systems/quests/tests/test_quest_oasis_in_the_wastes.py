@@ -159,6 +159,15 @@ class BareHandedCuttingTests(EvenniaTest):
         self.rusty = create_object(_RUSTY_POLE, key="rusty pole",
                                    location=self.room1)
 
+        # Headroom above the bare-hand cost -- FORTITUDE_START_LEVEL seeds a
+        # fresh character at 1 HP, and _pay_bare_hand_cost's "survives" check
+        # is strictly-greater-than the 1 HP cost, so a fresh character could
+        # never survive their own first bare-handed cut. The one test that
+        # wants the fatal case (test_a_fatal_cut_kills_instead_of_harvesting)
+        # sets hp back down to 1 itself.
+        self.char1.db.max_hp = 10
+        self.char1.db.hp = 10
+
 
     def _cut(self, target):
         from systems.progression.skills.skill_defs.gathering.cutting import Cutting

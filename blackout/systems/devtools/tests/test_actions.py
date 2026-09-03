@@ -42,6 +42,11 @@ class GodModeTests(EvenniaTest):
     """The one genuinely new game rule the moderator tool adds."""
 
     def test_damage_applies_normally_with_god_mode_off(self):
+        # Headroom above the hit -- FORTITUDE_START_LEVEL seeds a fresh
+        # character at 1 HP, which this damage would kill outright (and
+        # respawn back to full), masking the non-lethal case under test.
+        self.char1.db.max_hp = 10
+        self.char1.db.hp = 10
         start_hp = self.char1.hp
         removed = self.char1.at_damage(3, attacker=self.char2)
 
@@ -78,6 +83,11 @@ class GodModeTests(EvenniaTest):
         self.assertEqual(recorded, self.char2.id)
 
     def test_turning_god_mode_off_restores_normal_damage(self):
+        # Headroom above the hit -- FORTITUDE_START_LEVEL seeds a fresh
+        # character at 1 HP, which this damage would kill outright (and
+        # respawn back to full), masking the non-lethal case under test.
+        self.char1.db.max_hp = 10
+        self.char1.db.hp = 10
         dev_actions.set_godmode(self.char2, self.char1, True)
         dev_actions.set_godmode(self.char2, self.char1, False)
         start_hp = self.char1.hp

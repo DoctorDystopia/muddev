@@ -71,6 +71,11 @@ class TestRegenIsScheduled(EvenniaTest):
         self.manager = get_regen_manager()
         self.manager.ndb._sweep_handle = None
 
+        # Headroom above the wounds this class inflicts below --
+        # FORTITUDE_START_LEVEL seeds a fresh character at 1 HP, which
+        # leaves no room for "max_hp - 5" to stay positive.
+        self.char1.db.max_hp = 10
+
     def test_bootstrap_books_a_sweep(self):
         """Load-bearing: the scheduler is ndb, so a sweep booked before a
         reload is gone and every user must re-arm itself at boot."""
@@ -162,6 +167,16 @@ class TestRegenRegistration(EvenniaTest):
 class TestRegenSweep(EvenniaTest):
     """sweep() -- the healing logic itself. Runs unconditionally: regen is
     not gated on being in combat, per the 08/08 design dialogue."""
+
+    def setUp(self):
+        super().setUp()
+
+        # Headroom above the wounds this class inflicts below --
+        # FORTITUDE_START_LEVEL seeds a fresh character at 1 HP, which
+        # leaves no room for "max_hp - 3" to stay positive (a negative db.hp
+        # reads as truthy-and-dead through the hp property, so sweep would
+        # skip it as no longer alive instead of healing it).
+        self.char1.db.max_hp = 10
 
     def test_sweep_heals_a_wounded_entity(self):
         manager = get_regen_manager()

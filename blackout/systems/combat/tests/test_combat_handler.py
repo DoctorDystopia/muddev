@@ -568,6 +568,12 @@ class TestNpcAttackerEarnsNothing(EvenniaTest):
 
     def test_an_npc_swing_damages_the_player(self):
         """The direction of travel this whole batch exists to enable."""
+        # Headroom above the swing's damage -- FORTITUDE_START_LEVEL seeds a
+        # fresh character at 1 HP, which the swing below would kill outright
+        # (and respawn back to full), masking the non-lethal case this test
+        # is actually about.
+        self.char1.db.max_hp = 10
+        self.char1.db.hp = 10
         before = self.char1.hp
 
         self._npc_swing_at_char(damage=3)

@@ -270,6 +270,12 @@ class TestBackfireSwing(EvenniaTest):
         self.assertEqual(kwargs["damage_type"], const.DAMAGE_TYPE_ENERGY)
 
     def test_the_attacker_loses_hp_to_their_own_swing(self):
+        # Headroom above the backfire's damage -- FORTITUDE_START_LEVEL seeds
+        # a fresh character at 1 HP, which the backfire below would kill
+        # outright (and respawn back to full), masking the non-lethal case
+        # this test is actually about.
+        self.char1.db.max_hp = 10
+        self.char1.db.hp = 10
         before = self.char1.hp
 
         self._backfiring_swing(self_damage=2)

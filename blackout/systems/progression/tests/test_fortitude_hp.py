@@ -207,6 +207,10 @@ class TestFortitudeLevelUpPublishesTheNewCap(EvenniaTest):
 
     def test_raising_the_cap_does_not_heal(self):
         """The published hp is the character's real hp, not a topped-up one."""
+        # Headroom for the hp=5 write below -- setUp's seed_fortitude_on_creation
+        # only gives 1 max_hp at FORTITUDE_START_LEVEL, and the hp setter
+        # clamps to it.
+        self.char1.db.max_hp = 10
         self.char1.hp = 5
         self.published.clear()
         self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 42, "xp": 0}
@@ -219,6 +223,10 @@ class TestFortitudeLevelUpPublishesTheNewCap(EvenniaTest):
 
     def test_an_ordinary_hp_change_still_publishes(self):
         """The hp setter's own send, which this change must not disturb."""
+        # Headroom for the hp=7 write below -- setUp's seed_fortitude_on_creation
+        # only gives 1 max_hp at FORTITUDE_START_LEVEL, and the hp setter
+        # clamps to it.
+        self.char1.db.max_hp = 10
         self.char1.hp = 7
 
         readings = [body["hp"] for body, _ in self.published]
