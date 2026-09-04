@@ -44,19 +44,64 @@ from typeclasses.rooms import GridTile
 # stores the map name there and coordinates are string Tags underneath.
 FIXTURE_MAP_NAME = "profiling_fixture"
 
-# Grid dimensions. 9x9 is the smallest square that fully contains a radius-3
-# neighbourhood around a centre tile with a margin, so a radius-3 scenario is
-# measuring 49 real rooms rather than 49 requests that fall off the edge.
-FIXTURE_WIDTH: int = 9
-FIXTURE_HEIGHT: int = 9
+# Grid dimensions. Sized to the PRODUCTION visibility radius, not to a
+# comfortable one. statefeed's STATEFEED_ENTITY_RADIUS is 10, and the live maps
+# (oasis, oasis_outskirts, neo_cairo) are 59-81 nodes inside a coordinate span
+# of roughly 13x12 -- so a radius-10 neighbourhood on any of them is the whole
+# map. A 13x13 fixture is that span with room to spare, which makes
+# _visible_rooms here return what it returns in the live game rather than a
+# fraction of it.
+#
+# Was 9x9 until 09/03/2026, chosen as the smallest square containing a radius-3
+# neighbourhood. That was the right size for the question the harness was
+# asking then, and the wrong size for the one it is asking now: at 9x9 a
+# radius-10 emit costs 81 tiles instead of the map's 169, which understates
+# every crowd measurement by half. The radius-3 scenarios are unaffected --
+# they still resolve 49 tiles and 147 objects -- because CENTRE moved with the
+# grid.
+FIXTURE_WIDTH: int = 13
+FIXTURE_HEIGHT: int = 13
 
 # Objects placed on each tile. Three is enough that a per-object query cost
 # separates visibly from a per-room one in the captured count.
 ITEMS_PER_TILE: int = 3
 
 # The centre tile, where the observing character stands.
-CENTRE_X: int = 4
-CENTRE_Y: int = 4
+CENTRE_X: int = 6
+CENTRE_Y: int = 6
+
+# Crowd sizes the scaling scenarios step through. The point of a THREE-point
+# ladder rather than a before/after pair is that it separates a linear cost
+# from a quadratic one: a cost that doubles from 1 to 8 and doubles again from
+# 8 to 24 is per-observer overhead, while one that grows with the SQUARE of
+# the step is the fan-out multiplying the payload.
+#
+# 24 is not a stress number. It is a busy Oasis on a weekend, and it is well
+# inside the "comfortable concurrency sits in the tens" that
+# statefeed/subscriptions.py cites as Evennia's own envelope.
+CROWD_SIZES = (1, 8, 24)
+
+# Where a crowd stands. ONE tile, because a graphical client's worst case is
+# everybody in the same room -- which is also what a market, a bank or a quest
+# hand-in produces every day.
+#
+# That tile is a far corner rather than the centre, and for the reason
+# scenarios/engine.py's _arm_crowd spells out at length: scenarios share one
+# world, pkgutil discovers scenario modules alphabetically, and "crowd" sorts
+# before "database" and "statefeed". So the crowd is already standing when the
+# radius-3 scenarios are measured, and a crowd on the CENTRE tile would silently
+# grow the world those scenarios walk -- which is the one form of shared state
+# harness.py does not accept. Radius 3 around (6, 6) covers x and y in 3..9;
+# this tile is outside it.
+#
+# It is also a different corner from _arm_crowd's, so the two crowds do not
+# pile onto one tile and change each other's room.contents walks.
+CROWD_TILE = (0, FIXTURE_HEIGHT - 1)
+
+# First session id handed to a stand-in client. Well clear of the low ids the
+# EvenniaTest fixtures use, so a stub session can never be confused for one of
+# theirs while reading a profile.
+_CROWD_SESSID_BASE: int = 9000
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -79,6 +124,7 @@ class ProfilingWorld:
         self.items = []
         self.character = None
         self.centre = None
+        self._crowd = []
 
 
     def build(self) -> "ProfilingWorld":
@@ -196,3 +242,74 @@ class ProfilingWorld:
                     found.append(tile)
 
         return found
+
+
+    def crowd(self, size: int) -> list:
+        """
+        Purpose: Hand back `size` player-shaped observers, each with a
+                 subscribed client attached, creating them on first request.
+
+        Entry:
+            size - how many observers the caller needs. Must not exceed the
+                   number a previous call already asked for plus what this one
+                   adds; the pool only grows.
+
+        Exit/Returns:
+            Returns the first `size` members of the crowd, in creation order.
+
+        Module Globals:
+            CROWD_TILE read. FIXTURE-scoped `_crowd` written.
+
+        Methodology:
+            The pool GROWS and is never rebuilt. Scenarios run in registration
+            order against one shared world, so a ladder that walks 1, 8, 24
+            asks for a superset each time -- and tearing the crowd down between
+            steps would mean the 24-observer measurement was taken against a
+            world that had just done 24 deletions, with the idmapper and the
+            contents cache in a state no live server is ever in.
+
+            The consequence a reader has to know: a scenario registered AFTER a
+            crowd scenario is measured against a world with that crowd standing
+            in it. That is why the crowd stands on the centre tile and why the
+            crowd scenarios are registered last -- see scenarios/crowd.py.
+
+            Characters, not NPCs. serialize_entity reads hp/max_hp and the
+            interact affordance off a real combatant, so a crowd of Objects
+            would produce a smaller payload than a crowd of players and would
+            understate exactly the number being measured.
+
+        Notes/References:
+            client_stub.attach_client is what makes emit() do work rather than
+            return early. Without it every number here would be zero.
+
+        Author: Nick Hobar
+        Creation date: 09/03/2026
+        """
+        from typeclasses.characters import Character
+
+        from .client_stub import attach_client
+
+        arena = self.tiles[CROWD_TILE]
+
+        while len(self._crowd) < size:
+            index = len(self._crowd)
+            player = create_object(Character,
+                                   key=f"profiling_player_{index}",
+                                   location=arena)
+            attach_client(player, sessid=_CROWD_SESSID_BASE + index)
+            self._crowd.append(player)
+
+        return self._crowd[:size]
+
+
+    def full_map(self) -> list:
+        """Hand back every tile, which is what a radius-10 emit resolves to.
+
+        Named for what it MEANS rather than for the radius that produces it.
+        STATEFEED_ENTITY_RADIUS is 10 and the live maps are smaller than that
+        in every direction, so `_visible_rooms` returns the whole map -- and a
+        scenario that said `rooms_within(10)` would read as though the radius
+        were the interesting number, when the interesting number is that the
+        radius stopped bounding anything.
+        """
+        return list(self.tiles.values())

@@ -478,6 +478,37 @@ RATE_STATE_ATTR: str = "statefeed_last_send"
 # removes a failure mode that only appears once a map grows.
 MAP_NODES_PER_CHUNK: int = 40
 
+# How large an inbound websocket message a Godot client must be prepared to
+# accept, in bytes. Exported to the client, which sets it on its WebSocketPeer
+# before connecting.
+#
+# WHY THIS IS A SERVER CONSTANT. It is the SERVER that decides how big a message
+# gets -- STATEFEED_ENTITY_RADIUS above is the knob, and raising it grows
+# room_players quadratically. A ceiling owned by the client would be a number
+# nobody re-checked when the radius moved, which is precisely how the map
+# payload earned its chunker. One owner, exported, and
+# test_payload_size.py fails when the two drift.
+#
+# WHY 1 MiB RATHER THAN THE 65535 DEFAULT. Godot's WebSocketPeer defaults to a
+# 64 KiB inbound buffer. A whole-map room_players payload measures ~43 KB on a
+# live-sized map today (see docs/2026-09-03-PERF-0002-crowd-scaling.md), which
+# is 66% of that default -- one radius increase or one busy market away from
+# hitting it. On Godot < 4.4 the overflow TRUNCATED SILENTLY; on 4.7, which
+# this client targets, it errors instead, which is better and still a
+# disconnection nobody can diagnose from the symptom.
+#
+# The cost is one buffer on one socket in one client process, so the headroom
+# is nearly free and the alternative -- chunking room_players the way
+# blackout_map is chunked -- is a two-sided change that would make a client
+# render a partially-applied entity list. That change may still be worth making
+# if the radius rises far enough; this constant is what makes the moment it
+# becomes necessary a failing test rather than a bug report.
+#
+# It does NOT apply to a web export. A browser build delegates to the native
+# WebSocket API, which has no such ceiling; the property is simply ignored
+# there.
+CLIENT_INBOUND_BUFFER_BYTES: int = 1024 * 1024
+
 
 # ─── Asset keys ──────────────────────────────────────────────────────────────
 

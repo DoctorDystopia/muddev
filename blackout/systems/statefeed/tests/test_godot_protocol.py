@@ -332,3 +332,91 @@ class FeedIsSafeForBBCodeTests(unittest.TestCase):
                         "%s carries colour markup; the structured feed is "
                         "never run through parse_to_bbcode, so it would reach "
                         "a Godot client as a literal %s" % (name, marker))
+
+
+class CompressionNegotiationTests(unittest.TestCase):
+    """permessage-deflate is accepted, and declining is still safe.
+
+    A SILENT failure like the three above: nothing raises when compression is
+    off, and nobody notices except by watching bytes on a tunnel. Autobahn
+    compresses only when a server explicitly accepts an offer, and Evennia sets
+    no protocol options on any factory -- so this is one line standing between
+    the statefeed's largest payloads and a 15.4x saving, and a test is what
+    stops a future edit to start_plugin_services dropping it.
+    """
+
+    def test_a_deflate_offer_is_accepted(self):
+        """A browser's offer -- what a web-exported Godot build sends."""
+        from autobahn.websocket.compress import (
+            PerMessageDeflateOffer, PerMessageDeflateOfferAccept)
+
+        from server.conf.godot_websocket import _accept_deflate
+
+        offer = PerMessageDeflateOffer(accept_no_context_takeover=True,
+                                       accept_max_window_bits=True,
+                                       request_no_context_takeover=False,
+                                       request_max_window_bits=0)
+
+        accepted = _accept_deflate([offer])
+
+        self.assertIsInstance(accepted, PerMessageDeflateOfferAccept)
+
+    def test_a_bare_offer_is_accepted_without_a_counter_proposal(self):
+        """
+        The regression this guards: requesting an explicit window bit count
+        raises inside autobahn unless the offer set accept_max_window_bits, and
+        the raise would happen during a handshake on the Portal -- where it
+        reads as a client that cannot connect rather than as a server bug.
+        """
+        from autobahn.websocket.compress import PerMessageDeflateOffer
+
+        from server.conf.godot_websocket import _accept_deflate
+
+        bare = PerMessageDeflateOffer(accept_no_context_takeover=False,
+                                      accept_max_window_bits=False,
+                                      request_no_context_takeover=False,
+                                      request_max_window_bits=0)
+
+        accepted = _accept_deflate([bare])
+
+        self.assertIsNotNone(accepted)
+        self.assertEqual(accepted.request_max_window_bits, 0)
+
+    def test_context_takeover_is_left_on(self):
+        """
+        Most of the measured saving comes from the deflate context surviving
+        ACROSS messages: consecutive room_players payloads differ by a handful
+        of entities and back-reference the rest. Turning no_context_takeover on
+        would compress each message from cold and quietly give that up.
+        """
+        from autobahn.websocket.compress import PerMessageDeflateOffer
+
+        from server.conf.godot_websocket import _accept_deflate
+
+        offer = PerMessageDeflateOffer(accept_no_context_takeover=True,
+                                       accept_max_window_bits=True,
+                                       request_no_context_takeover=False,
+                                       request_max_window_bits=0)
+
+        accepted = _accept_deflate([offer])
+
+        self.assertFalse(accepted.request_no_context_takeover)
+
+    def test_no_offer_declines_rather_than_raising(self):
+        """
+        A native desktop build whose WebSocketPeer offers no compression must
+        get the connection it has always had. Returning None is how autobahn is
+        told to speak uncompressed.
+        """
+        from server.conf.godot_websocket import _accept_deflate
+
+        self.assertIsNone(_accept_deflate([]))
+
+    def test_an_unknown_extension_is_not_mistaken_for_deflate(self):
+        """Only a PerMessageDeflateOffer may be accepted as one."""
+        from server.conf.godot_websocket import _accept_deflate
+
+        class _OtherExtension:
+            pass
+
+        self.assertIsNone(_accept_deflate([_OtherExtension()]))

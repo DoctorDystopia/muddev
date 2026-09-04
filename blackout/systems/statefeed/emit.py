@@ -100,6 +100,53 @@ def _passes_rate_cap(session, channel: str, now: float) -> bool:
     return True
 
 
+def _could_listen(obj) -> bool:
+    """
+    Purpose: Cheap "could this object possibly have a session" test, used to
+             keep a room broadcast from asking every rock on the floor.
+
+    Entry:
+        obj - any object sitting in a room.
+
+    Exit/Returns:
+        True when the object might have a session. False is a promise that it
+        has none.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Reads `db_sessid`, the raw column on the row that is already loaded,
+        rather than going through the `sessions` handler. That handler is a
+        lazy_property whose constructor splits the same column and then tests
+        every id in it against the global session handler -- work worth doing
+        for a player and pure waste for scenery.
+
+        This is the same move the profiling harness measures under "Raw column
+        obj.db_location_id" versus "FK traversal obj.location.id": read the
+        fact off the row you already have.
+
+        THE DIRECTION OF ERROR IS THE WHOLE ARGUMENT. The column can be stale
+        in one direction only -- it may still name a session that has since
+        gone away, because ObjectSessionHandler prunes those lazily when it is
+        next built. A stale-NON-EMPTY column costs one wasted emit() call,
+        which then does the real subscription check and sends nothing. A
+        stale-EMPTY column cannot happen: a session is recorded by writing this
+        column, so empty means no session has ever been attached.
+
+        So a False here is safe and a True is merely not yet a decision, which
+        is exactly the asymmetry a fast pre-filter needs.
+
+    Notes/References:
+        PERF-0002 measured 1,242 emit() calls for two moves, the overwhelming
+        majority of them on scenery. This is that number's fix.
+
+    Author: Nick Hobar
+    Creation date: 09/03/2026
+    """
+    return bool(getattr(obj, "db_sessid", None))
+
+
 def _eligible_sessions(obj, channel: str, now: float, force: bool) -> list:
     """Return the object's sessions that want `channel` and are not capped.
 
@@ -133,7 +180,7 @@ def _eligible_sessions(obj, channel: str, now: float, force: bool) -> list:
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
-def emit(obj, payload, force: bool = False) -> int:
+def emit(obj, payload, force: bool = False, body=None) -> int:
     """
     Purpose: Send one payload to one observer's subscribed sessions.
 
@@ -144,6 +191,10 @@ def emit(obj, payload, force: bool = False) -> int:
         force   - True to bypass the channel's rate cap. Reserved for resync,
                   where a dropped message would leave a client permanently
                   stale rather than merely a beat behind.
+        body    - a payload body already rendered by payload.to_dict(), for a
+                  broadcast that is sending the SAME body to many observers.
+                  None means render it here, which is the single-observer case
+                  and the one every direct caller wants.
 
     Exit/Returns:
         Returns the number of sessions the payload was sent to. Zero is the
@@ -160,6 +211,14 @@ def emit(obj, payload, force: bool = False) -> int:
         The payload is sent as the outputfunc's KWARGS -- msg(room_info={...})
         -- because clean_senddata normalises a bare dict to [[], {kwargs}],
         which is the shape a client can read by name rather than by position.
+
+        `body` exists so a room broadcast renders one dict instead of one per
+        observer; every observer of a broadcast is sent a byte-identical body,
+        and to_dict was being called once each. Sharing the dict is safe
+        because nothing downstream mutates it: clean_senddata's _validate
+        BUILDS a new structure rather than editing the one it walks, and the
+        `options` key msg() injects goes into the outer kwargs mapping, which
+        is constructed fresh on the line below.
 
     Notes/References:
         The reserved-name guard is not paranoia: Evennia's websocket
@@ -192,7 +251,9 @@ def emit(obj, payload, force: bool = False) -> int:
         if not sessions:
             return 0
 
-        body = payload.to_dict()
+        if body is None:
+            body = payload.to_dict()
+
         obj.msg(session=sessions, **{channel: body})
 
         return len(sessions)
@@ -201,7 +262,7 @@ def emit(obj, payload, force: bool = False) -> int:
         return 0
 
 
-def emit_to_room(room, payload, exclude=()) -> int:
+def emit_to_room(room, payload, exclude=(), body=None) -> int:
     """
     Purpose: Send one payload to every subscribed observer standing in a room.
 
@@ -223,6 +284,18 @@ def emit_to_room(room, payload, exclude=()) -> int:
         text reaches, and no one else. That equivalence is the whole reason the
         feed leaks no information the text channel does not already leak.
 
+        _could_listen NARROWS HOW the occupants are found, never WHICH of them
+        hear it. That distinction is the one thing to preserve if this loop is
+        ever touched again: the filter is a promise about objects that have no
+        session at all, and every object it lets through still goes through
+        emit() and still faces the real subscription check and the rate cap.
+        A room's contents are mostly scenery -- PERF-0002 measured 1,242
+        emit() calls for two moves, nearly all on rocks.
+
+        The body is rendered ONCE, here, and handed to every emit(). Each
+        observer of a room broadcast receives the same bytes, and payload
+        .to_dict() was being called once per observer to produce them.
+
     Notes/References:
         This is the room-sized broadcast, matching the text channel exactly.
         emit_to_area is the radius-sized one, used by the channels that report
@@ -242,11 +315,21 @@ def emit_to_room(room, payload, exclude=()) -> int:
         logger.log_trace()
         return 0
 
+    if body is None:
+        try:
+            body = payload.to_dict()
+        except Exception:
+            logger.log_trace()
+            return 0
+
     for occupant in occupants:
         if occupant in exclude:
             continue
 
-        reached = emit(occupant, payload)
+        if not _could_listen(occupant):
+            continue
+
+        reached = emit(occupant, payload, body=body)
         sent += reached
 
     return sent
@@ -278,6 +361,12 @@ def emit_to_area(rooms, payload, exclude=()) -> int:
         Reuses emit_to_room per room rather than flattening the occupant lists,
         so there is one implementation of "who in a room hears this".
 
+        The body is rendered once for the WHOLE area and threaded down, so a
+        radius-10 broadcast over 441 rooms renders one dict rather than one per
+        reached observer. emit_to_room would otherwise render its own per room,
+        which for a neighbourhood-sized broadcast is the same waste one level
+        up.
+
     Notes/References:
         This broadcast is WIDER than the text channel, which is exactly what
         raising STATEFEED_ENTITY_RADIUS above 0 means and why that constant
@@ -288,8 +377,14 @@ def emit_to_area(rooms, payload, exclude=()) -> int:
     """
     sent = 0
 
+    try:
+        body = payload.to_dict()
+    except Exception:
+        logger.log_trace()
+        return 0
+
     for room in rooms:
-        reached = emit_to_room(room, payload, exclude=exclude)
+        reached = emit_to_room(room, payload, exclude=exclude, body=body)
         sent += reached
 
     return sent

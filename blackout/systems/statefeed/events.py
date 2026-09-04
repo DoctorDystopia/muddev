@@ -75,11 +75,19 @@ def _visible_rooms(room) -> list:
         for an off-grid room, so the zero case costs no query and the
         hand-built-area case degrades to exactly the old behaviour.
 
-        Imported inside the routine. systems.combat.auras.targeting reaches
-        the xyzgrid contrib's models, and this module is imported by
-        typeclasses/mixins.py, which every Character and NPC pulls in at
-        startup -- a module-scope import would drag those models into
-        typeclass import time and couple the two systems' import order.
+        The lookup itself is MEMOISED by systems/statefeed/neighbourhood.py,
+        which owns the cache and its invalidation. A neighbourhood is a fact
+        about the map rather than about who is standing in it, and PERF-0002
+        measured 24 observers in one room asking this same question 24 times
+        and getting 46 duplicate queries for it. The radius is still read HERE
+        and passed in, so this stays the single place the constant is read.
+
+        Imported inside the routine. neighbourhood.py reaches
+        systems.combat.auras.targeting, which reaches the xyzgrid contrib's
+        models, and this module is imported by typeclasses/mixins.py, which
+        every Character and NPC pulls in at startup -- a module-scope import
+        would drag those models into typeclass import time and couple the two
+        systems' import order.
 
     Notes/References:
         Raising the radius is a BALANCE change, not a rendering one: a
@@ -92,9 +100,9 @@ def _visible_rooms(room) -> list:
     if room is None:
         return []
 
-    from systems.combat.auras.targeting import rooms_within_radius
+    from . import neighbourhood
 
-    return rooms_within_radius(room, const.STATEFEED_ENTITY_RADIUS)
+    return neighbourhood.visible_rooms(room, const.STATEFEED_ENTITY_RADIUS)
 
 
 

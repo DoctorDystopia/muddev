@@ -130,6 +130,8 @@ import json
 import re
 
 from autobahn.twisted import WebSocketServerFactory
+from autobahn.websocket.compress import (
+    PerMessageDeflateOffer, PerMessageDeflateOfferAccept)
 from twisted.application import internet
 
 from django.conf import settings
@@ -362,6 +364,74 @@ class BlackoutGodotWebSocketClient(KeepAliveWebSocketClient,
         self.sendLine(json.dumps([cmd, args, kwargs]))
 
 
+def _accept_deflate(offers):
+    """
+    Purpose: Accept a client's permessage-deflate offer, so the statefeed's
+             large payloads are compressed on the wire.
+
+    Entry:
+        offers - the compression extensions the client offered, in its
+                 preference order. Autobahn calls this once per handshake and
+                 only when the client offered something.
+
+    Exit/Returns:
+        Returns a PerMessageDeflateOfferAccept for the first deflate offer, or
+        None to decline every offer and speak uncompressed.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        WHY THIS IS WORTH A CALLBACK AT ALL. Autobahn compresses nothing unless
+        a server explicitly accepts, and Evennia sets no protocol options on
+        any of its factories -- so every frame this port has ever sent went out
+        raw. Measured on a whole-map room_players payload: 88,058 bytes raw,
+        5,704 deflated, a 15.4x cut. See
+        docs/2026-09-03-PERF-0002-crowd-scaling.md.
+
+        WHY IT MATTERS MOST ON THE WEBSITE. A web-exported Godot build does not
+        use WebSocketPeer's own implementation; it delegates to the browser's
+        native WebSocket, which offers permessage-deflate on every handshake
+        and inflates transparently. So the browser clients -- the ones reaching
+        this server through a Cloudflare tunnel rather than over a LAN -- are
+        exactly the ones that negotiate this, with no client change at all.
+        Cloudflare proxies websocket frames without compressing them, so the
+        origin is the only place the saving can be taken.
+
+        WHY DECLINING IS SAFE. A native desktop build whose peer does not offer
+        deflate never reaches this function, and the connection is byte-for-byte
+        what it was before. There is no flag to keep in step and no version to
+        gate on: the handshake already negotiates it.
+
+        The offer is accepted AS OFFERED, with no window or context-takeover
+        counter-proposal. Autobahn's defaults are already the two things worth
+        having -- a full 15-bit (32 KiB) window and context takeover left on,
+        so the deflate context survives ACROSS messages and consecutive
+        room_players payloads back-reference each other. Naming them
+        explicitly would only add a failure mode: `request_max_window_bits` is
+        rejected by autobahn unless the client's offer set
+        `accept_max_window_bits`, so a client that offered plain deflate would
+        raise here, inside a handshake, on the Portal.
+
+        The FIRST deflate offer is taken rather than the best one scored. The
+        client sends its preferences in order, and picking anything but its
+        first choice is a negotiation this server has no reason to want.
+
+    Notes/References:
+        Autobahn 20.12.3's compression API is snake_case
+        (`request_max_window_bits`); the camelCase spelling in its older
+        examples is not accepted by this version.
+
+    Author: Nick Hobar
+    Creation date: 09/03/2026
+    """
+    for offer in offers:
+        if isinstance(offer, PerMessageDeflateOffer):
+            return PerMessageDeflateOfferAccept(offer)
+
+    return None
+
+
 def start_plugin_services(portal) -> None:
     """
     Purpose: Add the Godot websocket service to the Portal.
@@ -410,6 +480,11 @@ def start_plugin_services(portal) -> None:
     factory.noisy = False
     factory.protocol = BlackoutGodotWebSocketClient
     factory.sessionhandler = PORTAL_SESSIONS
+
+    # Compression is OPT-IN in autobahn and Evennia opts in nowhere, so without
+    # this line every frame leaves uncompressed. See _accept_deflate for the
+    # measurements and for why the browser clients are the ones that benefit.
+    factory.setProtocolOptions(perMessageCompressionAccept=_accept_deflate)
 
     # `django.conf.settings`, not `evennia.settings` and not
     # `evennia.settings_default`. The contrib uses both, and each is a trap:

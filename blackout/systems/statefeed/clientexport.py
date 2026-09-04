@@ -182,6 +182,10 @@ _SCALAR_EXPORTS: tuple = (
     ("ACTION_INPUT_MIN_KEY", const.ACTION_INPUT_MIN_KEY),
     ("ACTION_INPUT_MAX_KEY", const.ACTION_INPUT_MAX_KEY),
     ("ACTION_INPUT_LABEL_KEY", const.ACTION_INPUT_LABEL_KEY),
+    # The socket ceiling. Exported rather than typed into the client because
+    # the SERVER is what decides how big a message gets -- see the constant's
+    # own comment, and PERF-0002.
+    ("CLIENT_INBOUND_BUFFER_BYTES", const.CLIENT_INBOUND_BUFFER_BYTES),
 )
 
 # What a line of game TEXT is about. Generated for the same reason the channel

@@ -49,6 +49,11 @@ var _url := ""
 ## instead of being ignored by every consumer.
 const _OPTIONS_KEY := "options"
 
+## The generated server constants. Pulled in for the socket ceiling below —
+## how big a message can arrive is the SERVER's decision, so the number is
+## exported rather than typed here.
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 var _socket := WebSocketPeer.new()
 var _open := false
 
@@ -75,6 +80,13 @@ func _ready() -> void:
 ## stale-state question.
 func open() -> Error:
 	_socket = WebSocketPeer.new()
+	# BEFORE connect_to_url — WebSocketPeer reads its buffer sizes when the
+	# socket is opened and ignores a later write. The default is 65535, and a
+	# whole-map `room_players` payload is already ~43 KB of that; overflowing it
+	# truncated SILENTLY before Godot 4.4 and errors now, which presents as a
+	# connection that drops with no clue why. Ignored on a web export, where the
+	# browser's own WebSocket has no such ceiling.
+	_socket.inbound_buffer_size = _Const.CLIENT_INBOUND_BUFFER_BYTES
 	_open = false
 	_close_requested = false
 

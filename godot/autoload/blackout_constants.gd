@@ -91,6 +91,7 @@ const ACTION_INPUT_KIND_KEY := "kind"
 const ACTION_INPUT_MIN_KEY := "min"
 const ACTION_INPUT_MAX_KEY := "max"
 const ACTION_INPUT_LABEL_KEY := "label"
+const CLIENT_INBOUND_BUFFER_BYTES := 1048576
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.

@@ -15,6 +15,7 @@ from systems.spawning import teardown
 from systems.statefeed import commerce
 from systems.statefeed import constants as feed_const
 from systems.statefeed import events as feed
+from systems.statefeed import neighbourhood
 from systems.statefeed import subscriptions
 from .objects import ObjectParent
 from .spawners import SPAWNER_REGISTRY, load_all_spawners
@@ -50,6 +51,41 @@ class GridTile(ObjectParent, XYZRoom):
     The baseline 1x1 coordinate tile for the physical world of Blackout.
     """
     map_visual_range = 6  # None = full map; default is 2 tiles in each direction
+
+    def at_object_creation(self):
+        """
+        Purpose: Drop the statefeed's cached neighbourhoods, because a new tile
+                 changes which rooms are within N tiles of its neighbours.
+
+        Entry:
+            No conditions. Called once by Evennia when the room is first built.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The creation half of the pair whose other half is in
+            at_object_delete. A cache invalidated only on deletion would go
+            stale in the direction that matters more during a map rebuild:
+            rooms are demolished and then rebuilt, and an observer whose
+            neighbourhood was cached mid-rebuild would be fed a map with holes
+            in it until something else happened to clear the entry.
+
+            super() first, unconditionally. This hook has a real implementation
+            up the chain and a cache detail must not displace it.
+
+        Notes/References:
+            systems/statefeed/neighbourhood.py owns what is cached and why.
+
+        Author: Nick Hobar
+        Creation date: 09/03/2026
+        """
+        super().at_object_creation()
+
+        neighbourhood.invalidate()
 
     def return_appearance(self, looker, **kwargs):
         """
@@ -491,6 +527,15 @@ class GridTile(ObjectParent, XYZRoom):
             teardown.demolish_contents(self)
         except Exception:
             logger.log_trace()
+
+        # The statefeed memoises "which rooms are within N tiles of this one",
+        # which is a fact about the MAP. Destroying a tile is one of the two
+        # events that can change that answer, and this hook is the only point
+        # common to every way a tile dies -- the manifest purge,
+        # XYZGrid.remove_map, and the contrib deleting a tile that fell off the
+        # map -- which is exactly the property the invalidator needs. See
+        # systems/statefeed/neighbourhood.py.
+        neighbourhood.invalidate()
 
         return True
 

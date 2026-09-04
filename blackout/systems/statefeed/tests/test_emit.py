@@ -41,12 +41,21 @@ class _FakeSessionHandler:
 
 
 class _FakeObserver:
-    """An object with sessions that records what msg() was called with."""
+    """An object with sessions that records what msg() was called with.
+
+    `db_sessid` is derived from the sessions rather than hardcoded, because
+    emit_to_room pre-filters occupants on that raw column before it will call
+    emit() at all -- see emit._could_listen. A double that carried sessions but
+    left the column empty would be a shape no real object has, and it would
+    make a room broadcast test pass or fail for the wrong reason.
+    """
 
     def __init__(self, sessions=(), obj_id=1):
         self.id = obj_id
         self.key = "Fake"
         self.sessions = _FakeSessionHandler(sessions)
+        self.db_sessid = ",".join(str(index)
+                                  for index, _ in enumerate(sessions, start=1))
         self.sent = []
 
     def msg(self, session=None, **kwargs):
@@ -330,3 +339,50 @@ class TestEmitToRoom(unittest.TestCase):
         sent = emit_to_room(None, RoomInfoPayload(num=1))
 
         self.assertEqual(sent, 0)
+
+    def test_scenery_is_not_asked_whether_it_is_listening(self):
+        """
+        A room's contents are mostly rocks. PERF-0002 measured 1,242 emit()
+        calls for two moves, nearly all of them on objects that cannot hold a
+        session, and this is the filter that stops them.
+        """
+        rock = _FakeObserver(sessions=[], obj_id=3)
+        self.room.contents = [self.watcher, rock]
+
+        sent = emit_to_room(self.room, RoomInfoPayload(num=1))
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(rock.sent, [])
+
+    def test_the_filter_narrows_how_not_who(self):
+        """
+        The invariant to preserve if this loop is touched again: an occupant
+        that COULD listen still faces the real subscription check, and is still
+        sent nothing when it is not subscribed.
+        """
+        unsubscribed = _FakeObserver(sessions=[_make_session()], obj_id=4)
+        self.room.contents = [unsubscribed]
+
+        sent = emit_to_room(self.room, RoomInfoPayload(num=1))
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(unsubscribed.sent, [])
+
+    def test_every_observer_receives_the_same_body_object(self):
+        """
+        The body is rendered once per broadcast rather than once per observer.
+        Asserting identity, not equality: equality would pass just as well if
+        to_dict were still being called per observer, which is the cost this
+        removed.
+        """
+        second_session = _make_session()
+        second = _FakeObserver(sessions=[second_session], obj_id=5)
+        subscriptions.subscribe(second_session, const.SUBSCRIBE_ALL)
+        self.room.contents = [self.watcher, second]
+
+        emit_to_room(self.room, RoomInfoPayload(num=1))
+
+        first_body = self.watcher.sent[0][1][const.CHANNEL_ROOM_INFO]
+        second_body = second.sent[0][1][const.CHANNEL_ROOM_INFO]
+
+        self.assertIs(first_body, second_body)
