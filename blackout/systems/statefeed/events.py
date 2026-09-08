@@ -36,6 +36,7 @@ from .payloads import (
     RoomInfoPayload,
     RoomPlayerAddPayload,
     RoomPlayerRemovePayload,
+    RoomPlayersDeltaPayload,
     RoomPlayersPayload,
 )
 
@@ -712,17 +713,202 @@ def emit_room_info(observer, force: bool = False) -> int:
 
 
 
+def _read_snapshot(observer):
+    """Return the entity ids this observer's client is believed to hold.
+
+    None means "nothing is known", which is not the same as an empty set: an
+    empty set is a client that has been told the neighbourhood is empty, and
+    None is a client that has been told nothing and needs a whole list.
+    """
+    holder = getattr(observer, "ndb", None)
+
+    if holder is None:
+        return None
+
+    return getattr(holder, const.ROOM_PLAYERS_SNAPSHOT_ATTR, None)
+
+
+def _write_snapshot(observer, entity_ids) -> None:
+    """Record what the client now holds, or clear the record entirely.
+
+    Cleared with None when a send did not reach anybody, so the NEXT call
+    rebuilds from a whole list rather than sending a delta against a state no
+    client ever received. That is the self-healing half of this design: a
+    dropped message costs one redundant full list, not a permanently wrong
+    client.
+
+    An observer with no ndb holder is a no-op rather than an error. Every real
+    Evennia object has one, so this is defence and not a live case -- but this
+    function sits on the movement path, and emit.py's rule that a cosmetic
+    side-channel must never be the reason a move fails applies just as much to
+    the bookkeeping around a send as to the send.
+    """
+    holder = getattr(observer, "ndb", None)
+
+    if holder is None:
+        return
+
+    setattr(holder, const.ROOM_PLAYERS_SNAPSHOT_ATTR, entity_ids)
+
+
+def _wants_delta(observer) -> bool:
+    """
+    Purpose: Decide whether this observer's client can be sent a delta rather
+             than a whole list.
+
+    Entry:
+        observer - the observer being published to.
+
+    Exit/Returns:
+        True only when the observer has at least one session and EVERY one of
+        them subscribes to CHANNEL_ROOM_PLAYERS_DELTA.
+
+    Module Globals:
+        const.CHANNEL_ROOM_PLAYERS_DELTA read.
+
+    Methodology:
+        EVERY session, not any. emit() sends one payload to whichever sessions
+        want the channel, so a delta sent to an observer with one new client
+        and one old one would reach the new client and silently skip the old
+        one -- which would then hold a list that never changes again until it
+        resyncs. Falling back to the whole list whenever any session cannot
+        follow a delta costs the new client nothing it was not already paying.
+
+        This is also the version gate. A client built before the delta channel
+        existed subscribes to everything it knows about, which does not include
+        this, so it keeps receiving whole lists with no flag to set and no
+        version to compare. The generated blackout_constants.gd is what makes
+        "knows about" a fact rather than a guess.
+
+    Notes/References:
+        subscriptions.is_subscribed is the same test emit() applies per session.
+
+    Author: Nick Hobar
+    Creation date: 09/08/2026
+    """
+    handler = getattr(observer, "sessions", None)
+
+    if handler is None:
+        return False
+
+    sessions = handler.all()
+
+    if not sessions:
+        return False
+
+    for session in sessions:
+        wants = subscriptions.is_subscribed(
+            session, const.CHANNEL_ROOM_PLAYERS_DELTA)
+
+        if not wants:
+            return False
+
+    return True
+
+
+def _delta_is_worth_sending(added, removed, current) -> bool:
+    """Return True when a delta is smaller than the list it replaces.
+
+    Compared against the size of the NEW list rather than the old one, because
+    the new list is what the alternative message would carry. A move into an
+    empty neighbourhood therefore always sends the list, which is right: the
+    delta would be all removals and the list is two bytes.
+    """
+    if not current:
+        return False
+
+    changed = len(added) + len(removed)
+    budget = len(current) * const.ROOM_PLAYERS_DELTA_MAX_FRACTION
+
+    return changed < budget
+
+
+def _emit_full_contents(observer, rooms, force: bool) -> int:
+    """Send the whole visible list and record what was sent."""
+    entities = serializers.serialize_area(rooms, exclude=(observer,))
+    payload = RoomPlayersPayload(entities=entities)
+    sent = emit(observer, payload, force=force)
+
+    if not sent:
+        _write_snapshot(observer, None)
+
+        return 0
+
+    known = set()
+
+    for entity in entities:
+        known.add(entity["id"])
+
+    _write_snapshot(observer, known)
+
+    return sent
+
+
 def emit_room_contents(observer, force: bool = False) -> int:
-    """Publish the full list of what the observer can see around them.
+    """
+    Purpose: Bring the observer's client up to date on what it can see, by
+             whichever message is smaller -- the whole list, the change since
+             last time, or nothing at all.
 
-    The "list" half of list-then-delta: sent on arrival and on resync, with
-    emit_entity_arrived / emit_entity_left carrying the changes in between.
-    The observer is excluded from their own list -- a client already knows
-    where it put the camera.
+    Entry:
+        observer - the observer to publish to.
+        force    - True to bypass the rate cap AND to send a whole list
+                   regardless of what the client is believed to hold. This is
+                   what resync means, and it is the one call that re-seeds a
+                   client whose snapshot has gone wrong.
 
-    "Around them" is STATEFEED_ENTITY_RADIUS tiles, not one room. Every entity
-    carries the coords of the room it is in, because a client given a
-    neighbourhood and no positions would stack all of it on the player's tile.
+    Exit/Returns:
+        Returns the number of sessions reached. Zero is returned both when
+        nothing was sent because nothing changed, and when there was nobody to
+        send to; a caller cannot tell those apart and has no reason to.
+
+    Module Globals:
+        const.STATEFEED_ENTITY_RADIUS read via _visible_rooms.
+
+    Methodology:
+        THE LIST HALF OF LIST-THEN-DELTA, MADE INCREMENTAL. Until 09/08/2026
+        this rebuilt and re-sent every visible entity on every arrival. At
+        STATEFEED_ENTITY_RADIUS = 10 that is the whole map -- 258 entities and
+        43 KB on a live-sized map, per player, per step through a door.
+
+        The observation that makes it avoidable: a one-tile step changes a
+        BORDER of the neighbourhood, and on a map smaller than the radius it
+        changes nothing whatsoever. So the question asked here is not "what can
+        this observer see" but "what has changed about what this observer can
+        see", and area_entity_ids answers it with one query and no typeclass
+        instantiation.
+
+        Only the entities that are genuinely new are then built. The ones that
+        stayed in view are not rebuilt, because they have not changed -- an
+        entity that MOVED within the neighbourhood is reported by
+        emit_entity_arrived and emit_entity_left off the room hooks, which is
+        the pre-existing delta path and is untouched by this.
+
+        FOUR OUTCOMES, in the order they are tested:
+
+          1. force, or a client that cannot follow deltas, or no snapshot at
+             all -> the whole list. All three mean "this client's state is not
+             known", and the whole list is the only honest answer.
+          2. Nothing changed -> nothing is sent. This is the common case on a
+             live map and the entire point of the change.
+          3. The change is bigger than half the new list -> the whole list. A
+             teleport across maps replaces every entity at once, and sending
+             that as a delta is strictly worse than sending the list.
+          4. Otherwise -> the delta.
+
+        The snapshot is written only after a send that actually reached
+        somebody, and cleared when one did not. A dropped message then costs
+        one redundant whole list rather than a client that is permanently
+        wrong.
+
+    Notes/References:
+        docs/2026-09-03-PERF-0002-crowd-scaling.md F7 is the measurement this
+        implements. Nothing here changes what a client is told, only how often
+        and in what shape -- the exclusion of the observer from their own list
+        is preserved on both paths.
+
+    Author: Nick Hobar
+    Creation date: 08/07/2026
     """
     room = getattr(observer, "location", None)
 
@@ -730,10 +916,42 @@ def emit_room_contents(observer, force: bool = False) -> int:
         return 0
 
     rooms = _visible_rooms(room)
-    entities = serializers.serialize_area(rooms, exclude=(observer,))
-    payload = RoomPlayersPayload(entities=entities)
 
-    return emit(observer, payload, force=force)
+    if force or not _wants_delta(observer):
+        return _emit_full_contents(observer, rooms, force=force)
+
+    previous = _read_snapshot(observer)
+
+    if previous is None:
+        return _emit_full_contents(observer, rooms, force=force)
+
+    current = serializers.area_entity_ids(rooms, exclude=(observer,))
+    added = current - previous
+    removed = previous - current
+
+    if not added and not removed:
+        return 0
+
+    worth_it = _delta_is_worth_sending(added, removed, current)
+
+    if not worth_it:
+        return _emit_full_contents(observer, rooms, force=force)
+
+    entities = serializers.serialize_area(rooms,
+                                          exclude=(observer,),
+                                          only_ids=added)
+    payload = RoomPlayersDeltaPayload(added=entities,
+                                      removed=sorted(removed))
+    sent = emit(observer, payload, force=force)
+
+    if not sent:
+        _write_snapshot(observer, None)
+
+        return 0
+
+    _write_snapshot(observer, current)
+
+    return sent
 
 
 

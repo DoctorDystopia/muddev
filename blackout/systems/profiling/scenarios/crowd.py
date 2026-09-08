@@ -226,6 +226,47 @@ def contents_emit_crowd(world):
     return work
 
 
+@scenario(name="area_entity_ids whole map (the delta probe)",
+          layer=const.LAYER_STATEFEED,
+          repeat=_AREA_REPEAT,
+          notes="One query, no typeclass instantiation. This is the question "
+                "emit_room_contents asks on every move now, in place of "
+                "rebuilding the list. Compare against the serialize_area row.")
+def area_ids_whole_map(world):
+    """Measure the id-only neighbourhood probe the delta path opens with."""
+    rooms = world.full_map()
+    exclude = (world.character,)
+
+    def work():
+        serializers.area_entity_ids(rooms, exclude=exclude)
+
+    return work
+
+
+@scenario(name="emit_room_contents x24, nothing changed",
+          layer=const.LAYER_STATEFEED,
+          repeat=_AREA_REPEAT,
+          notes="THE F7 PAYOFF. Every observer re-publishes with a warm "
+                "snapshot and an unchanged neighbourhood, which is what a "
+                "step on a live map is. Compare against the forced row above: "
+                "that one is a resync and still sends everything.")
+def contents_unchanged_crowd(world):
+    """Measure the steady state: 24 observers, nothing to tell any of them."""
+    crowd = world.crowd(CROWD_SIZES[2])
+
+    # Seed each observer's snapshot in SETUP, so the measured passes are the
+    # steady state rather than the first publish. Forced, because that is the
+    # call that establishes a snapshot from nothing.
+    for observer in crowd:
+        events.emit_room_contents(observer, force=True)
+
+    def work():
+        for observer in crowd:
+            events.emit_room_contents(observer)
+
+    return work
+
+
 @scenario(name="player move, 24 players watching",
           layer=const.LAYER_STATEFEED,
           repeat=_MOVE_REPEAT,

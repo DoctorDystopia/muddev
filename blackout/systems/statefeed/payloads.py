@@ -165,6 +165,32 @@ class RoomPlayersPayload(_Payload):
 
 
 @dataclass
+class RoomPlayersDeltaPayload(_Payload):
+    """What CHANGED about the visible entity list. Blackout-specific.
+
+    Sent when the OBSERVER moves and their neighbourhood shifts, in place of a
+    whole new list. `added` carries full entity rows in the same shape
+    RoomPlayersPayload sends; `removed` carries bare ids, for the same reason
+    RoomPlayerRemovePayload does -- an entity that left may already be deleted.
+
+    There is no GMCP analogue. Room.Players is whole-list only, because a MUD
+    room has no radius and walking through a door replaces everything visible.
+    A radius does not work that way: at STATEFEED_ENTITY_RADIUS = 10 a one-tile
+    step changes a border of the neighbourhood and, on a map smaller than the
+    radius, changes nothing at all.
+
+    BOTH FIELDS MAY BE EMPTY only in a payload that is never sent -- see
+    events.emit_room_contents, which returns without emitting when the diff is
+    empty. A client receiving one with both empty may treat it as a no-op.
+    """
+
+    channel = const.CHANNEL_ROOM_PLAYERS_DELTA
+
+    added: list = field(default_factory=list)    # [entity, ...]
+    removed: list = field(default_factory=list)  # [entity_id, ...]
+
+
+@dataclass
 class RoomPlayerAddPayload(_Payload):
     """One entity appeared in the observer's room. GMCP Room.AddPlayer."""
 

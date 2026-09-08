@@ -77,6 +77,9 @@ func _ready() -> void:
 	_the_family_decides_the_shape()
 	_an_unknown_family_still_draws()
 	_entities_can_be_added_and_removed()
+	_a_delta_applies_both_halves_at_once()
+	_a_delta_ignores_an_id_it_does_not_hold()
+	_an_empty_delta_changes_nothing()
 	_a_flash_reaches_every_material()
 	_a_flash_on_nothing_is_harmless()
 	_hover_lights_one_entity_at_a_time()
@@ -214,6 +217,48 @@ func _entities_can_be_added_and_removed() -> void:
 
 
 ## A three-part figure with one white head would be worse than no flash at all.
+## `room_players_delta` carries the change the observer's own movement caused.
+## The whole reason it is one message rather than a run of add/remove messages
+## is that each of those rebuilds the entire pool -- so the batch has to leave
+## the pool in the same state the equivalent run would, in ONE rebuild.
+func _a_delta_applies_both_halves_at_once() -> void:
+	_pool.replace_all([RAIDER, SWORD])
+
+	_pool.apply_delta([ODDITY], [20744.0])
+
+	_expect(_pool.get_child_count() == 2,
+		"a delta that adds one and drops one leaves the count alone")
+	_expect(not _pool.entity(20745).is_empty(), "the added entity is present")
+	_expect(_pool.entity(20744).is_empty(), "the removed entity is gone")
+	_expect(not _pool.entity(20743).is_empty(),
+		"an entity in neither half is untouched")
+
+
+## Removed ids arrive from JSON as floats and the pool keys entities by int. A
+## float that never matched would silently leave a removed entity on screen --
+## the trap `remove` already documents, re-checked here because this path takes
+## a whole array of them.
+func _a_delta_ignores_an_id_it_does_not_hold() -> void:
+	_pool.replace_all([RAIDER])
+
+	_pool.apply_delta([], [999999.0])
+
+	_expect(_pool.get_child_count() == 1,
+		"removing an id the pool never held changes nothing")
+	_expect(not _pool.entity(20743).is_empty(), "and touches no one else")
+
+
+## The server declines to send an empty delta, so this is defence rather than a
+## live case -- but an empty one must be a no-op rather than a redraw, because
+## the rebuild is the expensive half on a web export.
+func _an_empty_delta_changes_nothing() -> void:
+	_pool.replace_all([RAIDER, SWORD])
+
+	_pool.apply_delta([], [])
+
+	_expect(_pool.get_child_count() == 2, "an empty delta leaves the ring alone")
+
+
 func _a_flash_reaches_every_material() -> void:
 	_pool.replace_all([RAIDER])
 

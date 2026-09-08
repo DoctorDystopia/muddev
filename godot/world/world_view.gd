@@ -331,6 +331,10 @@ func _on_channel(channel: String, payload: Dictionary) -> void:
 		Const.CH_ROOM_PLAYERS:
 			_entities.replace_all(payload.get("entities", []))
 
+		Const.CH_ROOM_PLAYERS_DELTA:
+			_entities.apply_delta(payload.get("added", []),
+					payload.get("removed", []))
+
 		Const.CH_PLAYER_ADD:
 			_entities.add(payload.get("entity", {}))
 

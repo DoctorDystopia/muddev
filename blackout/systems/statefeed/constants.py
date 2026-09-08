@@ -23,6 +23,17 @@ CHANNEL_ROOM_INFO: str = "room_info"                  # -> Room.Info
 CHANNEL_ROOM_PLAYERS: str = "room_players"            # -> Room.Players
 CHANNEL_ROOM_PLAYER_ADD: str = "room_add_player"      # -> Room.AddPlayer
 CHANNEL_ROOM_PLAYER_REMOVE: str = "room_remove_player"  # -> Room.RemovePlayer
+
+# One batched change to the visible entity list, sent when the OBSERVER moves
+# and their neighbourhood shifts. Not a GMCP analogue -- IRE's Room.Players is
+# whole-list only, because a MUD room has no radius and stepping through a door
+# replaces everything visible.
+#
+# WHY A BATCH AND NOT N ROOM_PLAYER_ADDs. The client applies an add or a remove
+# by appending to its pool and rebuilding the scene, so a border-sized change
+# sent one entity at a time is one full rebuild per entity -- on a web export,
+# on the browser's main thread. One message, one rebuild.
+CHANNEL_ROOM_PLAYERS_DELTA: str = "room_players_delta"
 CHANNEL_CHAR_AVATAR: str = "char_avatar"              # -> Char.Avatar
 CHANNEL_CHAR_VITALS: str = "char_vitals"              # -> Char.Vitals
 CHANNEL_CHAR_STATUS: str = "char_status"              # -> Char.Status
@@ -96,6 +107,7 @@ CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
 SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,
+    CHANNEL_ROOM_PLAYERS_DELTA,
     CHANNEL_ROOM_PLAYER_ADD,
     CHANNEL_ROOM_PLAYER_REMOVE,
     CHANNEL_CHAR_AVATAR,
@@ -447,7 +459,12 @@ DEFAULT_MIN_INTERVAL_SECONDS: float = 0.0
 #     same target on one tick produce two, and keeping only the newest loses a
 #     hit the text log still shows. CHANNEL_ROOM_PLAYER_ADD / _REMOVE are
 #     deltas for the same reason -- coalescing two arrivals into one is the
-#     room_players bug in a new place.
+#     room_players bug in a new place. CHANNEL_ROOM_PLAYERS_DELTA is the
+#     sharpest case of all and is deliberately absent: it carries the CHANGE
+#     between two neighbourhoods, so two of them compose rather than supersede,
+#     and keeping only the second would leave the client holding entities the
+#     first one removed. Its whole-list sibling CHANNEL_ROOM_PLAYERS is listed
+#     below precisely because that one does supersede.
 #   - CHANNEL_MAP is excluded despite being a snapshot, because it is CHUNKED:
 #     its messages are pieces of one payload, not successive versions of it,
 #     so "newest wins" would deliver chunk 2 and drop chunk 1.
@@ -467,6 +484,37 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
 
 # The ndb attribute holding {channel: last_send_monotonic} per session.
 RATE_STATE_ATTR: str = "statefeed_last_send"
+
+# The ndb attribute holding the set of entity ids an observer's client is
+# believed to be currently rendering. Read and written only by
+# events.emit_room_contents, which diffs against it to decide whether a move
+# needs a whole list, a delta, or nothing at all.
+#
+# ON THE OBSERVER rather than on the session, even though it describes what a
+# CLIENT holds. Two sessions puppeting one character stand in the same room and
+# are sent the same messages, so one snapshot describes both -- and the case
+# that could desync them, a second session attaching later, already ends in
+# ServerSession.at_sync pushing a forced resync, which sends the whole list to
+# every session and re-seeds this from scratch.
+#
+# ndb rather than db: a snapshot is a claim about a live connection. It is
+# meaningless across a reload, and being wiped by one is correct rather than
+# unfortunate -- the client re-subscribes and resyncs on reconnect.
+ROOM_PLAYERS_SNAPSHOT_ATTR: str = "statefeed_room_players"
+
+# How large a change may be, as a fraction of the new entity list, before
+# emit_room_contents stops sending a delta and sends the whole list instead.
+#
+# A delta is only a saving while it is SMALL. Every added entity costs the same
+# bytes it would cost inside a full list, plus its share of a second message's
+# envelope, and the client pays a scene rebuild either way -- so a delta that
+# replaces most of the list is strictly worse than the list, and the crossover
+# is around a half.
+#
+# The case this exists for is a TELEPORT, not a step: walking one tile changes
+# a border, while a jump to another map replaces every entity at once and must
+# not be sent as a thousand adds and a thousand removes.
+ROOM_PLAYERS_DELTA_MAX_FRACTION: float = 0.5
 
 
 # ─── Payload sizing ──────────────────────────────────────────────────────────

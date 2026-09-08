@@ -15,6 +15,7 @@
 # Feed channels.
 const CH_ROOM_INFO := "room_info"
 const CH_ROOM_PLAYERS := "room_players"
+const CH_ROOM_PLAYERS_DELTA := "room_players_delta"
 const CH_PLAYER_ADD := "room_add_player"
 const CH_PLAYER_REMOVE := "room_remove_player"
 const CH_CHAR_AVATAR := "char_avatar"
@@ -95,6 +96,6 @@ const CLIENT_INBOUND_BUFFER_BYTES := 1048576
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "crafting_material", "crafting_tool", "currency", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

@@ -556,13 +556,88 @@ def serialize_entity(entity, coords=()) -> dict:
     return body
 
 
-def serialize_area(rooms, exclude=()) -> list:
+def area_entity_ids(rooms, exclude=()) -> set:
+    """
+    Purpose: Name which entities are visible across a group of rooms, without
+             building any of them.
+
+    Entry:
+        rooms   - room objects, typically from events._visible_rooms.
+        exclude - objects to leave out (typically the observer themself).
+
+    Exit/Returns:
+        Returns a set of integer ids. Empty set when `rooms` is empty.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        THE POINT OF THIS FUNCTION IS WHAT IT DOES NOT DO. serialize_area
+        instantiates a typeclass per row and then reads several Attributes and
+        a Tag off each one -- roughly 110 function calls per entity, measured.
+        Answering "which entities are here" needs none of that, and
+        emit_room_contents asks that question on every move in order to
+        discover that the answer has not changed.
+
+        `values_list("id", flat=True)` keeps the ORM from building model
+        instances at all, so this is one query returning integers.
+
+        The exit filter is expressed in SQL as db_destination__isnull rather
+        than by testing obj.destination per row, because testing it per row is
+        what would force the instantiation this exists to avoid. It must stay
+        in step with serialize_area's own exit skip -- an exit counted here and
+        not there would look to the delta like an entity that is permanently
+        arriving and never rendered.
+
+    Notes/References:
+        See docs/2026-09-03-PERF-0002-crowd-scaling.md F7 for why the id set is
+        the thing worth computing on a move.
+
+    Author: Nick Hobar
+    Creation date: 09/08/2026
+    """
+    from evennia.objects.models import ObjectDB
+
+    room_ids = []
+
+    for room in rooms:
+        room_ids.append(room.id)
+
+    if not room_ids:
+        return set()
+
+    excluded = set()
+
+    for obj in exclude:
+        excluded.add(getattr(obj, "id", None))
+
+    found = ObjectDB.objects.filter(
+        db_location__id__in=room_ids,
+        db_destination__isnull=True,
+    ).values_list("id", flat=True)
+
+    visible = set()
+
+    for entity_id in found:
+        if entity_id in excluded:
+            continue
+
+        visible.add(entity_id)
+
+    return visible
+
+
+def serialize_area(rooms, exclude=(), only_ids=None) -> list:
     """
     Purpose: Render everything visible across a group of rooms.
 
     Entry:
-        rooms   - room objects, typically from targeting.rooms_within_radius.
-        exclude - objects to leave out (typically the observer themself).
+        rooms    - room objects, typically from targeting.rooms_within_radius.
+        exclude  - objects to leave out (typically the observer themself).
+        only_ids - when given, build ONLY these entity ids and skip the rest.
+                   None means build everything, which is what a whole-list
+                   caller wants. An empty collection means build nothing, and
+                   is answered without a query.
 
     Exit/Returns:
         Returns a flat list of entity dicts, each carrying the coords of the
@@ -586,6 +661,13 @@ def serialize_area(rooms, exclude=()) -> list:
         it, rather than read per entity. An entity's own location lookup would
         be a query each, which is the storm again by another route.
 
+        `only_ids` narrows the same query rather than filtering its results in
+        Python, so a caller building the handful of entities that just came
+        into view pays for those and not for the four hundred that did not.
+        The coords map is still built over every room, because an entity being
+        built may stand in any of them -- and room_coords is a cached Tag read,
+        not a query.
+
     Notes/References:
         A room that is off-grid contributes an empty coords list, which is the
         same thing room_coords returns and which a client already has to
@@ -596,6 +678,9 @@ def serialize_area(rooms, exclude=()) -> list:
     """
     from evennia.objects.models import ObjectDB
 
+    if only_ids is not None and not only_ids:
+        return []
+
     coords_by_room = {}
 
     for room in rooms:
@@ -605,6 +690,10 @@ def serialize_area(rooms, exclude=()) -> list:
         return []
 
     contents = ObjectDB.objects.filter(db_location__id__in=list(coords_by_room))
+
+    if only_ids is not None:
+        contents = contents.filter(id__in=list(only_ids))
+
     entities = []
 
     for obj in contents:

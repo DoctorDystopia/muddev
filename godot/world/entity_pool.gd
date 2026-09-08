@@ -192,6 +192,53 @@ func remove(entity_id: int) -> void:
 			return
 
 
+## Apply one batched change to the visible list: `removed` ids drop out,
+## `added` entities come in, and the scene is rebuilt ONCE at the end.
+##
+## This is the whole reason `room_players_delta` is a batch rather than a run of
+## `room_add_player` messages. Both [method add] and [method remove] rebuild the
+## entire pool, so a border-sized change applied one entity at a time is one
+## full rebuild per entity — on the web export, on the browser's main thread,
+## while the player is mid-step. The server sends the change the observer's own
+## movement caused; single-entity add/remove still carry everything else.
+##
+## Removals are applied before additions. The two sets are disjoint by
+## construction on the server — an id cannot both arrive and depart in one diff
+## — so the order cannot change the result, and doing removals first keeps the
+## intermediate array smaller.
+##
+## A delta with nothing in it is not sent, but is harmless if one ever is: the
+## early return skips the rebuild rather than redrawing the same scene.
+func apply_delta(added: Array, removed: Array) -> void:
+	if added.is_empty() and removed.is_empty():
+		return
+
+	if not removed.is_empty():
+		var dropped := {}
+
+		# int() on every id, and untyped loop variables throughout: these
+		# arrived as JSON, and Godot parses every JSON number as a float. A
+		# `for id: int in removed` would fail its type check on the first one,
+		# and a float key would never match the int `_id_of` returns. The
+		# existing CH_PLAYER_REMOVE path int()s for the same reason.
+		for entity_id in removed:
+			dropped[int(entity_id)] = true
+
+		var kept: Array[Dictionary] = []
+
+		for entity: Dictionary in _entities:
+			if not dropped.has(_id_of(entity)):
+				kept.append(entity)
+
+		_entities = kept
+
+	for entity in added:
+		if entity is Dictionary and not entity.is_empty():
+			_entities.append(entity)
+
+	_rebuild()
+
+
 ## The entity nearest a point on screen, or 0 for nothing within reach.
 ##
 ## Screen-space rather than a physics raycast: there are no collision bodies in
