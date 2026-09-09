@@ -85,6 +85,10 @@ import-unsafe directory to resolve them. It now lives beside its only user in
 `typeclasses/npcs.py`, and `ShopkeepNPC.ensure_cleanup_script` re-points a
 shopkeep persisted under the old path on the next map rebuild.
 
+That is one instance of a rule that is not about this directory at all — see
+"An import path belongs in the code, never in a database row" under Code
+conventions. A path in a row goes stale wherever the module lives.
+
 Maps are regenerable from `world/maps/*.py` via
 `scripts/clean_and_reload_all_maps.ps1`; accounts and characters are not stored
 there.
@@ -322,6 +326,36 @@ a literal that already has a named constant is how the "Metalsmith" vs
 
 The rule crosses the language boundary too — see the Godot client section
 below.
+
+**An import path belongs in the code, never in a database row.** A path
+written in Python is reached by a rename, a grep and a moved directory; a path
+stamped into a `ScriptDB` row or an object Attribute is reached by none of
+them, and goes stale silently the moment the module moves. Declare it on the
+**class** — a class attribute is read live, so correcting the constant
+corrects every object already in the database, with no migration and no map
+rebuild.
+
+It has cost the game twice, the same way both times:
+
+| What was persisted | Broke on | Symptom |
+|---|---|---|
+| `ShopkeepCleanup`'s typeclass path in 34 `ScriptDB` rows | moving the class out of `scripts/`, 08/28/2026 | every server start imported out of the import-unsafe directory |
+| Each NPC's dialogue module in `db.menu_module` | the `systems/` reorganization, 09/08/2026 | `talk` tracebacked at the player on every pre-reorg shopkeep |
+
+The second is the sharper lesson, because the module it named was in no way
+unsafe to import — it had simply moved. `SHOPKEEP_DIALOGUE_MODULE` was updated
+with the directories, and every shopkeep already standing on the grid kept the
+row it was stamped with at creation. `TalkativeNPC.dialogue_module` is now a
+class attribute and `_dialogue_module_for` reads it **before** `db.menu_module`
+— that order is the fix, not the fallback: reading the row first would let a
+stale path shadow the corrected constant forever.
+
+Where a row is genuinely unavoidable, the migration rides the map rebuild the
+operator already runs — `ShopkeepNPC.ensure_cleanup_script` is the model — and
+the launcher refuses an unresolvable path rather than handing it onward.
+Evennia will not do that for you: `mod_import` returns `None` for a path that
+does not resolve and `EvMenu._parse_menudata` reads `__dict__` off it without
+checking, so the guard lives in `start_blackout_menu`.
 
 ## The Godot client
 
