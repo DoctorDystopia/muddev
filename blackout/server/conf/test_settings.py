@@ -6,7 +6,7 @@ Purpose:
 
 Entry:
     Selected on the command line, e.g.
-    `evennia test --settings test_settings.py systems.banking.tests`.
+    `evennia test --settings test_settings.py systems.gameplay.banking.tests`.
 
 Exit-Returns:
     Module-level settings names, same contract as `settings.py`.
@@ -53,5 +53,5 @@ PASSWORD_HASHERS = [
 # The instrument is INERT unless BLACKOUT_PROFILE_TESTS is set in the
 # environment, which is why it is safe to point at unconditionally rather than
 # asking every developer to remember a second --settings file. See
-# systems/profiling/testrunner.py for what it records.
+# profiling/testrunner.py for what it records.
 TEST_RUNNER = "server.conf.testrunner.BlackoutTestSuiteRunner"

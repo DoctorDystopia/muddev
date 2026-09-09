@@ -6,7 +6,7 @@ Description: Per-skill crafting facility typeclasses (furnace, anvil) and
              their room spawners.
 """
 
-from systems.crafting.constants import CATEGORY_FOUNDRY, CATEGORY_METALSMITH
+from systems.gameplay.crafting.constants import CATEGORY_FOUNDRY, CATEGORY_METALSMITH
 from typeclasses.crafting_facilities import CraftingFacility
 from .spawners import register_spawner, spawn_once
 

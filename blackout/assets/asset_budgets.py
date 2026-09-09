@@ -198,7 +198,7 @@ def budget_for(family: str) -> ModelBudget:
 
     Notes/References:
         Asserted against the served tree by
-        systems/statefeed/tests/test_model_budgets.py.
+        systems/interface/statefeed/tests/test_model_budgets.py.
 
     Author: Nick Hobar
     Creation date: 08/25/2026

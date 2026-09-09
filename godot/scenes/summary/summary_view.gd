@@ -16,7 +16,7 @@ extends Control
 ##
 ## Every section and every row comes from whatever `char_summary` contained.
 ## The server's contract is that adding a band is one file under
-## `systems/summary/panel_defs/` — a panel table here would be the third place
+## `systems/interface/summary/panel_defs/` — a panel table here would be the third place
 ## that fact lives and the first to go stale. So: iterate, never enumerate.
 ##
 ## The consequence worth stating, because it looks like a bug until you know:

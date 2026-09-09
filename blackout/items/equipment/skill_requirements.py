@@ -85,8 +85,8 @@ def get_equippables_for_skill(skill_key: str) -> list:
         rather than duplicated into a third table.
 
     Notes/References:
-        Mirrors systems.crafting.crafting_service.get_recipes_for_skill and
-        systems.progression.skills.gatherables.get_gatherables_for_skill --
+        Mirrors systems.gameplay.crafting.crafting_service.get_recipes_for_skill and
+        systems.gameplay.progression.skills.gatherables.get_gatherables_for_skill --
         the three functions together are what feed the skills menu's
         "Unlocks" listing.
 

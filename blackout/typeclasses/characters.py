@@ -19,20 +19,20 @@ from evennia.utils.utils import lazy_property
 
 from .mixins import CombatEntity
 from .objects import ObjectParent
-from systems.progression.skills.handler import SkillHandler
-from systems.banking.handler import BankHandler
+from systems.gameplay.progression.skills.handler import SkillHandler
+from systems.gameplay.banking.handler import BankHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
-from systems.quests.handler import QuestHandler
-from systems.stat_tracker.handler import StatHandler
-from systems.statefeed import events as feed
-from systems.statefeed import resync
+from systems.gameplay.quests.handler import QuestHandler
+from systems.core.stat_tracker.handler import StatHandler
+from systems.interface.statefeed import events as feed
+from systems.interface.statefeed import resync
 from world.respawn import get_respawn_room
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # The routing tags this module sends, bound once rather than repeated at
 # every call site. The SERVER says what a line IS; the client decides which
-# tab shows it. See MESSAGE_TYPES in systems/statefeed/constants.py.
+# tab shows it. See MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 _MSG_INVENTORY = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
@@ -83,7 +83,7 @@ def _handler_property(handler_class: type, attr_name: str):
         lazy_property caches into obj.__dict__ under its __name__ -- letting
         it default would key every accessor built here as the inner
         function's name and make them collide. Combat also pops that cache
-        entry by name (see systems/combat/combat.py), so the key must stay
+        entry by name (see systems/gameplay/combat/combat.py), so the key must stay
         exactly the attribute name.
 
     Notes/References:

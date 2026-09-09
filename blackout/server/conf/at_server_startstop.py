@@ -32,8 +32,8 @@ def at_server_start():
     """
     # One call, not one per system. Adding a global manager means decorating
     # its bootstrap with @register_manager and listing its module in
-    # systems/managers.py -- this file does not change again.
-    from systems.managers import bootstrap_all
+    # systems/core/managers.py -- this file does not change again.
+    from systems.core.managers import bootstrap_all
 
     bootstrap_all()
 

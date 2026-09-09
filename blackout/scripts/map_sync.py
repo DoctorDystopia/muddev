@@ -250,7 +250,7 @@ def prune_unlisted_maps(grid, wanted_zcoords, dry_run):
 
         Characters standing in a removed room are sent to their home
         locations; everything else on the tile is destroyed with it. That
-        split lives in systems/spawning/teardown.py, reached through
+        split lives in systems/gameplay/spawning/teardown.py, reached through
         GridTile.at_object_delete -- not here, because the contrib deletes
         rooms by two other paths this script cannot see.
 
@@ -300,7 +300,7 @@ def purge_zcoords(zcoords, dry_run):
 
         Deleting a room now takes its NPCs, nodes, facilities and floor litter
         with it -- see GridTile.at_object_delete and
-        systems/spawning/teardown.py. Those are not counted here: the tally is
+        systems/gameplay/spawning/teardown.py. Those are not counted here: the tally is
         of tagged objects this loop asked to delete, and the run's true effect
         is reported as an ObjectDB delta by _sync.
 

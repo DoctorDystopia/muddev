@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 
 from evennia import create_object
 
-from systems.ai import constants as ai_constants
-from systems.combat import constants as combat_constants
+from systems.gameplay.ai import constants as ai_constants
+from systems.gameplay.combat import constants as combat_constants
 
 
 @dataclass
@@ -89,7 +89,7 @@ class NpcDef:
     combat_styles: dict = field(default_factory=dict)
     default_combat_style: str | None = None
 
-    # combat_rules — list of keys into systems/combat/rules/RULES_REGISTRY,
+    # combat_rules — list of keys into systems/gameplay/combat/rules/RULES_REGISTRY,
     #     naming rules definitions that change how this NPC's actions resolve.
     #     An NPC has no equipment handler and carries its stat block on
     #     itself, so this is where a monster with unusual math declares it --
@@ -100,7 +100,7 @@ class NpcDef:
     # None  -> despawn permanently on death (the historical behavior; every
     #          NPC type is opt-in).
     # int   -> whole seconds. HostileNPC.respawn() enqueues on the global
-    #          BlackoutRespawnManager (systems/spawning/respawn.py), which
+    #          BlackoutRespawnManager (systems/gameplay/spawning/respawn.py), which
     #          re-creates the NPC on its spawn tile once the deadline passes.
     respawn_seconds: int | None = None
 
@@ -112,13 +112,13 @@ class NpcDef:
     #     Deliberately NOT stamped onto the object by create(), unlike
     #     respawn_seconds. Respawn has to survive the row being deleted, so it
     #     must be stamped; loot rolls while the NPC still exists, so
-    #     systems/loot/drops.py resolves it live through db.npc_key -> NPC_DB.
+    #     systems/gameplay/loot/drops.py resolves it live through db.npc_key -> NPC_DB.
     #     That keeps one owner for the fact and means editing a table plus
     #     `evennia reload` affects NPCs already standing on the grid.
     loot_table: str | None = None
 
     # ─── AI ──────────────────────────────────────────────────────────
-    # ai_behavior — key into systems/ai/registry.BEHAVIOR_REGISTRY, naming the
+    # ai_behavior — key into systems/gameplay/ai/registry.BEHAVIOR_REGISTRY, naming the
     #     behaviour the combat handler consults when this NPC has no pending
     #     action. None means the NPC never acts on its own, which is what every
     #     hostile did before this field existed.
@@ -181,7 +181,7 @@ class NpcDef:
 
         Also stamps the respawn identity (npc_key / spawn_room /
         respawn_seconds) that HostileNPC.respawn and the duplicate guards in
-        systems/spawning/respawn.py read back.
+        systems/gameplay/spawning/respawn.py read back.
         """
         obj = create_object(
             self.typeclass,

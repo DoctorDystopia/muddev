@@ -607,7 +607,7 @@ only be confirmed against a real server.
 ## Skills left the character sheet
 
 Until 08/28/2026 the roster was a **band on the dossier** — one panel under
-`systems/summary/panel_defs/`, arriving in `char_summary` beside vitals,
+`systems/interface/summary/panel_defs/`, arriving in `char_summary` beside vitals,
 holdings and the rest. The Character tab drew it because it draws every panel
 it is sent, and `score` printed it as a wrapped run of `Cutting 30  Brawn 12`.
 
@@ -671,7 +671,7 @@ for exactly what it will show. The cost is that pane mode draws from the last
 snapshot, which is why the rows are complete.
 
 Both text answers come from one renderer,
-`systems/progression/skills/detail.py`. It was inline in the EvMenu until this
+`systems/gameplay/progression/skills/detail.py`. It was inline in the EvMenu until this
 change, which meant the only way to see what a skill unlocked was to be inside
 a menu; three readers now share it — the menu node, `skills <skill>`, and this
 channel — and the sheet is rendered *from* the structured form rather than from
@@ -705,7 +705,7 @@ needs no branch for the two kinds; `counted` is what decides whether the
 reading beside it is a fraction or a tickbox.
 
 The payload is built entirely through `QuestHandler`'s public read API — see
-`systems/statefeed/quests.py`. Nothing outside that handler reads
+`systems/interface/statefeed/quests.py`. Nothing outside that handler reads
 `db.active_quests`, and this would have been the fourth module to try.
 
 ## The minimap is drawn from the feed, not from the text map
@@ -752,7 +752,7 @@ state only the server can report.
 Every line of game text may carry a routing tag in its outputfunc kwargs --
 `caller.msg((line, {"type": "combat"}))` on the server arrives here as
 `{"type": "combat"}`. The vocabulary is `MESSAGE_TYPES` in
-`blackout/systems/statefeed/constants.py`, generated into
+`blackout/systems/interface/statefeed/constants.py`, generated into
 `autoload/blackout_constants.gd` as `MSG_*` like every other server-owned name.
 
 **The server says what a line IS. The client says which tab shows it.** There is

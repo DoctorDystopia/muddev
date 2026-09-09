@@ -156,7 +156,7 @@ func _a_dropped_socket_clears_the_log() -> void:
 
 func _the_view_draws_whatever_it_was_sent() -> void:
 	# It names no quest and must not learn any: adding a quest is one file under
-	# systems/quests/content/, and a table here would be what goes stale.
+	# systems/gameplay/quests/content/, and a table here would be what goes stale.
 	var log := QuestState.new()
 	var view := QuestsView.new()
 	add_child(view)

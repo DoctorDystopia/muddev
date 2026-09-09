@@ -12,7 +12,7 @@ extends Control
 ##
 ## Every cell, every category heading and every unlock row comes from whatever
 ## `char_skills` contained, in the order the server sent it. Adding a skill is
-## one file under `systems/progression/skills/skill_defs/`, and a table of
+## one file under `systems/gameplay/progression/skills/skill_defs/`, and a table of
 ## names here would be the third place that fact lives and the first to go
 ## stale. The colours are the exception, and they are a LOOK rather than a fact
 ## — see [SkillPalette], which is guarded rather than generated for exactly

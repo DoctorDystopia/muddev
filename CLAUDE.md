@@ -24,13 +24,36 @@ Inside `blackout/`:
 
 | Directory | Holds |
 |---|---|
-| `systems/` | Game systems: `combat/`, `crafting/`, `progression/skills/`, `banking/`, `shop/`, `quests/`, `menus/`, `spawning/`, `ui/`. Plus `profiling/`, which is NOT a game system — see "The profiling harness" below |
+| `systems/` | Game systems, grouped into three sub-domains — see "The `systems/` sub-domains" below |
+| `profiling/` | The pipeline/test profiler. NOT a game system, and no longer nested under `systems/` because of that — see "The profiling harness" below |
 | `items/` | `equipment/` and `inventory/` handlers + slot constants |
 | `typeclasses/` | Evennia typeclasses; `mixins.py` holds `CombatEntity` |
 | `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `shop_defs/`, `maps/` |
 | `commands/` | Command classes and cmdsets |
 | `web/` | Django site + statefeed-adjacent static assets (the shared `.glb` model tree). The client itself is the Godot project at `godot/` — see "The Godot client" below. |
 | `scripts/` | **Destructive operator CLI scripts. See the warning below.** |
+
+### The `systems/` sub-domains
+
+`systems/` splits into three sub-domains, each its own package:
+
+| Sub-domain | Holds | Example |
+|---|---|---|
+| `systems/gameplay/` | Mechanics with content and rules — the things a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/` |
+| `systems/interface/` | How TRUE state is shaped for a player, across both clients | `statefeed/` (Godot wire protocol), `summary/` (dossier), `menus/` (EvMenu flows), `ui/` (colours, meters) |
+| `systems/core/` | Engine plumbing every sub-domain above rides on | `tick/`, `stat_tracker/`, `managers.py` |
+
+`systems/devtools/` (the moderator egg) sits directly under `systems/`,
+ungrouped — it's neither gameplay content, pure presentation, nor infra, and
+per its own section below it's already split cleanly on its own terms.
+
+This split is why an import now reads `systems.gameplay.combat` rather than
+`systems.combat` — every reference in this file and in the code was updated
+together when the directories moved, on 09/08/2026. `systems/tick/` in
+particular is imported directly by `combat`, `ai`, `spawning`, `statefeed` and
+`typeclasses/mixins.py`, which is exactly why it lives in `core/` rather than
+as a peer of `combat` — it's plumbing every one of those depends on, not a
+game system in its own right.
 
 > **Read the installed Evennia, not the submodule.** Imports resolve to
 > `evenv/Lib/site-packages/evennia/`, which can differ from the pinned
@@ -50,7 +73,7 @@ exclude it explicitly.
 `export_client_constants.py` is the one file here that touches no database — it
 only renders the generated client constants — but it lives behind the same
 guard, and code that needs its output should import
-`systems/statefeed/clientexport.py` instead. That is why the output-path table
+`systems/interface/statefeed/clientexport.py` instead. That is why the output-path table
 lives in `clientexport.py` rather than in the script: the test that checks the
 generated files are current cannot import this directory.
 
@@ -85,7 +108,7 @@ The rebuild also spawns in-process rather than shelling out to
 decline the question — so the rebuild could not run unattended, and its exit
 code was never checked.
 
-**Destroying a room destroys what is standing on it.** `systems/spawning/
+**Destroying a room destroys what is standing on it.** `systems/gameplay/spawning/
 teardown.py` owns that rule and `GridTile.at_object_delete` is where it runs.
 Evennia's `clear_contents` does not delete a room's contents — it moves them to
 their home, rewriting that home to `settings.DEFAULT_HOME` when the home IS the
@@ -123,20 +146,20 @@ and anything created after the freeze is still collected. See
 **During development:** run only the modules you changed (seconds):
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
 **Before merging or major changes:** run the full suite (1857 tests, ~8.7 min):
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world
+../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling
 ```
 
 Add `--durations 20` to either to see where the time went.
 
 Details:
 - **Omitting a root silently runs fewer tests** rather than erroring. `items`,
-  `systems`, and `world` are the roots that hold tests.
+  `systems`, `world`, and `profiling` are the roots that hold tests.
 - `evennia test .` is **not** equivalent — it collects fewer tests.
 - Every test module must subclass `unittest.TestCase`. **Bare module-level
   `def test_*()` functions are silently skipped** by Django's discovery.
@@ -155,7 +178,7 @@ Details:
   in front of any `evennia test` invocation prints the slowest tests, the
   costliest classes and the per-base-class floor; add
   `BLACKOUT_PROFILE_TESTS_OUTPUT=run.timings.csv` for per-test rows. Off by
-  default and inert when off. See `systems/profiling/README.md`.
+  default and inert when off. See `profiling/README.md`.
 
 ### Writing tests
 
@@ -191,10 +214,12 @@ Details:
 
 ## The profiling harness
 
-`systems/profiling/` measures the pipeline end to end — Database → Evennia →
-Statefeed → Protocol → Web — and the test suite. It is **not a game system**;
-it sits under `systems/` because that is where packages live, and everything
-else about it points the other way.
+`profiling/` measures the pipeline end to end — Database → Evennia →
+Statefeed → Protocol → Web — and the test suite. It is **not a game system**,
+which is why it is a top-level sibling of `systems/` rather than nested inside
+it — moved there on 09/08/2026 when `systems/` split into sub-domains, so the
+directory tree no longer needs to explain the exception. Everything else about
+the package still points the other way, into the game.
 
 ```bash
 python scripts/profile_pipeline.py            # everything
@@ -210,11 +235,11 @@ row is `critical`, so CI can gate on it.
 never back: the package pulls in `cProfile`, `django.test` and Evennia's test
 resources, and one convenient import of a timing decorator into a serialiser
 loads the test framework into a running server.
-`systems/profiling/tests/test_isolation.py` fails if that ever happens, with
+`profiling/tests/test_isolation.py` fails if that ever happens, with
 one exemption (`server/conf/testrunner.py`) that the same test checks still
 exists. To profile production code, attach to a seam that is already there —
-`register_phase_hook` in `systems/tick/engine.py` is the one built for it, and
-`systems/tick/debug.py` is the model for how a bystander to the tick behaves.
+`register_phase_hook` in `systems/core/tick/engine.py` is the one built for it, and
+`systems/core/tick/debug.py` is the model for how a bystander to the tick behaves.
 
 **It cannot touch the live database.** Every scenario runs inside a Django test
 database created for the run and destroyed after it, because the run happens
@@ -281,17 +306,17 @@ than reinvent:
 
 | Pattern | Example |
 |---|---|
-| Package auto-discovery | `systems/progression/skills/registry.py` |
-| Settings-driven discovery | `systems/crafting/registry.py` |
+| Package auto-discovery | `systems/gameplay/progression/skills/registry.py` |
+| Settings-driven discovery | `systems/gameplay/crafting/registry.py` |
 | Decorator registration | `@register_spawner` in `typeclasses/spawners.py` |
 | Data table + dataclass | `world/item_database.py`, `world/npc_database.py` |
 
 Adding a skill, recipe, item, or NPC should mean **adding one file or one dict
 entry**, never editing a dispatch chain.
 
-**One owner per fact.** Colours in `systems/ui/colors.py`; crafting categories
-and tag categories in `systems/crafting/constants.py`; combat tunables in
-`systems/combat/constants.py`; slot labels on the `WieldLocation` enum. Typing
+**One owner per fact.** Colours in `systems/interface/ui/colors.py`; crafting categories
+and tag categories in `systems/gameplay/crafting/constants.py`; combat tunables in
+`systems/gameplay/combat/constants.py`; slot labels on the `WieldLocation` enum. Typing
 a literal that already has a named constant is how the "Metalsmith" vs
 "Metalsmithing" bug hid every anvil recipe.
 
@@ -331,7 +356,7 @@ sends the string `"north"` through `Evennia.command()`. There is no privileged
 client channel that bypasses a Command, so every lock, permission and cooldown
 keeps working with no audit.
 
-### Regenerate after editing `systems/statefeed/constants.py`
+### Regenerate after editing `systems/interface/statefeed/constants.py`
 
 ```bash
 python scripts/export_client_constants.py
@@ -340,7 +365,7 @@ python scripts/export_client_constants.py
 It renders `godot/autoload/blackout_constants.gd` from the Python. The file is
 committed, and a test fails if it goes stale — so a missed run is loud, not
 silent. Never hand-edit a generated file. `--check` writes nothing and exits
-non-zero, for CI. `systems/statefeed/clientexport.py`'s output table is a
+non-zero, for CI. `systems/interface/statefeed/clientexport.py`'s output table is a
 language → path map for exactly this reason: a second client is a row added
 there, not a rewrite of the renderer.
 
@@ -349,7 +374,7 @@ there, not a rewrite of the renderer.
 `ROOM_KIND_COLORS`, `Z_LAYOUT_ORDER` and `SKILL_CATEGORY_COLORS` mix a server
 fact (which room kinds, maps and skill categories exist) with a client one
 (what colour, what order). They are guarded instead of generated, by
-`systems/statefeed/tests/test_client_constants.py`. The asymmetry is
+`systems/interface/statefeed/tests/test_client_constants.py`. The asymmetry is
 deliberate: **a client key naming nothing is a bug; a server fact with no
 client entry is fine** — every one of those tables documents a fallback, so
 adding content must never require a client edit.
@@ -368,7 +393,7 @@ value); the pane picks its mesh out of the second. Neither reader cares that
 the other tag is there.
 
 Which family a multi-family item resolves to is decided by
-`ITEM_FAMILY_PRIORITY` in `systems/statefeed/constants.py`, **never by tag
+`ITEM_FAMILY_PRIORITY` in `systems/interface/statefeed/constants.py`, **never by tag
 order** — Evennia returns an object's tags as an unordered set, so a reader
 taking the first family category it sees can answer differently on two calls
 about the same item, and the axe would render as a tool in one session and a
@@ -402,7 +427,7 @@ a weapon added tomorrow is covered without an edit.
    inventory slot and whether stackables merge.
 6. **Sub-second timers need a twisted `LoopingCall`.** `ScriptDB.db_interval`
    is a Django `IntegerField` (0.6 truncates to 0) and `TickerHandler` rejects
-   sub-second intervals. See `systems/combat/tick_engine.py`.
+   sub-second intervals. See `systems/gameplay/combat/tick_engine.py`.
 7. **`lazy_property` caches into `obj.__dict__` under its `__name__`** and its
    deleter raises. Clear it with `obj.__dict__.pop("name", None)`; when
    building accessors from a factory, pass `name=` explicitly or they collide.
@@ -423,11 +448,11 @@ a weapon added tomorrow is covered without an edit.
 
 ## The quest system
 
-`systems/quests/` splits four ways, and the split is load-bearing:
+`systems/gameplay/quests/` splits four ways, and the split is load-bearing:
 
 | Module | Holds | May import |
 |---|---|---|
-| `constants.py` | The action vocabulary, status strings, message templates | `systems/ui/colors.py` |
+| `constants.py` | The action vocabulary, status strings, message templates | `systems/interface/ui/colors.py` |
 | `quests.py` | `QuestStep`, `QuestBlueprint` — the shapes content declares | `constants` **only** |
 | `loader.py` | `GLOBAL_QUEST_REGISTRY`, package auto-discovery of `content/` | `content` |
 | `handler.py` | `QuestHandler` — one character's progress | `loader`, `quests`, `constants` |
@@ -446,8 +471,8 @@ could not be accepted. `QuestRegistry.load_errors` plus
 **Game systems call `notify_quests`, never `update_progress`.**
 
 ```python
-from systems.quests import constants as quest_constants
-from systems.quests.hooks import notify_quests
+from systems.gameplay.quests import constants as quest_constants
+from systems.gameplay.quests.hooks import notify_quests
 
 notify_quests(killer, quest_constants.ACTION_KILL, npc_key)
 ```
@@ -475,14 +500,14 @@ owning that fact is how the android's dialogue came to print `talk:tester: 0/Tru
 at players.
 
 Progression hooks currently live in `typeclasses/mixins.py` (`kill`),
-`systems/crafting/crafting_service.py` (`craft`),
+`systems/gameplay/crafting/crafting_service.py` (`craft`),
 `skill_defs/gathering/cutting.py` (`cut`, `gather`) and `typeclasses/rooms.py`
 (`visit`, opt-in per room via `db.quest_visit_key`). `talk` is fired by
 dialogue nodes, not by `CmdTalk` — one NPC can be two different targets.
 
 ## Skills are not on the dossier
 
-They were a band under `systems/summary/panel_defs/` until 08/28/2026, and the
+They were a band under `systems/interface/summary/panel_defs/` until 08/28/2026, and the
 band is gone — from `score` and from `profile` both. `PANEL_ORDER_SKILLS` is a
 deliberate gap at 40.
 
@@ -491,9 +516,9 @@ client iterates `char_summary`'s panels and never names one, which is what lets
 a band added on the server appear with no client edit. A skills GRID would have
 had to reach in and pull one key out by name, and the first client to do that
 makes the contract a suggestion. One screen, one channel:
-`CHANNEL_CHAR_SKILLS`, built by `systems/statefeed/skills.py`.
+`CHANNEL_CHAR_SKILLS`, built by `systems/interface/statefeed/skills.py`.
 
-**`systems/progression/skills/detail.py` owns what a skill IS**, and three
+**`systems/gameplay/progression/skills/detail.py` owns what a skill IS**, and three
 readers share it: the EvMenu node, `skills <skill>`, and the feed. The text
 sheet is rendered FROM the structured form rather than from a second set of
 handler reads, so the two cannot describe a skill differently — the arrangement
@@ -517,21 +542,21 @@ the split is the same one the quest system makes:
 
 | Module | Holds | May import |
 |---|---|---|
-| `systems/devtools/constants.py` | The god-mode attribute name, the audit vocabulary, the bounds, the message templates | `systems/ui/colors.py` |
+| `systems/devtools/constants.py` | The god-mode attribute name, the audit vocabulary, the bounds, the message templates | `systems/interface/ui/colors.py` |
 | `systems/devtools/actions.py` | The effects. Every one is `(actor, target, ...) -> (succeeded, message)` | `constants`, plus whatever system it reaches into |
-| `systems/devtools/dossier.py` | The read-only report. Changes nothing | `constants`, `actions`, `systems/summary/` |
-| `systems/menus/dev_egg_menu.py` | EvMenu nodes. Presentation only | `actions`, `dossier`, `constants`, `base_menu` |
+| `systems/devtools/dossier.py` | The read-only report. Changes nothing | `constants`, `actions`, `systems/interface/summary/` |
+| `systems/interface/menus/dev_egg_menu.py` | EvMenu nodes. Presentation only | `actions`, `dossier`, `constants`, `base_menu` |
 
 `dossier.py` is split from `actions.py` on the read/write line, so a reviewer
 can tell at a glance which of the two a moderator screen is calling. Most of
-the report is not written there at all: `systems/summary/` already renders a
+the report is not written there at all: `systems/interface/summary/` already renders a
 character's dossier and owns what that contains, so the module adds only the
 staff half (dbrefs, the account, god mode, the itemised bag, live quest
 counters) and pastes the player's own screen above it **verbatim** — a
 moderator asking "is this what they are looking at" cannot be answered by a
 re-render of the same numbers. It is named `dossier` and not `inspect` because
 a module called `inspect.py` inside a package shadows the standard library the
-moment anything grows a relative import, and `systems/summary/registry.py`
+moment anything grows a relative import, and `systems/interface/summary/registry.py`
 depends on the real one.
 
 **The menu is not in the package on purpose.** An effect has to stay callable
@@ -552,7 +577,7 @@ in `systems/devtools/`.
 
 **Quest writes belong to `QuestHandler`, not to the tool.**
 `force_complete_quest`, `force_step` and `reset_quest` sit beside
-`accept_quest` in `systems/quests/handler.py` for the reason CLAUDE.md already
+`accept_quest` in `systems/gameplay/quests/handler.py` for the reason CLAUDE.md already
 gives: `db.active_quests` has exactly one owner, and a staff tool writing it
 directly would be the fourth module to own that fact. They are the write path
 a test fixture or a content migration needs too — the same role

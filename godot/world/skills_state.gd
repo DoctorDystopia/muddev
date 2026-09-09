@@ -5,7 +5,7 @@ extends RefCounted
 ## ## It knows no skill keys and must not learn any
 ##
 ## Every row comes from whatever the server sent. Adding a skill is one file
-## under `systems/progression/skills/skill_defs/`, and a table of skill names
+## under `systems/gameplay/progression/skills/skill_defs/`, and a table of skill names
 ## here would be the place that goes stale first — the same contract
 ## [SummaryState] answers for panels and [QuestState] for quests.
 ##
@@ -31,7 +31,7 @@ extends RefCounted
 ## `{"level": 30.0}` always, and `"%d"` on a float is not what it looks like.
 ## Converted here, at the point of use, exactly as [QuestState] does it.
 
-## Server-owned names, generated from blackout/systems/statefeed/constants.py.
+## Server-owned names, generated from blackout/systems/interface/statefeed/constants.py.
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Fired when the roster lands, so a view redraws from one place.

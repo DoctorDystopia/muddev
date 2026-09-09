@@ -21,7 +21,7 @@ Description: Cases for who is sent the ASCII map on look.
 import inspect
 import unittest
 
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 from typeclasses.rooms import GridTile
 
 

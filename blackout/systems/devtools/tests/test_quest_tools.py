@@ -21,9 +21,9 @@ from unittest import mock
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.devtools import actions as dev_actions
-from systems.quests import constants as quest_constants
-from systems.quests.loader import GLOBAL_QUEST_REGISTRY
-from systems.quests.quests import QuestBlueprint, QuestStep
+from systems.gameplay.quests import constants as quest_constants
+from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
+from systems.gameplay.quests.quests import QuestBlueprint, QuestStep
 
 
 # A three-step quest built here, so a content edit cannot move these results.

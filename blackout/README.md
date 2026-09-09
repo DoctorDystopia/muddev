@@ -184,7 +184,7 @@ HOLDINGS
 ```
 
 **Adding a band is one file.** Drop a `BasePanel` subclass into
-`systems/summary/panel_defs/` — the registry walks the package, so there is no
+`systems/interface/summary/panel_defs/` — the registry walks the package, so there is no
 import to add and no dispatch chain to edit. Each panel implements
 `render(character)` for the text screen and `data(character)` for the (phase 2)
 `char_summary` state-feed channel; both are built from the same handler reads so
@@ -192,10 +192,10 @@ they cannot drift.
 
 | Owns | Lives in |
 |---|---|
-| Screen assembly, per-panel failure containment | `systems/summary/service.py` |
-| Fixed-width rows, rules, wrapping | `systems/summary/layout.py` |
-| Panel discovery and ordering | `systems/summary/registry.py` |
-| The menu and its drill-down handoff | `systems/menus/summary_menu.py` |
+| Screen assembly, per-panel failure containment | `systems/interface/summary/service.py` |
+| Fixed-width rows, rules, wrapping | `systems/interface/summary/layout.py` |
+| Panel discovery and ordering | `systems/interface/summary/registry.py` |
+| The menu and its drill-down handoff | `systems/interface/menus/summary_menu.py` |
 
 Panels are **read-only**. Nothing on this screen is persisted — every value is
 fetched live from the handler that owns it, which is why the screen can never
@@ -276,7 +276,7 @@ The skill key must match a key in `SKILL_REGISTRY`:
 | Production | `metalsmith` |
 | Combat | `strike`, `brawn`, `defense`, `fortitude` |
 
-`systems/progression/skills/registry.py` **discovers these automatically** by
+`systems/gameplay/progression/skills/registry.py` **discovers these automatically** by
 walking `skill_defs/`. To add a skill, drop one module in the right category
 directory with a `BaseSkill` subclass carrying a unique `key` — there is no
 registry list to edit. A passive skill needs nothing but its four class
@@ -284,7 +284,7 @@ attributes; `get_unlock_requirements` and `execute` already default correctly on
 `BaseSkill`.
 
 ```python
-> py from systems.progression.skills.registry import SKILL_REGISTRY; sorted(SKILL_REGISTRY)
+> py from systems.gameplay.progression.skills.registry import SKILL_REGISTRY; sorted(SKILL_REGISTRY)
 ['brain_farming', 'brawn', 'cutting', 'defense', 'fortitude', 'foundry', 'metalsmith', 'strike']
 ```
 
@@ -325,9 +325,9 @@ one that used to be an error.
 
 | Owns | Lives in |
 |---|---|
-| The sheet, as text *and* as data; the unlock section table | `systems/progression/skills/detail.py` |
-| The `char_skills` payload | `systems/statefeed/skills.py` |
-| The menu node's back-navigation, and nothing else | `systems/menus/skills_menu.py` |
+| The sheet, as text *and* as data; the unlock section table | `systems/gameplay/progression/skills/detail.py` |
+| The `char_skills` payload | `systems/interface/statefeed/skills.py` |
+| The menu node's back-navigation, and nothing else | `systems/interface/menus/skills_menu.py` |
 
 **One description, three readers.** The sheet used to be written inline in the
 EvMenu, which meant the only way to see what a skill unlocked was to be inside a
@@ -351,7 +351,7 @@ bounded by the player, not by the tick.
 > py self.skills.get_level("cutting")
 7
 
-> py from systems.progression.skills.registry import SKILL_REGISTRY; {s: self.skills.get_level(s) for s in sorted(SKILL_REGISTRY)}
+> py from systems.gameplay.progression.skills.registry import SKILL_REGISTRY; {s: self.skills.get_level(s) for s in sorted(SKILL_REGISTRY)}
 {'brain_farming': 0, 'brawn': 0, 'cutting': 7, 'defense': 0, 'fortitude': 10, 'foundry': 3, 'metalsmith': 1, 'strike': 0}
 ```
 
@@ -456,7 +456,7 @@ every registered handler. It cannot use `Script.interval` or `TickerHandler`:
 
 Max HP scales **one-to-one with the Fortitude level**. Characters start at
 Fortitude 10, so at 10 HP, and the cap rises by one per level to 127. The
-scaling knob is `HP_PER_FORTITUDE_LEVEL` in `systems/combat/constants.py` —
+scaling knob is `HP_PER_FORTITUDE_LEVEL` in `systems/gameplay/combat/constants.py` —
 nothing multiplies a Fortitude level by a bare literal.
 
 ```python
@@ -549,7 +549,7 @@ them up with the stock `get` command.
 
 ### How a drop is resolved
 
-`CombatEntity.at_death` → `drop_loot()` → `systems/loot/drops.py`, which reads
+`CombatEntity.at_death` → `drop_loot()` → `systems/gameplay/loot/drops.py`, which reads
 `db.npc_key` → `NPC_DB[key].loot_table` → `LOOT_DB[table_key]` and rolls it.
 Resolution is **live**, not stamped at spawn, so editing a table and running
 `evennia reload` affects NPCs already standing on the grid.
@@ -702,24 +702,24 @@ requirements, and craft with optional confirmation.
 ### Python: browse available recipes
 
 ```python
-> py from systems.crafting.crafting_service import get_categories; get_categories()
+> py from systems.gameplay.crafting.crafting_service import get_categories; get_categories()
 {'Foundry': ['rusty scrap metal'],
  'Metalsmith': ['rusty metal dust', 'rusty scrap axe', 'rusty scrap shortsword', 'rusty scrap spear']}
 
-> py from systems.crafting.crafting_service import get_recipe_display_data; data = get_recipe_display_data(self, "rusty scrap metal"); data["name"], data["can_craft"]
+> py from systems.gameplay.crafting.crafting_service import get_recipe_display_data; data = get_recipe_display_data(self, "rusty scrap metal"); data["name"], data["can_craft"]
 ('Smelt rusty scrap metal', True)
 ```
 
 ### Adding a new recipe
 
-1. Create a class in `systems/crafting/recipes/` extending `BlackoutRecipe`.
+1. Create a class in `systems/gameplay/crafting/recipes/` extending `BlackoutRecipe`.
 2. Register the module in `server/conf/settings.py` under `CRAFT_RECIPE_MODULES`.
 3. Reload the server.
 
 ```python
-# systems/crafting/recipes/my_recipes.py
-from systems.crafting.blackout_recipe import BlackoutRecipe
-from systems.crafting.constants import CATEGORY_FOUNDRY
+# systems/gameplay/crafting/recipes/my_recipes.py
+from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
+from systems.gameplay.crafting.constants import CATEGORY_FOUNDRY
 
 class MyNewRecipe(BlackoutRecipe):
     name = "My New Recipe"
@@ -732,7 +732,7 @@ class MyNewRecipe(BlackoutRecipe):
     xp_reward = 25
 ```
 
-**Import `category` from `systems/crafting/constants.py` — never type the
+**Import `category` from `systems/gameplay/crafting/constants.py` — never type the
 literal.** A facility's `allowed_categories` is matched against it by exact
 string equality, so `"Metalsmithing"` vs `"Metalsmith"` silently hides every
 recipe in the category from the craft menu. `BlackoutRecipe.__init_subclass__`
@@ -754,8 +754,8 @@ Generic counters and stats all stored in a single per-character dict, e.g. kills
 
 ### Adding a new tracked stat
 
-1. Add a `STAT_KEY` constant in `systems/stat_tracker/constants.py`.
-2. Add a matching `StatDef` to `STAT_REGISTRY` in `systems/stat_tracker/registry.py`.
+1. Add a `STAT_KEY` constant in `systems/core/stat_tracker/constants.py`.
+2. Add a matching `StatDef` to `STAT_REGISTRY` in `systems/core/stat_tracker/registry.py`.
 3. Record an increment at the site of the event, following this pattern:
 
 ```python
@@ -770,10 +770,10 @@ if stats is not None and npc_key:
 ```
 
 ### Types of stats
-Each stat type is defined in `StatKind` once in `systems/stat_tracker/registry.py`.
+Each stat type is defined in `StatKind` once in `systems/core/stat_tracker/registry.py`.
 `StatHandler` defines how each is handled.
 
-Source of truth definitions in `systems/stat_tracker/registry.py`
+Source of truth definitions in `systems/core/stat_tracker/registry.py`
 
 ```text
 COUNTER stat stores         |  {stat_key: total(int)}
@@ -959,7 +959,7 @@ Preview a rebuild without changing anything (safe while the server is up):
 Evennia uses `|`-prefixed markup to color terminal text. Tags compose inline — wrap any character or string.
 
 **In game code, do not type these tags directly.** Import the named palette
-from `systems/ui/colors.py` (`TITLE_COLOR`, `HIGHLIGHT_COLOR`, `SUCCESS_COLOR`,
+from `systems/interface/ui/colors.py` (`TITLE_COLOR`, `HIGHLIGHT_COLOR`, `SUCCESS_COLOR`,
 `ERROR_COLOR`, `RESET_COLOR`, …) plus the `dialog()` / `highlight()` / `title()`
 wrappers. The table below is for reading existing markup and picking new
 palette entries. Nine modules once carried their own copy of these literals, so
@@ -1037,10 +1037,10 @@ seconds:
 
 ```bash
 # Single module
-../evenv/Scripts/evennia.exe test --settings test_settings.py systems.banking.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 
 # Multiple modules
-../evenv/Scripts/evennia.exe test --settings test_settings.py systems.combat.tests systems.crafting.tests
+../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.combat.tests systems.gameplay.crafting.tests
 ```
 
 ### Full test suite (only when necessary)
@@ -1076,7 +1076,7 @@ bootstrap the DB the Evennia suites need. It is not the runner for this
 project.
 
 Test files live alongside the code they test, in a `tests/` package
-(`systems/banking/tests.py` is the one legacy exception). **A `tests/`
+(`systems/gameplay/banking/tests.py` is the one legacy exception). **A `tests/`
 directory needs an `__init__.py`** or nothing inside it is collected.
 
 ---
@@ -1094,7 +1094,7 @@ directory needs an `__init__.py`** or nothing inside it is collected.
 | List bank contents | `py [i.key for i in self.bank.list_items()]` |
 | List equipped items | `py [i.key for i in self.equipment.all()]` |
 | Count inventory slots used | `py self.equipment.count_inventory()` |
-| List available recipe categories | `py from systems.crafting.crafting_service import get_categories; get_categories()` |
+| List available recipe categories | `py from systems.gameplay.crafting.crafting_service import get_categories; get_categories()` |
 | Set a character attribute | `py self.search("testchar2").db.has_cutting_reward = True` |
 | Delete all GridTile rooms | `py from typeclasses.rooms import GridTile; GridTile.objects.all().delete()` |
 | Count objects by typeclass | `py from typeclasses.characters import Character; Character.objects.all().count()` |

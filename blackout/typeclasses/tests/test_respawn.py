@@ -17,7 +17,7 @@ from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
-from systems.combat.combat import ensure_combat_handler, get_handler_for
+from systems.gameplay.combat.combat import ensure_combat_handler, get_handler_for
 from typeclasses.npc_combat import spawn_mutant_raider
 from typeclasses.rooms import GridTile
 from world.respawn import RESPAWN_XYZ, get_respawn_room

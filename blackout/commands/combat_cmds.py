@@ -8,21 +8,21 @@ Description: Twitch combat commands — attack, hold, flee, wield.
 from evennia import CmdSet, Command
 
 from commands.constants import HELP_CATEGORY_COMBAT
-from systems.combat import combat_msg, constants as const
-from systems.combat.protocols import Combatant
-from systems.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
-from systems.combat.auras.registry import AURA_REGISTRY, find_aura
-from systems.tick import debug as tick_debug
-from systems.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
-from systems.combat.rules.introspect import describe_action_rules, describe_registry
-from systems.ui import colors
-from systems.statefeed import constants as feed_const
+from systems.gameplay.combat import combat_msg, constants as const
+from systems.gameplay.combat.protocols import Combatant
+from systems.gameplay.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
+from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
+from systems.core.tick import debug as tick_debug
+from systems.gameplay.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
+from systems.gameplay.combat.rules.introspect import describe_action_rules, describe_registry
+from systems.interface.ui import colors
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is combat, so the routing tag is
 # bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 
 
@@ -299,11 +299,11 @@ class CmdCombatOptions(Command):
     def func(self) -> None:
         caller = self.caller
 
-        from systems.menus.base_menu import start_blackout_menu
+        from systems.interface.menus.base_menu import start_blackout_menu
 
         start_blackout_menu(
             caller,
-            "systems.menus.combat_options_menu",
+            "systems.interface.menus.combat_options_menu",
             startnode="start",
         )
 

@@ -4,13 +4,13 @@
 from evennia import Command
 from evennia import CmdSet
 from evennia import InterruptCommand
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about the room around you, so the
 # routing tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_ROOM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_ROOM}
 
 

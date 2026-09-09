@@ -14,7 +14,7 @@ extends RefCounted
 ## The keys below are six ITEM FAMILIES (`weapon`, `armor`, ...) and four ASSET
 ## KINDS (`npc`, `character`, `station`, `gatherable`) in one namespace. That is
 ## not an accident of this file — it mirrors the server, which collapses them
-## deliberately: `_mesh_family` in `systems/statefeed/serializers.py` returns
+## deliberately: `_mesh_family` in `systems/interface/statefeed/serializers.py` returns
 ## the item's family for an item and the KIND itself for anything else, and
 ## `serialize_entity` sends the result in one `family` field. One lookup key on
 ## the wire, one table here.
@@ -56,7 +56,7 @@ extends RefCounted
 ##     open          bool, for a cylinder drawn as a shell (armour)
 ##     segments      int, to make a primitive deliberately faceted
 
-## Server-owned names, generated from `blackout/systems/statefeed/constants.py`.
+## Server-owned names, generated from `blackout/systems/interface/statefeed/constants.py`.
 ##
 ## The keys of [member SHAPES] are these constants and NOT string literals, for
 ## the reason CLAUDE.md gives in full: a literal that already has a named

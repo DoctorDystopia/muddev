@@ -18,7 +18,7 @@ extends RefCounted
 ## first genuinely fractional field anyone adds.
 
 
-## Server-owned names, generated from blackout/systems/statefeed/constants.py.
+## Server-owned names, generated from blackout/systems/interface/statefeed/constants.py.
 ## Preloaded, not autoloaded -- the generated file declares no `extends Node`.
 const _Const := preload("res://autoload/blackout_constants.gd")
 

@@ -45,12 +45,12 @@ class ReportContentTests(EvenniaTest):
 
     def test_the_report_carries_the_player_dossier_verbatim(self):
         """
-        Reused from systems/summary/, not re-rendered. A moderator comparing
+        Reused from systems/interface/summary/, not re-rendered. A moderator comparing
         what they see against what the player sees is asking "is this what
         they are looking at", and a staff-only re-render of the same numbers
         cannot answer that.
         """
-        from systems.summary.service import render_summary
+        from systems.interface.summary.service import render_summary
 
         dossier = render_summary(self.char1)
         report = dev_dossier.render_report(self.char2, self.char1)

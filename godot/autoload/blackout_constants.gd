@@ -1,7 +1,7 @@
 # GENERATED FILE -- DO NOT EDIT.
 #
-# Rendered from systems/statefeed/constants.py by
-# systems/statefeed/clientexport.py. Change the Python and re-run:
+# Rendered from systems/interface/statefeed/constants.py by
+# systems/interface/statefeed/clientexport.py. Change the Python and re-run:
 #
 #     python scripts/export_client_constants.py
 #

@@ -8,18 +8,18 @@ Description: CraftingFacility base typeclass and the craft command attached
 
 from evennia import Command, CmdSet
 from evennia import DefaultObject
-from systems.menus.base_menu import start_blackout_menu
+from systems.interface.menus.base_menu import start_blackout_menu
 
 from commands.constants import HELP_CATEGORY_CRAFTING
-from systems.statefeed.constants import ASSET_KIND_STATION
+from systems.interface.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is crafting, so the routing tag is
 # bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
@@ -27,7 +27,7 @@ CRAFT_COMMAND_KEY = "craft"
 CRAFT_COMMAND_LOCKS = "cmd:all()"
 CRAFT_CMD_SET_KEY = "crafting_facility_cmdset"
 CRAFT_CMD_SET_PRIORITY = 10
-CRAFT_MENU_MODULE_PATH = "systems.menus.crafting_menu"
+CRAFT_MENU_MODULE_PATH = "systems.interface.menus.crafting_menu"
 
 
 class CmdCraft(Command):
@@ -208,7 +208,7 @@ class CraftingFacility(ObjectParent, DefaultObject):
     """
 
     # How a graphical client should draw this and what it may send to use it.
-    # Read by systems/statefeed/serializers.py through getattr, so the feed
+    # Read by systems/interface/statefeed/serializers.py through getattr, so the feed
     # never imports the typeclass layer. Without these a facility is
     # indistinguishable from a dropped item and a client offers to pick it up
     # -- which is exactly what happened to the Foundry Furnace.

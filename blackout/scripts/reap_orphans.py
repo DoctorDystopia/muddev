@@ -13,7 +13,7 @@ Description: Operator script. Destroys the objects that map rebuilds exiled to
              gathering node, facility, bank and NPC on the grid was exiled to
              Limbo rather than destroyed on each rebuild.
 
-             `systems/spawning/teardown.py` closes that going forward. This
+             `systems/gameplay/spawning/teardown.py` closes that going forward. This
              closes the backlog: on 08/28/2026 the development database held
              623 objects standing in Limbo with 197 more nested inside them,
              against 23 real non-exit objects on the entire live grid.
@@ -156,7 +156,7 @@ def find_orphans(home):
     Author: Nick Hobar
     Creation date: 08/28/2026
     """
-    from systems.spawning import teardown
+    from systems.gameplay.spawning import teardown
 
     orphans = []
     standing = list(home.contents)
@@ -257,7 +257,7 @@ def reap(orphans):
     Author: Nick Hobar
     Creation date: 08/28/2026
     """
-    from systems.spawning import teardown
+    from systems.gameplay.spawning import teardown
 
     destroyed = 0
 

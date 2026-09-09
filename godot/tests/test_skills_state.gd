@@ -28,7 +28,7 @@ func _ready() -> void:
 	get_tree().quit(0)
 
 
-## A payload shaped exactly as `systems/statefeed/skills.py` builds one, with
+## A payload shaped exactly as `systems/interface/statefeed/skills.py` builds one, with
 ## every number a float -- which is what `JSON.parse_string` always returns.
 func _payload() -> Dictionary:
 	return {

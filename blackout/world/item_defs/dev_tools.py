@@ -7,7 +7,7 @@ Description: ItemDef entries for moderator tooling -- items that exist to be
 
              There is one, and there is meant to be one. The Moderator Egg is
              a MENU, not a bag of abilities: every new moderator power should
-             become a node under systems/menus/dev_egg_menu.py, so that a
+             become a node under systems/interface/menus/dev_egg_menu.py, so that a
              moderator has one object to find and one screen to learn. A
              second dev item is how a game ends up with four of them and no
              agreement about which one heals.
@@ -25,7 +25,7 @@ from world.item_database import ItemDef
 # moderator destroys by emptying their own bag.
 #
 # The import direction is safe: devtools/constants.py imports only
-# systems/ui/colors.py, so nothing here can close a ring back through
+# systems/interface/ui/colors.py, so nothing here can close a ring back through
 # world/item_database.py.
 
 _MODERATOR_EGG_DESC = (

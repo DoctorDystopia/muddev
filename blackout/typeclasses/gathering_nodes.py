@@ -7,7 +7,7 @@ Description: Typeclasses for gatherable resource nodes in the world.
 
 from typeclasses.objects import DefaultObject
 from commands.gathering_cmds import GatheringNodeCmdSet
-from systems.progression.skills.gatherables import GATHERABLE_REGISTRY
+from systems.gameplay.progression.skills.gatherables import GATHERABLE_REGISTRY
 from .spawners import register_spawner, spawn_once
 
 
@@ -33,7 +33,7 @@ class RustyPole(DefaultObject):
 
     Notes/References:
         GATHERABLE_REGISTRY is this node's single owner for required level
-        and XP reward -- see systems/progression/skills/gatherables.py.
+        and XP reward -- see systems/gameplay/progression/skills/gatherables.py.
 
     Author: Nick Hobar
     Creation date: 06/05/2026
@@ -43,7 +43,7 @@ class RustyPole(DefaultObject):
     gatherable_key = "rusty_pole"
 
     # What a graphical client may send to work this node, read by
-    # systems/statefeed/serializers.py through getattr. Bare, because
+    # systems/interface/statefeed/serializers.py through getattr. Bare, because
     # GatheringNodeCmdSet hangs on this object.
     #
     # This lives here rather than in the client precisely because every
@@ -114,7 +114,7 @@ class MetalPole(DefaultObject):
 
     Notes/References:
         GATHERABLE_REGISTRY is this node's single owner for required level
-        and XP reward -- see systems/progression/skills/gatherables.py.
+        and XP reward -- see systems/gameplay/progression/skills/gatherables.py.
 
     Author: Nick Hobar
     Creation date: 08/22/2026
@@ -124,7 +124,7 @@ class MetalPole(DefaultObject):
     gatherable_key = "metal_pole"
 
     # What a graphical client may send to work this node, read by
-    # systems/statefeed/serializers.py through getattr. Bare, because
+    # systems/interface/statefeed/serializers.py through getattr. Bare, because
     # GatheringNodeCmdSet hangs on this object.
     
     # This lives here rather than in the client precisely because every

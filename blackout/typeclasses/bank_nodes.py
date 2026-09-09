@@ -8,19 +8,19 @@ Description: BankNode typeclass and the banking commands attached to it.
 from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_BANKING
-from systems.banking import messages
-from systems.banking.handler import BANK_MAX_UNIQUE_KEYS, NOT_STORED_ERROR
-from systems.statefeed.constants import ASSET_KIND_STATION, COMMERCE_ROLE_BANK
+from systems.gameplay.banking import messages
+from systems.gameplay.banking.handler import BANK_MAX_UNIQUE_KEYS, NOT_STORED_ERROR
+from systems.interface.statefeed.constants import ASSET_KIND_STATION, COMMERCE_ROLE_BANK
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner, spawn_once
-from systems.menus.base_menu import QUANTITY_ALL_KEYWORD, start_blackout_menu
-from systems.statefeed import constants as feed_const
+from systems.interface.menus.base_menu import QUANTITY_ALL_KEYWORD, start_blackout_menu
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is a shop or a bank, so the routing
 # tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_COMMERCE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMMERCE}
 
 # A banking command with no argument. Phrased as a question rather than as
@@ -262,7 +262,7 @@ def perform_deposit(caller, args):
         form takes a form that has never worked.
 
     Notes/References:
-        systems/shop/shop_service.perform_sell is the same shape for the same
+        systems/gameplay/shop/shop_service.perform_sell is the same shape for the same
         reason, and the two are deliberately readable side by side.
 
     Author: Nick Hobar
@@ -450,7 +450,7 @@ class CmdBank(Command):
 
     def func(self):
         caller = self.caller
-        start_blackout_menu(caller, "systems.menus.banking_menu", startnode="start")
+        start_blackout_menu(caller, "systems.interface.menus.banking_menu", startnode="start")
 
 
 class BankCmdSet(CmdSet):
@@ -474,7 +474,7 @@ class BankNode(ObjectParent, DefaultObject):
     """
 
     # How a graphical client draws this and what it may send to use it. Read
-    # by systems/statefeed/serializers.py through getattr. `bank` is bare
+    # by systems/interface/statefeed/serializers.py through getattr. `bank` is bare
     # because BankCmdSet hangs on this object -- the cmdset's owner is already
     # the target. Without these the terminal is served as a generic item and a
     # client offers `get`, on a thing that carries `get:false()`.
@@ -483,7 +483,7 @@ class BankNode(ObjectParent, DefaultObject):
     interact_verb = CmdBank.key
 
     # What standing at this terminal lets you do with what you are carrying.
-    # Read by systems/statefeed/commerce.py through getattr, the same route
+    # Read by systems/interface/statefeed/commerce.py through getattr, the same route
     # the three attributes above take.
     commerce_role = COMMERCE_ROLE_BANK
 

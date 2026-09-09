@@ -10,18 +10,18 @@ from evennia import DefaultObject
 from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GENERAL
-from systems.statefeed.constants import ASSET_KIND_NPC, COMMERCE_ROLE_SHOP
+from systems.interface.statefeed.constants import ASSET_KIND_NPC, COMMERCE_ROLE_SHOP
 from typeclasses.objects import ObjectParent
 from .scripts import Script
 from .spawners import register_spawner, spawn_once
-from systems.menus.base_menu import start_blackout_menu
-from systems.statefeed import constants as feed_const
+from systems.interface.menus.base_menu import start_blackout_menu
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about the room around you, so the
 # routing tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_ROOM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_ROOM}
 
 
@@ -39,8 +39,8 @@ SELL_COMMAND_LOCKS = "cmd:all()"
 SHOPKEEP_CMD_SET_KEY = "npc_shopkeep_cmdset"
 SHOPKEEP_CMD_SET_PRIORITY = 10
 
-SHOPKEEP_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_shopkeep"
-LONE_ANDROID_DIALOGUE_MODULE = "systems.menus.npc_dialogues.npc_oasis_lone_android"
+SHOPKEEP_DIALOGUE_MODULE = "systems.interface.menus.npc_dialogues.npc_shopkeep"
+LONE_ANDROID_DIALOGUE_MODULE = "systems.interface.menus.npc_dialogues.npc_oasis_lone_android"
 
 # The oasis quest giver. The key must match the room key of the "Lone Android"
 # prototype in world/maps/oasis.py, because that key is what SPAWNER_REGISTRY
@@ -235,7 +235,7 @@ class TalkativeNPC(ObjectParent, DefaultObject):
     """
 
     # How a graphical client draws this and what it may send to use it. Read
-    # by systems/statefeed/serializers.py through getattr.
+    # by systems/interface/statefeed/serializers.py through getattr.
     #
     # `asset_kind` has to be declared because nothing else identifies this as
     # an NPC: it is not an Evennia character, and `db.npc_key` belongs to the
@@ -391,7 +391,7 @@ class CmdSell(Command):
         Author: Nick Hobar
         Creation date: 09/02/2026
         """
-        from systems.shop.shop_service import perform_sell
+        from systems.gameplay.shop.shop_service import perform_sell
 
         perform_sell(self.caller, self.obj, self.args)
 
@@ -443,7 +443,7 @@ class ShopkeepNPC(TalkativeNPC):
     asset_key = "shopkeeper"
 
     # What standing near this NPC lets you do with what you are carrying. Read
-    # by systems/statefeed/commerce.py through getattr, the same route
+    # by systems/interface/statefeed/commerce.py through getattr, the same route
     # `asset_kind` and `interact_verb` above take -- so every shopkeeper
     # already in the database gains the Sell action with no migration and no
     # respawn.
@@ -573,7 +573,7 @@ class LoneAndroidNPC(TalkativeNPC):
 
     Notes/References:
         Design lives in the Obsidian vault, "Oasis in the Wastes"; the quest
-        blueprint is systems/quests/content/quest_oasis.py.
+        blueprint is systems/gameplay/quests/content/quest_oasis.py.
 
     Author: Nick Hobar
     Creation date: 08/25/2026

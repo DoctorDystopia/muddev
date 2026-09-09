@@ -776,7 +776,7 @@ def audit_served_models():
         raw asset dropped in by hand gets wrong.
 
     Notes/References:
-        Asserted by systems/statefeed/tests/test_model_budgets.py.
+        Asserted by systems/interface/statefeed/tests/test_model_budgets.py.
 
     Author: Nick Hobar
     Creation date: 08/25/2026

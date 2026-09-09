@@ -28,14 +28,14 @@ That asymmetry is the whole reason "deploy" doesn't mean one thing here.
 | Game logic (`systems/`, `typeclasses/`, `commands/`, `items/`, `world/*.py` other than maps) | `evennia reload` from `blackout/` |
 | A `server/conf/*.py` module named in `PORTAL_SERVICES_PLUGIN_MODULES` (e.g. `godot_websocket.py`) | `evennia reboot`, not `reload` — Portal plugins are only read at Portal start, and `reload` restarts the Server process only |
 | Maps (`world/maps/*.py`, `scripts/map_manifest.json`) | `scripts/clean_and_reload_all_maps.ps1` / `.sh` — stops Evennia, syncs the grid, spawns, reloads, all in one |
-| `systems/statefeed/constants.py` | Regenerate the generated client file **before** anything else touches it — see below |
+| `systems/interface/statefeed/constants.py` | Regenerate the generated client file **before** anything else touches it — see below |
 | Godot client (`godot/**`) | The full export → publish → deploy pipeline — see below |
 | `deploy/cloudflared/config.yml` | Manual, rare, needs an elevated shell — copy to `C:\ProgramData\cloudflared\`, substitute the tunnel id, `Restart-Service Cloudflared`. Not part of routine deploys; see the cloudflared README |
 | Django templates / non-plugin settings (`web/templates/`, most of `server/conf/settings.py`) | `evennia reload` |
 
 ## Regenerating client constants
 
-Anything that adds, renames, or removes a name in `systems/statefeed/constants.py`
+Anything that adds, renames, or removes a name in `systems/interface/statefeed/constants.py`
 has to be re-rendered before the client can be trusted:
 
 ```bash

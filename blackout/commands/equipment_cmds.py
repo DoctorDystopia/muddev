@@ -24,20 +24,20 @@ from commands.inventory_cmds import resolve_carried_item
 from evennia import CmdSet
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
-from systems.ui.colors import ERROR_COLOR, RESET_COLOR, SUCCESS_COLOR
-from systems.statefeed import constants as feed_const
+from systems.interface.ui.colors import ERROR_COLOR, RESET_COLOR, SUCCESS_COLOR
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about your inventory, so the
 # routing tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_INVENTORY = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 # Public constant definitions
-EQUIPMENT_MODULE_PATH = "systems.menus.equipment_menu"
+EQUIPMENT_MODULE_PATH = "systems.interface.menus.equipment_menu"
 
 # What a player may type in place of a slot value. WieldLocation.value spells
 # slots with underscores ("main_hand"); nobody types that, so a space is
@@ -200,7 +200,7 @@ class CmdEquipment(Command):
         target_text = self.args.strip()
 
         if not target_text:
-            from systems.menus.base_menu import start_blackout_menu
+            from systems.interface.menus.base_menu import start_blackout_menu
 
             start_blackout_menu(
                 caller,

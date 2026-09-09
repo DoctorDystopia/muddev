@@ -11,7 +11,7 @@ Description: Blackout armor ItemDef entries — feet armor
 
 
 
-import systems.combat.constants as combat_constants
+import systems.gameplay.combat.constants as combat_constants
 from items.equipment.constants import WieldLocation
 from world.item_database import ItemDef
 

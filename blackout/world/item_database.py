@@ -51,7 +51,7 @@ class ItemDef:
     #     type. Matches NpcDef.combat_styles.
     # default_combat_style — the key into combat_styles used when no
     #     /attackstyle command has selected another.
-    # combat_rules — list of keys into systems/combat/rules/RULES_REGISTRY.
+    # combat_rules — list of keys into systems/gameplay/combat/rules/RULES_REGISTRY.
     #     Each names a rules definition that changes how an action is resolved
     #     while this item is EQUIPPED, in any slot: a die replacement, a
     #     conditional stat modifier, or a whole-action override.

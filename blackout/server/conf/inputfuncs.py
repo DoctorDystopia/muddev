@@ -49,8 +49,8 @@ Creation date: 08/07/2026
 
 from evennia.utils import logger
 
-from systems.statefeed import constants as feed_const
-from systems.statefeed import resync, subscriptions
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import resync, subscriptions
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────

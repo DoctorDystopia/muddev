@@ -7,24 +7,24 @@ Description: CombatEntity mixin —_HP, death, and disconnect hooks for any comb
 
 from evennia.utils import logger, lazy_property
 
-from systems.ai.constants import LAST_ATTACKER_ID_ATTR
-from systems.combat import constants as combat_constants
-from systems.combat import combat_msg
-from systems.quests import constants as quest_constants
-from systems.quests.hooks import notify_quests
-from systems.combat.combat_level.logic import get_combat_level
-from systems.combat.protocols import XpEarner
+from systems.gameplay.ai.constants import LAST_ATTACKER_ID_ATTR
+from systems.gameplay.combat import constants as combat_constants
+from systems.gameplay.combat import combat_msg
+from systems.gameplay.quests import constants as quest_constants
+from systems.gameplay.quests.hooks import notify_quests
+from systems.gameplay.combat.combat_level.logic import get_combat_level
+from systems.gameplay.combat.protocols import XpEarner
 from systems.devtools import constants as dev_constants
-from systems.statefeed import events as feed
+from systems.interface.statefeed import events as feed
 
-from systems.stat_tracker import constants as stat_constants
-from systems.statefeed import constants as feed_const
+from systems.core.stat_tracker import constants as stat_constants
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is combat, so the routing tag is
 # bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 
 
@@ -171,7 +171,7 @@ class CombatEntity:
 
         if max_hp is not None and value < max_hp:
             try:
-                from systems.combat.hp_regen import register_for_regen
+                from systems.gameplay.combat.hp_regen import register_for_regen
 
                 register_for_regen(self)
             except Exception as exc:
@@ -272,7 +272,7 @@ class CombatEntity:
             None.
 
         Methodology:
-            Delegates to systems.combat.combat_level.logic.get_combat_level,
+            Delegates to systems.gameplay.combat.combat_level.logic.get_combat_level,
             which is a pure function of skill levels rather than persisted
             state -- there is no db.combat_level to keep in sync, so this
             property is always current, the same tradeoff hp/max_hp make in
@@ -430,7 +430,7 @@ class CombatEntity:
             This is the threat-table seam. §3.2 of
             docs/2026-08-23-DESIGN-0003 chose "last attacker" now with a threat
             table later; upgrading means accumulating per-attacker damage HERE
-            and changing what systems/ai/behaviors._last_attacker reads. No
+            and changing what systems/gameplay/ai/behaviors._last_attacker reads. No
             other caller and no behaviour changes.
 
         Author: Nick Hobar
@@ -757,7 +757,7 @@ class CombatEntity:
         # Deferred and guarded: a diagnostic must never be able to break the
         # anti-combat-log path it is riding on.
         try:
-            from systems.tick import debug as tick_debug
+            from systems.core.tick import debug as tick_debug
 
             tick_debug.detach(self)
         except Exception as exc:
@@ -792,12 +792,12 @@ class CombatEntity:
             otherwise was a bug once already.
 
         Notes/References:
-            systems/tick/states.py owns the state this reads.
+            systems/core/tick/states.py owns the state this reads.
 
         Author: Nick Hobar
         Creation date: 08/18/2026
         """
-        from systems.tick import states
+        from systems.core.tick import states
 
         try:
             handler = self.combat
@@ -847,7 +847,7 @@ class CombatEntity:
         Author: Nick Hobar
         Creation date: 07/26/2026
         """
-        from systems.combat.combat import get_handler_for  # local import to avoid circularity
+        from systems.gameplay.combat.combat import get_handler_for  # local import to avoid circularity
 
         try:
             return get_handler_for(self)
@@ -884,12 +884,12 @@ class CombatEntity:
             accessor handing out a deleted script for a whole session.
 
         Notes/References:
-            systems/combat/auras/aura_handler.py owns the handler itself.
+            systems/gameplay/combat/auras/aura_handler.py owns the handler itself.
 
         Author: Nick Hobar
         Creation date: 08/03/2026
         """
-        from systems.combat.auras.aura_handler import (  # local import to avoid circularity
+        from systems.gameplay.combat.auras.aura_handler import (  # local import to avoid circularity
             get_aura_handler_for,
         )
 

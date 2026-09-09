@@ -14,7 +14,7 @@ extends RefCounted
 ## Both mix a SERVER fact (which room kinds and maps exist) with a CLIENT one
 ## (what colour, what order). CLAUDE.md names them as the pair that is guarded
 ## instead of generated, by
-## `blackout/systems/statefeed/tests/test_client_constants.py`. The asymmetry
+## `blackout/systems/interface/statefeed/tests/test_client_constants.py`. The asymmetry
 ## that guard encodes is the whole design:
 ##
 ##     A client key naming NO room kind is a bug -- dead configuration that

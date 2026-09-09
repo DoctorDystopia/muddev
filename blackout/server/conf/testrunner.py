@@ -13,10 +13,10 @@ Description: The project's test runner. Owns how the suite RUNS, as distinct
                   or #2 exists -- so every create_object in the suite fails with
                   "settings.DEFAULT_HOME (= '#2') does not exist".
                2. A garbage-collection policy for the run. See below.
-               3. systems.profiling's opt-in per-test instrument, inert unless
+               3. profiling's opt-in per-test instrument, inert unless
                   BLACKOUT_PROFILE_TESTS is set.
 
-             The instrument is a MIXIN living in systems/profiling/ rather than
+             The instrument is a MIXIN living in profiling/ rather than
              a runner living here, because measuring a suite and configuring one
              are different jobs with different lifetimes. This module needs the
              configuration whether or not anybody ever asks for a measurement.
@@ -67,7 +67,7 @@ Notes/References:
 import gc
 
 from evennia.server.tests.testrunner import EvenniaTestSuiteRunner
-from systems.profiling.testrunner import ProfilingRunnerMixin
+from profiling.testrunner import ProfilingRunnerMixin
 
 
 class BlackoutTestSuiteRunner(ProfilingRunnerMixin, EvenniaTestSuiteRunner):

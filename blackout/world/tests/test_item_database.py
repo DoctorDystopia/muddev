@@ -15,7 +15,7 @@ Run with:
 from evennia.prototypes.spawner import spawn
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
-from systems.statefeed.constants import ITEM_FAMILIES, ITEM_FAMILY_WEAPON
+from systems.interface.statefeed.constants import ITEM_FAMILIES, ITEM_FAMILY_WEAPON
 from typeclasses.characters import Character as BlackoutCharacter
 from world.item_database import ITEM_DB
 
@@ -232,7 +232,7 @@ class TestSpawnedAttributesMatchDefinition(EvenniaTestCase):
 
     def test_an_item_in_the_weapon_family_can_actually_fight(self):
         """The weapon TAG is read by the 3D client to pick a mesh. Nothing in
-        combat reads it: systems.combat.combat._combat_style_source reads
+        combat reads it: systems.gameplay.combat.combat._combat_style_source reads
         `combat_styles` and `attack_speed` off the wielded object and never
         asks what it is tagged. So an ItemDef can look like a weapon and still
         hit for unarmed damage, which is exactly the trap a tool being given a

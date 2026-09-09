@@ -8,7 +8,7 @@ Description: Item typeclasses. Stats come from ITEM_DB definitions; these
 
 from typeclasses.objects import Object
 from items.equipment.constants import WieldLocation
-from systems.combat.combat_msg import format_combat_stat_bonuses
+from systems.gameplay.combat.combat_msg import format_combat_stat_bonuses
 
 
 
@@ -130,7 +130,7 @@ class EquippableItem(BaseItem):
             Delegates the base text to super().get_display_desc so a future
             change to Evennia's default/desc fallback is inherited rather
             than duplicated, then reuses
-            systems.combat.combat_msg.format_combat_stat_bonuses -- the same
+            systems.gameplay.combat.combat_msg.format_combat_stat_bonuses -- the same
             formatter the equipment menu uses -- so the two screens can never
             disagree on how a bonus is labelled or coloured.
 

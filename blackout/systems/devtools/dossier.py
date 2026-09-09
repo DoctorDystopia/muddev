@@ -7,7 +7,7 @@ Description: The moderator's read-only dossier on one character.
              Named `dossier` rather than `inspect` deliberately: a module
              called inspect.py inside a package is one `import inspect` away
              from shadowing the standard library for anything that ever grows
-             a relative import, and systems/summary/registry.py already
+             a relative import, and systems/interface/summary/registry.py already
              depends on the real one.
 
              Separate from actions.py because it CHANGES NOTHING. Every
@@ -15,7 +15,7 @@ Description: The moderator's read-only dossier on one character.
              of writers means a reviewer can tell at a glance which of the two
              a moderator screen is calling.
 
-             Most of the report is not written here at all. systems/summary/
+             Most of the report is not written here at all. systems/interface/summary/
              already renders a character's full dossier -- hitpoints, combat
              level, skills, equipment, credits, location, playtime, quests --
              and it is the panel registry that decides what that contains. A
@@ -31,8 +31,8 @@ Description: The moderator's read-only dossier on one character.
 
 from evennia.utils import logger
 
-from systems.summary.service import render_summary
-from systems.ui.colors import DIM_COLOR, RESET_COLOR
+from systems.interface.summary.service import render_summary
+from systems.interface.ui.colors import DIM_COLOR, RESET_COLOR
 
 from systems.devtools import actions as dev_actions
 from systems.devtools import constants as dev_constants
@@ -307,7 +307,7 @@ def render_report(actor, target) -> str:
         None.
 
     Methodology:
-        The player dossier first, verbatim from systems/summary/, then the
+        The player dossier first, verbatim from systems/interface/summary/, then the
         staff addendum. Verbatim matters: a moderator comparing what they see
         against what the player sees is doing it to answer "is this what they
         are looking at", and a staff-only re-render of the same numbers cannot

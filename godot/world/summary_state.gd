@@ -6,7 +6,7 @@ extends RefCounted
 ##
 ## `panels` is an OPEN dictionary — `{"vitals": {...}, "skills": {...}}` — and
 ## the server's whole design contract is that adding a band is **one new file**
-## under `systems/summary/panel_defs/`. `payloads.py` says so explicitly, and
+## under `systems/interface/summary/panel_defs/`. `payloads.py` says so explicitly, and
 ## says why it is not a field per panel: that would make it two files, with the
 ## payload module the one nobody remembers to edit.
 ##

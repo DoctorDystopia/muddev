@@ -16,7 +16,7 @@ from unittest import mock
 from evennia.contrib.grid.xyzgrid.commands import CmdGoto
 
 from commands.movement_cmds import BlackoutGotoCmd
-from systems.tick.constants import TICK_SECONDS
+from systems.core.tick.constants import TICK_SECONDS
 
 # Public constant definitions
 

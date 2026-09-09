@@ -10,9 +10,9 @@ from evennia import DefaultObject
 from evennia.utils import logger
 from evennia.utils.utils import lazy_property
 
-from systems.combat import constants as combat_constants
-from systems.progression.skills.constants import COMBAT_SKILL_KEYS
-from systems.progression.skills.stat_block import StatBlockSkills
+from systems.gameplay.combat import constants as combat_constants
+from systems.gameplay.progression.skills.constants import COMBAT_SKILL_KEYS
+from systems.gameplay.progression.skills.stat_block import StatBlockSkills
 from typeclasses.mixins import CombatEntity
 from typeclasses.objects import ObjectParent
 
@@ -149,10 +149,10 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
         respawn() below for the full version of that failure).
         """
         try:
-            # Local import: systems.loot pulls in world.item_database, and
+            # Local import: systems.gameplay.loot pulls in world.item_database, and
             # this module is loaded by SPAWNER_MODULES at load_all_spawners()
             # time. Matches the local-import style used throughout this module.
-            from systems.loot.drops import award_drops
+            from systems.gameplay.loot.drops import award_drops
 
             award_drops(self, killer)
         except Exception:
@@ -183,7 +183,7 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
             try:
                 # Local import: avoids a typeclasses <-> systems import cycle
                 # at load_all_spawners() time, matching the style below.
-                from systems.spawning.respawn import schedule_respawn
+                from systems.gameplay.spawning.respawn import schedule_respawn
 
                 schedule_respawn(npc_key, room, respawn_seconds)
             except Exception:
@@ -218,11 +218,11 @@ def spawn_mutant_raider(room):
     Exit: the created NPC, or None if one was already standing here.
     Module Globals: None.
     """
-    from systems.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_present
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.combat.constants + world.npc_defs.hostile, both of which are
+    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
     # themselves leaf), so a module-level import is also safe, but matching the
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/
@@ -254,11 +254,11 @@ def spawn_big_mutant(room):
     Exit: the created NPC, or None if one was already standing here.
     Module Globals: None.
     """
-    from systems.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_present
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.combat.constants + world.npc_defs.hostile, both of which are
+    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
     # themselves leaf), so a module-level import is also safe, but matching the
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/
@@ -290,11 +290,11 @@ def spawn_floating_eye(room):
     Exit: the created NPC, or None if one was already standing here.
     Module Globals: None.
     """
-    from systems.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_present
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.combat.constants + world.npc_defs.hostile, both of which are
+    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
     # themselves leaf), so a module-level import is also safe, but matching the
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/

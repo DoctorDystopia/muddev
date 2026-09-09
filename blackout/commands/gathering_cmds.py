@@ -10,14 +10,14 @@ from evennia import CmdSet
 from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GATHERING
-from systems.progression.skills.registry import SKILL_REGISTRY
-from systems.statefeed import constants as feed_const
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is gathering, so the routing tag is
 # bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_GATHERING = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_GATHERING}
 

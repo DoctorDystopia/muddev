@@ -24,7 +24,7 @@ several more options for customizing the Guest account system.
 
 from evennia.accounts.accounts import DefaultAccount, DefaultGuest
 
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 from world.respawn import get_respawn_room
 
 
@@ -171,7 +171,7 @@ class Account(DefaultAccount):
             time it returns, and there is nothing left to amend.
 
         Notes/References:
-            The tag vocabulary is systems/statefeed/constants.py; see
+            The tag vocabulary is systems/interface/statefeed/constants.py; see
             MESSAGE_TYPES. This is one of only two places Blackout tags text
             the ENGINE emits -- `say`, `whisper`, `pose`, `look` and `help`
             already carry Evennia's own tags and need no override.

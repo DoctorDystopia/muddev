@@ -9,14 +9,14 @@ from evennia.objects.objects import DefaultRoom
 from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
 
-from systems.quests import constants as quest_constants
-from systems.quests.hooks import notify_quests
-from systems.spawning import teardown
-from systems.statefeed import commerce
-from systems.statefeed import constants as feed_const
-from systems.statefeed import events as feed
-from systems.statefeed import neighbourhood
-from systems.statefeed import subscriptions
+from systems.gameplay.quests import constants as quest_constants
+from systems.gameplay.quests.hooks import notify_quests
+from systems.gameplay.spawning import teardown
+from systems.interface.statefeed import commerce
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed
+from systems.interface.statefeed import neighbourhood
+from systems.interface.statefeed import subscriptions
 from .objects import ObjectParent
 from .spawners import SPAWNER_REGISTRY, load_all_spawners
 
@@ -78,7 +78,7 @@ class GridTile(ObjectParent, XYZRoom):
             up the chain and a cache detail must not displace it.
 
         Notes/References:
-            systems/statefeed/neighbourhood.py owns what is cached and why.
+            systems/interface/statefeed/neighbourhood.py owns what is cached and why.
 
         Author: Nick Hobar
         Creation date: 09/03/2026
@@ -125,7 +125,7 @@ class GridTile(ObjectParent, XYZRoom):
             cosmetic highlight must never be able to break `look`.
 
         Notes/References:
-            systems/combat/auras/map_overlay.py owns the tinting itself, and
+            systems/gameplay/combat/auras/map_overlay.py owns the tinting itself, and
             documents the xygrid coordinate maths it depends on.
 
         Author: Nick Hobar
@@ -241,7 +241,7 @@ class GridTile(ObjectParent, XYZRoom):
         Notes/References:
             The attribute is an override rather than a capability, so it is
             per-character and not something the client announces. See
-            ASCII_MAP_ATTR in systems/statefeed/constants.py.
+            ASCII_MAP_ATTR in systems/interface/statefeed/constants.py.
 
         Author: Nick Hobar
         Creation date: 08/28/2026
@@ -270,7 +270,7 @@ class GridTile(ObjectParent, XYZRoom):
         Mirrors the contrib's own option resolution: an explicit kwarg wins,
         then the map's own options, then the class default.
         """
-        from systems.combat.auras.map_overlay import build_tinted_map
+        from systems.gameplay.combat.auras.map_overlay import build_tinted_map
 
         xyz = self.xyz
         xymap = self.xyzgrid.get_map(xyz[2])
@@ -499,7 +499,7 @@ class GridTile(ObjectParent, XYZRoom):
 
         Methodology:
             Ask the parent first, then hand the room to
-            systems.spawning.teardown, which destroys the NPCs, nodes,
+            systems.gameplay.spawning.teardown, which destroys the NPCs, nodes,
             facilities and floor litter depth-first and leaves player
             characters and exits alone. Evennia's own clear_exits and
             clear_contents then run on what is left.
@@ -534,7 +534,7 @@ class GridTile(ObjectParent, XYZRoom):
         # common to every way a tile dies -- the manifest purge,
         # XYZGrid.remove_map, and the contrib deleting a tile that fell off the
         # map -- which is exactly the property the invalidator needs. See
-        # systems/statefeed/neighbourhood.py.
+        # systems/interface/statefeed/neighbourhood.py.
         neighbourhood.invalidate()
 
         return True

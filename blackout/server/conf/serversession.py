@@ -25,7 +25,7 @@ settings file:
 from evennia.server.serversession import ServerSession as BaseServerSession
 from evennia import EVENNIA_SERVER_SERVICE
 
-from systems.statefeed import resync, subscriptions
+from systems.interface.statefeed import resync, subscriptions
 
 
 class ServerSession(BaseServerSession):

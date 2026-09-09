@@ -17,8 +17,8 @@ from evennia.utils.test_resources import EvenniaTest
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 from systems.devtools import actions as dev_actions
 from systems.devtools import constants as dev_constants
-from systems.progression.skills import constants as skill_constants
-from systems.progression.skills.registry import SKILL_REGISTRY
+from systems.gameplay.progression.skills import constants as skill_constants
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from world.item_database import ITEM_DB
 from world.maps.manifest import load_entries, zcoords_of
 
@@ -76,7 +76,7 @@ class GodModeTests(EvenniaTest):
         dev_actions.set_godmode(self.char2, self.char1, True)
         self.char1.at_damage(5, attacker=self.char2)
 
-        from systems.ai.constants import LAST_ATTACKER_ID_ATTR
+        from systems.gameplay.ai.constants import LAST_ATTACKER_ID_ATTR
 
         recorded = getattr(self.char1.ndb, LAST_ATTACKER_ID_ATTR, None)
 

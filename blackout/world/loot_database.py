@@ -10,7 +10,7 @@ Description: LootEntry / LootTableDef dataclasses and the LOOT_DB registry,
              nothing, and imports no Evennia object layer. That is what makes
              the entire probability surface testable with a seeded
              random.Random and zero game objects. Turning those pairs into
-             real items is systems/loot/drops.py's job, because only the
+             real items is systems/gameplay/loot/drops.py's job, because only the
              delivery side needs to know whether an item stacks.
 
              Weights are raw integers rather than floats so an OSRS drop table
@@ -44,7 +44,7 @@ class LootEntry:
     item_key must be a key into ITEM_DB; nothing here validates that, because
     an unresolvable key must not be able to take the server down at import
     time. validate_loot_tables() is the loud check, run from the test suite,
-    and systems/loot/drops.py logs-and-skips at runtime -- the same
+    and systems/gameplay/loot/drops.py logs-and-skips at runtime -- the same
     fail-loud-in-tests / fail-soft-at-runtime split the combat_rules lists
     use (world/item_database.py, ItemDef.combat_rules).
 
@@ -145,7 +145,7 @@ class LootTableDef:
         Entry:
             rng - optional random.Random instance for deterministic tests. If
                   None, uses the module-level random, matching the injection
-                  pattern in systems/combat/combat_calc.py roll_damage.
+                  pattern in systems/gameplay/combat/combat_calc.py roll_damage.
 
         Exit/Returns:
             Returns a list of (item_key, quantity) tuples, possibly empty.
@@ -362,7 +362,7 @@ def validate_loot_tables() -> list:
         Collects rather than raises so one run names every problem instead of
         the first. This is the LOUD half of the fail-loud-in-tests /
         fail-soft-at-runtime split: world/tests/test_loot_database.py asserts
-        the returned list is empty, while systems/loot/drops.py logs and skips
+        the returned list is empty, while systems/gameplay/loot/drops.py logs and skips
         a bad key at kill time. Import-time validation was rejected because a
         single typo in a def module would then refuse to boot the server.
 

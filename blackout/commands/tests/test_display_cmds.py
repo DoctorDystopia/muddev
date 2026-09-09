@@ -15,7 +15,7 @@ Description: Cases for `automap`.
 from evennia.utils.test_resources import EvenniaCommandTest
 
 from commands import display_cmds
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 
 class AutomapTests(EvenniaCommandTest):

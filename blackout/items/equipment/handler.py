@@ -107,7 +107,7 @@ class EquipmentHandler:
         Tell any graphical client that this character's gear changed.
 
         Here rather than in the commands, because the EvMenu in
-        systems/menus/equipment_menu.py reaches equip() and unequip() without
+        systems/interface/menus/equipment_menu.py reaches equip() and unequip() without
         passing through a command at all -- so a command-side emit would leave
         the 3D inventory pane stale for anyone using the menu, which is the
         path most players use.
@@ -123,7 +123,7 @@ class EquipmentHandler:
         import time, and a module-scope import of the feed would couple the
         two systems' import order for no benefit.
         """
-        from systems.statefeed import events as feed
+        from systems.interface.statefeed import events as feed
 
         feed.emit_inventory(self.obj)
 
@@ -134,7 +134,7 @@ class EquipmentHandler:
 
         BlackoutCombatHandler snapshots weapon stats, active style, attack
         speed, and rule contributors into ndb once and only rebuilds them
-        when _refresh_weapon() runs (systems/combat/combat.py). That method
+        when _refresh_weapon() runs (systems/gameplay/combat/combat.py). That method
         is already called by the mid-combat 'wield' action and by
         (re)entering combat, but equip()/unequip()/remove() are a second,
         independent path onto the same slots -- so a mid-fight `equip 3`
@@ -232,9 +232,9 @@ class EquipmentHandler:
         Methodology:
             Plain per-key accumulation over self.all(). This handler carries
             no knowledge of what the keys mean (that vocabulary belongs to
-            systems/combat/constants.py) -- it only knows how to add two
+            systems/gameplay/combat/constants.py) -- it only knows how to add two
             equipped items' numbers together, which is what keeps this
-            module free of a systems/combat import.
+            module free of a systems/gameplay/combat import.
 
         Notes/References:
             This is the seam combat.combat_profile() reads to let armour and

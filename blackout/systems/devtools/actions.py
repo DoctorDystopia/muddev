@@ -21,20 +21,20 @@ from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
 
 from items.equipment.constants import MAX_INVENTORY_SLOTS
-from systems.progression.skills.registry import SKILL_REGISTRY
-from systems.quests.loader import GLOBAL_QUEST_REGISTRY
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 from world.maps.manifest import ManifestError, load_entries, zcoords_of
 
 from systems.devtools import constants as dev_constants
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is the server speaking as itself, so
 # the routing tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_SYSTEM = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_SYSTEM}
 
 

@@ -10,20 +10,20 @@ from commands.constants import HELP_CATEGORY_GENERAL
 from evennia.commands.cmdset import CmdSet
 from items.inventory.display import render_grid
 from items.inventory.handler import SLOTS_TOTAL, InventoryError
-from systems.statefeed import events as feed
-from systems.ui.colors import (
+from systems.interface.statefeed import events as feed
+from systems.interface.ui.colors import (
     ERROR_COLOR,
     RESET_COLOR,
     SUCCESS_COLOR,
     TITLE_COLOR,
 )
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about your inventory, so the
 # routing tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_INVENTORY = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
@@ -62,7 +62,7 @@ def parse_slot_number(text: str) -> int:
         uses for a name that matched nothing.
 
     Notes/References:
-        systems/statefeed/inventory.py performs the same +1 when it builds the
+        systems/interface/statefeed/inventory.py performs the same +1 when it builds the
         action commands the 3D pane sends, so what the pane sends and what a
         player types are the same string.
 
@@ -190,7 +190,7 @@ def split_item_and_count(args: str) -> tuple:
     Author: Nick Hobar
     Creation date: 08/14/2026
     """
-    from systems.menus.base_menu import QUANTITY_ALL_KEYWORD
+    from systems.interface.menus.base_menu import QUANTITY_ALL_KEYWORD
 
     parts = args.split()
     count = None

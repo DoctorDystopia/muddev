@@ -8,7 +8,7 @@ extends Control
 ## exists to avoid.
 
 ## Every name the SERVER owns, generated from
-## blackout/systems/statefeed/constants.py by systems/statefeed/clientexport.py.
+## blackout/systems/interface/statefeed/constants.py by systems/interface/statefeed/clientexport.py.
 ## Preloaded, not autoloaded -- the generated file declares no `extends Node`.
 ##
 ## `SUBSCRIBE_ALL` asks for everything. The server answers with the set it

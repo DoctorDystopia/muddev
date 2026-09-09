@@ -10,20 +10,20 @@ from evennia import CmdSet
 
 from commands.command import Command
 from commands.constants import HELP_CATEGORY_GENERAL
-from systems.quests.loader import GLOBAL_QUEST_REGISTRY
-from systems.ui.colors import (
+from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
+from systems.interface.ui.colors import (
     DIM_COLOR,
     RESET_COLOR,
     highlight as _hl,
     title as _title,
 )
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about a quest, so the routing tag
 # is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_QUEST = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_QUEST}
 
 

@@ -18,7 +18,7 @@ Description: The Moderator Egg typeclass, and the one command that opens it.
 from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_ADMIN
-from systems.menus.base_menu import start_blackout_menu
+from systems.interface.menus.base_menu import start_blackout_menu
 from typeclasses.items import BaseItem
 
 
@@ -42,7 +42,7 @@ EGG_CMD_SET_KEY = "moderator_egg_cmdset"
 # cmdset keeps object commands at one altitude.
 EGG_CMD_SET_PRIORITY = 10
 
-EGG_MENU_MODULE = "systems.menus.dev_egg_menu"
+EGG_MENU_MODULE = "systems.interface.menus.dev_egg_menu"
 
 EGG_DEFAULT_DESC = (
     "A smooth ovoid of dull ceramic, warm to the touch and heavier than it "

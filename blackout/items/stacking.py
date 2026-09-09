@@ -11,8 +11,8 @@ Three modules independently derived "same key + both stackable => mergeable"
 and "quantity += then delete()":
 
   * items/inventory/handler.py   -- _find_existing_stack / add_item
-  * systems/banking/handler.py   -- _find_existing_stack_in_bank / _split_stack
-  * systems/loot/drops.py        -- _merge_stackable_pairs
+  * systems/gameplay/banking/handler.py   -- _find_existing_stack_in_bank / _split_stack
+  * systems/gameplay/loot/drops.py        -- _merge_stackable_pairs
 
 They did not agree. Inventory compared keys case-SENSITIVELY
 (``existing.key == obj.key``) while banking compared them case-insensitively

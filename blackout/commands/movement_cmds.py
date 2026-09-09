@@ -15,7 +15,7 @@ Description: Movement command overrides.
 from evennia.commands.cmdset import CmdSet
 from evennia.contrib.grid.xyzgrid.commands import CmdGoto
 
-from systems.tick.constants import TICK_SECONDS
+from systems.core.tick.constants import TICK_SECONDS
 
 
 class BlackoutGotoCmd(CmdGoto):

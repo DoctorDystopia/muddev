@@ -4,7 +4,7 @@ Author: Nick Hobar
 Creation date: 08/23/2026
 Description: Write the generated client constant modules to disk.
 
-             A thin CLI over systems.statefeed.clientexport, which owns the
+             A thin CLI over systems.interface.statefeed.clientexport, which owns the
              rendering and is pure. Everything that touches the filesystem is
              here, and nothing here decides what a constant is.
 
@@ -17,7 +17,7 @@ Description: Write the generated client constant modules to disk.
              safe file does not change how the directory should be treated.
 
              Run it after changing any exported name in
-             systems/statefeed/constants.py:
+             systems/interface/statefeed/constants.py:
 
                  python scripts/export_client_constants.py
 
@@ -65,7 +65,7 @@ _NEWLINE = "\n"
 
 def _bootstrap_django():
     """
-    Purpose: Make `systems.statefeed` importable.
+    Purpose: Make `systems.interface.statefeed` importable.
 
     Entry:
         None.
@@ -204,7 +204,7 @@ def _export(check_only) -> int:
         Iterates clientexport.languages() rather than the path table, so the
         renderer stays the authority on what can be rendered.
     """
-    from systems.statefeed import clientexport
+    from systems.interface.statefeed import clientexport
 
     outputs = clientexport.output_paths()
     stale = []

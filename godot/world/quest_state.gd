@@ -5,7 +5,7 @@ extends RefCounted
 ## ## It knows no quest keys and must not learn any
 ##
 ## Every row comes from whatever the server sent. Adding a quest is one file
-## under `systems/quests/content/`, and a table of quest names here would be
+## under `systems/gameplay/quests/content/`, and a table of quest names here would be
 ## the place that goes stale first. So: iterate, never enumerate — the same
 ## contract [SummaryState] answers for panels.
 ##
@@ -25,7 +25,7 @@ extends RefCounted
 ## like. Converted here, at the point of use, exactly as [WorldState] and
 ## [CharState] do it.
 
-## Server-owned names, generated from blackout/systems/statefeed/constants.py.
+## Server-owned names, generated from blackout/systems/interface/statefeed/constants.py.
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Fired when the log lands, so a view redraws from one place.

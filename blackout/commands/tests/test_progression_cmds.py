@@ -19,7 +19,7 @@ Run from blackout/:
 from evennia.utils.test_resources import EvenniaCommandTest
 
 from commands import progression_cmds
-from systems.progression.skills.registry import SKILL_REGISTRY
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from typeclasses.characters import Character as BlackoutCharacter
 
 
@@ -54,7 +54,7 @@ class SkillsCommandTests(EvenniaCommandTest):
         tomorrow is covered and a skill that legitimately unlocks nothing does
         not fail this.
         """
-        from systems.progression.skills import detail as skill_detail
+        from systems.gameplay.progression.skills import detail as skill_detail
 
         for skill_key in SKILL_REGISTRY:
             sections = skill_detail.unlock_sections(skill_key)

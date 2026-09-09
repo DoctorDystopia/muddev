@@ -20,10 +20,10 @@ extends RefCounted
 ##
 ## **`levels` is an OPEN dictionary and is never mirrored into fields.** The
 ## server's summary design is that adding a band is one new file under
-## `systems/summary/panel_defs/`; a field per skill here would make it two, with
+## `systems/interface/summary/panel_defs/`; a field per skill here would make it two, with
 ## this the file nobody remembers to edit. Read it by iteration.
 
-## Server-owned names, generated from blackout/systems/statefeed/constants.py.
+## Server-owned names, generated from blackout/systems/interface/statefeed/constants.py.
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Fired when any of the three channels lands, so a HUD can redraw once rather

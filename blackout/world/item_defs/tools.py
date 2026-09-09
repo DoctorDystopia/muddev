@@ -5,9 +5,9 @@ Creation date: 06/17/2026
 Description: ItemDef entries for gathering and crafting tools.
 """
 
-import systems.combat.constants as combat_constants
-from systems.crafting.constants import TOOL_TAG_CATEGORY
-from systems.statefeed.constants import ITEM_FAMILY_WEAPON
+import systems.gameplay.combat.constants as combat_constants
+from systems.gameplay.crafting.constants import TOOL_TAG_CATEGORY
+from systems.interface.statefeed.constants import ITEM_FAMILY_WEAPON
 from world.item_database import ItemDef
 from items.equipment.constants import WieldLocation
 
@@ -72,7 +72,7 @@ ITEMS = {
     #
     # What makes it swing is NOT the weapon tag -- nothing in combat reads a
     # tag. `combat_styles` plus `attack_speed` on the equipped object are the
-    # whole of it (systems/combat/combat.py: _combat_style_source reads the
+    # whole of it (systems/gameplay/combat/combat.py: _combat_style_source reads the
     # wielded object's db fields and never asks what typeclass or tag it
     # carries). An axe with the tag and no styles would render as a weapon and
     # still hit for unarmed damage.

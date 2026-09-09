@@ -16,7 +16,7 @@ registry instead of only its own category's.
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaCommandTest
 
-from systems.crafting.registry import RECIPE_REGISTRY
+from systems.gameplay.crafting.registry import RECIPE_REGISTRY
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.crafting_facilities import CmdCraft
 from typeclasses.skill_facilities import AnvilFacility, FurnaceFacility

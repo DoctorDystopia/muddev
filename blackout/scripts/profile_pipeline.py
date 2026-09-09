@@ -4,7 +4,7 @@ Author: Nick Hobar
 Creation date: 09/03/2026
 Description: Run the end-to-end profiling harness and write its report.
 
-             A thin CLI over systems.profiling, which owns every measurement
+             A thin CLI over profiling, which owns every measurement
              and every judgement. Everything that parses an argument or writes
              to stdout is here, and nothing here decides what is slow.
 
@@ -14,7 +14,7 @@ Description: Run the end-to-end profiling harness and write its report.
              constantly; it is safe because the database it opens is a TEST
              database that Django creates for the run and destroys after it.
              The live development data is never connected to, never queried,
-             and never written. See systems/profiling/harness.py for why that
+             and never written. See profiling/harness.py for why that
              was made structural rather than left to care.
 
              It is still behind the `if __name__ == "__main__"` guard every
@@ -67,7 +67,7 @@ _EXIT_CRITICAL = 1
 
 def _bootstrap_django() -> None:
     """
-    Purpose: Make `systems.profiling` importable and Django usable.
+    Purpose: Make `profiling` importable and Django usable.
 
     Entry:
         No conditions.
@@ -163,7 +163,7 @@ def _print_listing() -> int:
     Author: Nick Hobar
     Creation date: 09/03/2026
     """
-    from systems.profiling import scenarios_for
+    from profiling import scenarios_for
 
     entries = scenarios_for()
 
@@ -200,7 +200,7 @@ def _print_report(measurements, show_profiles: bool) -> None:
     Author: Nick Hobar
     Creation date: 09/03/2026
     """
-    from systems.profiling import render_profile, render_table
+    from profiling import render_profile, render_table
 
     table = render_table(measurements)
 
@@ -246,9 +246,9 @@ def main(argv) -> int:
     if _LIST_FLAG in argv:
         return _print_listing()
 
-    from systems.profiling import constants as const
-    from systems.profiling import run, write_artifacts
-    from systems.profiling.report import worst_severity
+    from profiling import constants as const
+    from profiling import run, write_artifacts
+    from profiling.report import worst_severity
 
     layers = _values_after(argv, _LAYER_FLAG)
     only = _values_after(argv, _ONLY_FLAG)

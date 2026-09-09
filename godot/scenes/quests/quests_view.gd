@@ -4,7 +4,7 @@ extends Control
 ##
 ## Presentation only, and it names no quest. Every row comes from whatever
 ## `char_quests` contained, so a quest added under
-## `systems/quests/content/` appears here with no edit — the same contract
+## `systems/gameplay/quests/content/` appears here with no edit — the same contract
 ## [SummaryView] answers for panels, and for the same reason.
 ##
 ## ## It draws bars, which is why the channel is structured

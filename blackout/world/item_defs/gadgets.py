@@ -6,12 +6,12 @@ Description: Blackout gadget ItemDef entries — wieldable items whose combat
              behaviour comes from a rules definition rather than from stats.
 
 A gadget's `combat_rules` list names entries in
-systems/combat/rules/RULES_REGISTRY. Those definitions own the action; the
+systems/gameplay/combat/rules/RULES_REGISTRY. Those definitions own the action; the
 combat_stat_bonuses here exist only so the item resolves through the same
 profile path as a sword, not because the numbers do much.
 """
 
-import systems.combat.constants as combat_constants
+import systems.gameplay.combat.constants as combat_constants
 from items.equipment.constants import WieldLocation
 from world.item_database import ItemDef
 

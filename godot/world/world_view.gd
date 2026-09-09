@@ -21,7 +21,7 @@ extends Node3D
 ## paid for once.
 
 ## Every name the SERVER owns, generated from
-## blackout/systems/statefeed/constants.py by systems/statefeed/clientexport.py.
+## blackout/systems/interface/statefeed/constants.py by systems/interface/statefeed/clientexport.py.
 ##
 ## Preloaded rather than autoloaded: the generated file declares no `extends
 ## Node`, and a Godot autoload must. Do not retype a channel name here -- the
@@ -929,7 +929,7 @@ func _turn_avatar() -> void:
 ##
 ## The ring is built from `radius` on activate and torn down on deactivate,
 ## NOT from the pulses. That is the server's own instruction -- see the comment
-## beside emit_aura's activate call in systems/combat/auras/aura_handler.py --
+## beside emit_aura's activate call in systems/gameplay/combat/auras/aura_handler.py --
 ## and the reason is that a ring rebuilt per pulse would flicker on the pulse
 ## cadence.
 ##

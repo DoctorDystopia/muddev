@@ -20,8 +20,8 @@ from unittest import mock
 from evennia.utils.test_resources import EvenniaTest
 from evennia.utils.utils import class_from_module
 
-from systems.menus import dev_egg_menu
-from systems.progression.skills import constants as skill_constants
+from systems.interface.menus import dev_egg_menu
+from systems.gameplay.progression.skills import constants as skill_constants
 from typeclasses.dev_tools import CmdEgg, EggCmdSet, ModeratorEgg
 from typeclasses.items import BaseItem
 from world.item_database import ITEM_DB
@@ -326,7 +326,7 @@ class MenuWiringTests(EvenniaTest):
     def test_the_clear_confirmation_binds_the_shared_yes_key(self):
         """Bound rather than auto-numbered, so confirming a destruction is
         never the digit that meant something else on the previous screen."""
-        from systems.menus.constants import CONFIRM_YES_KEYS
+        from systems.interface.menus.constants import CONFIRM_YES_KEYS
 
         _text, options = dev_egg_menu.node_clear_confirm(self.char1)
         keys = [option.get("key") for option in options]

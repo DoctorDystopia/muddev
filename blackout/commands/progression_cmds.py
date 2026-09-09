@@ -10,16 +10,16 @@ Description: Custom commands for players to interact with the progression system
 from commands.command import Command
 from commands.constants import HELP_CATEGORY_ADMIN, HELP_CATEGORY_PROGRESSION
 from evennia import CmdSet
-from systems.menus.base_menu import start_blackout_menu
-from systems.progression.skills.registry import SKILL_REGISTRY
-from systems.ui.meters import build_xp_meter
-from systems.statefeed import constants as feed_const
+from systems.interface.menus.base_menu import start_blackout_menu
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from systems.interface.ui.meters import build_xp_meter
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is progression, so the routing tag is
 # bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_PROGRESSION = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_PROGRESSION}
 
@@ -44,7 +44,7 @@ class CmdSkills(Command):
     help_category = HELP_CATEGORY_PROGRESSION
 
 
-    SKILLS_MENU_PATH = "systems.menus.skills_menu"
+    SKILLS_MENU_PATH = "systems.interface.menus.skills_menu"
 
     OTHER_HEADER = "|c--- {name}'s Skills ---|n"
     NO_SKILLS_MSG = "{name} has not acquired any skills yet."
@@ -84,14 +84,14 @@ class CmdSkills(Command):
 
         Notes/References:
             The per-skill sheet is rendered by
-            systems/progression/skills/detail.py, which is also what the menu
+            systems/gameplay/progression/skills/detail.py, which is also what the menu
             node prints and what CHANNEL_CHAR_SKILLS ships as data.
 
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
-        from systems.progression.skills import detail as skill_detail
-        from systems.statefeed import events as feed
+        from systems.gameplay.progression.skills import detail as skill_detail
+        from systems.interface.statefeed import events as feed
 
         caller = self.caller
         clean_args = self.args.strip()
@@ -236,7 +236,7 @@ class CmdScore(Command):
         Author: Nick Hobar
         Creation date: 08/08/2026
         """
-        from systems.menus.summary_menu import start_summary_menu
+        from systems.interface.menus.summary_menu import start_summary_menu
 
         start_summary_menu(self.caller)
 
@@ -296,7 +296,7 @@ class CmdProfile(Command):
         Author: Nick Hobar
         Creation date: 08/08/2026
         """
-        from systems.summary.service import render_public_summary
+        from systems.interface.summary.service import render_public_summary
 
         caller = self.caller
         clean_args = self.args.strip()

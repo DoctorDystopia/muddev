@@ -10,13 +10,13 @@ crash the pickup announcement.
 from evennia import default_cmds
 from evennia.commands.cmdset import CmdSet
 from evennia.utils import utils
-from systems.statefeed import constants as feed_const
+from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about your inventory, so the
 # routing tag is bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
-# MESSAGE_TYPES in systems/statefeed/constants.py.
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_INVENTORY = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
@@ -110,7 +110,7 @@ class GetCmd(default_cmds.CmdGet):
                they cannot see without a matching text-channel message.
                See `_is_single_stacked_group`. A click in the 3D pane
                sends the bare name via `interact_command`
-               (systems/statefeed/serializers.py) and has no way to
+               (systems/interface/statefeed/serializers.py) and has no way to
                supply a suffix, so without this the pane's "get" affords
                nothing once a stack has more than one instance.
             2. The grouped display name is resolved from the still-live

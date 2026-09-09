@@ -7,11 +7,11 @@ Description: The one owner of every moderator-tool literal -- the attribute
              speaks, the bounds each action clamps to, and the message
              templates the egg's menu prints.
 
-             Imports systems/ui/colors.py and nothing else, so that actions.py
+             Imports systems/interface/ui/colors.py and nothing else, so that actions.py
              may import this module while this module can never import back.
 """
 
-from systems.ui.colors import (
+from systems.interface.ui.colors import (
     DIM_COLOR,
     ERROR_COLOR,
     HIGHLIGHT_COLOR,
@@ -358,7 +358,7 @@ MSG_QUEST_STEP_SET: str = (
 
 # ─── Inspect report ──────────────────────────────────────────────────────────
 
-# The dossier systems/summary/ already renders is the body of the report. What
+# The dossier systems/interface/summary/ already renders is the body of the report. What
 # follows it is the half a MODERATOR needs and a player does not: dbrefs to
 # paste into a `py` call, who the account really is, and the itemised bag
 # behind the dossier's "12 / 32".

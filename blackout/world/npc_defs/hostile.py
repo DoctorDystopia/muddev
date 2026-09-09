@@ -11,7 +11,7 @@ Description: Blackout hostile NPC NpcDef entries. Stats are faithful OSRS
               math path resolves both PC swings and NPC defenders.
 """
 
-import systems.combat.constants as combat_constants
+import systems.gameplay.combat.constants as combat_constants
 from world.npc_database import NpcDef
 
 
@@ -86,10 +86,10 @@ NPCS = {
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",
         # 30s timed respawn on the raider's spawn tile, driven by
-        # BlackoutRespawnManager (systems/spawning/respawn.py).
+        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
         respawn_seconds=20,
         # Drop table in world/loot_defs/hostile.py, resolved at death through
-        # db.npc_key -> NPC_DB -> LOOT_DB by systems/loot/drops.py.
+        # db.npc_key -> NPC_DB -> LOOT_DB by systems/gameplay/loot/drops.py.
         loot_table="mutant_raider_drops",
     ),
     "big_mutant": NpcDef(
@@ -116,7 +116,7 @@ NPCS = {
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",
         # 30s timed respawn on the big mutant's spawn tile, driven by
-        # BlackoutRespawnManager (systems/spawning/respawn.py).
+        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
         respawn_seconds=30,
         # Two main-table rolls plus the 1/128 Glass Cannon amulet; see
         # world/loot_defs/hostile.py.
@@ -147,7 +147,7 @@ NPCS = {
         combat_styles=_headbutt_crush_aggressive_combat_style(),
         default_combat_style="headbutt",
         # 30s timed respawn on the Floating eye's spawn tile, driven by
-        # BlackoutRespawnManager (systems/spawning/respawn.py).
+        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
         respawn_seconds=30,
         # Drop table in world/loot_defs/hostile.py.
         loot_table="floating_eye_drops",

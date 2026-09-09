@@ -35,7 +35,7 @@ signal closed(code: int, reason: String, requested: bool)
 ## line would lose everything Evennia's own commands say.
 signal text_received(bbcode: String, kwargs: Dictionary)
 ## One structured state-feed message. `channel` is the outputfunc name
-## (`room_info`, `blackout_map`, ...); see blackout/systems/statefeed/constants.py.
+## (`room_info`, `blackout_map`, ...); see blackout/systems/interface/statefeed/constants.py.
 signal channel_received(channel: String, payload: Dictionary)
 
 ## Where this build connects, decided by [ServerEndpoint]: an explicit
