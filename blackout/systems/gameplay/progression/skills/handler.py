@@ -7,7 +7,10 @@ Description: Dynamic handler wrapper that attaches to Character typeclasses.
 
 
 
+from collections.abc import Mapping
+
 from . import logic
+from . import recovery
 
 from .registry import SKILL_REGISTRY
 from .constants import DEFAULT_START_LEVEL, DEFAULT_START_XP
@@ -41,21 +44,54 @@ class SkillHandler:
             None
             
         Methodology:
-            Sets the internal object reference. Checks if the persistent 
-            skills attribute exists. If not, initializes it as an empty dictionary.
-            
+            Sets the internal object reference, then makes db.skills a dict
+            or explains why it could not be.
+
+            The test is `Mapping`, NOT `dict`, and that distinction is the
+            entire bug. Evennia does not hand back a plain dict: a saved
+            Attribute comes back as `dbserialize._SaverDict`, which subclasses
+            `_SaverMutable` and `MutableMapping` and is NOT a `dict` subclass.
+            An `isinstance(attr, dict)` guard is therefore False for every
+            HEALTHY character, and the reset it gates wipes the progress of
+            whoever logs in next. That is what destroyed two characters on
+            09/08/2026 -- the two who happened to log in after the check
+            shipped -- and it would have taken every other character on their
+            next login.
+
+            A non-mapping db.skills is NOT assumed to be garbage either.
+            Evennia's
+            PickledObjectField.from_db_value swallows an unpickling failure
+            and hands back the RAW BASE64 STRING, so the single most likely
+            reason this attribute is not a dict is that it is a perfectly
+            good pickle naming a module that has since moved -- the player's
+            levels are still inside it. recovery.repair_skills_attribute is
+            given first refusal, and only a value it cannot read at all is
+            reset, after that value has been quarantined.
+
+            The ordering is the fix for a 09/08/2026 data-loss incident: an
+            earlier version of this guard reset the attribute the moment
+            `isinstance(attr, dict)` came back False, which destroyed two
+            characters' fully-recoverable progress. Resetting is the LAST
+            resort here, never the first.
+
         Notes/References:
-            None
-            
+            systems/gameplay/progression/skills/recovery.py carries the
+            incident write-up and the module-alias table it repairs with.
+
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
         self.obj = obj
-        
+
         skills_attr = self.obj.db.skills
-        has_skills = bool(skills_attr)
-        
-        if not has_skills:
+        has_valid_skills = isinstance(skills_attr, Mapping)
+
+        if has_valid_skills:
+            return
+
+        was_repaired = recovery.repair_skills_attribute(self.obj)
+
+        if not was_repaired:
             self.obj.db.skills = {}
 
 
@@ -65,8 +101,11 @@ class SkillHandler:
         Inject all registered skills at level 0/xp 0 if not already tracked.
         """
 
-        if not self.obj.db.skills:
-            self.obj.db.skills = {}
+        if not isinstance(self.obj.db.skills, Mapping):
+            was_repaired = recovery.repair_skills_attribute(self.obj)
+
+            if not was_repaired:
+                self.obj.db.skills = {}
         
         for skill_key in SKILL_REGISTRY:
             if skill_key not in self.obj.db.skills:

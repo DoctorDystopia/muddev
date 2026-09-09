@@ -2,11 +2,16 @@
 evenv/
 .venv/
 .vscode/
+.claude/
 
 # Database and Cache
 *.db3
 __pycache__/
 *.pyc
+
+# Backups written by scripts/backup_db.py -- machine-specific snapshots of
+# the live database, never a deliverable.
+blackout/server/backups/
 
 # Logs
 **/logs/*

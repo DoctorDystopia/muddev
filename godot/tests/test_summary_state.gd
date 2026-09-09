@@ -15,6 +15,8 @@ func _ready() -> void:
 	_values_render_for_a_human()
 	_floats_that_are_whole_print_as_ints()
 	_nested_values_render_one_level()
+	_nested_dict_fields_become_a_group_not_a_row()
+	_negative_numbers_are_flagged_for_the_view()
 	_a_malformed_payload_is_survived()
 	_an_unknown_channel_is_refused()
 
@@ -108,6 +110,67 @@ func _nested_values_render_one_level() -> void:
 	_expect(SummaryState.render_value({"a_key": 3.0}) == "A Key 3",
 		"a nested dict renders inline")
 	_expect(SummaryState.render_value(null).is_empty(), "null renders as nothing")
+
+
+func _nested_dict_fields_become_a_group_not_a_row() -> void:
+	# A nested dict field is exactly what Combat Readiness's "bonuses" is --
+	# it must not show up as a crammed one-line row, and rows_for must no
+	# longer report it at all now that groups_for exists for it.
+	var summary := SummaryState.new()
+	summary.ingest(_Const.CH_CHAR_SUMMARY, {"panels": {
+		"readiness": {
+			"weapon": "scrap shortsword",
+			"bonuses": {"stab_attack_bonus": 6.0, "crush_attack_bonus": -2.0},
+		},
+	}})
+
+	var rows := summary.rows_for("readiness")
+	_expect(rows.size() == 1, "the nested field is excluded from rows_for")
+	_expect(rows[0][0] == "Weapon", "leaving only the scalar field")
+
+	var groups := summary.groups_for("readiness")
+	_expect(groups.size() == 1, "the nested field becomes one group")
+	_expect(groups[0]["label"] == "Bonuses", "labelled by its own field name")
+
+	var group_rows: Array = groups[0]["rows"]
+	_expect(group_rows.size() == 2, "one row per sub-key")
+
+	var seen: Dictionary = {}
+	for row: Array in group_rows:
+		seen[str(row[0])] = row
+
+	_expect(seen.get("Stab Attack Bonus")[1] == "6", "each sub-key keeps its own row")
+	_expect(seen.get("Crush Attack Bonus")[1] == "-2", "including a negative one")
+
+
+func _negative_numbers_are_flagged_for_the_view() -> void:
+	# The view colours a negative bonus rather than leaving a "-2" to get lost
+	# among six positive numbers -- that needs the flag to survive both
+	# rows_for and groups_for.
+	var summary := SummaryState.new()
+	summary.ingest(_Const.CH_CHAR_SUMMARY, {"panels": {
+		"readiness": {
+			"attack_bonus": -1.0,
+			"strength_bonus": 7.0,
+			"bonuses": {"crush_attack_bonus": -2.0, "stab_attack_bonus": 6.0},
+		},
+	}})
+
+	var flagged: Dictionary = {}
+	for row: Array in summary.rows_for("readiness"):
+		flagged[str(row[0])] = row[2]
+
+	_expect(flagged.get("Attack Bonus") == true, "a negative scalar is flagged")
+	_expect(flagged.get("Strength Bonus") == false, "a positive one is not")
+
+	var group_flagged: Dictionary = {}
+	for row: Array in summary.groups_for("readiness")[0]["rows"]:
+		group_flagged[str(row[0])] = row[2]
+
+	_expect(group_flagged.get("Crush Attack Bonus") == true,
+		"a negative value inside a group is flagged too")
+	_expect(group_flagged.get("Stab Attack Bonus") == false,
+		"and a positive one inside the same group is not")
 
 
 func _a_malformed_payload_is_survived() -> void:

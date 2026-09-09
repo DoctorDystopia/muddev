@@ -329,6 +329,13 @@ def set_combat_style(weapon, style_key: str, combatant=None) -> bool:
     If `combatant` is mid-fight, refreshes its cached active_weapon_data the
     same way ActionWield.resolve does after a weapon swap -- otherwise the
     new style would not take effect until the next wield or combat entry.
+
+    Also republishes `combatant`'s dossier: the Combat Readiness band shows
+    the active style and the attack/strength bonus it selects, and until this
+    call was added a style switch through combat_options_menu left that band
+    showing the OLD style until the player happened to run `score`. Sent
+    whether or not combatant is mid-fight -- the readiness band is read
+    outside combat too.
     """
     styles = _stored_combat_styles(weapon)
     if style_key not in styles:
@@ -338,6 +345,9 @@ def set_combat_style(weapon, style_key: str, combatant=None) -> bool:
 
     if combatant is not None and combatant.combat is not None:
         combatant.combat._refresh_weapon()
+
+    if combatant is not None:
+        feed.emit_summary(combatant)
 
     return True
 

@@ -60,7 +60,10 @@ func panel_keys() -> Array:
 	return panels.keys()
 
 
-## One panel's rows as [[label, value], ...], ready to draw.
+## One panel's SCALAR rows as [[label, value, is_negative], ...], ready to draw
+## in the panel's form grid. A field whose value is itself a dictionary is
+## left out — see [method groups_for], which is where those go instead, boxed
+## rather than crammed onto one line.
 ##
 ## Values are rendered to display strings HERE rather than in the view, so the
 ## view stays a layout concern and the rendering has one place and one test.
@@ -71,9 +74,60 @@ func rows_for(panel_key: String) -> Array:
 	var rows: Array = []
 
 	for field: Variant in data:
-		rows.append([humanise(str(field)), render_value(data[field])])
+		var value: Variant = data[field]
+
+		if typeof(value) == TYPE_DICTIONARY:
+			continue
+
+		rows.append([humanise(str(field)), render_value(value), _is_negative(value)])
 
 	return rows
+
+
+## One panel's nested-dictionary fields, each as its own labelled group of
+## [[label, value, is_negative], ...] rows.
+##
+## [method render_value] would fold a whole dict onto one line -- fine for a
+## text screen, but "Stab Attack Bonus 6  Slash Attack Bonus 4  Crush Attack
+## Bonus -2  ..." on a graphical row is a wall of text, not a readable value.
+## Giving every sub-key its own row instead needs no knowledge of what the
+## keys ARE: a sub-key is already a self-describing name (a combat tunable, a
+## resistance), so this stays exactly as generic as [method rows_for] is —
+## any panel field the server ever sends as a nested dict gets this
+## treatment, with no edit here.
+##
+## Groups are handed to the view SEPARATELY from the scalar rows and drawn
+## after them, regardless of where the field fell among its scalar siblings —
+## see [SummaryView._add_panel]. A panel mixing both is real (Combat Readiness
+## does today), and clustering every boxed group at the end of its panel reads
+## better than breaking the scalar grid apart around it.
+func groups_for(panel_key: String) -> Array:
+	var data: Dictionary = panels.get(panel_key, {})
+	var groups: Array = []
+
+	for field: Variant in data:
+		var value: Variant = data[field]
+
+		if typeof(value) != TYPE_DICTIONARY:
+			continue
+
+		var rows: Array = []
+
+		for key: Variant in value:
+			var sub_value: Variant = value[key]
+			rows.append([humanise(str(key)), render_value(sub_value), _is_negative(sub_value)])
+
+		groups.append({"label": humanise(str(field)), "rows": rows})
+
+	return groups
+
+
+## True for a value that will read as a negative number — a combat penalty
+## worth a player's eye going to first. Only a genuine number counts: a string
+## that happens to start with "-" is not one. Every number in a parsed payload
+## is a float, matching [method render_value]'s own assumption.
+static func _is_negative(value: Variant) -> bool:
+	return typeof(value) == TYPE_FLOAT and value < 0.0
 
 
 ## Turn a snake_case field name into something readable.

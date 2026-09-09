@@ -1017,6 +1017,8 @@ evennia reload
 | `scripts/map_sync.py` | Reconciles the grid with `map_manifest.json`: removes unlisted maps, purges and re-registers listed ones | `../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run]` (from `blackout/`) |
 | `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → sync → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1 [-DryRun]` |
 | `scripts/clean_and_reload_all_maps.sh` | Same rebuild from Git Bash | `./scripts/clean_and_reload_all_maps.sh [--dry-run]` |
+| `scripts/backup_db.py` | Snapshots the live sqlite3 database into `server/backups/` (gzip, timestamped), pruning old backups beyond `--keep` | `../evenv/Scripts/python.exe scripts/backup_db.py [--keep N] [--dest DIR]` (from `blackout/`) |
+| `scripts/backup_db.ps1` / `.sh` | Argument-light wrappers around `backup_db.py`, meant for Task Scheduler / cron | `.\scripts\backup_db.ps1 [-Keep N] [-Dest DIR]` |
 
 ---
 

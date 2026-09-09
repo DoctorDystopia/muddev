@@ -119,6 +119,15 @@ class EquipmentHandler:
         a half-applied move. The character's move hooks publish instead, after
         the move has completed.
 
+        Also republishes the dossier, not only the inventory pane: the
+        Character tab's Combat Readiness band (weapon, attack/defence
+        bonuses) and its Holdings counts both read off equipment.slots, and
+        until this call was added here they went stale the moment a player
+        equipped or unequipped anything without also running `score` --
+        emit_summary was reachable only from resync and the score menu.
+        emit_summary already gates on subscriber count itself, so this costs
+        nothing on a telnet-only connection.
+
         Imported inside the method. This package is reached from typeclass
         import time, and a module-scope import of the feed would couple the
         two systems' import order for no benefit.
@@ -126,6 +135,7 @@ class EquipmentHandler:
         from systems.interface.statefeed import events as feed
 
         feed.emit_inventory(self.obj)
+        feed.emit_summary(self.obj)
 
 
     def _refresh_combat(self):
