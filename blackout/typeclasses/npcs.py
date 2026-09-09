@@ -73,13 +73,53 @@ LEGACY_SHOPKEEP_CLEANUP_SCRIPTS = (
 
 
 
+def _dialogue_module_for(npc: object) -> object:
+    """
+    Purpose: Report which dialogue module an NPC speaks from.
+
+    Entry:
+        npc is the object CmdTalk is attached to.
+
+    Exit/Returns:
+        Returns a python path string, or None for an NPC with nothing to say.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The typeclass's own declaration wins over anything persisted, so a
+        module that has MOVED is corrected for every NPC already in the
+        database the moment the class attribute is edited. db.menu_module is
+        the fallback, for an NPC built by a script or a prototype with no
+        typeclass of its own to declare on.
+
+    Notes/References:
+        The order is the whole point. Reading the row first would let a
+        09/08/2026 shopkeep's stale `systems.menus....` path keep shadowing
+        the corrected class attribute forever, which is the bug this resolves.
+
+    Author: Nick Hobar
+    Creation date: 09/08/2026
+    """
+    declared = getattr(npc, "dialogue_module", None)
+
+    if declared:
+        return declared
+
+    persisted = npc.attributes.get("menu_module", default=None)
+
+    return persisted
+
+
+
 class CmdTalk(Command):
     """
     Purpose: Initiates a menu-driven conversation with an NPC.
 
     Entry:
         self.caller is a valid Evennia Character object
-        self.obj is the NPC with a db.menu_module path
+        self.obj is the NPC naming a dialogue module -- see
+        _dialogue_module_for
 
     Exit/Returns:
         No conditions. Launches an EvMenu on the caller.
@@ -125,7 +165,7 @@ class CmdTalk(Command):
             None
 
         Methodology:
-            Retrieves the menu module path from the NPC's db attribute.
+            Asks _dialogue_module_for which module this NPC speaks from.
             Passes npc=self.obj as a kwarg for dialogue node access.
 
         Notes/References:
@@ -136,7 +176,7 @@ class CmdTalk(Command):
         """
         caller = self.caller
         npc = self.obj
-        menu_module_path = npc.db.menu_module
+        menu_module_path = _dialogue_module_for(npc)
 
         menu_module_is_valid = bool(menu_module_path)
 
@@ -223,9 +263,10 @@ class TalkativeNPC(ObjectParent, DefaultObject):
         None
 
     Methodology:
-        At creation, adds the TalkCmdSet persistently.
-        Expects db.menu_module to be set (string path to
-        a dialogue module containing EvMenu node functions).
+        At creation, adds the TalkCmdSet persistently. A subclass names the
+        dialogue module it speaks from by declaring `dialogue_module`; a
+        one-off NPC with no typeclass of its own may set db.menu_module
+        instead.
 
     Notes/References:
         None
@@ -233,6 +274,20 @@ class TalkativeNPC(ObjectParent, DefaultObject):
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
+
+    # The dialogue module this NPC speaks from -- a python path to a module of
+    # EvMenu node functions. Declared on the CLASS, never written to db, for
+    # the reason CLAUDE.md gives about typeclass paths: an import path in a
+    # database row is one no rename, grep or reorganization can reach.
+    #
+    # It was a db attribute until 09/08/2026, stamped once at creation. The
+    # repo-wide directory reorganization moved every menu under
+    # systems/interface/, the constants below were updated with it, and every
+    # shopkeep already standing on the grid kept its `systems.menus....` row --
+    # so `talk` handed EvMenu a path that no longer imported and tracebacked at
+    # the player. A class attribute is read live and needs no migration, the
+    # same route `asset_kind` and `commerce_role` take below.
+    dialogue_module = None
 
     # How a graphical client draws this and what it may send to use it. Read
     # by systems/interface/statefeed/serializers.py through getattr.
@@ -442,6 +497,8 @@ class ShopkeepNPC(TalkativeNPC):
 
     asset_key = "shopkeeper"
 
+    dialogue_module = SHOPKEEP_DIALOGUE_MODULE
+
     # What standing near this NPC lets you do with what you are carrying. Read
     # by systems/interface/statefeed/commerce.py through getattr, the same route
     # `asset_kind` and `interact_verb` above take -- so every shopkeeper
@@ -452,7 +509,6 @@ class ShopkeepNPC(TalkativeNPC):
     def at_object_creation(self) -> None:
         super().at_object_creation()
         self.cmdset.add(ShopkeepCmdSet, persistent=True)
-        self.db.menu_module = SHOPKEEP_DIALOGUE_MODULE
         self.db.shopdef_key = "oasis_shop"
         self.db.desc = "A shopkeeper attending a stall of salvaged goods."
         self.db.max_held_items = SHOPKEEP_MAX_HELD_ITEMS
@@ -581,13 +637,14 @@ class LoneAndroidNPC(TalkativeNPC):
 
     asset_key = "lone_android"
 
+    dialogue_module = LONE_ANDROID_DIALOGUE_MODULE
+
 
     def at_object_creation(self) -> None:
-        """Point the NPC at its dialogue module and describe it."""
+        """Describe the NPC. Its dialogue module is the class attribute."""
         parent_class = super()
         parent_class.at_object_creation()
 
-        self.db.menu_module = LONE_ANDROID_DIALOGUE_MODULE
         self.db.desc = LONE_ANDROID_DESC
 
 
@@ -605,7 +662,6 @@ def spawn_lone_android(room):
 
     Module Globals:
         LONE_ANDROID_KEY, LONE_ANDROID_DESC read.
-        LONE_ANDROID_DIALOGUE_MODULE read.
 
     Methodology:
         world/maps/oasis.py has carried a "Lone Android" tile at (2, 0) since
@@ -614,10 +670,12 @@ def spawn_lone_android(room):
         quest giver did not exist. npc_oasis_guide.py was unreachable and the
         opening quest could not be started by any means.
 
-        Stamps the description and dialogue module unconditionally, matching
-        spawn_shopkeep: spawn_once returns the pre-existing NPC on a map
-        rebuild, and re-applying keeps an already-placed android in step with
-        edits here.
+        Stamps the description unconditionally, matching spawn_shopkeep:
+        spawn_once returns the pre-existing NPC on a map rebuild, and
+        re-applying keeps an already-placed android in step with edits here.
+        The dialogue module needs no such stamp -- it is a class attribute,
+        read live, which is why it survived the 09/08/2026 reorganization
+        while the shopkeep's persisted copy did not.
 
     Notes/References:
         Maps are rebuilt with scripts/clean_and_reload_all_maps.ps1.
@@ -632,6 +690,5 @@ def spawn_lone_android(room):
     )
 
     android.db.desc = LONE_ANDROID_DESC
-    android.db.menu_module = LONE_ANDROID_DIALOGUE_MODULE
 
     return android

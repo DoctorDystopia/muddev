@@ -70,6 +70,12 @@ QUANTITY_ALL_KEYWORD = "all"
 # than silently clamped -- buying 1 of something after typing 0 is surprising.
 MIN_QUANTITY = 1
 
+# What a player is told when the menu they opened names a module that does not
+# import. EvMenu's own answer is an untrapped AttributeError on None, printed
+# at whoever typed the verb, because _parse_menudata reads __dict__ off
+# mod_import's None without checking -- so the guard has to sit on this side.
+MENU_UNAVAILABLE_MSG = "That is not available right now."
+
 
 
 def _footer_hint(key: str, label: str) -> str:
@@ -239,12 +245,53 @@ def _module_attribute(menudata: object, name: str, default: object = None) -> ob
     if isinstance(menudata, dict):
         return default
 
-    module = mod_import(menudata) if isinstance(menudata, str) else menudata
+    module = _resolve_menudata(menudata)
 
     if module is None:
         return default
 
-    return getattr(module, name, default)
+    declared = getattr(module, name, default)
+
+    return declared
+
+
+def _resolve_menudata(menudata: object) -> object:
+    """
+    Purpose: Turn whatever a launcher passed as menudata into the module or
+             dict EvMenu will actually read, or None if there is no such
+             module.
+
+    Entry:
+        menudata is a python path string, an already-imported module, or a
+        dict of nodes.
+
+    Exit/Returns:
+        Returns the dict unchanged, the module the path names, or None when a
+        string path names nothing importable.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        One call to mod_import, which is idempotent on a module object and
+        returns None rather than raising on a path that does not resolve.
+        importlib caches, so resolving here and handing the module onward
+        does not load anything twice.
+
+    Notes/References:
+        This is the one place menudata is resolved, so the guard in
+        start_blackout_menu and the attribute reads above cannot disagree
+        about whether a given path names a module.
+
+    Author: Nick Hobar
+    Creation date: 09/08/2026
+    """
+    if isinstance(menudata, dict):
+        return menudata
+
+    module = mod_import(menudata)
+
+    return module
 
 
 def _module_closing_text(menudata: object) -> object:
@@ -612,13 +659,17 @@ def start_blackout_menu(caller: object,
         **kwargs are passed to the EvMenu init
 
     Exit/Returns:
-        Returns the BlackoutEvMenu instance.
+        Returns the BlackoutEvMenu instance, or None when menudata names no
+        importable module. The caller is told and the path is logged.
 
     Module Globals:
-        None
+        MENU_UNAVAILABLE_MSG read.
 
     Methodology:
-        Wraps the BlackoutEvMenu constructor with sensible defaults.
+        Resolve the path once, refuse to open a menu with nothing behind it,
+        then wrap the BlackoutEvMenu constructor with sensible defaults. The
+        resolved module rather than the path is handed onward, so the import
+        cannot succeed here and fail inside EvMenu.
 
     Notes/References:
         EVERY menu in the game is launched through here. Constructing a bare
@@ -626,10 +677,34 @@ def start_blackout_menu(caller: object,
         key footer and the closing line -- which is how six menus came to have
         six different words for "quit".
 
+        The guard is here rather than at each launcher because EvMenu's
+        failure mode is an untrapped AttributeError printed at the player:
+        _parse_menudata reads __dict__ off mod_import's None. Most launchers
+        pass a path written a few lines above, where a rename is caught by
+        grep; typeclasses/npcs.py passes one out of a DATABASE ROW, which no
+        rename can reach -- which is how a shopkeep placed before the
+        09/08/2026 directory reorganization came to traceback on `talk`.
+
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
-    menu_instance = BlackoutEvMenu(caller, menudata, startnode=startnode, **kwargs)
+    resolved_menudata = _resolve_menudata(menudata)
+
+    if resolved_menudata is None:
+        logger.log_err(
+            f"start_blackout_menu: {menudata!r} names no importable module "
+            f"(opened by {caller})."
+        )
+        caller.msg((MENU_UNAVAILABLE_MSG, _MSG_DIALOGUE))
+
+        return None
+
+    menu_instance = BlackoutEvMenu(
+        caller,
+        resolved_menudata,
+        startnode=startnode,
+        **kwargs,
+    )
 
     return menu_instance
 

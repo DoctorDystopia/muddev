@@ -120,12 +120,14 @@ class LoneAndroidSpawnerTests(EvenniaTest):
         from typeclasses.npcs import (
             LONE_ANDROID_DIALOGUE_MODULE,
             LONE_ANDROID_KEY,
+            _dialogue_module_for,
         )
 
         android = SPAWNER_REGISTRY[LONE_ANDROID_KEY](self.room1)
+        speaks_from = _dialogue_module_for(android)
 
         self.assertIsNotNone(android)
-        self.assertEqual(android.db.menu_module, LONE_ANDROID_DIALOGUE_MODULE)
+        self.assertEqual(speaks_from, LONE_ANDROID_DIALOGUE_MODULE)
         self.assertIn(android, self.room1.contents)
 
 

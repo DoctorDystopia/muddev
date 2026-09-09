@@ -253,3 +253,30 @@ class TestClosingText(_LiveMenuTest):
         menu.close_menu()
 
         self.assertIsNone(self.char1.ndb._evmenu)
+
+
+class TestUnresolvableMenuPath(_LiveMenuTest):
+    """A path naming no module is refused, not tracebacked at the player.
+
+    EvMenu's own answer is an AttributeError on None: _parse_menudata reads
+    __dict__ off whatever mod_import returned without checking. That is what a
+    shopkeep carrying a pre-09/08/2026 dialogue path printed at anyone who
+    typed `talk`, so the guard belongs on this side of the constructor.
+    """
+
+    MISSING_PATH = "systems.interface.menus.no_such_menu"
+
+    def test_no_menu_is_opened(self):
+        menu = self._open(self.MISSING_PATH)
+
+        self.assertIsNone(menu)
+        self.assertIsNone(self.char1.ndb._evmenu)
+
+    def test_the_caller_is_told(self):
+        self.char1.msg = mock.MagicMock()
+
+        self._open(self.MISSING_PATH)
+
+        spoken = str(self.char1.msg.mock_calls)
+
+        self.assertIn(base_menu.MENU_UNAVAILABLE_MSG, spoken)
