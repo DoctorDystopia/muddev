@@ -712,12 +712,25 @@ ITEM_FAMILY_GENERIC: str = "generic"
 # first. A slot index is exactly what the pane has.
 INVENTORY_ACTION_EQUIP: tuple = ("Equip", "equip {slot}")
 INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {slot}")
-INVENTORY_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
+
+# Inspect names a SLOT for exactly the reason Drop does, and it was the last
+# action that did not. `look` is the engine's command and its argument is a
+# thing in the ROOM, so it has no slot form to reach for -- three cured chunks
+# answered a right-click with Evennia's own "More than one match" list, and
+# the two forms it offered to narrow with ("chunk-1", "chunk-2") are search
+# ordinals that name no row the pane drew. commands/equipment_cmds.CmdInspect
+# is the slot-addressed verb that fixed it; it renders `look`'s own paragraph,
+# through at_look, under `look`'s own message type.
+INVENTORY_ACTION_INSPECT: tuple = ("Inspect", "inspect {slot}")
 
 # What an equipped item affords. Keyed by slot value rather than grid index,
 # because an equipped item has no grid position to name.
+#
+# That keying is not cosmetic on Inspect either: MAIN_HAND_FINGER and
+# OFF_HAND_FINGER mean two identical rings are a worn inventory the same way
+# eight metal chunks are a carried one.
 EQUIPMENT_ACTION_UNEQUIP: tuple = ("Unequip", "unequip {equip_slot}")
-EQUIPMENT_ACTION_INSPECT: tuple = ("Inspect", "look {name}")
+EQUIPMENT_ACTION_INSPECT: tuple = ("Inspect", "inspect {equip_slot}")
 
 
 # ─── Tile affordances ────────────────────────────────────────────────────────
@@ -842,10 +855,17 @@ INVENTORY_ACTION_DEPOSIT_ALL: tuple = ("Deposit All", "deposit {slot} all")
 # EQUIPMENT_ACTION_UNEQUIP is -- by the slot it occupies. `deposit` resolves
 # that through the equipment handler and unequips before banking.
 #
+# It said `{name}` until 09/11/2026, and the comment above was describing what
+# it ought to do rather than what it did. A name reaches perform_deposit's
+# GROUP path, which banks every copy of that name the character can bank --
+# so right-clicking the ring on one finger banked the ring on the other and
+# any in the bag besides. A worn slot holds one object, which is the one the
+# player clicked.
+#
 # There is no equipped SELL, and the asymmetry is deliberate. An unequipped
 # deposit is undone by `withdraw`; a sale at the miser factor is not, and worn
 # gear is exactly what a misclick most wants back.
-EQUIPMENT_ACTION_DEPOSIT: tuple = ("Deposit", "deposit {name}")
+EQUIPMENT_ACTION_DEPOSIT: tuple = ("Deposit", "deposit {equip_slot}")
 
 # The quantity prompt's spelling, for the one action the server cannot name
 # outright.

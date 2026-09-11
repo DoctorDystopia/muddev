@@ -20,10 +20,14 @@ Description: One skill, described in full -- as the text sheet a telnet player
              the same reads in the same order, so they cannot describe
              different skills.
 
-             THE FOUR SECTIONS ARE A TABLE, not four hand-rolled loops. Adding
-             a fifth skill-gated system means adding one row to
-             _UNLOCK_SECTIONS and writing its row builder -- the same shape the
-             menu already had, kept, because it is the part that was right.
+             THE SECTIONS ARE A TABLE, not a hand-rolled loop each. Adding a
+             skill-gated system means adding one row to _UNLOCK_SECTIONS and
+             writing its row builder -- the same shape the menu already had,
+             kept, because it is the part that was right. Curing's slots were
+             the first section added this way, and the only thing the addition
+             touched beyond its own builder was a statefeed test that had
+             hardcoded the count; SECTION_TITLES exists so the next one touches
+             nothing.
 
              EVERY OUTWARD IMPORT IS DEFERRED. This module reaches crafting,
              equipment, auras and gatherables, which is a heavier dependency
@@ -69,6 +73,7 @@ SECTION_RECIPES = "Unlocks"
 SECTION_GATHERABLES = "Gathering Unlocks"
 SECTION_EQUIPMENT = "Equipment Unlocks"
 SECTION_ABILITIES = "Ability Unlocks"
+SECTION_CAPACITY = "Capacity Unlocks"
 
 # Printed when a player names something that is not a skill.
 UNKNOWN_SKILL_TEXT = "There is no skill called '{name}'."
@@ -227,6 +232,57 @@ def _aura_rows(skill_key: str) -> list:
     return rows
 
 
+def _capacity_rows(skill_key: str) -> list:
+    """
+    Purpose: Build unlock rows for every working slot this skill opens.
+
+    Entry:
+        skill_key is a valid skill key string.
+
+    Exit/Returns:
+        Returns a list of (name, required_level, note) tuples. Empty for every
+        skill but Curing, which is what keeps the section off every other
+        skill's sheet -- unlock_sections renders nothing for an empty list.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The fifth gated system, and the first that is not a thing the player
+        makes. Curing's level curve does two jobs: it gates recipes like every
+        other skill's, and it opens CURING SLOTS -- one at 0, a second at 10 --
+        which is a capability rather than a recipe and had nowhere to be shown.
+
+        The first threshold is skipped. Slot one is what the skill IS, not
+        something it unlocks, and a row reading "1st curing slot, Level 0" on a
+        sheet the player is reading at level 0 is noise.
+
+    Notes/References:
+        systems/gameplay/curing/constants.py CURING_SLOT_LEVELS is the table.
+        Adding a third slot adds a row here with no edit to this function.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    from systems.gameplay.curing import constants as curing_constants
+    from systems.gameplay.progression.skills import constants as skill_constants
+
+    if skill_key != skill_constants.CURING_SKILL_KEY:
+        return []
+
+    rows = []
+    thresholds = curing_constants.CURING_SLOT_LEVELS
+
+    for index, level in enumerate(thresholds):
+        if index == 0:
+            continue
+        slot_number = index + 1
+        note = f"cure {slot_number} at once"
+        rows.append((f"Curing slot {slot_number}", level, note))
+
+    return rows
+
+
 # Every skill-gated system, and how to ask it what this skill opens.
 #
 # A TABLE rather than four calls in a row, so a fifth gated system is one entry
@@ -237,7 +293,17 @@ _UNLOCK_SECTIONS: tuple = (
     (SECTION_GATHERABLES, _gatherable_rows),
     (SECTION_EQUIPMENT, _equippable_rows),
     (SECTION_ABILITIES, _aura_rows),
+    (SECTION_CAPACITY, _capacity_rows),
 )
+
+# Every section title, as a flat view of the table above.
+#
+# Derived, never retyped. The statefeed's payload guard asserts that every
+# title it sends is one this module declares, and it used to do that against a
+# literal four-name set -- so adding a fifth gated system broke a test that had
+# nothing to say about the change. A section is still one _UNLOCK_SECTIONS entry
+# plus one builder; this is what keeps that promise true for the guard too.
+SECTION_TITLES: tuple = tuple(title for title, _builder in _UNLOCK_SECTIONS)
 
 
 def _section_text(title: str, current_level: int, rows: list) -> str:

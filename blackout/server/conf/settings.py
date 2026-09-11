@@ -45,6 +45,8 @@ PROTOTYPE_MODULES += ['evennia.contrib.grid.xyzgrid.prototypes']
 CRAFT_RECIPE_MODULES = [
     "systems.gameplay.crafting.recipes.foundry_recipes",
     "systems.gameplay.crafting.recipes.metalsmith_recipes",
+    "systems.gameplay.crafting.recipes.rendering_recipes",
+    "systems.gameplay.crafting.recipes.curing_recipes",
 ]
 
 # Godot web socket.

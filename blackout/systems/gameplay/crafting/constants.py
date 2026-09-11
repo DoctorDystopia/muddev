@@ -20,11 +20,20 @@ TOOL_TAG_CATEGORY = "crafting_tool"
 # crafting_service.get_categories, so both sides MUST import from here.
 CATEGORY_FOUNDRY = "Foundry"
 CATEGORY_METALSMITH = "Metalsmith"
+CATEGORY_RENDERING = "Rendering"
+CATEGORY_CURING = "Curing"
 
 # Every category the game knows about, for validation and UI ordering.
+#
+# Ordered by where the category sits in a production chain -- processing
+# before the production it feeds -- rather than alphabetically, because this
+# tuple is what orders the craft menu's category list. Foundry and Metalsmith
+# are the metal chain; Rendering opens the food one.
 CRAFTING_CATEGORIES = (
     CATEGORY_FOUNDRY,
     CATEGORY_METALSMITH,
+    CATEGORY_RENDERING,
+    CATEGORY_CURING,
 )
 
 # Seconds a single craft takes by default. A recipe overrides via its own

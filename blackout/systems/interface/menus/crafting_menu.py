@@ -44,6 +44,18 @@ RECIPE_SEPARATOR = "-" * 60
 # Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
 CLOSING_TEXT = "Closing crafting menu."
 
+# The menu's own words for a deferred stage, and deliberately not the stage's.
+#
+# A stage names ITSELF -- systems/gameplay/curing/constants.py types "chamber"
+# and "Curing slots", and this module prints those verbatim through
+# status_lines(). These two strings are about the MENU: a row it draws and a
+# refusal it makes, in the same relationship the menu's "Cannot craft: ..."
+# already has with the reasons crafting_service supplies. Naming the stage in
+# either would put a second spelling of "chamber" in a file that must work for
+# a stage nobody has written yet.
+DEFERRED_COLLECT_DESC = "Collect finished items"
+DEFERRED_NONE_READY = "Nothing is ready to collect yet."
+
 
 
 def _skill_requirement(skill_key, required_level):
@@ -111,6 +123,72 @@ def _recipe_line(recipe_cls):
     return line
 
 
+def _deferred_block(caller, facility):
+    """The slot display and its Collect row, for a facility that defers.
+
+    Entry:
+        caller is the character at the facility. facility may be None.
+
+    Exit/Returns:
+        Returns (text, options): the block to append to the menu's header and
+        the options to offer beneath it. Both are empty for a facility whose
+        recipes all finish in the call that starts them, which is every one but
+        the curing chamber today.
+
+    Methodology:
+        The menu asks the HANDLER for the display and prints what it gets back,
+        exactly as it asks the recipe registry which recipes to list. Nothing
+        here names curing, counts a slot or formats a countdown -- a second
+        deferred stage lights this block up with no edit in this file.
+
+        The Collect row is offered whenever anything is in the chamber, not
+        only when something is ready. The status block directly above it
+        already says which, and an option that appears and disappears as a
+        timer runs is one a player learns not to look for.
+    """
+    handler = crafting_service.get_deferred_handler_for_facility(caller, facility)
+
+    if handler is None:
+        return "", []
+
+    status = "\n".join(handler.status_lines())
+    text = f"\n\n{status}"
+    options = []
+
+    if handler.pending():
+        options.append(
+            {
+                "desc": DEFERRED_COLLECT_DESC,
+                "goto": (collect_deferred, {"facility": facility}),
+            }
+        )
+
+    return text, options
+
+
+def collect_deferred(caller, raw_string, **kwargs):
+    """Take everything finished out of a deferred stage, from the craft menu.
+
+    The same handler call `collect` at the chamber makes, so the two ways of
+    asking cannot deliver differently -- the per-item lines, the XP and the
+    quest hook are all the handler's either way. What this adds is the reason a
+    player never has to leave the menu to find out they could have.
+
+    A goto callable, so it returns a node name rather than a rendered node.
+    """
+    facility = kwargs.get("facility")
+    handler = crafting_service.get_deferred_handler_for_facility(caller, facility)
+
+    if handler is not None:
+        collected = handler.collect()
+
+        if not collected:
+            caller.msg((f"{ERROR_COLOR}{DEFERRED_NONE_READY}{RESET_COLOR}",
+                        _MSG_CRAFTING))
+
+    return "start", {"facility": facility}
+
+
 def start(caller, **kwargs):
     facility = kwargs.get("facility")
     recipes = crafting_service.get_recipes_for_facility(facility)
@@ -120,6 +198,10 @@ def start(caller, **kwargs):
         "Select a recipe to view its details."
     )
     options = []
+
+    deferred_text, deferred_options = _deferred_block(caller, facility)
+    text += deferred_text
+    options.extend(deferred_options)
 
     active_batch = craft_batch.get_active_batch(caller)
     if active_batch:

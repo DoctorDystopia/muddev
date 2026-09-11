@@ -182,12 +182,15 @@ class TestPerSkillDetail(_SkillFeedTest):
                     self.assertTrue(section["rows"])
 
     def test_every_section_title_is_one_the_renderer_owns(self):
-        known = {
-            skill_detail.SECTION_RECIPES,
-            skill_detail.SECTION_GATHERABLES,
-            skill_detail.SECTION_EQUIPMENT,
-            skill_detail.SECTION_ABILITIES,
-        }
+        """Derived from detail.SECTION_TITLES, not a literal list.
+
+        This named the four sections that existed when it was written, so
+        adding a fifth gated system failed a test whose subject is drift
+        between the payload and the renderer -- not the number of sections.
+        Reading the module's own view of its table means a new section is
+        covered rather than rejected.
+        """
+        known = set(skill_detail.SECTION_TITLES)
 
         for row in self._payload()["skills"]:
             for section in row["unlocks"]:

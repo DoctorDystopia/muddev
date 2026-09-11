@@ -382,6 +382,21 @@ Shows all 8 equipment slots (Main Hand, Off Hand, Two Hands, Head, Body, Legs,
 Feet, Back), what's equipped, and a count of carried items. Browse inventory to
 equip/unequip items.
 
+### Read one item's description (`inspect`)
+
+```bash
+> inspect 7
+> inspect main hand
+> inspect toy sword
+```
+
+Prints exactly what `look` prints, for something you are carrying or wearing.
+It exists because `look` cannot name a row: with three identical cured chunks
+in the bag, `look mutant raider cured chunk` can only answer with a multimatch
+list. A slot names one object, which is why every action the 3D pane sends is
+slot-addressed — see `INVENTORY_ACTION_INSPECT` in
+`systems/interface/statefeed/constants.py`.
+
 ### Inspect equipment state (Python)
 
 ```python
@@ -651,6 +666,15 @@ A quantity is optional and may be a number or `all`. **Omitting it moves
 everything that matches** — the whole stack for a stackable item, and every
 copy of it otherwise. Items that do not stack are separate objects, so a pile
 of eleven scrap plates is eleven bank entries, but one command moves them all.
+
+To bank **one** thing rather than the whole group, name where it is instead of
+what it is: an inventory slot number as `inventory` prints it, or an equipment
+slot for something you are wearing.
+
+```bash
+> deposit 7
+> deposit main hand
+```
 
 Opens the full banking menu:
 

@@ -441,14 +441,14 @@ class TestEveryTemplateNamesARealCommand(CommerceActionTestBase):
         """
         from evennia.commands.default.general import CmdDrop, CmdLook
 
-        from commands.equipment_cmds import CmdEquipment, CmdUnequip
+        from commands.equipment_cmds import CmdEquipment, CmdInspect, CmdUnequip
         from commands.inventory_cmds import CmdInventory, CmdSwap
         from typeclasses.bank_nodes import CmdDeposit
         from typeclasses.npcs import CmdSell
 
         commands = (
-            CmdDrop, CmdLook, CmdEquipment, CmdUnequip, CmdInventory,
-            CmdSwap, CmdDeposit, CmdSell,
+            CmdDrop, CmdLook, CmdEquipment, CmdInspect, CmdUnequip,
+            CmdInventory, CmdSwap, CmdDeposit, CmdSell,
         )
 
         return {cls.key for cls in commands}
@@ -498,6 +498,84 @@ class TestEveryTemplateNamesARealCommand(CommerceActionTestBase):
         self.assertTrue(
             const.INVENTORY_DEPOSIT_SOME_TEMPLATE.startswith(
                 CmdDeposit.key + " "))
+
+
+class TestEveryActionNamesTheRowItSitsOn(CommerceActionTestBase):
+    """The right-click contract: an action acts on the object that was clicked.
+
+    Nothing enforced this. Every action was slot-addressed except Inspect,
+    which went out as `look <name>` -- so three cured chunks answered a
+    right-click with Evennia's multimatch list and its two disambiguators
+    ("chunk-1", "chunk-2") were search ordinals naming no row the pane drew.
+    The worn Deposit had the quieter version of the same bug: a name reaches
+    perform_deposit's group path, which banks every copy it can reach.
+
+    Stated as a property rather than as a list of templates, so a fifth action
+    added tomorrow is covered without an edit here: TWO ROWS HOLDING IDENTICAL
+    ITEMS MAY SHARE NO COMMAND. A command both rows would send is by
+    definition one that cannot tell them apart.
+
+    Prompted actions are read through `template`, which is where their
+    addressing lives -- their `command` is empty on purpose.
+    """
+
+    PILE_SIZE = 3
+
+    def _pile(self, count=PILE_SIZE):
+        for _each in range(count):
+            ITEM_DB[CHUNK_KEY].create(location=self.char1)
+
+        self.char1.inventory.sync()
+
+    def _addressing(self, row):
+        return [action["command"] or action.get("template", "")
+                for action in row["actions"]]
+
+    def test_identical_carried_rows_share_no_command(self):
+        self._pile()
+        self._add_shopkeep()
+        self._add_bank()
+        rows = [row for row in self._payload().items if row["name"] ==
+                ITEM_DB[CHUNK_KEY].name]
+
+        self.assertEqual(len(rows), self.PILE_SIZE)
+
+        seen = {}
+
+        for row in rows:
+            for command in self._addressing(row):
+                with self.subTest(slot=row["slot"], command=command):
+                    self.assertNotIn(command, seen)
+                    seen[command] = row["slot"]
+
+    def test_identical_worn_rows_share_no_command(self):
+        """Two finger slots make this a real inventory, not a hypothetical."""
+        from items.equipment.constants import WieldLocation
+
+        fingers = (WieldLocation.MAIN_HAND_FINGER,
+                   WieldLocation.OFF_HAND_FINGER)
+        rings = []
+
+        for slot in fingers:
+            ring = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+            ring.db.inventory_use_slot = slot
+            rings.append(ring)
+            self.char1.equipment.slots[slot] = ring
+
+        self._add_bank()
+        rows = self._payload().equipped
+        worn = [row for row in rows if row["slot"] in
+                {slot.value for slot in fingers}]
+
+        self.assertEqual(len(worn), len(rings))
+
+        seen = set()
+
+        for row in worn:
+            for command in self._addressing(row):
+                with self.subTest(slot=row["slot"], command=command):
+                    self.assertNotIn(command, seen)
+                    seen.add(command)
 
 
 class TestNonStackableGroups(CommerceActionTestBase):

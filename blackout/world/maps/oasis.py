@@ -16,7 +16,7 @@ MAPSTR = r'''
                           1
     + 0 1 2 3 4 5 6 7 8 9 0
 
-   10 #   # # #     #-#-#
+   10 R   # # C     #-#-#
        \  | | |     |
     9   #-#-#-#     |
         |\    |     |
@@ -83,6 +83,24 @@ class AnvilFacilityNode(MapNode):
 
 
 
+class RenderingCookerFacilityNode(MapNode):
+    """
+    Custom MapNode for rendering cookers.
+    """
+    display_symbol = "|#cc7722R|n"
+    prototype = "xyz_room"
+
+
+
+class CuringChamberFacilityNode(MapNode):
+    """
+    Custom MapNode for curing chambers.
+    """
+    display_symbol = "|#88aaccC|n"
+    prototype = "xyz_room"
+
+
+
 class NPCNode(MapNode):
     """
     Custom MapNode for NPC characters.
@@ -125,6 +143,8 @@ LEGEND = {
     "ß": BankNode,
     "F": FurnaceFacilityNode,
     "A": AnvilFacilityNode,
+    "R": RenderingCookerFacilityNode,
+    "C": CuringChamberFacilityNode,
     "!": NPCNode,
     "§": ShopNPCNode,
     "m": MutantRaiderNPCNode,
@@ -161,6 +181,32 @@ _anvil = {
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Metalsmith Anvil Facility",
     "desc": "A Metalsmith's heavy steel anvil.",
+}
+
+# The facility standing on this tile spawns off the room KEY, matched against
+# @register_spawner("Rendering Cooker Facility") in
+# typeclasses/skill_facilities.py. That key is the one string here that must not
+# be retyped -- a typo leaves a tile that looks like a facility and has no
+# cooker on it, with nothing raised either way.
+_rendering_cooker = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Rendering Cooker Facility",
+    "desc": "A rendering cooker, its vat still warm. The smell arrives before you do.",
+}
+
+# Not placed in PROTOTYPES -- the coordinate is yours. Put a `C` on MAPSTR and
+# add `(x, y): _curing_chamber,` beside the other skill-node overrides below.
+#
+# Worth putting it within sight of the cooker: a chuck can go straight into the
+# chamber OR through the cooker first and into the chamber after, and those two
+# routes make two different foods. A player who cannot see both facilities at
+# once has no reason to notice the choice exists.
+_curing_chamber = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Curing Chamber Facility",
+    "desc": "A curing chamber, cold and dry, hung with hooks and smelling of salt.",
 }
 
 _npc_lone_android = {
@@ -216,6 +262,8 @@ PROTOTYPES = {
     (10, 0): _bank,
     (6, 3): _furnace,
     (4, 6): _anvil,
+    (0, 10): _rendering_cooker,
+    (4, 10): _curing_chamber,
     (2, 0): _npc_lone_android,
     (10, 4): _npc_shopkeeper,
     (2, 3): _npc_mutant_raider,

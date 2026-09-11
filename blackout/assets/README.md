@@ -7,10 +7,14 @@ downloads those files were built from, and nothing here is served to anyone.
 ```
 assets/
 ├── pack_model.py                     the one build step
-├── split_tileset.py                  the step in FRONT of it, for tilesets
+├── split_tileset.py                  a step in FRONT of it, for tilesets
+├── fbx_to_gltf.py                    a step in FRONT of it, for FBX downloads
 ├── items/weapons/rusty_sword/        one download, as it arrived
 │   ├── scene.gltf  scene.bin  textures/  license.txt
 ├── npcs/sus_eye/
+├── npcs/psx_low_poly_skeleton/       an FBX download, converted in place
+│   ├── skeleton.fbx  base.png  SOURCE.md
+│   └── scene.gltf  scene.bin  textures/   written by fbx_to_gltf.py
 ├── characters/quaternius_universal_male/
 ├── world_objects/sm_teleporter/
 └── tiles/desert/                     one download holding 34 tiles
@@ -44,9 +48,13 @@ mapping, so it cannot be typed inconsistently.
 
 3. Nothing to register for an ITEM, NPC or CHARACTER model — the client's
    `ModelRegistry` ingests `models/manifest.json` (step 2's output) directly,
-   so any asset key packed is one it can resolve. A TERRAIN tile is the
-   exception: it has no per-entity asset key to send, so it is registered by
-   map instead, in `godot/world/map_palette.gd` (`TILE_MODELS`).
+   so any asset key packed is one it can resolve. Two kinds of model are the
+   exception, both because the server sends no per-entity asset key for them:
+
+   - a TERRAIN tile is registered by map, in `godot/world/map_palette.gd`
+     (`TILE_MODELS`);
+   - a FAMILY stand-in — one model for every corpse, say — is registered by
+     family, in `godot/world/meshes/family_shapes.gd` (`MODELS`).
 4. Add the credit to `web/static/webclient/models/CREDITS.md`, in the same
    commit. For CC-BY work this is the licence term, not politeness.
 5. `evennia reload`, which runs `collectstatic`. A browser refresh alone will
@@ -57,6 +65,40 @@ its family's procedural mesh, so a missing step 3 is invisible rather than
 broken — check the item actually changed shape before believing it worked. A
 TILE prop is the exception: a room kind with nothing registered draws no prop
 at all, so there the missing step is simply nothing appearing.
+
+## Converting an FBX download
+
+Not every download arrives as glTF. itch.io packs routinely ship `.blend` +
+`.fbx` + a loose texture, and `pack_model.py` has nothing to point at.
+`fbx_to_gltf.py` is the step in front, and like `split_tileset.py` all it does
+is manufacture the shape the pipeline already takes:
+
+```bash
+../evenv/Scripts/python.exe assets/fbx_to_gltf.py \
+    assets/npcs/psx_low_poly_skeleton/skeleton.fbx \
+    assets/npcs/psx_low_poly_skeleton --texture base.png
+```
+
+That writes `scene.gltf`, `scene.bin` and `textures/` into the download's own
+directory, and from there every step above applies unchanged: a manifest row, a
+pack, a credit.
+
+- **It runs inside Blender**, which it finds itself; set `BLENDER_EXE` if yours
+  is installed somewhere unusual. The script is handed to Blender as its own
+  script, so the file you read and the settings that produced a served model
+  are the same file.
+- **`--texture` names an image beside the FBX**, and is needed more often than
+  it should be: an FBX whose mesh carries UVs and whose material references no
+  image at all is the normal case for a pack built around a palette atlas. The
+  material is then rebuilt as a Principled BSDF with NEAREST sampling — pixel
+  art filtered smoothly is pixel art nobody can see. Omit it and the material
+  is exported exactly as it arrived.
+- **The download is not written to**, only the three generated paths beside it.
+  Re-running overwrites those and nothing else.
+- **Prefer the FBX to the `.blend`.** A `.blend` carries the author's viewport
+  look — the skeleton's is an emission shader against one of three recolours,
+  plus a camera and an unused rig — and none of that is art. The FBX is the
+  mesh and the UVs, which is all the pipeline wants.
 
 ## Splitting a tileset
 

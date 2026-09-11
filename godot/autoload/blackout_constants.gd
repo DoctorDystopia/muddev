@@ -37,6 +37,7 @@ const FAMILY_CHARACTER := "character"
 const FAMILY_ROOM := "room"
 const FAMILY_STATION := "station"
 const FAMILY_GATHERABLE := "gatherable"
+const FAMILY_CORPSE := "corpse"
 const FAMILY_GENERIC := "generic"
 
 # Item families.

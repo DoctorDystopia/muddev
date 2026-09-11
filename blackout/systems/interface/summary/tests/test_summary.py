@@ -27,7 +27,7 @@ from systems.interface.summary.panel_defs.identity import IdentityPanel
 from systems.interface.summary.panel_defs.readiness import ReadinessPanel
 from systems.interface.summary.panel_defs.vitals import VitalsPanel
 from systems.interface.summary.panel_defs.world import WorldPanel
-from systems.interface.summary.registry import PANEL_REGISTRY
+from systems.interface.summary.registry import PANEL_REGISTRY, _iter_panel_modules
 from typeclasses.characters import Character as BlackoutCharacter
 
 
@@ -39,10 +39,28 @@ class _SummaryTest(EvenniaTest):
 
 class TestRegistry(_SummaryTest):
 
-    def test_every_panel_is_discovered(self):
-        expected = {"identity", "vitals", "readiness", "holdings", "world"}
+    def test_every_panel_module_contributes_a_panel(self):
+        """Every module under panel_defs/ is discovered, whatever it is called.
 
-        self.assertEqual(expected, set(PANEL_REGISTRY.keys()))
+        Derived from the package rather than from a list of five names. The
+        census this replaced failed the day a sixth panel was added as
+        intended, which trains a reader to edit the test instead of reading it
+        -- CLAUDE.md's rule, and this is the assertion it asks for: the
+        relationship between what is DEFINED and what is REGISTERED.
+        """
+        registered_modules = {
+            panel.__module__ for panel in PANEL_REGISTRY.values()
+        }
+        defined_modules = set(_iter_panel_modules())
+
+        self.assertEqual(defined_modules, registered_modules)
+
+    def test_every_panel_is_well_formed(self):
+        for key, panel in PANEL_REGISTRY.items():
+            with self.subTest(panel=key):
+                self.assertTrue(key)
+                self.assertIsInstance(panel.order, int)
+                self.assertIsInstance(panel.public, bool)
 
     def test_panels_are_ordered_by_declared_order(self):
         orders = [panel.order for panel in PANEL_REGISTRY.values()]

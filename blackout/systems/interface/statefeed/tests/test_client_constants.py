@@ -86,6 +86,20 @@ _TERRAIN_TABLE_SOURCES: tuple = (
     os.path.join(_REPO_ROOT, "godot", "world", "map_palette.gd"),
 )
 
+# Which whole FAMILY stands in a packed model's place -- tier 2 of the mesh
+# ladder, one asset key covering every entity of a family. The corpse family is
+# the case it was built for: a corpse's asset key is the key of whichever NPC
+# left it, so art aimed at keys would need one model per creature.
+#
+# Only the VALUE side is checked here, and that is the whole design. The keys
+# are generated constants (`_Const.FAMILY_CORPSE`), so a family renamed
+# server-side is a GDScript parse error and needs no guard; the asset key is a
+# bare string naming a build artefact, and nothing else would ever report it
+# wrong.
+_FAMILY_MODEL_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "meshes", "family_shapes.gd"),
+)
+
 # The table assignment, in either language. JS writes
 # `const ROOM_KIND_COLORS = {`, GDScript writes `const ROOM_KIND_COLORS := {`;
 # one optional colon covers both.
@@ -97,6 +111,20 @@ _MAP_ORDER_RE = re.compile(
 
 _TERRAIN_TABLE_RE = re.compile(
     r"TILE_MODELS\s*:?=\s*\{(.*?)\}", re.DOTALL)
+
+# Anchored on `var MODELS` rather than on the bare name, and carrying an
+# optional `: Dictionary` annotation: this one is a `static var` because its
+# siblings in the same file are (a GDScript `const` may not hold a computed
+# value), and an unanchored `MODELS` would also match a `TILE_MODELS` in any
+# file this is ever pointed at.
+_FAMILY_MODEL_TABLE_RE = re.compile(
+    r"var\s+MODELS\s*(?::\s*\w+\s*)?:?=\s*\{(.*?)\}", re.DOTALL)
+
+# The value half of a family row. The KEY is a constant reference rather than a
+# quoted string -- `_Const.FAMILY_CORPSE: "corpse_skeleton"` -- so the pair
+# regex above cannot read this table and a value-only match is not laziness but
+# the shape of the source.
+_TABLE_VALUE_RE = re.compile(r':\s*"([^"]+)"')
 
 _SKILL_CATEGORY_TABLE_RE = re.compile(
     r"SKILL_CATEGORY_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
@@ -258,6 +286,39 @@ def _extract_terrain_rows(source):
         return None
 
     return _TABLE_PAIR_RE.findall(match.group(1))
+
+
+def _extract_family_model_assets(source):
+    """
+    Purpose: Pull the asset keys a client's family -> model table names.
+
+    Entry:
+        source - client source text, comments already stripped.
+
+    Exit/Returns:
+        A list of asset-key strings, or None when the file declares no table.
+
+    Module Globals:
+        _FAMILY_MODEL_TABLE_RE, _TABLE_VALUE_RE read.
+
+    Methodology:
+        Values only. The key side is a generated constant, which the GDScript
+        parser already checks better than any regex could: rename a family
+        server-side and the client fails to parse rather than drawing a box.
+
+        Comments have already been stripped by _read_source, which matters more
+        for this table than for the others -- its entries carry several lines of
+        prose each and the reasoning in them names asset keys.
+
+    Notes/References:
+        godot/world/meshes/family_shapes.gd, MODELS.
+    """
+    match = _FAMILY_MODEL_TABLE_RE.search(source)
+
+    if not match:
+        return None
+
+    return _TABLE_VALUE_RE.findall(match.group(1))
 
 
 def _packed_asset_keys():
@@ -632,6 +693,75 @@ class ClientTerrainTileTests(unittest.TestCase):
                     "model_manifest.json does not build. The map keeps its "
                     "plain slab and nothing reports it."
                     % (client, name, asset_key))
+
+
+class ClientFamilyModelTests(unittest.TestCase):
+    """A family standing in a model's place must name art that can exist."""
+
+    def _rows(self):
+        """Every family model every client present names, with its file."""
+        rows = []
+
+        for path in _FAMILY_MODEL_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            found = _extract_family_model_assets(source)
+
+            if found is None:
+                continue
+
+            for asset_key in found:
+                rows.append((os.path.basename(path), asset_key))
+
+        return rows
+
+    def test_a_client_that_is_here_declares_the_table(self):
+        """
+        The vacuity guard, in the shape this table needs it: the check below
+        skips a client whose table it cannot match, so renaming MODELS would
+        turn it green while checking nothing.
+
+        A client that declares an EMPTY table still passes -- the table is
+        optional and a client with no family art is a legitimate state.
+        """
+        for path in _FAMILY_MODEL_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertIsNotNone(
+                    _extract_family_model_assets(source),
+                    "%s exists but declares no MODELS table. Either it was "
+                    "renamed or family art was removed; the drift check on it "
+                    "is now inert." % path)
+
+    def test_every_family_model_is_one_the_build_can_produce(self):
+        """
+        An asset key with no manifest row is never fetched and never 404s: the
+        family silently keeps its procedural shape, which is indistinguishable
+        from a family that was never given art at all.
+
+        The same direction the terrain check runs in, and for the same reason
+        the module docstring gives for that one. The asymmetry it describes --
+        a server fact with no client entry is fine -- still holds on the other
+        side: a family with no row here draws its shape, which is the whole
+        reason content never waits on art.
+        """
+        known = _packed_asset_keys()
+
+        for client, asset_key in self._rows():
+            with self.subTest(client=client, asset_key=asset_key):
+                self.assertIn(
+                    asset_key, known,
+                    "%s stands a family in for '%s', which assets/"
+                    "model_manifest.json does not build. The family keeps its "
+                    "procedural shape and nothing reports it."
+                    % (client, asset_key))
 
 
 class ClientTableDiscoveryTests(unittest.TestCase):

@@ -611,9 +611,16 @@ func _ring_radius(total: int) -> float:
 ## every other change here does: there are rarely more than a handful, and the
 ## alternative is a second code path that places a single entity and can drift
 ## from the one that places them all.
+##
+## Whether a row cares about the key is [method MeshResolver.redraws_for]'s to
+## answer, not this file's: an entity is drawn by its asset key OR by its
+## family's model, and only the resolver knows that ladder.
 func _on_art_arrived(asset_key: String) -> void:
 	for entity: Dictionary in _entities:
-		if str(entity.get("asset", "")) == asset_key:
+		var asset := str(entity.get("asset", ""))
+		var family := str(entity.get("family", ""))
+
+		if _resolver.redraws_for(asset, family, asset_key):
 			_rebuild()
 			return
 

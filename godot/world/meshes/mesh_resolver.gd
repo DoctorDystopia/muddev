@@ -5,9 +5,18 @@ extends Node
 ##
 ##     asset has art?    -- yes -->  the model                    tier 1
 ##            | no
-##     family has parts? -- yes -->  the family's shape           tier 2
+##     family has art?   -- yes -->  the family's model           tier 2
 ##            | no
-##                                   the generic block            tier 3
+##     family has parts? -- yes -->  the family's shape           tier 3
+##            | no
+##                                   the generic block            tier 4
+##
+## Tier 2 is the one that is not per-entity. It exists because an asset key
+## names one specific thing and some families are better described whole: every
+## corpse in the game is a body, and its asset key is the key of whichever NPC
+## left it, so art aimed at the key would have to be drawn once per creature
+## before any corpse stopped being a box. [member FamilyShapes.MODELS] is that
+## table and the reasoning is written there.
 ##
 ## This is the only file that knows the ORDER, and the only one panes talk to.
 ## [ModelLoader] knows how to fetch, [FamilyShapes] knows what a weapon looks
@@ -70,15 +79,28 @@ func _init(registry: ModelRegistry, origin: String) -> void:
 
 ## Something that must always be visible: an entity, an inventory item.
 ##
-## Never returns null. Falls back through the family's shape to the generic
-## block, so an asset key nobody has modelled and a family nobody has drawn both
-## still put something clickable in the room. That degradation is the whole
-## reason content can be added to the game without waiting on art.
+## Never returns null. Falls back through the family's model and the family's
+## shape to the generic block, so an asset key nobody has modelled and a family
+## nobody has drawn both still put something clickable in the room. That
+## degradation is the whole reason content can be added to the game without
+## waiting on art.
 func resolve_entity(asset_key: String, family: String) -> Node3D:
 	var model := _art_for(asset_key)
 
 	if model != null:
 		return model
+
+	# The family's stand-in, for a family art describes better than primitives
+	# do. Asked for the same way as the key's own art, so it is fetched on
+	# demand, cached once for every entity sharing the family, and absent
+	# rather than fatal until it arrives.
+	var family_key := FamilyShapes.model_for(family)
+
+	if not family_key.is_empty():
+		var stand_in := _art_for(family_key)
+
+		if stand_in != null:
+			return stand_in
 
 	return MeshBuilder.build(FamilyShapes.parts_for(family))
 
@@ -99,6 +121,28 @@ func resolve_scenery(asset_key: String) -> Node3D:
 ## a prop should not be revisited on every rebuild.
 func may_have_art(asset_key: String) -> bool:
 	return _loader.can_load(asset_key)
+
+
+## Whether art arriving for `arrived_key` changes how this entity is drawn.
+##
+## For a caller handling [signal refreshed]: it holds entities, the signal names
+## a key, and the two only match at tier 1. Comparing them directly was correct
+## while the ladder had one model tier and stopped being correct the moment it
+## had two — a corpse's asset key is the NPC's, so `corpse_skeleton` landing
+## matched nothing and every body on screen stayed a grey box until something
+## unrelated redrew the room.
+##
+## Asked HERE because the ladder lives here. The alternative is every pool
+## restating the tiers, which is the arrangement that made tier 2 invisible.
+##
+## Slightly generous: an entity whose own art is already in hand is reported as
+## affected when its family's model arrives, which costs one redraw that changes
+## nothing. Being wrong the other way costs a mesh nobody ever sees replaced.
+func redraws_for(asset_key: String, family: String, arrived_key: String) -> bool:
+	if asset_key == arrived_key:
+		return true
+
+	return FamilyShapes.model_for(family) == arrived_key
 
 
 ## How many models are still being fetched, straight from the loader.

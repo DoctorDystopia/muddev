@@ -29,6 +29,16 @@ const RIGGED_ASSET := "player_character"
 ## The one whose export declares itself transparent and is not.
 const TRANSPARENT_ASSET := "floating_eye"
 
+## An asset key nothing has art for, standing in for the creature a corpse came
+## from. Deliberately not a real NPC key: the point of the tier-2 fetch below is
+## that it happens for a body whose own asset is unmodelled, which is every body
+## in the game today and would stop being asserted the day one gains art.
+const UNMODELLED_CREATURE := "a_creature_with_no_art_of_its_own"
+
+## Server-owned names. The corpse FAMILY is the one whose art is looked up by
+## family rather than by asset key.
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 ## How far off square a terrain tile's footprint may land, as a ratio.
 ##
 ## Tighter than UNIT_TOLERANCE because this is not float slop: a tile is either
@@ -101,6 +111,11 @@ func _on_refreshed(asset_key: String) -> void:
 
 	if asset_key == TRANSPARENT_ASSET:
 		_an_export_lying_about_transparency_is_corrected()
+		_reported(asset_key)
+		return
+
+	if asset_key == FamilyShapes.model_for(_Const.FAMILY_CORPSE):
+		_a_body_is_lying_down()
 		_reported(asset_key)
 		return
 
@@ -181,6 +196,27 @@ func _on_refreshed(asset_key: String) -> void:
 	var eye := _resolver.resolve_entity(TRANSPARENT_ASSET, "npc")
 	eye.free()
 
+	# TIER 2, asked for the only way it is ever reached: an entity whose own
+	# asset key has no art, resolved by its FAMILY. Nothing here names the
+	# corpse model -- the table does, and the whole point of the tier is that
+	# adding a body to the game needs no client edit.
+	var corpse_model := FamilyShapes.model_for(_Const.FAMILY_CORPSE)
+
+	if corpse_model.is_empty():
+		_expect(false, "the corpse family names a model to stand in for it")
+	elif not _resolver.may_have_art(corpse_model):
+		# Asked before it is waited on, for the reason the terrain loop below
+		# spells out: a key the manifest does not name never fetches, so the
+		# test would sit out its timeout and blame a server that is fine.
+		_expect(false, "%s is in the served manifest. Repack and run " % corpse_model
+			+ "collectstatic, or every corpse in the game is a grey box")
+	else:
+		_outstanding[corpse_model] = true
+
+		var body := _resolver.resolve_entity(UNMODELLED_CREATURE,
+			_Const.FAMILY_CORPSE)
+		body.free()
+
 	# Every terrain the maps are surfaced with, from the table rather than by
 	# name -- a tile added for a third map is covered without an edit here, and
 	# the footprint check below is exactly the one a new tile is likely to fail.
@@ -259,6 +295,53 @@ func _a_rigged_model_stands_up() -> void:
 		% [bounds.size.y, mesh_only.size.y])
 
 	rigged.free()
+
+
+## A body arrives lying down, and arrives at all without naming its own art.
+##
+## Two separate facts, and both are only checkable against the real file.
+##
+## THE LADDER. `UNMODELLED_CREATURE` has no art and never will, so a node that
+## carries real geometry can only have come from the family's model — tier 2.
+## Before that tier existed the same call returned the generic block, which is
+## also a node, which is why the check is on the SHAPE and not on null.
+##
+## THE ORIENTATION. The download is a skeleton STANDING UP, because that is what
+## a character model is, and `ModelRegistry.PRESENTATION` lays it on its back.
+## That correction is a quarter turn about one axis and there is nothing invalid
+## about the file if it is wrong — a body standing to attention on the tile
+## where something died reads as a live enemy, and only a person looking at it
+## would ever say so. Exactly the class of failure this whole file exists for.
+##
+## Measured as a RATIO rather than against the authored numbers: what matters is
+## that the longest axis stopped being the vertical one, which survives a
+## repack, a different skeleton and a different tolerance on the normalise.
+func _a_body_is_lying_down() -> void:
+	var body := _resolver.resolve_entity(UNMODELLED_CREATURE,
+		_Const.FAMILY_CORPSE)
+
+	if body == null:
+		_expect(false, "a corpse resolves")
+		return
+
+	var bounds := ModelLoader.bounds_of(body)
+	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+	print("corpse: bounds=(%.3f, %.3f, %.3f)"
+		% [bounds.size.x, bounds.size.y, bounds.size.z])
+
+	# The generic block is a cube, so a longest axis of one proves nothing on
+	# its own -- but a cube is as deep as it is long, and no figure is.
+	_expect(bounds.size.x < longest - UNIT_TOLERANCE
+			or bounds.size.z < longest - UNIT_TOLERANCE,
+		"a corpse draws real art rather than the generic block, fetched by "
+		+ "family for a creature with no asset of its own")
+
+	_expect(bounds.size.y < longest * 0.5,
+		"and it is lying down rather than standing up (%.3f tall against a "
+		% bounds.size.y + "longest axis of %.3f)" % longest)
+
+	body.free()
 
 
 ## An export can be WRONG ABOUT ITSELF, and nothing downstream can tell.

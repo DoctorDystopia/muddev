@@ -53,8 +53,15 @@ PANEL_ORDER_IDENTITY: int = 10
 PANEL_ORDER_VITALS: int = 20
 PANEL_ORDER_READINESS: int = 30
 PANEL_ORDER_HOLDINGS: int = 50
+PANEL_ORDER_PROCESSING: int = 55
 PANEL_ORDER_WORLD: int = 60
 
+# 55 rather than a fresh decade, because what is CURING is nearest to what is
+# owned: both answer "what do I have", one of it in the bag and one of it still
+# in a chamber somewhere. It reads directly under Holdings for that reason, and
+# taking the half-step rather than renumbering World is exactly what the gaps
+# below are for.
+#
 # 40 is deliberately vacant. It was the skills band, which left the dossier on
 # 08/28/2026 for a screen of its own -- CHANNEL_CHAR_SKILLS and the `skills`
 # command. The gap is not tidied away because the gaps are the point of this

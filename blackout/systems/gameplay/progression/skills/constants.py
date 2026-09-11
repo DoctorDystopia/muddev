@@ -29,6 +29,18 @@ CUTTING_SKILL_KEY = "cutting"
 BUTCHERY_SKILL_KEY = "butchery"
 BRAIN_FARMING_SKILL_KEY = "brain_farming"
 
+# Processing skills whose recipes name them. A recipe's required_skill is read
+# by BlackoutRecipe.pre_craft and by the skills panel's unlock listing, both of
+# which live outside skill_defs, so the string has the same "named from
+# elsewhere" problem the gathering keys above do.
+#
+# Foundry and Metalsmith predate this block and still spell themselves inline
+# in their recipe modules. That is worth correcting, but correcting it touches
+# shipped recipes for no behavioural gain, so it is left for whoever next has
+# reason to open those files.
+RENDERING_SKILL_KEY = "rendering"
+CURING_SKILL_KEY = "curing"
+
 # Every skill that works a node in GATHERABLE_REGISTRY. Read by the gathering
 # command set, which builds one verb per entry, and asserted against
 # SKILL_REGISTRY by the gathering tests -- a skill named here with no class

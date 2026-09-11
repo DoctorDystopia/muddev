@@ -39,7 +39,11 @@ from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
 from typeclasses.npc_combat import spawn_mutant_raider
 from typeclasses.npcs import ShopkeepNPC
-from typeclasses.skill_facilities import AnvilFacility, FurnaceFacility
+from typeclasses.skill_facilities import (
+    AnvilFacility,
+    CuringChamberFacility,
+    FurnaceFacility,
+)
 from world.item_database import ITEM_DB
 
 # Public constant definitions
@@ -103,6 +107,38 @@ class TestInteractionVerbs(EvenniaTest):
         self.assertEqual(body["kind"], const.ASSET_KIND_STATION)
         self.assertEqual(body["asset"], "anvil")
 
+    def test_a_curing_chamber_offers_both_craft_and_collect(self):
+        """The one facility that affords TWO verbs, and why it has to say so.
+
+        A chamber whose only verb was `craft` left the Godot client no way to
+        reach `collect` at all -- and coming back for what is curing is the
+        entire point of the stage. `interact` is unchanged, so a left click
+        still opens the craft menu it always did.
+        """
+        chamber = create_object(
+            CuringChamberFacility, key="Curing Chamber", location=self.room1)
+
+        body = serializers.serialize_entity(chamber)
+        commands = [action["command"] for action in body["actions"]]
+
+        self.assertEqual(body["interact"], "craft")
+        self.assertEqual(["craft", "collect"], commands)
+
+    def test_a_curing_chambers_verbs_take_no_target(self):
+        """Both cmdsets hang on the chamber, so neither command names it.
+
+        `collect Curing Chamber` is not a command a telnet player could type,
+        and every string the feed sends has to be one.
+        """
+        chamber = create_object(
+            CuringChamberFacility, key="Curing Chamber", location=self.room1)
+
+        body = serializers.serialize_entity(chamber)
+
+        for action in body["actions"]:
+            with self.subTest(command=action["command"]):
+                self.assertNotIn("chamber", action["command"].lower())
+
     def test_a_bank_terminal_is_a_station_that_is_banked_at(self):
         terminal = create_object(
             BankNode, key="bank terminal", location=self.room1)
@@ -154,6 +190,30 @@ class TestInteractionVerbs(EvenniaTest):
         body = serializers.serialize_entity(node)
 
         self.assertNotIn("actions", body)
+
+    def test_a_corpse_reports_the_corpse_family_and_the_dead_npcs_asset(self):
+        """The two halves of a body's identity, and they disagree on purpose.
+
+        `asset` is the DEAD NPC's key, so a creature that one day gains a
+        lying-down model of its own reuses it with no client edit. Nothing has
+        such a model today, which is exactly why `family` matters: it is the
+        only field every corpse in the game has in common, and the client
+        stands one skeleton in for the whole family on the strength of it
+        (`FamilyShapes.MODELS`).
+
+        Asserted here rather than trusted because the two are produced by
+        different routines -- `Corpse.asset_key` and `_mesh_family` -- and a
+        corpse reporting family "item" would fall back to a generic box with
+        nothing anywhere reporting why.
+        """
+        corpse = ITEM_DB["mutant_raider_corpse"].create(location=self.room1)
+        corpse.db.corpse_npc_key = "mutant_raider"
+
+        body = serializers.serialize_entity(corpse)
+
+        self.assertEqual(body["kind"], const.ASSET_KIND_CORPSE)
+        self.assertEqual(body["family"], const.ASSET_KIND_CORPSE)
+        self.assertEqual(body["asset"], "mutant_raider")
 
     def test_a_hostile_npc_is_attacked_by_name(self):
         # `attack` lives on the CHARACTER's cmdset, so unlike the stations

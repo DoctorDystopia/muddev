@@ -1,6 +1,7 @@
 extends Node
-## Unit tests for MeshPalette, FamilyShapes and MeshBuilder — tier 2 of the
-## mesh ladder.
+## Unit tests for MeshPalette, FamilyShapes and MeshBuilder — the FAMILY tiers
+## of the mesh ladder, and the one question MeshResolver answers about them
+## that needs no network.
 ##
 ##     godot --headless --path godot res://tests/test_family_shapes.tscn
 ##
@@ -31,6 +32,10 @@ func _ready() -> void:
 	_the_palette_is_well_formed()
 	_the_two_figures_differ_only_in_colour()
 	_no_family_names_something_the_server_cannot_send()
+	_no_family_model_names_something_the_server_cannot_send()
+	_every_family_model_names_an_asset_key()
+	_a_family_with_no_model_says_so()
+	_art_redraws_the_entities_it_actually_draws()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -203,20 +208,111 @@ func _the_two_figures_differ_only_in_colour() -> void:
 ## The reverse is deliberately allowed: a family added server-side falls through
 ## to the generic block, which is what lets content ship ahead of art.
 func _no_family_names_something_the_server_cannot_send() -> void:
-	var Const := preload("res://autoload/blackout_constants.gd")
-	var sendable := PackedStringArray(Const.ITEM_FAMILIES)
-
-	# The kinds the server puts in the `family` field for anything that is not
-	# an item. `_mesh_family` returns the KIND itself in that case, so these are
-	# as legitimate a family as any item's.
-	for kind: String in [Const.FAMILY_NPC, Const.FAMILY_CHARACTER,
-			Const.FAMILY_STATION, Const.FAMILY_GATHERABLE,
-			Const.FAMILY_ITEM, Const.FAMILY_ROOM, Const.FAMILY_GENERIC]:
-		sendable.append(kind)
+	var sendable := _sendable_families()
 
 	for family: String in FamilyShapes.families():
 		_expect(sendable.has(family),
 			"'%s' is a family the server can actually send" % family)
+
+
+## The same check over the MODELS table, and it earns its keep separately.
+##
+## A dead key here is worse than a dead key in SHAPES: a shape entry nobody can
+## reach draws nothing and costs nothing, while a model entry nobody can reach
+## means a packed `.glb` sitting in the served tree that no entity will ever
+## ask for — art that was authored, packed, credited and then quietly orphaned
+## by one wrong family name.
+func _no_family_model_names_something_the_server_cannot_send() -> void:
+	var sendable := _sendable_families()
+
+	for family: String in FamilyShapes.modelled_families():
+		_expect(sendable.has(family),
+			"'%s' is a modelled family the server can actually send" % family)
+
+
+## Values are ASSET KEYS, not paths.
+##
+## ModelRegistry owns where a model is fetched from, so a path here would be a
+## second place to be wrong about the served tree — and it would fail silently,
+## because `_art_for` would simply never find "npcs/corpse_skeleton.glb" in the
+## manifest and the family would keep its procedural shape.
+##
+## That the key names art the BUILD can produce is checked from the other side,
+## in `systems/interface/statefeed/tests/test_client_constants.py`, which can
+## read `assets/model_manifest.json` and this cannot.
+func _every_family_model_names_an_asset_key() -> void:
+	for family: String in FamilyShapes.modelled_families():
+		var asset_key := FamilyShapes.model_for(family)
+
+		_expect(not asset_key.is_empty(),
+			"'%s' names a non-empty asset key" % family)
+		_expect(not asset_key.contains("/"),
+			"'%s' names an asset key and not a path (%s)" % [family, asset_key])
+		_expect(not asset_key.ends_with(".glb"),
+			"'%s' names an asset key and not a file (%s)" % [family, asset_key])
+
+
+## A family with no model answers "", not the first entry or an error.
+##
+## The empty string is what MeshResolver tests before reaching for tier 2, so a
+## family that has never been given art has to be able to say so plainly.
+func _a_family_with_no_model_says_so() -> void:
+	_expect(FamilyShapes.model_for("nothing_has_this_family").is_empty(),
+		"an unknown family names no model")
+
+	# A family with a procedural shape and no model is the NORMAL case, and the
+	# one that would break if MODELS were ever confused with SHAPES.
+	var Const := preload("res://autoload/blackout_constants.gd")
+
+	_expect(FamilyShapes.model_for(Const.ITEM_FAMILY_WEAPON).is_empty(),
+		"a family drawn from primitives names no model")
+
+
+## The regression this tier arrived with.
+##
+## EntityPool redraws on `refreshed`, which names an ASSET KEY. An entity drawn
+## at tier 2 does not carry that key — a corpse's asset is the dead NPC's — so
+## the pool comparing the two directly meant `corpse_skeleton` landing matched
+## nothing and every body on screen stayed a generic box until something
+## unrelated rebuilt the room. `redraws_for` is where that question moved.
+func _art_redraws_the_entities_it_actually_draws() -> void:
+	var Const := preload("res://autoload/blackout_constants.gd")
+	var resolver := MeshResolver.new(ModelRegistry.new(), "")
+	var corpse_model := FamilyShapes.model_for(Const.FAMILY_CORPSE)
+
+	_expect(resolver.redraws_for("floating_eye", Const.FAMILY_NPC,
+			"floating_eye"),
+		"art for an entity's own asset key redraws it")
+	_expect(not resolver.redraws_for("floating_eye", Const.FAMILY_NPC,
+			"player_character"),
+		"art for an unrelated key leaves an entity alone")
+	_expect(resolver.redraws_for("mutant_raider", Const.FAMILY_CORPSE,
+			corpse_model),
+		"art for a family's model redraws an entity of that family")
+	_expect(not resolver.redraws_for("mutant_raider", Const.FAMILY_NPC,
+			corpse_model),
+		"a family's model leaves entities of other families alone")
+
+	# A Node, and this test is not in a tree to reap it.
+	resolver.free()
+
+
+## Every family name the server is able to put in the `family` field.
+##
+## The item families plus the asset kinds: `_mesh_family` returns the item's
+## family for an item and the KIND itself for anything else, so both
+## vocabularies are legitimate. Built once for the two checks that need it —
+## a second copy is a second thing to forget when a kind is added.
+func _sendable_families() -> PackedStringArray:
+	var Const := preload("res://autoload/blackout_constants.gd")
+	var sendable := PackedStringArray(Const.ITEM_FAMILIES)
+
+	for kind: String in [Const.FAMILY_NPC, Const.FAMILY_CHARACTER,
+			Const.FAMILY_STATION, Const.FAMILY_GATHERABLE, Const.FAMILY_CORPSE,
+			Const.FAMILY_ITEM, Const.FAMILY_ROOM, Const.FAMILY_GENERIC]:
+		sendable.append(kind)
+
+	return sendable
 
 
 ## The AABB of a built node, in its own space.

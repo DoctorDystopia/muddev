@@ -37,6 +37,10 @@
       "asset_key": "floating_eye"
     },
     {
+      "source": "assets/npcs/psx_low_poly_skeleton",
+      "asset_key": "corpse_skeleton"
+    },
+    {
       "source": "assets/world_objects/sm_teleporter",
       "asset_key": "map_transition"
     },

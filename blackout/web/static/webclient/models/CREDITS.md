@@ -36,6 +36,28 @@ under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/)
 - Carries a 12-bone skin and five animations (`idle`, `movimiento`, `ataque`,
   `muerte`, `ArmatureAction`). Nothing plays them yet.
 
+## `npcs/corpse_skeleton.glb`
+
+"PSX Low Poly Skeleton" (https://puszke.itch.io/psx-low-poly-skeleton) by Puck
+is released under CC0 (https://creativecommons.org/publicdomain/zero/1.0/),
+which asks for nothing. The row is here anyway, for the reason the Quaternius
+one below gives: a file with no row is indistinguishable from one whose licence
+nobody checked. The download carries no licence file, so the itch.io page is
+the only record of the grant — see `assets/npcs/psx_low_poly_skeleton/SOURCE.md`.
+
+- Source download: `assets/npcs/psx_low_poly_skeleton/` — `.blend`, `.fbx` and
+  three recolours of one 128² atlas, as they arrived
+- The first model built from an **FBX**. `assets/fbx_to_gltf.py` converts it
+  into the ordinary source-directory shape and `pack_model.py` packs that; the
+  atlas is named on the converter's command line because the FBX carries UVs
+  and no material reference at all. Its sampler is NEAREST — a 128² pixel-art
+  atlas filtered any other way arrives as mud.
+- Textures unchanged at 128²: already far inside the `npcs` ceiling of 512².
+- **Not a corpse model, and not pretending to be one.** It is the stand-in for
+  the whole CORPSE FAMILY (`FamilyShapes.MODELS`), so every body in the game is
+  a skeleton until the creature that left it has art of its own. Laid on its
+  back by `ModelRegistry.PRESENTATION`; the download stands upright.
+
 ## `world_objects/map_transition.glb`
 
 "SM_Teleporter" (https://skfb.ly/osBBE) by Kain Hunter is licensed under

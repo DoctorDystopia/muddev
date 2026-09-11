@@ -21,6 +21,7 @@ from .mixins import CombatEntity
 from .objects import ObjectParent
 from systems.gameplay.progression.skills.handler import SkillHandler
 from systems.gameplay.banking.handler import BankHandler
+from systems.gameplay.curing.handler import CuringHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
 from systems.gameplay.quests.handler import QuestHandler
@@ -122,6 +123,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     equipment = _handler_property(EquipmentHandler, "equipment")
     inventory = _handler_property(InventoryHandler, "inventory")
     bank = _handler_property(BankHandler, "bank")
+    curing = _handler_property(CuringHandler, "curing")
     quests = _handler_property(QuestHandler, "quests")
     stats = _handler_property(StatHandler, "stats")
 

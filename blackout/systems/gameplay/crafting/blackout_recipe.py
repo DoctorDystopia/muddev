@@ -55,6 +55,79 @@ class BlackoutRecipe(CraftingRecipe):
 
     output_item_keys: list[str] = []
 
+    # Name of the CHARACTER HANDLER that owns this recipe's execution, or None
+    # when the recipe finishes inside the call that started it.
+    #
+    # A name rather than a class, and an attribute rather than a branch in
+    # crafting_service, because the question "does this recipe produce its
+    # output now" is a property of the recipe and nothing else should have to
+    # know the answer. A second deferred stage is one more attribute value and
+    # a handler, not another arm on a dispatch chain.
+    #
+    # The handler it names must provide these methods, which are the whole
+    # protocol:
+    #
+    #   start(recipe_cls) -> bool   begin one; False means it could not
+    #   capacity_remaining() -> int how many more may be begun right now
+    #   pending() -> list           what is in progress, one entry per slot
+    #   ready_count() -> int        how many of those are finished and waiting
+    #   collect() -> list           take every finished one, returning the
+    #                               objects delivered
+    #   status_lines() -> list      the whole display, rendered
+    #
+    # The first two are what crafting_service needs to START one. The rest are
+    # what a SCREEN needs, and they are part of the protocol rather than
+    # curing's private business for the same reason: the craft menu and the
+    # dossier's Processing band show a deferred stage without naming one, so a
+    # second deferred stage reaches both screens with no edit to either.
+    #
+    # status_lines() is rendered by the handler rather than by its readers
+    # because the handler owns the stage's vocabulary -- "Curing slots" is
+    # typed in systems/gameplay/curing/constants.py and nowhere else.
+    #
+    # Today the only one is CuringHandler ("curing"), because a cure is two
+    # events separated by time -- see systems/gameplay/curing/handler.py.
+    deferred_handler: str | None = None
+
+
+    @classmethod
+    def deferred_handler_for(cls, crafter):
+        """
+        Purpose: The handler owning this recipe's execution, if it is deferred.
+
+        Entry:
+            crafter is the character who would craft.
+
+        Exit/Returns:
+            Returns the handler object, or None when this recipe completes in
+            one call or the named handler is not attached to the crafter.
+
+        Module Globals:
+            None
+
+        Methodology:
+            One resolver, so the three readers in crafting_service
+            (check_craftable, get_max_craftable, perform_craft) cannot disagree
+            about whether a recipe is deferred. A missing handler returns None
+            rather than raising: a recipe naming a handler no character has is
+            a coding error, but failing closed into the immediate path would
+            produce the item instantly, which is the one outcome a deferred
+            recipe must never have -- so callers treat None-with-a-name as a
+            refusal instead.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 09/11/2026
+        """
+        if not cls.deferred_handler:
+            return None
+
+        handler = getattr(crafter, cls.deferred_handler, None)
+
+        return handler
+
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)

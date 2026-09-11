@@ -23,7 +23,11 @@ from evennia.contrib.game_systems.crafting.crafting import (
 
 from systems.gameplay.crafting import crafting_service
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
-from systems.gameplay.crafting.constants import CATEGORY_FOUNDRY, CATEGORY_METALSMITH
+from systems.gameplay.crafting.constants import (
+    CATEGORY_FOUNDRY,
+    CATEGORY_METALSMITH,
+    CRAFTING_CATEGORIES,
+)
 from systems.gameplay.crafting.registry import RECIPE_REGISTRY, _is_registrable_recipe
 
 
@@ -59,6 +63,14 @@ class TestRecipeDiscovery(unittest.TestCase):
 
         Deliberately reimplements discovery instead of calling the registry's
         own helper -- a test that reuses the code under test proves nothing.
+
+        The placeholder-name filter is the fourth condition and it is not
+        optional. A recipe module may define an abstract base of its own to
+        share declarations across its recipes (rendering_recipes does), and
+        such a base satisfies the other three checks exactly: it subclasses
+        BlackoutRecipe, it is defined in the module, and it is a class. What it
+        does not have is a name -- it inherits the contrib's, which is the same
+        thing the registry keys on to exclude it.
         """
         names = []
         for module_path in settings.CRAFT_RECIPE_MODULES:
@@ -70,9 +82,28 @@ class TestRecipeDiscovery(unittest.TestCase):
                     continue
                 if candidate.__module__ != module_path:
                     continue
+                if candidate.name in (CraftingRecipe.name, CraftingRecipeBase.name):
+                    continue
                 names.append(candidate.name)
 
         return names
+
+    def test_an_abstract_recipe_base_is_not_registered(self):
+        """A module-private base class must not reach the craft menu.
+
+        rendering_recipes._RenderingRecipe declares a category, a skill and a
+        tool but no name, so it is a perfectly valid recipe in every respect
+        except being one. The registry's placeholder-name filter is what keeps
+        it out; without it the menu grows a 'crafting recipe' entry that
+        consumes nothing and produces nothing.
+        """
+        module = importlib.import_module(
+            "systems.gameplay.crafting.recipes.rendering_recipes"
+        )
+        abstract_base = module._RenderingRecipe
+
+        self.assertEqual(abstract_base.name, CraftingRecipe.name)
+        self.assertNotIn(abstract_base, RECIPE_REGISTRY.values())
 
     def test_base_class_is_not_registered(self):
         """BlackoutRecipe is imported into both recipe modules, so a naive
@@ -98,12 +129,20 @@ class TestRecipeDiscovery(unittest.TestCase):
         self.assertNotEqual(defining_module, importing_module)
 
     def test_every_registered_recipe_has_a_real_category(self):
+        """Derived from CRAFTING_CATEGORIES, not a literal pair.
+
+        BlackoutRecipe.__init_subclass__ already raises at import on a category
+        outside that tuple, so what this actually guards is the tuple staying
+        the one owner of the list -- adding Rendering must not mean editing a
+        second census here.
+        """
         for recipe_name, recipe_cls in RECIPE_REGISTRY.items():
-            self.assertIn(
-                recipe_cls.category,
-                (CATEGORY_FOUNDRY, CATEGORY_METALSMITH),
-                msg=f"{recipe_name} has category {recipe_cls.category!r}",
-            )
+            with self.subTest(recipe=recipe_name):
+                self.assertIn(
+                    recipe_cls.category,
+                    CRAFTING_CATEGORIES,
+                    msg=f"{recipe_name} has category {recipe_cls.category!r}",
+                )
 
 
 
@@ -117,12 +156,20 @@ class TestServiceUsesRegistry(unittest.TestCase):
 
         self.assertNotIn("Uncategorized", categories)
 
-    def test_categories_are_the_known_ones(self):
+    def test_every_live_category_is_a_declared_one(self):
+        """Asserts the relationship, not a census.
+
+        One direction only, deliberately. Every category the service reports
+        must be declared in CRAFTING_CATEGORIES -- the other direction would
+        fail the moment a category is declared ahead of the recipes that fill
+        it, which is exactly how Curing and Gastronomy will arrive.
+        """
         categories = crafting_service.get_categories()
 
-        self.assertEqual(
-            sorted(categories), sorted([CATEGORY_FOUNDRY, CATEGORY_METALSMITH])
-        )
+        self.assertTrue(categories)
+        for category in categories:
+            with self.subTest(category=category):
+                self.assertIn(category, CRAFTING_CATEGORIES)
 
     def test_get_recipe_class_resolves_exactly(self):
         recipe_cls = crafting_service.get_recipe_class("rusty metal dust")
@@ -191,8 +238,16 @@ class TestServiceUsesRegistry(unittest.TestCase):
         self.assertEqual(found_categories, {CATEGORY_FOUNDRY})
 
     def test_recipes_for_facility_spans_multiple_allowed_categories(self):
+        """A facility allowing EVERY category sees every recipe.
+
+        allowed_categories is CRAFTING_CATEGORIES rather than the two it used
+        to name: the claim is that a facility restricted to nothing and a
+        facility allowed everything agree, and naming a subset turned that into
+        an accidental census that broke when Rendering landed.
+        """
+
         class _FakeMultiTool:
-            allowed_categories = [CATEGORY_FOUNDRY, CATEGORY_METALSMITH]
+            allowed_categories = list(CRAFTING_CATEGORIES)
 
         found = crafting_service.get_recipes_for_facility(_FakeMultiTool())
         found_names = [key for key, _cls in found]

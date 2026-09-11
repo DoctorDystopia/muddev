@@ -126,6 +126,62 @@ def _find_carried_group(caller, item_key):
     return [obj for obj in matches if obj.key.lower() == matched_key]
 
 
+def _equipped_slot_target(caller, item_key):
+    """
+    Purpose: Resolve an equipment slot name to the ONE worn object in it.
+
+    Entry:
+        caller is the character; item_key is the first token group of the
+        argument, e.g. "main_hand" or "main hand".
+
+    Exit/Returns:
+        Returns a one-object list, or an empty list when `item_key` names no
+        slot, the character wears nothing there, or has no equipment handler
+        at all. Messages nothing -- perform_deposit phrases the refusal.
+
+    Module Globals:
+        None
+
+    Methodology:
+        TRIED LAST, AFTER THE NAME GROUP HAS FAILED, so nothing that banked
+        before banks differently now. A slot name and an item name can in
+        principle collide -- "back" is both a WieldLocation and a plausible
+        prefix -- and the carried group is the older, more likely meaning.
+        Reaching this branch means the character is carrying nothing by that
+        name at all.
+
+        `deposit <slot>` was added for the 3D pane, whose equipped rows have
+        no grid number to send and whose right-click must reach the object
+        that was clicked rather than every copy of its name. See
+        EQUIPMENT_ACTION_DEPOSIT.
+
+    Notes/References:
+        _resolve_slot folds "main hand" to "main_hand", so the spelling the
+        pane sends and the one a player types are the same lookup.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    from commands.equipment_cmds import _resolve_slot
+
+    equipment = getattr(caller, "equipment", None)
+
+    if equipment is None:
+        return []
+
+    slot = _resolve_slot(item_key)
+
+    if slot is None:
+        return []
+
+    item = equipment.slots.get(slot)
+
+    if item is None:
+        return []
+
+    return [item]
+
+
 def _release_for_deposit(caller, targets):
     """
     Purpose: Take anything equipped out of its slot before it is banked.
@@ -261,6 +317,12 @@ def perform_deposit(caller, args):
         search for an item literally named "7" and find nothing, so the slot
         form takes a form that has never worked.
 
+        AN EQUIPMENT SLOT NAME IS THE SAME TRADE, made last. It is tried only
+        once the name group has come back empty, so it can take nothing from
+        a spelling that already banked something; what it buys is a way for
+        the pane's equipped rows to name one worn object, which a name cannot
+        do across two finger slots.
+
     Notes/References:
         systems/gameplay/shop/shop_service.perform_sell is the same shape for the same
         reason, and the two are deliberately readable side by side.
@@ -291,6 +353,9 @@ def perform_deposit(caller, args):
         targets = _find_carried_group(caller, item_key)
 
         if not targets:
+            targets = _equipped_slot_target(caller, item_key)
+
+        if not targets:
             caller.msg((f"You aren't carrying '{item_key}'.", _MSG_COMMERCE))
             return False
 
@@ -314,10 +379,12 @@ class CmdDeposit(Command):
         deposit <slot> <quantity>
         deposit <slot> all
         deposit <item name> [quantity|all]
+        deposit <equipment slot> [quantity|all]
 
     Slot numbers are the ones `inventory` prints, and name one stack. A name
     banks everything you are carrying that matches -- the whole stack for a
-    stackable item, and every copy of it otherwise.
+    stackable item, and every copy of it otherwise. An equipment slot name
+    such as 'main hand' banks just the one item worn there.
 
     If an item is currently equipped, it will be unequipped first.
     """

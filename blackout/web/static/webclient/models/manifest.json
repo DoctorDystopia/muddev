@@ -1,4 +1,5 @@
 {
+  "corpse_skeleton": "npcs/corpse_skeleton.glb",
   "floating_eye": "npcs/floating_eye.glb",
   "map_transition": "world_objects/map_transition.glb",
   "player_character": "characters/player_character.glb",

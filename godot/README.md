@@ -91,14 +91,31 @@ One ladder, and [MeshResolver] is the only thing that knows the order:
 ```
 asset has art?    -- yes -->  the fetched model      tier 1
 	   | no
-family has parts? -- yes -->  the family's shape     tier 2
+family has art?   -- yes -->  the family's model     tier 2
 	   | no
-							  the generic block      tier 3
+family has parts? -- yes -->  the family's shape     tier 3
+	   | no
+							  the generic block      tier 4
 ```
 
 The server already sends this as one lookup — `serialize_entity` calls `asset`
 and `family` "the two tiers of one lookup" — so the client resolves rather than
 decides. Nothing outside `world/meshes/` knows what a weapon looks like.
+
+**Tier 2 is the one that is not per-entity**, and it exists because an asset key
+is sometimes the wrong grain. A corpse's asset key is the key of whichever NPC
+left it, so art aimed at keys would need one packed model per creature in the
+game before any body stopped being a grey box; what every corpse has in common
+is its family, which the server already sends. `FamilyShapes.MODELS` is that
+table — one family, one asset key — and it is the CLIENT's, in the same way
+tier 3's shapes are: `corpse_skeleton` is an art filename and the server must
+never learn it.
+
+A consequence worth knowing when handling `refreshed`: the signal names an
+asset key, and an entity redrawn by tier 2 does not carry that key. Ask
+`MeshResolver.redraws_for()` instead of comparing — comparing directly was
+correct while there was one model tier and silently stopped being correct when
+there were two.
 
 **Two named methods, not a flag.** `resolve_entity()` always returns something,
 because an unmodelled item still has to be visible and clickable.
@@ -116,9 +133,11 @@ family shape, and `refreshed` fires if a model arrives later. A room full of
 unmodelled content is fully playable, which is what lets content ship ahead of
 art.
 
-**Adding a family is one entry in `family_shapes.gd`.** Its keys are the
-generated constants, not string literals — a family renamed server-side breaks
-the file loudly instead of silently drawing every weapon as a box.
+**Adding a family is one entry in `family_shapes.gd`** — `SHAPES` for a
+procedural shape, `MODELS` for a packed model standing in for the whole family.
+Both tables' keys are the generated constants, not string literals: a family
+renamed server-side breaks the file loudly instead of silently drawing every
+weapon as a box.
 
 > **On the web, art must be served from the page's own origin.** `wss://` is
 > exempt from CORS; an HTTP fetch for a `.glb` is not, and

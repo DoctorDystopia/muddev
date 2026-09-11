@@ -124,6 +124,13 @@ _CHANNEL_EXPORTS: tuple = (
 # FAMILY_CHARACTER on its own behalf -- it asks for the local player's mesh
 # rather than passing a payload's key through -- and the rest are here so the
 # set is complete rather than "the one that was needed first".
+#
+# FAMILY_CORPSE is ONE constant covering two server names. ASSET_KIND_CORPSE
+# and ITEM_FAMILY_CORPSE are the same string, deliberately: a corpse on the
+# ground reports the kind and the same corpse in a bag reports the item family,
+# and _mesh_family sends whichever applies in the one `family` field. Exporting
+# it twice under two names would let a client hold two constants that must
+# never differ, which is the drift this generated file exists to remove.
 _KIND_EXPORTS: tuple = (
     ("FAMILY_ITEM", const.ASSET_KIND_ITEM),
     ("FAMILY_NPC", const.ASSET_KIND_NPC),
@@ -131,6 +138,7 @@ _KIND_EXPORTS: tuple = (
     ("FAMILY_ROOM", const.ASSET_KIND_ROOM),
     ("FAMILY_STATION", const.ASSET_KIND_STATION),
     ("FAMILY_GATHERABLE", const.ASSET_KIND_GATHERABLE),
+    ("FAMILY_CORPSE", const.ASSET_KIND_CORPSE),
     ("FAMILY_GENERIC", const.ASSET_KEY_GENERIC),
 )
 

@@ -69,6 +69,69 @@ class SlotDepositTestBase(EvenniaCommandTest):
         return {obj.id for obj in self.char1.bank.list_items()}
 
 
+class TestAnEquipmentSlotNamesOneWornObject(SlotDepositTestBase):
+    """The worn row's address, and why a name was not one.
+
+    A worn row has no grid number, so EQUIPMENT_ACTION_DEPOSIT sent `deposit
+    <name>` -- which reaches the GROUP path and banks every copy the character
+    can bank. With MAIN_HAND_FINGER and OFF_HAND_FINGER both real slots,
+    right-clicking one ring banked the other and anything in the bag besides.
+
+    The slot form is tried only after the name group comes back empty, so
+    nothing that banked before banks differently now; that ordering is what
+    these tests pin.
+    """
+
+    EQUIPPABLE_KEY = "glass_cannon_amulet"
+
+    def _wear(self):
+        item = ITEM_DB[self.EQUIPPABLE_KEY].create(location=self.char1)
+        self.char1.inventory.sync()
+        self.char1.equipment.equip(item)
+
+        return item
+
+    def _slot_value(self, item):
+        return str(item.inventory_use_slot.value)
+
+    def test_a_worn_slot_banks_what_is_worn_there(self):
+        item = self._wear()
+
+        perform_deposit(self.char1, self._slot_value(item))
+
+        self.assertIn(item.id, self._stored_ids())
+
+    def test_it_banks_that_one_and_leaves_the_carried_copies_alone(self):
+        worn = self._wear()
+        spare = ITEM_DB[self.EQUIPPABLE_KEY].create(location=self.char1)
+        self.char1.inventory.sync()
+
+        perform_deposit(self.char1, self._slot_value(worn))
+
+        stored = self._stored_ids()
+        self.assertIn(worn.id, stored)
+        self.assertNotIn(spare.id, stored)
+
+    def test_a_name_still_banks_the_whole_group(self):
+        """The older meaning, unchanged. The slot branch may only fire where
+        a name found nothing."""
+        worn = self._wear()
+        spare = ITEM_DB[self.EQUIPPABLE_KEY].create(location=self.char1)
+        self.char1.inventory.sync()
+
+        perform_deposit(self.char1, worn.key)
+
+        stored = self._stored_ids()
+        self.assertIn(worn.id, stored)
+        self.assertIn(spare.id, stored)
+
+    def test_a_bare_slot_is_refused_rather_than_banking_nothing_quietly(self):
+        banked = perform_deposit(self.char1, "body")
+
+        self.assertFalse(banked)
+        self.assertFalse(self._stored_ids())
+
+
 class TestASlotNamesOneObject(SlotDepositTestBase):
 
     def test_a_slot_banks_that_object_alone(self):

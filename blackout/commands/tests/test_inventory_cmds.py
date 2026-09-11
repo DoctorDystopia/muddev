@@ -15,7 +15,7 @@ Run with:
 
 from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTestCase
 
-from commands.equipment_cmds import CmdEquipment, CmdUnequip
+from commands.equipment_cmds import CmdEquipment, CmdInspect, CmdUnequip
 from commands.inventory_cmds import CmdSwap, parse_slot_number
 from items.equipment.constants import WieldLocation
 from items.inventory.handler import SLOTS_TOTAL
@@ -53,6 +53,120 @@ class TestParseSlotNumber(EvenniaTestCase):
 
     def test_a_name_is_not_a_slot_number(self):
         self.assertEqual(parse_slot_number("toy sword"), -1)
+
+
+class TestCmdInspect(EvenniaCommandTest):
+    """Reading one row's description, addressed the way the pane addresses it.
+
+    `look <name>` could not do this. Three identical chunks answered it with
+    Evennia's multimatch list, and the disambiguators it offered ("chunk-1",
+    "chunk-2") are search ordinals naming no row the pane drew -- so the one
+    action in the payload still going out as a name was the one action a
+    player with a stack of anything could not use.
+    """
+
+    character_typeclass = BlackoutCharacter
+
+    def _pile(self, count=3, item_key=PLAIN_KEY):
+        made = [ITEM_DB[item_key].create(location=self.char1)
+                for _each in range(count)]
+        self.char1.inventory.sync()
+
+        return made
+
+    def test_a_grid_slot_describes_that_slots_item(self):
+        made = self._pile()
+        wanted = made[2]
+        wanted.db.desc = "The third one, and no other."
+
+        response = self.call(CmdInspect(), "3")
+
+        self.assertIn("The third one, and no other.", response)
+
+    def test_identical_copies_are_told_apart_by_slot(self):
+        made = self._pile()
+
+        for number, item in enumerate(made, start=1):
+            item.db.desc = f"Copy number {number}."
+
+        for number in (1, 2, 3):
+            with self.subTest(slot=number):
+                response = self.call(CmdInspect(), str(number))
+
+                self.assertIn(f"Copy number {number}.", response)
+
+    def test_an_empty_slot_is_refused_rather_than_searched(self):
+        response = self.call(CmdInspect(), "9")
+
+        self.assertIn("empty", response.lower())
+
+    def test_a_slot_past_the_grid_says_so(self):
+        response = self.call(CmdInspect(), str(SLOTS_TOTAL + 1))
+
+        self.assertIn(str(SLOTS_TOTAL), response)
+
+    def test_an_equipment_slot_describes_what_is_worn_there(self):
+        item = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        item.db.desc = "Worn, not carried."
+        self.char1.equipment.equip(item)
+
+        response = self.call(CmdInspect(), WieldLocation.NECK.value)
+
+        self.assertIn("Worn, not carried.", response)
+
+    def test_a_worn_slot_is_named_the_way_a_player_spells_it(self):
+        """The pane sends "main_hand"; a player types "main hand"."""
+        item = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        item.db.desc = "Worn, not carried."
+        self.char1.equipment.equip(item)
+        spaced = WieldLocation.NECK.value.replace("_", " ")
+
+        response = self.call(CmdInspect(), spaced)
+
+        self.assertIn("Worn, not carried.", response)
+
+    def test_an_empty_equipment_slot_says_what_is_bare(self):
+        response = self.call(CmdInspect(), WieldLocation.BODY.value)
+
+        self.assertIn(WieldLocation.BODY.label.lower(), response.lower())
+
+    def test_a_bare_slot_still_finds_an_item_whose_name_it_prefixes(self):
+        """Half the slot names are plausible item prefixes. Refusing `inspect
+        head` outright would be refusing a headlamp sitting in the bag."""
+        item = ITEM_DB[PLAIN_KEY].create(location=self.char1)
+        item.key = "head lamp"
+        item.db.desc = "Carried, not worn."
+        self.char1.inventory.sync()
+
+        response = self.call(CmdInspect(), WieldLocation.HEAD.value)
+
+        self.assertIn("Carried, not worn.", response)
+
+    def test_a_name_still_reaches_a_carried_item(self):
+        item = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        item.db.desc = "Named, not numbered."
+        self.char1.inventory.sync()
+
+        response = self.call(CmdInspect(), item.key)
+
+        self.assertIn("Named, not numbered.", response)
+
+    def test_a_name_reaches_an_equipped_item_too(self):
+        """Equipped objects sit at location=None, so nothing finds them by
+        name unless they are passed as candidates. Drawing a sword should not
+        cost the player the ability to read it."""
+        item = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        item.db.desc = "Still readable once worn."
+        self.char1.equipment.equip(item)
+
+        response = self.call(CmdInspect(), item.key)
+
+        self.assertIn("Still readable once worn.", response)
+
+    def test_no_argument_asks_for_one(self):
+        response = self.call(CmdInspect(), "")
+
+        self.assertIn("usage", response.lower())
 
 
 class TestCmdSwap(EvenniaCommandTest):

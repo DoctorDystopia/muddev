@@ -141,6 +141,86 @@ def _resolve_equipped_item(caller, text: str):
     return partial[0]
 
 
+def _resolve_inspect_target(caller, text: str):
+    """
+    Purpose: Resolve "7", "main hand" or "toy sword" to ONE object the
+    character is carrying or wearing.
+
+    Entry:
+        caller - the puppeted Character.
+        text   - a raw argument, already stripped and non-empty.
+
+    Exit/Returns:
+        Returns the object, or None having already messaged the caller.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        THREE ADDRESSES IN ONE FIXED ORDER, unambiguous first. A grid number
+        names exactly one slot and an equipment slot names exactly one worn
+        item; only the name form can match more than one thing, so the two
+        forms the pane sends are settled before the ambiguous one is tried.
+        `skills <arg>`'s three-way read is the same shape for the same reason.
+
+        DIGITS SHORT-CIRCUIT. A digit is never a slot NAME and never an item
+        name, so it goes to resolve_carried_item whole -- which owns both "that
+        slot is empty" and "you only have 32 slots", rather than letting an
+        empty slot fall through to a search for an object literally called
+        "7".
+
+        AN EMPTY SLOT FALLS THROUGH TO THE NAME, and this is the one place the
+        ordering bends. Half the slot names are also plausible item prefixes:
+        `inspect head` on a bare head, refused outright, would be refusing a
+        headlamp sitting in the bag. So a slot that is bare hands the string
+        back to the search, and only speaks up -- naming the slot, which is the
+        more useful refusal -- if the name matched nothing either.
+
+        The name form searches the carried grid and the worn slots TOGETHER.
+        Equipped objects are held at location=None, so they are in no contents
+        list and Evennia's search cannot reach them unless they are passed as
+        candidates; a player who can inspect a sword by name should not lose
+        that the moment they draw it.
+
+    Notes/References:
+        caller.search messages on both no-match and multi-match, which is why
+        those branches return without a message of their own -- and its
+        multimatch list is the right answer HERE, where a human typed an
+        ambiguous name. The pane never reaches it, because the pane sends
+        slots.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    if text.isdigit():
+        _index, item = resolve_carried_item(caller, text)
+
+        return item
+
+    equipment = getattr(caller, "equipment", None)
+    slot = _resolve_slot(text)
+    candidates = list(caller.contents)
+
+    if equipment is not None:
+        candidates.extend(obj for obj in equipment.all() if obj is not None)
+
+        if slot is not None:
+            worn = equipment.slots.get(slot)
+
+            if worn is not None:
+                return worn
+
+    if slot is not None and not caller.search(
+            text, candidates=candidates, quiet=True):
+        caller.msg(
+            (f"{ERROR_COLOR}Nothing is equipped in your "
+            f"{slot.label}.{RESET_COLOR}", _MSG_INVENTORY)
+        )
+        return None
+
+    return caller.search(text, candidates=candidates)
+
+
 # ─── Public routines / Classes ───────────────────────────────────────────────
 
 class CmdEquipment(Command):
@@ -306,6 +386,93 @@ class CmdUnequip(Command):
 
 
 
+class CmdInspect(Command):
+    """
+    read the description of something you are carrying or wearing
+
+    Usage:
+      inspect <slot>
+      inspect <item name>
+
+    <slot> is an inventory grid number as `inventory` prints it, or an
+    equipment slot name such as 'main hand' or 'body'.
+
+    Note for maintainers: never write a vertical bar in this command's
+    player-facing text. Evennia's ANSI parser reads "|i" as a markup code and
+    eats it.
+
+    Example:
+      inspect 7
+      inspect main hand
+      inspect toy sword
+    """
+
+    key = "inspect"
+    locks = "cmd:all()"
+    help_category = HELP_CATEGORY_GENERAL
+
+
+    def func(self) -> None:
+        """
+        Purpose: Describe ONE carried or worn object, named unambiguously.
+
+        Entry:
+            self.caller is a puppeted Character.
+            self.args names a grid slot, an equipment slot, or an item.
+
+        Exit/Returns:
+            No return value. Messages the caller either way.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            THIS EXISTS BECAUSE `look <name>` CANNOT NAME A ROW. Every other
+            per-item action the pane sends is addressed by the slot the row
+            occupies -- see INVENTORY_ACTION_EQUIP and _build_actions -- for
+            the reason constants.py gives at INVENTORY_ACTION_DROP: identical
+            copies are a real inventory, and a name is a target the pane
+            cannot predict. Inspect was the one action still going out as a
+            name, so three cured chunks answered a right-click with Evennia's
+            multimatch list instead of a description.
+
+            `look` is left alone rather than taught slot numbers. It is the
+            engine's command and its argument is a thing in the ROOM; a grid
+            number means nothing there, and an inventory is the only place
+            where slots exist.
+
+            The prose is `at_look`'s, reached exactly as CmdLook reaches it,
+            and tagged with the same MESSAGE_TYPE_LOOK. A player inspecting
+            from the pane and one typing `look` read the same paragraph in the
+            same tab -- which is also why this renders nothing of its own.
+
+        Notes/References:
+            _resolve_inspect_target owns the three-way lookup and every
+            refusal message.
+
+        Author: Nick Hobar
+        Creation date: 09/11/2026
+        """
+        caller = self.caller
+        target_text = self.args.strip()
+
+        if not target_text:
+            caller.msg(("Usage: inspect <slot or item>", _MSG_INVENTORY))
+            return
+
+        item = _resolve_inspect_target(caller, target_text)
+
+        if item is None:
+            return
+
+        description = caller.at_look(item)
+        self.msg(
+            text=(description,
+                  {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_LOOK}),
+            options=None,
+        )
+
+
 class EquipmentCmdSet(CmdSet):
     """
     Purpose: CmdSet containing equipment management commands.
@@ -357,3 +524,4 @@ class EquipmentCmdSet(CmdSet):
         unequip_cmd = CmdUnequip()
         self.add(equip_cmd)
         self.add(unequip_cmd)
+        self.add(CmdInspect())

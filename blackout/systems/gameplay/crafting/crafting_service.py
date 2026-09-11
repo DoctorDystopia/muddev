@@ -203,6 +203,90 @@ def get_recipe_class(recipe_key):
     return RECIPE_REGISTRY.get(recipe_key)
 
 
+def get_deferred_handler_for_facility(caller, facility):
+    """The character handler a facility's recipes defer their output to.
+
+    Entry:
+        caller is the character standing at the facility. facility is a
+        CraftingFacility, or None for the unrestricted menu.
+
+    Exit/Returns:
+        Returns the handler object, or None when nothing worked here is
+        deferred -- which is every facility but the curing chamber today.
+
+    Methodology:
+        Derived from the RECIPES, never from the facility's typeclass. The
+        curing chamber is the only facility with a slot display today, and
+        writing the test as "is this a chamber" would make a second deferred
+        stage a change to every screen that asks. What makes a facility's menu
+        show slots is that something workable there does not finish in the call
+        that started it, which is exactly what deferred_handler says.
+
+        The FIRST match wins. A facility whose categories mixed a deferred
+        recipe with an immediate one would show the deferred stage's slots,
+        which is the right answer: the immediate half has no slots to show.
+        Nothing in the game mixes them, and allowed_categories is per-facility
+        precisely so nothing has to.
+    """
+    recipes = get_recipes_for_facility(facility)
+
+    for _recipe_key, recipe_cls in recipes:
+        if not recipe_cls.deferred_handler:
+            continue
+
+        handler = recipe_cls.deferred_handler_for(caller)
+
+        if handler is not None:
+            return handler
+
+    return None
+
+
+def get_deferred_handlers(caller):
+    """Every deferred-stage handler this character has, in registry order.
+
+    Entry:
+        caller is a character.
+
+    Exit/Returns:
+        Returns a list of (stage_name, handler) tuples, one per distinct
+        deferred stage the recipe registry names. Empty when the character
+        carries none of them.
+
+        The name is the recipe's own deferred_handler string ("curing"), which
+        is the stable machine token for the stage -- a structured payload needs
+        to say WHICH stage a block of slots belongs to, and the attribute name
+        is the one spelling of that the game already has.
+
+    Methodology:
+        The registry is the source of truth for which stages exist, so a screen
+        showing "everything I have in progress" -- the dossier's Processing
+        band -- needs no list of its own and gains a second stage the day a
+        recipe declares one.
+
+        Distinct by HANDLER NAME rather than by recipe: forty curing recipes
+        are one chamber. A name the character does not carry is skipped rather
+        than reported, which is the same failure-closed reading
+        deferred_handler_for documents.
+    """
+    seen = set()
+    handlers = []
+
+    for _recipe_key, recipe_cls in RECIPE_REGISTRY.items():
+        name = recipe_cls.deferred_handler
+
+        if not name or name in seen:
+            continue
+
+        seen.add(name)
+        handler = recipe_cls.deferred_handler_for(caller)
+
+        if handler is not None:
+            handlers.append((name, handler))
+
+    return handlers
+
+
 def get_recipes_for_skill(skill_key):
     """Get every recipe that unlocks under a given skill.
 
@@ -295,9 +379,40 @@ def check_craftable(caller, recipe_key):
             )
             reasons.append(f"Missing tool: {tool_name}")
 
+    capacity_reason = _deferred_capacity_reason(caller, recipe_cls)
+    if capacity_reason:
+        reasons.append(capacity_reason)
+
     can_craft = meets_skill and not reasons
 
     return can_craft, reasons
+
+
+def _deferred_capacity_reason(caller, recipe_cls):
+    """Why a deferred recipe cannot be started right now, or None.
+
+    A curing recipe is refusable for a reason no material count can see: every
+    slot the character has is already holding something. Asked here rather than
+    only at the moment of starting, because craft_batch re-checks craftability
+    between items and a batch that sailed past a full chamber would report
+    items crafted that were silently dropped.
+
+    A recipe naming a handler the character does not have is refused too. It
+    cannot be allowed to fall through to the immediate path, which would hand
+    over a cured chuck with no wait at all.
+    """
+    if not recipe_cls.deferred_handler:
+        return None
+
+    handler = recipe_cls.deferred_handler_for(caller)
+    if handler is None:
+        return f"Cannot {recipe_cls.deferred_handler} right now."
+
+    remaining = handler.capacity_remaining()
+    if remaining <= 0:
+        return f"No free {recipe_cls.deferred_handler} slot."
+
+    return None
 
 
 def get_max_craftable(caller, recipe_key):
@@ -331,7 +446,13 @@ def get_max_craftable(caller, recipe_key):
         if not _has_tool_available(caller, tool_tag):
             return 0
 
+    capacity = _deferred_capacity(caller, recipe_cls)
+    if capacity is not None and capacity <= 0:
+        return 0
+
     if not recipe_cls.consumable_tags:
+        if capacity is not None:
+            return min(capacity, MAX_CRAFT_BATCH_SIZE)
         return MAX_CRAFT_BATCH_SIZE
 
     per_craft_counts = []
@@ -342,7 +463,30 @@ def get_max_craftable(caller, recipe_key):
 
     max_craftable = min(per_craft_counts)
 
+    if capacity is not None:
+        max_craftable = min(max_craftable, capacity)
+
     return max(0, min(max_craftable, MAX_CRAFT_BATCH_SIZE))
+
+
+def _deferred_capacity(caller, recipe_cls):
+    """How many more of a deferred recipe may be started, or None if immediate.
+
+    None and 0 are different answers and the caller must not conflate them:
+    None means "this recipe has no capacity limit", 0 means "it has one and it
+    is full". Returning 0 for an immediate recipe would make every craft in the
+    game impossible.
+    """
+    if not recipe_cls.deferred_handler:
+        return None
+
+    handler = recipe_cls.deferred_handler_for(caller)
+    if handler is None:
+        return 0
+
+    remaining = handler.capacity_remaining()
+
+    return remaining
 
 
 def get_recipe_display_data(caller, recipe_key):
@@ -566,6 +710,15 @@ def perform_craft(caller, recipe_key):
     if not recipe_cls:
         return None
 
+    # A deferred recipe does not finish here. Its handler consumes the input,
+    # claims a slot and returns; the output is spawned whenever the player
+    # comes back for it. Routed on the recipe's own attribute rather than on
+    # its type, so this stays the only execution boundary and adding a second
+    # deferred stage changes nothing in this module. See
+    # BlackoutRecipe.deferred_handler.
+    if recipe_cls.deferred_handler:
+        return _start_deferred_craft(caller, recipe_cls)
+
     consumables = [
         obj
         for obj in caller.contents
@@ -595,3 +748,36 @@ def perform_craft(caller, recipe_key):
     _publish_inventory(caller)
 
     return result
+
+
+def _start_deferred_craft(caller, recipe_cls):
+    """Hand a deferred recipe to its handler and report what happened.
+
+    Returns an empty list when the recipe was successfully STARTED, and None
+    when it was refused. Both are falsy, which is deliberate: nothing was
+    produced either way, so a caller asking "did I get items" gets the right
+    answer without having to know the stage is timed. The distinction is there
+    for a caller that does care -- `[] is not None`.
+
+    No quest notification fires here. A player who seals meat into a chamber
+    has not crafted anything yet, so ACTION_CRAFT is the handler's to fire when
+    the cured meat is actually collected.
+    """
+    from evennia.utils import logger
+
+    handler = recipe_cls.deferred_handler_for(caller)
+
+    if handler is None:
+        logger.log_err(
+            f"[CRAFTING] {recipe_cls.name!r} names deferred handler "
+            f"{recipe_cls.deferred_handler!r}, which {caller.key} does not "
+            f"have; refusing rather than crafting it immediately."
+        )
+        return None
+
+    started = handler.start(recipe_cls)
+
+    if not started:
+        return None
+
+    return []

@@ -89,6 +89,23 @@ const PRESENTATION := {
 	# than a change -- forcing it opaque removes nothing that was ever drawn.
 	"tile_oasis": {"opaque": true},
 	"tile_oasis_outskirts": {"opaque": true},
+
+	# THE ONLY MODEL WHOSE ORIENTATION IS A GAMEPLAY FACT rather than a
+	# correction to an export. The download is a skeleton STANDING UP, because
+	# that is what a character model is, and it is served as the stand-in for
+	# the corpse family (FamilyShapes.MODELS) — so a body that has not been
+	# laid down is a skeleton standing on the tile where something died, which
+	# reads as a live enemy rather than as loot.
+	#
+	# -PI/2 rather than +PI/2 puts it on its BACK. The model faces +Z, so the
+	# negative turn takes the front to +Y and leaves the ribcage and skull
+	# facing the camera; the positive turn buries the face in the sand. Neither
+	# is wrong about the file and only a person looking at it can tell, which
+	# is what every entry in this table has in common.
+	#
+	# No offset. EntityPool lifts a node by its own lowest point (_rest_offset),
+	# so the body sits on the ground once it is flat without a number here.
+	"corpse_skeleton": {"rotation": Vector3(-PI / 2.0, 0.0, 0.0)},
 }
 
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.

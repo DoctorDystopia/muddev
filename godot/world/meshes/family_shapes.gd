@@ -208,6 +208,42 @@ static var GENERIC: Array = [
 		"color": MeshPalette.GENERIC},
 ]
 
+## One family, one packed model, for a family better served by art than by
+## primitives. Tier 2 of the mesh ladder; [member SHAPES] is tier 3 below it.
+##
+## ## Why a family gets art at all
+##
+## Tier 1 is a model per ASSET KEY, and an asset key names one specific thing —
+## `rusty_scrap_shortsword`, `floating_eye`. That is the right grain for a
+## sword, and the wrong grain for a body: a corpse's asset key is the key of
+## whatever NPC left it (see `typeclasses/corpses.py`), so covering corpses at
+## tier 1 would mean one packed model per creature in the game before any of
+## them stopped being a grey box. What every corpse has in common is its
+## FAMILY, which is exactly what the server already sends.
+##
+## ## Why it is the client's table
+##
+## CLAUDE.md draws this line and it is drawn here: the server owns which
+## families exist, the client owns what they look like. `corpse_skeleton` is an
+## art filename and the server must never learn it — `Corpse.asset_key`
+## deliberately names the dead NPC instead, so a mutant raider that one day
+## gains a lying-down model reuses it at tier 1 with no edit in this file.
+##
+## The key is a family constant and the value an ASSET KEY, not a path: the
+## registry already owns where a model is fetched from, so a path here would be
+## a second place to be wrong about the served tree.
+##
+## Entirely optional. A family named here whose model has not arrived draws its
+## tier 3 shape and sharpens in when it lands, exactly as an unmodelled entity
+## does, and a family absent here is not an error.
+static var MODELS: Dictionary = {
+	# A PSX-era skeleton, standing, laid flat by ModelRegistry.PRESENTATION.
+	# Placeholder art for EVERY corpse in the game, which is what a family
+	# entry means — a mutant raider leaves a skeleton because one model is
+	# better than sixteen grey boxes, not because the fiction says so.
+	_Const.FAMILY_CORPSE: "corpse_skeleton",
+}
+
 
 ## One head, one torso, one base — the same shape for both kinds of person.
 ##
@@ -248,6 +284,25 @@ static func has_shape(family: String) -> bool:
 ## Every family this table draws. Derived, never restated.
 static func families() -> PackedStringArray:
 	var names := PackedStringArray(SHAPES.keys())
+	names.sort()
+
+	return names
+
+
+## The asset key standing in for a whole family, or "" when none does.
+##
+## Answers for the TABLE, not for the registry: a key comes back whether or not
+## art for it has arrived, because whether it has is the loader's question and
+## asking two things at once is how the tile-prop policy ended up living in
+## callers' memory. See [method MeshResolver.resolve_entity] for the ladder that
+## uses this.
+static func model_for(family: String) -> String:
+	return str(MODELS.get(family, ""))
+
+
+## Every family standing in a packed model's place. Derived, never restated.
+static func modelled_families() -> PackedStringArray:
+	var names := PackedStringArray(MODELS.keys())
 	names.sort()
 
 	return names

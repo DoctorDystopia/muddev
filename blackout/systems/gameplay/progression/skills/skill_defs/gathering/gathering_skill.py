@@ -35,8 +35,7 @@ from world.item_database import ITEM_DB
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
 # MESSAGE_TYPES in systems/interface/statefeed/constants.py.
-_MSG_GATHERING = {
-    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_GATHERING}
+_MSG_GATHERING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_GATHERING}
 
 
 _MIN_HARVEST_COOLDOWN = 2.0
@@ -252,7 +251,7 @@ class GatheringSkill(BaseSkill):
             An explicit choice is matched the way `skills <arg>` matches its
             argument -- exact key, then exact name, then unique prefix of
             either -- so `butcher corpse = filet` works without the player
-            knowing that the item key is mutant_raider_filet.
+            knowing that the item key is mutant_raider_raw_filet.
 
             A named-but-locked yield is refused with its level rather than
             silently downgraded to the one below it. Handing someone a chuck

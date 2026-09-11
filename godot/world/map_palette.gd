@@ -80,6 +80,9 @@ const ROOM_KIND_COLORS := {
 	"Bank": Color("4488ff"),
 	"Foundry Furnace Facility": Color("dd4422"),
 	"Metalsmith Anvil Facility": Color("aaaaaa"),
+	# The food chain's first facility, coloured tallow rather than flame so it
+	# does not read as a second furnace at a glance.
+	"Rendering Cooker Facility": Color("cc7722"),
 	# Two clearings, not one, and they are told apart by what they yield:
 	# oasis grows rusty poles, oasis_outskirts grows metal ones. Coloured for
 	# the material rather than for the tile, so the map reads as a gradient

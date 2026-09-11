@@ -200,14 +200,14 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         bare_hands=True,
         yields=(
             GatherableYield(
-                item_key="mutant_raider_chuck",
+                item_key="mutant_raider_raw_chuck",
                 skill_key=skill_constants.BUTCHERY_SKILL_KEY,
                 required_level=0,
                 xp_reward=25,
                 secondary_xp={skill_constants.CUTTING_SKILL_KEY: 5},
             ),
             GatherableYield(
-                item_key="mutant_raider_filet",
+                item_key="mutant_raider_raw_filet",
                 skill_key=skill_constants.BUTCHERY_SKILL_KEY,
                 required_level=10,
                 xp_reward=45,
