@@ -135,12 +135,50 @@ class CallSiteTests(unittest.TestCase):
         self.assertIn("ACTION_CRAFT, recipe_key", source)
 
 
-    def test_gathering_reports_both_cut_and_gather(self):
+    def test_gathering_reports_both_the_node_and_the_item(self):
+        """Two verbs per harvest, and neither may quietly become the other.
+
+        A quest that wants "work this node" names `<verb>:<gatherable_key>`;
+        one that wants "obtain this material, from any source" names
+        `gather:<item_key>`. Collapsing them would force every material
+        objective to know which skill produced it.
+
+        Reads the shared GatheringSkill rather than Cutting, which is where
+        the call sites moved when Butchery stopped being a copy of Cutting --
+        one body now, so one place to assert.
+        """
         import inspect
 
-        from systems.gameplay.progression.skills.skill_defs.gathering import cutting
+        from systems.gameplay.progression.skills.skill_defs.gathering import (
+            gathering_skill,
+        )
 
-        source = inspect.getsource(cutting.Cutting._execute_gathering)
+        source = inspect.getsource(gathering_skill.GatheringSkill._notify_quests)
 
-        self.assertIn("ACTION_CUT, gatherable_key", source)
-        self.assertIn("ACTION_GATHER, item_key", source)
+        self.assertIn("self.quest_action, gatherable_def.key", source)
+        self.assertIn("ACTION_GATHER, chosen.item_key", source)
+
+    def test_every_gathering_skill_names_a_real_quest_verb(self):
+        """The per-skill half of the same claim.
+
+        _notify_quests fires whatever `quest_action` the skill declares, so a
+        skill declaring a verb the vocabulary does not carry would raise
+        inside notify_quests on a successful harvest -- at the player.
+        """
+        from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+        from systems.gameplay.progression.skills.skill_defs.gathering.gathering_skill import (
+            GatheringSkill,
+        )
+        from systems.gameplay.quests import constants as quest_constants
+
+        for skill_key, skill_class in SKILL_REGISTRY.items():
+            if not issubclass(skill_class, GatheringSkill):
+                continue
+
+            with self.subTest(skill=skill_key):
+                action = skill_class.quest_action
+
+                if action is None:
+                    continue
+
+                self.assertIn(action, quest_constants.QUEST_ACTIONS)

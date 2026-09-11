@@ -77,6 +77,11 @@ func _ready() -> void:
 	_the_family_decides_the_shape()
 	_an_unknown_family_still_draws()
 	_entities_can_be_added_and_removed()
+	_an_entity_announced_twice_is_drawn_once()
+	_a_re_announcement_carries_the_fresher_values()
+	_removing_a_doubled_entity_takes_all_of_it()
+	_a_delta_that_repeats_a_held_entity_does_not_double_it()
+	_a_whole_list_containing_a_repeat_draws_it_once()
 	_a_delta_applies_both_halves_at_once()
 	_a_delta_ignores_an_id_it_does_not_hold()
 	_an_empty_delta_changes_nothing()
@@ -215,6 +220,77 @@ func _entities_can_be_added_and_removed() -> void:
 	_expect(not _pool.entity(20743).is_empty(),
 		"an id parsed from a float still looks up as an int")
 
+
+# ─── One entry per id ────────────────────────────────────────────────────────
+
+## Nothing in the wire protocol promises an entity is announced once.
+##
+## `room_add_player` puts an NPC on screen the moment it respawns; the server's
+## snapshot of this client's view was taken before it existed, so the `added`
+## half of the next `room_players_delta` names it again. Both are correct
+## messages. Appending both drew the thing twice.
+func _an_entity_announced_twice_is_drawn_once() -> void:
+	_pool.replace_all([RAIDER])
+
+	_pool.add(RAIDER)
+
+	_expect(_pool.get_child_count() == 1,
+		"an entity announced a second time is still drawn once")
+
+
+func _a_re_announcement_carries_the_fresher_values() -> void:
+	## Replace and not skip: a re-sent entity may have moved, taken damage or
+	## gained an action, and keeping the first copy would pin the client to
+	## whatever it happened to hear first.
+	var wounded := RAIDER.duplicate(true)
+	wounded["name"] = "mutant raider (wounded)"
+	_pool.replace_all([RAIDER])
+
+	_pool.add(wounded)
+
+	_expect(_pool.get_child_count() == 1, "still one entity")
+	_expect(str(_pool.entity(20743).get("name", "")) == "mutant raider (wounded)",
+		"and it holds the values from the later announcement")
+
+
+## The long tail of the doubling bug, and the half actually seen in play.
+##
+## `remove` took only the FIRST match, so a doubled corpse lost one copy when
+## it was butchered and kept the other -- standing on the tile permanently,
+## still clickable, sending commands about an object that no longer existed.
+func _removing_a_doubled_entity_takes_all_of_it() -> void:
+	# Forced past the public API, which no longer permits it: the uniqueness
+	# invariant is held on every WRITE, and _rebuild draws one node per entry
+	# rather than re-checking. This is the state a client that shipped without
+	# the invariant would be in, and remove() has to be able to get out of it.
+	_pool.replace_all([RAIDER])
+	_pool._entities.append(RAIDER)
+	_pool._rebuild()
+	_expect(_pool.get_child_count() == 2, "two entries draw two nodes")
+
+	_pool.remove(20743)
+
+	_expect(_pool.entity(20743).is_empty(), "removing it takes every copy")
+	_expect(_pool.get_child_count() == 0, "and nothing is left drawn")
+
+
+func _a_delta_that_repeats_a_held_entity_does_not_double_it() -> void:
+	_pool.replace_all([RAIDER, SWORD])
+
+	_pool.apply_delta([RAIDER, ODDITY], [])
+
+	_expect(_pool.get_child_count() == 3,
+		"a delta re-naming a held entity adds only what is new")
+
+
+## Resync sends the whole list. Applying it twice must leave the same screen.
+func _a_whole_list_containing_a_repeat_draws_it_once() -> void:
+	_pool.replace_all([RAIDER, SWORD, RAIDER])
+
+	_expect(_pool.get_child_count() == 2, "a repeated id in one list draws once")
+
+
+# ─── Deltas ──────────────────────────────────────────────────────────────────
 
 ## A three-part figure with one white head would be worse than no flash at all.
 ## `room_players_delta` carries the change the observer's own movement caused.

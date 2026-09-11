@@ -50,6 +50,7 @@ ACTION_USE = "use"
 
 # Blackout-specific skills and progression.
 ACTION_CUT = "cut"
+ACTION_BUTCHER = "butcher"
 ACTION_MINE = "mine"
 ACTION_HARVEST_BRAIN = "harvest_brain"
 
@@ -65,6 +66,7 @@ QUEST_ACTIONS = frozenset({
     ACTION_CRAFT,
     ACTION_USE,
     ACTION_CUT,
+    ACTION_BUTCHER,
     ACTION_MINE,
     ACTION_HARVEST_BRAIN,
 })

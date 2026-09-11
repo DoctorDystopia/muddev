@@ -130,6 +130,12 @@ Tied to the core "Cutting" skill. Fired when successfully slicing synthetic crys
 
 * **Usage Examples:** `cut:synthetic_crystal`, `cut:old_metal`
 
+### `butcher`
+
+Tied to the core "Butchery" skill. Fired when successfully taking a cut off a corpse. The key is the corpse's gatherable key, not the cut taken -- an objective that wants a particular cut names `gather:<item_key>` instead.
+
+* **Usage Examples:** `butcher:mutant_raider_corpse`, `butcher:big_mutant_corpse`
+
 ### `mine`
 
 Tied to the core "Mining" skill. Fired when successfully extracting from ore/mineral deposits.

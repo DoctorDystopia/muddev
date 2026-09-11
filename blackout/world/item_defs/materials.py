@@ -44,6 +44,33 @@ ITEMS = {
         tags=[("rusty_scrap_metal", "crafting_material")],
     ),
 
+    # ─── Mutant raider cuts ───────────────────────────────────────────────
+    # Butchery's two yields off a raider corpse: the chuck from level 0, the
+    # filet from 10. Non-stackable, matching rusty_metal_chunk -- a gathered
+    # material a recipe consumes one of. Rendering and Gastronomy read them
+    # by tag, so adding a third cut needs no edit outside this dict and
+    # GATHERABLE_REGISTRY.
+    "mutant_raider_chuck": ItemDef(
+        key="mutant_raider_chuck",
+        name="mutant raider chuck",
+        desc="A rough rectangular slab off a mutant raider.",
+        value=6,
+        weight=1.5,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_raider_chuck", "crafting_material")],
+    ),
+    "mutant_raider_filet": ItemDef(
+        key="mutant_raider_filet",
+        name="mutant raider filet",
+        desc="A clean, boneless portion of a mutant raider.",
+        value=18,
+        weight=0.8,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_raider_filet", "crafting_material")],
+    ),
+
     # Metal items
     "metal_chunk": ItemDef(
         key="metal_chunk",

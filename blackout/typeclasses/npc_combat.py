@@ -14,12 +14,12 @@ from systems.gameplay.combat import constants as combat_constants
 from systems.gameplay.progression.skills.constants import COMBAT_SKILL_KEYS
 from systems.gameplay.progression.skills.stat_block import StatBlockSkills
 from typeclasses.mixins import CombatEntity
-from typeclasses.objects import ObjectParent
+from typeclasses.objects import ObjectParent, Unpocketable
 
 from .spawners import register_spawner
 
 
-class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
+class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
     """
     Purpose: An aggressive NPC enemy for batch 2 melee combat testing.
 
@@ -52,6 +52,12 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
+
+    # Refused by Unpocketable.at_pre_get. A live enemy in your bag never dies
+    # in its room, so HostileNPC.respawn never runs and its tile stays empty
+    # for good -- see the mixin in typeclasses/objects.py for the full story.
+    cannot_get_message = "{name} is still moving. Killing it first is the usual order."
+
 
     @lazy_property
     def skills(self) -> StatBlockSkills:
@@ -155,6 +161,62 @@ class HostileNPC(CombatEntity, ObjectParent, DefaultObject):
             from systems.gameplay.loot.drops import award_drops
 
             award_drops(self, killer)
+        except Exception:
+            logger.log_trace()
+
+
+    def leave_corpse(self, killer=None) -> None:
+        """Leave this NpcDef's corpse on the floor of the room it died in.
+
+        The corpse is named by its NpcDef's `corpse_key` and resolved live
+        through db.npc_key, so an NPC with no corpse_key simply leaves nothing
+        -- opt-in, exactly as loot_table and respawn_seconds are.
+
+        The body carries `corpse_npc_key`, NOT `npc_key`. That is the whole
+        reason corpses were dangerous to add: `npc_key` is what
+        systems/gameplay/spawning/respawn.py npc_present() matches on, so a
+        corpse answering to it reads as a live raider standing on the tile.
+        The sweep does not requeue a blocked entry, it DROPS it -- the raider
+        would never return, and taking the corpse away afterwards could not
+        undo it. The same attribute is also the first branch of the
+        statefeed's _asset_identity, which would have drawn a walking raider
+        where the body lies.
+
+        Wrapped the way drop_loot is: a broken corpse def must never block the
+        death itself, because a skipped respawn() leaves a 0-hp corpse
+        standing and hangs the fight.
+        """
+        try:
+            # Local imports: world.item_database and world.npc_database pull
+            # in every def module, and this module is loaded by
+            # SPAWNER_MODULES at load_all_spawners() time. Matches the
+            # local-import style used throughout this module.
+            from typeclasses.corpses import CORPSE_NPC_KEY_ATTR
+            from world.item_database import ITEM_DB
+            from world.npc_database import NPC_DB
+
+            npc_key = self.db.npc_key
+            npc_def = NPC_DB.get(npc_key)
+
+            if npc_def is None or not npc_def.corpse_key:
+                return
+
+            room = self.location
+
+            if room is None:
+                return
+
+            item_def = ITEM_DB.get(npc_def.corpse_key)
+
+            if item_def is None:
+                logger.log_err(
+                    f"HostileNPC.leave_corpse: {npc_key!r} names unknown "
+                    f"corpse item {npc_def.corpse_key!r}."
+                )
+                return
+
+            corpse = item_def.create(location=room)
+            corpse.attributes.add(CORPSE_NPC_KEY_ATTR, npc_key)
         except Exception:
             logger.log_trace()
 

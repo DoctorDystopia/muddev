@@ -125,12 +125,35 @@ class TestInteractionVerbs(EvenniaTest):
         self.assertEqual(body["interact"], "talk")
 
     def test_a_gathering_node_is_cut_not_taken(self):
+        """The point of the case: a node affords `cut`, never `get`.
+
+        It names the node, where it used to be the bare verb. A gathering
+        node's verbs are now derived from GATHERABLE_REGISTRY rather than from
+        a singular `interact_verb`, and derived verbs have to name their
+        target -- a room can hold two corpses, and a client can only send a
+        string. Both forms are commands a telnet player could type; the node's
+        cmdset hangs on the node either way.
+        """
         node = create_object(RustyPole, key="rusty pole", location=self.room1)
 
         body = serializers.serialize_entity(node)
 
         self.assertEqual(body["kind"], const.ASSET_KIND_GATHERABLE)
-        self.assertEqual(body["interact"], "cut")
+        self.assertEqual(body["interact"], "cut rusty pole")
+        self.assertNotIn("get", body["interact"])
+
+    def test_a_node_offers_one_verb_per_skill_that_works_it(self):
+        """Derived from the registry, so a second skill needs no client edit.
+
+        A single-skill node sends no `actions` at all -- the list would be a
+        second copy of `interact` on every entity in the biggest payload the
+        feed sends.
+        """
+        node = create_object(RustyPole, key="rusty pole", location=self.room1)
+
+        body = serializers.serialize_entity(node)
+
+        self.assertNotIn("actions", body)
 
     def test_a_hostile_npc_is_attacked_by_name(self):
         # `attack` lives on the CHARACTER's cmdset, so unlike the stations

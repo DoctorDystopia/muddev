@@ -10,7 +10,8 @@ Description: Configuration for Stat Tracking.
 # literals -- combat, shop, and quest code will reference these by name.
 
 KILLS_PER_HOSTILE_STAT_KEY   = "kills_per_hostile"  # mixins.py -> at_death
-CUTTING_TOTALS_STAT_KEY      = "cutting_totals"     # cutting.py _execute_gathering
+CUTTING_TOTALS_STAT_KEY      = "cutting_totals"     # cutting.py, via GatheringSkill
+BUTCHERY_TOTALS_STAT_KEY     = "butchery_totals"    # butchery.py, via GatheringSkill
 CREDITS_SPENT_STAT_KEY       = "credits_spent"      # shop_service.py execute_buy
 DEATHS_PER_HOSTILE_STAT_KEY  = "deaths_per_hostile" # mixins.py -> at_death
 # MATERIAL_TOTALS_STAT_KEY = "TOTAL"

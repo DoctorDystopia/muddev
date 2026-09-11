@@ -117,6 +117,22 @@ class NpcDef:
     #     `evennia reload` affects NPCs already standing on the grid.
     loot_table: str | None = None
 
+    # corpse_key — key into world.item_database.ITEM_DB naming the corpse this
+    #     NPC leaves behind, or None for one that leaves nothing. Opt-in, the
+    #     way loot_table and respawn_seconds are: an NPC nobody has written a
+    #     corpse for simply vanishes on death, as every NPC did before this.
+    #
+    #     Resolved live through db.npc_key -> NPC_DB for the same reason
+    #     loot_table is, and NOT stamped onto the object: the corpse is created
+    #     while the NPC still exists (at_death runs leave_corpse before
+    #     respawn() deletes the row), so there is nothing for a stamp to
+    #     outlive.
+    #
+    #     The ItemDef it names is what carries the gatherable_key, so what a
+    #     corpse YIELDS is not restated here -- this field says only that
+    #     there is one.
+    corpse_key: str | None = None
+
     # ─── AI ──────────────────────────────────────────────────────────
     # ai_behavior — key into systems/gameplay/ai/registry.BEHAVIOR_REGISTRY, naming the
     #     behaviour the combat handler consults when this NPC has no pending

@@ -484,7 +484,9 @@ class CombatEntity:
             5. Report the kill to the killer's quests, keyed on the victim's
                stable `db.npc_key`. A player victim has no npc_key and is
                therefore never a quest objective.
-            6. call self.respawn() to permit subclass divergence (player
+            6. leave what death leaves: the loot table, then the corpse.
+               Both read db.npc_key, which respawn() is about to delete.
+            7. call self.respawn() to permit subclass divergence (player
                respawn vs NPC despawn).
 
         Notes/References:
@@ -564,6 +566,12 @@ class CombatEntity:
         # and the loot table is resolved off db.npc_key while it still exists.
         self.drop_loot(killer)
 
+        # Same window, same reason: the corpse's ItemDef is resolved through
+        # db.npc_key, and this is the last moment that attribute exists. It
+        # runs AFTER drop_loot so that a body and the things that fell out of
+        # it arrive in the order a player would expect to read them.
+        self.leave_corpse(killer)
+
         # Tear combat down BEFORE respawn. respawn() restores HP to max, so
         # running it first made the corpse read as alive again and the fight
         # simply continued -- check_stop_combat's "you lost" branch was
@@ -637,6 +645,41 @@ class CombatEntity:
 
         Author: Nick Hobar
         Creation date: 08/14/2026
+        """
+        pass
+
+
+    def leave_corpse(self, killer=None) -> None:
+        """
+        Purpose: Subclass-overridable hook for leaving a body behind on death.
+        Default behaviour is to leave nothing.
+
+        Entry:
+            killer - the entity that landed the killing blow, or None.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A sibling of drop_loot, and a separate hook rather than a branch
+            inside it, because the two answer different questions and one can
+            fail without the other. Loot is a probability table; a corpse is a
+            fact about the NpcDef. An NPC may have either, both, or neither.
+
+            A Player override is where a player's own corpse would land if
+            Blackout ever wants one; the hook existing now means that work
+            needs no change to at_death.
+
+        Notes/References:
+            Called from at_death BEFORE respawn(), which deletes the database
+            row this reads db.npc_key off -- the same ordering constraint
+            drop_loot has, and for the same reason.
+
+        Author: Nick Hobar
+        Creation date: 09/10/2026
         """
         pass
 

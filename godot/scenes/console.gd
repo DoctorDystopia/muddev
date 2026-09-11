@@ -66,6 +66,7 @@ const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
 ## the pane in the scene, so it covers the map, the minimap and the vitals
 ## rather than sitting under them.
 @onready var _veil: LoadingVeil = %LoadingVeil
+@onready var _choose: ChooseOption = %ChooseOption
 
 var _channels := PackedStringArray()
 
@@ -216,6 +217,17 @@ func _ready() -> void:
 	# type, and this sends it. Clicking a minimap cell is the same
 	# `WorldState.tile_action` lookup a click on the 3D pane makes.
 	_minimap.command_requested.connect(Evennia.command)
+
+	# The right-click menu. The 3D pane raises the question and the menu is a
+	# sibling Control over the pane rather than a child of the Node3D, so the
+	# 3D scene stays 3D and the box can be tested with no camera.
+	#
+	# The chosen row goes straight to Evennia.command(), like every other
+	# affordance on this screen -- the string was composed by the server and is
+	# one a telnet player could type, so a click can do nothing a typed line
+	# cannot and every lock and cooldown still applies with nothing to audit.
+	_world.options_requested.connect(_choose.open)
+	_choose.chosen.connect(Evennia.command)
 
 	# After both panes are bound, so the manifest landing finds consumers ready
 	# rather than arriving at a pane that has not been given the resolver yet.

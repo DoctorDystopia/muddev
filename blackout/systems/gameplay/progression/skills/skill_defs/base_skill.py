@@ -63,6 +63,7 @@ class BaseSkill:
         return cooldown_name
 
 
+
     def is_off_cooldown(self, character: object) -> bool:
         """
         Purpose: Report whether this skill is ready to be used again.
@@ -96,6 +97,7 @@ class BaseSkill:
         return is_ready
 
 
+
     def arm_cooldown(self, character: object) -> None:
         """
         Purpose: Start this skill's cooldown on the given character.
@@ -127,6 +129,7 @@ class BaseSkill:
         character.cooldowns.add(cooldown_name, self.cooldown_seconds)
 
 
+
     def get_unlock_requirements(self, character: object) -> bool:
         """
         Purpose: Determines if the given character meets the requirements to unlock the skill.
@@ -151,6 +154,7 @@ class BaseSkill:
         """
 
         return True
+
 
 
     def execute(self, character: object, target: object) -> None:

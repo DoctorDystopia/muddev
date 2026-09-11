@@ -67,6 +67,23 @@ _WORST_CASE_ENTITIES = 1200
 _LONG_NAME = "mutant raider sergeant of the eastern approach"
 _LONG_ASSET = "npc_mutant_raider_sergeant_eastern_variant_b"
 
+# How many verbs the worst-case entity affords.
+#
+# serialize_entity omits `actions` entirely for the one-verb case, so this is
+# the cost of the entities that DO carry it: a corpse offers one verb per
+# gathering skill that can work it, plus `get`. Two today (butcher, get), three
+# once Brain Farming lands.
+#
+# TWO, which is what a corpse affords today, and the number is load-bearing:
+# at THREE a 1200-entity room measures 700136 bytes against a 699050-byte
+# budget and this suite goes red. That is the decision this file exists to
+# force, and it is coming due the moment Brain Farming gives a corpse its third
+# verb -- raise CLIENT_INBOUND_BUFFER_BYTES, lower STATEFEED_ENTITY_RADIUS, or
+# chunk room_players. It is written down here rather than left to be
+# rediscovered, and it is NOT pre-emptively set to three, because a suite that
+# is red for something nobody has built yet is a suite people learn to ignore.
+_WORST_CASE_ACTIONS = 2
+
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
@@ -91,6 +108,13 @@ def _synthetic_entity(index: int) -> dict:
         "asset": _LONG_ASSET,
         "family": "weapon",
         "interact": f"attack {_LONG_NAME}",
+        # Present on the synthetic row even though serialize_entity omits it
+        # for a one-verb entity, because this row is the CEILING: a room full
+        # of bodies is the case that has to fit, not a room full of NPCs.
+        "actions": [
+            {"command": f"butcher {_LONG_NAME}", "label": "butcher"}
+            for _ in range(_WORST_CASE_ACTIONS)
+        ],
         "coords": [index % 32, index // 32, "oasis_outskirts"],
         "hp": 40,
         "max_hp": 60,

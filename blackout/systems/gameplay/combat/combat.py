@@ -1317,6 +1317,19 @@ class BlackoutCombatHandler(TickableHandler):
             self.obj.msg((f"|x{target.key} is already dead.|n", _MSG_COMBAT))
             return False
 
+        # Same room, checked HERE rather than left to check_stop_combat.
+        # That guard runs on the first tick and answers "no enemy is standing
+        # where you are", which it reports as |xThe combat is over. You won!|n
+        # -- so attacking something you are carrying, or something one room
+        # away, announced a victory over a combatant that was never engaged.
+        # A refusal at queue time is both truthful and immediate, which is the
+        # reason this routine exists at all.
+        location = getattr(self.obj, "location", None)
+
+        if location is None or getattr(target, "location", None) is not location:
+            self.obj.msg((f"|x{target.key} is not here.|n", _MSG_COMBAT))
+            return False
+
         return True
 
     def apply_action(self, action_dict: dict) -> None:

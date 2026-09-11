@@ -11,8 +11,11 @@ extends Node3D
 ## one thing the earlier proof of concept got better than blackout3d.js did: it
 ## already handles pushing the camera in when something is between it and the
 ## focus, for free, the day this scene grows anything to collide with.
+##
+## **Orbit is MIDDLE-drag, not right-drag.** The right button belongs to the
+## world pane's Choose Option menu; see [method _handle_button].
 
-const ORBIT_SPEED := 0.006      # radians per pixel dragged
+const ORBIT_SPEED := 0.006      # radians per pixel MIDDLE-dragged
 const ZOOM_STEP := 1.12         # distance multiplier per wheel notch
 const DISTANCE_START := 14.0
 const DISTANCE_MIN := 0.5
@@ -58,9 +61,19 @@ func _process(delta: float) -> void:
 	global_position = global_position.lerp(focus, minf(FOLLOW_SPEED * delta, 1.0))
 
 
+## MIDDLE drag orbits, and that is a deliberate reassignment.
+##
+## It was the RIGHT button until 09/10/2026, when the world pane grew a
+## right-click Choose Option menu. Sharing one button between "turn the camera"
+## and "ask what this is" cannot be made to feel right: opening on the press
+## pops a menu at the start of every turn, and opening on the release pops one
+## at the end of every turn unless the click is distinguished from the drag by
+## a pixel threshold -- which then has to be tuned, and is wrong for somebody.
+## The menu is worth more on the button players expect it on, so the camera
+## moved.
 func _handle_button(event: InputEventMouseButton) -> void:
 	match event.button_index:
-		MOUSE_BUTTON_RIGHT:
+		MOUSE_BUTTON_MIDDLE:
 			_dragging = event.pressed
 		MOUSE_BUTTON_WHEEL_UP:
 			_zoom(1.0 / ZOOM_STEP)

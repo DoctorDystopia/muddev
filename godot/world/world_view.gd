@@ -29,6 +29,15 @@ extends Node3D
 ## and rendered a fallback hue in both clients until 08/23/2026.
 const Const := preload("res://autoload/blackout_constants.gd")
 
+## Emitted when the player right-clicks something that affords anything.
+##
+## `options` are `{command, label, target}` dictionaries in the server's own
+## order; `at` is where to open the box, in this viewport's coordinates. The
+## pane raises the question and something else draws it -- [ChooseOption] is a
+## sibling Control over the world pane, not a child of this Node3D, so the 3D
+## scene stays 3D and the menu can be tested without a camera.
+signal options_requested(options: Array, at: Vector2)
+
 const AURA_EVENT_DEACTIVATE := "deactivate"
 const AURA_EVENT_PULSE := "pulse"
 const AURA_RING_THICKNESS := 0.06
@@ -363,6 +372,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if click.button_index == MOUSE_BUTTON_LEFT and click.pressed:
 		_act_on(click.position)
+		return
+
+	# Right click ASKS instead of acting. Left click still performs the
+	# default, which is the first option the server listed -- so nothing about
+	# the existing one-verb flow changes, and the menu is purely additional.
+	#
+	# On the PRESS, with no gesture arbitration, because the right button is
+	# the menu's alone: OrbitCamera turns the camera on a MIDDLE drag, moved
+	# there on 09/10/2026 for exactly this. Sharing one button between the two
+	# needs a click-versus-drag threshold, and a threshold is a number that is
+	# wrong for somebody.
+	if click.button_index == MOUSE_BUTTON_RIGHT and click.pressed:
+		_offer_options(click.position)
 
 
 ## Where an entity's `coords` put it in the world, or null if not placeable yet.
@@ -491,6 +513,92 @@ func _act_on_entity(entity: Dictionary) -> void:
 		return
 
 	Evennia.command(command)
+
+
+## Gather everything a right click could mean here, and raise it.
+##
+## Entity first, then the tile beneath -- the same order [method _act_on] and
+## [method _hover_at] use, so the menu opens on exactly what a left click would
+## have acted on. An entity that affords nothing STOPS the search rather than
+## falling through to the ground under it, for the reason _hover_at gives: a
+## menu offering to walk to the tile another player is standing on is not what
+## the player was asking about.
+func _offer_options(screen_point: Vector2) -> void:
+	var entity_id := _entities.pick(_camera, screen_point, PICK_REACH_PIXELS)
+
+	if entity_id != 0:
+		var options := options_for(_entities.entity(entity_id))
+
+		if not options.is_empty():
+			options_requested.emit(options, screen_point)
+
+		return
+
+	var tile := _state.tile_action(_cell_under(screen_point))
+	var command := str(tile.get("command", ""))
+
+	if command.is_empty():
+		return
+
+	# A tile action carries no `label` -- it is `{command, kind}` and always
+	# has been -- so the label is left EMPTY rather than filled with a copy of
+	# the command. Empty is what ChooseOption.row_text's fallback is for, and
+	# it is the honest answer: the server named no wording for this, so the
+	# client derives one instead of pretending it was told.
+	#
+	# The row then reads as the verb: "North", "Goto (4,3)". Giving tiles a
+	# server-sent label is a one-field change on `tile_actions` if the wording
+	# ever needs to be better than the command.
+	options_requested.emit(
+		[{"command": command, "label": "", "target": ""}], screen_point)
+
+
+## Every verb the server said this entity affords, richest form first.
+##
+## Static and public so a test can assert the fallback without a scene, a
+## camera or a pool.
+##
+## `actions` is the list; `interact` is its head, sent separately so that a
+## client reading only the single verb keeps working. Reading the list when it
+## is there and falling back to the single verb when it is not is what lets
+## this pane sit in front of a server of either vintage -- and the server omits
+## `actions` entirely for the one-verb case, which is nearly every entity in
+## the world, so the fallback is the COMMON path rather than a legacy one.
+##
+## Deduplicates on the command rather than on the label, because two rows that
+## send the same string are one option however they are worded, and a menu that
+## lists it twice looks broken.
+static func options_for(entity: Dictionary) -> Array:
+	var target := str(entity.get("name", ""))
+	var rows: Array = []
+	var seen := {}
+
+	for raw: Variant in entity.get("actions", []):
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+
+		var action := raw as Dictionary
+		var command := str(action.get("command", "")).strip_edges()
+
+		if command.is_empty() or seen.has(command):
+			continue
+
+		seen[command] = true
+		rows.append({
+			"command": command,
+			"label": str(action.get("label", "")),
+			"target": target,
+		})
+
+	if not rows.is_empty():
+		return rows
+
+	var single := _interaction(entity)
+
+	if single.is_empty():
+		return []
+
+	return [{"command": single, "label": "", "target": target}]
 
 
 ## The whole command the server said this entity affords, or "".

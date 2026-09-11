@@ -21,6 +21,7 @@ Description: Turn live Evennia objects into the plain, JSON-safe values the
 """
 
 from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
+from evennia.utils import logger
 
 from . import constants as const
 
@@ -141,21 +142,23 @@ def _classify(entity) -> tuple:
     if npc_key:
         return const.ASSET_KIND_NPC, str(npc_key)
 
-    gatherable_key = entity.attributes.get("gatherable_key", default=None)
-
-    if gatherable_key:
-        return const.ASSET_KIND_GATHERABLE, str(gatherable_key)
-
-    # A typeclass that describes itself wins over anything inferred below.
-    # This is what a Foundry Furnace, a bank terminal and a shopkeeper have in
-    # common: nothing about their storage distinguishes them from a dropped
-    # sword, so they say what they are rather than being guessed at.
+    # A typeclass that declares itself is checked BEFORE gatherable_key,
+    # which reverses the old order for exactly one case: a corpse carries a
+    # gatherable_key like any node, but it is also an item you can pick up, so
+    # reporting it as a plain gatherable would hide half of what it affords.
+    # Nothing else declares both, and a node that declares neither is
+    # unaffected.
     declared_kind = getattr(entity, "asset_kind", "")
 
     if declared_kind:
         declared_key = getattr(entity, "asset_key", "")
 
         return str(declared_kind), str(declared_key or const.ASSET_KEY_GENERIC)
+
+    gatherable_key = entity.attributes.get("gatherable_key", default=None)
+
+    if gatherable_key:
+        return const.ASSET_KIND_GATHERABLE, str(gatherable_key)
 
     content_types = getattr(entity, "_content_types", ())
 
@@ -494,6 +497,169 @@ def interact_command(entity, kind: str) -> str:
     return targeted_verb + " " + str(entity.key)
 
 
+def interact_actions(entity, kind: str) -> list:
+    """
+    Purpose: Name EVERY command a client may send to act on this entity.
+
+    Entry:
+        entity - a live object.
+        kind   - the entity's ASSET_KIND_*, as decided by _classify.
+
+    Exit/Returns:
+        Returns a list of {"command", "label"} dicts, in the order a client
+        should offer them. Empty when the entity affords nothing. The first
+        entry is the entity's primary verb, and is what the serialized body
+        reports as `interact`.
+
+    Module Globals:
+        const read.
+
+    Methodology:
+        The server names the verbs, plural. `interact_verb` could only ever
+        carry one, which was true of everything in the game until a corpse: a
+        body can be butchered where it lies, brain-farmed once that skill
+        lands, or simply picked up and carried off. A client asked to pick one
+        of those from `kind` would be holding the verb table this codebase has
+        deleted twice for being wrong within a week.
+
+        The verbs come from the entity itself when it publishes an
+        `extra_actions()`, and from interact_command otherwise -- so a
+        typeclass that has nothing extra to say needs no edit anywhere, and
+        one that does says it in one place rather than having to keep a
+        singular `interact_verb` in step with a plural list.
+
+        An entity publishing its own list REPLACES the single verb rather
+        than prepending to it. A gathering node's verbs are derived from
+        GATHERABLE_REGISTRY, which already knows every skill that works it,
+        so a fallback verb concatenated in front could only ever be a stale
+        duplicate of one of them -- which is exactly what `interact_verb =
+        "cut"` on a node became the day a node existed that is not cut.
+
+        Every string returned is a complete command a telnet player could
+        type, which is the invariant that keeps a graphical client from being
+        able to do anything a text one cannot.
+
+    Notes/References:
+        `interact` on the serialized body is unchanged and still carries the
+        first of these. That is deliberate: the Godot client reads `interact`
+        today, and a payload that moved the primary verb into a new field
+        would make every existing pane stop affording anything the moment the
+        server updated.
+
+    Author: Nick Hobar
+    Creation date: 09/10/2026
+    """
+    actions = []
+    seen = set()
+
+    for action in _declared_actions(entity):
+        command = str(action.get("command", "")).strip()
+
+        if not command or command in seen:
+            continue
+
+        seen.add(command)
+        actions.append({
+            "command": command,
+            "label": _action_label(action.get("label", ""), command),
+        })
+
+    if actions:
+        return actions
+
+    primary = interact_command(entity, kind)
+
+    if not primary:
+        return []
+
+    return [{"command": primary, "label": _action_label("", primary)}]
+
+
+def _action_label(label, command: str) -> str:
+    """
+    Purpose: The words a menu row shows for one action.
+
+    Entry:
+        label   - what the entity called this action, possibly empty.
+        command - the full command, used when the entity named nothing.
+
+    Exit/Returns:
+        Returns a capitalised display label, never empty.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        THE SERVER OWNS THE SPELLING, which is the rule the inventory's own
+        action list already follows -- INVENTORY_ACTION_EQUIP is ("Equip",
+        "equip {slot}"), capital and all. Entity actions are the same field in
+        the same client, so they answer to the same rule rather than leaving
+        one menu to capitalise for itself and the other not to.
+
+        The label is the verb ALONE and never names the target, even though
+        the row a client draws will. The entity's name is already on the row
+        it belongs to; repeating it once per action would be a third copy of
+        the same string on room_players, which is the largest payload the feed
+        sends and the one already measured against a ceiling. Joining the two
+        is a layout decision, and layout is the client's.
+
+        The fallback takes the command's first word, which is the verb by
+        construction -- every command here is one a telnet player could type.
+
+    Notes/References:
+        test_payload_size.py is where the size of this decision is guarded.
+
+    Author: Nick Hobar
+    Creation date: 09/10/2026
+    """
+    words = str(label or "").strip() or command.split(" ")[0]
+
+    return words[:1].upper() + words[1:]
+
+
+def _declared_actions(entity) -> list:
+    """
+    Purpose: Read an entity's own action list, if it publishes one.
+
+    Entry:
+        entity - a live object. Most do not publish one.
+
+    Exit/Returns:
+        Returns whatever the entity's extra_actions() gave back, or [].
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read through getattr rather than an import, so this module stays out
+        of the typeclass layer -- the same rule _asset_identity and
+        interact_command follow.
+
+        Wrapped, because a cosmetic feed runs during combat and room
+        broadcasts and must never be able to raise into a gameplay path. A
+        typeclass with a broken action list falls back to its single verb
+        rather than making the room undrawable.
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 09/10/2026
+    """
+    source = getattr(entity, "extra_actions", None)
+
+    if source is None:
+        return []
+
+    try:
+        return list(source() or [])
+    except Exception as exc:
+        logger.log_err(
+            f"_declared_actions: {entity} extra_actions failed: {exc!r}")
+
+        return []
+
+
 def serialize_entity(entity, coords=()) -> dict:
     """
     Purpose: Render one visible entity as a plain dict for a graphical client.
@@ -520,6 +686,15 @@ def serialize_entity(entity, coords=()) -> dict:
         CharItemsPayload sends: the client draws a model for the asset key if
         it has one, and the family's generic mesh if it does not.
 
+        `interact` is the entity's primary verb, exactly as it has always
+        been. `actions` is the FULL list, and appears only when there is more
+        than one -- a corpse can be butchered where it lies or picked up and
+        carried off, and no client should have to choose between those for the
+        player. Omitting the single-verb case is not a micro-optimisation: it
+        is one duplicated command string per entity on the biggest payload the
+        feed sends, and it keeps every client that reads only `interact`
+        working unchanged.
+
     Module Globals:
         None.
 
@@ -537,15 +712,26 @@ def serialize_entity(entity, coords=()) -> dict:
     """
     kind, asset_key = _classify(entity)
     family = _mesh_family(entity, kind)
+    actions = interact_actions(entity, kind)
     body = {
         "id": entity.id,
         "name": str(entity.key),
         "kind": kind,
         "asset": asset_key,
         "family": family,
-        "interact": interact_command(entity, kind),
+        "interact": actions[0]["command"] if actions else "",
         "coords": list(coords),
     }
+
+    # Sent ONLY when it says something `interact` does not. Almost every
+    # entity in the world affords exactly one verb, and for those the list
+    # would be a second copy of a string already on the row -- on the largest
+    # payload the feed sends, once per entity, on every move. The one-action
+    # case is what `interact` has always been, so a client that reads only
+    # `interact` keeps working and a client that reads `actions` falls back to
+    # it when the key is absent.
+    if len(actions) > 1:
+        body["actions"] = actions
 
     max_hp = getattr(entity, "max_hp", None)
 

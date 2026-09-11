@@ -87,10 +87,14 @@ NPCS = {
         default_combat_style="headbutt",
         # 30s timed respawn on the raider's spawn tile, driven by
         # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
-        respawn_seconds=20,
+        respawn_seconds=15,
         # Drop table in world/loot_defs/hostile.py, resolved at death through
         # db.npc_key -> NPC_DB -> LOOT_DB by systems/gameplay/loot/drops.py.
         loot_table="mutant_raider_drops",
+        # Butchery's starter node. The body carries its own yields via
+        # the ItemDef's gatherable_key, so nothing about chuck or filet
+        # is restated here.
+        corpse_key="mutant_raider_corpse",
     ),
     "big_mutant": NpcDef(
         key="big_mutant",

@@ -165,13 +165,58 @@ func stand(coords: Array) -> void:
 	_observer_tile = _tile_key(coords)
 
 
+## ONE ENTRY PER ID, ALWAYS. The invariant every route below holds.
+##
+## Nothing in the wire protocol promises that an entity is announced once. It
+## does not, and cannot: `room_players` is a whole list sent on arrival and on
+## resync, `room_add_player` is a delta, and `room_players_delta` is computed
+## against a snapshot of what the SERVER believes this client holds. An entity
+## that arrived by one route is legitimately named again by another -- an NPC
+## respawning on your tile is announced by `room_add_player`, and then named
+## again in the `added` half of the next delta, because the server's snapshot
+## of your view was taken before it existed.
+##
+## Appending both times drew it TWICE, in two slots of the tile's ring, and
+## that is a bug with a long tail: [method remove] took only the first match,
+## so deleting the entity server-side left the second copy standing there
+## permanently, and still clickable. Two mutant raider corpses on a tile where
+## one had been butchered, and a click on the survivor sending a command about
+## an object that no longer exists.
+##
+## The fix is an INVARIANT rather than a rule about who may send what: the pool
+## holds at most one entry per id, whatever arrives. That is also what makes a
+## resync idempotent, which is the property resync exists for.
+static func _index_of(entities: Array, entity_id: int) -> int:
+	for index: int in entities.size():
+		if _id_of(entities[index]) == entity_id:
+			return index
+
+	return -1
+
+
+## Add an entity, or replace the entry already holding its id.
+##
+## Replace and not skip: the later announcement is the fresher one. An entity
+## re-sent after it moved, took damage or gained an action carries the new
+## values, and keeping the first copy would pin the client to whatever it
+## happened to hear first.
+func _upsert(entities: Array, entity: Dictionary) -> void:
+	var at := _index_of(entities, _id_of(entity))
+
+	if at < 0:
+		entities.append(entity)
+		return
+
+	entities[at] = entity
+
+
 ## Replace everything visible. `room_players` is the full list, sent on arrival
 ## and on resync; the add/remove channels carry the deltas in between.
 func replace_all(entities: Array) -> void:
 	_entities.clear()
 
 	for entity: Dictionary in entities:
-		_entities.append(entity)
+		_upsert(_entities, entity)
 
 	_rebuild()
 
@@ -180,16 +225,28 @@ func add(entity: Dictionary) -> void:
 	if entity.is_empty():
 		return
 
-	_entities.append(entity)
+	_upsert(_entities, entity)
 	_rebuild()
 
 
+## Drop every entry holding this id, not merely the first.
+##
+## Belt and braces beside the upsert above: the two together mean a duplicate
+## cannot be created and could not survive one removal if it somehow were. This
+## half is what was actually observed failing -- a doubled corpse lost one copy
+## when it was butchered and kept the other.
 func remove(entity_id: int) -> void:
-	for index: int in _entities.size():
-		if _id_of(_entities[index]) == entity_id:
-			_entities.remove_at(index)
-			_rebuild()
-			return
+	var kept: Array[Dictionary] = []
+
+	for entity: Dictionary in _entities:
+		if _id_of(entity) != entity_id:
+			kept.append(entity)
+
+	if kept.size() == _entities.size():
+		return
+
+	_entities = kept
+	_rebuild()
 
 
 ## Apply one batched change to the visible list: `removed` ids drop out,
@@ -234,7 +291,7 @@ func apply_delta(added: Array, removed: Array) -> void:
 
 	for entity in added:
 		if entity is Dictionary and not entity.is_empty():
-			_entities.append(entity)
+			_upsert(_entities, entity)
 
 	_rebuild()
 

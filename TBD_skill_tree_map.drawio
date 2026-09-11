@@ -9,8 +9,8 @@
                         <mxPoint x="310" y="320" as="sourcePoint"/>
                         <mxPoint x="500" y="390" as="targetPoint"/>
                         <Array as="points">
-                            <mxPoint x="300" y="350"/>
-                            <mxPoint x="500" y="350"/>
+                            <mxPoint x="300" y="360"/>
+                            <mxPoint x="500" y="360"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
@@ -70,10 +70,10 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="100" value="rusty_scrap_ shortsword / axe / etc." style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;" parent="1" vertex="1">
+                <mxCell id="100" value="rusty_scrap_ shortsword /&lt;div&gt;axe /&lt;/div&gt;&lt;div&gt;etc.&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;" parent="1" vertex="1">
                     <mxGeometry x="1250" y="230" width="100" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="234" style="edgeStyle=none;html=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" edge="1" parent="1" source="48" target="3">
+                <mxCell id="234" style="edgeStyle=none;html=1;entryX=0;entryY=0.75;entryDx=0;entryDy=0;" parent="1" source="48" target="3" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points"/>
                     </mxGeometry>
@@ -84,13 +84,13 @@
                 <mxCell id="10" value="Butchery" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="240" y="410" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="33" value="mutant_raider chuck" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                <mxCell id="33" value="mutant_raider chuck /&lt;div&gt;filet /&lt;/div&gt;&lt;div&gt;etc.&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="450" y="390" width="100" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="12" value="Rendering" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=13;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="640" y="410" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="36" value="mutant_raider tallow" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                <mxCell id="36" value="mutant_raider tallow /&lt;div&gt;etc.&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="850" y="390" width="100" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="230" style="edgeStyle=none;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="13" target="229" edge="1">
@@ -104,7 +104,7 @@
                 <mxCell id="13" value="Gastronomy" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=13;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="1040" y="410" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="43" value="mutant_raider steak" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                <mxCell id="43" value="mutant_raider steak / etc." style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="1250" y="390" width="100" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="214" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="1" source="19" target="210" edge="1">
@@ -112,6 +112,11 @@
                         <Array as="points">
                             <mxPoint x="300" y="760"/>
                         </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="240" value="brain farming XP" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="214" vertex="1" connectable="0">
+                    <mxGeometry x="0.1571" y="-1" relative="1" as="geometry">
+                        <mxPoint x="48" y="-1" as="offset"/>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="19" value="Brain Farming" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=13;" parent="1" vertex="1">
@@ -128,7 +133,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="49" value="mutant_raider fatless_meat" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                <mxCell id="49" value="mutant_raider fatless_meat /&lt;div&gt;etc.&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="850" y="550" width="100" height="100" as="geometry"/>
                 </mxCell>
                 <mxCell id="224" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="45" target="223" edge="1">
@@ -146,6 +151,11 @@
                 </mxCell>
                 <mxCell id="30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="3" target="29" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="241" value="cutting XP" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="30" vertex="1" connectable="0">
+                    <mxGeometry x="-0.4222" y="1" relative="1" as="geometry">
+                        <mxPoint x="14" y="1" as="offset"/>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="29" target="2" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
@@ -174,8 +184,13 @@
                 <mxCell id="54" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="13" target="43" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="55" value="cutting + butchery" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;fontColor=#4D4D4D;labelBackgroundColor=#FFFFFF;" parent="1" source="3" target="33" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
+                <mxCell id="55" value="cutting + butchery XP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;fontColor=#4D4D4D;labelBackgroundColor=#FFFFFF;" parent="1" source="3" target="33" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="300" y="360"/>
+                            <mxPoint x="500" y="360"/>
+                        </Array>
+                    </mxGeometry>
                 </mxCell>
                 <mxCell id="201" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="48" target="19" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
@@ -203,15 +218,6 @@
                 <mxCell id="225" value="second processing pass" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="51" vertex="1" connectable="0">
                     <mxGeometry x="0.1962" relative="1" as="geometry">
                         <mxPoint x="9" as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="53" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="45" target="13" edge="1">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="780" y="590"/>
-                            <mxPoint x="780" y="680"/>
-                            <mxPoint x="1100" y="680"/>
-                        </Array>
                     </mxGeometry>
                 </mxCell>
                 <mxCell id="17" value="POTENTIAL" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];strokeColor=none;fillColor=none;fontSize=12;fontStyle=1;fontColor=#8C8C8C;" parent="1" vertex="1">
@@ -300,7 +306,7 @@
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="213" value="butchery + brain farming" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=0.442;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;fontColor=#4D4D4D;labelBackgroundColor=#FFFFFF;exitPerimeter=0;" parent="1" source="10" target="101" edge="1">
+                <mxCell id="213" value="butchery + brain farming XP" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#4D4D4D;exitX=0.442;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=10;fontColor=#4D4D4D;labelBackgroundColor=#FFFFFF;exitPerimeter=0;" parent="1" source="10" target="101" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <mxPoint x="289.75" y="500" as="sourcePoint"/>
                         <mxPoint x="489.75" y="580" as="targetPoint"/>
@@ -323,19 +329,19 @@
                         <mxPoint x="-45" y="52" as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="226" style="edgeStyle=none;html=1;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" parent="1" source="223" target="13" edge="1">
+                <mxCell id="226" style="edgeStyle=none;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" source="223" target="13" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
-                            <mxPoint x="1130" y="760"/>
+                            <mxPoint x="1100" y="760"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="227" style="edgeStyle=none;html=1;entryX=0.75;entryY=1;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="1" source="223" target="203" edge="1">
+                <mxCell id="227" style="edgeStyle=none;html=1;entryX=0.892;entryY=0.983;entryDx=0;entryDy=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryPerimeter=0;" parent="1" source="223" target="203" edge="1">
                     <mxGeometry relative="1" as="geometry">
                         <Array as="points">
                             <mxPoint x="900" y="840"/>
                             <mxPoint x="1210" y="840"/>
-                            <mxPoint x="1530" y="840"/>
+                            <mxPoint x="1550" y="840"/>
                         </Array>
                     </mxGeometry>
                 </mxCell>
@@ -344,20 +350,38 @@
                         <mxPoint as="offset"/>
                     </mxGeometry>
                 </mxCell>
-                <mxCell id="223" value="mutant_raider cured_meat" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                <mxCell id="223" value="mutant_raider cured_meat /&lt;div&gt;etc.&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="850" y="710" width="100" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="229" value="mutant_raider&lt;div&gt;cured_meat_sandwich&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
+                <mxCell id="237" style="edgeStyle=none;html=1;entryX=0.75;entryY=1;entryDx=0;entryDy=0;" parent="1" source="229" target="203" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1530" y="590"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="238" value="eat for more hitpoints than cured meat" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="237" vertex="1" connectable="0">
+                    <mxGeometry x="-0.7174" y="-4" relative="1" as="geometry">
+                        <mxPoint x="35" y="-4" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="229" value="mutant_raider&lt;div&gt;cured_meat_sandwich / etc.&lt;/div&gt;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="1250" y="540" width="100" height="100" as="geometry"/>
                 </mxCell>
-                <mxCell id="236" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="232" target="235">
+                <mxCell id="236" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="232" target="235" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="232" value="[brain farm production]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#FFE6CC;strokeColor=#D79B00;fontSize=13;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="1040" y="880" width="120" height="60" as="geometry"/>
                 </mxCell>
-                <mxCell id="235" value="Psych" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;dashed=1;" vertex="1" parent="1">
+                <mxCell id="235" value="Psych" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;dashed=1;" parent="1" vertex="1">
                     <mxGeometry x="1440" y="880" width="120" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="243" style="edgeStyle=none;html=1;entryX=0;entryY=1;entryDx=0;entryDy=0;" parent="1" source="242" target="19" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="242" value="canopic_jars" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;" parent="1" vertex="1">
+                    <mxGeometry x="50" y="680" width="100" height="100" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>

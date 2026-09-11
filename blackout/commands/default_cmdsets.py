@@ -23,6 +23,7 @@ from commands.display_cmds import DisplayCmdSet
 from commands.combat_cmds import CombatCmdSet
 from commands.drop_cmds import DropCmdSet
 from commands.equipment_cmds import EquipmentCmdSet
+from commands.gathering_cmds import GatheringCmdSet
 from commands.get_cmds import GetCmdSet
 from commands.inventory_cmds import InventoryCmdSet
 from commands.movement_cmds import MovementCmdSet
@@ -52,6 +53,10 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())
         self.add(GetCmdSet())
+        # On the CHARACTER, not on each node. A cmdset that hangs on a
+        # corpse is deleted with the corpse the moment it is butchered,
+        # so the verb could not survive its own first use.
+        self.add(GatheringCmdSet())
         self.add(DropCmdSet())
         self.add(XYZGridCmdSet())
         # After XYZGridCmdSet, so BlackoutGotoCmd overloads the contrib's

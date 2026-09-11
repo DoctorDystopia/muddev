@@ -28,6 +28,11 @@ class ItemDef:
     stackable: bool = False
     use_slot: WieldLocation | None = None
     tool_type: str | None = None
+    # Key into GATHERABLE_REGISTRY, for an item that can be WORKED rather
+    # than only carried -- a corpse. Stamped as db.gatherable_key, which is
+    # the single thing that makes any object a gathering node, so a corpse
+    # in a bag and a rusty pole on a tile are read by exactly the same code.
+    gatherable_key: str | None = None
     tier: int = 0
     req_level: int = 0
     tags: list = field(default_factory=list)
@@ -108,6 +113,8 @@ class ItemDef:
             attrs["use_slot"] = self.use_slot
         if self.tool_type is not None:
             attrs["tool_type"] = self.tool_type
+        if self.gatherable_key is not None:
+            attrs["gatherable_key"] = self.gatherable_key
         # Combat fields — only emitted when populated; non-combat ItemDefs
         # stay clean.
         if self.attack_speed is not None:
@@ -222,6 +229,7 @@ from .item_defs.armor_body import ITEMS as _ARMOR_BODY
 from .item_defs.armor_offhand import ITEMS as _ARMOR_OFFHAND
 from .item_defs.armor_feet import ITEMS as _ARMOR_FEET
 from .item_defs.dev_tools import ITEMS as _DEV_TOOLS
+from .item_defs.corpses import ITEMS as _CORPSES
 
 
 
@@ -229,5 +237,5 @@ from .item_defs.dev_tools import ITEMS as _DEV_TOOLS
 # out of the loop contributes nothing and raises nothing -- its items simply
 # do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY, _ARMOR_BODY, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY, _ARMOR_BODY, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES]:
     ITEM_DB.update(_d)

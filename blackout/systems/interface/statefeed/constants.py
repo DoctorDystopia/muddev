@@ -584,6 +584,13 @@ ASSET_KIND_STATION: str = "station"
 # offers the one interaction the object refuses.
 ASSET_KIND_GATHERABLE: str = "gatherable"
 
+# A corpse. Distinct from both an item and a gatherable because it is
+# genuinely both, and the two kinds afford opposite things: it can be pocketed
+# like an item AND worked where it lies like a node. Reporting it as either one
+# alone hides half of what a player can do with it, which is exactly what the
+# `actions` list on a serialized entity exists to stop.
+ASSET_KIND_CORPSE: str = "corpse"
+
 ASSET_KEY_GENERIC: str = "generic"
 
 # Every puppetable character, until one of them says otherwise.
@@ -655,6 +662,7 @@ ITEM_FAMILY_JEWELLERY: str = "jewellery"
 ITEM_FAMILY_MATERIAL: str = "crafting_material"
 ITEM_FAMILY_TOOL: str = "crafting_tool"
 ITEM_FAMILY_CURRENCY: str = "currency"
+ITEM_FAMILY_CORPSE: str = "corpse"
 
 # The order the families are resolved in when ONE item declares several of
 # them.
@@ -674,6 +682,7 @@ ITEM_FAMILY_CURRENCY: str = "currency"
 # unaffected by the order.
 ITEM_FAMILY_PRIORITY: tuple = (
     ITEM_FAMILY_CURRENCY,
+    ITEM_FAMILY_CORPSE,
     ITEM_FAMILY_MATERIAL,
     ITEM_FAMILY_JEWELLERY,
     ITEM_FAMILY_TOOL,

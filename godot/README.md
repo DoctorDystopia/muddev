@@ -57,7 +57,8 @@ a fetched model where there is art, its family's silhouette where there is not.
 | **Drag a divider** | Resizes, and it is remembered. Both offsets were a literal 300 in the scene until 08/28/2026 |
 | **Ctrl+F** | Find in the log. Enter steps, Escape closes |
 | **Help tab** | Client help — gestures and keys, not the game's `help` |
-| **Right-drag** | Orbit the camera |
+| **Middle-drag** | Orbit the camera. It was right-drag until 09/10/2026, when the right button became Choose Option |
+| **Right-click the world** | Choose Option: every verb the server said a thing affords, at the cursor |
 | **Wheel** | Zoom |
 
 ## Nothing in the two tab strips takes the keyboard
@@ -286,6 +287,77 @@ landmarks on it is what a minimap is for.
 > to a model both panes drew, and neither drew a tile the other did not. The
 > served manifest still names the tile keys either way.
 
+## The entity pool holds one entry per id
+
+Nothing in the wire protocol promises an entity is announced once, and nothing
+can: `room_players` is a whole list sent on arrival and on resync,
+`room_add_player` is a delta, and `room_players_delta` is computed against the
+server's snapshot of what this client holds. An entity that arrived by one
+route is legitimately named again by another — an NPC respawning on your tile
+is announced by `room_add_player`, and then named again in the `added` half of
+the next delta, because that snapshot was taken before it existed.
+
+`EntityPool` appended both times, so it drew the thing twice, in two slots of
+the tile's ring. That is a bug with a long tail: `remove` took only the first
+match, so deleting the entity server-side left the second copy standing there
+permanently — and still clickable. Two corpses on a tile where one had been
+butchered, and a click on the survivor sending a command about an object that
+no longer existed.
+
+The fix is an INVARIANT, not a rule about who may send what: at most one entry
+per id, whatever arrives. A later announcement REPLACES an earlier one, because
+the later one is the fresher — a re-sent entity may have moved, taken damage or
+gained an action. `remove` drops every copy rather than the first. Together
+those also make a resync idempotent, which is the property resync exists for.
+
+## Right click asks; left click still acts
+
+One thing in the world can be several things to you at once. A mutant raider
+corpse can be butchered where it lies or picked up and carried off, and a left
+click can only ever mean one of those.
+
+`serialize_entity` sends both: `interact` is the primary verb and `actions` is
+the whole list, `{command, label}` per row. **`actions` is present only when
+there is more than one**, because otherwise it would be a second copy of a
+string already on the row — once per entity, on `room_players`, the largest
+payload the feed sends. So the single-verb fallback in
+`WorldView.options_for()` is the COMMON path, not a legacy one.
+
+Left click sends `interact`, exactly as before. Right click opens
+`ChooseOption`, modelled on the OSRS box of the same name: the header, one row
+per option in the server's order, and `Cancel` last. Right-clicking bare ground
+offers that tile's own action instead.
+
+> **The camera moved to the middle button to make room.** `OrbitCamera` turned
+> on a right-drag until 09/10/2026. Sharing one button between "turn the
+> camera" and "ask what this is" cannot be made to feel right: opening on the
+> press pops a menu at the start of every turn, and opening on the release pops
+> one at the end of every turn unless a pixel threshold separates click from
+> drag — and a threshold is a number that is wrong for somebody. Orbit is
+> MIDDLE-drag now, the menu opens on the right PRESS with no arbitration at
+> all, and `test_choose_option` reads `orbit_camera.gd` to assert the right
+> button stayed free.
+
+**There is still no verb table in this client.** Every row's command is a string
+the server composed and this pane sends verbatim, and every row's WORDING is the
+`label` sent beside it — capitalised on the server, exactly as
+`INVENTORY_ACTION_EQUIP` is `("Equip", "equip {slot}")`, so the two menus on
+this screen cannot spell their rows differently. What the client decides is the
+JOINING: `"Butcher"` plus the entity's own name makes `Butcher Mutant Raider
+corpse`. The label never names the target, because the row already knows it and
+a third copy of that string is what the payload ceiling is measured against.
+
+That division is why a corpse growing a Brain Farming yield grows a row here
+with no edit in either file. `world_view.gd` documents what the *other*
+arrangement cost the two clients that tried it.
+
+> **The box is a sibling of the world pane, not a child of the `Node3D`.** It
+> lives in `WorldPane` beside `Minimap` and `LoadingVeil`, so the 3D scene stays
+> 3D and the menu is a plain `Control` that `test_choose_option` drives with no
+> camera, no pool and no connection. `WorldView` raises `options_requested` and
+> `console.gd` connects it — the pane asks the question and something else
+> draws it.
+
 ## The inventory draws in 3D without giving up drag and drop
 
 The retired browser client gave the inventory a whole second three.js scene,
@@ -341,10 +413,10 @@ Godot's own splash cannot cover this: it is gone before the socket opens.
 
 ### Four facts, and the phase is whichever is missing first
 
-    a body      char_vitals landed          CharState.has_vitals
-    a place     room_info named a map       WorldState.current_z
-    a map       every chunk of it arrived   Level.is_complete()
-    the art     nothing left in flight      MeshResolver.in_flight_count()
+	a body      char_vitals landed          CharState.has_vitals
+	a place     room_info named a map       WorldState.current_z
+	a map       every chunk of it arrived   Level.is_complete()
+	the art     nothing left in flight      MeshResolver.in_flight_count()
 
 They do complete in that order today. Nothing in `SessionReadiness` assumes it —
 each is tested independently, so a server that reorders them reports the truth
@@ -491,7 +563,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All thirty-two are headless and exit non-zero on failure. Twenty-nine need
+All thirty-three are headless and exit non-zero on failure. Thirty need
 nothing running; three of the four `smoke_*` scenes need an Evennia, and none
 needs an account. `smoke_console` is the exception: it builds `console.tscn` for real and
 needs nothing, because the socket it opens is expected to fail.
@@ -517,6 +589,20 @@ in the shape Godot's JSON parser produces:
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_state.tscn
 ```
+
+`test_choose_option.tscn` needs nothing running — the payloads are hand-built
+in the shape `serialize_entity` produces, floats and all, and the menu is a
+plain `Control` driven with no camera and no pool:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_choose_option.tscn
+```
+
+It covers the two things that go silently wrong: that every row emits the
+server's string byte for byte and `Cancel` emits nothing at all, and that
+`options_for` falls back to `interact` when `actions` is absent — which is
+nearly every entity in the world, since the server omits the list for the
+one-verb case.
 
 `test_world_view.tscn` needs nothing running either — `yaw_towards` is static,
 and every case is a pair of grid cells:

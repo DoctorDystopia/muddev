@@ -21,10 +21,13 @@ from .skill_defs.base_skill import BaseSkill
 
 # Public constant definitions
 
-# Modules under skill_defs/ that hold no skill classes. base_skill defines the
-# interface itself; the *_skills.py container modules are the hand-maintained
-# dicts this auto-discovery replaces and are kept only as import shims.
-_EXCLUDED_MODULE_NAMES = frozenset({"base_skill"})
+# Modules under skill_defs/ that hold no PLAYABLE skill classes. base_skill
+# defines the interface itself; gathering_skill is the shared body every
+# gathering skill inherits and is no more playable than base_skill is. Without
+# the exclusion the walk finds them, sees BaseSkill's placeholder key, and
+# logs "has no unique `key`" on every server start -- an error line for
+# something working exactly as intended.
+_EXCLUDED_MODULE_NAMES = frozenset({"base_skill", "gathering_skill"})
 
 
 

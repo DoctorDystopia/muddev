@@ -11,7 +11,7 @@ from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GENERAL
 from systems.interface.statefeed.constants import ASSET_KIND_NPC, COMMERCE_ROLE_SHOP
-from typeclasses.objects import ObjectParent
+from typeclasses.objects import ObjectParent, Unpocketable
 from .scripts import Script
 from .spawners import register_spawner, spawn_once
 from systems.interface.menus.base_menu import start_blackout_menu
@@ -249,7 +249,7 @@ class TalkCmdSet(CmdSet):
 
 
 
-class TalkativeNPC(ObjectParent, DefaultObject):
+class TalkativeNPC(Unpocketable, ObjectParent, DefaultObject):
     """
     Purpose: An NPC that can engage in menu-driven conversations.
 
@@ -304,6 +304,11 @@ class TalkativeNPC(ObjectParent, DefaultObject):
     asset_kind = ASSET_KIND_NPC
     asset_key = "talkative_npc"
     interact_verb = TALK_COMMAND_KEY
+
+
+    # Refused by Unpocketable.at_pre_get. A pocketed shopkeep takes the shop
+    # with it, and nothing on the tile brings either back.
+    cannot_get_message = "{name} declines to be picked up."
 
 
     def at_object_creation(self) -> None:

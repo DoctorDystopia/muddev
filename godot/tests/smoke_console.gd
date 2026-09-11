@@ -112,6 +112,24 @@ func _the_veil_is_drawn_over_the_pane_and_not_under_it(console: Node) -> void:
 
 	_expect(last == veil, "the veil is the last child of the world pane")
 
+	# And the right-click menu is directly under it, for the same reason
+	# stated the other way round: it has to be drawn over the viewport, the
+	# minimap and the vitals, and under the veil. Over the veil it would show
+	# through the loading screen; under the viewport it would be invisible,
+	# which is a menu with no options at all.
+	var menu: Node = console.get_node_or_null("%ChooseOption")
+
+	if menu == null:
+		_fail("the choose-option menu is in the scene")
+		return
+
+	var beneath_veil: Node = pane.get_child(pane.get_child_count() - 2)
+
+	_expect(beneath_veil == menu,
+			"the choose-option menu sits directly under the veil")
+	_expect(not (menu as Control).visible,
+			"and starts hidden, so it never opens itself on login")
+
 
 func _expect(passed: bool, what: String) -> void:
 	if passed:

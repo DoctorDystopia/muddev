@@ -9,6 +9,17 @@ with a location in the game world (like Characters, Rooms, Exits).
 """
 
 from evennia import DefaultObject
+from evennia.utils import logger
+
+from systems.interface.statefeed import constants as feed_const
+
+# Refusing a pickup is a line about your inventory, so it carries the same
+# routing tag commands/get_cmds.py puts on every other line in that flow.
+#
+# The SERVER says what a line IS; the client decides which tab shows it. See
+# MESSAGE_TYPES in systems/interface/statefeed/constants.py.
+_MSG_INVENTORY = {
+    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 class ObjectParent:
@@ -21,6 +32,79 @@ class ObjectParent:
     take precedence.
 
     """
+
+
+    def at_object_delete(self):
+        """
+        Purpose: Tell every watching client that this entity is gone, before
+        it stops being readable.
+
+        Entry:
+            No conditions. Called by DefaultObject.delete() as its first act,
+            while self.location and self.id are both still valid.
+
+        Exit/Returns:
+            Returns whatever the parent hook returns -- False vetoes the
+            deletion, and this must never be the thing that changes that
+            answer.
+
+        Module variables:
+            None.
+
+        Methodology:
+            THE SEAM IS DELETION, and it had none. The feed's remove-delta was
+            wired to Room.at_object_leave, which Evennia fires from move_to --
+            and delete() does not move anything. It assigns `self.location =
+            None` directly (evennia/objects/objects.py, DefaultObject.delete),
+            so every object that left the world by being destroyed rather than
+            by walking out left a permanent ghost on every client that had
+            been told about it.
+
+            That covered the two most common events in the game. A killed NPC
+            is deleted by HostileNPC.respawn, and a butchered corpse is
+            deleted by GatheringSkill.consume_node. Both stayed on screen,
+            stacked up over a session, and stayed CLICKABLE -- so a click
+            aimed at the live raider standing on the tile could land on the
+            body of the one before it, or on last kill's uncollected loot, and
+            send that entity's verb instead. Nothing was wrong with the verb;
+            the client was being asked about an entity the server had
+            forgotten.
+
+            Deliberately here on ObjectParent rather than on the two
+            typeclasses that provoked it. The next deletable entity should not
+            have to remember to do this, and every Blackout entity already
+            inherits this mixin.
+
+            Exits are skipped because the feed does not report them
+            (serialize_area skips them by db_destination), and a location of
+            None means nobody could have been told about it in the first
+            place -- which is also every room, since a room has no location.
+
+        Notes/References:
+            The import is local. This module is loaded very early, by items,
+            npcs and characters alike, and systems.interface.statefeed pulls
+            in a large graph -- matching the local-import style
+            typeclasses/npc_combat.py documents.
+
+        Author: Nick Hobar
+        Creation date: 09/10/2026
+        """
+        try:
+            room = self.location
+
+            if room is not None and not self.destination:
+                from systems.interface.statefeed import events as feed
+
+                feed.emit_entity_left(room, self.id, exclude=(self,))
+        except Exception:
+            # A cosmetic feed must never be able to veto a deletion. A
+            # skipped removal is a ghost; a raised one would leave a 0-hp NPC
+            # standing and hang the fight that killed it.
+            logger.log_trace()
+
+        parent_class = super()
+
+        return parent_class.at_object_delete()
 
 
 class Object(ObjectParent, DefaultObject):
@@ -214,4 +298,55 @@ class Object(ObjectParent, DefaultObject):
 
     """
 
-    pass
+
+
+class Unpocketable:
+    """
+    Purpose: Refuse `get` on an object that is scenery or a person, for every
+    instance already in the database as well as every future one.
+
+    Entry:
+        Mixed in FIRST, before the typeclass's other bases, so at_pre_get
+        below wins over DefaultObject's permissive one.
+
+    Exit/Returns:
+        No conditions. at_pre_get returns False and messages the getter.
+
+    Module variables:
+        _MSG_INVENTORY read.
+
+    Methodology:
+        A HOOK, deliberately, and not the `get:false()` lock every other
+        un-pickable thing in the game carries. A lock is a row on the object:
+        it is written once in at_object_creation, which runs once, so adding
+        one now would leave every NPC already standing on the grid pocketable
+        until the next map rebuild -- and the shopkeeps, whose rooms are never
+        rebuilt, forever. A hook is a class attribute, read live on every
+        attempt, so declaring it here corrects objects that were created
+        months ago with no migration. Same reasoning CLAUDE.md gives for
+        TalkativeNPC.dialogue_module.
+
+        The message is a class attribute rather than a literal so a subclass
+        can say something truer about itself without reimplementing the hook.
+
+    Notes/References:
+        Both Evennia's CmdGet (commands/default/general.py:466) and Blackout's
+        override (commands/get_cmds.py:160) call at_pre_get and abort on a
+        False return, so this is the one seam both honour.
+
+        Why it was needed: a player could `get mutant raider`, and the raider
+        went into their bag alive. It never died in its room, so
+        HostileNPC.respawn never ran, so nothing was ever queued on
+        BlackoutRespawnManager -- the tile stayed empty for the rest of the
+        server's life. The respawn queue itself was never at fault.
+
+    Author: Nick Hobar
+    Creation date: 09/10/2026
+    """
+    cannot_get_message = "{name} is not going anywhere in your pocket."
+
+    def at_pre_get(self, getter, **kwargs) -> bool:
+        message = self.cannot_get_message.format(name=self.key)
+        getter.msg((message, _MSG_INVENTORY))
+
+        return False

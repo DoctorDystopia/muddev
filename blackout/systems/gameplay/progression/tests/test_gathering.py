@@ -11,7 +11,8 @@ from evennia.utils.test_resources import EvenniaCommandTest
 from evennia import create_object 
 from typeclasses.objects import DefaultObject
 
-from typeclasses.gathering_nodes import RustyPole
+from typeclasses.gathering_nodes import MetalPole, RustyPole
+from systems.gameplay.progression.skills.gatherables import GATHERABLE_REGISTRY
 from systems.gameplay.progression.skills.handler import SkillHandler
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.gameplay.progression.skills.skill_defs.base_skill import (
@@ -19,7 +20,8 @@ from systems.gameplay.progression.skills.skill_defs.base_skill import (
     COOLDOWN_KEY_PREFIX,
     NO_COOLDOWN,
 )
-from commands.gathering_cmds import CmdCutGatheringNode, CUTTING_SKILL_KEY
+from commands.gathering_cmds import CmdCutGatheringNode
+from systems.gameplay.progression.skills.constants import CUTTING_SKILL_KEY
 
 
 
@@ -81,24 +83,33 @@ class TestCuttingProgression(EvenniaCommandTest):
 
 
     def test_cut_level_requirement_fail(self) -> None:
+        """A node above the character's level refuses, and says the level.
+
+        The METAL pole, whose GatherableDef asks for Cutting 10. The level
+        used to come off db.required_level, a per-spawn override this test was
+        the only user of; a node now carries a LIST of yields at different
+        levels for different skills, so the level lives in
+        GATHERABLE_REGISTRY and nowhere else. Reading the expected number back
+        out of the registry is also what keeps this test from having to be
+        edited the day that number is tuned.
+        """
         char_obj = self.char1
-        pole_obj = self.pole
-        
-        pole_obj.db.required_level = 99
-        
-        # Apply the exact same formatting and instantiation here
+
+        metal_pole = create_object(
+            MetalPole, key="metal pole", location=char_obj.location)
+        required_level = GATHERABLE_REGISTRY["metal_pole"].yields[0].required_level
+
+        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 0, "xp": _STARTING_XP}
+
         response = self.call(
             CmdCutGatheringNode(),
-            " rusty pole",
+            " metal pole",
             cmdstring="cut",
             caller=char_obj,
-            obj=pole_obj
+            obj=metal_pole
         )
 
-        print(f"\n[TEST OUTPUT - FAIL]: {response}")
-        # execute() accumulates every missing requirement into one line rather
-        # than reporting only the first failure.
-        expected_error = "Cutting level 99"
+        expected_error = f"Cutting level {required_level}"
         self.assertIn(expected_error, response)
 
 

@@ -19,10 +19,28 @@ DEFAULT_START_XP = 0
 MIN_BASE_SKILL_LEVEL = 0
 MAX_BASE_SKILL_LEVEL = 127
 
+
+
 # Skill keys referenced by name from code outside the skill_defs tree. Kept
 # here so a rename is a one-line change rather than a grep for string
-# literals -- Fortitude in particular is read by the combat layer, the
+# literals, Fortitude in particular is read by the combat layer, the
 # level-up side-effect table, and character creation.
+CUTTING_SKILL_KEY = "cutting"
+BUTCHERY_SKILL_KEY = "butchery"
+BRAIN_FARMING_SKILL_KEY = "brain_farming"
+
+# Every skill that works a node in GATHERABLE_REGISTRY. Read by the gathering
+# command set, which builds one verb per entry, and asserted against
+# SKILL_REGISTRY by the gathering tests -- a skill named here with no class
+# behind it would give a node a verb that resolves to nothing.
+GATHERING_SKILL_KEYS = (
+    CUTTING_SKILL_KEY,
+    BUTCHERY_SKILL_KEY,
+    BRAIN_FARMING_SKILL_KEY,
+)
+
+
+
 FORTITUDE_SKILL_KEY = "fortitude"
 
 # The three combat axes a melee swing resolves against. These are read by the

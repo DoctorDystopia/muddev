@@ -135,7 +135,11 @@ def _gatherable_rows(skill_key: str) -> list:
         None.
 
     Methodology:
-        One row per entry from gatherables.get_gatherables_for_skill.
+        One row per (node, yield) pair from
+        gatherables.get_gatherables_for_skill. A node worked at two
+        levels for two different items is two rows, because the panel's
+        job is to say what opens at what level -- one row per NODE would
+        have shown the corpse once, at whichever of its cuts came first.
 
     Notes/References:
         None
@@ -144,16 +148,17 @@ def _gatherable_rows(skill_key: str) -> list:
     Creation date: 08/05/2026
     """
     from systems.gameplay.progression.skills.gatherables import (
-        get_gatherable_item_name,
         get_gatherables_for_skill,
+        get_yield_item_name,
     )
 
     rows = []
 
-    for gatherable_def in get_gatherables_for_skill(skill_key):
-        item_name = get_gatherable_item_name(gatherable_def)
+    for gatherable_def, gatherable_yield in get_gatherables_for_skill(skill_key):
+        item_name = get_yield_item_name(gatherable_yield)
         note = f"yields {item_name}"
-        rows.append((gatherable_def.node_name, gatherable_def.required_level, note))
+        rows.append(
+            (gatherable_def.node_name, gatherable_yield.required_level, note))
 
     return rows
 

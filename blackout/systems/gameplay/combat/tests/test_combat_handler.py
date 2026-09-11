@@ -731,3 +731,50 @@ class TestSwingReporting(EvenniaTest):
         miss_line = lines[self._index_of(lines, "miss")]
 
         self.assertNotIn("xp", miss_line)
+
+
+class TestAttackRequiresTheSameRoom(EvenniaTest):
+    """Regression: attacking something you are carrying announced a victory.
+
+    _validate_attack asked only "is it a live Combatant", so the target's
+    location went unchecked until check_stop_combat ran on the first tick.
+    That guard's question is "is any enemy standing where I am", and its
+    answer for a target in your own bag is the |xYou won!|n branch -- so
+    `get mutant raider` followed by `attack mutant raider` reported a win
+    over an NPC that was never engaged and took no damage.
+    """
+
+    def test_a_carried_target_is_refused(self):
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room1)
+        target.move_to(self.char1, quiet=True)
+
+        accepted = handler._validate_attack({"kind": "attack", "target": target})
+
+        self.assertFalse(accepted)
+
+    def test_a_target_in_another_room_is_refused(self):
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room2)
+
+        accepted = handler._validate_attack({"kind": "attack", "target": target})
+
+        self.assertFalse(accepted)
+
+    def test_the_refusal_says_the_target_is_not_here(self):
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room2)
+        seen = []
+        self.char1.msg = lambda text=None, **kwargs: seen.append(text)
+
+        handler._validate_attack({"kind": "attack", "target": target})
+
+        self.assertIn("not here", seen[0][0])
+
+    def test_a_target_in_the_same_room_is_still_accepted(self):
+        handler = ensure_combat_handler(self.char1)
+        target = spawn_mutant_raider(self.room1)
+
+        accepted = handler._validate_attack({"kind": "attack", "target": target})
+
+        self.assertTrue(accepted)

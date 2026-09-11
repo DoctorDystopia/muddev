@@ -284,7 +284,31 @@ class BlackoutRespawnManager(DefaultScript):
             # window. Drop rather than double up.
             return False
 
-        npc_def.create(location=room)
+        npc = npc_def.create(location=room)
+
+        # Announce the arrival, because nothing else will. NpcDef.create goes
+        # through create_object(location=...), and Evennia does not fire
+        # at_object_receive for that -- only move_to does (CLAUDE.md, "Evennia
+        # gotchas found the hard way", item 5). Room.at_object_receive is
+        # where emit_entity_arrived hangs, so a respawned NPC appeared to no
+        # client until that observer happened to walk far enough to be sent a
+        # fresh contents list. On a tile you are standing on, that means the
+        # raider comes back invisible and stays invisible.
+        #
+        # Here rather than inside NpcDef.create: this is the one path that
+        # puts a live NPC into a room somebody may already be standing in. The
+        # map spawners also call create(), during a rebuild, where every
+        # observer is about to be re-seeded anyway.
+        try:
+            from systems.interface.statefeed import events as feed
+
+            feed.emit_entity_arrived(room, npc)
+        except Exception:
+            # A cosmetic feed must never stall the sweep. A missed
+            # announcement costs one invisible NPC until the observer moves;
+            # a raise would drop this entry and cost the NPC entirely.
+            logger.log_trace()
+
         return True
 
 
