@@ -1,9 +1,20 @@
 {
   "corpse_skeleton": "npcs/corpse_skeleton.glb",
   "floating_eye": "npcs/floating_eye.glb",
+  "food_meat": "items/food_meat.glb",
   "map_transition": "world_objects/map_transition.glb",
+  "moderator_egg": "items/moderator_egg.glb",
+  "mutant_raider_cured_chuck": "items/mutant_raider_cured_chuck.glb",
+  "mutant_raider_cured_fatless_meat": "items/mutant_raider_cured_fatless_meat.glb",
+  "mutant_raider_cured_filet": "items/mutant_raider_cured_filet.glb",
+  "mutant_raider_cured_meat_sandwich": "items/mutant_raider_cured_meat_sandwich.glb",
+  "mutant_raider_cured_prime_meat": "items/mutant_raider_cured_prime_meat.glb",
+  "mutant_raider_prime_cured_meat_sandwich": "items/mutant_raider_prime_cured_meat_sandwich.glb",
+  "mutant_raider_prime_steak": "items/mutant_raider_prime_steak.glb",
+  "mutant_raider_steak": "items/mutant_raider_steak.glb",
   "player_character": "characters/player_character.glb",
   "rusty_scrap_shortsword": "items/rusty_scrap_shortsword.glb",
   "tile_oasis": "tiles/tile_oasis.glb",
-  "tile_oasis_outskirts": "tiles/tile_oasis_outskirts.glb"
+  "tile_oasis_outskirts": "tiles/tile_oasis_outskirts.glb",
+  "tile_azm_plains": "tiles/tile_azm_plains.glb"
 }

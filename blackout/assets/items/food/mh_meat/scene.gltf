@@ -1,0 +1,127 @@
+{
+  "asset": {
+    "generator": "blackout picocad_to_gltf.py",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "picocad",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "picocad"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "picocad",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "picocad",
+      "doubleSided": true,
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0,
+        "roughnessFactor": 1
+      }
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "picocad",
+      "mimeType": "image/png",
+      "uri": "textures/texture.png"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9728,
+      "minFilter": 9728,
+      "wrapS": 33071,
+      "wrapT": 33071
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 1038,
+      "type": "VEC3",
+      "min": [
+        -1.2219,
+        -0.1016999999999999,
+        -2.7698
+      ],
+      "max": [
+        1.1217000000000001,
+        2.2417,
+        4.2299999999999995
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 1038,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 1038,
+      "type": "VEC2"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 12456,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 12456,
+      "byteLength": 12456,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24912,
+      "byteLength": 8304,
+      "target": 34962
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 33216,
+      "uri": "scene.bin"
+    }
+  ]
+}

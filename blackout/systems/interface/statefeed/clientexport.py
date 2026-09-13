@@ -139,11 +139,39 @@ _KIND_EXPORTS: tuple = (
     ("FAMILY_STATION", const.ASSET_KIND_STATION),
     ("FAMILY_GATHERABLE", const.ASSET_KIND_GATHERABLE),
     ("FAMILY_CORPSE", const.ASSET_KIND_CORPSE),
+    ("FAMILY_SIGN", const.ASSET_KIND_SIGN),
     ("FAMILY_GENERIC", const.ASSET_KEY_GENERIC),
+)
+
+# What sort of text a `label` on an entity row is, for a client deciding how to
+# draw it.
+#
+# Exported for the reason the message types are, and the hazard is the one
+# CLAUDE.md names: the client keys a COLOUR table on these, and a table keyed
+# by a typed literal is one spelling away from drawing every developer's note
+# as though it were signage a player should believe.
+#
+# Generating them is also what spares that table a guard test. A client is free
+# to colour fewer kinds than are listed -- its fallback is documented -- and it
+# CANNOT name one that does not exist, because a kind renamed or dropped here
+# breaks the generated file the client's keys are read from. The same argument
+# family_shapes.gd's MODELS table makes for having only its values checked.
+_LABEL_KIND_EXPORTS: tuple = (
+    ("LABEL_KIND_SIGN", const.LABEL_KIND_SIGN),
+    ("LABEL_KIND_MARKER", const.LABEL_KIND_MARKER),
+    ("LABEL_KIND_GRAFFITI", const.LABEL_KIND_GRAFFITI),
 )
 
 # Item families, in the order family_shapes.gd builds procedural meshes for
 # them, so the generated list reads alongside the file that consumes it.
+#
+# FOOD is here for the same reason every other name is, and the reason is
+# worth stating because it has no procedural mesh: the client keys a family's
+# STAND-IN MODEL on the constant too (`FamilyShapes.MODELS`), and a family
+# with art but no exported name is one whose entry has to be typed as a string
+# literal -- the "Metalsmith" versus "Metalsmithing" hazard CLAUDE.md names,
+# on a table where the symptom is every meal in the game silently drawing a
+# grey box.
 _ITEM_FAMILY_EXPORTS: tuple = (
     ("ITEM_FAMILY_WEAPON", const.ITEM_FAMILY_WEAPON),
     ("ITEM_FAMILY_ARMOR", const.ITEM_FAMILY_ARMOR),
@@ -151,6 +179,7 @@ _ITEM_FAMILY_EXPORTS: tuple = (
     ("ITEM_FAMILY_MATERIAL", const.ITEM_FAMILY_MATERIAL),
     ("ITEM_FAMILY_TOOL", const.ITEM_FAMILY_TOOL),
     ("ITEM_FAMILY_CURRENCY", const.ITEM_FAMILY_CURRENCY),
+    ("ITEM_FAMILY_FOOD", const.ITEM_FAMILY_FOOD),
     ("ITEM_FAMILY_GENERIC", const.ITEM_FAMILY_GENERIC),
 )
 
@@ -369,7 +398,8 @@ def _render_body(syntax: dict, indent: str) -> str:
 
     Module Globals:
         _CHANNEL_EXPORTS, _KIND_EXPORTS, _ITEM_FAMILY_EXPORTS,
-        _TILE_KIND_EXPORTS, _MESSAGE_TYPE_EXPORTS, _SCALAR_EXPORTS read.
+        _LABEL_KIND_EXPORTS, _TILE_KIND_EXPORTS, _MESSAGE_TYPE_EXPORTS,
+        _SCALAR_EXPORTS read.
 
     Methodology:
         Walk the export tables in the order they are declared above,
@@ -398,6 +428,8 @@ def _render_body(syntax: dict, indent: str) -> str:
     section("Asset kinds -- the client's mesh `family` vocabulary.",
             _KIND_EXPORTS)
     section("Item families.", _ITEM_FAMILY_EXPORTS)
+    section("World label kinds -- what sort of text an entity's `label` is.",
+            _LABEL_KIND_EXPORTS)
     section("Tile action kinds -- what a click does to a walk in progress.",
             _TILE_KIND_EXPORTS)
     section("Text routing -- what a line of game text is ABOUT. Which tab "

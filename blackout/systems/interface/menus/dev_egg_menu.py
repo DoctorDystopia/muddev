@@ -625,6 +625,7 @@ def start(caller, **kwargs):
         {"desc": "Restore (full HP, out of combat)", "goto": _goto_restore},
         {"desc": "Empty inventory (destroys carried AND equipped)",
          "goto": "node_clear_confirm"},
+        {"desc": "Erase what they have written", "goto": "node_erase_confirm"},
         {"desc": "Teleport to a map", "goto": "node_teleport"},
         {"desc": "Teleport to a player", "goto": "node_teleport_player"},
         {"desc": "Bring target to me", "goto": _goto_bring_here},
@@ -764,6 +765,59 @@ def node_clear_confirm(caller, **kwargs):
     text = f"{_HEADING}\n\n{ERROR_COLOR}{warning}{RESET_COLOR}"
     options = (
         {"key": CONFIRM_YES_KEYS, "desc": "Yes, destroy them", "goto": _goto_clear},
+        cancel_option("start"),
+    )
+
+    return text, options
+
+
+def node_erase_confirm(caller, **kwargs):
+    """
+    Purpose: Require an explicit yes before destroying what a player wrote.
+
+    Entry:
+        caller is the moderator's Character.
+
+    Exit/Returns:
+        Returns the (text, options) tuple EvMenu renders.
+
+    Module Globals:
+        dev_constants.MSG_ERASE_CONFIRM and MSG_ERASE_NOTHING read.
+
+    Methodology:
+        The SECOND confirmation on the egg, and the second entry that cannot
+        be undone by doing something else -- a deleted scrawl is as gone as a
+        deleted item. Everything else here is reversible by doing the opposite.
+
+        It counts first, and it counts for two reasons. A moderator reading
+        "erase 31 things written by Bob" catches a wrong target where one
+        reading "are you sure?" confirms it; and a target who has written
+        nothing is told so on this screen rather than being asked to confirm
+        destroying nothing and then told it did nothing.
+
+    Notes/References:
+        Bound to the shared yes key rather than auto-numbered, matching
+        node_clear_confirm -- confirming must never be the digit that meant
+        something else on the last screen.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    target = _target(caller)
+    standing = dev_actions.graffiti_count(target)
+
+    if standing < 1:
+        nothing = dev_constants.MSG_ERASE_NOTHING.format(target=target.key)
+        text = f"{_HEADING}\n\n{nothing}"
+
+        return text, (cancel_option("start"),)
+
+    warning = dev_constants.MSG_ERASE_CONFIRM.format(
+        count=standing, target=target.key)
+    text = f"{_HEADING}\n\n{warning}"
+    options = (
+        {"key": CONFIRM_YES_KEYS, "desc": "Yes, erase them",
+         "goto": _goto_erase},
         cancel_option("start"),
     )
 
@@ -1117,6 +1171,15 @@ def _goto_clear(caller, raw_string, **kwargs) -> str:
     """Destroy the target's belongings, after the confirmation node."""
     target = _target(caller)
     _succeeded, message = dev_actions.clear_inventory(caller, target)
+    _report(caller, message)
+
+    return "start"
+
+
+def _goto_erase(caller, raw_string, **kwargs) -> str:
+    """Destroy everything the target has written, after the confirmation."""
+    target = _target(caller)
+    _succeeded, message = dev_actions.erase_graffiti(caller, target)
     _report(caller, message)
 
     return "start"

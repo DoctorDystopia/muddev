@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dxss65xqajsum"]
+
+[ext_resource type="PackedScene" uid="uid://pdreiypq2lvc" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/eggplant.glb" id="1_vbxcl"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_rw8bn"]
+
+[node name="eggplant" instance=ExtResource("1_vbxcl")]
+
+[node name="Eggplant" parent="." index="0"]
+material_override = ExtResource("2_rw8bn")

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://ruiphn4wlnup"]
+
+[ext_resource type="PackedScene" uid="uid://dq4u5nyca2yiw" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/zucchini.glb" id="1_igmsy"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_s1b57"]
+
+[node name="zucchini" instance=ExtResource("1_igmsy")]
+
+[node name="Zucchini" parent="." index="0"]
+material_override = ExtResource("2_s1b57")

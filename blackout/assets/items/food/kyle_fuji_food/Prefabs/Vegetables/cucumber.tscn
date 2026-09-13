@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bm32nu4ew23ov"]
+
+[ext_resource type="PackedScene" uid="uid://claw51ny8e28s" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/cucumber.glb" id="1_3akyu"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_rljun"]
+
+[node name="cucumber" instance=ExtResource("1_3akyu")]
+
+[node name="Cucumber" parent="." index="0"]
+material_override = ExtResource("2_rljun")

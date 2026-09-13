@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bpni38pxht376"]
+
+[ext_resource type="PackedScene" uid="uid://dowaqugdrhoxb" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/corn.glb" id="1_hhy51"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_ruhtc"]
+
+[node name="corn" instance=ExtResource("1_hhy51")]
+
+[node name="Corn" parent="." index="0"]
+material_override = ExtResource("2_ruhtc")

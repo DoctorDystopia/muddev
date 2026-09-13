@@ -37,7 +37,7 @@ extends RefCounted
 ## Z is a map NAME, not an elevation, and their relative placement cannot be
 ## computed from the data -- so it is authored. A map not listed still appears,
 ## after the named ones.
-const Z_LAYOUT_ORDER := ["oasis", "oasis_outskirts", "trade town sector 1"]
+const Z_LAYOUT_ORDER := ["oasis", "oasis_outskirts", "azm_plains", "trade town sector 1"]
 
 ## The terrain each map's ground is surfaced with, as an asset key.
 ##
@@ -63,6 +63,7 @@ const TILE_MODELS := {
 	# one, which is the entire difference between the two maps in the fiction.
 	"oasis": "tile_oasis",
 	"oasis_outskirts": "tile_oasis_outskirts",
+	"azm_plains": "tile_azm_plains"
 }
 
 ## What a tile with no room kind at all is drawn in.
@@ -76,6 +77,19 @@ const KIND_HSL_LIGHTNESS := 0.42
 
 ## Must colour the SAME set of room kinds as blackout3d.js, key for key --
 ## ClientRoomKindTests asserts it in both directions.
+##
+## There is deliberately no row for signage, and the reason is worth knowing
+## before adding one. A signpost dispatches off a room ATTRIBUTE rather than a
+## room key, so it usually stands on a tile that is already something else --
+## the furnace tile keeps the furnace key and the furnace colour, which is
+## correct, because the tile IS a furnace with a sign on it. Only a tile whose
+## whole purpose is the sign carries the sign room key, and a map need never
+## have one. A colour row for a key no map declares is the "Pole clearing" bug
+## the guard test above exists to catch; it caught this one.
+##
+## If a map does keep a sign-only tile and you want it coloured, the row is one
+## line here plus the key that map declares -- and the guard will hold you to
+## the two agreeing.
 const ROOM_KIND_COLORS := {
 	"Bank": Color("4488ff"),
 	"Foundry Furnace Facility": Color("dd4422"),
@@ -83,6 +97,12 @@ const ROOM_KIND_COLORS := {
 	# The food chain's first facility, coloured tallow rather than flame so it
 	# does not read as a second furnace at a glance.
 	"Rendering Cooker Facility": Color("cc7722"),
+	# The chain's second facility, and the pair reads as a pair: warm for the
+	# cooker that boils fat out, cold for the chamber that dries meat. A player
+	# glancing at the minimap should be able to tell which is which without the
+	# label, because the two sit a few tiles apart and the route through them is
+	# the decision the food chain is built around.
+	"Curing Chamber Facility": Color("88aacc"),
 	# Two clearings, not one, and they are told apart by what they yield:
 	# oasis grows rusty poles, oasis_outskirts grows metal ones. Coloured for
 	# the material rather than for the tile, so the map reads as a gradient

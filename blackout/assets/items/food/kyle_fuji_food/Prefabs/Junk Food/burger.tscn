@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://cn6k7aoialhqf"]
+
+[ext_resource type="PackedScene" uid="uid://waouvrpasw1d" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/burger.glb" id="1_srdgs"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_a0vbf"]
+
+[node name="burger" instance=ExtResource("1_srdgs")]
+
+[node name="Burger" parent="." index="0"]
+material_override = ExtResource("2_a0vbf")

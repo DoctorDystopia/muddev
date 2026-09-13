@@ -25,6 +25,8 @@ Description: Turn a character's inventory grid and equipment slots into the
 """
 
 from . import commerce
+from systems.gameplay.consumables import service as consumables
+
 from . import constants as const
 from .serializers import _classify, _item_family
 
@@ -352,6 +354,13 @@ def _serialize_carried(handler, context) -> list:
 
         if equip_slot:
             leading.append(const.INVENTORY_ACTION_EQUIP)
+
+        # Eat sits beside Equip as the other "what is this FOR" verb, and is
+        # gated the same way: on a field of the item, not on its tag or its
+        # typeclass. consumables.service owns the question, so the pane offers
+        # Eat on exactly what the `eat` command would accept.
+        if consumables.is_edible(item):
+            leading.append(const.INVENTORY_ACTION_EAT)
 
         actions = _build_actions(leading, item, slot_number, equip_slot)
         actions.extend(

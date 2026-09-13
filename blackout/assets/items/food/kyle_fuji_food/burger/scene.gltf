@@ -1,0 +1,139 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v5.0.21 + blackout glb_to_gltf.py",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "Burger"
+    }
+  ],
+  "meshes": [
+    {
+      "name": "Circle.012",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 83,
+      "max": [
+        0.058308497071266174,
+        0.08075648546218872,
+        0.058308497071266174
+      ],
+      "min": [
+        -0.058308497071266174,
+        0,
+        -0.058308497071266174
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 83,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 83,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 240,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 996,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 996,
+      "byteOffset": 996,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 664,
+      "byteOffset": 1992,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 480,
+      "byteOffset": 2656,
+      "target": 34963
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 3136,
+      "uri": "scene.bin"
+    }
+  ],
+  "materials": [
+    {
+      "name": "T_junk_atlas_diffuse",
+      "alphaMode": "OPAQUE",
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 0
+        },
+        "metallicFactor": 0.0,
+        "roughnessFactor": 0.7
+      }
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "T_junk_atlas_diffuse",
+      "mimeType": "image/png",
+      "uri": "../Textures/T_junk_atlas_diffuse.png"
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ]
+}

@@ -9,8 +9,9 @@ extends RefCounted
 ##
 ## ## Only what is genuinely the player's
 ##
-## Font size, UI scale, which panes are shown, where the dividers sit, and
-## where a clicked skill's detail is shown — and deliberately nothing else. Everything the client draws from the feed belongs to the
+## Font size, UI scale, which panes are shown, where the dividers sit, where a
+## clicked skill's detail is shown, and how loud sound effects play — and
+## deliberately nothing else. Everything the client draws from the feed belongs to the
 ## server, and a setting that duplicated one would be a second owner of it. The
 ## line is the same one the whole client is built on: the server says what is
 ## true, the player says how it looks. Hiding a pane does not unsubscribe from
@@ -30,6 +31,10 @@ const DEFAULT_PATH := "user://client.cfg"
 
 const SECTION := "display"
 
+## Sound gets its own section: a volume is not a display setting, and a file
+## read by hand should say which is which.
+const AUDIO_SECTION := "audio"
+
 const KEY_FONT_SIZE := "font_size"
 const KEY_UI_SCALE := "ui_scale"
 const KEY_SHOW_WORLD := "show_world"
@@ -37,6 +42,7 @@ const KEY_SHOW_INVENTORY := "show_inventory"
 const KEY_TEXT_SPLIT := "text_split"
 const KEY_WORLD_SPLIT := "world_split"
 const KEY_SKILL_DETAIL := "skill_detail"
+const KEY_SFX_VOLUME := "sfx_volume"
 
 const DEFAULT_FONT_SIZE := 14
 const MIN_FONT_SIZE := 9
@@ -130,6 +136,19 @@ const DEFAULT_SKILL_DETAIL := SKILL_DETAIL_BOTH
 const MIN_SPLIT := 120
 const MAX_SPLIT := 4000
 
+## How loud every sound effect plays, LINEAR from silent (0.0) to as mixed (1.0).
+##
+## Linear and not decibels, because a slider in decibels crowds every audible
+## change into its last quarter. Turning this into a bus level is
+## [method SoundCues.apply_volume]'s job, not this file's -- this stores what
+## the player chose, the bus owner decides what that means to the mixer.
+##
+## Capped at 1.0 rather than allowing a boost: above the authored mix is where
+## clips start to clip, and a louder game is the operating system's slider.
+const DEFAULT_SFX_VOLUME := 1.0
+const MIN_SFX_VOLUME := 0.0
+const MAX_SFX_VOLUME := 1.0
+
 ## Emitted after any change, so every consumer redraws from one place.
 signal changed
 
@@ -140,6 +159,7 @@ var show_inventory := DEFAULT_SHOW_INVENTORY
 var text_split := DEFAULT_TEXT_SPLIT
 var world_split := DEFAULT_WORLD_SPLIT
 var skill_detail := DEFAULT_SKILL_DETAIL
+var sfx_volume := DEFAULT_SFX_VOLUME
 
 var _path: String
 
@@ -176,6 +196,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_WORLD_SPLIT, DEFAULT_WORLD_SPLIT)))
 	skill_detail = _clamp_skill_detail(str(config.get_value(
 		SECTION, KEY_SKILL_DETAIL, DEFAULT_SKILL_DETAIL)))
+	sfx_volume = _clamp_volume(float(config.get_value(
+		AUDIO_SECTION, KEY_SFX_VOLUME, DEFAULT_SFX_VOLUME)))
 
 	changed.emit()
 
@@ -193,6 +215,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_TEXT_SPLIT, text_split)
 	config.set_value(SECTION, KEY_WORLD_SPLIT, world_split)
 	config.set_value(SECTION, KEY_SKILL_DETAIL, skill_detail)
+	config.set_value(AUDIO_SECTION, KEY_SFX_VOLUME, sfx_volume)
 
 	return config.save(_path)
 
@@ -285,6 +308,22 @@ func set_skill_detail(value: String) -> void:
 	changed.emit()
 
 
+## Set the sound effects volume, clamped, and persist it.
+##
+## Clamped for the same reason the font is, with a quieter failure: a volume
+## saved far above 1.0 would clip every clip, and one below zero is meaningless
+## to the mixer.
+func set_sfx_volume(value: float) -> void:
+	var clamped := _clamp_volume(value)
+
+	if is_equal_approx(clamped, sfx_volume):
+		return
+
+	sfx_volume = clamped
+	save_to_disk()
+	changed.emit()
+
+
 ## True when a clicked skill should open the detail view inside the pane.
 ##
 ## Two readers ask this rather than comparing against a mode string, so the
@@ -310,6 +349,7 @@ func reset() -> void:
 	text_split = DEFAULT_TEXT_SPLIT
 	world_split = DEFAULT_WORLD_SPLIT
 	skill_detail = DEFAULT_SKILL_DETAIL
+	sfx_volume = DEFAULT_SFX_VOLUME
 	save_to_disk()
 	changed.emit()
 
@@ -331,3 +371,7 @@ func _clamp_scale(value: float) -> float:
 
 func _clamp_split(value: int) -> int:
 	return clampi(value, MIN_SPLIT, MAX_SPLIT)
+
+
+func _clamp_volume(value: float) -> float:
+	return clampf(value, MIN_SFX_VOLUME, MAX_SFX_VOLUME)

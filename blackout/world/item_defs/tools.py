@@ -7,6 +7,7 @@ Description: ItemDef entries for gathering and crafting tools.
 
 import systems.gameplay.combat.constants as combat_constants
 from systems.gameplay.crafting.constants import TOOL_TAG_CATEGORY
+from systems.gameplay.graffiti.constants import GRAFFITI_MEDIUM_CATEGORY
 from systems.interface.statefeed.constants import ITEM_FAMILY_WEAPON
 from world.item_database import ItemDef
 from items.equipment.constants import WieldLocation
@@ -128,5 +129,43 @@ ITEMS = {
         tier=1,
         req_level=0,
         tags=[("hammer", TOOL_TAG_CATEGORY)],
+    ),
+    # TWO families, and CLAUDE.md blesses it: Evennia files each (key,
+    # category) pair independently, so one item declares as many families as it
+    # belongs to. TOOL_TAG_CATEGORY is the string the 3D pane picks a mesh out
+    # of -- it and statefeed's ITEM_FAMILY_TOOL are the same value under two
+    # names -- and GRAFFITI_MEDIUM_CATEGORY is what
+    # systems/gameplay/graffiti/service.py searches a writer's bag for. Neither
+    # reader sees the other's tag.
+    #
+    # The medium category is IMPORTED, not typed. The service finds a medium by
+    # it and this stamps it, so two spellings would be a can that cannot be
+    # sprayed with nothing raised either way -- the same reasoning
+    # dev_tools.py gives for DEV_TOOL_TAG_CATEGORY.
+    #
+    # Carries no charge count. systems/gameplay/graffiti/constants.py owns the
+    # default and the service applies it on READ, so a capacity here would be a
+    # second place to be wrong about how much paint is in a can.
+    "spray_can": ItemDef(
+        key="spray_can",
+        name="spray can",
+        desc=(
+            "A dented aerosol can, label long gone, the ball inside it still "
+            "loose enough to rattle. Enough left in it to say something."
+        ),
+        value=8,
+        weight=0.4,
+        tradeable=True,
+        # NOT stackable, and that is the charge count's doing rather than a
+        # style choice: a stack is one object with a quantity, so two cans in
+        # one slot would share one charge attribute and spending from either
+        # would empty both.
+        stackable=False,
+        tier=1,
+        req_level=0,
+        tags=[
+            ("spray_can", TOOL_TAG_CATEGORY),
+            ("spray_can", GRAFFITI_MEDIUM_CATEGORY),
+        ],
     ),
 }

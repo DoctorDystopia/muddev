@@ -1,0 +1,10 @@
+[gd_resource type="StandardMaterial3D" load_steps=3 format=3 uid="uid://wg6fve45smuu"]
+
+[ext_resource type="Texture2D" uid="uid://2xjnrygcab7p" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_plate_diffuse.png" id="1_61p64"]
+[ext_resource type="Texture2D" uid="uid://b41qi5scu4ft4" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_plate_normal.png" id="2_pg25e"]
+
+[resource]
+albedo_texture = ExtResource("1_61p64")
+roughness = 0.4
+normal_enabled = true
+normal_texture = ExtResource("2_pg25e")

@@ -73,6 +73,10 @@ func _ready() -> void:
 
 	_the_camera_does_not_want_the_right_button()
 
+	_the_menu_owns_the_panes_clicks_while_it_is_open()
+	_a_click_off_the_rows_dismisses_it()
+	_the_mouse_dismissal_does_not_wait_for_unhandled_input()
+
 	_choosing_a_row_sends_that_rows_command_verbatim()
 	_cancel_sends_nothing()
 	_an_empty_option_list_opens_nothing()
@@ -198,6 +202,65 @@ func _the_camera_does_not_want_the_right_button() -> void:
 			"and lays no claim to the right one, which is the menu's")
 
 
+# ─── How it closes ───────────────────────────────────────────────────────────
+
+## The menu stands over a [SubViewportContainer], which forwards every mouse
+## event the GUI gives it into the 3D pane. A box that covered only its own
+## rows therefore never saw the click that was meant to dismiss it -- the
+## container took it, the world acted on it, and the box stayed open over a
+## corpse the player had just walked away from.
+##
+## These three cases are the shape of the fix: while it is open the menu is a
+## full-pane Control that GUI picking reaches BEFORE the container, so the
+## dismissing click is consumed rather than forwarded.
+func _the_menu_owns_the_panes_clicks_while_it_is_open() -> void:
+	var menu := _menu()
+
+	_expect(menu.anchor_right == 1.0 and menu.anchor_bottom == 1.0,
+			"the menu is anchored to the whole pane, not to its own rows")
+	_expect(menu.mouse_filter == Control.MOUSE_FILTER_STOP,
+			"and stops the clicks it is picked for rather than passing them on")
+	_expect(not menu.visible,
+			"but is invisible, and so unpickable, until it opens")
+	menu.queue_free()
+
+
+func _a_click_off_the_rows_dismisses_it() -> void:
+	## Driven through _gui_input directly: a headless run has no window, so
+	## real GUI picking never happens and a pushed InputEvent would prove
+	## nothing either way.
+	var menu := _menu()
+	menu.open(WorldView.options_for(CORPSE), Vector2(10.0, 10.0))
+
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.position = Vector2(600.0, 600.0)
+	menu._gui_input(press)
+
+	_expect(not menu.is_open(), "a click on the backdrop closes the box")
+	_expect(_dismissals == 1, "and reports it as a dismissal")
+	_expect(_sent.is_empty(), "and sends nothing")
+	menu.queue_free()
+
+
+## The bug was a dismissal that waited for an event that never came, so the
+## assertion is about WHERE the mouse is read rather than about the outcome --
+## the outcome above passes either way in a headless run, which is exactly how
+## this shipped.
+func _the_mouse_dismissal_does_not_wait_for_unhandled_input() -> void:
+	var source := FileAccess.get_file_as_string(
+			"res://scenes/world/choose_option.gd")
+	var unhandled := source.split("func _unhandled_input")
+
+	_expect(source.contains("func _gui_input"),
+			"the menu reads the mouse where it is picked, in _gui_input")
+	_expect(unhandled.size() == 2
+			and not unhandled[1].contains("InputEventMouseButton"),
+			"and _unhandled_input claims no mouse button, which the "
+			+ "SubViewportContainer below would have eaten first")
+
+
 # ─── What gets sent ──────────────────────────────────────────────────────────
 
 func _choosing_a_row_sends_that_rows_command_verbatim() -> void:
@@ -245,9 +308,9 @@ func _the_box_stays_inside_the_pane() -> void:
 	pane.add_child(menu)
 	menu.open(WorldView.options_for(CORPSE), PANE)
 
-	var corner := menu.position + menu.size
+	var corner := menu.box.position + menu.box.size
 
-	_expect(menu.position.x >= 0.0 and menu.position.y >= 0.0,
+	_expect(menu.box.position.x >= 0.0 and menu.box.position.y >= 0.0,
 			"the box does not open off the top or left")
 	_expect(corner.x <= PANE.x and corner.y <= PANE.y,
 			"the box does not overflow the bottom or right")
@@ -272,7 +335,7 @@ func _menu() -> ChooseOption:
 ## Click the row showing this text. Fails the case if there is no such row,
 ## which is how a renamed row is caught rather than silently untested.
 func _press(menu: ChooseOption, text: String) -> void:
-	for row: Node in menu.get_child(0).get_children():
+	for row: Node in menu.box.get_child(0).get_children():
 		if row is Button and (row as Button).text == text:
 			(row as Button).pressed.emit()
 			return

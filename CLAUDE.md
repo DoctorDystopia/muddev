@@ -62,7 +62,7 @@ Inside `blackout/`:
 
 | Sub-domain | Holds | Contains |
 |---|---|---|
-| `systems/gameplay/` | Mechanics with content and rules — what a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/` |
+| `systems/gameplay/` | Mechanics with content and rules — what a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/`, `consumables/`, `graffiti/` |
 | `systems/interface/` | How TRUE state is shaped for a player | `statefeed/` (Godot wire protocol), `summary/` (dossier), `menus/` (EvMenu flows), `ui/` (colours, meters) |
 | `systems/core/` | Engine plumbing the others ride on | `tick/`, `stat_tracker/`, `managers.py` |
 

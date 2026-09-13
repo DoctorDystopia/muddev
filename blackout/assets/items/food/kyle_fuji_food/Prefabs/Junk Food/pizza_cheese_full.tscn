@@ -1,0 +1,22 @@
+[gd_scene load_steps=2 format=3 uid="uid://csly7dcq1atdc"]
+
+[ext_resource type="PackedScene" uid="uid://px0xcycocbfj" path="res://Low Poly Food Asset Pack/Kyle Fuji/Prefabs/Junk Food/pizza_cheese.tscn" id="1_v5d6t"]
+
+[node name="pizza_cheese_full" type="Node3D"]
+
+[node name="pizza_cheese" parent="." instance=ExtResource("1_v5d6t")]
+
+[node name="pizza_cheese2" parent="." instance=ExtResource("1_v5d6t")]
+transform = Transform3D(0.49999997, 0, 0.86602545, 0, 1, 0, -0.86602545, 0, 0.49999997, 0, 0, 0)
+
+[node name="pizza_cheese3" parent="." instance=ExtResource("1_v5d6t")]
+transform = Transform3D(-0.5000001, 0, 0.8660254, 0, 1, 0, -0.8660254, 0, -0.5000001, 0, 0, 0)
+
+[node name="pizza_cheese4" parent="." instance=ExtResource("1_v5d6t")]
+transform = Transform3D(-1, 0, -1.1920929e-07, 0, 1, 0, 1.1920929e-07, 0, -1, 0, 0, 0)
+
+[node name="pizza_cheese5" parent="." instance=ExtResource("1_v5d6t")]
+transform = Transform3D(-0.49999988, 0, -0.8660255, 0, 1, 0, 0.8660255, 0, -0.49999988, 0, 0, 0)
+
+[node name="pizza_cheese6" parent="." instance=ExtResource("1_v5d6t")]
+transform = Transform3D(0.5000002, 0, -0.8660253, 0, 1, 0, 0.8660253, 0, 0.5000002, 0, 0, 0)

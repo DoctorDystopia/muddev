@@ -30,7 +30,7 @@ from systems.interface.ui import colors
 # The first entry MUST be the starting level. A player at level 0 with no
 # cleared threshold would have zero slots and could never cure anything, which
 # is a deadlock rather than a curve.
-CURING_SLOT_LEVELS: tuple = (0, 10)
+CURING_SLOT_LEVELS: tuple = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
 
 # Attribute on the CHARACTER holding the in-progress cures.
 #
@@ -74,9 +74,7 @@ SLOT_STATE_READY = "ready"
 # handler and the chamber's commands cannot describe the same event two ways.
 MSG_CURE_STARTED = "You seal the {item} into the curing chamber."
 MSG_CURE_READY = "You draw the {item} out of the chamber, cured."
-MSG_NO_FREE_SLOT = (
-    "Every curing slot you have is full. Collect something first."
-)
+MSG_NO_FREE_SLOT = "Every curing slot you have is full. Collect something first."
 MSG_NOTHING_READY = "Nothing in the chamber is ready yet."
 MSG_NOTHING_CURING = "You have nothing curing."
 
@@ -97,8 +95,8 @@ MSG_NOTHING_CURING = "You have nothing curing."
 # The progress line, both halves of it. Split so a slot that is still working
 # and one that is done are not assembled by the same format call with a
 # conditional inside it.
-MSG_SLOT_WORKING = "{item} -- {remaining} remaining"
-MSG_SLOT_DONE = f"{{item}} -- {colors.SUCCESS_COLOR}ready{colors.RESET_COLOR}"
+MSG_SLOT_WORKING = "{item} - {remaining} remaining"
+MSG_SLOT_DONE = f"{{item}} - {colors.SUCCESS_COLOR}ready{colors.RESET_COLOR}"
 
 # The line above those, naming how much of the chamber is spoken for.
 #
@@ -113,7 +111,7 @@ MSG_SLOT_DONE = f"{{item}} -- {colors.SUCCESS_COLOR}ready{colors.RESET_COLOR}"
 # them can name it differently.
 MSG_SLOT_HEADER = "Curing slots: {used}/{total}"
 MSG_SLOT_HEADER_READY = (
-    f"Curing slots: {{used}}/{{total}} -- {colors.SUCCESS_COLOR}"
+    f"Curing slots: {{used}}/{{total}} - {colors.SUCCESS_COLOR}"
     f"{{ready}} ready to collect{colors.RESET_COLOR}"
 )
 

@@ -1,0 +1,15 @@
+[gd_resource type="StandardMaterial3D" load_steps=4 format=3 uid="uid://blstyi06jttd1"]
+
+[ext_resource type="Texture2D" uid="uid://dnv4vj3iak4hy" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_junk_atlas_diffuse.png" id="1_7nac1"]
+[ext_resource type="Texture2D" uid="uid://djyrs31213mfv" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_junk_atlas_metallic.png" id="2_7nac1"]
+[ext_resource type="Texture2D" uid="uid://css17wukhg0cq" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_junk_atlas_normal.png" id="3_grm3k"]
+
+[resource]
+albedo_texture = ExtResource("1_7nac1")
+metallic_texture = ExtResource("2_7nac1")
+metallic_texture_channel = 4
+roughness = 0.7
+roughness_texture = ExtResource("2_7nac1")
+roughness_texture_channel = 3
+normal_enabled = true
+normal_texture = ExtResource("3_grm3k")

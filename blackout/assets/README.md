@@ -9,8 +9,16 @@ assets/
 ├── pack_model.py                     the one build step
 ├── split_tileset.py                  a step in FRONT of it, for tilesets
 ├── fbx_to_gltf.py                    a step in FRONT of it, for FBX downloads
+├── picocad_to_gltf.py                a step in FRONT of it, for picoCAD saves
+├── glb_to_gltf.py                    a step in FRONT of it, for untextured .glb packs
 ├── items/weapons/rusty_sword/        one download, as it arrived
 │   ├── scene.gltf  scene.bin  textures/  license.txt
+├── items/food/mh_meat/               built here, not downloaded
+│   ├── mh_meat.txt  SOURCE.md         the picoCAD save file IS the art
+│   └── scene.gltf  scene.bin  textures/   written by picocad_to_gltf.py
+├── items/food/kyle_fuji_food/        a Godot Asset Library pack, 47 models
+│   ├── Models/  Textures/  Materials/  Prefabs/  SOURCE.md
+│   └── egg/  steak/  meat_haunch/  burger/   written by glb_to_gltf.py
 ├── npcs/sus_eye/
 ├── npcs/psx_low_poly_skeleton/       an FBX download, converted in place
 │   ├── skeleton.fbx  base.png  SOURCE.md
@@ -65,6 +73,43 @@ its family's procedural mesh, so a missing step 3 is invisible rather than
 broken — check the item actually changed shape before believing it worked. A
 TILE prop is the exception: a room kind with nothing registered draws no prop
 at all, so there the missing step is simply nothing appearing.
+
+## Converting an untextured GLB pack
+
+A pack installed from the **Godot Asset Library** is shaped for Godot, not for
+a pipeline: every model is a `.glb` holding a mesh and its UVs and **no
+material**, and the look is a `StandardMaterial3D` `.tres` a prefab applies with
+`material_override`. Packed as-is the model loads, reports nothing, and renders
+untextured. `glb_to_gltf.py` is the step in front:
+
+```bash
+../evenv/Scripts/python.exe assets/glb_to_gltf.py \
+    assets/items/food/kyle_fuji_food/Models/egg.glb \
+    assets/items/food/kyle_fuji_food/egg \
+    --texture assets/items/food/kyle_fuji_food/Textures/T_protein_atlas_diffuse.png
+```
+
+That writes `scene.gltf` and `scene.bin` into the destination, and from there
+every step above applies unchanged: a manifest row, a pack, a credit.
+
+- **Find the atlas through the prefab.** `Prefabs/<group>/<model>.tscn` names
+  its material; the material's `albedo_texture` names the image. Nothing in the
+  `.glb` says which of the pack's atlases it was UV-mapped against.
+- **The image is referenced, not copied.** Its `uri` is written relative to the
+  destination (`../Textures/...`), because several models share one atlas and a
+  copy per model would commit the same half-megabyte once for each.
+- **The material is opaque, always.** Pack atlases put ROUGHNESS in the alpha
+  channel (`roughness_texture_channel = 3` in the `.tres`); read as coverage,
+  that draws the model partly see-through.
+- **Base colour only.** Normal, roughness and metallic maps are left out: an
+  item is seventy pixels across in an inventory cell, and each map would still
+  cost a 512² PNG in the served file. `--roughness` sets the constant, default
+  0.7, the `.tres`'s own scalar.
+- **It refuses rather than guesses** when a `.glb` already has a material or
+  images, holds more than one buffer, or has a primitive with no UVs.
+- **Godot's `.import` sidecars and demo scenes are not the download.** Do not
+  leave an Asset Library pack where the editor installed it: inside `godot/` it
+  ships in the `.pck` before the login prompt. Move it under `assets/`.
 
 ## Converting an FBX download
 
@@ -140,6 +185,49 @@ in there, which is the fastest way to see what a tileset contains.
   leaves a gap between every pair of tiles in the world. Nothing about the file
   is wrong and nothing reports it. `godot/tests/smoke_model_load.gd` measures
   the footprint of every terrain tile for that reason.
+
+## Converting a picoCAD model
+
+Art built here rather than downloaded arrives as neither glTF nor FBX.
+[picoCAD](https://johanpeitz.itch.io/picocad) saves one text file — a Lua table
+of objects, then a 128×120 sheet of PICO-8 palette indices — and exports nothing
+`pack_model.py` can point at. `picocad_to_gltf.py` is the step in front, and
+like the two above it all it does is manufacture the shape the pipeline already
+takes:
+
+```bash
+../evenv/Scripts/python.exe assets/picocad_to_gltf.py \
+    assets/items/food/mh_meat/mh_meat.txt assets/items/food/mh_meat
+```
+
+That writes `scene.gltf`, `scene.bin` and `textures/` beside the save file, and
+from there every step above applies unchanged: a manifest row, a pack, a credit.
+
+- **The save file is the art.** There is no export to keep in step with it —
+  edit the `.txt` in picoCAD, re-run the converter, repack. The save file is
+  never written to.
+- **picoCAD's Y points DOWN and its Z points AWAY**, the way a PICO-8 screen
+  does. The conversion is `(x, -y, -z)`, which is a half turn about X — a
+  rotation and not a mirror, so face winding carries over and normals stay
+  outward. The half turn is the half of this that is *checked*: the first model
+  through is near enough symmetric that an upside-down import would look
+  identical, so what a render proves is that the mesh, the UVs and the winding
+  survive, not which way is up. The first asymmetric model settles it.
+- **A flat-shaded face has nowhere to put its colour**, so the 128×120 sheet is
+  padded to 128×128 and the eight new rows are written as sixteen 8×8 palette
+  swatches for those faces to sit on. One image and one material, rather than a
+  primitive per colour. It is also why the sampler is NEAREST with **no
+  mipmaps**: a minified mip would blend the swatch strip into the art above it.
+- **Everything is drawn double-sided.** picoCAD carries `dbl` per face and glTF
+  carries it per material, and the flag only ever makes a face more visible.
+- **The header's alpha colour is reported, not applied.** Punching every texel
+  of one palette index out of the sheet turns a model somebody painted black
+  into a model full of holes; a solid pixel where transparency was wanted is the
+  failure a person can see.
+- **A rotated object warns.** picoCAD bakes an edited turn into its vertices, so
+  `rot` is zero in every file seen so far and the rotation order the converter
+  assumes has never been checked against picoCAD's own view. If that warning
+  ever prints, look at the model before believing it.
 
 ## What packing does, and why
 

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://conasnuwf8wed"]
+
+[ext_resource type="PackedScene" uid="uid://dlxhmf0h7shig" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/drumstick.glb" id="1_y0nnx"]
+[ext_resource type="Material" uid="uid://dk5dfllnqpili" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_protein.tres" id="2_mjpec"]
+
+[node name="drumstick" instance=ExtResource("1_y0nnx")]
+
+[node name="Drumstick" parent="." index="0"]
+material_override = ExtResource("2_mjpec")

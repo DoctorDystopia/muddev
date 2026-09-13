@@ -87,6 +87,13 @@ ACTION_QUEST: str = "quest"
 # one nobody can account for afterwards.
 ACTION_INSPECT: str = "inspect"
 
+# Destroying what a player wrote on the world. Its own verb rather than
+# ACTION_CLEAR with a different detail, because the two answer different
+# questions in a review: clear is about someone's belongings and erase is about
+# their SPEECH, and a moderation log that could not tell them apart is one that
+# cannot show whether a player was silenced.
+ACTION_ERASE: str = "erase"
+
 MODERATOR_ACTIONS: frozenset = frozenset((
     ACTION_SPAWN,
     ACTION_SPAWN_NPC,
@@ -101,6 +108,7 @@ MODERATOR_ACTIONS: frozenset = frozenset((
     ACTION_UNBAN,
     ACTION_QUEST,
     ACTION_INSPECT,
+    ACTION_ERASE,
 ))
 
 # Stamped on every audited line so one grep finds every moderator action taken
@@ -210,6 +218,24 @@ MSG_CLEAR_DONE: str = (
 
 MSG_CLEAR_KEPT: str = (
     f"{HIGHLIGHT_COLOR}({{kept}} staff item(s) left alone.){RESET_COLOR}"
+)
+
+MSG_ERASE_NOTHING: str = (
+    f"{HIGHLIGHT_COLOR}{{target}} has written nothing that is still standing."
+    f"{RESET_COLOR}"
+)
+
+MSG_ERASE_DONE: str = (
+    f"{SUCCESS_COLOR}Erased{RESET_COLOR} {HIGHLIGHT_COLOR}{{count}}{RESET_COLOR}"
+    f"{SUCCESS_COLOR} thing(s) written by {{target}}.{RESET_COLOR}"
+)
+
+# The confirmation counts what it will destroy and names whose it is, for the
+# reason the inventory confirmation does: a moderator reading "31 written by
+# Bob" catches a wrong target, and one reading "are you sure?" confirms it.
+MSG_ERASE_CONFIRM: str = (
+    f"{ERROR_COLOR}Erase {{count}} thing(s) written by {{target}}?"
+    f"{RESET_COLOR}\nThis cannot be undone."
 )
 
 MSG_GODMODE_ON: str = (
@@ -372,6 +398,11 @@ INSPECT_LABEL_PERMISSIONS: str = "Permissions"
 INSPECT_LABEL_CONNECTED: str = "Connected"
 INSPECT_LABEL_LOCATION: str = "Location"
 INSPECT_LABEL_GODMODE: str = "God mode"
+# What the player has written on the world and left standing. On the dossier
+# rather than only behind the Erase row, because a moderator arrives here first
+# -- a report that made them go and open the erase screen to find out whether
+# there was anything to erase would be a report missing the answer.
+INSPECT_LABEL_WRITTEN: str = "Written"
 INSPECT_LABEL_CARRYING: str = "Carrying"
 INSPECT_LABEL_QUESTS: str = "Quests"
 

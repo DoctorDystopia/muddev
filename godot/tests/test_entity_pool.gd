@@ -35,6 +35,38 @@ const ODDITY := {"id": 20745.0, "name": "a thing", "kind": "item",
 	"asset": "generic", "family": "no_such_family", "interact": "",
 	"coords": HERE}
 
+## A sign as the server serialises one: it affords nothing, and the whole of
+## what it is for rides in `label`. The two fields appear together or not at
+## all -- serialize_entity omits both for every entity with nothing to say,
+## which is nearly all of them, so UNLABELLED is the COMMON shape and the one
+## worth a case of its own.
+const SIGN := {"id": 20748.0, "name": "TRADE TOWN", "kind": "sign",
+	"asset": "generic", "family": "sign", "interact": "",
+	"label": "TRADE TOWN", "label_kind": "sign", "coords": HERE}
+const MARKER := {"id": 20749.0, "name": "note", "kind": "sign",
+	"asset": "generic", "family": "sign", "interact": "",
+	"label": "WIP -- no spawns past here", "label_kind": "marker",
+	"coords": HERE}
+
+## What a PLAYER wrote. A third kind rather than a variant of the other two,
+## because a player reading words in the world has to be able to tell the world
+## speaking from another player speaking.
+const SCRAWL := {"id": 20752.0, "name": "graffiti", "kind": "sign",
+	"asset": "generic", "family": "sign", "interact": "read graffiti",
+	"label": "BANK: EAST", "label_kind": "graffiti", "coords": HERE}
+
+## A kind this client has never heard of. The server is free to name one, and
+## the answer must be a readable label in the fallback colour rather than a
+## missing one -- the same guarantee an unknown FAMILY already gets.
+const ODD_LABEL := {"id": 20750.0, "name": "odd", "kind": "sign",
+	"asset": "generic", "family": "sign", "interact": "",
+	"label": "?", "label_kind": "no_such_kind", "coords": HERE}
+
+## The same sign with nothing to say. Identical in every other field, so a
+## difference between this and SIGN can only be the label.
+const MUTE_SIGN := {"id": 20751.0, "name": "TRADE TOWN", "kind": "sign",
+	"asset": "generic", "family": "sign", "interact": "", "coords": HERE}
+
 ## A synthesised crowd, for the ring-spacing checks. Ids start well above the
 ## named payloads' so the two never collide in one ring.
 const CROWD_FIRST_ID := 30000
@@ -94,6 +126,11 @@ func _ready() -> void:
 	_a_ring_leaves_room_between_its_neighbours()
 	_a_ring_stays_inside_its_own_tile()
 	_ring_order_comes_from_ids_not_from_arrival()
+	_a_label_is_drawn_over_the_thing_that_carries_it()
+	_an_entity_with_nothing_to_say_carries_no_label()
+	_the_kind_decides_the_colour_and_an_unknown_one_still_reads()
+	_a_label_does_not_lift_its_entity_off_the_ground()
+	_a_labelled_entity_shares_a_tile_without_losing_its_words()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -599,6 +636,145 @@ func _shapes_of(root: Node3D) -> Array:
 	found.sort()
 
 	return found
+
+
+## The label is the server's string, drawn where a player will read it as
+## belonging to this entity and not to the tile behind it.
+func _a_label_is_drawn_over_the_thing_that_carries_it() -> void:
+	_pool.replace_all([SIGN])
+
+	var node := _node_for(20748)
+	var label := _label_of(node)
+
+	_expect(label != null, "an entity carrying a label gets one drawn")
+
+	if label == null:
+		return
+
+	_expect(label.text == SIGN["label"],
+		"and it says exactly what the server said, not a rebuilt version of it")
+	_expect(label.position.y > 0.0, "sitting above the mesh rather than inside it")
+
+	# Undone, not inherited. The mesh is scaled to ENTITY_SCALE and a child
+	# would be drawn at that scale too -- text half size on a small entity, and
+	# smaller again the day ENTITY_SCALE is tuned.
+	_expect(is_equal_approx(label.scale.x, 1.0 / EntityPool.ENTITY_SCALE),
+		"at a size that does not depend on how big the entity under it is")
+
+
+## The common case, and the one worth asserting: nearly every entity in the
+## world has nothing to say, and a pool that hung an empty label on each of
+## them would pay for signage on every rock.
+func _an_entity_with_nothing_to_say_carries_no_label() -> void:
+	_pool.replace_all([RAIDER, MUTE_SIGN])
+
+	_expect(_label_of(_node_for(20743)) == null,
+		"an entity the server sent no label for gets none")
+	_expect(_label_of(_node_for(20751)) == null,
+		"and that includes a sign nobody has written on")
+
+
+## A marker is a note to whoever is BUILDING the game. Drawn like signage, it
+## would be read as signage by the first player to walk past it.
+func _the_kind_decides_the_colour_and_an_unknown_one_still_reads() -> void:
+	_pool.replace_all([SIGN, MARKER, ODD_LABEL])
+
+	var sign_label := _label_of(_node_for(20748))
+	var marker_label := _label_of(_node_for(20749))
+	var odd_label := _label_of(_node_for(20750))
+
+	_expect(sign_label != null and marker_label != null and odd_label != null,
+		"all three are drawn")
+
+	if sign_label == null or marker_label == null or odd_label == null:
+		return
+
+	_expect(sign_label.modulate != marker_label.modulate,
+		"a marker is not drawn in a sign's colour")
+	_expect(odd_label.modulate == EntityPool.COLOR_LABEL_FALLBACK,
+		"and a kind this client has never heard of still reads, in the fallback")
+
+	# Three kinds, three colours, checked pairwise. A table where two of them
+	# happened to share a value would pass every "not equal to the sign" check
+	# and still leave a player unable to tell who wrote what.
+	_pool.replace_all([SIGN, MARKER, SCRAWL])
+
+	var colours := [
+		_label_of(_node_for(20748)).modulate,
+		_label_of(_node_for(20749)).modulate,
+		_label_of(_node_for(20752)).modulate,
+	]
+
+	for first: int in colours.size():
+		for second: int in range(first + 1, colours.size()):
+			_expect(colours[first] != colours[second],
+				"label kinds %d and %d are drawn differently" % [first, second])
+
+
+## The ordering bug this is here to catch: _rest_offset and _attach_label both
+## measure the node's bounds, so a label attached FIRST is measured as part of
+## the mesh and lifts its entity off the ground by the height of its own text.
+## Nothing else would show it -- the sign still draws, still reads, and simply
+## floats.
+func _a_label_does_not_lift_its_entity_off_the_ground() -> void:
+	_pool.replace_all([SIGN])
+
+	var labelled := _node_for(20748).position.y
+
+	_pool.replace_all([MUTE_SIGN])
+
+	var mute := _node_for(20751).position.y
+
+	_expect(is_equal_approx(labelled, mute),
+		"a sign with text stands at the same height as one without")
+
+
+## A signpost labelling a crafting facility: two entities on ONE tile, one with
+## words and one without. The server can now put both on the same coordinate --
+## signage dispatches off a room attribute rather than the room key -- so the
+## pane has to ring them apart AND keep the label on the right one.
+##
+## The ring itself is covered above; what is new here is that sharing a tile
+## does not cost the sign its text or hang a label on its neighbour.
+func _a_labelled_entity_shares_a_tile_without_losing_its_words() -> void:
+	var facility := {"id": 20753.0, "name": "Foundry Furnace", "kind": "station",
+		"asset": "generic", "family": "station", "interact": "craft",
+		"coords": HERE}
+
+	_pool.replace_all([facility, SIGN])
+
+	var furnace := _node_for(20753)
+	var post := _node_for(20748)
+
+	_expect(furnace != null and post != null, "both stand on the tile")
+
+	if furnace == null or post == null:
+		return
+
+	_expect(_label_of(post) != null and _label_of(post).text == SIGN["label"],
+		"the sign keeps its words while sharing a tile")
+	_expect(_label_of(furnace) == null,
+		"and the facility beside it gains none")
+	_expect(furnace.position.distance_to(post.position) > 0.0,
+		"the two are not drawn in the same place")
+
+
+## Every check above counts MeshInstance3D nodes; a Label3D is neither, which
+## is also why the hover and flash walks leave it alone.
+func _label_of(root: Node3D) -> Label3D:
+	var stack: Array[Node] = [root]
+
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		var label := node as Label3D
+
+		if label != null:
+			return label
+
+		for child: Node in node.get_children():
+			stack.append(child)
+
+	return null
 
 
 func _mesh_count(root: Node3D) -> int:

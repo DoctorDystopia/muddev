@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3 uid="uid://pmkjsy2iixlc"]
+
+[ext_resource type="PackedScene" uid="uid://bjvl1l3uqv73j" path="res://Low Poly Food Asset Pack/Kyle Fuji/Prefabs/Junk Food/Helpers/ice_cream_cone.tscn" id="1_n5ygh"]
+[ext_resource type="PackedScene" uid="uid://b46who0dsohlh" path="res://Low Poly Food Asset Pack/Kyle Fuji/Prefabs/Junk Food/scoop_2_strawberry.tscn" id="2_ldou7"]
+
+[node name="ice_cream_strawberry_cone" type="Node3D"]
+
+[node name="ice_cream_cone" parent="." instance=ExtResource("1_n5ygh")]
+
+[node name="scoop_2_strawberry" parent="." instance=ExtResource("2_ldou7")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.085, 0)

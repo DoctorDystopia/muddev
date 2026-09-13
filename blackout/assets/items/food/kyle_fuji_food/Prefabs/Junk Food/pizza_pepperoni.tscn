@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bckrt0ajnw7db"]
+
+[ext_resource type="PackedScene" uid="uid://x60s0jriyffa" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/pepperoni_pizza.glb" id="1_445tn"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_807em"]
+
+[node name="pizza_pepperoni" instance=ExtResource("1_445tn")]
+
+[node name="Pepperoni Pizza" parent="." index="0"]
+material_override = ExtResource("2_807em")

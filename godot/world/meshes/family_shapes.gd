@@ -121,7 +121,7 @@ static var SHAPES: Dictionary = {
 		{"shape": SHAPE_TORUS, "inner": 0.195, "outer": 0.285,
 			"color": MeshPalette.GOLD, "finish": MeshPalette.FINISH_METAL},
 		{"shape": SHAPE_FACETED, "radius": 0.1, "segments": 4,
-			"offset": Vector3(0.0, 0.26, 0.0),
+			"offset": Vector3(0.0, 0.1, 0.0),
 			"color": MeshPalette.GEM, "finish": MeshPalette.FINISH_GEM},
 	],
 
@@ -149,7 +149,7 @@ static var SHAPES: Dictionary = {
 	# Three coins, fanned, so a pile reads as money rather than as one disc.
 	_Const.ITEM_FAMILY_CURRENCY: [
 		{"shape": SHAPE_CYLINDER, "radius": 0.22, "height": 0.045,
-			"segments": 18, "offset": Vector3(0.0, -0.09, 0.0),
+			"segments": 18, "offset": Vector3(0.0, -0.06, 0.0),
 			"color": MeshPalette.GOLD, "finish": MeshPalette.FINISH_METAL},
 		{"shape": SHAPE_CYLINDER, "radius": 0.22, "height": 0.045,
 			"segments": 18, "rotation": Vector3(0.0, 0.4, 0.0),
@@ -199,6 +199,28 @@ static var SHAPES: Dictionary = {
 			"scale": Vector3(0.62, 0.62, 0.62),
 			"color": MeshPalette.GATHERABLE},
 	],
+
+	# A scrap post holding a flat board at reading height. Nothing about the
+	# board says what it says -- the words are a Label3D hung above it by
+	# [EntityPool], because text is the server's and a mesh cannot carry it.
+	#
+	# Shaped to be recognisable with its text stripped off, which is the state
+	# every sign is in for the frame before the entity row lands and the state a
+	# second client with no label support would leave it in permanently. A
+	# silhouette that only reads as a sign once you can read the sign is not a
+	# silhouette.
+	#
+	# Rust and steel rather than the station's violet: the one distinction a
+	# signpost has to make at a glance is that it is not something you walk up
+	# to and USE.
+	_Const.FAMILY_SIGN: [
+		{"shape": SHAPE_CYLINDER, "radius": 0.035, "height": 0.6, "segments": 8,
+			"offset": Vector3(0.0, -0.2, 0.0),
+			"color": MeshPalette.RUST, "finish": MeshPalette.FINISH_METAL},
+		{"shape": SHAPE_BOX, "size": Vector3(0.62, 0.36, 0.04),
+			"offset": Vector3(0.0, 0.26, 0.0),
+			"color": MeshPalette.STEEL, "finish": MeshPalette.FINISH_METAL},
+	],
 }
 
 ## Drawn for a family with no entry. Tier 3, and the reason nothing can fail to
@@ -242,6 +264,17 @@ static var MODELS: Dictionary = {
 	# entry means — a mutant raider leaves a skeleton because one model is
 	# better than sixteen grey boxes, not because the fiction says so.
 	_Const.FAMILY_CORPSE: "corpse_skeleton",
+
+	# One hunk of meat on the bone for EVERY edible thing in the game, which is
+	# what a family entry means — a cured chuck and a roasted haunch are the
+	# same model because one piece of art beats a dozen brown boxes, not
+	# because the fiction says they look alike.
+	#
+	# Food is also the family with no tier 3 shape of its own, so this is the
+	# only thing between an edible item and the generic block. That is the
+	# ladder working as designed rather than a gap: the art landed before
+	# anybody wrote a procedural meal, and a family may enter at any tier.
+	_Const.ITEM_FAMILY_FOOD: "food_meat",
 }
 
 

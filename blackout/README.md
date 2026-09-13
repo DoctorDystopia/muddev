@@ -721,7 +721,13 @@ requirements, and craft with optional confirmation.
 
 ```bash
 > toggle craft confirm
+Crafting confirmation turned OFF.
+> toggle craft confirm
+Crafting confirmation turned ON.
 ```
+
+Works anywhere, not only at a facility. The Godot client's Options pane has
+the same toggle as a button under Game.
 
 ### Python: browse available recipes
 
@@ -816,6 +822,91 @@ KEYED_COUNTER stat stores   |  {stat_key: {sub_key: total(int)}}
 ```
 
 Requires Builder permission. Searches both inventory and equipment slots.
+
+### Put words in the world (`sign`, `marker`)
+
+```bash
+> sign TRADE TOWN                       # a sign reading TRADE TOWN, here
+> sign north post = TRADE TOWN          # ...and call the object "north post"
+> marker WIP -- no spawns past here     # a note to the developers
+> sign                                  # what is labelled in this room
+> destroy north post                    # remove one (Evennia's own command)
+```
+
+Requires Builder permission. The text is drawn floating in the Godot world
+view, so it is capped at 64 characters over 3 lines and stripped of colour
+codes. Anything longer goes in the object's `desc`, which `read` shows
+underneath the words:
+
+```bash
+> desc north post = Bolted over an older sign nobody has scraped off.
+> read north post
+```
+
+A **sign** is worldbuilding a player is meant to believe. A **marker** is a
+note *about* the game, drawn in a colour no signage uses so nobody mistakes
+one for the other.
+
+Both live in the **database**, not in the map, so a map rebuild takes them
+with the tiles they stand on. That is the right lifetime for an annotation.
+
+### Permanent signage belongs in the map
+
+A signpost needs no new MAPSTR symbol and no tile of its own. Two ways to
+place one, both a single row beside the skill-node overrides:
+
+```python
+# world/maps/oasis.py
+(1, 0): _signpost("OASIS\nBANK: EAST\nFORGE: NORTH"),   # a tile that is only a sign
+(6, 3): _signed(_furnace, "FOUNDRY\nNO NAKED FLAMES"),  # a sign ON the furnace tile
+```
+
+`_signed` is the one to reach for when labelling a facility. The tile keeps its
+own key, desc, minimap colour and facility, and the sign stands beside it in
+the tile's ring — so a sign no longer needs a neighbouring tile spent on it.
+
+**Signs dispatch off a room attribute, not the room key.** That is what makes
+sharing possible: `SPAWNER_REGISTRY` is keyed on the room key and a tile has
+exactly one, so a tile keyed `Foundry Furnace Facility` can never also be
+keyed `Signpost`. `ATTRIBUTE_SPAWNER_REGISTRY` runs every spawner whose
+attribute the tile declares, so a tile can carry as many decorations as it
+likes on top of the one thing it *is*.
+
+The map module stays the **owner** of the words: the spawner re-asserts them
+on every rebuild, so fixing a typo is an edit plus a rebuild rather than
+destroying the tile. `_signed` **copies** the prototype it is given — every
+facility prototype is one dict shared by every coordinate naming it, so
+mutating one would sign all of them.
+
+Takes effect on the next `clean_and_reload_all_maps.ps1`.
+
+### Player graffiti (`write`)
+
+```bash
+> write THE HEGEMONY LIES               # needs a spray can, spends one charge
+> read graffiti
+```
+
+Available to everyone — the **medium is the gate**, not a permission. A spray
+can (`spray_can` in `ITEM_DB`) holds 12 charges and is destroyed when the last
+one goes.
+
+Every scrawl records **who wrote it and when**, expires after a week, and is
+swept hourly by a global Script (`systems/gameplay/graffiti/decay.py`). To
+give someone a can:
+
+```python
+> py from world.item_database import ITEM_DB; ITEM_DB["spray_can"].create(location=me)
+```
+
+A blocklist seam exists and is **empty by default** — set
+`BLACKOUT_GRAFFITI_BLOCKLIST` in settings to a tuple of words to refuse.
+Refusal happens before the charge is spent.
+
+Moderators erase a player's scrawls from the egg: **Erase what they have
+written**, which counts them and names whose they are before asking. It cannot
+reach map signage or builder markers — those are sibling typeclasses, not
+subclasses of `Graffiti`, so the query cannot return them.
 
 ### The Moderator Egg
 

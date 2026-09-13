@@ -21,6 +21,7 @@ from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
 
 from items.equipment.constants import MAX_INVENTORY_SLOTS
+from systems.gameplay.graffiti import service as graffiti_service
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
 from world.item_database import ITEM_DB
@@ -705,6 +706,87 @@ def clear_inventory(actor, target) -> tuple:
         message = f"{message}\n{dev_constants.MSG_CLEAR_KEPT.format(kept=kept)}"
 
     return True, message
+
+
+def graffiti_count(target) -> int:
+    """
+    Purpose: How many things a character has written that are still standing.
+
+    Entry:
+        target is the Character in question.
+
+    Exit/Returns:
+        Returns the count. Zero for a character who has written nothing, and
+        for every character on a server where nobody has.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A READ, so the menu's confirmation can count what it is about to
+        destroy before asking. Everything else about it belongs to the
+        graffiti system, which is why this is a two-line pass-through rather
+        than a query written here: what counts as graffiti has one owner, and
+        a second query in this file could answer differently from the erase it
+        is meant to be describing.
+
+    Notes/References:
+        systems/gameplay/graffiti/service.py written_by does the work.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    return graffiti_service.written_by(target)
+
+
+def erase_graffiti(actor, target) -> tuple:
+    """
+    Purpose: Destroy everything one character has written on the world.
+
+    Entry:
+        actor is the moderator. target is the Character whose scrawls go.
+
+    Exit/Returns:
+        Returns (succeeded, message). Failure means there was nothing to
+        erase, which is not an error and says so plainly.
+
+    Module Globals:
+        dev_constants.ACTION_ERASE and the MSG_ERASE_* templates read.
+
+    Methodology:
+        By AUTHOR and not by room, because that is the question a moderator
+        has. A player reported for one scrawl has rarely written only one, and
+        clearing the tile they were reported on leaves the rest standing
+        across the map with nothing left to find them by.
+
+        Map-authored signage and a builder's markers are not reachable from
+        here at all, and not because of a check in this routine: the service
+        queries the Graffiti typeclass, of which Sign and Marker are SIBLINGS
+        rather than subclasses. That is a structural guard rather than a
+        careful one -- the same property DEV_TOOL_TAG_CATEGORY gives
+        clear_inventory, one level stronger.
+
+        Audited under a verb of its own. Erasing what a player wrote is a
+        moderation action about their SPEECH, and a review that could not tell
+        it from emptying their bag could not show whether they were silenced.
+
+    Notes/References:
+        The second irreversible entry on the tool, and therefore the second
+        behind a confirmation -- see node_erase_confirm in
+        systems/interface/menus/dev_egg_menu.py.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    erased = graffiti_service.erase_by_author(target)
+
+    if erased < 1:
+        return False, dev_constants.MSG_ERASE_NOTHING.format(target=target.key)
+
+    _audit(actor, dev_constants.ACTION_ERASE, target, f"{erased} erased")
+
+    return True, dev_constants.MSG_ERASE_DONE.format(
+        count=erased, target=target.key)
 
 
 # ─── Teleport ────────────────────────────────────────────────────────────────

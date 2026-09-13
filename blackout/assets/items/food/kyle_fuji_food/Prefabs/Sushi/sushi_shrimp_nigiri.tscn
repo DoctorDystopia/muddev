@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dq4w2158ofwws"]
+
+[ext_resource type="PackedScene" uid="uid://bm8jf3tg53s3j" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/shrimp_nigiri.glb" id="1_nlxx1"]
+[ext_resource type="Material" uid="uid://cvavx5m3vs1l3" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_sushi.tres" id="2_a5oug"]
+
+[node name="shrimp_nigiri" instance=ExtResource("1_nlxx1")]
+
+[node name="Shrimp Nigiri" parent="." index="0"]
+material_override = ExtResource("2_a5oug")

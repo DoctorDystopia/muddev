@@ -36,8 +36,8 @@ from systems.gameplay.curing.recipe import CuringRecipe
 # chosen so a cure is something a player sets going and leaves,
 # long enough that the chamber is a place you come back to, short
 # enough that it is not a once-a-session errand.
-_CHUCK_TIER_SECONDS = 15.0
-_PRIME_TIER_SECONDS = 30.0
+_CHUCK_TIER_SECONDS = 5.0
+_PRIME_TIER_SECONDS = 10.0
 
 
 

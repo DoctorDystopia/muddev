@@ -87,6 +87,66 @@ const COLOR_HIT_FLASH := Color.WHITE
 const COLOR_HOVER_GLOW := Color(0.6, 0.7, 0.85)
 const HOVER_ENERGY := 0.6
 
+const _Const := preload("res://autoload/blackout_constants.gd")
+
+## How far above an entity's own top its label floats, in world units.
+##
+## Measured from the mesh's TOP rather than from the tile, so a sign, a
+## shopkeep and a dropped sword all hold their text the same distance clear of
+## themselves — which one constant from the ground could never do, for the same
+## reason [method _rest_offset] replaced a fixed lift.
+const LABEL_GAP := 0.14
+
+## How big the text is drawn, and how wide it may run before wrapping.
+##
+## `LABEL_PIXEL_SIZE` converts font pixels to world units, so a line is
+## `LABEL_FONT_SIZE * LABEL_PIXEL_SIZE` tall — 0.16 of a tile here — and
+## `LABEL_WRAP_PIXELS` is one tile across at the same conversion. A label wider
+## than its own tile reads as belonging to the tile next door, which on a grid
+## of rooms is not a cosmetic complaint.
+const LABEL_FONT_SIZE := 64
+const LABEL_PIXEL_SIZE := 0.0025
+const LABEL_WRAP_PIXELS := 400.0
+
+## A dark rim around every glyph, in font pixels. Not decoration: the world
+## pane draws sand, steel and night sky behind these, and text with one colour
+## and no outline is legible over roughly one of the three.
+const LABEL_OUTLINE_SIZE := 14
+const COLOR_LABEL_OUTLINE := Color(0.04, 0.05, 0.07, 0.85)
+
+## What each kind of label is drawn in. THE CLIENT'S TABLE, deliberately: the
+## server owns which kinds exist and this file owns what they look like, which
+## is the boundary CLAUDE.md draws and the reason the kinds are generated into
+## [code]blackout_constants.gd[/code] while these colours are not.
+##
+## A kind absent here is NOT an error — it falls to
+## [constant COLOR_LABEL_FALLBACK] and still reads — so the server may name a
+## new kind without waiting on a client edit.
+##
+## The reverse needs no guard, unlike [constant MapPalette.ROOM_KIND_COLORS]
+## next door, and the difference is the keys: these are GENERATED constants, so
+## a kind renamed or dropped server-side is a GDScript parse error on the next
+## export rather than a row quietly colouring nothing. That is the same
+## argument `FamilyShapes.MODELS` makes for having only its values checked.
+const LABEL_KIND_COLORS := {
+	# Warm and paper-like. In the fiction, meant to be believed.
+	_Const.LABEL_KIND_SIGN: Color("e8dcc0"),
+
+	# Deliberately synthetic, and deliberately a colour no signage uses. A
+	# marker is a note to whoever is BUILDING the game; the first player to
+	# mistake one for worldbuilding is the bug this colour exists to prevent.
+	_Const.LABEL_KIND_MARKER: Color("ff5fd2"),
+
+	# Aerosol green, and the same argument as the marker one line up: a player
+	# reading words in the world has to be able to tell the world speaking from
+	# another player speaking, because a scrawl reading "BANK: EAST" is a lie a
+	# signpost could not tell.
+	_Const.LABEL_KIND_GRAFFITI: Color("7ce06a"),
+}
+
+## Drawn for a kind this table has never heard of. See [constant LABEL_KIND_COLORS].
+const COLOR_LABEL_FALLBACK := Color("b9c6d2")
+
 ## Fired when the observer's own slot on their tile moves, as an offset from
 ## the tile's centre.
 ##
@@ -504,6 +564,12 @@ func _rebuild() -> void:
 			node.position = _slot_position(
 				group["origin"], key, first + index, occupants)
 			node.position.y += _rest_offset(node)
+
+			# AFTER the rest offset, and that ordering is load-bearing: both
+			# read the node's bounds, and a label attached first would be
+			# measured as part of the mesh -- lifting every labelled entity off
+			# the ground by the height of its own text.
+			_attach_label(node, entity)
 			add_child(node)
 			_nodes[_id_of(entity)] = node
 
@@ -529,6 +595,71 @@ func _build(entity: Dictionary) -> Node3D:
 	node.scale = Vector3.ONE * ENTITY_SCALE
 
 	return node
+
+
+## Hang the server's text over one entity, when it sent any.
+##
+## The `label` field is not a sign's field. Any entity may carry one — a
+## signpost today, a nameplate or a shop's name tomorrow — so this reads it the
+## same blind way [method _build] reads `asset` and `family`, and gains every
+## future case with no edit. An entity without one costs a dictionary lookup
+## and returns, which is nearly all of them.
+##
+## ## Why the scale is undone
+##
+## The mesh is scaled to [constant ENTITY_SCALE] and a child inherits that, so
+## a label left alone would be drawn half size on a small entity and would
+## shrink again if that constant were ever tuned. Text size is a READABILITY
+## decision, not a function of how big the thing under it is, so the scale is
+## divided back out and [constant LABEL_FONT_SIZE] is the whole of the answer.
+##
+## Placed from the mesh's own top rather than a fixed height, for the reason
+## [method _rest_offset] exists: one number cannot clear a sword, a figure and
+## a rigged character at once.
+func _attach_label(node: Node3D, entity: Dictionary) -> void:
+	var text := str(entity.get("label", ""))
+
+	if text.is_empty():
+		return
+
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = LABEL_FONT_SIZE
+	label.pixel_size = LABEL_PIXEL_SIZE
+	label.width = LABEL_WRAP_PIXELS
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.outline_size = LABEL_OUTLINE_SIZE
+	label.outline_modulate = COLOR_LABEL_OUTLINE
+	label.modulate = _label_colour(str(entity.get("label_kind", "")))
+
+	# Y-only billboard: the text turns to face the orbit camera as it swings
+	# around, but never tips. A fully billboarded label lies flat on its back
+	# when the camera looks down, which is the angle this game is played at.
+	label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+
+	# Cut rather than blended. Transparent text sorts against every other
+	# transparent surface in the scene and picks a fight it loses somewhere on
+	# a crowded tile; discarding the transparent pixels takes it out of that
+	# queue entirely.
+	label.alpha_cut = Label3D.ALPHA_CUT_DISCARD
+
+	var bounds := ModelLoader.bounds_of(node)
+	var top := bounds.position.y + bounds.size.y
+
+	label.scale = Vector3.ONE / ENTITY_SCALE
+	label.position.y = top + LABEL_GAP / ENTITY_SCALE
+	node.add_child(label)
+
+
+## What one kind of label is drawn in, or the fallback for a kind this client
+## has never heard of. See [constant LABEL_KIND_COLORS] for why the unknown
+## case is not an error.
+func _label_colour(kind: String) -> Color:
+	if LABEL_KIND_COLORS.has(kind):
+		return LABEL_KIND_COLORS[kind]
+
+	return COLOR_LABEL_FALLBACK
 
 
 ## Even slots around the ring, the whole ring rotated by a hash of the TILE.

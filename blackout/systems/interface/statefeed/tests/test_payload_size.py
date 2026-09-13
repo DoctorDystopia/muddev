@@ -71,18 +71,22 @@ _LONG_ASSET = "npc_mutant_raider_sergeant_eastern_variant_b"
 #
 # serialize_entity omits `actions` entirely for the one-verb case, so this is
 # the cost of the entities that DO carry it: a corpse offers one verb per
-# gathering skill that can work it, plus `get`. Two today (butcher, get), three
-# once Brain Farming lands.
+# gathering skill that can work it, one row per CUT that skill can take when
+# it can take more than one, plus `get`.
 #
-# TWO, which is what a corpse affords today, and the number is load-bearing:
-# at THREE a 1200-entity room measures 700136 bytes against a 699050-byte
-# budget and this suite goes red. That is the decision this file exists to
-# force, and it is coming due the moment Brain Farming gives a corpse its third
-# verb -- raise CLIENT_INBOUND_BUFFER_BYTES, lower STATEFEED_ENTITY_RADIUS, or
-# chunk room_players. It is written down here rather than left to be
-# rediscovered, and it is NOT pre-emptively set to three, because a suite that
-# is red for something nobody has built yet is a suite people learn to ignore.
-_WORST_CASE_ACTIONS = 2
+# FOUR, which is what a raider corpse affords as of 09/11/2026: butcher,
+# butcher-chuck, butcher-filet, get. It was two, and the comment that stood
+# here said the ceiling decision came due at three -- it did, one row sooner
+# than expected and for the yield menu rather than for Brain Farming. A
+# 1200-entity room measures 845336 bytes at four, so CLIENT_INBOUND_BUFFER_BYTES
+# went from 1 MiB to 2 MiB rather than the UI losing the only way a graphical
+# client has to ask for a particular cut. The other two levers on the table --
+# lower STATEFEED_ENTITY_RADIUS, or chunk room_players the way blackout_map is
+# chunked -- are both still there and both still cost more than a buffer does.
+#
+# Keep this at what a real corpse actually affords. Set higher it stops being
+# a measurement; set lower it stops being a ceiling.
+_WORST_CASE_ACTIONS = 4
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────

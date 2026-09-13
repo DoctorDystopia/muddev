@@ -1,0 +1,12 @@
+[gd_resource type="StandardMaterial3D" load_steps=3 format=3 uid="uid://cvavx5m3vs1l3"]
+
+[ext_resource type="Texture2D" uid="uid://c4u6040o6kc6a" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_sushi_atlas_diffuse.png" id="1_lxso7"]
+[ext_resource type="Texture2D" uid="uid://xlw20en5ieir" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_sushi_atlas_normal.png" id="2_gpp3v"]
+
+[resource]
+albedo_texture = ExtResource("1_lxso7")
+roughness = 0.7
+roughness_texture = ExtResource("1_lxso7")
+roughness_texture_channel = 3
+normal_enabled = true
+normal_texture = ExtResource("2_gpp3v")

@@ -12,13 +12,18 @@ Run from blackout/:
 
 import unittest
 
+import time
+
+from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 from systems.devtools import actions as dev_actions
 from systems.devtools import constants as dev_constants
+from systems.gameplay.graffiti import constants as graffiti_constants
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from typeclasses.signs import Graffiti, Sign
 from world.item_database import ITEM_DB
 from world.maps.manifest import load_entries, zcoords_of
 
@@ -394,6 +399,66 @@ class DelegationTests(unittest.TestCase):
 
 
 
+class EraseGraffitiTests(EvenniaTest):
+    """The moderator's bulk delete of what a player wrote.
+
+    The count and the erase are asserted to AGREE, because the confirmation
+    screen reads the first before asking and destroys with the second -- a
+    moderator told one number and given another is the failure a confirmation
+    exists to prevent.
+
+    Signage being unreachable is asserted here as well as in the graffiti
+    package's own tests, and the duplication is deliberate: this is the caller
+    a moderator actually reaches, and "the egg cannot delete the map" is a
+    claim worth failing on this side of the boundary too.
+    """
+
+    def _scrawl_by(self, author, text):
+        made = create_object(Graffiti, key="graffiti", location=self.room1)
+        made.world_label = text
+        made.attributes.add(graffiti_constants.AUTHOR_ID_ATTR, author.id)
+        made.attributes.add(graffiti_constants.WRITTEN_AT_ATTR, time.time())
+
+        return made
+
+    def test_erasing_takes_everything_that_character_wrote(self):
+        self._scrawl_by(self.char1, "ONE")
+        self._scrawl_by(self.char1, "TWO")
+
+        succeeded, message = dev_actions.erase_graffiti(self.char1, self.char1)
+
+        self.assertTrue(succeeded)
+        self.assertEqual(list(Graffiti.objects.all_family()), [])
+        self.assertIn(self.char1.key, message)
+
+    def test_erasing_nothing_is_reported_rather_than_claimed(self):
+        succeeded, message = dev_actions.erase_graffiti(self.char1, self.char1)
+
+        self.assertFalse(succeeded)
+        self.assertIn("nothing", message.lower())
+
+    def test_the_count_the_confirmation_shows_matches_what_goes(self):
+        self._scrawl_by(self.char1, "ONE")
+        self._scrawl_by(self.char1, "TWO")
+        self._scrawl_by(self.char2, "HERS")
+
+        counted = dev_actions.graffiti_count(self.char1)
+        dev_actions.erase_graffiti(self.char1, self.char1)
+        left = list(Graffiti.objects.all_family())
+
+        self.assertEqual(counted, 2)
+        self.assertEqual(len(left), 1)
+
+    def test_the_egg_cannot_erase_the_map(self):
+        signpost = create_object(Sign, key="signpost", location=self.room1)
+        signpost.world_label = "OASIS"
+        self._scrawl_by(self.char1, "MINE")
+
+        dev_actions.erase_graffiti(self.char1, self.char1)
+
+        self.assertIsNotNone(signpost.pk)
+
+
 class AuditVocabularyTests(unittest.TestCase):
     """Every verb an effect audits under must be in the vocabulary."""
 
@@ -408,6 +473,7 @@ class AuditVocabularyTests(unittest.TestCase):
             dev_constants.ACTION_BOOT,
             dev_constants.ACTION_BAN,
             dev_constants.ACTION_UNBAN,
+            dev_constants.ACTION_ERASE,
         ]
 
         for action in named:

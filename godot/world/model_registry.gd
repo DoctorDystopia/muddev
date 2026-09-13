@@ -106,6 +106,32 @@ const PRESENTATION := {
 	# No offset. EntityPool lifts a node by its own lowest point (_rest_offset),
 	# so the body sits on the ground once it is flat without a number here.
 	"corpse_skeleton": {"rotation": Vector3(-PI / 2.0, 0.0, 0.0)},
+
+	# THE SWORD'S PROBLEM, on a different model. picoCAD builds along Z and the
+	# meat is seven units of bone-to-bone against two of thickness, so as
+	# exported it points straight at the camera: an inventory cell shows a
+	# brown octagon with a pale dot in the middle, which is the end-on view and
+	# describes nothing. A quarter turn about Y lays the bone left to right and
+	# gives back the silhouette the model was built for.
+	#
+	# Y rather than X, so it lies down rather than standing on end. Both read
+	# in a cell; only one reads on the ground, and the world pane draws the
+	# same model on the tile a meal was dropped on.
+	"food_meat": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
+
+	# The same problem a third time, and the same quarter turn. Kyle Fuji's
+	# meat haunch is 0.26 long along Z against 0.11 across, bone first at the
+	# camera: rendered 09/12/2026 at ItemStage's tilt, spin 0 showed a brown
+	# oval with a white knob in the middle -- food_meat's end-on octagon again.
+	# Four asset keys, one model, so four rows; see CREDITS.md for why the
+	# served files are duplicated rather than aliased.
+	#
+	# The steak, egg and sandwich from the same pack need nothing: the steak is
+	# a flat slab that reads from either end, and the other two are upright.
+	"mutant_raider_cured_chuck": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
+	"mutant_raider_cured_fatless_meat": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
+	"mutant_raider_cured_filet": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
+	"mutant_raider_cured_prime_meat": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
 }
 
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://px0xcycocbfj"]
+
+[ext_resource type="PackedScene" uid="uid://cvbm0m4e5b23f" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/cheese_pizza.glb" id="1_oojb4"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_8tt4t"]
+
+[node name="pizza_cheese" instance=ExtResource("1_oojb4")]
+
+[node name="Cheese Pizza" parent="." index="0"]
+material_override = ExtResource("2_8tt4t")

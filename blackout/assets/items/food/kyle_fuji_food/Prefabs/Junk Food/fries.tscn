@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dlnows4vpshsb"]
+
+[ext_resource type="PackedScene" uid="uid://by67e88j43vse" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/fries.glb" id="1_hsxkq"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_nl2sm"]
+
+[node name="fries" instance=ExtResource("1_hsxkq")]
+
+[node name="Fries" parent="." index="0"]
+material_override = ExtResource("2_nl2sm")

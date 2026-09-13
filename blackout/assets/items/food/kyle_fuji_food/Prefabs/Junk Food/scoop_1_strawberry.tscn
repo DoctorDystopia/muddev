@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://cxiuvtgur2s25"]
+
+[ext_resource type="PackedScene" uid="uid://crx07168chxnm" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/scoop_1.glb" id="1_n3ltc"]
+[ext_resource type="Material" uid="uid://wlltio445ygs" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_scoop_strawberry.tres" id="2_48uhx"]
+
+[node name="scoop_1_strawberry" instance=ExtResource("1_n3ltc")]
+
+[node name="Scoop 1" parent="." index="0"]
+material_override = ExtResource("2_48uhx")

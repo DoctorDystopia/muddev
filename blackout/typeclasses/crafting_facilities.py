@@ -99,33 +99,6 @@ class CmdCraft(Command):
 
 
 
-class CmdToggleCraftConfirm(Command):
-    """
-    Toggle the crafting confirmation prompt on or off.
-
-    Usage:
-        toggle craft confirm
-
-    When confirmation is OFF, selecting a recipe in the crafting menu
-    will skip the confirmation step and craft immediately.
-    """
-
-    key = "toggle craft confirm"
-    locks = "cmd:all()"
-    help_category = HELP_CATEGORY_CRAFTING
-
-
-    def func(self) -> None:
-        caller = self.caller
-        current = caller.db.craft_confirm
-        if current is None:
-            current = True
-        caller.db.craft_confirm = not current
-        status = "ON" if caller.db.craft_confirm else "OFF"
-        caller.msg((f"Crafting confirmation turned {status}.", _MSG_CRAFTING))
-
-
-
 class CraftCmdSet(CmdSet):
     """
     Purpose: Stores the craft command for crafting facilities.
@@ -175,10 +148,10 @@ class CraftCmdSet(CmdSet):
         Author: Nick Hobar
         Creation date: 07/13/2026
         """
+        # `toggle craft confirm` is NOT here: it is the player's preference and
+        # must work away from a workbench. See commands/crafting_cmds.py.
         craft_command = CmdCraft()
         self.add(craft_command)
-        toggle_command = CmdToggleCraftConfirm()
-        self.add(toggle_command)
 
 
 

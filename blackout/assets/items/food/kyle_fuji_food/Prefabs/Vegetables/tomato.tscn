@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bcrlnqn78bgp4"]
+
+[ext_resource type="PackedScene" uid="uid://bfqd4ml66h84r" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/tomato.glb" id="1_xdyu8"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_30olm"]
+
+[node name="tomato" instance=ExtResource("1_xdyu8")]
+
+[node name="Tomato" parent="." index="0"]
+material_override = ExtResource("2_30olm")

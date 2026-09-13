@@ -329,6 +329,58 @@ the later one is the fresher — a re-sent entity may have moved, taken damage o
 gained an action. `remove` drops every copy rather than the first. Together
 those also make a resync idempotent, which is the property resync exists for.
 
+## An entity may carry text, and it is not a sign's field
+
+`serialize_entity` sends an optional `label` and `label_kind` beside the
+`asset`/`family` pair. A signpost is the first thing to use them and
+deliberately not the last: a nameplate, a shop's name and a builder's note over
+a broken tile are the same fact said about different entities, so the pool
+draws floating text once and gains every future case with no edit here.
+
+`EntityPool._attach_label` hangs a `Label3D` off the node when the field is
+present and returns immediately when it is not — which is nearly every entity
+in the world, and why the two fields are omitted rather than sent empty.
+
+Three things about it are load-bearing:
+
+- **It is attached AFTER `_rest_offset`.** Both read the node's bounds, so a
+  label attached first is measured as part of the mesh and lifts its entity off
+  the ground by the height of its own text. Nothing else would show it: the
+  sign still draws, still reads, and simply floats.
+- **The entity scale is divided back out.** A child inherits `ENTITY_SCALE`, so
+  a label left alone is drawn half size — and smaller again the day that
+  constant is tuned. How big text is is a readability decision, not a function
+  of how big the thing under it is.
+- **The colour table is the client's, and needs no guard test.** The server
+  owns which kinds exist; `LABEL_KIND_COLORS` owns what they look like. Its
+  keys are generated constants, so a kind renamed server-side is a parse error
+  rather than a row colouring nothing — the argument `FamilyShapes.MODELS`
+  makes for having only its values checked. A kind this client has never heard
+  of falls to `COLOR_LABEL_FALLBACK` and still reads.
+
+The cap is the server's: 64 characters over 3 lines, enforced in
+`systems/interface/statefeed/labels.py`, because `label` rides the biggest
+payload the feed sends.
+
+## Three kinds of words, three colours
+
+`label_kind` arrives beside every `label`, and the client's `LABEL_KIND_COLORS`
+is what turns it into a colour. The three the server names today are not
+decoration:
+
+| kind | who wrote it | drawn |
+|---|---|---|
+| `sign` | a map module | warm paper |
+| `marker` | whoever is building the game | synthetic magenta |
+| `graffiti` | a player, with a spray can | aerosol green |
+
+The distinction a player needs is the second row against the first and the
+third against both. A builder's note that looked like signage would be read as
+worldbuilding by the first player who walked past it, and a scrawl reading
+`BANK: EAST` is a lie a signpost could not tell. Two of these being drawn the
+same colour is a bug the pairwise check in `test_entity_pool.gd` exists to
+catch.
+
 ## Right click asks; left click still acts
 
 One thing in the world can be several things to you at once. A mutant raider
@@ -376,6 +428,27 @@ arrangement cost the two clients that tried it.
 > camera, no pool and no connection. `WorldView` raises `options_requested` and
 > `console.gd` connects it — the pane asks the question and something else
 > draws it.
+
+> **While it is open, the menu owns the pane's clicks.** `ChooseOption` is a
+> full-rect transparent `Control` with the box positioned inside it, and that
+> backdrop is the whole reason the menu can be dismissed at all. Under it sits a
+> `SubViewportContainer`, which forwards every mouse event the GUI hands it into
+> the 3D pane — so a menu that covered only its own rows never saw the click
+> meant to close it. Until 09/11/2026 a right click left a box standing over the
+> world for good, and the click that should have dismissed it *walked the player
+> instead*. The mouse is read in `_gui_input`, where the backdrop is picked;
+> `_unhandled_input` keeps only Escape, which is not picked by position. A
+> headless run has no GUI picking at all, which is exactly how this shipped, so
+> `test_choose_option` asserts the structure and the source rather than pushing
+> a click and believing the result.
+
+**A multi-yield node lists its cuts.** Right-clicking a mutant raider corpse
+offers `Butcher Mutant Raider corpse` — the best cut your level allows, which is
+also what a left click sends — and then one row per cut: `Butcher chuck from
+Mutant Raider corpse`, `Butcher filet from …`. The rows are built by
+`gathering_verbs` on the server out of `GATHERABLE_REGISTRY`, and each sends
+`butcher <node> = <cut>`, a line a telnet player could have typed. Nothing here
+knows a corpse has cuts.
 
 ## The inventory draws in 3D without giving up drag and drop
 
@@ -582,7 +655,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All thirty-three are headless and exit non-zero on failure. Thirty need
+All thirty-four are headless and exit non-zero on failure. Thirty-one need
 nothing running; three of the four `smoke_*` scenes need an Evennia, and none
 needs an account. `smoke_console` is the exception: it builds `console.tscn` for real and
 needs nothing, because the socket it opens is expected to fail.
@@ -690,6 +763,13 @@ running either:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
+```
+
+`test_sound_cues.tscn` needs nothing running either — headless uses the dummy
+audio driver, so every cue is played for real with no speaker attached:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_sound_cues.tscn
 ```
 
 `smoke_reconnect.tscn` needs a running Evennia but no account. It proves the
@@ -852,6 +932,12 @@ reason to imagine it exists. They are BUTTONS and not a checkbox on purpose:
 the setting is the server's, so a checkbox here would be claiming to know a
 state only the server can report.
 
+The same row style carries **`toggle craft confirm`** as a single Toggle
+button. The server offers only a toggle for it — no on, off or query — so the
+pane offers exactly that, and the log's "Crafting confirmation turned ON/OFF."
+is the answer. The command lives on the character (`commands/crafting_cmds.py`)
+rather than the workbench so the button works in any room.
+
 ## The log is tabbed, and the server never names a tab
 
 Every line of game text may carry a routing tag in its outputfunc kwargs --
@@ -892,6 +978,62 @@ difference between a tab strip and an annoying one. Each log is capped at
 `active_log_changed`, because a find that spanned tabs would scroll one the
 player cannot see and count matches in logs they are not reading.
 
+## Sound is the client's, and a cue hangs off a fact
+
+`world/sound_cues.gd` is the whole table: a cue NAME (`SoundCues.LEVEL_UP`)
+mapped to a clip under `audio/sfx/`. Callers ask for the moment, never the
+file, so swapping a clip is one line and no caller moves. The server names no
+sound and must not start — which clip a level-up plays is a look, on the same
+side of the line as a mesh or a colour.
+
+**A cue hangs off state, never off a line of prose.** The level-up cue is
+`SkillsState.levelled`, which compares each `char_skills` roster with the one
+before it. The server does print `[LEVEL_UP] ...` at the same moment, and
+matching that string would work until its first copy edit, then stop with no
+error. The comparison needs no server change because `char_skills`
+republishes only on a level moving, a resync or the `skills` command, and the
+last two compare equal. A redial stays quiet because `SkillsState.reset`
+empties the roster the next one is compared against.
+
+A cue with no state behind it — a miss, a failed craft — is the case for a
+structured server event, a constant in `statefeed/constants.py` regenerated
+into `blackout_constants.gd`, rather than a pattern over the log.
+
+**Every clip plays on the `SFX` bus** declared in `default_bus_layout.tres`.
+A player naming a bus that does not exist plays on Master without a word,
+which is why `test_sound_cues` checks the bus by name.
+
+**The Options slider sets that bus, and nothing else does.** It writes
+`ClientSettings.sfx_volume`, LINEAR from 0.0 to 1.0 — a slider in decibels
+crowds every audible change into its last quarter — and the console's
+`_apply_settings` hands it to `SoundCues.apply_volume`, the one place that
+knows a decibel exists. Zero mutes the bus rather than writing
+`linear_to_db(0.0)`, which is negative infinity. The ceiling is 1.0, the level
+the clips were mixed at: louder is the operating system's slider, not a reason
+to clip.
+
+**Browsers refuse audio before the page has been clicked or typed into.**
+Logging in is both, so anything cued from a game event plays; a sound on the
+login screen itself may not.
+
+### Only the clips in use live in this project
+
+Source packs stay OUTSIDE the repo — the Ovani Sound FX Starter Pack is at
+`C:\Users\NickR\Games\Projects\Godot\Assets\` — for two reasons:
+
+- **The licence.** Ovani permits use in a game and asks no credit, but forbids
+  distributing the content on its own. A pack committed here is a pack
+  published on GitHub. That is also why it is not under `blackout/assets/`
+  beside the model sources: that directory is tracked.
+- **The export.** `export_presets.cfg` exports `all_resources`, so every audio
+  file Godot has imported ships in the web build. The whole pack is 215 MB
+  against a ~38 MiB client, and unzipped into `godot/` it would have been in
+  the next export.
+
+Adding a sound: copy the one clip to `audio/sfx/<cue>.wav`, tick Force → Mono
+in the Import dock unless it is positional, add a row to `audio/CREDITS.md`,
+then one constant and one `_STREAMS` row in `sound_cues.gd`.
+
 ## Layout
 
 | File | Owns |
@@ -925,7 +1067,7 @@ player cannot see and count matches in logs they are not reading.
 | `scenes/vitals/vitals_bars.gd` | Your resources as bars. One control, two homes. |
 | `world/chat_tabs.gd` | Which tab a line belongs in, and which tabs have unread lines. Holds no text. |
 | `scenes/chat/chat_view.gd` | The tab strip and one RichTextLabel per tab. Appends; never re-renders. |
-| `world/client_settings.gd` | Font size, UI scale, which panes are shown and where the dividers sit, via ConfigFile under `user://`. |
+| `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown and where the dividers sit, via ConfigFile under `user://`. |
 | `ui/blackout_theme.tres` | Every margin, separation, font size and label colour. Assigned once on the console root and inherited. |
 | `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
@@ -936,6 +1078,9 @@ player cannot see and count matches in logs they are not reading.
 | `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colours. |
 | `world/entity_pool.gd` | Everything the feed can see, each on its own tile. Hit flash and hover. |
 | `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
+| `world/sound_cues.gd` | Which clip each cue plays, on the SFX bus. The server names no sound. |
+| `audio/sfx/`, `audio/CREDITS.md` | The clips in use, and where each came from. Source packs live outside the repo. |
+| `default_bus_layout.tres` | The audio buses. Every cue plays on `SFX`. |
 
 Four rules worth not rediscovering:
 

@@ -22,6 +22,64 @@ under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/)
 
 ---
 
+## `items/food_meat.glb`
+
+Built for Blackout by Nick Hobar in picoCAD (https://johanpeitz.itch.io/picocad)
+and owned outright — no third-party grant is involved, and the row is here
+because a file with no row is indistinguishable from one whose licence nobody
+checked.
+
+- Source: `assets/items/food/mh_meat/mh_meat.txt`, the picoCAD save file
+  itself. The FIRST model in the served tree that is not somebody's download,
+  so the "source" is a project to reopen rather than an archive to keep intact.
+- Converted by `assets/picocad_to_gltf.py` into the ordinary source-directory
+  shape and packed like any download. picoCAD exports nothing this pipeline can
+  read, so the converter is the step in front, the way `fbx_to_gltf.py` and
+  `split_tileset.py` are for their formats.
+- Textures unchanged at 128²: the picoCAD sheet is 128×120 of PICO-8 palette
+  indices, padded to a square by sixteen 8×8 swatches the flat-shaded faces are
+  mapped onto. Its sampler is NEAREST with no mipmaps — the padding is a chart
+  of colours and a mip level would blend it into the art above.
+- **Not a meat model, and not pretending to be one.** It is the stand-in for
+  the whole FOOD FAMILY (`FamilyShapes.MODELS`), so every edible in the game is
+  a hunk on the bone until the dish has art of its own. Laid on its side by
+  `ModelRegistry.PRESENTATION`; the export points along Z, at the camera.
+
+---
+
+## `items/moderator_egg.glb`, the two steaks, the four cured meats, the two sandwiches
+
+"Low Poly Food Asset Pack" by Kyle Fuji (https://www.patreon.com/kylefuji) is
+released under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/),
+which asks for nothing. The row is here anyway, because a file with no row is
+indistinguishable from one whose licence nobody checked.
+
+| Served files | Pack model |
+|---|---|
+| `items/moderator_egg.glb` | `egg` |
+| `items/mutant_raider_steak.glb`, `items/mutant_raider_prime_steak.glb` | `steak` |
+| `items/mutant_raider_cured_chuck.glb`, `items/mutant_raider_cured_fatless_meat.glb`, `items/mutant_raider_cured_filet.glb`, `items/mutant_raider_cured_prime_meat.glb` | `meat_haunch` |
+| `items/mutant_raider_cured_meat_sandwich.glb`, `items/mutant_raider_prime_cured_meat_sandwich.glb` | `burger` |
+
+- Source download: `assets/items/food/kyle_fuji_food/` — `Models/`, `Textures/`,
+  `Materials/`, `Prefabs/` and the original `license.txt`, as the Godot Asset
+  Library delivered them, less Godot's `.import` sidecars and seven demo
+  scenes; see `SOURCE.md` there.
+- The first models from a pack shaped for **Godot**: each `.glb` carries a
+  mesh and UVs and no material, the look living in a `.tres` its prefab applies.
+  `assets/glb_to_gltf.py` splits one into the ordinary source-directory shape
+  and attaches the base-colour atlas that `.tres` names; `pack_model.py` packs
+  that. The normal and metallic maps are not carried — nothing an inventory
+  cell draws can resolve them.
+- Atlases resampled 1024² → 512². Opaque on purpose: the protein atlas's alpha
+  channel is the pack's roughness map, not coverage.
+- **Several served files are the same bytes under different asset keys.** Two
+  steaks, four cured cuts and two sandwiches each share one model, because an
+  asset key names one item and the client fetches by key. A player who carries
+  only a chuck downloads only the chuck.
+
+---
+
 ## `npcs/floating_eye.glb`
 
 "sus eye 👁‍🗨 👁" (https://skfb.ly/p6vt6) by Jeff for no reason. is licensed

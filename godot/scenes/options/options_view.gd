@@ -1,7 +1,7 @@
 class_name OptionsView
 extends Control
-## Font size, interface scale, which panes are drawn, and where a clicked
-## skill's detail is shown.
+## Font size, interface scale, sound effects volume, which panes are drawn, and
+## where a clicked skill's detail is shown.
 ##
 ## A body in [PanelView], and a Window before 08/28/2026. It is also the reason
 ## the panel column has no "hide me" setting: a control that can hide the screen
@@ -48,6 +48,8 @@ var _font_slider: HSlider
 var _font_value: Label
 var _scale_slider: HSlider
 var _scale_value: Label
+var _sfx_slider: HSlider
+var _sfx_value: Label
 var _world_check: CheckBox
 var _inventory_check: CheckBox
 var _skill_detail: OptionButton
@@ -84,6 +86,17 @@ func _init() -> void:
 	scale_row.add_child(_scale_slider)
 	_scale_value = Label.new()
 	scale_row.add_child(_scale_value)
+
+	# Linear, shown as a percentage. The console turns it into a bus level
+	# through SoundCues, so this pane never learns what a decibel is.
+	column.add_child(_heading("Sound effects"))
+	var sfx_row := HBoxContainer.new()
+	column.add_child(sfx_row)
+	_sfx_slider = _slider(ClientSettings.MIN_SFX_VOLUME,
+		ClientSettings.MAX_SFX_VOLUME, 0.05)
+	sfx_row.add_child(_sfx_slider)
+	_sfx_value = Label.new()
+	sfx_row.add_child(_sfx_value)
 
 	# The two panes toggle separately, because they cost different things: the
 	# world pane redraws every tile every frame, the bag redraws when the bag
@@ -130,6 +143,14 @@ func _init() -> void:
 	automap.add_child(_command_button("Off", "automap off"))
 	automap.add_child(_command_button("?", "automap"))
 
+	# The server only offers a TOGGLE for this one -- no on, no off, no query --
+	# so the pane offers exactly that and nothing it would have to fake. The
+	# reply in the log names the state it landed on.
+	var craft_confirm := HBoxContainer.new()
+	column.add_child(craft_confirm)
+	craft_confirm.add_child(_label("Confirm before crafting"))
+	craft_confirm.add_child(_command_button("Toggle", "toggle craft confirm"))
+
 	var reset := Button.new()
 	reset.text = "Reset to defaults"
 	reset.pressed.connect(func(): _settings.reset())
@@ -137,6 +158,7 @@ func _init() -> void:
 
 	_font_slider.value_changed.connect(_on_font_changed)
 	_scale_slider.value_changed.connect(_on_scale_changed)
+	_sfx_slider.value_changed.connect(_on_sfx_changed)
 	_world_check.toggled.connect(_on_world_toggled)
 	_inventory_check.toggled.connect(_on_inventory_toggled)
 	_skill_detail.item_selected.connect(_on_skill_detail_selected)
@@ -157,6 +179,8 @@ func _sync() -> void:
 	_font_value.text = "%dpx" % _settings.font_size
 	_scale_slider.value = _settings.ui_scale
 	_scale_value.text = "%d%%" % roundi(_settings.ui_scale * 100.0)
+	_sfx_slider.value = _settings.sfx_volume
+	_sfx_value.text = "%d%%" % roundi(_settings.sfx_volume * 100.0)
 	_world_check.button_pressed = _settings.show_world
 	_inventory_check.button_pressed = _settings.show_inventory
 	_skill_detail.selected = ClientSettings.SKILL_DETAIL_MODES.find(
@@ -176,6 +200,13 @@ func _on_scale_changed(value: float) -> void:
 		return
 
 	_settings.set_ui_scale(value)
+
+
+func _on_sfx_changed(value: float) -> void:
+	if _syncing:
+		return
+
+	_settings.set_sfx_volume(value)
 
 
 func _on_world_toggled(pressed: bool) -> void:

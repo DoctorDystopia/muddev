@@ -309,7 +309,8 @@ func _sendable_families() -> PackedStringArray:
 
 	for kind: String in [Const.FAMILY_NPC, Const.FAMILY_CHARACTER,
 			Const.FAMILY_STATION, Const.FAMILY_GATHERABLE, Const.FAMILY_CORPSE,
-			Const.FAMILY_ITEM, Const.FAMILY_ROOM, Const.FAMILY_GENERIC]:
+			Const.FAMILY_SIGN, Const.FAMILY_ITEM, Const.FAMILY_ROOM,
+			Const.FAMILY_GENERIC]:
 		sendable.append(kind)
 
 	return sendable

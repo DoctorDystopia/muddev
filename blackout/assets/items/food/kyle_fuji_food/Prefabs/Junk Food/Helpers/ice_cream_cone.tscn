@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bjvl1l3uqv73j"]
+
+[ext_resource type="PackedScene" uid="uid://cueqbmhiyut2t" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/ice_cream_cone.glb" id="1_5n647"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_pobq7"]
+
+[node name="ice_cream_cone" instance=ExtResource("1_5n647")]
+
+[node name="Ice Cream Cone" parent="." index="0"]
+material_override = ExtResource("2_pobq7")

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://pj1tqjoale5s"]
+
+[ext_resource type="PackedScene" uid="uid://c7dtdf4bihdy5" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/broccoli.glb" id="1_68pfd"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_qqbdp"]
+
+[node name="broccoli" instance=ExtResource("1_68pfd")]
+
+[node name="Broccoli" parent="." index="0"]
+material_override = ExtResource("2_qqbdp")

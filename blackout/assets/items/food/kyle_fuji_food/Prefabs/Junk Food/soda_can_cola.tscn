@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://scy5a7eo76p4"]
+
+[ext_resource type="PackedScene" uid="uid://xexk8yrrrfsw" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/soda_can_cola.glb" id="1_73ak7"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_snja5"]
+
+[node name="soda_can_cola" instance=ExtResource("1_73ak7")]
+
+[node name="Soda Can Cola" parent="." index="0"]
+material_override = ExtResource("2_snja5")

@@ -225,6 +225,45 @@ def _quest_rows(target) -> list:
     return rows
 
 
+def _graffiti_rows(target) -> list:
+    """
+    Purpose: How much of this player's writing is still standing in the world.
+
+    Entry:
+        target is a Character.
+
+    Exit/Returns:
+        Returns a single-row list. Zero is reported rather than omitted: "this
+        player has written nothing" is an answer a moderator came here for, and
+        a missing row reads as a section that failed.
+
+    Module Globals:
+        dev_constants.INSPECT_LABEL_WRITTEN read.
+
+    Methodology:
+        A SECTION and not a line appended beside god mode, which is where it
+        first went. The difference is the containment: the sections below run
+        inside a try/except and the fields above it do not, and this one is a
+        query across every scrawl in the database rather than an attribute
+        read. A moderator must not lose the whole dossier to it.
+
+        It answers the question the Erase row is about, on the screen a
+        moderator reaches FIRST. A report that made them open the erase screen
+        to find out whether there was anything to erase would be a report
+        missing the answer.
+
+    Notes/References:
+        systems/devtools/actions.py graffiti_count, which passes through to
+        the graffiti system's own count.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    standing = dev_actions.graffiti_count(target)
+
+    return [_field(dev_constants.INSPECT_LABEL_WRITTEN, str(standing))]
+
+
 def _staff_lines(target) -> list:
     """
     Purpose: Build the moderator-only addendum below the player dossier.
@@ -251,7 +290,7 @@ def _staff_lines(target) -> list:
     Author: Nick Hobar
     Creation date: 08/25/2026
     """
-    sections = (_account_rows, _carried_rows, _quest_rows)
+    sections = (_account_rows, _carried_rows, _quest_rows, _graffiti_rows)
     lines = [
         "",
         dev_constants.INSPECT_STAFF_HEADING,

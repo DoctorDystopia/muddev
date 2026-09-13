@@ -21,6 +21,7 @@ func _ready() -> void:
 	_the_two_panes_toggle_independently()
 	_a_dragged_divider_is_remembered_and_clamped()
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
+	_the_sfx_volume_persists_clamps_and_resets()
 
 	_clean()
 
@@ -214,6 +215,46 @@ func _an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid() ->
 	s.set_skill_detail(ClientSettings.SKILL_DETAIL_BOTH)
 	_expect(s.skill_detail_in_pane() and s.skill_detail_in_log(),
 		"and both does both")
+
+	_clean()
+
+
+func _the_sfx_volume_persists_clamps_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	_expect(is_equal_approx(s.sfx_volume, ClientSettings.DEFAULT_SFX_VOLUME),
+		"default sound effects volume")
+
+	s.set_sfx_volume(0.3)
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(is_equal_approx(reloaded.sfx_volume, 0.3), "the volume persists")
+
+	s.set_sfx_volume(0.0)
+	_expect(is_equal_approx(s.sfx_volume, 0.0),
+		"silent is a real setting, not clamped away")
+
+	s.set_sfx_volume(5.0)
+	_expect(is_equal_approx(s.sfx_volume, ClientSettings.MAX_SFX_VOLUME),
+		"a boost above the mix is clamped down")
+
+	s.set_sfx_volume(-1.0)
+	_expect(is_equal_approx(s.sfx_volume, ClientSettings.MIN_SFX_VOLUME),
+		"a negative volume is clamped up")
+
+	# Clamped on READ, like every other value here.
+	var handle := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	handle.store_string("[audio]\nsfx_volume=7.0\n")
+	handle.close()
+
+	var repaired := ClientSettings.new(TEST_PATH)
+	repaired.load_from_disk()
+	_expect(is_equal_approx(repaired.sfx_volume, ClientSettings.MAX_SFX_VOLUME),
+		"an out-of-range saved volume is clamped on load")
+
+	repaired.reset()
+	_expect(is_equal_approx(repaired.sfx_volume, ClientSettings.DEFAULT_SFX_VOLUME),
+		"and reset restores the default")
 
 	_clean()
 

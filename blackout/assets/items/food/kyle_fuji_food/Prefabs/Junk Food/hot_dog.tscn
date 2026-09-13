@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bgdrimfm1mm03"]
+
+[ext_resource type="PackedScene" uid="uid://b5a4n335h3nft" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/hot_dog.glb" id="1_vrdw0"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_mxwdk"]
+
+[node name="hot_dog" instance=ExtResource("1_vrdw0")]
+
+[node name="Hot Dog" parent="." index="0"]
+material_override = ExtResource("2_mxwdk")

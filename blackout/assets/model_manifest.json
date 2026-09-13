@@ -33,6 +33,46 @@
       "asset_key": "rusty_scrap_shortsword"
     },
     {
+      "source": "assets/items/food/mh_meat",
+      "asset_key": "food_meat"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/egg",
+      "asset_key": "moderator_egg"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/steak",
+      "asset_key": "mutant_raider_steak"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/steak",
+      "asset_key": "mutant_raider_prime_steak"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/meat_haunch",
+      "asset_key": "mutant_raider_cured_chuck"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/meat_haunch",
+      "asset_key": "mutant_raider_cured_fatless_meat"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/meat_haunch",
+      "asset_key": "mutant_raider_cured_filet"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/meat_haunch",
+      "asset_key": "mutant_raider_cured_prime_meat"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/burger",
+      "asset_key": "mutant_raider_cured_meat_sandwich"
+    },
+    {
+      "source": "assets/items/food/kyle_fuji_food/burger",
+      "asset_key": "mutant_raider_prime_cured_meat_sandwich"
+    },
+    {
       "source": "assets/npcs/sus_eye",
       "asset_key": "floating_eye"
     },
@@ -51,6 +91,10 @@
     {
       "source": "assets/tiles/desert/center_b",
       "asset_key": "tile_oasis_outskirts"
+    },
+    {
+      "source": "assets/tiles/desert/center_b",
+      "asset_key": "tile_azm_plains"
     }
   ]
 }

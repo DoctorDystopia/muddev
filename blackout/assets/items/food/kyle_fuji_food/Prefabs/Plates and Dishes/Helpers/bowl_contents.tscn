@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://b4fyum4srflfh"]
+
+[ext_resource type="PackedScene" uid="uid://bysavl71yy3qp" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/bowl_contents.glb" id="1_pyyax"]
+[ext_resource type="Material" uid="uid://djm0x6cjks101" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_bowl_contents.tres" id="2_5a4dr"]
+
+[node name="bowl_contents" instance=ExtResource("1_pyyax")]
+
+[node name="Bowl Contents" parent="." index="0"]
+material_override = ExtResource("2_5a4dr")

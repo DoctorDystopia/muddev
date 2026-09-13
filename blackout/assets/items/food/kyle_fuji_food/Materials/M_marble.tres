@@ -1,0 +1,8 @@
+[gd_resource type="StandardMaterial3D" load_steps=2 format=3 uid="uid://mwjxjakpho40"]
+
+[ext_resource type="Texture2D" uid="uid://do0frbl6heav6" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_marble_diffuse.png" id="1_o2ce7"]
+
+[resource]
+albedo_texture = ExtResource("1_o2ce7")
+roughness = 0.5
+normal_enabled = true

@@ -137,6 +137,10 @@ var _history := CommandHistory.new()
 ## the web is IndexedDB and survives a reload.
 var _settings := ClientSettings.new()
 
+## What the game sounds like. A Node because every cue is a player it parents.
+## Cues hang off MODEL signals, never off a line of text -- see [SoundCues].
+var _sounds := SoundCues.new()
+
 ## When to redial after a drop. Pure schedule; the Timer below is the clock.
 var _reconnect := ReconnectPolicy.new()
 
@@ -271,6 +275,13 @@ func _ready() -> void:
 	# and this sends it. There is no privileged path from this screen to the
 	# game.
 	_skill_grid.command_requested.connect(Evennia.command)
+
+	# The roster says a level rose; the client decides that sounds like a
+	# jingle. Off the model rather than the `[LEVEL_UP]` line in the log, so a
+	# copy edit on the server cannot silence it.
+	add_child(_sounds)
+	_skills.levelled.connect(func(_skill_key: String, _level: int):
+		_sounds.play(SoundCues.LEVEL_UP))
 
 	_quests = QuestsView.new()
 	_quests.bind(_quest_log)
@@ -559,6 +570,10 @@ func _apply_settings() -> void:
 	_chat.apply_font_size(size_px)
 
 	get_window().content_scale_factor = _settings.ui_scale
+
+	# The bus, not each player: every cue plays on SFX, so one write reaches a
+	# sound already playing as well as the next one.
+	SoundCues.apply_volume(_settings.sfx_volume)
 
 	# A hidden Control is not drawn and its SubViewport stops rendering, which is
 	# the point of the world setting on a machine that is struggling. Nothing

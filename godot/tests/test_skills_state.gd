@@ -18,6 +18,12 @@ func _ready() -> void:
 	_a_malformed_payload_is_survived()
 	_an_unknown_channel_is_refused()
 	_a_drop_clears_the_roster()
+	_a_level_rise_is_announced()
+	_the_first_roster_announces_nothing()
+	_an_unchanged_roster_announces_nothing()
+	_a_roster_after_a_drop_announces_nothing()
+	_a_multi_level_jump_is_announced_once()
+	_a_lowered_level_is_not_a_rise()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -194,6 +200,83 @@ func _a_drop_clears_the_roster() -> void:
 	_expect(not state.has_data, "a drop forgets that we were told")
 	_expect(state.skills.is_empty(), "and forgets the roster")
 	_expect(state.total_level == 0, "and the totals with it")
+
+
+## The standard payload with Cutting (7 in [method _payload]) at [param level].
+func _payload_with_cutting_at(level: float) -> Dictionary:
+	var payload := _payload()
+	payload["skills"][1]["level"] = level
+
+	return payload
+
+
+## Every `levelled` emission from [param state], as [key, level] pairs.
+func _listen(state: SkillsState) -> Array:
+	var heard: Array = []
+	state.levelled.connect(func(key: String, level: int): heard.append([key, level]))
+
+	return heard
+
+
+func _a_level_rise_is_announced() -> void:
+	# What the console plays the level-up sound from. Comparing rosters is the
+	# whole mechanism -- the server sends no level-up event, only a new roster.
+	var state := _bound()
+	var heard := _listen(state)
+	state.ingest(_Const.CH_CHAR_SKILLS, _payload_with_cutting_at(8.0))
+
+	_expect(heard.size() == 1, "one rise is announced once")
+	_expect(heard.size() == 1 and heard[0] == ["cutting", 8],
+		"naming the skill and the level it reached")
+
+
+func _the_first_roster_announces_nothing() -> void:
+	# A login is not a level-up, however high the levels it arrives with.
+	var state := SkillsState.new()
+	var heard := _listen(state)
+	state.ingest(_Const.CH_CHAR_SKILLS, _payload())
+
+	_expect(heard.is_empty(), "the first roster announces nothing")
+
+
+func _an_unchanged_roster_announces_nothing() -> void:
+	# The `skills` command and a resync both republish with no level moved.
+	var state := _bound()
+	var heard := _listen(state)
+	state.ingest(_Const.CH_CHAR_SKILLS, _payload())
+
+	_expect(heard.is_empty(), "a republished roster with no level moved is quiet")
+
+
+func _a_roster_after_a_drop_announces_nothing() -> void:
+	# A redial lands a fresh roster on a reset model. Whatever it carries is a
+	# starting point, not something the player just earned.
+	var state := _bound()
+	var heard := _listen(state)
+	state.reset()
+	state.ingest(_Const.CH_CHAR_SKILLS, _payload_with_cutting_at(9.0))
+
+	_expect(heard.is_empty(), "the first roster after a drop is quiet")
+
+
+func _a_multi_level_jump_is_announced_once() -> void:
+	# add_xp can cross several thresholds in one award; the server publishes
+	# once, and so this announces once, at the level reached.
+	var state := _bound()
+	var heard := _listen(state)
+	state.ingest(_Const.CH_CHAR_SKILLS, _payload_with_cutting_at(11.0))
+
+	_expect(heard.size() == 1 and heard[0] == ["cutting", 11],
+		"a jump of several levels is one announcement at the level reached")
+
+
+func _a_lowered_level_is_not_a_rise() -> void:
+	# The moderator egg's set_level can lower a skill.
+	var state := _bound()
+	var heard := _listen(state)
+	state.ingest(_Const.CH_CHAR_SKILLS, _payload_with_cutting_at(3.0))
+
+	_expect(heard.is_empty(), "a lowered level announces nothing")
 
 
 func _expect(passed: bool, what: String) -> void:

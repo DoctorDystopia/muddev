@@ -18,17 +18,22 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 from evennia import default_cmds
 from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
+from commands.build_cmds import BuildCmdSet
 from commands.cleanup_cmds import CleanupCmdSet
 from commands.display_cmds import DisplayCmdSet
 from commands.combat_cmds import CombatCmdSet
+from commands.crafting_cmds import CraftingCmdSet
 from commands.drop_cmds import DropCmdSet
 from commands.equipment_cmds import EquipmentCmdSet
 from commands.gathering_cmds import GatheringCmdSet
+from commands.graffiti_cmds import GraffitiCmdSet
 from commands.get_cmds import GetCmdSet
+from commands.consumable_cmds import ConsumableCmdSet
 from commands.inventory_cmds import InventoryCmdSet
 from commands.movement_cmds import MovementCmdSet
 from commands.progression_cmds import ProgressionCmdSet
 from commands.quest_cmds import QuestCmdSet
+from commands.read_cmds import ReadCmdSet
 
 
 class CharacterCmdSet(default_cmds.CharacterCmdSet):
@@ -52,6 +57,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(QuestCmdSet())
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())
+        self.add(ConsumableCmdSet())
         self.add(GetCmdSet())
         # On the CHARACTER, not on each node. A cmdset that hangs on a
         # corpse is deleted with the corpse the moment it is butchered,
@@ -63,7 +69,13 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         # CmdGoto rather than being overloaded by it.
         self.add(MovementCmdSet())
         self.add(CleanupCmdSet())
+        self.add(BuildCmdSet())
+        self.add(ReadCmdSet())
+        self.add(GraffitiCmdSet())
         self.add(DisplayCmdSet())
+        # The confirm toggle, on the character so the Godot Options button
+        # works anywhere, not only beside a workbench.
+        self.add(CraftingCmdSet())
 
         self.add(CombatCmdSet())
 

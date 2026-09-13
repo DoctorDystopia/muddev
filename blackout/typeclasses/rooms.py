@@ -18,7 +18,11 @@ from systems.interface.statefeed import events as feed
 from systems.interface.statefeed import neighbourhood
 from systems.interface.statefeed import subscriptions
 from .objects import ObjectParent
-from .spawners import SPAWNER_REGISTRY, load_all_spawners
+from .spawners import (
+    ATTRIBUTE_SPAWNER_REGISTRY,
+    SPAWNER_REGISTRY,
+    load_all_spawners,
+)
 
 # The ASCII map this room prints on every look.
 #
@@ -541,14 +545,99 @@ class GridTile(ObjectParent, XYZRoom):
 
     def at_object_post_spawn(self, prototype=None):
         """
-        Called after this room is created/updated via a prototype
-        during xyzgrid building. Looks up the prototype's room key
-        in SPAWNER_REGISTRY and dispatches to the matching spawner, if any.
+        Purpose: Stand up everything a map said should be on this tile.
+
+        Entry:
+            prototype - the prototype just applied, or None. Evennia hands one
+                        over on the update path the xyzgrid actually uses, and
+                        omits it on the create path the grid never takes.
+
+        Exit/Returns:
+            No return value.
+
+        Module Globals:
+            SPAWNER_REGISTRY and ATTRIBUTE_SPAWNER_REGISTRY read.
+
+        Methodology:
+            TWO dispatches, because a tile answers two questions. Its KEY says
+            what it is, and a tile has one key, so one occupant: the furnace,
+            the bank terminal, the shopkeep. Its ATTRIBUTES say what else is
+            standing on it, and it may declare as many as it likes -- which is
+            what lets a signpost label the furnace instead of replacing it. A
+            tile cannot be keyed both "Foundry Furnace Facility" and
+            "Signpost", so signage dispatched on the key could never share a
+            tile with anything at all.
+
+            The attributes are readable here because Evennia applies them and
+            saves BEFORE calling this hook -- see
+            prototypes/spawner.py batch_update_objects_with_prototype.
+
+            Attribute spawners are CONTAINED and the key spawner is not, and
+            the asymmetry is the point. The key spawner is the tile's reason
+            for existing: a furnace tile with no furnace is broken and should
+            be loud. An attribute spawner is decoration, and a sign that
+            cannot be built must never cost the operator the furnace.
+
+        Notes/References:
+            typeclasses/spawners.py owns both registries and the decorators
+            that fill them.
+
+        Author: Nick Hobar
+        Creation date: 08/01/2026
         """
         if prototype is None:
             return
+
         load_all_spawners()
+
         key = prototype.get("key")
         spawner = SPAWNER_REGISTRY.get(key)
+
         if spawner:
             spawner(self)
+
+        self._spawn_declared_extras()
+
+    def _spawn_declared_extras(self) -> None:
+        """
+        Purpose: Run every attribute spawner this tile has asked for.
+
+        Entry:
+            Called from at_object_post_spawn, after the key spawner.
+
+        Exit/Returns:
+            No return value.
+
+        Module Globals:
+            ATTRIBUTE_SPAWNER_REGISTRY read.
+
+        Methodology:
+            Iterates the REGISTRY and asks the room, rather than iterating the
+            room's attributes and looking each one up. A tile carries dozens of
+            attributes and the registry holds a handful, so this is the cheaper
+            direction -- and it stays cheap as content grows, where the other
+            direction gets slower with every attribute any system adds.
+
+            One try/except per spawner, matching managers.bootstrap_all: a
+            broken decoration must not take the rest of the tile's decorations
+            with it, and the traceback belongs in the log rather than in the
+            middle of a map rebuild the operator cannot interrupt.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 09/12/2026
+        """
+        for attr_name, spawner in ATTRIBUTE_SPAWNER_REGISTRY.items():
+            if not self.attributes.has(attr_name):
+                continue
+
+            try:
+                spawner(self)
+            except Exception:
+                logger.log_trace()
+                logger.log_err(
+                    f"at_object_post_spawn: the '{attr_name}' spawner failed "
+                    f"on {self.key}."
+                )

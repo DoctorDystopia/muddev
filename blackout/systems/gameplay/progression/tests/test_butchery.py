@@ -21,7 +21,10 @@ from commands.gathering_cmds import (
     resolve_gathering_skill,
 )
 from systems.gameplay.progression.skills import constants as skill_constants
-from systems.gameplay.progression.skills.gatherables import GATHERABLE_REGISTRY
+from systems.gameplay.progression.skills.gatherables import (
+    GATHERABLE_REGISTRY,
+    yield_menu_label,
+)
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.gameplay.spawning.respawn import get_respawn_manager, npc_present
 from systems.interface.statefeed import constants as feed_const
@@ -182,6 +185,12 @@ class CorpseSerializationTest(EvenniaTest):
         Every string sent is a command a telnet player could type, so a click
         can do nothing a typed line cannot -- which is what keeps every lock,
         permission and cooldown in force with no separate audit.
+
+        The row must SAY the verb it runs, which is what this checks. It used
+        to check that the label WAS the verb and nothing else, which held only
+        while every row was a bare verb; a row naming a particular cut reads
+        "butcher chuck from" and runs `butcher`, and the two still agree about
+        what is about to happen.
         """
         corpse = self._corpse()
 
@@ -190,7 +199,8 @@ class CorpseSerializationTest(EvenniaTest):
         for action in body["actions"]:
             with self.subTest(command=action["command"]):
                 verb = action["command"].split(" ")[0]
-                self.assertEqual(verb.lower(), action["label"].lower())
+                said = action["label"].split(" ")[0]
+                self.assertEqual(verb.lower(), said.lower())
 
 
     def test_labels_are_capitalised_the_way_the_inventory_capitalises_its_own(self):
@@ -241,6 +251,22 @@ class ButcheryYieldTest(EvenniaCommandTest):
             caller=self.char1,
             obj=self.corpse,
         )
+
+
+    def _another_corpse(self):
+        """A fresh body and a cleared timer, for a case that harvests twice.
+
+        One corpse is one harvest by design, and the skill arms a two-second
+        cooldown on a success -- so a loop over the registry's cuts needs both
+        undone between iterations or the second one measures the cooldown
+        rather than the cut.
+        """
+        if self.corpse.pk:
+            self.corpse.delete()
+
+        self.char1.cooldowns.reset(
+            SKILL_REGISTRY[_BUTCHERY]().cooldown_key())
+        self.corpse = ITEM_DB[_CORPSE_KEY].create(location=self.room1)
 
 
     def _carried_keys(self):
@@ -314,6 +340,63 @@ class ButcheryYieldTest(EvenniaCommandTest):
         response = self._butcher(wanted="wingtip")
 
         self.assertIn("wingtip", response)
+
+
+    def test_a_cut_can_be_named_by_the_word_that_tells_it_apart(self):
+        """
+        Every cut off a raider is a "mutant raider raw <something>", so the
+        only word that distinguishes them is the last one -- and no prefix of
+        any name reaches it. `butcher corpse = chuck` was refused as a cut the
+        corpse does not yield, one line under a message that had just called
+        it one.
+        """
+        for entry in _yields():
+            with self.subTest(cut=entry.item_key):
+                self._set_level(entry.required_level)
+                self._another_corpse()
+
+                response = self._butcher(wanted=yield_menu_label(entry))
+
+                self.assertIn(ITEM_DB[entry.item_key].name, response)
+
+
+    def test_every_row_the_menu_offers_is_a_command_that_works(self):
+        """
+        The one assertion that ties the two halves together. A client sends
+        these strings verbatim, so a row whose argument the parser will not
+        resolve is a button that does nothing -- and nothing else in either
+        suite would notice, because the menu builds its own wording and the
+        parser is tested on wording a human typed.
+        """
+        self._set_level(_yields()[-1].required_level)
+        rows = gathering_verbs(self.corpse)
+
+        for row in rows:
+            if "=" not in row["command"]:
+                continue
+
+            wanted = row["command"].partition("=")[2].strip()
+
+            with self.subTest(row=row["command"]):
+                self._another_corpse()
+
+                response = self._butcher(wanted=wanted)
+
+                self.assertIn("successfully", response.lower())
+
+
+    def test_a_word_that_could_mean_two_cuts_names_them_both(self):
+        """
+        "Yields nothing called 'raw'" is false where every cut is raw, and
+        sends the player looking for a different word rather than a longer
+        one.
+        """
+        self._set_level(_yields()[-1].required_level)
+
+        response = self._butcher(wanted="raw")
+
+        for entry in _yields():
+            self.assertIn(yield_menu_label(entry), response)
 
 
     def test_one_corpse_is_one_harvest(self):
@@ -465,6 +548,47 @@ class GatheringVerbTableTest(EvenniaTest):
         verbs = {action["label"] for action in gathering_verbs(node)}
 
         self.assertEqual(verbs, {"cut"})
+
+
+    def test_a_multi_yield_node_offers_a_row_per_cut(self):
+        """
+        Right-clicking a corpse has to be able to ask for a particular cut.
+        Without these rows the only way to name one is to type it, which a
+        player who has never seen the text client has no reason to guess at.
+        """
+        corpse = ITEM_DB[_CORPSE_KEY].create(location=self.room1)
+
+        commands = [action["command"] for action in gathering_verbs(corpse)]
+
+        for entry in _yields():
+            with self.subTest(cut=entry.item_key):
+                self.assertIn(
+                    f"butcher {corpse.key} = {yield_menu_label(entry)}",
+                    commands)
+
+
+    def test_the_bare_verb_is_still_the_first_row(self):
+        """
+        serialize_entity reports the head of this list as `interact`, and
+        `interact` is what a left click sends. A first row naming one cut
+        would freeze every player's default at whichever cut sorts first,
+        which is the starter one -- so levelling would stop changing what a
+        click does.
+        """
+        corpse = ITEM_DB[_CORPSE_KEY].create(location=self.room1)
+
+        first = gathering_verbs(corpse)[0]
+
+        self.assertEqual(first["command"], f"butcher {corpse.key}")
+
+
+    def test_a_single_yield_node_offers_no_cut_rows(self):
+        """Two rows for one act reads as a bug in the menu, not as a choice."""
+        from typeclasses.gathering_nodes import RustyPole
+
+        node = create_object(RustyPole, key="rusty pole", location=self.room1)
+
+        self.assertEqual(len(gathering_verbs(node)), 1)
 
 
     def test_every_skill_a_registry_entry_names_actually_exists(self):

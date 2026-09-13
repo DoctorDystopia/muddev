@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3 uid="uid://b2k38waupx2xp"]
+
+[ext_resource type="PackedScene" uid="uid://bpexo8ja3ky8o" path="res://Low Poly Food Asset Pack/Kyle Fuji/Prefabs/Plates and Dishes/dish.tscn" id="1_gq266"]
+[ext_resource type="PackedScene" uid="uid://b4fyum4srflfh" path="res://Low Poly Food Asset Pack/Kyle Fuji/Prefabs/Plates and Dishes/Helpers/bowl_contents.tscn" id="2_igjsi"]
+
+[node name="dish_full" type="Node3D"]
+
+[node name="dish" parent="." instance=ExtResource("1_gq266")]
+
+[node name="bowl_contents" parent="." instance=ExtResource("2_igjsi")]
+transform = Transform3D(1.0679164, 0, 0, 0, 1, 0, 0, 0, 1.0541313, 0, -0.042999025, 0)

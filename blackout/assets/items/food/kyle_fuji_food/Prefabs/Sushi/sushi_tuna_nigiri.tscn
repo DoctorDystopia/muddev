@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dqffgxs5rfncw"]
+
+[ext_resource type="PackedScene" uid="uid://0pd1xaeksrpb" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/tuna_nigiri.glb" id="1_8ehvp"]
+[ext_resource type="Material" uid="uid://cvavx5m3vs1l3" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_sushi.tres" id="2_anpna"]
+
+[node name="tuna_nigiri" instance=ExtResource("1_8ehvp")]
+
+[node name="Tuna Nigiri" parent="." index="0"]
+material_override = ExtResource("2_anpna")

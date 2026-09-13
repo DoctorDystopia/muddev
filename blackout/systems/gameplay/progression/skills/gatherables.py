@@ -45,12 +45,24 @@ class GatherableYield:
     {skill_key: xp} dict rather than a fraction of xp_reward, so a chain that
     wants an unusual split says so instead of the split being computed from a
     rule nobody can see in the table.
+
+    menu_label is the SHORT name of this cut: the word a right-click row says
+    and the word a player types after the `=`. It is not a second name for the
+    item -- the item's name is still the ItemDef's, and every line the harvest
+    sends uses it -- it is the part of that name which tells this node's cuts
+    apart. "mutant raider raw filet" and "mutant raider raw chuck" differ in
+    one word, and a menu row reading "Butcher mutant raider raw filet from
+    Mutant Raider corpse" names the corpse twice to say it.
+
+    Empty means "use the item's name", so a node with one yield per skill --
+    every node but the corpse today -- declares nothing.
     """
     item_key: str
     skill_key: str
     required_level: int
     xp_reward: int
     secondary_xp: dict = field(default_factory=dict)
+    menu_label: str = ""
 
 
 
@@ -205,6 +217,7 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
                 required_level=0,
                 xp_reward=25,
                 secondary_xp={skill_constants.CUTTING_SKILL_KEY: 5},
+                menu_label="chuck",
             ),
             GatherableYield(
                 item_key="mutant_raider_raw_filet",
@@ -212,6 +225,7 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
                 required_level=10,
                 xp_reward=45,
                 secondary_xp={skill_constants.CUTTING_SKILL_KEY: 10},
+                menu_label="filet",
             ),
         ),
     ),
@@ -243,6 +257,28 @@ _empty_nodes = [
 if _empty_nodes:
     raise ValueError(
         f"GATHERABLE_REGISTRY: no yields declared for: {_empty_nodes}"
+    )
+
+
+# A menu label is what the client sends back after the `=`, so two cuts of one
+# node sharing one is a row that cannot say which it meant. Caught at import
+# for the same reason the two checks above are: the alternative is a player
+# clicking "filet" and being handed a chuck.
+_ambiguous_labels = []
+for _gatherable_def in GATHERABLE_REGISTRY.values():
+    for _skill_key in _gatherable_def.skill_keys():
+        _labels = [
+            entry.menu_label.lower()
+            for entry in _gatherable_def.yields_for_skill(_skill_key)
+            if entry.menu_label
+        ]
+
+        if len(_labels) != len(set(_labels)):
+            _ambiguous_labels.append(f"{_gatherable_def.key}:{_skill_key}")
+if _ambiguous_labels:
+    raise ValueError(
+        f"GATHERABLE_REGISTRY: one skill's yields share a menu_label on: "
+        f"{_ambiguous_labels}"
     )
 
 
@@ -392,3 +428,36 @@ def get_yield_item_name(gatherable_yield: GatherableYield) -> str:
     item_name = ITEM_DB[gatherable_yield.item_key].name
 
     return item_name
+
+
+
+def yield_menu_label(gatherable_yield: GatherableYield) -> str:
+    """
+    Purpose: The short name one cut is offered and asked for by.
+
+    Entry:
+        gatherable_yield is a GatherableYield.
+
+    Exit/Returns:
+        Returns the yield's menu_label, or the item's display name when it
+        declares none.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        One routine, because three readers need the same answer and any
+        disagreement between them is a click that does not work: the
+        right-click row a client draws, the command that row sends, and
+        GatheringSkill's matching of what a player typed. A label offered in
+        a menu that the parser will not accept is worse than no menu.
+
+    Notes/References:
+        GatherableYield.menu_label carries why a short name exists at all.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    label = gatherable_yield.menu_label or get_yield_item_name(gatherable_yield)
+
+    return label

@@ -537,7 +537,7 @@ MAP_NODES_PER_CHUNK: int = 40
 # payload earned its chunker. One owner, exported, and
 # test_payload_size.py fails when the two drift.
 #
-# WHY 1 MiB RATHER THAN THE 65535 DEFAULT. Godot's WebSocketPeer defaults to a
+# WHY 2 MiB RATHER THAN THE 65535 DEFAULT. Godot's WebSocketPeer defaults to a
 # 64 KiB inbound buffer. A whole-map room_players payload measures ~43 KB on a
 # live-sized map today (see docs/2026-09-03-PERF-0002-crowd-scaling.md), which
 # is 66% of that default -- one radius increase or one busy market away from
@@ -555,7 +555,17 @@ MAP_NODES_PER_CHUNK: int = 40
 # It does NOT apply to a web export. A browser build delegates to the native
 # WebSocket API, which has no such ceiling; the property is simply ignored
 # there.
-CLIENT_INBOUND_BUFFER_BYTES: int = 1024 * 1024
+#
+# RAISED FROM 1 MiB TO 2 MiB ON 09/11/2026, which is the moment the paragraph
+# above was written for. A corpse grew from two clickable rows to four when the
+# right-click menu learned to name a particular cut, and the synthetic ceiling
+# in test_payload_size.py -- 1200 entities, every one of them a corpse with a
+# long name -- went from 590936 bytes to 845336 against a 699050-byte budget.
+# The buffer was the cheapest of the three levers that test names: it is one
+# allocation on one socket in one client process, where lowering
+# STATEFEED_ENTITY_RADIUS takes the world away from the player and chunking
+# room_players makes a client render a half-applied entity list.
+CLIENT_INBOUND_BUFFER_BYTES: int = 2 * 1024 * 1024
 
 
 # ─── Asset keys ──────────────────────────────────────────────────────────────
@@ -590,6 +600,15 @@ ASSET_KIND_GATHERABLE: str = "gatherable"
 # alone hides half of what a player can do with it, which is exactly what the
 # `actions` list on a serialized entity exists to stop.
 ASSET_KIND_CORPSE: str = "corpse"
+
+# Something standing in the world whose POINT is the words on it. Distinct
+# from a station because the two afford opposite things -- a station is used
+# and a sign is read -- and distinct from an item for the reason a station is:
+# it carries no `get`, and a client told "item" offers to pocket the signpost.
+#
+# Nothing about the kind carries the text. That is `label` on the serialized
+# body, which any entity may declare; see WORLD_LABEL_MAX_CHARS below.
+ASSET_KIND_SIGN: str = "sign"
 
 ASSET_KEY_GENERIC: str = "generic"
 
@@ -642,6 +661,60 @@ ROOM_KIND_DEFAULT: str = "default"
 ROOM_KIND_TRANSITION: str = "map_transition"
 
 
+# ─── World labels ────────────────────────────────────────────────────────────
+
+# Text an entity carries to be DRAWN in the world, beside the thing itself.
+#
+# A field on the serialized body rather than a channel or a kind of its own,
+# and that is the whole design: a signpost, a dev annotation over a broken
+# tile, a shop's name and -- one day -- a nameplate are the same fact said
+# about different entities, so one optional field reaches all of them and the
+# client learns to draw floating text exactly once.
+#
+# It is NOT `desc`, which serialize_entity refuses on purpose. A desc is
+# unbounded prose for the text channel; a label is short, capped, and rendered.
+# A sign wanting to say more than fits here says it in its desc and a player
+# reads it, which is the same split a poster and its small print already have.
+
+# What a sign is: worldbuilding, in the fiction, authored as content.
+LABEL_KIND_SIGN: str = "sign"
+
+# What a marker is: an annotation ABOUT the game rather than in it -- "no
+# spawns past here", "WIP". A kind of its own rather than a flag, because the
+# client draws it differently on purpose: a note to the developers that looked
+# like signage would be read as signage by the first player to walk past it.
+LABEL_KIND_MARKER: str = "marker"
+
+# What a PLAYER wrote. Its own kind and not LABEL_KIND_SIGN, and the reason is
+# the reader rather than the writer: a player must be able to tell at a glance
+# whether the words in front of them are the world speaking or another player,
+# because the two carry completely different authority. A scrawl reading "BANK:
+# EAST" is a lie a sign could not tell.
+LABEL_KIND_GRAFFITI: str = "graffiti"
+
+# Every kind the server will name. A client is free to know fewer -- its table
+# documents a fallback, so a kind added here never requires a client edit --
+# but a client naming one absent from this set is naming nothing, which is what
+# systems/interface/statefeed/tests/test_client_constants.py checks.
+LABEL_KINDS: frozenset = frozenset((
+    LABEL_KIND_SIGN,
+    LABEL_KIND_MARKER,
+    LABEL_KIND_GRAFFITI,
+))
+
+# What a label may not exceed, enforced by labels.normalise and by nothing
+# else.
+#
+# The cap is the payload's bound, not a matter of taste. `label` rides the
+# entity row, which is the biggest thing the feed sends -- test_payload_size.py
+# prices 1200 of them against a 699050-byte budget -- and an uncapped string
+# there is a budget nothing can be written against. Sized to what a player can
+# actually read floating over a tile from the orbit camera: a few words, or a
+# short line of three.
+WORLD_LABEL_MAX_CHARS: int = 64
+WORLD_LABEL_MAX_LINES: int = 3
+
+
 # ─── Inventory ───────────────────────────────────────────────────────────────
 
 # The second tier of the client's mesh lookup, after the per-item asset key.
@@ -663,6 +736,7 @@ ITEM_FAMILY_MATERIAL: str = "crafting_material"
 ITEM_FAMILY_TOOL: str = "crafting_tool"
 ITEM_FAMILY_CURRENCY: str = "currency"
 ITEM_FAMILY_CORPSE: str = "corpse"
+ITEM_FAMILY_FOOD: str = "food"
 
 # The order the families are resolved in when ONE item declares several of
 # them.
@@ -683,6 +757,13 @@ ITEM_FAMILY_CORPSE: str = "corpse"
 ITEM_FAMILY_PRIORITY: tuple = (
     ITEM_FAMILY_CURRENCY,
     ITEM_FAMILY_CORPSE,
+    # Ahead of MATERIAL deliberately, and this is the entry that proves the
+    # tuple earns its keep. Every food is tagged crafting_material as well --
+    # Gastronomy's recipes find their ingredients by that tag -- so a cured
+    # chuck belongs to two families and the order here is the only thing
+    # deciding which mesh it falls back to. Behind MATERIAL it would render as
+    # an anonymous lump, which is what it was until food existed.
+    ITEM_FAMILY_FOOD,
     ITEM_FAMILY_MATERIAL,
     ITEM_FAMILY_JEWELLERY,
     ITEM_FAMILY_TOOL,
@@ -712,6 +793,16 @@ ITEM_FAMILY_GENERIC: str = "generic"
 # first. A slot index is exactly what the pane has.
 INVENTORY_ACTION_EQUIP: tuple = ("Equip", "equip {slot}")
 INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {slot}")
+
+# Eat names a SLOT, for the reason Drop and Inspect do: three identical cured
+# chucks are a real inventory, and a pane sending `eat mutant raider cured
+# chuck` would be sending a command whose target it cannot predict.
+#
+# Sent only for an item that is actually edible -- gated on heal_amount in
+# inventory._serialize_carried, the same way Equip is gated on a use_slot. A
+# client therefore never draws Eat on a sword and needs no rule of its own
+# about what food is.
+INVENTORY_ACTION_EAT: tuple = ("Eat", "eat {slot}")
 
 # Inspect names a SLOT for exactly the reason Drop does, and it was the last
 # action that did not. `look` is the engine's command and its argument is a

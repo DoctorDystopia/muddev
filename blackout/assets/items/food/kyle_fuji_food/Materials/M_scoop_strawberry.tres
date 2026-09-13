@@ -1,0 +1,11 @@
+[gd_resource type="StandardMaterial3D" load_steps=3 format=3 uid="uid://wlltio445ygs"]
+
+[ext_resource type="Texture2D" uid="uid://b2l4aqw0rgt5j" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_scoop_diffuse.png" id="1_jl4ht"]
+[ext_resource type="Texture2D" uid="uid://imxdtflbtljl" path="res://Low Poly Food Asset Pack/Kyle Fuji/Textures/T_scoop_normal.png" id="2_dqh5i"]
+
+[resource]
+albedo_color = Color(0.90588236, 0.53333336, 0.60784316, 1)
+albedo_texture = ExtResource("1_jl4ht")
+roughness = 0.5
+normal_enabled = true
+normal_texture = ExtResource("2_dqh5i")

@@ -1,5 +1,5 @@
 class_name ChooseOption
-extends PanelContainer
+extends Control
 ## The right-click menu over the world pane: every verb the server said a thing
 ## affords, listed at the cursor.
 ##
@@ -21,6 +21,22 @@ extends PanelContainer
 ## broke it. This is the third menu written over that payload and the first one
 ## that cannot go stale: a corpse that gains a Brain Farming yield grows a row
 ## here with no edit in this file.
+##
+## WHY THIS IS A FULL-PANE CONTROL WITH THE BOX INSIDE IT, and not just the box.
+## The menu stands over a [SubViewportContainer], which forwards every mouse
+## event it is given into the 3D pane. So while the box was only the box, a
+## click anywhere else in the pane went to the world -- and two things followed
+## from that, both of which players saw. The box never closed, because a
+## dismissal that waits for `_unhandled_input` waits for an event the container
+## has already eaten; and the click that should have closed it walked the
+## player instead. A right click then left the client with a stale menu
+## floating over the world, listing verbs for a corpse that might be gone.
+##
+## The transparent backdrop is the fix and it is what every context menu in
+## every toolkit does: while the menu is open it OWNS the pane's clicks. It
+## draws nothing, it sits above the container in the scene so GUI picking
+## reaches it first, and it is invisible -- and therefore unpickable -- the
+## rest of the time.
 
 ## Emitted with the exact command string to send. The caller is what talks to
 ## the server, so this stays a plain Control that a test can drive with no
@@ -50,6 +66,11 @@ const CURSOR_OFFSET := Vector2(2.0, 2.0)
 ## the box UP instead of overflowing -- the same thing every context menu does.
 const EDGE_MARGIN := 4.0
 
+## The box itself. Public so a test can read where it landed and how big it is
+## -- which is what [method _placement] is judged on -- without reaching
+## through a private name.
+var box: PanelContainer
+
 var _rows: VBoxContainer
 
 
@@ -57,14 +78,28 @@ var _rows: VBoxContainer
 func _init() -> void:
 	visible = false
 
-	# STOP, so a click on the menu is a click on the MENU. Without it the
-	# press would fall through to the world pane behind and walk the player to
-	# whatever tile happens to be under the row they were aiming at.
+	# The backdrop fills its parent, so a click anywhere in the world pane is a
+	# click on the menu while the menu is open.
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	# STOP on both, and for two different reasons. On the BOX, so a click on a
+	# row is a click on the MENU -- without it the press falls through to the
+	# world pane behind and walks the player to whatever tile happens to be
+	# under the row they were aiming at. On the BACKDROP, so a click anywhere
+	# else is a dismissal rather than a move order.
 	mouse_filter = Control.MOUSE_FILTER_STOP
+
+	box = PanelContainer.new()
+	# Explicit, because a Container defaults to PASS rather than to Control's
+	# STOP: without this a click on the box's own border or on the gap beside
+	# the title would fall through to the backdrop and read as "clicked
+	# somewhere else", closing the menu the player was aiming at.
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(box)
 
 	_rows = VBoxContainer.new()
 	_rows.add_theme_constant_override("separation", 0)
-	add_child(_rows)
+	box.add_child(_rows)
 
 
 
@@ -95,8 +130,8 @@ func open(options: Array, at: Vector2) -> void:
 	# Immediately, not next frame: the box has to be placed before it is drawn,
 	# and reset_size() takes the size the children just declared rather than
 	# the stale one from the last time it was open.
-	reset_size()
-	position = _placement(at)
+	box.reset_size()
+	box.position = _placement(at)
 
 
 func close() -> void:
@@ -167,18 +202,31 @@ static func _capitalised(text: String) -> String:
 
 # ─── Input ───────────────────────────────────────────────────────────────────
 
-## Escape closes, and so does a click that landed anywhere but on this box.
+## A click on the backdrop -- anywhere in the pane but the box -- closes.
 ##
-## _unhandled_input and not _gui_input, because the events worth reacting to
-## are the ones that did NOT hit this Control. A row's own Button consumes its
-## click before it reaches here, so anything arriving is by definition a miss.
-func _unhandled_input(event: InputEvent) -> void:
+## _gui_input and not _unhandled_input, and that is the fix rather than a
+## tidy-up. Unhandled input never arrives here at all: the SubViewportContainer
+## under this one takes every mouse event the GUI hands it and forwards it into
+## the 3D pane, so the click that should dismiss the menu used to walk the
+## player instead and leave the box standing. Arriving here means the backdrop
+## itself was picked, which is exactly "the player clicked somewhere that is
+## not a row" -- and because it was picked, the world never sees it.
+func _gui_input(event: InputEvent) -> void:
 	if not visible:
 		return
 
 	if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
 		_dismiss()
-		get_viewport().set_input_as_handled()
+		accept_event()
+
+
+## Escape closes too, from anywhere.
+##
+## Still _unhandled_input, because a key press is not picked by position and
+## nothing in the world pane claims this one. The mouse half of this used to
+## live here as well; see [method _gui_input] for why it could not stay.
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible:
 		return
 
 	if event.is_action_pressed("ui_cancel"):
@@ -243,16 +291,23 @@ func _choose(command: String) -> void:
 ## pane, and a menu that escaped into the chat log beside it would be drawn
 ## somewhere the player was not looking. A box taller than the space below the
 ## cursor is moved up rather than shrunk, so no row is ever unreachable.
+##
+## The room is measured from the PANE -- this control's own parent -- and not
+## from the backdrop, even though the backdrop covers exactly the same
+## rectangle. A full-rect anchor is resolved by a layout pass, and open() runs
+## between the right click and that pass; the backdrop's own size is still
+## whatever it was last frame, which on the first right click of a session is
+## zero, and every row would land in the top-left corner.
 func _placement(at: Vector2) -> Vector2:
 	var parent := get_parent() as Control
 
 	if parent == null:
 		return at + CURSOR_OFFSET
 
-	# size is valid here because open() calls reset_size() before placing.
+	# box.size is valid here because open() calls box.reset_size() first.
 	var room := parent.size
 	var wanted := at + CURSOR_OFFSET
-	var most := room - size - Vector2(EDGE_MARGIN, EDGE_MARGIN)
+	var most := room - box.size - Vector2(EDGE_MARGIN, EDGE_MARGIN)
 
 	return Vector2(
 		clampf(wanted.x, EDGE_MARGIN, maxf(EDGE_MARGIN, most.x)),

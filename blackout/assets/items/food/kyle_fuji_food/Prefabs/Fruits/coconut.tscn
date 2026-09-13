@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bfjfuvx2ldwm2"]
+
+[ext_resource type="PackedScene" uid="uid://dsd266ga5mb3a" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/coconut.glb" id="1_1staw"]
+[ext_resource type="Material" uid="uid://cm12wr5xd8hut" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_fruit.tres" id="2_8qer7"]
+
+[node name="coconut" instance=ExtResource("1_1staw")]
+
+[node name="Coconut" parent="." index="0"]
+material_override = ExtResource("2_8qer7")

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dwi8idqw4utnm"]
+
+[ext_resource type="PackedScene" uid="uid://ci63fhyn287oc" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/shiromi_maki.glb" id="1_tu0u8"]
+[ext_resource type="Material" uid="uid://cvavx5m3vs1l3" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_sushi.tres" id="2_bhy1p"]
+
+[node name="shiromi_maki" instance=ExtResource("1_tu0u8")]
+
+[node name="Shiromi Maki" parent="." index="0"]
+material_override = ExtResource("2_bhy1p")

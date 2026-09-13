@@ -79,7 +79,7 @@ const HOVER_LIFT := 1.5
 ## colour and would then only show on the sides -- edge-on, from the angle this
 ## camera actually sits at. Leaving a rim shows both, and reads as a border
 ## rather than as a mistake.
-const TERRAIN_SCALE := 0.86
+const TERRAIN_SCALE := 0.95
 
 ## How far ABOVE the slab's face the terrain is laid.
 ##
@@ -95,17 +95,17 @@ const TERRAIN_SCALE := 0.86
 const TERRAIN_LIFT := 0.004
 
 const TILE_SIZE := 1.0
-const TILE_GAP := 0.18
+const TILE_GAP := 0.0
 const TILE_HEIGHT := 0.16
 const STEP := TILE_SIZE + TILE_GAP
 const Z_LEVEL_GAP := 4.0
-const LINK_WIDTH := 0.10
-const LINK_HEIGHT := 0.04
+const LINK_WIDTH := 0.01
+const LINK_HEIGHT := 0.02
 
 ## Colours and island order live in [MapPalette] -- the minimap draws the same
 ## map and a second copy of either table is the failure this repo has already
 ## paid for once. `COLOR_LINK` stays because nothing but a 3D pane draws links.
-const COLOR_LINK := Color("2e4256")
+const COLOR_LINK := Color("587695ff")
 
 
 @onready var _islands: Node3D = $Islands

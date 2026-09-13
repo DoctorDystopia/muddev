@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bggn06w354kvl"]
+
+[ext_resource type="PackedScene" uid="uid://1w5i8kwjcr6i" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/tuna_maki.glb" id="1_ixp7o"]
+[ext_resource type="Material" uid="uid://cvavx5m3vs1l3" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_sushi.tres" id="2_ah416"]
+
+[node name="tuna_maki" instance=ExtResource("1_ixp7o")]
+
+[node name="Tuna Maki" parent="." index="0"]
+material_override = ExtResource("2_ah416")

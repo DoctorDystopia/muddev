@@ -11,7 +11,10 @@ from evennia.utils import logger, utils
 
 from commands.constants import HELP_CATEGORY_GATHERING
 from systems.gameplay.progression.skills import constants as skill_constants
-from systems.gameplay.progression.skills.gatherables import get_gatherable_for_node
+from systems.gameplay.progression.skills.gatherables import (
+    get_gatherable_for_node,
+    yield_menu_label,
+)
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.interface.statefeed import constants as feed_const
 
@@ -22,6 +25,15 @@ from systems.interface.statefeed import constants as feed_const
 # MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_GATHERING = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_GATHERING}
+
+# The wording of a row that names one particular cut.
+#
+# It ends in a dangling "from" on purpose: a client joins the label to the
+# entity's NAME, which it already has, so the row reads "Butcher chuck from
+# Mutant Raider corpse" without the server having to send that name a third
+# time. Where the join happens is the client's decision and the wording is the
+# server's -- see serializers._action_label for the other half of that split.
+_YIELD_LABEL = "{verb} {cut} from"
 
 
 
@@ -125,6 +137,13 @@ def gathering_verbs(node) -> list:
         no edit -- the same guarantee GATHERABLE_REGISTRY gives everywhere
         else it is read.
 
+        The BARE verb comes first and stays first, because serialize_entity
+        reports the head of this list as `interact` and `interact` is what a
+        left click sends. The bare verb means "the best cut I can take", which
+        is the behaviour levelling is supposed to change; a menu whose first
+        row named one particular cut would freeze a new player's default at
+        the starter one for good.
+
         Each command NAMES the node. The verbs also work bare, because the
         cmdset hangs on the node itself, but a player may be standing beside
         two bodies and a client can only send a string.
@@ -150,8 +169,72 @@ def gathering_verbs(node) -> list:
             continue
 
         actions.append({"command": f"{verb} {node.key}", "label": verb})
+        actions.extend(_yield_verbs(node, gatherable_def, skill_key, verb))
 
     return actions
+
+
+
+def _yield_verbs(node, gatherable_def, skill_key: str, verb: str) -> list:
+    """
+    Purpose: The clickable rows that name one particular cut of a node.
+
+    Entry:
+        node is a live gathering node.
+        gatherable_def is its GatherableDef.
+        skill_key names the skill whose yields these are.
+        verb is the command word that runs that skill.
+
+    Exit/Returns:
+        Returns a list of {"command", "label"} dicts, cheapest cut first.
+        Empty when the skill takes only one thing off this node.
+
+    Module Globals:
+        _YIELD_LABEL read.
+
+    Methodology:
+        Nothing at all for a single-yield node, which is every node in the
+        world but the corpse: a menu offering "Cut rusty metal chunk from
+        Rusty Pole" underneath "Cut Rusty Pole" is two rows for one act.
+
+        Cheapest first, which is `yields_for_skill`'s own order, so the list
+        reads as a ladder and the row a player grows into is at the bottom
+        rather than shuffling position as content is added.
+
+        NO LEVEL FILTERING, matching the rule Corpse.extra_actions already
+        states: nothing here has an observer to filter against -- one payload
+        is serialised for the whole room -- and the skill refuses a locked cut
+        by naming the level it wants, which tells a player something a missing
+        row does not.
+
+        The command names the cut by its MENU LABEL rather than its item key,
+        so the string a click sends is one a player could plausibly have
+        typed. That is the whole invariant the click path rests on, and an
+        `= mutant_raider_raw_filet` nobody would type is the first step toward
+        a privileged channel.
+
+    Notes/References:
+        systems/gameplay/progression/skills/gatherables.py owns the labels and
+        refuses two cuts of one node that share one.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    cuts = gatherable_def.yields_for_skill(skill_key)
+
+    if len(cuts) < 2:
+        return []
+
+    rows = []
+
+    for entry in cuts:
+        cut = yield_menu_label(entry)
+        rows.append({
+            "command": f"{verb} {node.key} = {cut}",
+            "label": _YIELD_LABEL.format(verb=verb, cut=cut),
+        })
+
+    return rows
 
 
 

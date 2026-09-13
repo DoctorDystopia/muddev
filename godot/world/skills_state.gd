@@ -37,6 +37,24 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 ## Fired when the roster lands, so a view redraws from one place.
 signal changed
 
+## A skill's level ROSE between two rosters. Once per skill per roster.
+##
+## Derived rather than sent. `char_skills` republishes only when a level moves,
+## on resync, and on the `skills` command -- so comparing each roster with the
+## one before it finds exactly the rises, with no server event to add. The two
+## republishes that are not a rise compare equal and stay quiet.
+##
+## Never fired by the first roster after a connect: [method reset] empties the
+## rows, and a skill with no previous level cannot have risen. That is what
+## keeps a login -- or a redial after a drop -- from sounding like a level-up.
+##
+## A jump of several levels fires ONCE, with the level reached. A moderator
+## raising a level with the egg fires it too, and should: the level did rise.
+##
+## Why not match the server's `[LEVEL_UP]` line instead: that is prose, and the
+## first copy edit to it would silently stop every cue hung from it.
+signal levelled(skill_key: String, level: int)
+
 ## True once char_skills has arrived. Distinguishes "the server has said
 ## nothing yet" from a character with every skill at zero, which look identical
 ## in a grid and are not the same thing to a player who has just logged in.
@@ -71,6 +89,9 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 	if channel != _Const.CH_CHAR_SKILLS:
 		return false
 
+	# Read BEFORE the rows are replaced -- see [signal levelled].
+	var previous := _levels_by_key()
+
 	skills = _rows(payload.get("skills", []))
 	categories = _categories(payload.get("categories", []))
 	total_level = int(payload.get("total_level", 0))
@@ -79,7 +100,10 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 	closest = _closest(payload.get("closest", {}))
 	has_data = true
 
+	# After `changed`, so a view has redrawn the new level by the time anything
+	# listening for the rise reacts to it.
 	changed.emit()
+	_announce_rises(previous)
 
 	return true
 
@@ -237,3 +261,29 @@ func _closest(raw: Variant) -> Dictionary:
 		"needed_xp": int(raw.get("needed_xp", 0)),
 		"remaining_xp": int(raw.get("remaining_xp", 0)),
 	}
+
+
+## The current roster as {skill_key: level}. Empty before any roster, and after
+## [method reset].
+func _levels_by_key() -> Dictionary:
+	var levels := {}
+
+	for row: Dictionary in skills:
+		levels[row["key"]] = row["level"]
+
+	return levels
+
+
+## Fire [signal levelled] for every skill whose level is above [param previous].
+##
+## A skill absent from [param previous] is skipped rather than treated as a rise
+## from zero: it is either the first roster after a connect or a skill added to
+## the server since, and neither is a level the player just earned.
+func _announce_rises(previous: Dictionary) -> void:
+	for row: Dictionary in skills:
+		var key: String = row["key"]
+		var level: int = row["level"]
+		var known := previous.has(key)
+
+		if known and level > int(previous[key]):
+			levelled.emit(key, level)

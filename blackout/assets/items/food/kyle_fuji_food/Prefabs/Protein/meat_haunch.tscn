@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://cipnk7up4ofs1"]
+
+[ext_resource type="PackedScene" uid="uid://d02fhveopkhs2" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/meat_haunch.glb" id="1_mykwi"]
+[ext_resource type="Material" uid="uid://dk5dfllnqpili" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_protein.tres" id="2_nkhed"]
+
+[node name="meat_haunch" instance=ExtResource("1_mykwi")]
+
+[node name="Meat Haunch" parent="." index="0"]
+material_override = ExtResource("2_nkhed")

@@ -62,6 +62,31 @@ class ItemDef:
     #     conditional stat modifier, or a whole-action override.
     #     A LIST, not one key, so behaviours combine without a bespoke class
     #     per combination. Unknown keys are logged and skipped, not raised.
+    # ─── Consumable fields (food only; None on everything else) ──
+    # heal_amount — hit points restored when eaten. This is the field that
+    #     makes an item FOOD: None means not edible, and nothing else decides
+    #     it. One field rather than an `edible` flag beside a number, because
+    #     two fields that must agree is one more thing to get wrong.
+    #
+    #     Healing is FLAT per item, never scaled by the eater. A cured chuck
+    #     restores the same 2 HP at Fortitude 10 and at 127, and what varies is
+    #     how much of the bar that is. Overheal is lost, not banked.
+    #
+    # eat_delay_ticks — ticks before this character may eat again.
+    # attack_delay_ticks — ticks added to the eater's combat cooldown.
+    #
+    #     Both in TICKS, because the tick is the game's universal clock and
+    #     OSRS states food delays in it. Both default to
+    #     STANDARD_*_DELAY_TICKS, so ordinary food declares neither and the
+    #     only foods spelling one out are the ones that differ -- the cured
+    #     meats, which swing a tick sooner (the Cooked karambwan property).
+    #
+    #     They are read only when heal_amount is set and _get_attrs emits them
+    #     only then, so a sword carries no eat delay.
+    heal_amount: int | None = None
+    eat_delay_ticks: int | None = None
+    attack_delay_ticks: int | None = None
+
     attack_speed: int | None = None
     combat_stat_bonuses: dict = field(default_factory=dict)
     combat_styles: dict = field(default_factory=dict)
@@ -128,7 +153,39 @@ class ItemDef:
         if self.combat_rules:
             attrs["combat_rules"] = list(self.combat_rules)
 
+        # Consumable fields. Gated on heal_amount rather than emitted
+        # individually: the delays are meaningless on something that cannot be
+        # eaten, and a non-food carrying an eat delay would read as food to
+        # anything checking the wrong field.
+        if self.heal_amount is not None:
+            attrs["heal_amount"] = self.heal_amount
+            attrs["eat_delay_ticks"] = self.eat_delay_ticks_or_default()
+            attrs["attack_delay_ticks"] = self.attack_delay_ticks_or_default()
+
         return attrs
+
+    def eat_delay_ticks_or_default(self) -> int:
+        """Ticks before this food's eater may eat again.
+
+        Resolved HERE rather than by defaulting the field, so the constant has
+        one owner and a food that declares nothing follows it even if it is
+        retuned after the item was written.
+        """
+        from systems.gameplay.consumables import constants as consumable_const
+
+        if self.eat_delay_ticks is None:
+            return consumable_const.STANDARD_EAT_DELAY_TICKS
+
+        return self.eat_delay_ticks
+
+    def attack_delay_ticks_or_default(self) -> int:
+        """Ticks added to this food's eater's combat cooldown."""
+        from systems.gameplay.consumables import constants as consumable_const
+
+        if self.attack_delay_ticks is None:
+            return consumable_const.STANDARD_ATTACK_DELAY_TICKS
+
+        return self.attack_delay_ticks
 
     def to_prototype(self, quantity: int = 1) -> dict:
         """

@@ -23,6 +23,7 @@ from evennia.utils import logger
 from systems.gameplay.progression.skills.gatherables import (
     get_gatherable_for_node,
     get_yield_item_name,
+    yield_menu_label,
 )
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 from systems.gameplay.quests import constants as quest_constants
@@ -249,9 +250,15 @@ class GatheringSkill(BaseSkill):
             possible afterwards.
 
             An explicit choice is matched the way `skills <arg>` matches its
-            argument -- exact key, then exact name, then unique prefix of
-            either -- so `butcher corpse = filet` works without the player
-            knowing that the item key is mutant_raider_raw_filet.
+            argument -- exact, then unique prefix, then unique substring -- so
+            `butcher corpse = filet` works without the player knowing that the
+            item key is mutant_raider_raw_filet, and so does `= chuck`, which
+            is a word in the middle of every name that cut has.
+
+            An ambiguous choice is told what it could have meant. "Yields
+            nothing called 'raw'" is false where two cuts are both raw, and a
+            player reading it goes looking for a different word rather than a
+            longer one.
 
             A named-but-locked yield is refused with its level rather than
             silently downgraded to the one below it. Handing someone a chuck
@@ -272,13 +279,22 @@ class GatheringSkill(BaseSkill):
             )
 
         if wanted:
-            matched = self._match_yield(candidates, wanted)
+            matches = self._matching_yields(candidates, wanted)
 
-            if matched is None:
+            if not matches:
                 return None, (
                     f"The {gatherable_def.node_name} yields nothing called "
                     f"'{wanted}'."
                 )
+
+            if len(matches) > 1:
+                named = ", ".join(yield_menu_label(entry) for entry in matches)
+
+                return None, (
+                    f"'{wanted}' could mean {named}. Name one."
+                )
+
+            matched = matches[0]
 
             if not character.skills.meets_prerequisite(
                     self.key, matched.required_level):
@@ -307,52 +323,102 @@ class GatheringSkill(BaseSkill):
 
 
 
-    def _match_yield(self, candidates: list, wanted: str):
+    def _matching_yields(self, candidates: list, wanted: str) -> list:
         """
-        Purpose: Resolve a player's typed choice to one of a node's yields.
+        Purpose: Every one of a node's yields a player's typed choice could
+        have meant.
 
         Entry:
             candidates is a non-empty list of GatherableYield.
             wanted is a non-empty, already-stripped string.
 
         Exit/Returns:
-            Returns the matching GatherableYield, or None when nothing matched
-            or when a prefix matched more than one.
+            Returns a list of GatherableYield: empty when nothing matched, one
+            when the choice was unambiguous, several when it was not.
 
         Module Globals:
             None.
 
         Methodology:
-            Exact item key, then exact item name, then unique prefix of
-            either. An ambiguous prefix returns None rather than picking one,
-            because the two things it could mean differ in level and in value.
+            Three passes over three names each, narrowest first, and the first
+            pass that matches anything at all is the answer. Exact wins over
+            prefix and prefix over substring, so a cut whose whole name
+            another cut merely contains is still reachable by typing it.
+
+            SUBSTRING, not only prefix, is what `= chuck` needs. Every cut off
+            the raider is called "mutant raider raw <cut>", so the word that
+            tells them apart is the LAST one and no prefix of any name reaches
+            it -- `butcher corpse = chuck` was refused as a name the corpse
+            does not yield, next to a message that had just used it.
+
+            The menu_label is matched alongside the key and the item name
+            because it is the word a right-click row shows. A player who can
+            read "Butcher chuck from ..." on screen and cannot type it has
+            been shown a vocabulary the parser does not share.
+
+            A list rather than one entry or None, because "matched nothing"
+            and "matched three things" are different refusals and the caller
+            is the one that phrases them.
 
         Notes/References:
-            The same three-pass shape `skills <arg>` uses for its argument.
+            The same widening-pass shape `skills <arg>` uses for its argument.
 
         Author: Nick Hobar
         Creation date: 09/10/2026
         """
         wanted = wanted.strip().lower()
+        named = [(entry, self._yield_names(entry)) for entry in candidates]
 
-        for entry in candidates:
-            if entry.item_key.lower() == wanted:
-                return entry
+        exact = [entry for entry, names in named if wanted in names]
 
-        for entry in candidates:
-            if get_yield_item_name(entry).lower() == wanted:
-                return entry
+        if exact:
+            return exact
 
         prefixed = [
-            entry for entry in candidates
-            if entry.item_key.lower().startswith(wanted)
-            or get_yield_item_name(entry).lower().startswith(wanted)
+            entry for entry, names in named
+            if any(name.startswith(wanted) for name in names)
         ]
 
-        if len(prefixed) == 1:
-            return prefixed[0]
+        if prefixed:
+            return prefixed
 
-        return None
+        return [
+            entry for entry, names in named
+            if any(wanted in name for name in names)
+        ]
+
+
+    def _yield_names(self, entry) -> tuple:
+        """
+        Purpose: Every string a player may call one yield by.
+
+        Entry:
+            entry is a GatherableYield.
+
+        Exit/Returns:
+            Returns a tuple of lower-cased names: the item key, the item's
+            display name, and the yield's menu label.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Built here rather than inline in each pass so the three passes
+            cannot come to disagree about which names count -- the bug that
+            shape produces is a word the exact pass knows and the prefix pass
+            does not.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 09/11/2026
+        """
+        return (
+            entry.item_key.lower(),
+            get_yield_item_name(entry).lower(),
+            yield_menu_label(entry).lower(),
+        )
 
 
 

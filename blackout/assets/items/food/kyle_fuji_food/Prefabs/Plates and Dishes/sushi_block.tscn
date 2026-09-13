@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dxn7lpef1s2tf"]
+
+[ext_resource type="PackedScene" uid="uid://2j3gigrcg7xc" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/sushi_block.glb" id="1_b3y2q"]
+[ext_resource type="Material" uid="uid://dyd2nh7h1m61x" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_wood.tres" id="2_78w45"]
+
+[node name="sushi_block" instance=ExtResource("1_b3y2q")]
+
+[node name="Sushi Block" parent="." index="0"]
+material_override = ExtResource("2_78w45")

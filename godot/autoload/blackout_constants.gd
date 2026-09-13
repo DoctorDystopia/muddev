@@ -38,6 +38,7 @@ const FAMILY_ROOM := "room"
 const FAMILY_STATION := "station"
 const FAMILY_GATHERABLE := "gatherable"
 const FAMILY_CORPSE := "corpse"
+const FAMILY_SIGN := "sign"
 const FAMILY_GENERIC := "generic"
 
 # Item families.
@@ -47,7 +48,13 @@ const ITEM_FAMILY_JEWELLERY := "jewellery"
 const ITEM_FAMILY_MATERIAL := "crafting_material"
 const ITEM_FAMILY_TOOL := "crafting_tool"
 const ITEM_FAMILY_CURRENCY := "currency"
+const ITEM_FAMILY_FOOD := "food"
 const ITEM_FAMILY_GENERIC := "generic"
+
+# World label kinds -- what sort of text an entity's `label` is.
+const LABEL_KIND_SIGN := "sign"
+const LABEL_KIND_MARKER := "marker"
+const LABEL_KIND_GRAFFITI := "graffiti"
 
 # Tile action kinds -- what a click does to a walk in progress.
 const KIND_STEP := "step"
@@ -93,10 +100,10 @@ const ACTION_INPUT_KIND_KEY := "kind"
 const ACTION_INPUT_MIN_KEY := "min"
 const ACTION_INPUT_MAX_KEY := "max"
 const ACTION_INPUT_LABEL_KEY := "label"
-const CLIENT_INBOUND_BUFFER_BYTES := 1048576
+const CLIENT_INBOUND_BUFFER_BYTES := 2097152
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
 const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "char_avatar", "char_items_list", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
-const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "jewellery", "weapon"]
+const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

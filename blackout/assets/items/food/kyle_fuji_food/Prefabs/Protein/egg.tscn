@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://cgdoiq1xbrrog"]
+
+[ext_resource type="PackedScene" uid="uid://c5s70neiyalxk" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/egg.glb" id="1_io0lh"]
+[ext_resource type="Material" uid="uid://dk5dfllnqpili" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_protein.tres" id="2_d3sne"]
+
+[node name="egg" instance=ExtResource("1_io0lh")]
+
+[node name="Egg" parent="." index="0"]
+material_override = ExtResource("2_d3sne")

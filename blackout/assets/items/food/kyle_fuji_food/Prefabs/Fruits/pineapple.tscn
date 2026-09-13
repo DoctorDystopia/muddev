@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://xwa17g0crs8s"]
+
+[ext_resource type="PackedScene" uid="uid://blj5ty1bryrge" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/pineapple.glb" id="1_7dqti"]
+[ext_resource type="Material" uid="uid://cm12wr5xd8hut" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_fruit.tres" id="2_55lge"]
+
+[node name="pineapple" instance=ExtResource("1_7dqti")]
+
+[node name="Pineapple" parent="." index="0"]
+material_override = ExtResource("2_55lge")

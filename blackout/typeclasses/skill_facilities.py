@@ -12,6 +12,7 @@ from commands.constants import HELP_CATEGORY_CRAFTING
 from systems.gameplay.crafting.constants import (
     CATEGORY_CURING,
     CATEGORY_FOUNDRY,
+    CATEGORY_GASTRONOMY,
     CATEGORY_METALSMITH,
     CATEGORY_RENDERING,
 )
@@ -312,6 +313,41 @@ class AnvilFacility(MetalsmithBaseFacility):
         self.db.desc = "A solid steel anvil, scarred from years of use. Perfect for shaping metal."
 
 
+class GastronomyBaseFacility(CraftingFacility):
+    """
+    The base crafting facility for Gastronomy-skill production.
+    Specific facility types (GastroWorktableFacility, etc.) inherit from this
+    and add their own tool tags for recipe tool requirements.
+    """
+    allowed_categories = [CATEGORY_GASTRONOMY]
+
+    def at_object_creation(self):
+        parent_class = super()
+        parent_class.at_object_creation()
+        self.locks.add("get:false()")
+        self.db.desc = "A Gastronomy facility for turning prepared meat into food."
+
+
+class GastroWorktableFacility(GastronomyBaseFacility):
+    """
+    A worktable where players cook via the Gastronomy skill.
+    Only Gastronomy-category recipes are shown in the craft menu.
+    Tagged as a 'gastro_worktable' tool so it satisfies recipe tool
+    requirements.
+
+    Carries only `craft`, unlike the curing chamber. There is nothing to come
+    back for: a meal is finished the moment it is ordered, so the worktable has
+    no second verb and needs none.
+    """
+    asset_key = "gastro_worktable"
+
+    def at_object_creation(self):
+        parent_class = super()
+        parent_class.at_object_creation()
+        self.tags.add("gastro_worktable", category="crafting_tool")
+        self.db.desc = "A scrubbed steel worktable with a pan, a flame, and a row of knives worn thin."
+
+
 # -------------------------
 # --- SPAWNER FUNCTIONS ---
 # -------------------------
@@ -348,4 +384,13 @@ def spawn_curing_chamber_facility(room):
         room,
         "typeclasses.skill_facilities.CuringChamberFacility",
         key="Curing Chamber",
+    )
+
+
+@register_spawner("Gastronomy Worktable Facility")
+def spawn_gastro_worktable_facility(room):
+    spawn_once(
+        room,
+        "typeclasses.skill_facilities.GastroWorktableFacility",
+        key="Gastronomy Worktable",
     )

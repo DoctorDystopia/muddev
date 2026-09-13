@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://dem65xjvr3ep8"]
+
+[ext_resource type="PackedScene" uid="uid://qi7oym14ti4x" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/mushroom.glb" id="1_lf8yv"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_m7mpx"]
+
+[node name="mushroom" instance=ExtResource("1_lf8yv")]
+
+[node name="Mushroom" parent="." index="0"]
+material_override = ExtResource("2_m7mpx")

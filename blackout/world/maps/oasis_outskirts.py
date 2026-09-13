@@ -18,12 +18,12 @@ MAPSTR = r'''
 
    10 #   # # #     #-#-T
        \  | | |     |
-    9   #-#-#-#     |
+    9   #-#-#-#     #
         |\    |     |
-    8   #-#-#-#-----#-----#
-        |     |           |
-    7   #-#---#-#-#-#-#   |
-        |         | | |   |
+    8   #-#-#-#-----#-#-#-a
+        |     |     | |   
+    7   #-#---#-#-#-#-#   
+        |         | | |   
     6   #-#-#-#-#-#-#-#-#-#
            \  | | | | | | |
     5   #---#-#-#-#-#-#-#-#
@@ -92,6 +92,15 @@ class ToOasisNode(MapTransitionNode):
     prototype = None
 
 
+class ToAzmPlainsNode(MapTransitionNode):
+    """
+    MapNode to teleport to the Azm Plains.
+    """
+    display_symbol = "|ga|n"
+    target_map_xyz = (1, 2, "azm_plains")
+    prototype = None
+
+
 
 LEGEND = {
     "†": MetalPoleNode,
@@ -99,6 +108,7 @@ LEGEND = {
     "M": BigMutantNPCNode,
     "e": FloatingEyeNPCNode,
     "T": ToOasisNode,
+    "a": ToAzmPlainsNode,
 }
 
 

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://di4vpmce4ecn8"]
+
+[ext_resource type="PackedScene" uid="uid://dyxbpfcpgs72m" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/steak.glb" id="1_kjhvd"]
+[ext_resource type="Material" uid="uid://dk5dfllnqpili" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_protein.tres" id="2_rg55n"]
+
+[node name="steak" instance=ExtResource("1_kjhvd")]
+
+[node name="Steak" parent="." index="0"]
+material_override = ExtResource("2_rg55n")

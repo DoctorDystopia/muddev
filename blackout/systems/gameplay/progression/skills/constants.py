@@ -41,6 +41,10 @@ BRAIN_FARMING_SKILL_KEY = "brain_farming"
 RENDERING_SKILL_KEY = "rendering"
 CURING_SKILL_KEY = "curing"
 
+# Production skills whose recipes name them. Same reasoning as the processing
+# keys above.
+GASTRONOMY_SKILL_KEY = "gastronomy"
+
 # Every skill that works a node in GATHERABLE_REGISTRY. Read by the gathering
 # command set, which builds one verb per entry, and asserted against
 # SKILL_REGISTRY by the gathering tests -- a skill named here with no class

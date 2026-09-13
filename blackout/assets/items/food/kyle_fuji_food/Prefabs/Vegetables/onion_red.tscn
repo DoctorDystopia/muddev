@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://8tj1yxp05mji"]
+
+[ext_resource type="PackedScene" uid="uid://bewcxgtvygf22" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/onion_red.glb" id="1_xh7cj"]
+[ext_resource type="Material" uid="uid://b1y1q3s2q4i75" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_vegetable.tres" id="2_eey6u"]
+
+[node name="onion_red" instance=ExtResource("1_xh7cj")]
+
+[node name="Onion Red" parent="." index="0"]
+material_override = ExtResource("2_eey6u")

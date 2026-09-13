@@ -25,6 +25,7 @@ func _ready() -> void:
 	_a_game_setting_is_only_ever_asked_for()
 	_every_command_button_sends_a_whole_line()
 	_the_skill_detail_choice_offers_every_mode_and_stores_the_value()
+	_the_sfx_slider_writes_the_volume_and_follows_it()
 
 	_clean()
 
@@ -113,6 +114,8 @@ func _every_command_button_sends_a_whole_line() -> void:
 
 	_expect(sent.has("automap"), "including the one that just asks")
 	_expect(sent.has("automap on"), "and the one that turns the map back on")
+	_expect(sent.has("toggle craft confirm"),
+		"and the crafting confirmation toggle")
 
 
 func _the_skill_detail_choice_offers_every_mode_and_stores_the_value() -> void:
@@ -142,6 +145,35 @@ func _the_skill_detail_choice_offers_every_mode_and_stores_the_value() -> void:
 
 	_expect(reloaded.skill_detail == _settings.skill_detail,
 		"and the choice survives a reload")
+
+
+func _the_sfx_slider_writes_the_volume_and_follows_it() -> void:
+	# The slider writes through ClientSettings like every other client control,
+	# and follows `changed` -- so Reset to defaults moves it back as well.
+	_fresh()
+
+	var slider: HSlider = _view._sfx_slider
+	var readout: Label = _view._sfx_value
+
+	_expect(is_equal_approx(slider.max_value, ClientSettings.MAX_SFX_VOLUME),
+		"the slider's bounds come from ClientSettings")
+
+	slider.value = 0.4
+
+	_expect(is_equal_approx(_settings.sfx_volume, 0.4),
+		"dragging the slider stores the volume")
+	_expect(readout.text == "40%", "and reads it as a percentage")
+
+	_settings.set_sfx_volume(0.0)
+
+	_expect(is_equal_approx(slider.value, 0.0),
+		"a volume set elsewhere moves the slider")
+	_expect(readout.text == "0%", "and its readout")
+
+	_settings.reset()
+
+	_expect(is_equal_approx(slider.value, ClientSettings.DEFAULT_SFX_VOLUME),
+		"and Reset to defaults puts it back")
 
 
 func _expect(passed: bool, what: String) -> void:

@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://jn6x4tfmlsv7"]
+
+[ext_resource type="PackedScene" uid="uid://bnq85dq6o3dtr" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/soda_can_beer.glb" id="1_i2wow"]
+[ext_resource type="Material" uid="uid://blstyi06jttd1" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_junk_food.tres" id="2_m0eve"]
+
+[node name="soda_can_beer" instance=ExtResource("1_i2wow")]
+
+[node name="Soda Can Beer" parent="." index="0"]
+material_override = ExtResource("2_m0eve")

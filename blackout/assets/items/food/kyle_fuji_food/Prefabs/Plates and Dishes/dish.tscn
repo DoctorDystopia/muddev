@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://bpexo8ja3ky8o"]
+
+[ext_resource type="PackedScene" uid="uid://bslyhet7lg70r" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/dish.glb" id="1_i2vls"]
+[ext_resource type="Material" uid="uid://wg6fve45smuu" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_plate.tres" id="2_0kkaq"]
+
+[node name="dish" instance=ExtResource("1_i2vls")]
+
+[node name="Dish" parent="." index="0"]
+material_override = ExtResource("2_0kkaq")

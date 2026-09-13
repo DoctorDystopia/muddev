@@ -24,6 +24,7 @@ from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
 from evennia.utils import logger
 
 from . import constants as const
+from . import labels
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -660,6 +661,60 @@ def _declared_actions(entity) -> list:
         return []
 
 
+def _world_label(entity) -> tuple:
+    """
+    Purpose: Read the text an entity wants DRAWN beside it, and what sort of
+             text it is.
+
+    Entry:
+        entity - a live object. Almost none carry a label.
+
+    Exit/Returns:
+        Returns (label, kind). ("", "") for the overwhelming majority, which
+        the caller reads as "send no label fields at all".
+
+    Module Globals:
+        const.LABEL_KIND_SIGN read, as the kind for a label that names none.
+
+    Methodology:
+        Read through getattr rather than an import, the same rule
+        _declared_actions, interact_command and _classify all follow -- a
+        label is not a property of signs, it is a property of anything that
+        has something to say, so this must not learn one typeclass's name to
+        find it.
+
+        Normalised on the way OUT as well as on the way in. labels.normalise
+        is idempotent and the second pass is what makes the payload's ceiling
+        a property of the feed rather than a promise every future writer has
+        to keep; its module docstring argues the case.
+
+        Wrapped, because a cosmetic feed runs during combat and room
+        broadcasts and must never raise into a gameplay path. A label that
+        cannot be read is no label, not an undrawable room.
+
+    Notes/References:
+        The cap itself is const.WORLD_LABEL_MAX_CHARS, enforced only in
+        labels.py.
+
+    Author: Nick Hobar
+    Creation date: 09/11/2026
+    """
+    try:
+        raw = getattr(entity, "world_label", "")
+        label = labels.normalise(raw)
+    except Exception as exc:
+        logger.log_err(f"_world_label: {entity} label failed: {exc!r}")
+
+        return "", ""
+
+    if not label:
+        return "", ""
+
+    kind = getattr(entity, "label_kind", "")
+
+    return label, str(kind or const.LABEL_KIND_SIGN)
+
+
 def serialize_entity(entity, coords=()) -> dict:
     """
     Purpose: Render one visible entity as a plain dict for a graphical client.
@@ -694,6 +749,14 @@ def serialize_entity(entity, coords=()) -> dict:
         is one duplicated command string per entity on the biggest payload the
         feed sends, and it keeps every client that reads only `interact`
         working unchanged.
+
+        `label` and `label_kind` appear together or not at all, and for almost
+        every entity it is not at all. They are the text a client DRAWS beside
+        the thing -- a signpost's face, a dev annotation over a broken tile --
+        and the pair generalises on purpose: a nameplate and a shop's name are
+        the same fact said about a different entity, so a client learns to
+        draw floating text once. See systems/interface/statefeed/labels.py for
+        the ceiling, which is the payload's and not a matter of taste.
 
     Module Globals:
         None.
@@ -732,6 +795,17 @@ def serialize_entity(entity, coords=()) -> dict:
     # it when the key is absent.
     if len(actions) > 1:
         body["actions"] = actions
+
+    # Sent ONLY by the handful of entities that have something to say, the
+    # same rule `actions` and the hp pair above follow. Almost nothing in the
+    # world carries a label, and two empty strings per entity per move is a
+    # cost paid by the whole room so that a signpost need not be a special
+    # case in the payload.
+    label, label_kind = _world_label(entity)
+
+    if label:
+        body["label"] = label
+        body["label_kind"] = label_kind
 
     max_hp = getattr(entity, "max_hp", None)
 

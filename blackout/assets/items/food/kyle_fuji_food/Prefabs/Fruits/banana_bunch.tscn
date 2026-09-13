@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3 uid="uid://bhsyy64fc1ujw"]
+
+[ext_resource type="PackedScene" uid="uid://dctx7sbnoqhyc" path="res://Low Poly Food Asset Pack/Kyle Fuji/Prefabs/Fruits/banana.tscn" id="1_ovfkj"]
+
+[node name="banana_bunch" type="Node3D"]
+
+[node name="banana" parent="." instance=ExtResource("1_ovfkj")]
+transform = Transform3D(-4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0, 0, 1, -0.020716399, 0.020126201, 0)
+
+[node name="banana2" parent="." instance=ExtResource("1_ovfkj")]
+transform = Transform3D(-0.48296297, 0.83651626, -0.25881904, -0.8660254, -0.50000006, 0, -0.12940954, 0.22414386, 0.9659258, -0.072417706, 0.038194813, -0.015922956)
+
+[node name="banana3" parent="." instance=ExtResource("1_ovfkj")]
+transform = Transform3D(0.5, 0.8365164, 0.22414389, -0.8660254, 0.48296288, 0.12940952, 1.13133405e-08, -0.25881907, 0.96592593, 0.03501697, 0.030605823, 0.002784416)
+
+[node name="banana4" parent="." instance=ExtResource("1_ovfkj")]
+transform = Transform3D(-0.38744175, 0.9092509, 0.1521553, -0.8533643, -0.41616732, 0.31396532, 0.34879535, -0.008200556, 0.9371632, -0.027569946, 0.06974431, 0.016454585)

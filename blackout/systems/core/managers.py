@@ -62,6 +62,7 @@ _MANAGER_MODULES = (
     "systems.core.tick.engine",
     "systems.gameplay.spawning.respawn",
     "systems.gameplay.combat.hp_regen",
+    "systems.gameplay.graffiti.decay",
 )
 
 

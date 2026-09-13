@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3 uid="uid://djc5c1oyajhky"]
+
+[ext_resource type="PackedScene" uid="uid://cgjviu7aqhrcj" path="res://Low Poly Food Asset Pack/Kyle Fuji/Models/watermelon.glb" id="1_o0ic8"]
+[ext_resource type="Material" uid="uid://cm12wr5xd8hut" path="res://Low Poly Food Asset Pack/Kyle Fuji/Materials/M_fruit.tres" id="2_aw2e5"]
+
+[node name="watermelon" instance=ExtResource("1_o0ic8")]
+
+[node name="Watermelon" parent="." index="0"]
+material_override = ExtResource("2_aw2e5")
