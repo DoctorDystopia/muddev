@@ -35,6 +35,10 @@ extends TabContainer
 ## layout is; the other three are built in code because their contents are.
 ## Both routes land in the same strip, and the order is the order they arrive.
 const TAB_INVENTORY := "Inventory"
+## Your weapon and its styles, modelled on OSRS's Combat Options. Beside the
+## inventory because a style is picked for the weapon worn there; see
+## [CombatOptionsView].
+const TAB_COMBAT := "Combat"
 const TAB_CHARACTER := "Character"
 ## Beside Character rather than inside it. The skills band left the dossier on
 ## 08/28/2026 for a channel and a screen of its own; see [SkillsView].

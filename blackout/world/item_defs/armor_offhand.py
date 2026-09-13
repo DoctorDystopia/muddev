@@ -18,6 +18,7 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
+    # ─── Rusty scrap melee armor offhand ───────────────────────────────────────────────
     "rusty_scrap_square_shield": ItemDef(
         key="rusty_scrap_square_shield",
         name="rusty scrap square shield",
@@ -41,6 +42,37 @@ ITEMS = {
             "stab_defense_bonus": 5,
             "slash_defense_bonus": 6,
             "crush_defense_bonus": 4,
+            # Other bonuses
+            "melee_strength_bonus": 0,
+        },
+    ),
+
+
+
+    # ─── Scrap melee armor offhand ───────────────────────────────────────────────
+    "scrap_square_shield": ItemDef(
+        key="scrap_square_shield",
+        name="scrap square shield",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Scrap square shield. Infection not included.",
+        value=168,
+        weight=3.628,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.OFF_HAND,
+        tool_type="square_shield",
+        tier=1,
+        req_level=10,
+        tags=[("scrap_square_shield", "armor")],
+        combat_stat_bonuses={
+            # Attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+            # Defense bonuses
+            "stab_defense_bonus": 8,
+            "slash_defense_bonus": 9,
+            "crush_defense_bonus": 7,
             # Other bonuses
             "melee_strength_bonus": 0,
         },

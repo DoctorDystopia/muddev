@@ -91,6 +91,10 @@ var _summary := SummaryState.new()
 ## split the band onto its own channel; this is the other end of that.
 var _skills := SkillsState.new()
 
+## Your weapon, its styles and which one is active. A model like the others; the
+## Combat tab is a view of it.
+var _combat_options := CombatOptionsState.new()
+
 ## What you have taken and how far through it you are. A model like the others.
 var _quest_log := QuestState.new()
 
@@ -165,6 +169,7 @@ const SPLIT_SAVE_DELAY := 0.4
 ## scene -- the sheet's rows come from `char_summary`, the options' bounds from
 ## [ClientSettings] -- and handed to [PanelView], which owns where they sit.
 var _sheet: SummaryView
+var _combat_tab: CombatOptionsView
 var _skill_grid: SkillsView
 var _options: OptionsView
 var _help: HelpView
@@ -259,6 +264,15 @@ func _ready() -> void:
 
 	# Built, bound, then handed over. The panel adds them to the tree, so
 	# nothing here is parented twice.
+	#
+	# Combat first, so it sits beside Inventory: a style is chosen for the
+	# weapon worn there. A clicked style emits the `combatoptions <style>` line
+	# the server named on its row, and this sends it like every other pane.
+	_combat_tab = CombatOptionsView.new()
+	_combat_tab.bind(_combat_options)
+	_panel.add_panel(PanelView.TAB_COMBAT, _combat_tab)
+	_combat_tab.command_requested.connect(Evennia.command)
+
 	_sheet = SummaryView.new()
 	_sheet.bind(_summary)
 	_panel.add_panel(PanelView.TAB_CHARACTER, _sheet)
@@ -369,6 +383,7 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_char.reset()
 	_quest_log.reset()
 	_skills.reset()
+	_combat_options.reset()
 
 	# A new socket is a new Evennia Session at the connection screen, so the
 	# next login has to be waited for again -- including the player's decision
@@ -632,9 +647,17 @@ func _on_split_dragged(_offset: int) -> void:
 	_split_timer.start(SPLIT_SAVE_DELAY)
 
 
+## Both offsets are read BEFORE either is written. Each setter that changes
+## something fires `changed`, and [method _apply_settings] pushes the stored
+## offsets back into both containers -- so writing the text split first used to
+## overwrite a freshly dragged world divider with its old value before this
+## line got to read it.
 func _save_splits() -> void:
-	_settings.set_text_split(_split.split_offset)
-	_settings.set_world_split(_right.split_offset)
+	var text_offset := _split.split_offset
+	var world_offset := _right.split_offset
+
+	_settings.set_text_split(text_offset)
+	_settings.set_world_split(world_offset)
 
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:
@@ -653,6 +676,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _skills.ingest(channel, _payload):
+			return
+
+		if _combat_options.ingest(channel, _payload):
 			return
 
 		if _quest_log.ingest(channel, _payload):

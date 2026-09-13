@@ -18,6 +18,7 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
+    # ─── Rusty scrap melee armor feet ───────────────────────────────────────────────
     "rusty_scrap_boots": ItemDef(
         key="rusty_scrap_boots",
         name="rusty scrap boots",
@@ -41,6 +42,37 @@ ITEMS = {
             "stab_defense_bonus": 1,
             "slash_defense_bonus": 2,
             "crush_defense_bonus": 3,
+            # Other bonuses
+            "melee_strength_bonus": 0,
+        },
+    ),
+
+
+
+    # ─── Scrap melee armor feet ───────────────────────────────────────────────
+    "scrap_boots": ItemDef(
+        key="scrap_boots",
+        name="scrap boots",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Scrap boots. Infection not included.",
+        value=84,
+        weight=1.36,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.FEET,
+        tool_type="boots",
+        tier=1,
+        req_level=10,
+        tags=[("scrap_boots", "armor")],
+        combat_stat_bonuses={
+            # Attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+            # Defense bonuses
+            "stab_defense_bonus": 2,
+            "slash_defense_bonus": 3,
+            "crush_defense_bonus": 4,
             # Other bonuses
             "melee_strength_bonus": 0,
         },

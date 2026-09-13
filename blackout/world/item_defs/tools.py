@@ -88,7 +88,7 @@ ITEMS = {
         typeclass="typeclasses.items.ToolItem",
         desc="A crude axe hammered together from scrap metal.",
         value=10,
-        weight=3.0,
+        weight=1.36,
         tradeable=True,
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
@@ -115,6 +115,41 @@ ITEMS = {
         combat_styles=_AXE_COMBAT_STYLES,
         default_combat_style="chop",
     ),
+
+    "scrap_axe": ItemDef(
+        key="scrap_axe",
+        name="scrap axe",
+        typeclass="typeclasses.items.ToolItem",
+        desc="A crude axe hammered together from scrap metal.",
+        value=56,
+        weight=1.36,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="axe",
+        tier=1,
+        req_level=10,
+        tags=[
+            ("scrap_axe", TOOL_TAG_CATEGORY),
+            ("scrap_axe", ITEM_FAMILY_WEAPON),
+        ],
+        attack_speed=5,
+        combat_stat_bonuses={
+            # Attack bonuses
+            "stab_attack_bonus": -2,
+            "slash_attack_bonus": 5,
+            "crush_attack_bonus": 3,
+            # Defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 1,
+            "crush_defense_bonus": 0,
+            # Other bonuses
+            "melee_strength_bonus": 7,
+        },
+        combat_styles=_AXE_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
     "hammer": ItemDef(
         key="hammer",
         name="hammer",
@@ -130,6 +165,7 @@ ITEMS = {
         req_level=0,
         tags=[("hammer", TOOL_TAG_CATEGORY)],
     ),
+    
     # TWO families, and CLAUDE.md blesses it: Evennia files each (key,
     # category) pair independently, so one item declares as many families as it
     # belongs to. TOOL_TAG_CATEGORY is the string the 3D pane picks a mesh out

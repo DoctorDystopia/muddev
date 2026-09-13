@@ -35,6 +35,7 @@ from systems.gameplay.progression.skills.constants import (
     FORTITUDE_SKILL_KEY,
 )
 from systems.gameplay.progression.skills import logic
+from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import events
 from systems.interface.statefeed import resync
@@ -75,6 +76,10 @@ class _SubscribedCharacterTest(EvenniaTest):
         patcher = mock.patch.object(events, "emit", side_effect=self._record)
         patcher.start()
         self.addCleanup(patcher.stop)
+
+        # Stale marks are module state, and seeding above made some.
+        buffer.reset()
+        self.addCleanup(buffer.reset)
 
     def _record(self, obj, payload, force=False):
         """Stand in for emit(), keeping the channel, the body and the cap."""
@@ -185,10 +190,11 @@ class TestStatusTrigger(_SubscribedCharacterTest):
                 self.assertEqual(level, self.char1.skills.get_level(skill_key))
 
     def test_levelling_also_publishes_the_dossier(self):
-        """The channel a skills tab draws from, refreshed on the same event."""
+        """Refreshed on the same event, once the stale mark is drained."""
         self.published.clear()
 
         self.char1.skills.set_level("brawn", 33)
+        buffer.drain_stale()
 
         self.assertTrue(self._bodies(const.CHANNEL_CHAR_SUMMARY))
 
@@ -219,6 +225,7 @@ class TestFortitudeOrdering(_SubscribedCharacterTest):
 
     def test_the_cap_is_already_updated_when_the_dossier_is_built(self):
         self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        buffer.drain_stale()
 
         expected = 42 * combat_constants.HP_PER_FORTITUDE_LEVEL
         self.assertEqual(self.caps_at_publish[-1], expected)

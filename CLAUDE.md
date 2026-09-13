@@ -349,6 +349,34 @@ hand-edit a generated file. `--check` writes nothing and exits non-zero, for
 CI. `clientexport.py`'s output table is a language → path map: a second client
 is a row added there, not a rewrite of the renderer.
 
+### Every pane follows its facts
+
+What Godot shows must be as current as the server can make it: a pane that
+refreshes only when the player reopens a menu is a bug, whichever pane it is.
+The Character tab was exactly that until 09/12/2026 — `char_summary` was built
+on `score`, on resync and on four hand-picked events, so it showed HP, location
+and credits as they stood when the dossier was last opened. Two rules in
+`systems/interface/statefeed/` keep it from recurring:
+
+- **No channel is rate-capped.** The cap in `emit.py` DROPS, and a dropped
+  snapshot is repaired only if the same fact moves again — a heal to full never
+  is, because regen stops at `max_hp`. Inside a tick `buffer.py` already
+  coalesces every snapshot to one send, keeping the newest; outside one, the
+  player's own commands are the bound.
+- **An expensive snapshot is marked stale, never built at the change.**
+  `refresh_summary`, `refresh_skills` and `refresh_status` record the observer,
+  and `buffer.drain_stale` builds each once after the last change — in the
+  tick's FEED phase inside a tick, at the end of the reactor turn outside one.
+  The dossier follows a fact because that fact's own emitter (`emit_vitals`,
+  `emit_inventory`, `emit_room_info`, …) calls `refresh_summary`, not because a
+  call sits beside each write. A fact that moves on a clock rather than an
+  event schedules its own mark, `refresh_summary(obj, delay=...)`, as a cure
+  coming due does.
+
+Adding a fact to a snapshot means finding every write of it and making sure one
+reaches that snapshot's emitter or a `refresh_*`;
+`statefeed/tests/test_freshness.py` is where the proof goes.
+
 ### Client-side facts that cannot be generated
 
 `ROOM_KIND_COLORS`, `Z_LAYOUT_ORDER` and `SKILL_CATEGORY_COLORS` mix a server
@@ -497,10 +525,12 @@ reads, so the two cannot describe a skill differently — the arrangement
 are a table; a fifth skill-gated system is one row plus one row builder,
 reaching both outputs at once.
 
-**`emit_skills` fires on a level change, on the `skills` command and on resync
-— never on an XP award.** It walks four unlock registries per skill and is the
-most expensive payload in the feed; combat awards XP on every hit. That is also
-why the channel is uncapped: its rate is bounded by the player, not the tick.
+**Nothing builds the roster on an XP award; the award marks it stale.** It
+walks four unlock registries per skill and is the most expensive payload in the
+feed, and combat awards XP on every hit — so `add_xp` calls `refresh_skills`,
+and `statefeed/buffer.py` builds the roster once after the last award: at most
+once a tick in a fight. `emit_skills` itself is called only where the player
+asks (`skills`) and on resync. See "Every pane follows its facts".
 
 `skills <arg>` reads its argument three ways in a fixed order — skill key,
 skill name or unique prefix, then character name. That took nothing away: every

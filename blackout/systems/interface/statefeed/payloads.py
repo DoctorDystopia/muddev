@@ -327,6 +327,40 @@ class CharSkillsPayload(_Payload):
 
 
 @dataclass
+class CharCombatPayload(_Payload):
+    """How the observer fights. Char.Combat.
+
+    A SNAPSHOT, for the reason CharItemsPayload gives: the style can change
+    through the command, the EvMenu and a mid-fight `wield`, and the weapon
+    through every equip path, so a delta would need an emit at each and rot at
+    the first one forgotten. It is also tiny -- four style rows.
+
+    `styles` is a LIST in the weapon's own order, so a client draws the four
+    buttons where the ItemDef put them without an ordering table. Each row is
+    `{key, name, attack_type, weapon_style, boosts, xp_skills, active,
+    command}`; `boosts` and `xp_skills` are `{skill_key, name}` entries, with
+    `amount` on a boost. Exactly one row is active.
+
+    `command` is the whole line that picks the style, named by the server for
+    the reason CharSkillsPayload's rows name theirs. It is EMPTY on a row that
+    cannot be picked -- bare hands, or a held item declaring no styles -- which
+    every client already reads as "the server declines".
+
+    `attack_speed_seconds` ships beside the ticks because the tick length is
+    the server's and no client is told it.
+    """
+
+    channel = const.CHANNEL_CHAR_COMBAT
+
+    weapon_name: str = ""
+    armed: bool = False
+    combat_level: int = 0
+    attack_speed_ticks: int = 0
+    attack_speed_seconds: float = 0.0
+    styles: list = field(default_factory=list)   # [{key, name, ...}, ...]
+
+
+@dataclass
 class CharItemsPayload(_Payload):
     """The whole carried inventory and every equipment slot. Char.Items.List.
 

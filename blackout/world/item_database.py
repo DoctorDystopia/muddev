@@ -282,7 +282,9 @@ from .item_defs.currencies import ITEMS as _CURRENCIES
 from .item_defs.weapons import ITEMS as _WEAPONS
 from .item_defs.gadgets import ITEMS as _GADGETS
 from .item_defs.jewellery import ITEMS as _JEWELLERY
+from .item_defs.armor_head import ITEMS as _ARMOR_HEAD
 from .item_defs.armor_body import ITEMS as _ARMOR_BODY
+from .item_defs.armor_legs import ITEMS as _ARMOR_LEGS
 from .item_defs.armor_offhand import ITEMS as _ARMOR_OFFHAND
 from .item_defs.armor_feet import ITEMS as _ARMOR_FEET
 from .item_defs.dev_tools import ITEMS as _DEV_TOOLS
@@ -295,5 +297,5 @@ from .item_defs.food import ITEMS as _FOOD
 # out of the loop contributes nothing and raises nothing -- its items simply
 # do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY, _ARMOR_BODY, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD]:
     ITEM_DB.update(_d)

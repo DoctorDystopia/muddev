@@ -23,6 +23,7 @@ ITEMS = {
         stackable=False,
         tags=[("rusty_metal_chunk", "crafting_material")],
     ),
+
     "rusty_metal_dust": ItemDef(
         key="rusty_metal_dust",
         name="rusty metal dust",
@@ -33,6 +34,7 @@ ITEMS = {
         stackable=True,
         tags=[("rusty_metal_dust", "crafting_material")],
     ),
+
     "rusty_scrap_metal": ItemDef(
         key="rusty_scrap_metal",
         name="rusty scrap metal",
@@ -43,6 +45,8 @@ ITEMS = {
         stackable=False,
         tags=[("rusty_scrap_metal", "crafting_material")],
     ),
+
+
 
     # ─── Mutant raider cuts (Butchery) ────────────────────────────────────
     # Butchery's two yields off a raider corpse: the chuck from level 0, the
@@ -78,6 +82,8 @@ ITEMS = {
         tags=[("mutant_raider_raw_filet", "crafting_material")],
     ),
 
+
+
     # ─── Rendered mutant raider products (Rendering) ──────────────────────
     # What the rendering cooker makes of a cut: the fat boiled out of it, and
     # what is left once the fat is gone. One cut in, ONE product out -- the
@@ -101,6 +107,7 @@ ITEMS = {
         stackable=True,
         tags=[("mutant_raider_tallow", "crafting_material")],
     ),
+
     "mutant_raider_fatless_meat": ItemDef(
         key="mutant_raider_fatless_meat",
         name="mutant raider fatless meat",
@@ -111,6 +118,7 @@ ITEMS = {
         stackable=False,
         tags=[("mutant_raider_fatless_meat", "crafting_material")],
     ),
+
     "mutant_raider_prime_tallow": ItemDef(
         key="mutant_raider_prime_tallow",
         name="mutant raider prime tallow",
@@ -121,6 +129,7 @@ ITEMS = {
         stackable=True,
         tags=[("mutant_raider_prime_tallow", "crafting_material")],
     ),
+
     "mutant_raider_prime_meat": ItemDef(
         key="mutant_raider_prime_meat",
         name="mutant raider prime meat",
@@ -131,6 +140,8 @@ ITEMS = {
         stackable=False,
         tags=[("mutant_raider_prime_meat", "crafting_material")],
     ),
+
+
 
     # Metal items
     "metal_chunk": ItemDef(
@@ -143,6 +154,7 @@ ITEMS = {
         stackable=False,
         tags=[("metal_chunk", "crafting_material")],
     ),
+
     "metal_dust": ItemDef(
         key="metal_dust",
         name="metal dust",
@@ -153,6 +165,7 @@ ITEMS = {
         stackable=True,
         tags=[("metal_dust", "crafting_material")],
     ),
+    
     "scrap_metal": ItemDef(
         key="scrap_metal",
         name="scrap metal",

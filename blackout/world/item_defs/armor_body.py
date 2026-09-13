@@ -16,6 +16,7 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
+    # ─── Rusty scrap melee armor body ───────────────────────────────────────────────
     "rusty_scrap_chainbody": ItemDef(
         key="rusty_scrap_chainbody",
         name="rusty scrap chainbody",
@@ -40,6 +41,40 @@ ITEMS = {
             "stab_defense_bonus": 7,
             "slash_defense_bonus": 11,
             "crush_defense_bonus": 13,
+            # Other bonuses
+            "melee_strength_bonus": 0,
+        },
+        # combat_styles=_SHORTSWORD_COMBAT_STYLES,
+        # default_combat_style="irimi",
+    ),
+
+
+
+    # ─── Scrap melee armor body ───────────────────────────────────────────────
+    "scrap_chainbody": ItemDef(
+        key="scrap_chainbody",
+        name="scrap chainbody",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Scrap chainbody. Infection not included.",
+        value=210,
+        weight=3.0,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.BODY,
+        tool_type="chainbody",
+        tier=1,
+        req_level=10,
+        tags=[("scrap_chainbody", "armor")],
+        # attack_speed=4,
+        combat_stat_bonuses={
+            # Attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+            # Defense bonuses
+            "stab_defense_bonus": 10,
+            "slash_defense_bonus": 15,
+            "crush_defense_bonus": 19,
             # Other bonuses
             "melee_strength_bonus": 0,
         },

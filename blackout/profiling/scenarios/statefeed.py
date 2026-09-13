@@ -20,7 +20,9 @@ Description: Profiling scenarios for the statefeed layer -- the serialisers
 """
 
 from systems.interface.statefeed import serializers
+from systems.interface.statefeed import skills as skills_feed
 from systems.interface.statefeed.payloads import CharItemsPayload, MapChunkPayload
+from systems.interface.summary.service import summary_data
 
 from .. import constants as const
 from . import scenario
@@ -181,5 +183,41 @@ def payload_to_dict_map(world):
 
     def work():
         payload.to_dict()
+
+    return work
+
+
+@scenario(name="summary_data (the dossier)",
+          layer=const.LAYER_STATEFEED,
+          repeat=_AREA_REPEAT,
+          notes="Every panel's data() for one character, the vault listing "
+                "included. refresh_summary builds this at most once a tick "
+                "per watched character in a fight, so this is that tick's "
+                "price.")
+def summary_data_one(world):
+    """Measure one dossier build."""
+    character = world.character
+
+    # The first build materialises the character's bank room. That is a
+    # once-per-character write, not the cost a tick pays, so it is setup.
+    summary_data(character)
+
+    def work():
+        summary_data(character)
+
+    return work
+
+
+@scenario(name="skills build_payload (the roster)",
+          layer=const.LAYER_STATEFEED,
+          repeat=_AREA_REPEAT,
+          notes="Four unlock registries walked per skill. refresh_skills "
+                "builds this at most once a tick while XP is being awarded.")
+def skills_roster_one(world):
+    """Measure one skill roster build."""
+    character = world.character
+
+    def work():
+        skills_feed.build_payload(character)
 
     return work

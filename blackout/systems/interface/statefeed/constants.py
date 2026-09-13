@@ -96,6 +96,21 @@ CHANNEL_CHAR_QUESTS: str = "char_quests"              # -> Char.Quests
 # the whole table is a few kilobytes for the entire roster.
 CHANNEL_CHAR_SKILLS: str = "char_skills"              # -> Char.Skills
 
+# How the observer fights: the wielded weapon, its styles, which one is active,
+# the attack speed and the combat level. The Combat tab, modelled on OSRS's
+# Combat Options.
+#
+# A Char.* channel for the reason the two above give. It is NOT char_status,
+# which also carries combat skill levels: that channel is cheap and feeds the
+# 3D view, and a style table with display names would widen it for a screen the
+# 3D view never draws.
+#
+# STRUCTURED, NOT RENDERED. Each style row carries its boosts and XP skills as
+# data and the whole `combatoptions <style>` command that picks it, composed by
+# systems/gameplay/combat/style_options.py -- which the EvMenu renders from too,
+# so the tab and the menu cannot disagree.
+CHANNEL_CHAR_COMBAT: str = "char_combat"              # -> Char.Combat
+
 # Blackout-specific extensions.
 CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
@@ -117,6 +132,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_ITEMS,
     CHANNEL_CHAR_QUESTS,
     CHANNEL_CHAR_SKILLS,
+    CHANNEL_CHAR_COMBAT,
     CHANNEL_MAP,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
@@ -392,17 +408,33 @@ STATEFEED_ENTITY_RADIUS: int = 10
 # ─── Rate limiting ───────────────────────────────────────────────────────────
 
 # Minimum seconds between two sends on the same channel to the same session.
-# Aardwolf hard-caps its group channel at one send per second for exactly this
-# reason.
+# Aardwolf hard-caps its group channel at one send per second.
 #
-# ONLY cap channels that report a CONTINUOUS VALUE, where a dropped message is
-# superseded by the next one and costs the client nothing but latency. Vitals
-# and status qualify: miss an HP reading and the following one still tells the
-# whole truth.
+# EMPTY, and deliberately. The cap DROPS: a send inside the window is thrown
+# away and nothing is scheduled behind it, so the client keeps the previous
+# value until something else happens to move the same fact. That was accepted
+# for char_vitals (0.5s) and char_status (1.0s) on the theory that the next
+# reading always follows, and the theory fails exactly where it matters. Two
+# heals inside half a second -- a queued `eat`, a regen sweep landing beside a
+# sandwich -- dropped the second, and if it brought the character to full
+# NOTHING followed: regen stops at max_hp, so the bar kept the older number
+# until the next fight. A fight starting and ending inside a second left the
+# status channel reporting a fight that was over.
 #
-# Never cap a channel that reports a STATE TRANSITION. Those do not supersede
-# one another -- dropping one leaves the client permanently wrong, with nothing
-# scheduled that would correct it:
+# The bound a cap was meant to supply exists without one:
+#
+#   - Inside a tick, buffer.py coalesces every snapshot channel to one send per
+#     observer per tick, keeping the NEWEST rather than the first.
+#   - Outside a tick, sends are paced by commands and by the per-minute regen
+#     sweep, both bounded by the player.
+#   - The expensive snapshots are not rebuilt per change at all:
+#     events.refresh_summary / refresh_skills / refresh_status mark them stale
+#     and buffer.drain_stale builds each once, after the last change.
+#
+# The mechanism in emit.py stays for a channel that can meet the rule a cap
+# needs: something must be scheduled behind a dropped send. None can today, and
+# the channels below are the ones where that has already been learned the hard
+# way:
 #
 #   - CHANNEL_ROOM_PLAYERS was capped at 1.0s here and it was a bug. Walking
 #     two rooms inside a second published the second room_info with no matching
@@ -411,17 +443,21 @@ STATEFEED_ENTITY_RADIUS: int = 10
 #   - CHANNEL_COMBAT is uncapped for the same reason. At a 0.6s tick and a
 #     4-tick weapon cycle it is self-limiting anyway, and dropping a swing
 #     would desync the HP readout from the text log.
-#   - CHANNEL_CHAR_SUMMARY is uncapped despite carrying continuous values,
-#     because it is REQUEST-DRIVEN rather than event-driven: it fires when the
-#     player opens their dossier and on resync, nowhere else. Nothing is
-#     scheduled behind a dropped one, so a cap here would mean a player pressing
-#     `score` twice in a second and getting no answer the second time.
-#   - CHANNEL_CHAR_SKILLS is uncapped for the same reason as the summary, and
-#     it is worth stating separately because the channel LOOKS event-driven:
-#     combat awards XP on every hit. It is not published on an XP award. It
-#     fires when a level actually MOVES, when the player asks about skills, and
-#     on resync -- so its rate is bounded by the player, not by the tick, and a
-#     cap would only mean `skills` twice in a second answering once.
+#   - CHANNEL_CHAR_SUMMARY repeats facts half the feed owns -- HP, combat
+#     state, location, credits, quests, the active style -- so it goes stale
+#     whenever any of them moves. It used to be request-driven, sent only on
+#     `score` and resync, and the Character tab showed whatever was true the
+#     last time the player opened it. A cap is the wrong bound for it; the
+#     stale mark in buffer.py is the right one.
+#   - CHANNEL_CHAR_SKILLS LOOKS as if it needs a cap, because combat awards XP
+#     on every hit and the roster carries each skill's progress. It is marked
+#     stale on an award rather than built, so a fight rebuilds it at most once
+#     a tick; a cap would only mean `skills` twice in a second answering once.
+#   - CHANNEL_CHAR_COMBAT is uncapped because a dropped send is exactly the
+#     room_players bug: click Guard, lose that snapshot to a cap, and the tab
+#     shows the old style active until the player happens to change gear. It
+#     fires on a style switch, a gear change, a level moving and resync, all
+#     bounded by the player.
 #   - CHANNEL_CHAR_ITEMS is uncapped, and this is the one most likely to be
 #     "fixed" by someone reading only the first paragraph. It LOOKS like a
 #     continuous value -- a whole-grid snapshot, each superseding the last --
@@ -431,13 +467,9 @@ STATEFEED_ENTITY_RADIUS: int = 10
 #
 #     It is self-limiting anyway: sends are driven by discrete player actions
 #     bounded by the 0.6s tick. If a gathering loop ever does make it chatty,
-#     the fix is a COALESCING cap -- schedule a trailing send -- not a dropping
-#     one. emit.py has no such mechanism today, and adding one is a bigger
-#     change than the entry in this dict would suggest.
-CHANNEL_MIN_INTERVAL_SECONDS: dict = {
-    CHANNEL_CHAR_VITALS: 0.5,
-    CHANNEL_CHAR_STATUS: 1.0,
-}
+#     the fix is buffer.py's coalescing -- or a stale mark, if the build is
+#     what costs -- not a dropping cap.
+CHANNEL_MIN_INTERVAL_SECONDS: dict = {}
 
 # Fallback when a channel has no entry above.
 DEFAULT_MIN_INTERVAL_SECONDS: float = 0.0
@@ -477,10 +509,18 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_STATUS,
     CHANNEL_CHAR_SUMMARY,
     CHANNEL_CHAR_SKILLS,
+    CHANNEL_CHAR_COMBAT,
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,
 ))
+
+# How many passes buffer.drain_stale makes before leaving what is still stale
+# to the next drain. Building one snapshot can mark another -- emit_status marks
+# the dossier, which repeats in_combat -- so one pass is not enough, and the
+# chain is two deep today. A mark still standing after this many is a cycle
+# between builders; spinning on it would stall the reactor turn it runs in.
+STALE_DRAIN_MAX_PASSES: int = 4
 
 # The ndb attribute holding {channel: last_send_monotonic} per session.
 RATE_STATE_ATTR: str = "statefeed_last_send"

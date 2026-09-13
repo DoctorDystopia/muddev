@@ -79,16 +79,28 @@ const DEFAULT_SHOW_WORLD := true
 ## the bag changes -- had no setting at all. Two facts, two bools.
 const DEFAULT_SHOW_INVENTORY := true
 
-## Where the two dividers sit, in pixels: the width of the text column, and the
-## height of the 3D world above the inventory.
+## Where the two dividers sit, as Godot's own `split_offset`.
 ##
 ## Persisted because the alternative is what shipped -- both offsets authored in
 ## console.tscn as a literal 300, so every drag was forgotten on the next run.
 ## The notes for DESIGN-0004 ask for layout experimentation and "perhaps
 ## multiple configurations depending on player preferences"; a divider that
 ## remembers where it was put is the floor under that.
+##
+## **An offset is not a position, and it can be negative.** Since 4.x a
+## SplitContainer measures it from where the divider would sit with no offset,
+## and that is decided by which child EXPANDS. The text column does not and the
+## right column does, so the horizontal divider rests at the text column's
+## minimum width and a positive offset widens it. In the right column the WORLD
+## expands and the panel does not, so that divider rests at the bottom with the
+## panel at its minimum -- and only a NEGATIVE offset gives the panel any height.
+##
+## The world default was 300 until 09/12/2026, and the clamp below had a floor
+## of 120: both are "panel shrunk to its tab strip". Every drag was saved as
+## 120, then re-applied the next time any setting changed, so moving a slider
+## in Options collapsed the pane the slider was in.
 const DEFAULT_TEXT_SPLIT := 300
-const DEFAULT_WORLD_SPLIT := 300
+const DEFAULT_WORLD_SPLIT := -300
 
 ## Where a clicked skill's detail is shown: in the pane, in the game log, or
 ## both.
@@ -130,10 +142,14 @@ const SKILL_DETAIL_MODES: Array[String] = [
 
 const DEFAULT_SKILL_DETAIL := SKILL_DETAIL_BOTH
 
-## Bounds on a divider. Clamped for the same reason the font is: an offset saved
-## from a much wider window, or typed into the file by hand, can leave a pane at
-## zero width -- and a pane with no pixels has no divider to drag back.
-const MIN_SPLIT := 120
+## Bounds on a divider, symmetric because an offset runs both ways from rest.
+##
+## These only keep a hand-edited number sane. Keeping a pane from reaching zero
+## pixels is the ENGINE's job, and it does it: a SplitContainer lays out an
+## out-of-range offset clamped to its children's minimum sizes, so the divider
+## is always on screen to drag back. A floor here that tried to do the same
+## thing without knowing which child expands is what caused the bug above.
+const MIN_SPLIT := -4000
 const MAX_SPLIT := 4000
 
 ## How loud every sound effect plays, LINEAR from silent (0.0) to as mixed (1.0).

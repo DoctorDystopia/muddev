@@ -20,6 +20,7 @@ func _ready() -> void:
 	_changed_fires_for_a_real_change_only()
 	_the_two_panes_toggle_independently()
 	_a_dragged_divider_is_remembered_and_clamped()
+	await _the_default_world_split_leaves_the_panel_room()
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 	_the_sfx_volume_persists_clamps_and_resets()
 
@@ -78,9 +79,9 @@ func _values_are_clamped_on_the_way_in() -> void:
 	_expect(is_equal_approx(s.ui_scale, ClientSettings.MAX_UI_SCALE),
 		"a runaway scale is clamped")
 
-	s.set_text_split(0)
+	s.set_text_split(-99999)
 	_expect(s.text_split == ClientSettings.MIN_SPLIT,
-		"a divider dragged to nothing is clamped up")
+		"a runaway divider offset is clamped up")
 
 
 func _a_corrupt_file_falls_back_rather_than_failing() -> void:
@@ -162,18 +163,21 @@ func _a_dragged_divider_is_remembered_and_clamped() -> void:
 	_clean()
 	var s := ClientSettings.new(TEST_PATH)
 	s.set_text_split(420)
-	s.set_world_split(180)
+	s.set_world_split(-180)
 
 	var reloaded := ClientSettings.new(TEST_PATH)
 	reloaded.load_from_disk()
 	_expect(reloaded.text_split == 420, "the text divider persists")
-	_expect(reloaded.world_split == 180, "and so does the world one")
 
-	# Clamped on READ, not only on write -- an offset saved from a much wider
-	# window can leave a pane at zero width, and a pane with no pixels has no
-	# divider to drag back.
+	# NEGATIVE, and that is the case that matters: it is the only kind of offset
+	# that gives the panel under the world any height. A floor of 120 saved
+	# every drag of that divider as "collapsed" until 09/12/2026.
+	_expect(reloaded.world_split == -180,
+		"and so does the world one, negative as the engine reports it")
+
+	# Clamped on READ, not only on write -- a hand-edited number stays sane.
 	var handle := FileAccess.open(TEST_PATH, FileAccess.WRITE)
-	handle.store_string("[display]\ntext_split=99999\nworld_split=-40\n")
+	handle.store_string("[display]\ntext_split=99999\nworld_split=-99999\n")
 	handle.close()
 
 	var repaired := ClientSettings.new(TEST_PATH)
@@ -181,7 +185,38 @@ func _a_dragged_divider_is_remembered_and_clamped() -> void:
 	_expect(repaired.text_split == ClientSettings.MAX_SPLIT,
 		"an out-of-range saved offset is clamped down on load")
 	_expect(repaired.world_split == ClientSettings.MIN_SPLIT,
-		"and a negative one is clamped up")
+		"and a runaway negative one is clamped up")
+
+
+## The default is checked against the ENGINE, not against a number, because the
+## number was plausible and wrong: 300 laid out the panel under the world at its
+## minimum height, the tab strip alone. Built the shape `console.tscn` gives the
+## right column -- world expands, panel does not -- so a Godot upgrade that
+## changes what an offset means fails here rather than in a player's Options.
+func _the_default_world_split_leaves_the_panel_room() -> void:
+	const COLUMN_HEIGHT := 1000.0
+	const PANEL_MINIMUM := 40.0
+
+	var column := VSplitContainer.new()
+	column.size = Vector2(400.0, COLUMN_HEIGHT)
+
+	var world := Control.new()
+	world.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(world)
+
+	var panel := Control.new()
+	panel.custom_minimum_size = Vector2(0.0, PANEL_MINIMUM)
+	column.add_child(panel)
+
+	add_child(column)
+	column.split_offset = ClientSettings.DEFAULT_WORLD_SPLIT
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	_expect(panel.size.y > PANEL_MINIMUM,
+		"the default world split gives the panel more than its tab strip")
+
+	column.queue_free()
 
 
 func _an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid() -> void:

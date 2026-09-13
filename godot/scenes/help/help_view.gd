@@ -20,6 +20,7 @@ const ENTRIES := [
 	["Right-click an item", "Its own actions, as the server listed them."],
 	["Right-click the world", "Choose Option: every verb a thing affords."],
 	["Middle-drag / Wheel", "Orbit and zoom the world view."],
+	["Combat tab", "Your weapon and its styles. Click one to fight that way."],
 	["Character tab", "Your sheet, panel by panel."],
 	["Quests tab", "What you have taken, and how far through it you are."],
 	["Options tab", "Text size, interface scale, which panes are drawn."],

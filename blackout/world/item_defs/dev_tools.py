@@ -36,6 +36,7 @@ _MODERATOR_EGG_DESC = (
 )
 
 
+
 ITEMS = {
     "moderator_egg": ItemDef(
         key="moderator_egg",

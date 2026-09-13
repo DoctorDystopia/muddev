@@ -64,8 +64,8 @@ class TestChannel(_SkillFeedTest):
             feed_const.CHANNEL_CHAR_SKILLS, feed_const.SUBSCRIBABLE_CHANNELS)
 
     def test_channel_is_not_rate_capped(self):
-        # It fires on a level change, on the `skills` command and on resync --
-        # never on an XP award -- so its rate is bounded by the player.
+        # An XP award marks it stale rather than building it, so a fight builds
+        # it at most once a tick; a cap would only drop a `skills` answer.
         self.assertNotIn(
             feed_const.CHANNEL_CHAR_SKILLS,
             feed_const.CHANNEL_MIN_INTERVAL_SECONDS)

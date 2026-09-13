@@ -4,14 +4,14 @@ Author: Nick Hobar
 Creation date: 08/04/2026
 Description: EvMenu nodes for the combat options screen: pick which combat
              style is active on the currently wielded weapon.
+
+             Rendered FROM systems/gameplay/combat/style_options.py, which is
+             also what CHANNEL_CHAR_COMBAT ships to a graphical client -- so
+             this menu and the Combat tab cannot describe a style differently.
 """
 
-from systems.gameplay.combat.combat import (
-    active_combat_style_key,
-    available_combat_styles,
-    held_weapon,
-    set_combat_style,
-)
+from systems.gameplay.combat import style_options
+from systems.gameplay.combat.combat import held_weapon, set_combat_style
 from systems.interface.menus.base_menu import back_option
 from systems.interface.ui.colors import (
     ERROR_COLOR,
@@ -27,76 +27,76 @@ ACTIVE_MARKER = "(active)"
 # Spoken by BlackoutEvMenu.close_menu, however the menu is closed.
 CLOSING_TEXT = "Closing combat options menu."
 
+# What a style with no boosts or no XP skill reads as.
+NONE_TEXT = "(none)"
 
-def _skill_names(skill_keys) -> str:
-    """Resolve an iterable (or single string) of skill keys to a
-    comma-separated list of display names via SKILL_REGISTRY.
 
-    Deferred import for the same reason as combat.py::_labelled_awards: this
-    module is reachable from typeclass modules during startup, before the
-    registry's skill_defs walk is safe to trigger.
-    """
-    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
-
-    if isinstance(skill_keys, str):
-        skill_keys = (skill_keys,)
-
+def _names(entries) -> str:
+    """Join skill entries' display names: 'Strike, Brawn'."""
     names = []
-    for skill_key in skill_keys or ():
-        skill_class = SKILL_REGISTRY.get(skill_key)
-        names.append(getattr(skill_class, "name", skill_key))
 
-    return ", ".join(names) if names else "(none)"
+    for entry in entries:
+        names.append(entry["name"])
+
+    return ", ".join(names) if names else NONE_TEXT
 
 
-def _boost_text(level_boost: dict) -> str:
-    """Render a weapon_style_level_boost dict as 'Strike +3, Brawn +1'."""
-    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
-
+def _boost_text(boosts) -> str:
+    """Render boost entries as 'Strike +3, Brawn +1'."""
     parts = []
-    for skill_key, amount in (level_boost or {}).items():
-        skill_class = SKILL_REGISTRY.get(skill_key)
-        display_name = getattr(skill_class, "name", skill_key)
-        parts.append(f"{display_name} +{amount}")
 
-    return ", ".join(parts) if parts else "(none)"
+    for boost in boosts:
+        parts.append(f"{boost['name']} +{boost['amount']}")
+
+    return ", ".join(parts) if parts else NONE_TEXT
+
+
+def _style_line(row: dict) -> str:
+    """One style as the menu prints it."""
+    marker = f" {SUCCESS_COLOR}{ACTIVE_MARKER}{RESET_COLOR}" if row["active"] else ""
+    attack_type = row["attack_type"].title()
+    weapon_style = row["weapon_style"].title()
+    boost_text = _boost_text(row["boosts"])
+    xp_text = _names(row["xp_skills"])
+
+    return (
+        f"  {HIGHLIGHT_COLOR}{row['name']}{RESET_COLOR}{marker} "
+        f"— {attack_type}. Style: {weapon_style}. "
+        f"Boosts: {boost_text}. XP: {xp_text}"
+    )
 
 
 def start(caller: object, **kwargs) -> tuple:
-    weapon = held_weapon(caller)
+    options = style_options.combat_options(caller)
 
-    if weapon is None:
+    if not options.get("armed"):
         text = f"{ERROR_COLOR}You have no weapon equipped.{RESET_COLOR}"
         return text, None
 
-    styles = available_combat_styles(weapon)
+    weapon_name = options["weapon_name"]
 
-    if not styles:
-        text = f"{HIGHLIGHT_COLOR}{weapon.key}{RESET_COLOR} has no combat styles to choose from."
+    # Only the rows the server would let a player pick. A held item with no
+    # styles of its own reports the unarmed style it falls back to, and that
+    # row carries no command.
+    rows = []
+
+    for row in options["styles"]:
+        if row["command"]:
+            rows.append(row)
+
+    if not rows:
+        text = f"{HIGHLIGHT_COLOR}{weapon_name}{RESET_COLOR} has no combat styles to choose from."
         return text, None
 
-    active_key = active_combat_style_key(weapon)
-
-    text_lines = [f"{TITLE_COLOR}--- Combat Options: {weapon.key} ---{RESET_COLOR}"]
+    text_lines = [f"{TITLE_COLOR}--- Combat Options: {weapon_name} ---{RESET_COLOR}"]
     options_list = []
 
-    for style_key, style in styles.items():
-        marker = f" {SUCCESS_COLOR}{ACTIVE_MARKER}{RESET_COLOR}" if style_key == active_key else ""
-        attack_type = str(style.get("attack_type", "")).title()
-        weapon_style = str(style.get("weapon_style", "")).title()
-        boost_text = _boost_text(style.get("weapon_style_level_boost"))
-        xp_text = _skill_names(style.get("weapon_style_xp_skill"))
-
-        style_line = (
-            f"  {HIGHLIGHT_COLOR}{style_key.title()}{RESET_COLOR}{marker} "
-            f"— {attack_type}. Style: {weapon_style}. "
-            f"Boosts: {boost_text}. XP: {xp_text}"
-        )
-        text_lines.append(style_line)
+    for row in rows:
+        text_lines.append(_style_line(row))
 
         options_list.append({
-            "desc": f"Use {style_key.title()} style",
-            "goto": ("node_set_style", {"style_key": style_key}),
+            "desc": f"Use {row['name']} style",
+            "goto": ("node_set_style", {"style_key": row["key"]}),
         })
 
     text = "\n".join(text_lines)
@@ -113,7 +113,8 @@ def node_set_style(caller: object, **kwargs) -> tuple:
         return text, options
 
     if set_combat_style(weapon, style_key, combatant=caller):
-        text = f"{SUCCESS_COLOR}You switch to {style_key.title()} style.{RESET_COLOR}"
+        switched = style_options.STYLE_SWITCHED_TEMPLATE.format(name=style_key.title())
+        text = f"{SUCCESS_COLOR}{switched}{RESET_COLOR}"
     else:
         text = f"{ERROR_COLOR}That style is no longer available on {weapon.key}.{RESET_COLOR}"
 

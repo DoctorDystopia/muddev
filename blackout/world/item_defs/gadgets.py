@@ -32,6 +32,8 @@ _GADGET_COMBAT_STYLES = {
     },
 }
 
+
+
 _TOY_SWORD_COMBAT_STYLES = {
     "bonk": {
         "attack_type": combat_constants.ATTACK_TYPE_CRUSH,
@@ -42,6 +44,8 @@ _TOY_SWORD_COMBAT_STYLES = {
         ),
     },
 }
+
+
 
 _BIT_BLADE_COMBAT_STYLES = {
     "rend": {
@@ -54,6 +58,8 @@ _BIT_BLADE_COMBAT_STYLES = {
     },
 }
 
+
+
 # A gadget carries no stat bonuses of its own.
 _NO_COMBAT_BONUSES = {
     "stab_attack_bonus": 0,
@@ -64,6 +70,7 @@ _NO_COMBAT_BONUSES = {
     "crush_defense_bonus": 0,
     "melee_strength_bonus": 0,
 }
+
 
 
 ITEMS = {
@@ -87,6 +94,7 @@ ITEMS = {
         default_combat_style="discharge",
         combat_rules=["malfunctioning_gizmo"],
     ),
+
     "toy_sword": ItemDef(
         key="toy_sword",
         name="Toy Sword",
@@ -107,6 +115,7 @@ ITEMS = {
         default_combat_style="bonk",
         combat_rules=["toy_sword"],
     ),
+
     "bit_blade": ItemDef(
         key="bit_blade",
         name="bit-blade",
@@ -127,6 +136,7 @@ ITEMS = {
         default_combat_style="rend",
         combat_rules=["bit_blade"],
     ),
+
     "broken_bit_blade": ItemDef(
         key="broken_bit_blade",
         name="broken bit-blade",
@@ -147,6 +157,7 @@ ITEMS = {
         default_combat_style="rend",
         combat_rules=["broken_bit_blade"],
     ),
+
     "mk2_bit_blade": ItemDef(
         key="mk2_bit_blade",
         name="MK.II bit-blade",
@@ -167,6 +178,7 @@ ITEMS = {
         default_combat_style="rend",
         combat_rules=["mk2_bit_blade"],
     ),
+    
     "legendary_bit_blade": ItemDef(
         key="legendary_bit_blade",
         name="0x7F",

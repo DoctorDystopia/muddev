@@ -39,10 +39,10 @@ signal changed
 
 ## A skill's level ROSE between two rosters. Once per skill per roster.
 ##
-## Derived rather than sent. `char_skills` republishes only when a level moves,
+## Derived rather than sent. `char_skills` republishes when XP or a level moves,
 ## on resync, and on the `skills` command -- so comparing each roster with the
-## one before it finds exactly the rises, with no server event to add. The two
-## republishes that are not a rise compare equal and stay quiet.
+## one before it finds exactly the rises, with no server event to add. Every
+## republish that is not a rise compares equal and stays quiet.
 ##
 ## Never fired by the first roster after a connect: [method reset] empties the
 ## rows, and a skill with no previous level cannot have risen. That is what

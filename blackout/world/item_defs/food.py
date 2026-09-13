@@ -76,6 +76,7 @@ ITEMS = {
             ("mutant_raider_cured_chuck", ITEM_FAMILY_FOOD),
         ],
     ),
+
     "mutant_raider_cured_fatless_meat": ItemDef(
         key="mutant_raider_cured_fatless_meat",
         name="mutant raider cured fatless meat",
@@ -91,6 +92,7 @@ ITEMS = {
             ("mutant_raider_cured_fatless_meat", ITEM_FAMILY_FOOD),
         ],
     ),
+
     "mutant_raider_cured_filet": ItemDef(
         key="mutant_raider_cured_filet",
         name="mutant raider cured filet",
@@ -106,6 +108,7 @@ ITEMS = {
             ("mutant_raider_cured_filet", ITEM_FAMILY_FOOD),
         ],
     ),
+
     "mutant_raider_cured_prime_meat": ItemDef(
         key="mutant_raider_cured_prime_meat",
         name="mutant raider cured prime meat",
@@ -121,6 +124,8 @@ ITEMS = {
             ("mutant_raider_cured_prime_meat", ITEM_FAMILY_FOOD),
         ],
     ),
+
+
 
     # ─── Prepared meals (Gastronomy) ──────────────────────────────────────
     # The end of the chain: nothing consumes these, and the spreadsheet marks
@@ -148,6 +153,7 @@ ITEMS = {
             ("mutant_raider_steak", ITEM_FAMILY_FOOD),
         ],
     ),
+
     "mutant_raider_cured_meat_sandwich": ItemDef(
         key="mutant_raider_cured_meat_sandwich",
         name="mutant raider cured meat sandwich",
@@ -164,6 +170,7 @@ ITEMS = {
             ("mutant_raider_cured_meat_sandwich", ITEM_FAMILY_FOOD),
         ],
     ),
+
     "mutant_raider_prime_steak": ItemDef(
         key="mutant_raider_prime_steak",
         name="mutant raider prime steak",
@@ -178,6 +185,7 @@ ITEMS = {
             ("mutant_raider_prime_steak", ITEM_FAMILY_FOOD),
         ],
     ),
+    
     "mutant_raider_prime_cured_meat_sandwich": ItemDef(
         key="mutant_raider_prime_cured_meat_sandwich",
         name="mutant raider prime cured meat sandwich",

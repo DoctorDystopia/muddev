@@ -170,25 +170,33 @@ def _publish_level_change(obj: object) -> None:
         per XP award; a skill tab does not need to be told about a level that
         stayed the same, and combat awards XP on every hit.
 
-        THREE channels, because they answer different questions and a client
+        FOUR channels, because they answer different questions and a client
         may want any of them:
 
           char_status  -- the combat level table the 3D view reads. Cheap.
           char_summary -- the dossier, whose vitals band carries combat level,
                           total level and total XP. All three move when a
-                          skill does.
+                          skill does. MARKED stale rather than built, like
+                          the roster below.
           char_skills  -- the roster a skills PANE draws: every level, every XP
                           curve, every unlock. The most expensive payload in
-                          the feed, which is why it fires here -- on a level
-                          actually moving -- and not on an XP award.
+                          the feed, so it is marked stale and the statefeed
+                          buffer builds it once, after the last change.
 
-        The last two check for a subscriber before building anything, so both
+          char_combat  -- the Combat tab, which shows the combat level. Sent
+                          for every skill rather than only combat ones: which
+                          skills feed combat level is the combat_level
+                          package's business, and a list of them here would
+                          be a second copy.
+
+        Every one checks for a subscriber before building anything, so they
         cost nothing on a server with no graphical client attached.
 
         Runs AFTER apply_level_up_side_effects at both call sites, and the
         order is load-bearing: Fortitude's side effect is the one that moves
-        max_hp, and a summary built before it would carry the old HP cap into
-        the same payload that announces the new Fortitude level.
+        max_hp, and a status built before it would announce the new Fortitude
+        level beside the old cap. The two marked snapshots are built later
+        still, at the drain, so they cannot straddle it either.
 
         The import is deferred. systems.interface.statefeed.events reaches the payload
         builders and the summary registry, and this module is imported through
@@ -197,9 +205,9 @@ def _publish_level_change(obj: object) -> None:
         wrapper.
 
     Notes/References:
-        in_combat rides along on char_status and is correct at the moment of
-        sending, but it is NOT published by its own transitions -- see
-        emit_status.
+        XP that does not level is published by _publish_xp_change. in_combat
+        rides on char_status too, and is published by its own transitions --
+        see events.refresh_status.
 
     Author: Nick Hobar
     Creation date: 08/28/2026
@@ -207,8 +215,51 @@ def _publish_level_change(obj: object) -> None:
     from systems.interface.statefeed import events as feed
 
     feed.emit_status(obj)
-    feed.emit_summary(obj)
-    feed.emit_skills(obj)
+    feed.refresh_summary(obj)
+    feed.refresh_skills(obj)
+    feed.emit_combat_options(obj)
+
+
+def _publish_xp_change(obj: object) -> None:
+    """
+    Purpose: Tell a graphical client that this character's XP moved.
+
+    Entry:
+        obj is the character just awarded XP. Anything without sessions -- an
+        NPC, a test fixture -- is a supported no-op.
+
+    Exit/Returns:
+        No conditions. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Two snapshots carry XP: the skill roster, which draws each skill's
+        progress through its level, and the dossier, which shows total XP.
+        Until this existed neither heard about an award that did not level,
+        so a Skills tab bar sat still for the whole of every level and then
+        jumped.
+
+        Both are MARKED stale rather than built. Combat awards XP on every hit
+        and these are the two most expensive payloads in the feed; the
+        statefeed buffer builds each once, after the last award, so a fight
+        costs one roster a tick at most rather than one a hit.
+
+        Called for every positive award, the levelling one included. Marks are
+        idempotent, so _publish_level_change marking the same two again adds
+        nothing but what only a level changes.
+
+    Notes/References:
+        systems/interface/statefeed/buffer.py, "Stale marks".
+
+    Author: Nick Hobar
+    Creation date: 09/12/2026
+    """
+    from systems.interface.statefeed import events as feed
+
+    feed.refresh_skills(obj)
+    feed.refresh_summary(obj)
 
 
 def set_level(obj: object, skill_key: str, level: int) -> int:
@@ -442,6 +493,9 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         leveled_up = True
         
     obj.db.skills[skill_key] = skill_data
+
+    if amount_to_add > 0:
+        _publish_xp_change(obj)
 
     if leveled_up:
         skill_class = SKILL_REGISTRY[skill_key]

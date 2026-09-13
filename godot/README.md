@@ -43,6 +43,8 @@ a fetched model where there is art, its family's silhouette where there is not.
 | **Drag an inventory cell** | Swap, equip or unequip — whichever the server named |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
+| **Combat tab** | Your weapon, combat level, attack speed, and a button per style — OSRS's Combat Options |
+| **Click a style** | Sends the row's `combatoptions <style>`. The highlight moves when the server republishes, not on the click |
 | **Character tab** | The sheet — whatever panels `char_summary` sent |
 | **Skills tab** | The roster as a grid, banded by category, with a bar per skill |
 | **Click a skill** | Its sheet: XP, progress and everything it unlocks. Where that lands is an Options setting |
@@ -655,7 +657,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All thirty-four are headless and exit non-zero on failure. Thirty-one need
+All thirty-seven are headless and exit non-zero on failure. Thirty-four need
 nothing running; three of the four `smoke_*` scenes need an Evennia, and none
 needs an account. `smoke_console` is the exception: it builds `console.tscn` for real and
 needs nothing, because the socket it opens is expected to fail.
@@ -748,6 +750,15 @@ three detail modes asks for exactly what it shows.
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_skills_view.tscn
+```
+
+`test_combat_options_state.tscn` and `test_combat_options_view.tscn` need
+nothing running either. The view test asserts that every command leaving the
+tab is the one its row carried, and that a click alone never moves the
+highlight:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_combat_options_view.tscn
 ```
 
 `test_login_view.tscn` needs nothing running either:
@@ -865,17 +876,55 @@ differently.
 
 ### The open sheet survives a rebuild
 
-`char_skills` republishes whenever a level moves, on resync, and whenever the
-player types `skills`, and this pane rebuilds wholesale on each — so the
-selected key outlives the rebuild. Without that, the sheet would throw itself
-away the moment the skill being read levelled, which is the moment a player is
-most likely to be looking at it. It is also what makes the sheet update live.
+`char_skills` republishes whenever XP or a level moves (at most once a tick), on
+resync, and whenever the player types `skills`, and this pane rebuilds wholesale
+on each — so the selected key outlives the rebuild. Without that, the sheet
+would throw itself away every time the skill being read earned XP, which is
+exactly when a player is looking at it. It is also what makes the sheet update
+live.
 
 One consequence worth naming: this pane frees its children with `queue_free`
 where [InventoryView] and [QuestsView] use `free`. Those rebuild from a
 *model's* signal and nothing they destroy is mid-emit; this one also rebuilds
 from a *cell's* signal — clicking a skill destroys the cell that was clicked —
 and freeing there tears down an object while its signal is still emitting.
+
+## The Combat tab lights what the server says, not what was clicked
+
+Modelled on OSRS's Combat Options: the weapon and combat level at the top, one
+button per style beneath. Auto-retaliate and the special attack bar are absent
+because Blackout has neither.
+
+```
+char_combat -> {weapon_name, armed, combat_level,
+				attack_speed_ticks, attack_speed_seconds, styles: [...]}
+```
+
+Each style row carries its boosts and XP skills as data and the whole
+`combatoptions <style>` line that picks it. Both are built by
+`systems/gameplay/combat/style_options.py`, which the `combatoptions` EvMenu
+renders from as well — so the tab and the menu cannot describe a style
+differently, the arrangement `detail.py` makes for skills.
+
+**A click sends and changes nothing else.** The button is put straight back to
+what the last snapshot said, and `set_combat_style` republishing `char_combat`
+is what moves the highlight. An optimistic highlight would show a style the
+server refused — the weapon unequipped between the click and the command — with
+nothing scheduled to correct it. Clicking the style already active sends
+nothing, since the only answer is "already using it".
+
+**Bare hands show one disabled button.** The unarmed table declares four
+styles, but there is no object to store a choice on and combat always resolves
+`punch`, so the server sends that row with an empty command. Three more buttons
+would change nothing.
+
+`attack_speed_seconds` ships beside the ticks because the tick length is the
+server's and is not exported; dividing by a copy of 0.6 here would be a second
+owner of it.
+
+The channel republishes on a style switch, on any equipment change (which
+covers a mid-fight `wield`), on a level moving (combat level), on the bare
+`combatoptions` command, and on resync.
 
 ## The quest log is numbers, not sentences
 
@@ -1061,6 +1110,8 @@ then one constant and one `_STREAMS` row in `sound_cues.gd`.
 | `world/reconnect_policy.gd` | How long to wait before redialling. Pure schedule, no clock. |
 | `world/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
 | `scenes/quests/quests_view.gd` | The quest tab: a bar per objective, drawn from numbers rather than prose. |
+| `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
+| `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/map_palette.gd` | Room-kind colours, island order, and which map is surfaced with which terrain. Read by BOTH map panes; guarded from Python by path. |
 | `scenes/minimap/minimap_view.gd` | The map drawn small over the world pane. Clickable, and from the feed rather than the ASCII print. |
 | `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. |

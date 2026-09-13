@@ -508,11 +508,50 @@ class CuringHandler:
             curing_constants.SLOT_DUE_AT_KEY: due_at,
         }
         self._slots().append(slot)
+        self._wake_when_due(recipe_cls.cure_seconds)
 
         started = curing_constants.MSG_CURE_STARTED.format(item=recipe_cls.name)
         self.obj.msg((started, _MSG_CRAFTING))
 
         return True
+
+
+    def _wake_when_due(self, seconds: float) -> None:
+        """
+        Purpose: Mark the dossier stale at the moment a new cure comes due.
+
+        Entry:
+            seconds is the cure's duration, from now.
+
+        Exit/Returns:
+            No conditions. Never raises.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A cure coming due changes the Processing band -- the slot turns
+            ready -- with nothing happening that the feed could hear, because
+            readiness is computed on read. The timed mark is the one event that
+            moment has. Scheduled here, once per slot, from the duration the
+            slot was just stamped with, rather than by walking pending() from a
+            publish: the publish on this path runs before the slot exists.
+
+            Two cures due together build once; the marks coalesce. A mark is
+            lost on a reload, and the resync after one sends the dossier whole.
+
+        Notes/References:
+            systems/interface/statefeed/buffer.py, mark_stale.
+
+        Author: Nick Hobar
+        Creation date: 09/12/2026
+        """
+        from systems.interface.statefeed import events as feed
+
+        try:
+            feed.refresh_summary(self.obj, delay=seconds)
+        except Exception:
+            logger.log_trace()
 
 
     def _consume_input(self, recipe_cls) -> bool:
@@ -705,9 +744,14 @@ class CuringHandler:
             handler makes the same pair of calls for the same reason -- a band
             reachable only from `score` is one a client shows stale.
 
-            emit_summary gates on the subscriber count itself, so this costs
-            nothing on a telnet-only server; and both ends of a cure are paced
-            by the player, never by the tick, so there is no rate to bound.
+            The dossier is MARKED stale rather than built. That matters on the
+            start path in particular: this runs from _consume_input, BEFORE
+            start() appends the new slot, and a build deferred to the drain
+            reads the chamber after the append rather than before it. The
+            deadline's own mark is start()'s job -- see _wake_when_due.
+
+            refresh_summary gates on the subscriber count itself, so this
+            costs nothing on a telnet-only server, and schedules nothing.
 
             Imported inside the method, copying BankHandler._publish_inventory
             verbatim and for its stated reason: this module is reached from
@@ -725,7 +769,7 @@ class CuringHandler:
 
         try:
             feed.emit_inventory(self.obj)
-            feed.emit_summary(self.obj)
+            feed.refresh_summary(self.obj)
         except Exception:
             logger.log_trace()
 

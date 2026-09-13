@@ -30,9 +30,11 @@ WEAPON_SKILL_MAP: dict[str, str | None] = {
 
     # Combat categories — gated via the Strike skill (melee accuracy).
     "shortsword": "strike",
+    "scimitar":   "strike",
     "spear":      "strike",
     "dagger":     "strike",
     "battleaxe":  "strike",
+    "greatsword": "strike",
 
     # Gadgets are salvage anyone can point at anything. Their behaviour comes
     # from an action rules definition rather than from the wielder's accuracy,
@@ -52,7 +54,9 @@ WEAPON_SKILL_MAP: dict[str, str | None] = {
 
 ARMOR_SKILL_MAP: dict[str, str | None] = {
     # Armor categories, gated via the Defense skill. Every armor category the game emits must appear here. A value of None means "deliberately ungated"
+    "helmet": "defense",
     "chainbody": "defense",
+    "platelegs": "defense",
     "boots": "defense",
     "square_shield": "defense",
 }

@@ -16,11 +16,16 @@ Run from blackout/:
 
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import subscriptions
 from systems.interface.statefeed.emit import emit, emit_to_room
-from systems.interface.statefeed.payloads import CharVitalsPayload, RoomInfoPayload
+from systems.interface.statefeed.payloads import (
+    CharStatusPayload,
+    CharVitalsPayload,
+    RoomInfoPayload,
+)
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -211,12 +216,25 @@ class TestEmitRouting(unittest.TestCase):
 
 
 class TestRateCapping(unittest.TestCase):
-    """Noisy channels are capped; combat deliberately is not."""
+    """The cap mechanism, exercised through an entry installed for the test.
+
+    No channel is capped today -- see CHANNEL_MIN_INTERVAL_SECONDS -- so these
+    cases install one for their own duration. What is under test is that the
+    mechanism still behaves as a future entry would rely on, not which channels
+    carry one.
+    """
 
     def setUp(self):
         self.session = _make_session()
         self.observer = _FakeObserver(sessions=[self.session])
         subscriptions.subscribe(self.session, const.SUBSCRIBE_ALL)
+
+        patcher = mock.patch.dict(
+            const.CHANNEL_MIN_INTERVAL_SECONDS,
+            {const.CHANNEL_CHAR_VITALS: 0.5},
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_a_capped_channel_drops_an_immediate_second_send(self):
         payload = CharVitalsPayload(hp=10, max_hp=10)
@@ -291,6 +309,33 @@ class TestRateCapping(unittest.TestCase):
         sent = emit(self.observer, payload)
 
         self.assertEqual(sent, 1)
+
+
+class TestSnapshotsAreNotDropped(unittest.TestCase):
+    """The regression behind emptying the cap table.
+
+    A dropped vitals reading was repaired only if HP moved again, and after a
+    heal to full nothing did: regen stops at max_hp, so the bar kept the older
+    number until the next fight. Status had the same hole for a fight that
+    started and ended inside its one-second window.
+    """
+
+    def setUp(self):
+        self.session = _make_session()
+        self.observer = _FakeObserver(sessions=[self.session])
+        subscriptions.subscribe(self.session, const.SUBSCRIBE_ALL)
+
+    def test_two_vitals_readings_in_quick_succession_both_arrive(self):
+        first = emit(self.observer, CharVitalsPayload(hp=9, max_hp=10))
+        second = emit(self.observer, CharVitalsPayload(hp=10, max_hp=10))
+
+        self.assertEqual((first, second), (1, 1))
+
+    def test_a_fight_ending_just_after_it_started_still_arrives(self):
+        first = emit(self.observer, CharStatusPayload(in_combat=True))
+        second = emit(self.observer, CharStatusPayload(in_combat=False))
+
+        self.assertEqual((first, second), (1, 1))
 
 
 class TestReservedChannelGuard(unittest.TestCase):

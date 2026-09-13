@@ -123,10 +123,14 @@ def send_full_state(observer) -> int:
         sent = _send_map(observer)
         sent += _send_room(observer)
         sent += _send_self(observer)
-        sent += events.emit_summary(observer, force=True)
         sent += events.emit_skills(observer, force=True)
+        sent += events.emit_combat_options(observer, force=True)
         sent += events.emit_quests(observer, force=True)
         sent += events.emit_inventory(observer, force=True)
+        # The dossier LAST. Every emitter above marks it stale, because it
+        # repeats a fact each of them carries; a build that follows them all
+        # satisfies those marks instead of leaving a second build to the drain.
+        sent += events.emit_summary(observer, force=True)
 
         return sent
     except Exception:

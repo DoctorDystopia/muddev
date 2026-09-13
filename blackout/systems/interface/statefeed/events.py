@@ -21,11 +21,12 @@ Description: The adapter layer — game events in, payloads out, emitted.
 
 
 from . import constants as const
-from . import serializers, subscriptions
+from . import buffer, serializers, subscriptions
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
     CharAvatarPayload,
+    CharCombatPayload,
     CharItemsPayload,
     CharQuestsPayload,
     CharSkillsPayload,
@@ -203,6 +204,28 @@ def _broadcast(payload, attacker, target, room) -> int:
 
 
 
+def _mark_stale_if_heard(observer, channel: str, builder, delay: float) -> bool:
+    """Mark one snapshot stale for an observer somebody is subscribed through.
+
+    The shared body of the refresh_* routines. Returns True if a mark was made.
+    The subscriber check happens here as well as in the builder, because the
+    commonest caller is emit_vitals on an NPC taking a hit, and that should
+    cost one session lookup rather than a scheduled no-op.
+    """
+    if observer is None:
+        return False
+
+    wants = subscriptions.has_channel_subscribers(observer, channel)
+
+    if not wants:
+        return False
+
+    buffer.mark_stale(observer, builder, delay=delay)
+
+    return True
+
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 # TODO: update emit_swing name (e.g, emit_combat_action). Also, might be
@@ -330,7 +353,13 @@ def emit_vitals(entity, force: bool = False) -> int:
     itself on the next one; max_hp moves once per Fortitude level and nothing
     repeats it, so its send must not be the one the cap happens to eat. See
     CombatEntity's max_hp setter.
+
+    The dossier repeats both numbers, so it is marked stale here. Every HP
+    change already passes through this routine on its way from the hp setter,
+    which makes this the choke point rather than each thing that writes hp.
     """
+    refresh_summary(entity)
+
     max_hp = getattr(entity, "max_hp", 0)
     payload = CharVitalsPayload(hp=getattr(entity, "hp", 0), max_hp=max_hp)
 
@@ -347,7 +376,7 @@ def emit_status(observer, force: bool = False) -> int:
         observer - the puppeted Character, or anything exposing `skills` and
                    `in_combat`. An entity with neither is supported and sends
                    an empty level table rather than raising.
-        force    - True to bypass the channel's 1s rate cap. Used by resync.
+        force    - True to bypass rate caps. Used by resync.
 
     Exit/Returns:
         Returns the number of sends performed. Zero when nobody is subscribed,
@@ -377,9 +406,15 @@ def emit_status(observer, force: bool = False) -> int:
     Notes/References:
         Deliberately does NOT carry the full skill table. See _read_levels.
 
+        Marks the dossier stale, whose vitals band repeats in_combat. The
+        transitions of in_combat itself reach here through refresh_status,
+        called where a combat handler is created and torn down.
+
     Author: Nick Hobar
     Creation date: 08/28/2026
     """
+    refresh_summary(observer)
+
     wants = subscriptions.has_channel_subscribers(
         observer, CharStatusPayload.channel
     )
@@ -474,6 +509,11 @@ def emit_summary(observer, force: bool = False) -> int:
         speculatively. emit() would discard it for free, but only after the
         work was already done.
 
+        Called directly only where the player ASKS -- the dossier opening, a
+        resync. Everywhere a fact changes calls refresh_summary instead, which
+        has buffer.py build this once after the last change. The discard below
+        is what stops an ask arriving just after a change from building twice.
+
         systems.interface.summary is imported inside the function rather than at module
         scope. This module is imported by typeclasses/mixins.py, which every
         Character and NPC pulls in at startup; a top-level import would drag
@@ -497,6 +537,7 @@ def emit_summary(observer, force: bool = False) -> int:
     if not wants:
         return 0
 
+    buffer.discard_stale(observer, emit_summary)
     payload = CharSummaryPayload(panels=summary_data(observer))
 
     return emit(observer, payload, force=force)
@@ -530,13 +571,14 @@ def emit_skills(observer, force: bool = False) -> int:
         by some distance. emit() would discard the result for free, but only
         after all of that work was already done.
 
-        WHERE IT IS CALLED FROM is the other half of that cost argument. Not on
-        an XP award: combat awards XP on every hit, and the roster's numbers
-        would be rebuilt several times a second for a screen nobody is looking
-        at. It fires when a level actually MOVES, when the player asks about
-        skills, and on resync -- so its rate is bounded by the player rather
-        than by the tick. See CHANNEL_MIN_INTERVAL_SECONDS on why that also
-        makes a rate cap the wrong tool here.
+        WHERE IT IS CALLED FROM is the other half of that cost argument. Not
+        directly on an XP award or a level moving: combat awards XP on every
+        hit, and the roster would be built several times a tick to have all
+        but the last thrown away. Those paths call refresh_skills, which marks
+        the roster stale for buffer.py to build once, after the last change --
+        at most once a tick in a fight. Direct calls are the player asking
+        (`skills`) and resync, both of which want it now; the discard below
+        stops one of those arriving just after an award from building twice.
 
         systems.interface.statefeed.skills is imported inside the routine. It reaches
         systems/gameplay/progression/skills/detail.py, which reaches crafting, auras and
@@ -561,7 +603,66 @@ def emit_skills(observer, force: bool = False) -> int:
     if not wants:
         return 0
 
+    buffer.discard_stale(observer, emit_skills)
+
     return emit(observer, skills_serializer.build_payload(observer),
+                force=force)
+
+
+def emit_combat_options(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the observer's combat options to the observer alone.
+
+    Entry:
+        observer - the puppeted Character. One with no equipment handler is a
+                   supported no-op.
+        force    - True to bypass rate caps. The channel is uncapped, so this
+                   is a formality that keeps the resync call shape identical to
+                   every other send.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the reason emit_summary does
+        it. The payload is small, but building it reads the combat profile and
+        computes the combat level, and three of its four call sites -- a gear
+        change, a style switch, a level moving -- are on paths every telnet
+        player walks.
+
+        Called from set_combat_style, EquipmentHandler._publish, the level-up
+        publish in skills/logic.py, the bare `combatoptions` command and
+        resync. A mid-fight `wield` reaches the equipment handler, so it needs
+        no call of its own.
+
+        systems.interface.statefeed.combat_options is imported inside the
+        routine: it reaches combat.py and the combat level package, and this
+        module is imported by typeclasses/mixins.py at startup.
+
+    Notes/References:
+        The payload is built by systems/interface/statefeed/combat_options.py
+        from the same description the combat options EvMenu renders.
+
+    Author: Nick Hobar
+    Creation date: 09/12/2026
+    """
+    from . import combat_options as combat_options_serializer
+
+    # The dossier's readiness band repeats the weapon and the active style.
+    refresh_summary(observer)
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharCombatPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    return emit(observer, combat_options_serializer.build_payload(observer),
                 force=force)
 
 
@@ -603,6 +704,9 @@ def emit_quests(observer, force: bool = False) -> int:
     Creation date: 08/28/2026
     """
     from . import quests as quests_serializer
+
+    # The dossier's world band repeats the active and completed quests.
+    refresh_summary(observer)
 
     wants = subscriptions.has_channel_subscribers(
         observer, CharQuestsPayload.channel
@@ -668,6 +772,10 @@ def emit_inventory(observer, force: bool = False, ignore=None) -> int:
 
     from . import inventory as inventory_serializer
 
+    # The dossier's holdings band repeats credits, slot counts and the vault.
+    # A deposit reaches here too -- see BankHandler._publish_inventory.
+    refresh_summary(observer)
+
     wants = subscriptions.has_channel_subscribers(
         observer, CharItemsPayload.channel
     )
@@ -693,7 +801,11 @@ def emit_room_info(observer, force: bool = False) -> int:
 
     Room identity is per-observer, not per-room: two people standing in the
     same tile each get their own message, because this is "where YOU are".
+
+    Marks the dossier stale, whose world band repeats the location.
     """
+    refresh_summary(observer)
+
     room = getattr(observer, "location", None)
 
     if room is None:
@@ -1044,6 +1156,11 @@ def emit_aura(owner, event: str, aura_key: str, radius: int,
     Author: Nick Hobar
     Creation date: 08/07/2026
     """
+    # The dossier's vitals band names the active aura. A pulse changes nothing
+    # it shows, and fires every few ticks.
+    if event != AURA_EVENT_PULSE:
+        refresh_summary(owner)
+
     coords = []
 
     for tile in tiles:
@@ -1058,3 +1175,86 @@ def emit_aura(owner, event: str, aura_key: str, radius: int,
     )
 
     return emit(owner, payload)
+
+
+
+# ─── Stale marks ─────────────────────────────────────────────────────────────
+
+def refresh_summary(observer, delay: float = 0.0) -> bool:
+    """
+    Purpose: Mark the observer's dossier out of date, to be rebuilt once after
+    the last change rather than once per change.
+
+    Entry:
+        observer - any object. One nobody is subscribed through -- an NPC, a
+                   telnet player -- is a supported no-op.
+        delay    - seconds until the dossier goes stale, for a fact that moves
+                   on a clock rather than on an event. 0 means now.
+
+    Exit/Returns:
+        Returns True if a rebuild was scheduled.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The dossier repeats facts half the feed owns -- HP, combat state,
+        location, credits, quests, the active style -- and until this existed
+        it was built on `score`, on resync and on four hand-picked events, so
+        the Character tab showed whatever was true the last time any of those
+        happened. Rather than a call beside every write of every one of those
+        facts, the EMITTER of each channel carrying one calls this, so a fact
+        that reaches a client on its own channel reaches the dossier too, by
+        construction. A new channel repeating a dossier fact calls it the same
+        way.
+
+        MARKED, not emitted, because building it is the most expensive read in
+        the feed and the facts it repeats move several times a tick in a fight.
+        buffer.mark_stale builds it once, after the last of them.
+
+    Notes/References:
+        systems/interface/statefeed/buffer.py, "Stale marks".
+
+    Author: Nick Hobar
+    Creation date: 09/12/2026
+    """
+    marked = _mark_stale_if_heard(
+        observer, CharSummaryPayload.channel, emit_summary, delay
+    )
+
+    return marked
+
+
+
+def refresh_skills(observer) -> bool:
+    """Mark the observer's skill roster out of date. See refresh_summary.
+
+    Called on every XP award as well as on a level moving: the roster carries
+    each skill's progress through its level, and a bar that moves only on a
+    level-up is wrong for the whole of every level. The build this defers is
+    the most expensive in the feed, which is exactly why it is deferred -- a
+    fight awards XP per hit and rebuilds the roster at most once a tick.
+    """
+    marked = _mark_stale_if_heard(
+        observer, CharSkillsPayload.channel, emit_skills, 0.0
+    )
+
+    return marked
+
+
+
+def refresh_status(observer) -> bool:
+    """Mark the observer's status -- combat levels and in_combat -- out of date.
+
+    Called where a combat handler is created and where one is torn down,
+    which is where in_combat actually changes. Marked rather than emitted
+    because the value is DERIVED from the handler, and at teardown the handler
+    is gone only once end_combat has finished deleting it: a build deferred to
+    the drain reads the finished state, where one made inline would have to be
+    placed with care after the last line that changes it.
+    """
+    marked = _mark_stale_if_heard(
+        observer, CharStatusPayload.channel, emit_status, 0.0
+    )
+
+    return marked

@@ -330,12 +330,16 @@ def set_combat_style(weapon, style_key: str, combatant=None) -> bool:
     same way ActionWield.resolve does after a weapon swap -- otherwise the
     new style would not take effect until the next wield or combat entry.
 
-    Also republishes `combatant`'s dossier: the Combat Readiness band shows
+    Also marks `combatant`'s dossier stale: the Combat Readiness band shows
     the active style and the attack/strength bonus it selects, and until this
     call was added a style switch through combat_options_menu left that band
     showing the OLD style until the player happened to run `score`. Sent
     whether or not combatant is mid-fight -- the readiness band is read
     outside combat too.
+
+    And the Combat tab's snapshot, which is the screen the switch was most
+    likely made from: without it the button clicked would stay unlit until
+    the next gear change.
     """
     styles = _stored_combat_styles(weapon)
     if style_key not in styles:
@@ -347,7 +351,8 @@ def set_combat_style(weapon, style_key: str, combatant=None) -> bool:
         combatant.combat._refresh_weapon()
 
     if combatant is not None:
-        feed.emit_summary(combatant)
+        feed.refresh_summary(combatant)
+        feed.emit_combat_options(combatant)
 
     return True
 
@@ -1432,6 +1437,11 @@ class BlackoutCombatHandler(TickableHandler):
         except Exception as exc:
             logger.log_err(f"CombatHandler.end_combat failed delete: {exc!r}")
 
+        # The other half of the transition ensure_combat_handler publishes.
+        # Marked, and after the delete, so the status is built from the state
+        # this routine leaves behind rather than the one it is dismantling.
+        feed.refresh_status(obj)
+
     def drop_combatant(self, entity) -> None:
         """Remove one combatant's handler — called from the disconnect clean path.
 
@@ -1470,7 +1480,15 @@ def ensure_combat_handler(combatant) -> BlackoutCombatHandler:
     site doesn't reimplement the lazy create-or-fetch dance. The dance itself
     is tickable.ensure_handler; the weapon refresh this used to do inline is
     BlackoutCombatHandler.on_ensured.
+
+    Marks the combatant's status stale, because this is where a fight STARTS:
+    CombatEntity.in_combat derives from the handler existing, so creating it is
+    the transition, for an attacker and for the defender start_combat_state
+    ensures a handler on. Until this call the status channel carried in_combat
+    only at login. Harmless on reuse -- a mark coalesces.
     """
     handler = ensure_handler(combatant, BlackoutCombatHandler)
+
+    feed.refresh_status(combatant)
 
     return handler

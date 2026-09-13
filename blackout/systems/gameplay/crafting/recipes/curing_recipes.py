@@ -46,7 +46,7 @@ class MutantRaiderCuredChuckRecipe(CuringRecipe):
 
     name = "mutant raider cured chuck"
     required_level = 0
-    xp_reward = 10
+    xp_reward = 25
     cure_seconds = _CHUCK_TIER_SECONDS
 
     consumable_tags = ["mutant_raider_raw_chuck"]
@@ -67,7 +67,7 @@ class MutantRaiderCuredFatlessMeatRecipe(CuringRecipe):
 
     name = "mutant raider cured fatless meat"
     required_level = 2
-    xp_reward = 10
+    xp_reward = 25
     cure_seconds = _CHUCK_TIER_SECONDS
 
     consumable_tags = ["mutant_raider_fatless_meat"]
@@ -84,7 +84,7 @@ class MutantRaiderCuredFiletRecipe(CuringRecipe):
 
     name = "mutant raider cured filet"
     required_level = 10
-    xp_reward = 20
+    xp_reward = 50
     cure_seconds = _PRIME_TIER_SECONDS
 
     consumable_tags = ["mutant_raider_raw_filet"]
@@ -101,7 +101,7 @@ class MutantRaiderCuredPrimeMeatRecipe(CuringRecipe):
 
     name = "mutant raider cured prime meat"
     required_level = 12
-    xp_reward = 20
+    xp_reward = 70
     cure_seconds = _PRIME_TIER_SECONDS
 
     consumable_tags = ["mutant_raider_prime_meat"]

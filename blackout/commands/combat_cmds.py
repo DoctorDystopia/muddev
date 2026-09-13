@@ -8,15 +8,22 @@ Description: Twitch combat commands — attack, hold, flee, wield.
 from evennia import CmdSet, Command
 
 from commands.constants import HELP_CATEGORY_COMBAT
-from systems.gameplay.combat import combat_msg, constants as const
+from systems.gameplay.combat import combat_msg, constants as const, style_options
 from systems.gameplay.combat.protocols import Combatant
 from systems.gameplay.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
 from systems.core.tick import debug as tick_debug
-from systems.gameplay.combat.combat import active_combat_style_key, ensure_combat_handler, held_weapon
+from systems.gameplay.combat.combat import (
+    active_combat_style_key,
+    available_combat_styles,
+    ensure_combat_handler,
+    held_weapon,
+    set_combat_style,
+)
 from systems.gameplay.combat.rules.introspect import describe_action_rules, describe_registry
 from systems.interface.ui import colors
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed
 
 # Every line this module sends a player is combat, so the routing tag is
 # bound once here rather than repeated at every call site.
@@ -280,7 +287,7 @@ class CmdCombatRules(Command):
 
 
 class CmdCombatOptions(Command):
-    """Command combatoptions — pick which combat style your wielded weapon uses.
+    """Command combatoptions [<style>] — pick which combat style your wielded weapon uses.
 
     Each weapon offers a handful of named styles (e.g. a shortsword's
     accurate/aggressive/defensive stances). The active style decides which
@@ -288,7 +295,13 @@ class CmdCombatOptions(Command):
     earn XP from the damage dealt. Switching is free and instant.
 
     Usage:
-        combatoptions   (aliases: stance, combatstyle)
+        combatoptions           open the combat options menu
+        combatoptions <style>   switch straight to a style, e.g. combatoptions guard
+
+    Aliases: stance, combatstyle
+
+    The second form is also what the graphical client's Combat tab sends when
+    a style is clicked -- the same line, so every check here applies to both.
     """
 
     key = "combatoptions"
@@ -297,15 +310,80 @@ class CmdCombatOptions(Command):
     help_category = HELP_CATEGORY_COMBAT
 
     def func(self) -> None:
+        argument = self.args.strip()
+
+        if not argument:
+            self._open_menu()
+            return
+
+        self._switch(argument)
+
+    def _open_menu(self) -> None:
+        """Open the EvMenu, republishing the Combat tab on the way in.
+
+        The publish is the `skills` command's arrangement: a player asking
+        about combat options is a reason for a graphical client's tab to be
+        current, and it pre-checks its subscription so telnet pays nothing.
+        """
         caller = self.caller
 
         from systems.interface.menus.base_menu import start_blackout_menu
+
+        feed.emit_combat_options(caller)
 
         start_blackout_menu(
             caller,
             "systems.interface.menus.combat_options_menu",
             startnode="start",
         )
+
+    def _switch(self, argument: str) -> None:
+        """Resolve a typed style against the wielded weapon and make it active.
+
+        set_combat_style does the republishing -- the dossier and the Combat
+        tab -- so this path and the menu's cannot publish differently.
+        """
+        caller = self.caller
+        weapon = held_weapon(caller)
+
+        if weapon is None:
+            caller.msg(
+                ("You have no weapon equipped, so there is no style to choose.",
+                 _MSG_COMBAT))
+            return
+
+        style_key = style_options.resolve_style_key(weapon, argument)
+
+        if not style_key:
+            self._refuse_unknown(weapon, argument)
+            return
+
+        style_name = style_key.title()
+
+        if style_key == active_combat_style_key(weapon):
+            caller.msg((f"You are already using {style_name} style.", _MSG_COMBAT))
+            return
+
+        set_combat_style(weapon, style_key, combatant=caller)
+
+        switched = style_options.STYLE_SWITCHED_TEMPLATE.format(name=style_name)
+        caller.msg(
+            (f"{colors.SUCCESS_COLOR}{switched}{colors.RESET_COLOR}", _MSG_COMBAT))
+
+    def _refuse_unknown(self, weapon, argument: str) -> None:
+        """Say the style does not exist, and name the ones that do."""
+        caller = self.caller
+        styles = available_combat_styles(weapon)
+
+        if not styles:
+            caller.msg(
+                (f"{weapon.key} has no combat styles to choose from.", _MSG_COMBAT))
+            return
+
+        names = ", ".join(str(style_key).title() for style_key in styles)
+        caller.msg(
+            (f"{weapon.key} has no style called '{argument}'. "
+             f"Choose from: {names}.", _MSG_COMBAT))
 
 
 class CmdTickDebug(Command):

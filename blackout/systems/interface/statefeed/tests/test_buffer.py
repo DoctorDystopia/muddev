@@ -17,6 +17,7 @@ Run from blackout/:
 from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
+from twisted.internet import reactor
 
 from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
@@ -150,6 +151,9 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             # The whole roster in one message, so the newest carries every
             # level and every XP curve the one before it did.
             const.CHANNEL_CHAR_SKILLS,
+            # The weapon and all its styles in one message; the newest names
+            # the active style on its own.
+            const.CHANNEL_CHAR_COMBAT,
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,
@@ -207,6 +211,152 @@ class TestFlushIsolation(_BufferTestCase):
         buffer.flush()
 
         self.assertEqual(buffer.pending_count(), 0)
+
+
+class TestStaleMarks(_BufferTestCase):
+    """An expensive snapshot is built once, after the last change."""
+
+    def setUp(self):
+        super().setUp()
+        self.built = []
+
+    def _builder(self, obj):
+        self.built.append(obj)
+
+    def test_a_mark_builds_nothing_until_drained(self):
+        buffer.mark_stale(self.char1, self._builder)
+
+        self.assertEqual(self.built, [])
+        buffer.drain_stale()
+        self.assertEqual(self.built, [self.char1])
+
+    def test_repeated_marks_collapse_to_one_build(self):
+        for _ in range(3):
+            buffer.mark_stale(self.char1, self._builder)
+
+        self.assertEqual(buffer.stale_count(), 1)
+        buffer.drain_stale()
+        self.assertEqual(len(self.built), 1)
+
+    def test_two_snapshots_for_one_observer_stay_two(self):
+        buffer.mark_stale(self.char1, self._builder)
+        buffer.mark_stale(self.char1, lambda obj: None)
+
+        self.assertEqual(buffer.stale_count(), 2)
+
+    def test_outside_a_tick_one_drain_is_scheduled_for_this_turn(self):
+        with mock.patch.object(reactor, "callLater") as later:
+            buffer.mark_stale(self.char1, self._builder)
+            buffer.mark_stale(self.char2, self._builder)
+
+        self.assertEqual(later.call_count, 1)
+        self.assertEqual(later.call_args[0], (0, buffer.drain_stale))
+
+    def test_inside_a_tick_nothing_is_scheduled(self):
+        """flush() is already certain to run."""
+        buffer.begin_tick()
+
+        with mock.patch.object(reactor, "callLater") as later:
+            buffer.mark_stale(self.char1, self._builder)
+
+        later.assert_not_called()
+
+    def test_flush_builds_while_the_window_is_still_open(self):
+        """What a stale build emits must join the tick it belongs to."""
+        holding_at_build = []
+        buffer.begin_tick()
+        buffer.mark_stale(
+            self.char1, lambda obj: holding_at_build.append(buffer.is_holding())
+        )
+
+        buffer.flush()
+
+        self.assertEqual(holding_at_build, [True])
+        self.assertFalse(buffer.is_holding())
+
+    def test_a_built_snapshot_leaves_in_the_same_flush(self):
+        buffer.begin_tick()
+        buffer.mark_stale(
+            self.char1, lambda obj: buffer.hold(obj, self._vitals())
+        )
+
+        with mock.patch.object(emit_module, "emit", return_value=1) as sent:
+            buffer.flush()
+
+        self.assertEqual(sent.call_count, 1)
+        self.assertEqual(buffer.pending_count(), 0)
+
+    def test_a_mark_made_while_draining_is_drained_too(self):
+        """emit_status marks the dossier; both belong to the same change."""
+        def _marks_another(obj):
+            buffer.mark_stale(obj, self._builder)
+
+        buffer.mark_stale(self.char1, _marks_another)
+        buffer.drain_stale()
+
+        self.assertEqual(self.built, [self.char1])
+        self.assertEqual(buffer.stale_count(), 0)
+
+    def test_a_builder_marking_itself_cannot_spin_the_drain(self):
+        calls = []
+
+        def _remarks(obj):
+            calls.append(obj)
+            buffer.mark_stale(obj, _remarks)
+
+        buffer.mark_stale(self.char1, _remarks)
+        buffer.drain_stale()
+
+        self.assertEqual(len(calls), const.STALE_DRAIN_MAX_PASSES)
+        self.assertEqual(buffer.stale_count(), 1)
+
+    def test_a_deleted_observer_is_skipped(self):
+        buffer.mark_stale(self.obj1, self._builder)
+        self.obj1.delete()
+
+        built = buffer.drain_stale()  # must not raise
+
+        self.assertEqual(built, 0)
+        self.assertEqual(self.built, [])
+
+    def test_one_failing_builder_does_not_strand_the_others(self):
+        def _explodes(obj):
+            raise RuntimeError("boom")
+
+        buffer.mark_stale(self.char1, _explodes)
+        buffer.mark_stale(self.char2, self._builder)
+
+        buffer.drain_stale()
+
+        self.assertEqual(self.built, [self.char2])
+
+    def test_a_delayed_mark_waits_for_its_moment(self):
+        """A cure coming due changes the dossier with nothing to hear."""
+        with mock.patch.object(reactor, "callLater") as later:
+            buffer.mark_stale(self.char1, self._builder, delay=5.0)
+
+        self.assertEqual(buffer.stale_count(), 0)
+
+        delay, callback, *args = later.call_args[0]
+        self.assertEqual(delay, 5.0)
+
+        callback(*args)
+        self.assertEqual(buffer.stale_count(), 1)
+
+    def test_a_build_happening_now_satisfies_an_earlier_mark(self):
+        buffer.mark_stale(self.char1, self._builder)
+
+        buffer.discard_stale(self.char1, self._builder)
+
+        self.assertEqual(buffer.stale_count(), 0)
+
+    def test_reset_forgets_every_mark(self):
+        buffer.mark_stale(self.char1, self._builder)
+
+        buffer.reset()
+        buffer.drain_stale()
+
+        self.assertEqual(self.built, [])
 
 
 class TestEngineBrackets(_BufferTestCase):

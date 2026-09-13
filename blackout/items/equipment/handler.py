@@ -125,8 +125,13 @@ class EquipmentHandler:
         until this call was added here they went stale the moment a player
         equipped or unequipped anything without also running `score` --
         emit_summary was reachable only from resync and the score menu.
-        emit_summary already gates on subscriber count itself, so this costs
-        nothing on a telnet-only connection.
+        MARKED stale rather than built, so `wear all` rebuilds the dossier
+        once rather than once per item; refresh_summary gates on subscriber
+        count itself, so this costs nothing on a telnet-only connection.
+
+        And the Combat tab, whose weapon, styles and attack speed are all read
+        off the wielded slot. Every equip path passes through here, including
+        a mid-fight `wield`, so this one call covers them all.
 
         Imported inside the method. This package is reached from typeclass
         import time, and a module-scope import of the feed would couple the
@@ -135,7 +140,8 @@ class EquipmentHandler:
         from systems.interface.statefeed import events as feed
 
         feed.emit_inventory(self.obj)
-        feed.emit_summary(self.obj)
+        feed.refresh_summary(self.obj)
+        feed.emit_combat_options(self.obj)
 
 
     def _refresh_combat(self):
