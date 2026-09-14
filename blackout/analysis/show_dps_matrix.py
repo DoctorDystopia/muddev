@@ -18,10 +18,10 @@ encounter is content or a death sentence.
 
 Everything here is expected value, not simulation: hit_chance * max_hit / 2 per
 swing, divided by the weapon cadence. Variance is deliberately out of scope --
-that belongs to a Monte Carlo snapshot, not to this one.
+show_damage_distribution.py measures it.
 
 Run it:
-    ../evenv/Scripts/python.exe systems/gameplay/combat/show_dps_matrix.py
+    ../evenv/Scripts/python.exe analysis/show_dps_matrix.py
 """
 
 from __future__ import annotations
@@ -31,8 +31,8 @@ from pathlib import Path
 
 
 # The game directory has to be importable before `systems.*` resolves.
-# Running this file directly puts systems/gameplay/combat/ on sys.path, not blackout/.
-_GAME_DIR: str = str(Path(__file__).resolve().parents[3])
+# Running this file directly puts analysis/ on sys.path, not blackout/.
+_GAME_DIR: str = str(Path(__file__).resolve().parents[1])
 
 if _GAME_DIR not in sys.path:
     sys.path.insert(0, _GAME_DIR)
@@ -40,15 +40,13 @@ if _GAME_DIR not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 
-from systems.gameplay.combat import _snapshot_env as env
+from analysis import _snapshot_env as env
 
 
 # Public constant definitions
 
 # The stat the player's armour is chosen on. Every NPC in NPC_DB currently
-# attacks crush, so crush defence is the axis worth optimising against. With
-# one candidate per armour slot in ITEM_DB today the choice is vacuous either
-# way; it starts to matter the moment a slot has two options.
+# attacks crush, so crush defence is the axis worth optimising against.
 ARMOUR_SELECTION_STAT: str = "crush_defense_bonus"
 
 # Lowest level the sweeps plot from. Level 0 gives a character 0 max HP, which
@@ -90,9 +88,9 @@ _TTK_AXIS_SCALE: str = "log"
 _NEVER_LABEL: str = "never"
 
 # Flags a weapon carrying combat_rules. Every number on such a row comes from
-# the OSRS formulas, which a rules definition owning roll_damage or resolve
-# does not obey -- so the row is fiction. show_rules_map names them;
-# show_damage_distribution measures them through the real pipeline.
+# the OSRS formulas, which a rules definition does not obey -- so the row is
+# fiction. show_rules_map names them; show_damage_distribution measures them
+# through the real pipeline.
 _UNMODELLED_MARK: str = " *"
 
 
@@ -121,6 +119,14 @@ def _player_profiles(armour: dict) -> list:
     return profiles
 
 
+def _uniform_player(level: int):
+    """Return a player_for callable: a player at `level` on every axis."""
+    def player_for(profile):
+        return env.player_combatant(level, profile)
+
+    return player_for
+
+
 def _best_damage_style(attacker, defender) -> tuple:
     """Return (style_key, metrics) for the style with the highest DPS.
 
@@ -145,14 +151,17 @@ def _best_damage_style(attacker, defender) -> tuple:
     return best_key, best_metrics
 
 
-def _best_weapon_at_level(profiles: list, level: int, defender) -> tuple:
-    """Return (profile, style_key, metrics) for the best DPS at one level."""
+def _best_weapon_for(profiles: list, player_for, defender) -> tuple:
+    """Return (profile, style_key, metrics) for the best DPS against one NPC.
+
+    player_for(profile) returns the player Combatant that holds the profile.
+    """
     best_profile = None
     best_style = None
     best_metrics = None
 
     for profile in profiles:
-        attacker = env.player_combatant(level, profile)
+        attacker = player_for(profile)
         style_key, metrics = _best_damage_style(attacker, defender)
 
         if best_metrics is None:
@@ -172,13 +181,32 @@ def _best_weapon_at_level(profiles: list, level: int, defender) -> tuple:
 def _inbound_metrics(npc, player):
     """Resolve the NPC's swing against the player. Returns SwingMetrics.
 
-    An NPC declares exactly one style today, so there is no contest to run --
-    but the lookup goes through the same evaluate_styles path so an NPC that
-    later declares several is handled without touching this routine.
+    An NPC fights with its active style: the default_combat_style its block
+    declares. It never picks the best style against its target, so this
+    routine must not pick one either. The old version took the best-DPS
+    style, which gives an NPC with several styles a choice the live game does
+    not give it.
     """
-    _style_key, metrics = _best_damage_style(npc, player)
+    style_key = env.active_style_key(npc.profile)
 
-    return metrics
+    return env.swing_metrics(npc, style_key, player)
+
+
+def _kill_ratio(player, npc) -> float:
+    """Inbound kill time divided by outbound kill time for one matchup."""
+    _style_key, outbound = _best_damage_style(player, npc)
+    inbound = _inbound_metrics(npc, player)
+
+    player_seconds = env.time_to_kill(outbound.damage_per_second, npc.max_hp)
+    npc_seconds = env.time_to_kill(inbound.damage_per_second, player.max_hp)
+
+    if player_seconds == env.UNKILLABLE_SECONDS:
+        return 0.0
+
+    if npc_seconds == env.UNKILLABLE_SECONDS:
+        return float("inf")
+
+    return npc_seconds / player_seconds
 
 
 def _format_seconds(seconds: float) -> str:
@@ -214,7 +242,7 @@ def _print_armour(items: list) -> None:
         print(f"  {slot_label:<12} {item_def.name:<{_NAME_WIDTH}} {bonus:>+4}")
 
 
-def _print_outbound(profiles: list, npcs: dict, level: int) -> None:
+def _print_outbound(profiles: list, npcs: dict, title: str, player_for) -> None:
     """Print the player's damage per second and kill time against each NPC."""
     header = f"{'Weapon':<{_NAME_WIDTH}} |"
 
@@ -223,7 +251,7 @@ def _print_outbound(profiles: list, npcs: dict, level: int) -> None:
         header += f" {label:>{_NPC_WIDTH + _NUMBER_WIDTH}}"
 
     print()
-    print(f"OUTBOUND -- player level {level}: best-DPS style, DPS and time to kill")
+    print(f"OUTBOUND -- {title}: best-DPS style, DPS and time to kill")
     print(header)
     print("-" * len(header))
 
@@ -234,9 +262,9 @@ def _print_outbound(profiles: list, npcs: dict, level: int) -> None:
         unmodelled_seen = unmodelled_seen or bool(profile.combat_rules)
         label = f"{profile.name}{marker}"
         line = f"{label:<{_NAME_WIDTH}} |"
+        attacker = player_for(profile)
 
         for combatant in npcs.values():
-            attacker = env.player_combatant(level, profile)
             style_key, metrics = _best_damage_style(attacker, combatant)
             seconds = env.time_to_kill(metrics.damage_per_second, combatant.max_hp)
             time_label = _format_seconds(seconds)
@@ -252,7 +280,7 @@ def _print_outbound(profiles: list, npcs: dict, level: int) -> None:
         print("    Run show_rules_map.py and show_damage_distribution.py instead.")
 
 
-def _print_inbound(profiles: list, npcs: dict, level: int) -> None:
+def _print_inbound(profiles: list, npcs: dict, title: str, player_for) -> None:
     """Print each NPC's damage per second and kill time against the player.
 
     The player is holding the weapon that maximises DPS against the first NPC,
@@ -261,12 +289,12 @@ def _print_inbound(profiles: list, npcs: dict, level: int) -> None:
     beats picking one silently.
     """
     first_npc = next(iter(npcs.values()))
-    reference, _style, _metrics = _best_weapon_at_level(profiles, level, first_npc)
-    player = env.player_combatant(level, reference)
+    reference, _style, _metrics = _best_weapon_for(profiles, player_for, first_npc)
+    player = player_for(reference)
 
     print()
-    print(f"INBOUND -- each NPC against a level-{level} player in the armour "
-          f"above, wielding {reference.name}")
+    print(f"INBOUND -- each NPC, in its own active style, against a {title} in "
+          f"the armour above, wielding {reference.name}")
     print(f"  {'NPC':<{_NPC_WIDTH}} {'hit%':>6} {'max':>4} "
           f"{'DPS':>{_NUMBER_WIDTH}} {'kills player in':>16}")
 
@@ -279,15 +307,15 @@ def _print_inbound(profiles: list, npcs: dict, level: int) -> None:
               f"{metrics.max_hit:>4} {metrics.damage_per_second:>{_NUMBER_WIDTH}.3f} "
               f"{time_label:>16}")
 
-    print(f"  Player max HP at level {level}: {player.max_hp}")
+    print(f"  Player max HP: {player.max_hp}")
     print("  Defence bonuses sum the armour set and the wielded weapon, exactly")
     print("  as EquipmentHandler.total_combat_stat_bonuses sums live gear.")
 
 
-def _print_kill_ratio(profiles: list, npcs: dict, level: int) -> None:
+def _print_kill_ratio(profiles: list, npcs: dict, title: str, player_for) -> None:
     """Print inbound-over-outbound kill time: above 1.0 the player wins."""
     print()
-    print(f"KILL RATIO at level {level} -- NPC's kill time / player's kill time")
+    print(f"KILL RATIO -- {title}: NPC's kill time / player's kill time")
     print(f"  Above {EVEN_FIGHT_RATIO:.1f} the player wins the exchange.")
     header = f"  {'Weapon':<{_NAME_WIDTH}} |"
 
@@ -299,30 +327,13 @@ def _print_kill_ratio(profiles: list, npcs: dict, level: int) -> None:
 
     for profile in profiles:
         line = f"  {profile.name:<{_NAME_WIDTH}} |"
+        player = player_for(profile)
 
         for combatant in npcs.values():
-            ratio = _kill_ratio(profile, combatant, level)
+            ratio = _kill_ratio(player, combatant)
             line += f" {ratio:>{_NPC_WIDTH}.2f}"
 
         print(line)
-
-
-def _kill_ratio(profile, npc, level: int) -> float:
-    """Inbound kill time divided by outbound kill time for one matchup."""
-    player = env.player_combatant(level, profile)
-    _style_key, outbound = _best_damage_style(player, npc)
-    inbound = _inbound_metrics(npc, player)
-
-    player_seconds = env.time_to_kill(outbound.damage_per_second, npc.max_hp)
-    npc_seconds = env.time_to_kill(inbound.damage_per_second, player.max_hp)
-
-    if player_seconds == env.UNKILLABLE_SECONDS:
-        return 0.0
-
-    if npc_seconds == env.UNKILLABLE_SECONDS:
-        return float("inf")
-
-    return npc_seconds / player_seconds
 
 
 # Private helper routines -- plotting
@@ -343,8 +354,8 @@ def _plot_time_to_kill(axes, profiles: list, npcs: dict) -> None:
         times = []
 
         for level in levels:
-            _profile, _style, metrics = _best_weapon_at_level(
-                profiles, level, combatant
+            _profile, _style, metrics = _best_weapon_for(
+                profiles, _uniform_player(level), combatant
             )
             seconds = env.time_to_kill(metrics.damage_per_second, combatant.max_hp)
             times.append(_plottable(seconds))
@@ -359,13 +370,13 @@ def _plot_time_to_kill(axes, profiles: list, npcs: dict) -> None:
     axes.legend(fontsize="small")
 
 
-def _dps_grid(profiles: list, npcs: dict, level: int):
-    """Damage per second for every (weapon, NPC) pair at one level."""
+def _dps_grid(profiles: list, npcs: dict, player_for):
+    """Damage per second for every (weapon, NPC) pair for one player build."""
     grid = np.zeros((len(profiles), len(npcs)))
     combatants = list(npcs.values())
 
     for row_index, profile in enumerate(profiles):
-        attacker = env.player_combatant(level, profile)
+        attacker = player_for(profile)
 
         for col_index, combatant in enumerate(combatants):
             _style_key, metrics = _best_damage_style(attacker, combatant)
@@ -374,9 +385,10 @@ def _dps_grid(profiles: list, npcs: dict, level: int):
     return grid
 
 
-def _plot_dps_grid(axes, figure, profiles: list, npcs: dict, level: int) -> None:
+def _plot_dps_grid(axes, figure, profiles: list, npcs: dict, title: str,
+                   player_for) -> None:
     """Draw the weapon-by-NPC damage-per-second grid with the values written in."""
-    grid = _dps_grid(profiles, npcs, level)
+    grid = _dps_grid(profiles, npcs, player_for)
     weapon_labels = [profile.name for profile in profiles]
     npc_labels = [combatant.name for combatant in npcs.values()]
 
@@ -392,7 +404,7 @@ def _plot_dps_grid(axes, figure, profiles: list, npcs: dict, level: int) -> None
     axes.set_xticklabels(npc_labels, fontsize=_TICK_TEXT_SIZE, rotation=20)
     axes.set_yticks(range(len(weapon_labels)))
     axes.set_yticklabels(weapon_labels, fontsize=_TICK_TEXT_SIZE)
-    axes.set_title(f"Player DPS at level {level}")
+    axes.set_title(f"Player DPS -- {title}")
     figure.colorbar(image, ax=axes, label="Damage per second")
 
 
@@ -404,11 +416,11 @@ def _plot_kill_ratio(axes, profiles: list, npcs: dict) -> None:
         ratios = []
 
         for level in levels:
-            profile, _style, _metrics = _best_weapon_at_level(
-                profiles, level, combatant
+            player_for = _uniform_player(level)
+            profile, _style, _metrics = _best_weapon_for(
+                profiles, player_for, combatant
             )
-            ratio = _kill_ratio(profile, combatant, level)
-            ratios.append(ratio)
+            ratios.append(_kill_ratio(player_for(profile), combatant))
 
         axes.plot(levels, ratios, linewidth=_LINE_WIDTH, label=combatant.name)
 
@@ -439,15 +451,17 @@ def main() -> None:
         ARMOUR_SELECTION_STAT read.
 
     Methodology:
-        Tables at the spawn level answer "is the starting content survivable";
-        the plots answer "where does that stop being true". Both directions
-        use the same armour set so the two halves of a fight are consistent
-        with each other -- reporting outbound damage from a geared player and
-        inbound damage against a naked one is the easy way to make an
-        encounter look balanced when it is not.
+        Tables for a new character answer "is the starting content
+        survivable"; the plots answer "where does that stop being true". Both
+        directions use the same armour set so the two halves of a fight are
+        consistent with each other -- reporting outbound damage from a geared
+        player and inbound damage against a naked one is the easy way to make
+        an encounter look balanced when it is not.
 
     Notes/References:
-        None.
+        The new-character tables used to show a player at level 1 on every
+        axis. Character creation leaves Strike, Brawn and Defense at 0, so
+        those rows gave a new character skills it does not have.
 
     Author: Nick Hobar
     Creation date: 08/22/2026
@@ -458,20 +472,23 @@ def main() -> None:
     armour_bonuses, armour_items = _armour_totals()
     profiles = _player_profiles(armour_bonuses)
     npcs = env.npc_combatants()
-    spawn_level = combat_const.FORTITUDE_START_LEVEL
+    spawn_title = env.spawn_label()
+    top_level = combat_const.MAX_BASE_SKILL_LEVEL
+    top_title = f"uniform player level {top_level}"
 
     _print_armour(armour_items)
-    _print_outbound(profiles, npcs, spawn_level)
-    _print_inbound(profiles, npcs, spawn_level)
-    _print_kill_ratio(profiles, npcs, spawn_level)
-    _print_outbound(profiles, npcs, combat_const.MAX_BASE_SKILL_LEVEL)
+    _print_outbound(profiles, npcs, spawn_title, env.spawn_combatant)
+    _print_inbound(profiles, npcs, spawn_title, env.spawn_combatant)
+    _print_kill_ratio(profiles, npcs, spawn_title, env.spawn_combatant)
+    _print_outbound(profiles, npcs, top_title, _uniform_player(top_level))
 
     figure, (left_axes, middle_axes, right_axes) = plt.subplots(
         _SUBPLOT_ROWS, _SUBPLOT_COLUMNS,
         figsize=(_FIGURE_WIDTH_INCHES, _FIGURE_HEIGHT_INCHES),
     )
     _plot_time_to_kill(left_axes, profiles, npcs)
-    _plot_dps_grid(middle_axes, figure, profiles, npcs, spawn_level)
+    _plot_dps_grid(middle_axes, figure, profiles, npcs, spawn_title,
+                   env.spawn_combatant)
     _plot_kill_ratio(right_axes, profiles, npcs)
 
     figure.tight_layout()

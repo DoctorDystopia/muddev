@@ -150,3 +150,15 @@ Maintain the following order within the Python file:
 * **Constants vs. literals:** No use of literals (magic numbers) is permitted. Constants must be used instead, particularly for defining maximum sizes or bounds.
 * **Embedded routine calls:** Do not embed routine calls in `if` statements, `for` loops, as parameters to another routine, or directly in `return` statements. This makes the code difficult to debug because the evaluated value isn't stored for easy examination. Assign the return value to a local variable first, then evaluate it.
 * **Local variables:** Use specific names for local variables (except for standard counters like `i`). Do not reuse a local variable for different purposes throughout a routine; create a new, well-named variable instead.
+
+---
+
+## 9.0 Prose in Docstrings and Comments
+
+Docstring and comment prose follows ASD-STE100 Simplified Technical English, through the `asd-ste100` skill. The headers in section 2.0 already match its two kinds of text:
+
+* **Purpose** and **Notes/References** are descriptive text. Write 25 words at most in each sentence.
+* **Entry** and **Exit/Returns** are conditions. Write each condition as one short statement, for example `1 <= card_num <= 3`.
+* **Methodology** is a procedure when it lists steps. Number the steps, use the imperative form, and write 20 words at most in each step.
+
+Use the technical nouns in `glossary.md`. Do not use semicolons or contractions. Put a condition before its action: "If the slot is empty, return None."

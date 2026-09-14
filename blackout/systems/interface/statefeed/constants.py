@@ -939,6 +939,31 @@ TILE_COMMAND_LOOK: str = "look"
 TILE_COMMAND_GOTO: str = "goto"
 TILE_COMMAND_GOTO_TEMPLATE: str = "goto ({x},{y})"
 
+# What joins a `goto` to the command it runs on arrival: `goto (4,7) then cut
+# rusty pole` walks to (4,7) and, if the player is still standing there when
+# the walk ends, types `cut rusty pole` for them. commands/movement_cmds.py
+# parses it; nothing else may spell it.
+#
+# Spaces on both sides are part of the token. A room is named by its key in the
+# other form of `goto`, and a key merely CONTAINING "then" must not be split.
+GOTO_FOLLOW_UP_SEPARATOR: str = " then "
+
+# What a client sends to act on an entity standing on a tile other than its
+# own. `{command}` is the entity's `interact`, or one of its `actions`, exactly
+# as the server named it.
+#
+# A TEMPLATE rather than a field on every entity, for the reason
+# INVENTORY_SWAP_TEMPLATE gives: which tile the observer is on changes every
+# step, and the entity row does not -- a per-entity command would be stale the
+# moment the player moved, or would have to be re-sent for the whole
+# neighbourhood on every step, on the largest payload the feed sends. The
+# server owns the SPELLING; the client knows both tiles and fills it in.
+#
+# Derived, so the template and the parser cannot disagree about the separator.
+ENTITY_APPROACH_TEMPLATE: str = (
+    TILE_COMMAND_GOTO_TEMPLATE + GOTO_FOLLOW_UP_SEPARATOR + "{command}"
+)
+
 # How a tile is keyed in a tile-action map. Formatted here rather than in the
 # client for the same reason serialize_inventory formats its slot numbers here:
 # one owner for the shape, and no client left holding a format string.

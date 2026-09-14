@@ -514,7 +514,8 @@ func _act_on(screen_point: Vector2) -> void:
 
 
 func _act_on_entity(entity: Dictionary) -> void:
-	var command := _interaction(entity)
+	var command := approach_command(_interaction(entity), entity,
+		_state.current_cell, _state.current_z)
 
 	if command.is_empty():
 		return
@@ -534,7 +535,9 @@ func _offer_options(screen_point: Vector2) -> void:
 	var entity_id := _entities.pick(_camera, screen_point, PICK_REACH_PIXELS)
 
 	if entity_id != 0:
-		var options := options_for(_entities.entity(entity_id))
+		var entity := _entities.entity(entity_id)
+		var options := approach_options(options_for(entity), entity,
+			_state.current_cell, _state.current_z)
 
 		if not options.is_empty():
 			options_requested.emit(options, screen_point)
@@ -634,6 +637,78 @@ static func options_for(entity: Dictionary) -> Array:
 ## unclickable.
 static func _interaction(entity: Dictionary) -> String:
 	return str(entity.get("interact", ""))
+
+
+## The command that acts on `entity` from where the observer stands, or "".
+##
+## An entity on the observer's own tile gets `command` verbatim, exactly as
+## before. One on a DIFFERENT tile of the same island gets it wrapped in the
+## server's [constant Const.ENTITY_APPROACH_TEMPLATE] -- `goto (4,7) then cut
+## rusty pole` -- so the click walks there and acts on arrival. Sent verbatim it
+## could only fail: a gathering node's verb lives in the node's own cmdset, and
+## `attack` and `get` search the room the player is in.
+##
+## THE TEMPLATE IS THE SERVER'S; only the two tiles are this pane's, and it
+## already holds both. The wrap cannot ride on the entity row instead, because
+## which tile the observer stands on changes every step and the row does not.
+##
+## An entity on ANOTHER island is sent verbatim too, and that is not a rule
+## about maps: the server reads the template's (X,Y) on the map the player is
+## standing on, so the same numbers there name a different room entirely.
+## Wrapping it would walk the player somewhere they never clicked.
+##
+## Static and public so a test can pin every branch with hand-built payloads.
+static func approach_command(command: String, entity: Dictionary,
+		here: Vector2i, here_z: String) -> String:
+	if command.is_empty():
+		return ""
+
+	var coords: Variant = entity.get("coords", [])
+
+	if typeof(coords) != TYPE_ARRAY or coords.size() < 3:
+		return command
+
+	# Floats off the wire, converted at the point of use like every other
+	# coordinate in this client.
+	var cell := Vector2i(int(coords[0]), int(coords[1]))
+
+	if cell == here or str(coords[2]) != here_z:
+		return command
+
+	# {command} LAST, so a command that happened to contain "{x}" is carried
+	# as written rather than having a coordinate substituted into it.
+	return Const.ENTITY_APPROACH_TEMPLATE \
+		.replace("{x}", str(cell.x)) \
+		.replace("{y}", str(cell.y)) \
+		.replace("{command}", command)
+
+
+## [method options_for]'s rows, each command passed through
+## [method approach_command].
+##
+## A row whose command gets wrapped keeps its VERB as its label. A row the
+## server sent no label for is worded by [method ChooseOption.row_text] from
+## the command's first word -- which, once wrapped, is `goto`, and every far
+## entity's menu would then read "Goto Rusty Pole" on every row.
+static func approach_options(options: Array, entity: Dictionary,
+		here: Vector2i, here_z: String) -> Array:
+	var rows: Array = []
+
+	for option: Dictionary in options:
+		var command := str(option.get("command", ""))
+		var label := str(option.get("label", ""))
+		var sent := approach_command(command, entity, here, here_z)
+
+		if sent != command and label.is_empty():
+			label = command.split(" ")[0]
+
+		rows.append({
+			"command": sent,
+			"label": label,
+			"target": option.get("target", ""),
+		})
+
+	return rows
 
 
 ## Send whatever the server said this tile affords.

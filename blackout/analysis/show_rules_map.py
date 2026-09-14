@@ -18,7 +18,7 @@ formulas at all. Every item named in the final section is a row those
 snapshots report fiction for, and show_damage_distribution measures properly.
 
 Run it:
-    ../evenv/Scripts/python.exe systems/gameplay/combat/show_rules_map.py
+    ../evenv/Scripts/python.exe analysis/show_rules_map.py
 """
 
 from __future__ import annotations
@@ -28,20 +28,22 @@ from pathlib import Path
 
 
 # The game directory has to be importable before `systems.*` resolves.
-_GAME_DIR: str = str(Path(__file__).resolve().parents[3])
+_GAME_DIR: str = str(Path(__file__).resolve().parents[1])
 
 if _GAME_DIR not in sys.path:
     sys.path.insert(0, _GAME_DIR)
 
-from systems.gameplay.combat import _snapshot_env as env
+from analysis import _snapshot_env as env
 
 
 # Public constant definitions
 
-# Seams whose owner replaces the damage number outright. A definition owning
-# any of these makes the OSRS max-hit formula stop describing the weapon, which
-# is what puts its carrier on the unmodellable list.
-DAMAGE_OWNING_SEAMS: tuple = ("roll_damage", "resolve", "max_hit")
+# Shown in the seam column for a definition that contributes modifiers.
+# swing_metrics calls combat_calc directly. It resolves no seam and reads no
+# modifier channel, so ANY rule on a weapon takes that weapon off the model:
+# an accuracy owner changes the hit chance, and a Brawn modifier changes the
+# max hit, just as a roll_damage owner changes the damage.
+MODIFIERS_LABEL: str = "modifiers"
 
 
 # Private constant definitions
@@ -159,7 +161,14 @@ def _seam_winners(rule_keys: list) -> dict:
 
 
 def _unmodellable_profiles() -> list:
-    """Every weapon whose rules replace a number the OSRS formulas produce."""
+    """Every weapon that carries a rule the analytic swing model ignores.
+
+    That is every weapon with combat_rules (see MODIFIERS_LABEL). The old
+    version flagged only a weapon that owned roll_damage, resolve or max_hit,
+    so a weapon that owned accuracy, or only contributed modifiers, passed as
+    modelled. The seam list names what each weapon changes, so a reader can
+    see which numbers are wrong.
+    """
     profiles = env.weapon_profiles()
     flagged = []
 
@@ -169,20 +178,17 @@ def _unmodellable_profiles() -> list:
 
         owned = set()
 
-        for rule_key in profile.combat_rules:
-            contributors = env.rules_for([rule_key])
+        for rules in env.rules_for(profile.combat_rules):
+            owned.update(_seams_of(rules))
 
-            for rules in contributors:
-                owned.update(_seams_of(rules))
+            if _contributes_modifiers(rules):
+                owned.add(MODIFIERS_LABEL)
 
-        overlap = owned.intersection(DAMAGE_OWNING_SEAMS)
-
-        if overlap:
-            flagged.append({
-                "name": profile.name,
-                "rules": list(profile.combat_rules),
-                "seams": tuple(sorted(overlap)),
-            })
+        flagged.append({
+            "name": profile.name,
+            "rules": list(profile.combat_rules),
+            "seams": tuple(sorted(owned)),
+        })
 
     return flagged
 
@@ -244,20 +250,21 @@ def _print_unmodellable(flagged: list) -> None:
     print("ANALYTIC-MODEL CAVEAT")
 
     if not flagged:
-        print("  No weapon replaces a damage seam. Every row in show_max_hit and")
-        print("  show_dps_matrix is described by the OSRS formulas.")
+        print("  No weapon carries combat_rules. Every row in show_max_hit,")
+        print("  show_hit_chance and show_dps_matrix is described by the OSRS")
+        print("  formulas.")
         return
 
-    print("  These weapons own a seam that produces the damage number, so the")
-    print("  OSRS formulas do not describe them. show_max_hit and")
-    print("  show_dps_matrix report the FORMULA result for these rows, which is")
-    print("  not what the weapon does. show_damage_distribution measures them")
-    print("  through the real pipeline instead.")
+    print("  These weapons carry rules. The analytic model resolves no seam and")
+    print("  reads no modifier, so the OSRS formulas do not describe them.")
+    print("  show_max_hit, show_hit_chance and show_dps_matrix report the")
+    print("  FORMULA result for these rows, which is not what the weapon does.")
+    print("  show_damage_distribution measures them through the real pipeline.")
     print()
-    print(f"  {'weapon':<{_CARRIER_WIDTH}} {'seams owned':<{_SEAM_WIDTH}} rules")
+    print(f"  {'weapon':<{_CARRIER_WIDTH}} {'changes':<{_SEAM_WIDTH}} rules")
 
     for entry in flagged:
-        seam_label = ", ".join(entry["seams"])
+        seam_label = ", ".join(entry["seams"]) or _NOTHING_LABEL
         rule_label = ", ".join(entry["rules"])
         print(f"  {entry['name']:<{_CARRIER_WIDTH}} {seam_label:<{_SEAM_WIDTH}} "
               f"{rule_label}")
@@ -279,7 +286,7 @@ def main() -> None:
         of eleven rows would carry less than the table does.
 
     Module Globals:
-        DAMAGE_OWNING_SEAMS read.
+        MODIFIERS_LABEL read.
 
     Methodology:
         Seam ownership is resolved through the pipeline's own _resolve_winners

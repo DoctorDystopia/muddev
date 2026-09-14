@@ -2,16 +2,14 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/22/2026
-Description: Shared bootstrap and math scaffolding for the combat snapshot
-             scripts -- show_max_hit.py, show_hit_chance.py and
-             show_dps_matrix.py all sweep the same pure combat_calc surface
-             and differ only in what they tabulate and plot.
+Description: Shared bootstrap and math scaffolding for every script in
+             analysis/. They all sweep the same pure combat_calc surface and
+             differ only in what they tabulate and plot.
 
-Django is deliberately NOT started at import time. show_skills_graph.py calls
-django.setup() at module scope, so merely importing it stands a whole game
-environment up -- the import hazard CLAUDE.md documents for blackout/scripts/.
-Here the snapshot scripts call bootstrap() from inside their own __main__
-guard, which leaves this module inert on import.
+Django is deliberately NOT started at import time. Each script calls
+bootstrap() from inside its own __main__ guard, which leaves this module inert
+on import. A test can therefore import it inside the test runner, where Django
+is already set up.
 
 Every systems.gameplay.combat / world import therefore lives INSIDE a routine rather
 than at the top of the file: those modules read Django settings while being
@@ -51,9 +49,9 @@ NO_STANCE_BONUS: int = 0
 
 # Private constant definitions
 
-# This file sits at blackout/systems/gameplay/combat/, so the game directory is three
-# parents up. Derived rather than hardcoded so a snapshot runs from any cwd.
-_BLACKOUT_ROOT: Path = Path(__file__).resolve().parents[3]
+# This file sits at blackout/analysis/, so the game directory is one
+# parent up. Derived rather than hardcoded so a snapshot runs from any cwd.
+_BLACKOUT_ROOT: Path = Path(__file__).resolve().parents[1]
 
 # Per-damage-type equipment keys. The attack type ("stab"/"slash"/"crush") is
 # interpolated in, exactly as systems/gameplay/combat/combat.py does it.
@@ -114,6 +112,10 @@ class AttackProfile:
     # way to measure one of these.
     combat_rules: list = field(default_factory=list)
 
+    # The style key the entity fights with when nothing picks one: an NpcDef's
+    # default_combat_style. None for a weapon, because a player picks a style.
+    default_style: str | None = None
+
 
 @dataclass
 class Combatant:
@@ -122,8 +124,10 @@ class Combatant:
     the profile it swings with.
 
     Entry:
-        Levels are on Blackout's 0..127 scale. max_hp is the Fortitude-derived
-        pool for a Character, or NpcDef.max_hp for a monster.
+        Levels are on Blackout's 0..127 scale. fortitude_level is the Fortitude
+        skill level. max_hp is the Fortitude-derived pool for a Character, or
+        NpcDef.max_hp for a monster. They are two fields because an NpcDef may
+        set a Fortitude that differs from its HP pool.
 
     Exit/Returns:
         Not applicable -- a record.
@@ -147,6 +151,7 @@ class Combatant:
     strike_level: int
     brawn_level: int
     defense_level: int
+    fortitude_level: int
     max_hp: int
     profile: AttackProfile
 
@@ -436,33 +441,37 @@ def npc_combatants() -> dict:
         Character's gear is.
 
     Notes/References:
-        attack_speed is Optional on NpcDef and falls back to the unarmed
-        cadence at create time; the same fallback is applied here.
+        Every field comes from NpcDef.to_combat_block, the dict that
+        HostileNPC.apply_combat_stats applies at spawn. That block owns each
+        fallback: attack_speed to the unarmed cadence, default_combat_style to
+        the unarmed style, and fortitude_level to max_hp. The old version read
+        max_hp as the Fortitude level and ignored fortitude_level.
 
     Author: Nick Hobar
     Creation date: 08/22/2026
     """
     from world.npc_database import NPC_DB
 
-    combat_const = combat_constants()
     combatants = {}
 
     for npc_key, npc_def in NPC_DB.items():
-        speed = npc_def.attack_speed or combat_const.UNARMED_ATTACK_SPEED_TICKS
+        block = npc_def.to_combat_block()
         profile = AttackProfile(
             key=npc_def.key,
             name=npc_def.name,
-            attack_speed=speed,
-            combat_stat_bonuses=dict(npc_def.combat_stat_bonuses),
-            combat_styles=dict(npc_def.combat_styles),
-            combat_rules=list(npc_def.combat_rules),
+            attack_speed=block["attack_speed"],
+            combat_stat_bonuses=block["combat_stat_bonuses"],
+            combat_styles=block["combat_styles"],
+            combat_rules=block["combat_rules"],
+            default_style=block["default_combat_style"],
         )
         combatants[npc_key] = Combatant(
             name=npc_def.name,
-            strike_level=npc_def.strike_level,
-            brawn_level=npc_def.brawn_level,
-            defense_level=npc_def.defense_level,
-            max_hp=npc_def.max_hp,
+            strike_level=block["strike_level"],
+            brawn_level=block["brawn_level"],
+            defense_level=block["defense_level"],
+            fortitude_level=block["fortitude_level"],
+            max_hp=block["max_hp"],
             profile=profile,
         )
 
@@ -504,9 +513,89 @@ def player_combatant(level: int, profile: AttackProfile,
         strike_level=level,
         brawn_level=level,
         defense_level=level,
+        fortitude_level=level,
         max_hp=hit_points,
         profile=profile,
     )
+
+
+def spawn_combatant(profile: AttackProfile,
+                    name: str = "New character") -> Combatant:
+    """
+    Purpose: A Character exactly as character creation leaves it.
+
+    Entry:
+        bootstrap() must have run. profile is what the character swings.
+
+    Exit/Returns:
+        Returns a Combatant with Strike, Brawn and Defense at
+        DEFAULT_START_LEVEL, Fortitude at FORTITUDE_START_LEVEL, and max_hp
+        derived from Fortitude.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Mirrors init_all_skills followed by seed_fortitude_on_creation. Every
+        skill starts at DEFAULT_START_LEVEL, and only Fortitude diverges.
+
+    Notes/References:
+        player_combatant(FORTITUDE_START_LEVEL) is NOT this character. It gives
+        Strike, Brawn and Defense the Fortitude start level, which a new
+        character does not have. Three snapshots used that build as "the spawn
+        level" until 09/14/2026.
+
+    Author: Nick Hobar
+    Creation date: 09/14/2026
+    """
+    from systems.gameplay.progression.skills import constants as skill_const
+
+    combat_const = combat_constants()
+    start = skill_const.DEFAULT_START_LEVEL
+    fortitude = combat_const.FORTITUDE_START_LEVEL
+
+    return Combatant(
+        name=name,
+        strike_level=start,
+        brawn_level=start,
+        defense_level=start,
+        fortitude_level=fortitude,
+        max_hp=fortitude * combat_const.HP_PER_FORTITUDE_LEVEL,
+        profile=profile,
+    )
+
+
+def spawn_label() -> str:
+    """
+    Purpose: Name the spawn_combatant build in a table title.
+
+    Entry:
+        bootstrap() must have run.
+
+    Exit/Returns:
+        Returns a label such as
+        "new character (Strike, Brawn and Defense 0, Fortitude 1)".
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Reads the same constants as spawn_combatant, so a change to a start
+        level changes the label and the numbers together.
+
+    Notes/References:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 09/14/2026
+    """
+    from systems.gameplay.progression.skills import constants as skill_const
+
+    combat_const = combat_constants()
+
+    return (f"new character (Strike, Brawn and Defense "
+            f"{skill_const.DEFAULT_START_LEVEL}, Fortitude "
+            f"{combat_const.FORTITUDE_START_LEVEL})")
 
 
 # Private helper routines -- loadouts
@@ -864,6 +953,92 @@ def evaluate_styles(attacker: Combatant, defender: Combatant) -> dict:
     return results
 
 
+def active_style_key(profile: AttackProfile) -> str:
+    """
+    Purpose: The style key an entity fights with when nothing picks one.
+
+    Entry:
+        profile.combat_styles must be non-empty.
+
+    Exit/Returns:
+        Returns profile.default_style when the profile declares that style,
+        else the first declared style key. Raises ValueError when a default
+        style is set but not declared.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Mirrors combat._resolve_style_and_speed. An NPC never changes style,
+        so its swings use this key, never the best style against its target.
+
+    Notes/References:
+        For a default style the profile does not declare, the live game falls
+        back to the unarmed default style. A snapshot cannot sweep a style
+        that is not in the profile, so it raises and names the content bug.
+
+    Author: Nick Hobar
+    Creation date: 09/14/2026
+    """
+    styles = profile.combat_styles
+
+    if profile.default_style is None:
+        return next(iter(styles))
+
+    if profile.default_style in styles:
+        return profile.default_style
+
+    raise ValueError(
+        f"{profile.key} names default style {profile.default_style!r}, which "
+        f"it does not declare. The live game falls back to unarmed."
+    )
+
+
+def best_plain_weapon(level: int, defender: Combatant) -> tuple:
+    """
+    Purpose: The weapon and style with the highest analytic damage per second
+    against one defender, from the weapons that carry no combat_rules.
+
+    Entry:
+        bootstrap() must have run. level is a uniform player level.
+
+    Exit/Returns:
+        Returns (profile, style_key, metrics). Unarmed is a candidate.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A weapon with combat_rules is never a candidate, because swing_metrics
+        does not model it (show_rules_map.py names each one). A tie keeps the
+        first candidate: unarmed, then ITEM_DB order.
+
+    Notes/References:
+        show_xp_economy and show_damage_distribution both measure against this
+        weapon, so their reference weapon cannot disagree.
+
+    Author: Nick Hobar
+    Creation date: 09/14/2026
+    """
+    candidates = [unarmed_profile()]
+    candidates.extend(
+        profile for profile in weapon_profiles().values()
+        if not profile.combat_rules
+    )
+    best = None
+
+    for profile in candidates:
+        attacker = player_combatant(level, profile)
+
+        for style_key, metrics in evaluate_styles(attacker, defender).items():
+            if best is not None and metrics.damage_per_second <= best[2].damage_per_second:
+                continue
+
+            best = (profile, style_key, metrics)
+
+    return best
+
+
 # Public routines -- live pipeline simulation
 
 def rules_for(rule_keys: list) -> tuple:
@@ -959,13 +1134,13 @@ def build_context(attacker: Combatant, style_key: str, defender: Combatant,
         STRIKE_SKILL_KEY: attacker.strike_level,
         BRAWN_SKILL_KEY: attacker.brawn_level,
         DEFENSE_SKILL_KEY: attacker.defense_level,
-        FORTITUDE_SKILL_KEY: attacker.max_hp,
+        FORTITUDE_SKILL_KEY: attacker.fortitude_level,
     }
     defender_levels = {
         STRIKE_SKILL_KEY: defender.strike_level,
         BRAWN_SKILL_KEY: defender.brawn_level,
         DEFENSE_SKILL_KEY: defender.defense_level,
-        FORTITUDE_SKILL_KEY: defender.max_hp,
+        FORTITUDE_SKILL_KEY: defender.fortitude_level,
     }
 
     return ActionContext(
@@ -1042,8 +1217,8 @@ def time_to_kill(damage_per_second: float, hit_points: int) -> float:
         hundred ticks against damage measured per four.
 
     Notes/References:
-        Variance is what the proposed show_damage_distribution.py snapshot is
-        for; this routine is deliberately the mean.
+        show_damage_distribution.py measures the variance. This routine is
+        deliberately the mean.
 
     Author: Nick Hobar
     Creation date: 08/22/2026

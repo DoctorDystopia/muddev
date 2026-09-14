@@ -20,6 +20,8 @@ from evennia.utils.test_resources import EvenniaTest
 from evennia.utils.utils import mod_import
 
 from systems.interface.menus import base_menu
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import serializers as feed_serializers
 from systems.interface.menus.constants import (
     BACK_KEYS,
     CONFIRM_NO_KEYS,
@@ -253,6 +255,96 @@ class TestClosingText(_LiveMenuTest):
         menu.close_menu()
 
         self.assertIsNone(self.char1.ndb._evmenu)
+
+
+class TestClickingTheWorldClosesTheMenu(_LiveMenuTest):
+    """A line aimed at the world closes the menu and runs; nothing else does.
+
+    execute_cmd is replaced with a recorder: what is under test is that the
+    menu steps aside and forwards the line intact, not what the line then does.
+    """
+
+    STAY_DESC = "Stay here"
+
+    def _menu(self, options=None, **kwargs):
+        def _node(caller, raw_string=None, **node_kwargs):
+            return "A menu.", options or ({"desc": self.STAY_DESC, "goto": "start"},)
+
+        menu = base_menu.start_blackout_menu(self.char1, {"start": _node}, **kwargs)
+        self.char1.execute_cmd = mock.MagicMock()
+
+        return menu
+
+    def _assert_forwarded(self, line):
+        self.assertIsNone(self.char1.ndb._evmenu)
+        self.char1.execute_cmd.assert_called_once_with(line, session=mock.ANY)
+
+    def _assert_kept(self):
+        self.assertIsNotNone(self.char1.ndb._evmenu)
+        self.char1.execute_cmd.assert_not_called()
+
+    def test_an_exit_out_of_the_room_closes_it(self):
+        menu = self._menu()
+
+        menu.parse_input(self.exit.key)
+
+        self._assert_forwarded(self.exit.key)
+
+    def test_a_walk_to_a_tile_closes_it(self):
+        menu = self._menu()
+        walk = feed_const.TILE_COMMAND_GOTO_TEMPLATE.format(x=4, y=7)
+
+        menu.parse_input(walk)
+
+        self._assert_forwarded(walk)
+
+    def test_an_action_on_something_in_the_room_closes_it(self):
+        # Derived from the feed rather than typed, so this is the very string
+        # a click on obj1 sends.
+        clicked = feed_serializers.serialize_entity(self.obj1)["interact"]
+        self.assertTrue(clicked, "obj1 must afford something for this test")
+        menu = self._menu()
+
+        menu.parse_input(clicked)
+
+        self._assert_forwarded(clicked)
+
+    def test_a_key_the_menu_binds_is_still_the_menus(self):
+        menu = self._menu(options=({"key": self.exit.key, "goto": "start"},))
+
+        menu.parse_input(self.exit.key)
+
+        self._assert_kept()
+
+    def test_a_line_naming_nothing_stays_with_the_menu(self):
+        menu = self._menu()
+
+        menu.parse_input("banana")
+
+        self._assert_kept()
+
+    def test_a_prompt_still_receives_its_answer(self):
+        menu = self._menu(options=({"key": "_default", "goto": "start"},))
+
+        menu.parse_input("3")
+
+        self._assert_kept()
+
+    def test_closing_for_the_world_runs_no_exit_command(self):
+        on_exit = mock.MagicMock()
+        menu = self._menu(cmd_on_exit=on_exit)
+
+        menu.parse_input(self.exit.key)
+
+        on_exit.assert_not_called()
+
+    def test_quitting_still_runs_the_exit_command(self):
+        on_exit = mock.MagicMock()
+        menu = self._menu(cmd_on_exit=on_exit)
+
+        menu.parse_input(QUIT_KEYS[0])
+
+        on_exit.assert_called_once()
 
 
 class TestUnresolvableMenuPath(_LiveMenuTest):

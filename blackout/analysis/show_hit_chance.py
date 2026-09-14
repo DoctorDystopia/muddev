@@ -18,7 +18,7 @@ Two things this is built to expose:
    oracle and the live path do not agree at the top of the band.
 
 Run it:
-    ../evenv/Scripts/python.exe systems/gameplay/combat/show_hit_chance.py
+    ../evenv/Scripts/python.exe analysis/show_hit_chance.py
 """
 
 from __future__ import annotations
@@ -28,8 +28,8 @@ from pathlib import Path
 
 
 # The game directory has to be importable before `systems.*` resolves.
-# Running this file directly puts systems/gameplay/combat/ on sys.path, not blackout/.
-_GAME_DIR: str = str(Path(__file__).resolve().parents[3])
+# Running this file directly puts analysis/ on sys.path, not blackout/.
+_GAME_DIR: str = str(Path(__file__).resolve().parents[1])
 
 if _GAME_DIR not in sys.path:
     sys.path.insert(0, _GAME_DIR)
@@ -37,7 +37,7 @@ if _GAME_DIR not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 
-from systems.gameplay.combat import _snapshot_env as env
+from analysis import _snapshot_env as env
 
 
 # Public constant definitions
@@ -78,6 +78,10 @@ _PROBABILITY_CEILING: float = 1.0
 # Equipment bonus used for the structural heatmap. Zero on both sides isolates
 # the level term, which is the thing that panel is about.
 _NEUTRAL_BONUS: int = 0
+
+# Flags a weapon carrying combat_rules. Its hit chance here is the OSRS
+# formula, which a rule that owns accuracy or resolve does not obey.
+_UNMODELLED_MARK: str = " +"
 
 
 # Private helper routines
@@ -141,22 +145,31 @@ def _best_pair_at_level(profiles: list, level: int, defender) -> tuple:
     return best_profile, best_style, best_metrics
 
 
-def _print_pair_table(profiles: list, npcs: dict, level: int) -> None:
-    """Print best-style hit chance for every weapon against every NPC."""
+def _print_pair_table(profiles: list, npcs: dict, title: str,
+                      player_for) -> None:
+    """Print best-style hit chance for every weapon against every NPC.
+
+    player_for(profile) returns the attacking Combatant. That lets one table
+    show a new character and another show a uniform level.
+    """
     header = f"{'Weapon':<{_NAME_WIDTH}} |"
 
     for combatant in npcs.values():
         header += f" {combatant.name:>{_NPC_WIDTH}}"
 
     print()
-    print(f"Best-style hit chance at player level {level} "
-          f"(style chosen per defender)")
+    print(f"Best-style hit chance -- {title} (style chosen per defender)")
     print(header)
     print("-" * len(header))
 
+    unmodelled_seen = False
+
     for profile in profiles:
-        attacker = env.player_combatant(level, profile)
-        line = f"{profile.name:<{_NAME_WIDTH}} |"
+        attacker = player_for(profile)
+        marker = _UNMODELLED_MARK if profile.combat_rules else ""
+        unmodelled_seen = unmodelled_seen or bool(profile.combat_rules)
+        label = f"{profile.name}{marker}"
+        line = f"{label:<{_NAME_WIDTH}} |"
 
         for combatant in npcs.values():
             style_key, metrics = _best_style_against(attacker, combatant)
@@ -165,6 +178,10 @@ def _print_pair_table(profiles: list, npcs: dict, level: int) -> None:
             line += f" {cell:>{_NPC_WIDTH}}"
 
         print(line)
+
+    if unmodelled_seen:
+        print(f"  {_UNMODELLED_MARK} carries combat_rules: this is the OSRS "
+              f"formula, which a rule can replace. See show_rules_map.py.")
 
 
 def _ceiling_crossings(profiles: list, npcs: dict, level: int) -> list:
@@ -360,8 +377,14 @@ def main() -> None:
     profiles = _attacker_profiles()
     npcs = env.npc_combatants()
 
-    _print_pair_table(profiles, npcs, combat_const.FORTITUDE_START_LEVEL)
-    _print_pair_table(profiles, npcs, combat_const.MAX_BASE_SKILL_LEVEL)
+    top_level = combat_const.MAX_BASE_SKILL_LEVEL
+
+    def top_player(profile):
+        return env.player_combatant(top_level, profile)
+
+    _print_pair_table(profiles, npcs, env.spawn_label(), env.spawn_combatant)
+    _print_pair_table(profiles, npcs, f"uniform player level {top_level}",
+                      top_player)
     _print_ceiling_report(profiles, npcs)
 
     figure, (left_axes, middle_axes, right_axes) = plt.subplots(

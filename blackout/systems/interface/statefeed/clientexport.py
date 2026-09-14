@@ -211,6 +211,7 @@ _SCALAR_EXPORTS: tuple = (
     ("ROOM_KIND_DEFAULT", const.ROOM_KIND_DEFAULT),
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
+    ("ENTITY_APPROACH_TEMPLATE", const.ENTITY_APPROACH_TEMPLATE),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the

@@ -20,7 +20,7 @@ would let the snapshot and the game disagree, which is the failure mode the
 whole snapshot family exists to catch.
 
 Run it:
-    ../evenv/Scripts/python.exe systems/gameplay/combat/show_combat_level.py
+    ../evenv/Scripts/python.exe analysis/show_combat_level.py
 """
 
 from __future__ import annotations
@@ -31,14 +31,14 @@ from pathlib import Path
 
 
 # The game directory has to be importable before `systems.*` resolves.
-_GAME_DIR: str = str(Path(__file__).resolve().parents[3])
+_GAME_DIR: str = str(Path(__file__).resolve().parents[1])
 
 if _GAME_DIR not in sys.path:
     sys.path.insert(0, _GAME_DIR)
 
 import matplotlib.pyplot as plt
 
-from systems.gameplay.combat import _snapshot_env as env
+from analysis import _snapshot_env as env
 
 
 # Public constant definitions
@@ -163,6 +163,41 @@ def _build_curve(skill_keys: tuple) -> list:
     return curve
 
 
+def _unfloored_level(skill_keys: tuple, level: int) -> float:
+    """The combat level of a build before get_combat_level's final floor.
+
+    The base term is built again from the constants. The branch term calls
+    each registered branch's own compute_score. The floor of the result must
+    equal get_combat_level for the same build, and the routine raises if it
+    does not. Thus this copy of the base formula cannot drift from the real
+    one without an error.
+    """
+    from systems.gameplay.combat.combat_level.registry import (
+        COMBAT_BRANCH_REGISTRY,
+    )
+
+    combat_const = env.combat_constants()
+    build = _build_levels(skill_keys, level)
+
+    def lookup(skill_key: str) -> int:
+        return build.get(skill_key, _UNTRAINED_LEVEL)
+
+    base_levels = sum(lookup(key) for key in combat_const.COMBAT_LEVEL_BASE_SKILLS)
+    base = combat_const.COMBAT_LEVEL_BASE_WEIGHT * base_levels
+    scores = [branch.compute_score(lookup)
+              for branch in COMBAT_BRANCH_REGISTRY.values()]
+    unfloored = base + max(scores, default=0.0)
+    expected = _combat_level_for(build)
+
+    if math.floor(unfloored) != expected:
+        raise RuntimeError(
+            f"Unfloored combat level {unfloored:.3f} does not floor to "
+            f"get_combat_level's {expected}. The base formula here is stale."
+        )
+
+    return unfloored
+
+
 def _npc_combat_levels() -> list:
     """Combat level for every NPC in NPC_DB, from its own stat block."""
     npcs = env.npc_combatants()
@@ -173,7 +208,7 @@ def _npc_combat_levels() -> list:
             "strike": combatant.strike_level,
             "brawn": combatant.brawn_level,
             "defense": combatant.defense_level,
-            "fortitude": combatant.max_hp,
+            "fortitude": combatant.fortitude_level,
         }
         rows.append({
             "name": combatant.name,
@@ -227,14 +262,15 @@ def _print_ceiling(curves: dict) -> None:
     )
     augmentation_gain = augmentation_share * combat_const.COMBAT_LEVEL_BASE_WEIGHT
     melee_top = curves["melee maxed"][-1]
-    eventual = math.floor(melee_top + augmentation_gain)
+    melee_unfloored = _unfloored_level(BUILD_SHAPES["melee maxed"], top_level)
+    eventual = math.floor(melee_unfloored + augmentation_gain)
 
     print()
     print("  Augmentation is not a registered skill yet, so it contributes 0 to")
-    print(f"  every row above. Maxing it once it ships adds {augmentation_gain:.2f},")
-    print(f"  taking a melee-maxed character from {melee_top} to {eventual}.")
-    print("  That reconciles the \"around 162\" figure in constants.py: that")
-    print("  number is the POST-Augmentation ceiling, not the reachable one.")
+    print(f"  every row above. Maxing it once it ships adds {augmentation_gain:.2f}")
+    print(f"  to the unfloored {melee_unfloored:.2f}, taking a melee-maxed")
+    print(f"  character from {melee_top} to {eventual}. constants.py predicts")
+    print("  \"around 162\" for that POST-Augmentation ceiling.")
 
 
 def _print_npc_levels(rows: list) -> None:
@@ -246,9 +282,9 @@ def _print_npc_levels(rows: list) -> None:
     for row in rows:
         print(f"  {row['name']:<{_NAME_WIDTH}} {row['level']:>6} {row['hp']:>6}")
 
-    print("  Fortitude for an NPC is its max_hp, since the two are the same")
-    print("  number by the 1:1 scaling rule -- which makes an 87 hp monster")
-    print("  read as a far higher combat level than its level-1 skills imply.")
+    print("  Fortitude for an NPC is NpcDef.fortitude_level, or its max_hp when")
+    print("  that field is None -- the rule NpcDef.to_combat_block applies. A")
+    print("  large HP pool therefore raises an NPC's combat level.")
 
 
 # Private helper routines -- plotting

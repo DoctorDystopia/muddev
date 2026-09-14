@@ -44,6 +44,12 @@ func _ready() -> void:
 	_standing_still_keeps_the_yaw()
 	_a_teleport_keeps_the_yaw()
 	_a_diagonal_splits_its_two_cardinals()
+	_a_far_entity_is_walked_to_first()
+	_an_entity_on_your_tile_is_acted_on_directly()
+	_an_entity_on_another_island_is_never_walked_to()
+	_an_entity_without_coords_is_acted_on_directly()
+	_nothing_to_send_stays_nothing()
+	_a_walked_to_menu_row_still_reads_as_its_verb()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -132,6 +138,76 @@ func _a_diagonal_splits_its_two_cardinals() -> void:
 		"northeast is as far from north as it is from east")
 	_expect(is_equal_approx(absf(to_north), PI / 4.0),
 		"and that distance is an eighth turn")
+
+
+# ─── Approach ────────────────────────────────────────────────────────────────
+
+const POLE_COMMAND := "cut rusty pole"
+const HERE := Vector2i(2, 3)
+const HERE_Z := "oasis"
+
+
+static func _pole_at(coords: Array) -> Dictionary:
+	return {"name": "Rusty Pole", "interact": POLE_COMMAND, "coords": coords}
+
+
+## The case the feature exists for. Asserted by what the command must CARRY --
+## the destination tile and the verb, untouched -- rather than against a copy of
+## the template, which would agree with a wrong template forever.
+func _a_far_entity_is_walked_to_first() -> void:
+	var sent := WorldView.approach_command(POLE_COMMAND,
+		_pole_at([4.0, 7.0, HERE_Z]), HERE, HERE_Z)
+
+	_expect(sent != POLE_COMMAND, "a pole two tiles off is not cut from here")
+	_expect(sent.contains("(4,7)"), "the walk names the pole's tile")
+	_expect(sent.ends_with(POLE_COMMAND), "and the verb arrives intact")
+
+
+func _an_entity_on_your_tile_is_acted_on_directly() -> void:
+	var sent := WorldView.approach_command(POLE_COMMAND,
+		_pole_at([2.0, 3.0, HERE_Z]), HERE, HERE_Z)
+
+	_expect(sent == POLE_COMMAND, "a pole on your own tile is cut at once")
+
+
+## (4,7) on another island is a different room on this one. Wrapping it would
+## walk the player to a tile they never clicked.
+func _an_entity_on_another_island_is_never_walked_to() -> void:
+	var sent := WorldView.approach_command(POLE_COMMAND,
+		_pole_at([4.0, 7.0, "azm plains"]), HERE, HERE_Z)
+
+	_expect(sent == POLE_COMMAND, "a pole on another map is sent as it was named")
+
+
+func _an_entity_without_coords_is_acted_on_directly() -> void:
+	var sent := WorldView.approach_command(POLE_COMMAND,
+		{"interact": POLE_COMMAND}, HERE, HERE_Z)
+
+	_expect(sent == POLE_COMMAND, "an unplaced entity is sent as it was named")
+
+
+func _nothing_to_send_stays_nothing() -> void:
+	var sent := WorldView.approach_command("", _pole_at([4.0, 7.0, HERE_Z]),
+		HERE, HERE_Z)
+
+	_expect(sent.is_empty(), "an entity affording nothing still affords nothing")
+
+
+## Without the label the wrap keeps, the menu row is worded from the wrapped
+## command's first word and every far entity reads as "Goto".
+func _a_walked_to_menu_row_still_reads_as_its_verb() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+	var rows := WorldView.approach_options(WorldView.options_for(pole), pole,
+		HERE, HERE_Z)
+
+	_expect(rows.size() == 1, "one verb, one row")
+
+	var row: Dictionary = rows[0]
+	var text := ChooseOption.row_text(row)
+
+	_expect(str(row["command"]).ends_with(POLE_COMMAND), "the row walks, then cuts")
+	_expect(not text.to_lower().begins_with("goto"),
+		"the row reads as the verb, not the walk: %s" % text)
 
 
 # ─── Harness ─────────────────────────────────────────────────────────────────

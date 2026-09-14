@@ -11,7 +11,7 @@ number this game can put on the screen right now, and how much of it comes
 from levelling versus from gear.
 
 Run it:
-    ../evenv/Scripts/python.exe systems/gameplay/combat/show_max_hit.py
+    ../evenv/Scripts/python.exe analysis/show_max_hit.py
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ from pathlib import Path
 
 
 # The game directory has to be importable before `systems.*` resolves.
-# Running this file directly puts systems/gameplay/combat/ on sys.path, not blackout/,
+# Running this file directly puts analysis/ on sys.path, not blackout/,
 # so the insert happens here rather than inside _snapshot_env -- by the time
 # that module could fix the path, importing it has already failed.
-_GAME_DIR: str = str(Path(__file__).resolve().parents[3])
+_GAME_DIR: str = str(Path(__file__).resolve().parents[1])
 
 if _GAME_DIR not in sys.path:
     sys.path.insert(0, _GAME_DIR)
@@ -32,14 +32,14 @@ if _GAME_DIR not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 
-from systems.gameplay.combat import _snapshot_env as env
+from analysis import _snapshot_env as env
 
 
 # Public constant definitions
 
 # The equipment strength bonus the heatmap sweeps up to. Well past anything in
-# ITEM_DB today (the best is single digits) so the surface shows where the
-# content could go, not only where it is.
+# ITEM_DB today (the best loadout is printed under the weapon table) so the
+# surface shows where the content could go, not only where it is.
 STRENGTH_BONUS_CEILING: int = 150
 
 # Brawn levels the printed table samples. A 128-row table is unreadable; these
@@ -78,6 +78,10 @@ _GEAR_MARKER_SIZE: float = 55.0
 _GEAR_MARKER_COLOR: str = "white"
 _GEAR_MARKER_EDGE: str = "black"
 _GEAR_MARKER_Z: int = 3
+
+# Marker for the best whole loadout, larger than one weapon's dot.
+_LOADOUT_MARKER: str = "*"
+_LOADOUT_MARKER_SIZE: float = 220.0
 _GRID_ALPHA: float = 0.3
 _LINE_WIDTH: float = 2.0
 _CONTOUR_WIDTH: float = 0.8
@@ -273,8 +277,12 @@ def _plot_weapon_curves(axes, rows: list) -> None:
     axes.legend(fontsize="small")
 
 
-def _plot_bonus_surface(axes, figure, rows: list) -> None:
-    """Draw the max-hit surface over Brawn level and equipment strength bonus."""
+def _plot_bonus_surface(axes, figure, rows: list, loadout_bonus: int) -> None:
+    """Draw the max-hit surface over Brawn level and equipment strength bonus.
+
+    The dots are each weapon's own strength bonus. The star is the best whole
+    loadout, which is the highest bonus a character can wear today.
+    """
     levels = np.array(env.level_range())
     bonuses = np.arange(_BONUS_FLOOR, STRENGTH_BONUS_CEILING + 1)
     stance = _aggressive_stance_bonus()
@@ -293,7 +301,11 @@ def _plot_bonus_surface(axes, figure, rows: list) -> None:
                      s=_GEAR_MARKER_SIZE, c=_GEAR_MARKER_COLOR,
                      edgecolors=_GEAR_MARKER_EDGE, zorder=_GEAR_MARKER_Z)
 
-    axes.set_title("Max hit surface (dots: strength bonuses that exist today)")
+    axes.scatter(top_level, loadout_bonus, marker=_LOADOUT_MARKER,
+                 s=_LOADOUT_MARKER_SIZE, c=_GEAR_MARKER_COLOR,
+                 edgecolors=_GEAR_MARKER_EDGE, zorder=_GEAR_MARKER_Z)
+
+    axes.set_title("Max hit surface (dots: weapon bonuses, star: best loadout)")
     axes.set_xlabel("Brawn level")
     axes.set_ylabel("Equipment strength bonus")
     figure.colorbar(mesh, ax=axes, label="Max hit")
@@ -331,13 +343,14 @@ def main() -> None:
 
     totals, items = env.best_loadout(STRENGTH_BONUS_KEY)
     _print_gear_ceiling(totals, items)
+    loadout_bonus = totals.get(STRENGTH_BONUS_KEY, _BONUS_FLOOR)
 
     figure, (left_axes, right_axes) = plt.subplots(
         _SUBPLOT_ROWS, _SUBPLOT_COLUMNS,
         figsize=(_FIGURE_WIDTH_INCHES, _FIGURE_HEIGHT_INCHES),
     )
     _plot_weapon_curves(left_axes, rows)
-    _plot_bonus_surface(right_axes, figure, rows)
+    _plot_bonus_surface(right_axes, figure, rows, loadout_bonus)
 
     figure.tight_layout()
     plt.show()

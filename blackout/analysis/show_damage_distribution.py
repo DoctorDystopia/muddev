@@ -22,7 +22,7 @@ Three things this exists to settle:
    simulation through resolve_action tells the truth.
 
 Run it:
-    ../evenv/Scripts/python.exe systems/gameplay/combat/show_damage_distribution.py
+    ../evenv/Scripts/python.exe analysis/show_damage_distribution.py
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from pathlib import Path
 
 
 # The game directory has to be importable before `systems.*` resolves.
-_GAME_DIR: str = str(Path(__file__).resolve().parents[3])
+_GAME_DIR: str = str(Path(__file__).resolve().parents[1])
 
 if _GAME_DIR not in sys.path:
     sys.path.insert(0, _GAME_DIR)
@@ -42,7 +42,7 @@ if _GAME_DIR not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 
-from systems.gameplay.combat import _snapshot_env as env
+from analysis import _snapshot_env as env
 
 
 # Public constant definitions
@@ -105,6 +105,14 @@ _MAX_FIGHT_SWINGS: int = 10000
 # Reported when a fight hit the swing cap without landing a kill.
 _UNRESOLVED_LABEL: str = "unresolved"
 
+# A plain weapon whose simulated mean is further than this many standard
+# errors from the analytic mean fails the model check. Noise alone passes
+# three standard errors about once in 370 weapons.
+_NOISE_BOUND_SIGMAS: float = 3.0
+
+# Appended to a model-check row outside the noise bound.
+_OUTSIDE_NOISE_MARK: str = "  !"
+
 
 # Private helper routines -- the two candidate damage rolls
 
@@ -134,15 +142,6 @@ def _triangular_roll(max_hit: int, rng) -> int:
 
 
 # Private helper routines -- simulation
-
-def _reference_pair(profile):
-    """Return (player, npc) for the level and target this snapshot uses."""
-    npcs = env.npc_combatants()
-    target = npcs[REFERENCE_NPC_KEY]
-    player = env.player_combatant(REFERENCE_LEVEL, profile)
-
-    return player, target
-
 
 def _best_style(player, target) -> str:
     """The style key with the highest analytic DPS against the target."""
@@ -184,6 +183,10 @@ def _fight_lengths(metrics, hit_points: int, roll_function, rng) -> tuple:
     length is a FLOOR, not a measurement, so the count has to travel with the
     sample -- silently keeping the capped value would pull the mean down and
     make an unwinnable fight look merely slow.
+
+    A length runs from the first swing to the killing swing. The first swing
+    lands at time zero, so a fight of n swings lasts n - 1 swing periods. The
+    old count of n periods added one whole period to every fight.
     """
     lengths = np.zeros(FIGHT_TRIALS)
     truncated = 0
@@ -203,7 +206,7 @@ def _fight_lengths(metrics, hit_points: int, roll_function, rng) -> tuple:
         if remaining > 0:
             truncated += 1
 
-        lengths[trial] = swings * metrics.seconds_per_swing
+        lengths[trial] = (swings - 1) * metrics.seconds_per_swing
 
     return lengths, truncated
 
@@ -272,6 +275,23 @@ def _print_truncation(uniform_cut: int, triangular_cut: int) -> None:
     print("  understate the true time to kill by an unknown amount.")
 
 
+def _error_in_sigmas(samples: np.ndarray, error: float) -> float:
+    """Return |error| in standard errors of the sample mean.
+
+    A sample with no spread has a standard error of zero. Its mean is then
+    exact, so any error at all is real and reads as infinite.
+    """
+    standard_error = float(samples.std()) / math.sqrt(samples.size)
+
+    if standard_error > 0.0:
+        return abs(error) / standard_error
+
+    if error == 0.0:
+        return 0.0
+
+    return float("inf")
+
+
 def _print_model_check(profiles: list, rng) -> list:
     """Compare the analytic mean damage against the simulated pipeline mean.
 
@@ -285,7 +305,10 @@ def _print_model_check(profiles: list, rng) -> list:
     print(f"MODEL CHECK -- analytic vs simulated mean damage per swing "
           f"(level {REFERENCE_LEVEL} vs {target.name})")
     print(f"  {'Weapon':<{_NAME_WIDTH}} {'analytic':>{_NUMBER_WIDTH}} "
-          f"{'simulated':>{_NUMBER_WIDTH}} {'error':>{_NUMBER_WIDTH}}  rules")
+          f"{'simulated':>{_NUMBER_WIDTH}} {'error':>{_NUMBER_WIDTH}} "
+          f"{'sigmas':>{_NUMBER_WIDTH}}  rules")
+
+    model_broken = False
 
     for profile in profiles:
         player = env.player_combatant(REFERENCE_LEVEL, profile)
@@ -295,7 +318,11 @@ def _print_model_check(profiles: list, rng) -> list:
         measured = float(simulated.mean())
         analytic = metrics.average_damage
         error = measured - analytic
+        sigmas = _error_in_sigmas(simulated, error)
         rule_label = ", ".join(profile.combat_rules) or "-"
+        outside = not profile.combat_rules and sigmas > _NOISE_BOUND_SIGMAS
+        model_broken = model_broken or outside
+        flag = _OUTSIDE_NOISE_MARK if outside else ""
 
         rows.append({
             "name": profile.name,
@@ -306,13 +333,19 @@ def _print_model_check(profiles: list, rng) -> list:
         })
 
         print(f"  {profile.name:<{_NAME_WIDTH}} {analytic:>{_NUMBER_WIDTH}.3f} "
-              f"{measured:>{_NUMBER_WIDTH}.3f} {error:>+{_NUMBER_WIDTH}.3f}  "
-              f"{rule_label}")
+              f"{measured:>{_NUMBER_WIDTH}.3f} {error:>+{_NUMBER_WIDTH}.3f} "
+              f"{sigmas:>{_NUMBER_WIDTH}.1f}  {rule_label}{flag}")
 
-    print("  A non-zero error on a weapon with no rules would mean the")
-    print("  expected-value model in show_dps_matrix is wrong. On a weapon WITH")
-    print("  rules it means the OSRS formulas never described it in the first")
-    print("  place -- the analytic snapshots cannot model those rows.")
+    print(f"  sigmas is |error| over the standard error of the simulated mean.")
+    print(f"  Noise alone rarely passes {_NOISE_BOUND_SIGMAS:.0f}. A weapon with no")
+    print("  rules past that bound means the expected-value model in")
+    print("  show_dps_matrix is wrong. On a weapon WITH rules a large error means")
+    print("  the OSRS formulas never described it -- the analytic snapshots")
+    print("  cannot model those rows.")
+
+    if model_broken:
+        print(f"  {_OUTSIDE_NOISE_MARK.strip()} MODEL CHECK FAILED: a plain weapon "
+              f"is outside the noise bound.")
 
     return rows
 
@@ -407,14 +440,11 @@ def main() -> None:
     unarmed = env.unarmed_profile()
     weapons = env.weapon_profiles()
 
-    plain = [unarmed]
-    plain.extend(
-        profile for profile in weapons.values() if not profile.combat_rules
+    npcs = env.npc_combatants()
+    target = npcs[REFERENCE_NPC_KEY]
+    reference_profile, style_key, metrics = env.best_plain_weapon(
+        REFERENCE_LEVEL, target
     )
-    reference_profile = plain[-1]
-    player, target = _reference_pair(reference_profile)
-    style_key = _best_style(player, target)
-    metrics = env.swing_metrics(player, style_key, target)
 
     print(f"Reference: {reference_profile.name}, style {style_key}, "
           f"level {REFERENCE_LEVEL}, target {target.name} ({target.max_hp} hp)")

@@ -6,17 +6,22 @@ Description: Tests for BlackoutGotoCmd -- a non-builder must be able to name a
              `goto` target by grid coordinate, because that is the only name
              the 3D pane has for a room.
 
+             Also that `goto <location> then <command>` runs the command when,
+             and only when, the walk ends where it was headed.
+
 Run with:
-    evennia test --settings settings.py commands.tests.test_movement_cmds
+    evennia test --settings test_settings.py commands.tests.test_movement_cmds
 """
 
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from evennia.contrib.grid.xyzgrid.commands import CmdGoto
 
-from commands.movement_cmds import BlackoutGotoCmd
+from commands.movement_cmds import BlackoutGotoCmd, FollowUp
 from systems.core.tick.constants import TICK_SECONDS
+from systems.interface.statefeed import constants as feed_const
 
 # Public constant definitions
 
@@ -24,6 +29,40 @@ COORD_ARGUMENT = "(4,7)"
 NAME_ARGUMENT = "Bank"
 START_XYZ = ("2", "3", "oasis")
 FOUND_ROOM = object()
+
+FOLLOW_UP = "cut rusty pole"
+TARGET_ROOM = object()
+OTHER_ROOM = object()
+SESSION = object()
+
+
+def _parsed(args):
+    """Build a goto command as the cmdhandler would, and parse `args`."""
+    command = BlackoutGotoCmd()
+    command.cmdstring = feed_const.TILE_COMMAND_GOTO
+    command.args = args
+    command.parse()
+
+    return command
+
+
+def _caller(location):
+    """A stand-in character: ndb slots, a location, and a command recorder."""
+    ndb = SimpleNamespace(xy_path_data=None, goto_follow_up=None)
+
+    return SimpleNamespace(ndb=ndb, location=location, execute_cmd=mock.Mock())
+
+
+def _still_walking(caller):
+    """A contrib step that scheduled another step after itself."""
+    task = mock.Mock()
+    task.active.return_value = True
+    caller.ndb.xy_path_data = SimpleNamespace(task=task)
+
+
+def _walk_ended(caller):
+    """A contrib step that found nothing left to walk and cleared the path."""
+    caller.ndb.xy_path_data = None
 
 
 class TestBlackoutGotoTargetSearch(unittest.TestCase):
@@ -103,3 +142,117 @@ class TestBlackoutGotoPacing(unittest.TestCase):
         # delay() is twisted's deferLater, not ScriptDB.db_interval -- an int
         # here would truncate to 0 and step the whole path instantly.
         self.assertIsInstance(BlackoutGotoCmd.auto_step_delay, float)
+
+
+class TestGotoFollowUpParsing(unittest.TestCase):
+    """
+    Purpose: `then` splits a walk from the command run at its end, and the
+    string a client builds from ENTITY_APPROACH_TEMPLATE parses back into the
+    two parts it was built from.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+
+    def test_the_approach_template_parses_back_into_its_parts(self):
+        # Derived from the template rather than typed, so a changed separator
+        # or coordinate syntax is caught here instead of at a player's click.
+        sent = feed_const.ENTITY_APPROACH_TEMPLATE.format(
+            x=4, y=7, command=FOLLOW_UP)
+        walk = feed_const.TILE_COMMAND_GOTO_TEMPLATE.format(x=4, y=7)
+        verb = feed_const.TILE_COMMAND_GOTO
+
+        command = _parsed(sent[len(verb):])
+
+        self.assertEqual(command.args, walk[len(verb):].strip())
+        self.assertEqual(command.follow_up, FOLLOW_UP)
+
+    def test_a_plain_walk_carries_no_follow_up(self):
+        command = _parsed(" " + COORD_ARGUMENT)
+
+        self.assertEqual(command.args, COORD_ARGUMENT)
+        self.assertEqual(command.follow_up, "")
+
+    def test_a_room_name_containing_then_is_not_split(self):
+        command = _parsed(" Heathen Market")
+
+        self.assertEqual(command.args, "Heathen Market")
+        self.assertEqual(command.follow_up, "")
+
+    def test_only_the_first_separator_splits(self):
+        separator = feed_const.GOTO_FOLLOW_UP_SEPARATOR
+        follow_up = "say left" + separator + "right"
+
+        command = _parsed(" " + COORD_ARGUMENT + separator + follow_up)
+
+        self.assertEqual(command.args, COORD_ARGUMENT)
+        self.assertEqual(command.follow_up, follow_up)
+
+
+class TestGotoFollowUpOnArrival(unittest.TestCase):
+    """
+    Purpose: The follow-up runs once the walk ends in its target room, and
+    never anywhere else.
+
+    The contrib's step is patched out; each test scripts what that step did
+    to the path. What is under test is the decision made after it, which is
+    the whole of the override.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+
+    def _step(self, command, caller, effect, **kwargs):
+        with mock.patch.object(
+                CmdGoto, "_auto_step", side_effect=lambda *a, **k: effect(caller)):
+            command._auto_step(caller, SESSION, **kwargs)
+
+    def test_it_waits_for_the_walk_then_runs_on_arrival(self):
+        caller = _caller(OTHER_ROOM)
+        command = _parsed(" " + COORD_ARGUMENT + " then " + FOLLOW_UP)
+
+        self._step(command, caller, _still_walking, target=TARGET_ROOM)
+        caller.execute_cmd.assert_not_called()
+
+        caller.location = TARGET_ROOM
+        self._step(command, caller, _walk_ended)
+
+        caller.execute_cmd.assert_called_once_with(FOLLOW_UP, session=SESSION)
+        self.assertIsNone(caller.ndb.goto_follow_up)
+
+    def test_already_standing_there_runs_it_at_once(self):
+        caller = _caller(TARGET_ROOM)
+        command = _parsed(" " + COORD_ARGUMENT + " then " + FOLLOW_UP)
+
+        self._step(command, caller, _walk_ended, target=TARGET_ROOM)
+
+        caller.execute_cmd.assert_called_once_with(FOLLOW_UP, session=SESSION)
+
+    def test_a_walk_that_stops_short_drops_it(self):
+        # An interrupt node, a missing exit, leaving the grid: every early
+        # ending leaves the player somewhere other than the target.
+        caller = _caller(OTHER_ROOM)
+        command = _parsed(" " + COORD_ARGUMENT + " then " + FOLLOW_UP)
+
+        self._step(command, caller, _walk_ended, target=TARGET_ROOM)
+
+        caller.execute_cmd.assert_not_called()
+        self.assertIsNone(caller.ndb.goto_follow_up)
+
+    def test_a_new_plain_walk_replaces_it(self):
+        caller = _caller(OTHER_ROOM)
+        caller.ndb.goto_follow_up = FollowUp(TARGET_ROOM, FOLLOW_UP)
+        command = _parsed(" " + COORD_ARGUMENT)
+
+        self._step(command, caller, _still_walking, target=OTHER_ROOM)
+
+        self.assertIsNone(caller.ndb.goto_follow_up)
+
+    def test_path_never_runs_it(self):
+        # `path` shows a route and walks nowhere, so there is no arrival.
+        caller = _caller(TARGET_ROOM)
+        command = _parsed(" " + COORD_ARGUMENT + " then " + FOLLOW_UP)
+
+        self._step(command, caller, _walk_ended, target=TARGET_ROOM, step=False)
+
+        caller.execute_cmd.assert_not_called()

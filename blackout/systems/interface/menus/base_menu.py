@@ -29,6 +29,7 @@ from systems.interface.ui.colors import (
     RESET_COLOR,
 )
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import serializers as feed_serializers
 
 # Every line this module sends a player is something an NPC says, so the
 # routing tag is bound once here rather than repeated at every call site.
@@ -309,6 +310,126 @@ def _module_room_bound(menudata: object) -> bool:
     return bool(_module_attribute(menudata, ROOM_BOUND_ATTR, False))
 
 
+def _names_an_exit(location: object, cmd: str) -> bool:
+    """Report whether `cmd` is the key or an alias of an exit out of `location`."""
+    for exit_obj in getattr(location, "exits", ()):
+        names = [exit_obj.key] + list(exit_obj.aliases.all())
+        lowered = {name.lower() for name in names}
+
+        if cmd in lowered:
+            return True
+
+    return False
+
+
+def _names_an_entity_action(caller: object, location: object, cmd: str) -> bool:
+    """
+    Purpose: Report whether `cmd` is one of the commands the state feed names
+             for something standing in `location`.
+
+    Entry:
+        caller   - the character the menu is open for; never its own target.
+        location - the room the caller is standing in.
+        cmd      - the typed line, stripped and lowercased.
+
+    Exit/Returns:
+        Returns True when some entity here affords exactly that command.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Asks serialize_entity rather than holding a verb list, so the answer is
+        by construction what a click on that entity sends -- `interact` and
+        every row of `actions`. A verb added to a typeclass tomorrow makes its
+        click close a menu with no edit here.
+
+        Exits are skipped because an exit is not an entity to the feed either;
+        _names_an_exit answers for them.
+
+    Notes/References:
+        Only reached for a line the open menu has no option for, so the cost of
+        serialising the room's contents is paid on a misfire, not per keypress.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    for obj in location.contents:
+        if obj is caller or obj.destination is not None:
+            continue
+
+        body = feed_serializers.serialize_entity(obj)
+        commands = [body.get("interact", "")]
+        commands += [action.get("command", "") for action in body.get("actions", [])]
+        lowered = {command.lower() for command in commands if command}
+
+        if cmd in lowered:
+            return True
+
+    return False
+
+
+def _is_world_command(caller: object, raw_string: str) -> bool:
+    """
+    Purpose: Report whether a line typed into a menu is really aimed at the
+             world around the player.
+
+    Entry:
+        caller     - the character the menu is open for.
+        raw_string - the line as it reached the menu.
+
+    Exit/Returns:
+        Returns True for a walk (`goto ...`), an exit out of the current room,
+        or a command some entity in the room affords.
+
+    Module Globals:
+        feed_const.TILE_COMMAND_GOTO read.
+
+    Methodology:
+        These three are exactly what a graphical client sends when the player
+        clicks a tile or a thing -- tile_actions names the exits, the map node
+        names the goto, serialize_entity names the rest -- so every click in
+        the world pane is recognised, and nothing else is. A typed line matching
+        none of them is still the menu's to answer, which keeps a quantity
+        prompt reading "3" as three and a search prompt reading "banana" as a
+        search.
+
+        Also what keeps an auto-walk moving through an open menu: the goto
+        contrib steps by typing the exit's name, which lands here.
+
+    Notes/References:
+        The menu's own option keys are tested BEFORE this, in
+        BlackoutEvMenu.parse_input, so a menu that binds a key which happens to
+        name an exit keeps it.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    cmd = strip_ansi(raw_string or "").strip().lower()
+
+    if not cmd:
+        return False
+
+    verb = cmd.split(" ")[0]
+
+    if verb == feed_const.TILE_COMMAND_GOTO:
+        return True
+
+    location = getattr(caller, "location", None)
+
+    if location is None:
+        return False
+
+    exit_named = _names_an_exit(location, cmd)
+
+    if exit_named:
+        return True
+
+    entity_named = _names_an_entity_action(caller, location, cmd)
+
+    return entity_named
+
+
 
 class BlackoutEvMenu(EvMenu):
     """
@@ -465,6 +586,85 @@ class BlackoutEvMenu(EvMenu):
                 self.msg((closing_text, _MSG_DIALOGUE))
 
         super().close_menu()
+
+
+    def parse_input(self, raw_string: str) -> None:
+        """
+        Purpose: Answer a line typed into the menu -- or, when the line is aimed
+                 at the world rather than the menu, close the menu and run it.
+
+        Entry:
+            raw_string is the line as CmdEvMenuNode received it.
+
+        Exit/Returns:
+            None.
+
+        Module Globals:
+            None
+
+        Methodology:
+            EvMenu's cmdset REPLACES the character's own, so while any menu is
+            open every line lands here -- including a click on a tile, which
+            sends `north` or `goto (4,7)`. The parent answers those with "Choose
+            an option", or worse, feeds them to a quantity prompt's _default.
+            Clicking away from a furnace left the player stuck in its recipe
+            list, the same way a click on the world in OSRS closes whatever
+            interface is open.
+
+            Option keys are tested first and win outright, so no key a menu
+            binds is ever taken from it. Only a line the menu does not claim is
+            checked against the world, by _is_world_command.
+
+        Notes/References:
+            The line runs through caller.execute_cmd AFTER close_menu, when the
+            menu's cmdset is gone, so it resolves exactly as typed with no menu
+            open -- every lock and cooldown still applies.
+
+        Author: Nick Hobar
+        Creation date: 09/13/2026
+        """
+        cmd = strip_ansi((raw_string or "").strip().lower())
+        claimed = bool(self.options) and cmd in self.options
+        world_command = not claimed and _is_world_command(self.caller, raw_string)
+
+        if not world_command:
+            super().parse_input(raw_string)
+            return
+
+        self._yield_to_world(raw_string)
+
+
+    def _yield_to_world(self, raw_string: str) -> None:
+        """
+        Purpose: Close the menu and run the line that closed it.
+
+        Entry:
+            raw_string is a line _is_world_command accepted.
+
+        Exit/Returns:
+            None.
+
+        Module Globals:
+            None
+
+        Methodology:
+            cmd_on_exit is dropped first. EvMenu's default runs `look` on close,
+            and the dossier's runs its drill-down; either would print ahead of
+            the command the player actually sent -- a room description, then
+            the move that makes it stale. The closing line is still spoken, by
+            close_menu, because that is how every menu says goodbye.
+
+        Notes/References:
+            The dossier's pending drill-down is also cleared by
+            start_summary_menu on the next open, so skipping its cmd_on_exit
+            leaves nothing armed.
+
+        Author: Nick Hobar
+        Creation date: 09/13/2026
+        """
+        self.cmd_on_exit = None
+        self.close_menu()
+        self.caller.execute_cmd(raw_string, session=self._session)
 
 
     def nodetext_formatter(self, nodetext: str) -> str:

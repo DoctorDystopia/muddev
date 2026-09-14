@@ -1,7 +1,7 @@
 # Deploying Blackout — start here
 
-This is the one file that ties the other three together. Each of them owns
-one layer and none of them tells you which layers a given change touches:
+This is the one file that connects the other three docs. Each of them owns one
+layer, and none of them tells you which layers a given change affects:
 
 | Doc | Owns |
 |---|---|
@@ -10,16 +10,16 @@ one layer and none of them tells you which layers a given change touches:
 | [`deploy/webexport/README.md`](webexport/README.md) | Building and publishing the Godot client |
 | [`docs/old/2026-08-21-INFRA-0001-public-hosting.md`](../docs/old/2026-08-21-INFRA-0001-public-hosting.md) | Why the architecture is shaped this way |
 
-**The mental model that makes the table below make sense:** this machine *is*
-production for the game server. There is no push/build/upload step for
-Python — `cloudflared` tunnels straight into whatever is running and being
-served from disk on this box. The Godot client is the one genuine exception:
-it is a ~38 MiB binary that cannot live on Evennia's
-webserver or as a Cloudflare static asset (25 MiB cap either way), so it alone
-has a real build → publish → deploy pipeline into R2 and a Worker in the
-sibling `playblackout-site` repo.
+**The mental model behind the table below:** this machine *is* production for
+the game server. Python has no push, build, or upload step. `cloudflared`
+tunnels straight into whatever runs and serves from disk on this box.
 
-That asymmetry is the whole reason "deploy" doesn't mean one thing here.
+The Godot client is the one real exception. It is a ~38 MiB binary that cannot
+live on Evennia's webserver or as a Cloudflare static asset (25 MiB cap either
+way). Thus, only the client has a real build → publish → deploy pipeline into
+R2 and a Worker in the sibling `playblackout-site` repo.
+
+That asymmetry is the whole reason that "deploy" does not mean one thing here.
 
 ## What did you touch?
 
@@ -35,34 +35,35 @@ That asymmetry is the whole reason "deploy" doesn't mean one thing here.
 
 ## Regenerating client constants
 
-Anything that adds, renames, or removes a name in `systems/interface/statefeed/constants.py`
-has to be re-rendered before the client can be trusted:
+If a change adds, renames, or removes a name in
+`systems/interface/statefeed/constants.py`, render the client file again before
+you trust the client:
 
 ```bash
 python scripts/export_client_constants.py
 ```
 
-This writes `godot/autoload/blackout_constants.gd` from the one Python
-source. It's committed — the client has no build step of its own for it and
-must not acquire one just to load a constant, so the committed copy is the
-artifact it actually reads.
+This command writes `godot/autoload/blackout_constants.gd` from the one Python
+source. The file is committed. The client has no build step of its own for it,
+and must not get one only to load a constant. Thus, the committed copy is the
+artifact that the client actually reads.
 
 ```bash
 python scripts/export_client_constants.py --check
 ```
 
-writes nothing and exits non-zero if a committed copy is stale — this is what
-the test suite runs, and what a deploy script should run first so it fails
-loud rather than shipping a Godot export with a stale `.gd` baked into it.
+writes nothing, and exits non-zero if a committed copy is stale. The test suite
+runs this check. A deploy script must run it first, so that the script fails
+loudly and does not ship a Godot export with a stale `.gd` inside it.
 
-**Order matters:** regenerate *before* exporting the Godot client. The `.gd`
-file is compiled into the binary at export time — export first and the fix
-never leaves this machine.
+**Order matters:** regenerate *before* you export the Godot client. The export
+compiles the `.gd` file into the binary. If you export first, the fix never
+leaves this machine.
 
 ## The Godot client pipeline
 
-Three steps, always in this order, spelled out in full in
-[`deploy/webexport/README.md`](webexport/README.md):
+The pipeline has three steps, always in this order.
+[`deploy/webexport/README.md`](webexport/README.md) gives them in full:
 
 ```bash
 # 1. Export (release, not debug — debug dials localhost, not production)
@@ -78,13 +79,13 @@ Three steps, always in this order, spelled out in full in
 cd ../playblackout-site && npx wrangler deploy
 ```
 
-**Publish before deploy, always.** A publish with no deploy leaves the old
-client live; a deploy with no publish 404s `/play`.
+**Always publish before you deploy.** A publish with no deploy leaves the old
+client live. A deploy with no publish 404s `/play`.
 
 ## The full pipeline, in order
 
-Everything above, laid out as one sequence. `full_deploy.sh` in this
-directory runs exactly this, in this order:
+This section gives everything above as one sequence. `full_deploy.sh` in this
+directory runs exactly this sequence, in this order:
 
 ```bash
 ./deploy/full_deploy.sh              # constants -> reload -> Godot export/publish/deploy -> verify
@@ -94,28 +95,27 @@ directory runs exactly this, in this order:
 ./deploy/full_deploy.sh --dry-run    # print every command instead of running it
 ```
 
-Later steps are safe to run even when only part of this applies; treat each
-as a no-op if its inputs didn't change.
+Later steps are safe to run even when only part of this sequence applies. If
+the inputs of a step did not change, treat the step as a no-op.
 
-1. `python scripts/export_client_constants.py --check` — fail fast if the
-   generated client files are stale before anything else runs.
-2. If `world/maps/**` or `scripts/map_manifest.json` changed:
-   `scripts/clean_and_reload_all_maps.ps1` / `.sh` (this already stops and
-   reloads Evennia itself — skip step 3 if this ran).
+1. Run `python scripts/export_client_constants.py --check`. It fails fast if
+   the generated client files are stale, before anything else runs.
+2. If `world/maps/**` or `scripts/map_manifest.json` changed, run
+   `scripts/clean_and_reload_all_maps.ps1` / `.sh`. This script already stops
+   and reloads Evennia itself. If it ran, skip step 3.
 
-   Safe to run unattended as of 08/28/2026. The spawn used to be a separate
-   `evennia xyzgrid spawn` step, which asks for confirmation on stdin and
-   offers no way to decline the question — so `full_deploy.sh --maps` would
-   hang on a terminal and raise `EOFError` without one. It now happens inside
-   `map_sync.py`, whose exit code the wrapper actually checks.
-3. Otherwise, reload the game server:
-   `evennia reload` from `blackout/` — or `evennia reboot` if a
-   `PORTAL_SERVICES_PLUGIN_MODULES` entry changed. `reboot` restarts the
-   Portal too, so expect a brief player disconnect that `reload` doesn't
-   cause.
-4. If `godot/**` changed, or step 1 regenerated `blackout_constants.gd`:
+   Since 08/28/2026, this step is safe to run unattended. The spawn used to be
+   a separate `evennia xyzgrid spawn` step, which asks for confirmation on
+   stdin and offers no way to decline. Thus, `full_deploy.sh --maps` would hang
+   on a terminal, and raise `EOFError` with no terminal. The spawn now happens
+   inside `map_sync.py`, and the wrapper checks its exit code.
+3. Otherwise, reload the game server with `evennia reload` from `blackout/`.
+   If a `PORTAL_SERVICES_PLUGIN_MODULES` entry changed, use `evennia reboot`
+   instead. `reboot` also restarts the Portal, so expect a brief player
+   disconnect that `reload` does not cause.
+4. If `godot/**` changed, or step 1 regenerated `blackout_constants.gd`, run
    export → `publish.sh` → `wrangler deploy`, in that order (see above).
-5. Verify (below).
+5. Verify the deploy (below).
 
 ## Verifying it actually landed
 
@@ -123,23 +123,23 @@ as a no-op if its inputs didn't change.
 curl -sS -o /dev/null -w "%{http_code}\n" https://game.playblackout.io/
 ```
 
-`200` is good. `530`/`error code: 1033` means the tunnel is down, not
-Evennia. `502` means the tunnel is up and Evennia is not — check
-`evennia start` ran. Full detail in
+`200` is good. `530`/`error code: 1033` means that the tunnel is down, not
+Evennia. `502` means that the tunnel is up and Evennia is not. Make sure that
+`evennia start` ran. For full detail, refer to
 [`deploy/cloudflared/README.md`](cloudflared/README.md).
 
-For the Godot client, `deploy/webexport/publish.sh` (no `--dry-run`) prints
-every key it wrote; a `curl` against
-`https://playblackout.io/client/index.wasm` confirms the worker is actually
-serving the new build rather than a stale cached one.
+For the Godot client, `deploy/webexport/publish.sh` (with no `--dry-run`)
+prints every key that it wrote. A `curl` against
+`https://playblackout.io/client/index.wasm` confirms that the worker serves the
+new build, not a stale cached one.
 
 ## What's deliberately left out of any deploy script
 
-- **`deploy/cloudflared/config.yml` changes.** Rare, needs an elevated shell,
-  and a broken tunnel config takes the whole site down silently in the
-  background. Do this by hand, per the cloudflared README, and confirm `UDP=4`
-  and a `200` afterward before walking away.
+- **`deploy/cloudflared/config.yml` changes.** They are rare and need an
+  elevated shell. A broken tunnel config silently stops the whole site in the
+  background. Make this change by hand, as the cloudflared README tells you.
+  Before you leave, make sure that you see `UDP=4` and a `200`.
 - **Anything under `blackout/scripts/` other than `export_client_constants.py`
-  and the map rebuild scripts.** That directory acts on the live database —
-  see the warning in `CLAUDE.md` — and nothing in it should be added to an
-  automated pipeline without the same scrutiny `map_sync.py` already gets.
+  and the map rebuild scripts.** That directory acts on the live database (see
+  the warning in `CLAUDE.md`). Do not add anything from it to an automated
+  pipeline without the same scrutiny that `map_sync.py` already gets.
