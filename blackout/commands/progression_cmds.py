@@ -241,6 +241,59 @@ class CmdScore(Command):
         start_summary_menu(self.caller)
 
 
+class CmdStats(Command):
+    """
+    Show your lifetime records: kills and deaths per hostile, harvests per
+    node, credits spent.
+
+    Your dossier (`score`) carries the short form of the same tallies; this
+    names every entry.
+
+    Usage:
+      stats
+    """
+    key = "stats"
+    aliases = ["records"]
+    locks = "cmd:all()"
+    help_category = HELP_CATEGORY_PROGRESSION
+
+
+    def func(self) -> None:
+        """
+        Purpose: Prints the caller's full records sheet.
+
+        Entry:
+            self.caller is a valid Evennia Character object.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            _MSG_PROGRESSION read.
+
+        Methodology:
+            A launcher, like `score`: the sheet is built by RecordsPanel, the
+            same module that draws the dossier band, so the two cannot describe
+            a tally differently.
+
+            Takes no target, for the reason `score` gives -- the tallies are
+            private until the Records band is deliberately made public, and an
+            argument here would publish them by the back door.
+
+        Notes/References:
+            The panel is imported inside func, as CmdProfile imports the
+            summary service, to keep the panel registry's package walk out of
+            cmdset import time.
+
+        Author: Nick Hobar
+        Creation date: 09/13/2026
+        """
+        from systems.interface.summary.panel_defs.records import RecordsPanel
+
+        screen = RecordsPanel.sheet(self.caller)
+        self.caller.msg((screen, _MSG_PROGRESSION))
+
+
 class CmdProfile(Command):
     """
     Show the public profile of another character -- what anyone may read about
@@ -410,5 +463,6 @@ class ProgressionCmdSet(CmdSet):
     def at_cmdset_creation(self):
         self.add(CmdSkills())
         self.add(CmdScore())
+        self.add(CmdStats())
         self.add(CmdProfile())
         self.add(CmdAddXP())

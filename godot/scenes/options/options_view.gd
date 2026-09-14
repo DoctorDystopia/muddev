@@ -31,6 +31,11 @@ extends Control
 ## Emitted with a whole command a telnet player could have typed.
 signal command_requested(command: String)
 
+## The player asked to start the XP tracker's session over. Not a setting and
+## not a command -- the session is the client's own reading -- so it is a
+## signal the console answers by resetting the tracker.
+signal xp_session_reset_requested
+
 ## What each skill-detail mode is called on screen.
 ##
 ## Keyed by the stored value, so the list the player sees is built by walking
@@ -53,6 +58,8 @@ var _sfx_value: Label
 var _world_check: CheckBox
 var _inventory_check: CheckBox
 var _skill_detail: OptionButton
+var _xp_drops_check: CheckBox
+var _skill_rates_check: CheckBox
 
 ## Set while pushing values INTO the widgets, so their value_changed does not
 ## write straight back and fight the update that is in progress.
@@ -129,6 +136,19 @@ func _init() -> void:
 
 	column.add_child(_skill_detail)
 
+	# The XP drops over the world. Both are the player's; the reset is neither a
+	# setting nor a command, which is why it is a signal of its own.
+	column.add_child(_heading("XP tracker"))
+	_xp_drops_check = _check("XP drops and session tracker")
+	column.add_child(_xp_drops_check)
+	_skill_rates_check = _check("XP per hour for each skill")
+	column.add_child(_skill_rates_check)
+	var reset_session := Button.new()
+	reset_session.text = "Reset session"
+	reset_session.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	reset_session.pressed.connect(func(): xp_session_reset_requested.emit())
+	column.add_child(reset_session)
+
 	# Server-owned settings. See the class docstring on why these are buttons.
 	#
 	# `automap` is the one a player of THIS client would otherwise never
@@ -162,6 +182,8 @@ func _init() -> void:
 	_world_check.toggled.connect(_on_world_toggled)
 	_inventory_check.toggled.connect(_on_inventory_toggled)
 	_skill_detail.item_selected.connect(_on_skill_detail_selected)
+	_xp_drops_check.toggled.connect(_on_xp_drops_toggled)
+	_skill_rates_check.toggled.connect(_on_skill_rates_toggled)
 
 
 func bind(settings: ClientSettings) -> void:
@@ -185,6 +207,9 @@ func _sync() -> void:
 	_inventory_check.button_pressed = _settings.show_inventory
 	_skill_detail.selected = ClientSettings.SKILL_DETAIL_MODES.find(
 		_settings.skill_detail)
+	_xp_drops_check.button_pressed = _settings.show_xp_drops
+	_skill_rates_check.button_pressed = _settings.show_skill_rates
+	_skill_rates_check.disabled = not _settings.show_xp_drops
 	_syncing = false
 
 
@@ -221,6 +246,20 @@ func _on_inventory_toggled(pressed: bool) -> void:
 		return
 
 	_settings.set_show_inventory(pressed)
+
+
+func _on_xp_drops_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_show_xp_drops(pressed)
+
+
+func _on_skill_rates_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_show_skill_rates(pressed)
 
 
 ## The chosen index is a position in ClientSettings.SKILL_DETAIL_MODES, because

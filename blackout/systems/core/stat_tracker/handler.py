@@ -80,6 +80,8 @@ class StatHandler:
         else:
             raise ValueError(f"{stat_key} has StatKind {stat_def.kind}, not supported by StatHandler.increment")
 
+        self._mark_dossier_stale()
+
     def get(self, stat_key: str, key: str | None = None) -> int | dict:
         """
         Purpose: Read the current total for a stat.
@@ -127,6 +129,70 @@ class StatHandler:
         """
         return dict(self.obj.db.stats)
 
+    def recorded(self) -> list:
+        """
+        Purpose: Every registered stat this character has a nonzero record
+        for, in STAT_REGISTRY order.
+
+        Exit/Returns:
+            Returns a list of (StatDef, value) tuples. value is an int for a
+            COUNTER stat and a plain {sub_key: total} dict for a KEYED_COUNTER
+            stat. A stat never incremented is absent, not reported as zero.
+
+        Module Globals:
+            STAT_REGISTRY read.
+
+        Methodology:
+            Walks the REGISTRY, not self.obj.db.stats, so a row left behind by
+            a stat since removed from the registry is never shown -- the
+            registry decides what a stat is called and what shape it has, and
+            a stored key it cannot describe has no honest way to be drawn.
+
+            This is the one read the Records dossier band and the `stats`
+            sheet share, so the two cannot disagree about what has been
+            recorded.
+
+        Author: Nick Hobar
+        Creation date: 09/13/2026
+        """
+        recorded = []
+
+        for stat_key, stat_def in STAT_REGISTRY.items():
+            value = self.get(stat_key)
+
+            if not value:
+                continue
+
+            recorded.append((stat_def, value))
+
+        return recorded
+
+    def _mark_dossier_stale(self) -> None:
+        """
+        Purpose: Tell the state feed this character's dossier is out of date.
+
+        Exit/Returns:
+            None. A no-op for an object nobody is subscribed through.
+
+        Methodology:
+            The Records band on the dossier reads these totals, and CLAUDE.md's
+            "Every pane follows its facts" rule puts the mark at the writer of
+            the fact rather than beside each caller -- a kill, a harvest and a
+            purchase all reach the Character tab because they all come through
+            increment. refresh_summary marks, it does not build, so a fight
+            recording a kill a tick costs one dossier build a tick at most.
+
+            Imported inside the method: typeclasses/characters.py imports this
+            module while its class is being defined, and the statefeed's own
+            import graph has no business running ahead of that.
+
+        Author: Nick Hobar
+        Creation date: 09/13/2026
+        """
+        from systems.interface.statefeed.events import refresh_summary
+
+        refresh_summary(self.obj)
+
     def _hard_reset(self) -> None:
         """
         Purpose: Completely resets self.obj.db.stats, Irreversible.
@@ -138,3 +204,4 @@ class StatHandler:
         Creation date: 08/18/2026
         """
         self.obj.db.stats = {}
+        self._mark_dossier_stale()

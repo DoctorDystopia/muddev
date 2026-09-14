@@ -61,6 +61,7 @@ import time
 from evennia.utils import logger
 
 from systems.gameplay.progression.skills import constants as skill_constants
+from systems.gameplay.progression.skills import xp_awards
 from systems.interface.statefeed import constants as feed_const
 
 from . import constants as curing_constants
@@ -710,13 +711,14 @@ class CuringHandler:
         for obj in spawned:
             crafting_service._deliver_output(self.obj, obj)
 
+        # The XP rides on the collection line. It was paid with no mention at
+        # all until 09/13/2026.
+        awards = [(recipe_cls.required_skill, recipe_cls.xp_reward)]
         ready = curing_constants.MSG_CURE_READY.format(item=recipe_cls.name)
-        self.obj.msg((ready, _MSG_CRAFTING))
+        xp_text = xp_awards.format_xp_suffix(awards)
+        self.obj.msg((f"{ready}{xp_text}", _MSG_CRAFTING))
 
-        if recipe_cls.xp_reward > 0:
-            self.obj.skills.add_xp(
-                recipe_cls.required_skill, recipe_cls.xp_reward
-            )
+        xp_awards.grant_xp(self.obj, awards, feed_const.MESSAGE_TYPE_CRAFTING)
 
         _notify_craft(self.obj, recipe_key)
 

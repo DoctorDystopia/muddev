@@ -100,4 +100,8 @@ static func material_for(role: String, finish: String) -> StandardMaterial3D:
 	material.metallic = values[0]
 	material.roughness = values[1]
 
+	# Glow-ready from birth, so a hover never changes which shader draws it.
+	# See MeshGlow for the measured cost of getting this wrong.
+	MeshGlow.prepare(material)
+
 	return material

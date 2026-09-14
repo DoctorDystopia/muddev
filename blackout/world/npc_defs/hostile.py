@@ -156,4 +156,34 @@ NPCS = {
         # Drop table in world/loot_defs/hostile.py.
         loot_table="floating_eye_drops",
     ),
+    "mutant_crab": NpcDef(
+        key="mutant_crab",
+        name="Mutant Crab",
+        desc="A large, aggressive crab.",
+        strike_level=1,
+        brawn_level=1,
+        defense_level=1,
+        max_hp=60,
+        attack_speed=4,
+        combat_stat_bonuses={
+            # stats based on OSRS chaos druid, defenses lowered for flavor
+            # https://oldschool.runescape.wiki/w/Chaos_druid
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+            # Defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+            # Other bonuses
+            "melee_strength_bonus": 0,
+        },
+        combat_styles=_headbutt_crush_aggressive_combat_style(),
+        default_combat_style="headbutt",
+        # 30s timed respawn on the Mutant Crab's spawn tile, driven by
+        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
+        respawn_seconds=30,
+        # Drop table in world/loot_defs/hostile.py.
+        loot_table="mutant_crab_drops",
+    ),
 }

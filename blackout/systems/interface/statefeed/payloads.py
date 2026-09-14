@@ -489,6 +489,33 @@ class CombatPayload(_Payload):
 
 
 @dataclass
+class XpDropPayload(_Payload):
+    """One XP award, every skill it taught. Blackout.Xp.
+
+    One message per ACTION, not per skill: butchering a corpse is one drop
+    reading "+25 Butchery +5 Cutting", the grouping OSRS's XP drops offer and
+    the grouping xp_awards already holds. A client wanting one drop per skill
+    can split a list; one given separate messages could not tell which belong
+    together.
+
+    `kind` is the MESSAGE_TYPE of the line that announced the award -- combat,
+    gathering, crafting, quest -- so a client may treat a fight's drops
+    differently from a harvest's without a vocabulary of its own.
+
+    Each award row is `{skill_key, name, category, amount, level, current_xp,
+    needed_xp}`, the progress read AFTER the award landed. `name` and
+    `category` ship so a drop draws on its own, before or without a roster;
+    `current_xp` / `needed_xp` are progress INTO the level and that level's own
+    threshold, spelled exactly as CharSkillsPayload spells them.
+    """
+
+    channel = const.CHANNEL_XP_DROP
+
+    kind: str = ""
+    awards: list = field(default_factory=list)   # [{skill_key, amount, ...}]
+
+
+@dataclass
 class AuraPayload(_Payload):
     """An aura activating, deactivating, or pulsing. Blackout.Aura.
 

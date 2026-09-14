@@ -135,6 +135,38 @@ family shape, and `refreshed` fires if a model arrives later. A room full of
 unmodelled content is fully playable, which is what lets content ship ahead of
 art.
 
+**Every model is fetched, and drawn once out of sight, behind the veil.** On the
+web a shader is compiled the first time something is drawn with it, and the
+compile freezes the window: measured 09/13/2026 in a Chromium WebGL 2 export,
+today's twenty models cost **13.5 s** of frozen frames to draw once, most of it
+six compiles of 1–5 s. Left to first sight, that was a corpse dropping or an NPC
+walking in. `MeshResolver.prefetch_all()` asks for every manifest key the first
+time the veil goes up — at the veil and not at startup, because the login form
+is not a screen to freeze while a password is typed — and `ShaderWarmer`, a
+tiny `SubViewport` sharing the world pane's `World3D`, draws each arrival for
+three frames 20,000 units below the map, past the world camera's far plane. A
+model waiting to be drawn counts as in flight, so the veil waits for the
+compiles too. Instanced terrain is its own variant, so each model is warmed as
+a one-instance `MultiMesh` as well.
+
+> **A compiled shader lives only as long as a material of its exact variant.**
+> Godot frees it with the last user, and a copy is freed with its entity — so
+> `ModelLoader._prepare_materials` makes each PROTOTYPE's materials the same
+> variant as its copies. The prototypes live all session and hold the warmed
+> shaders alive. The procedural palette has no prototype, so the warmer keeps
+> one hidden block for it.
+
+**Hover changes a colour, never a shader.** `emission_enabled` is part of the key
+a `BaseMaterial3D` builds its shader from, and hover used to flip it both ways —
+a compile on every hover-on AND every hover-off, since Godot frees the variant
+the material just left. **Every material is glow-ready from birth**: emission on,
+resting at whatever the model authored (black at zero for nearly all of them).
+`MeshGlow` owns the rule, `MeshPalette` and `ModelLoader` both call
+`MeshGlow.prepare`, and hover writes only colour and energy. Measured on the same
+export: toggling cost ~52 ms per hover on a primitive and ~1.9 s on a model's
+first; writing the uniforms cost nothing measurable, ever.
+`test_entity_pool` asserts no hover changes the flag.
+
 **Adding a family is one entry in `family_shapes.gd`** — `SHAPES` for a
 procedural shape, `MODELS` for a packed model standing in for the whole family.
 Both tables' keys are the generated constants, not string literals: a family
@@ -510,7 +542,8 @@ Godot's own splash cannot cover this: it is gone before the socket opens.
 	a body      char_vitals landed          CharState.has_vitals
 	a place     room_info named a map       WorldState.current_z
 	a map       every chunk of it arrived   Level.is_complete()
-	the art     nothing left in flight      MeshResolver.in_flight_count()
+	the art     nothing fetched, unwarmed   MeshResolver.in_flight_count()
+	            or awaiting the manifest
 
 They do complete in that order today. Nothing in `SessionReadiness` assumes it —
 each is tested independently, so a server that reorders them reports the truth
@@ -523,6 +556,15 @@ a complete map arriving before the room that names it.
 > entity layer asks for the NPCs standing on them. Lifting on the first zero
 > raises the veil on a room with nobody in it. `SETTLE_SECONDS` is how long the
 > quiet has to hold, and it is the single most load-bearing constant here.
+>
+> Since 09/13/2026 the veil also starts a prefetch of every model (see "Where
+> meshes come from"), and the count covers all of it: fetches in the air, models
+> not yet drawn by `ShaderWarmer`, and — while the manifest has not landed — the
+> manifest itself. Without that last one a veil raised before the manifest
+> arrived would read zero and lift on a prefetch that had not started. On the
+> web this puts the compiles — 13.5 s measured for today's art — under the veil,
+> inside `CEILING_SECONDS`. Whether the browser's own program cache shortens that
+> on a second visit has not been measured.
 
 **The rule is static and takes every input as an argument.** `phase_for()` is the
 whole decision and can be tested with no socket, no timer and no frame — the same
@@ -657,7 +699,7 @@ subscribing` followed by a fresh `subscribed: ...`.
 
 ## Tests
 
-All thirty-seven are headless and exit non-zero on failure. Thirty-four need
+All forty-one are headless and exit non-zero on failure. Thirty-eight need
 nothing running; three of the four `smoke_*` scenes need an Evennia, and none
 needs an account. `smoke_console` is the exception: it builds `console.tscn` for real and
 needs nothing, because the socket it opens is expected to fail.
@@ -750,6 +792,15 @@ three detail modes asks for exactly what it shows.
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_skills_view.tscn
+```
+
+`test_xp_tracker_state.tscn` and `test_xp_hud_view.tscn` need nothing running
+either. The tracker's clock is a Callable the test moves by hand, so an hour of
+XP per hour is measured in milliseconds; the view test proves the HUD is hidden
+before an award and that no control in it takes the mouse.
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_xp_hud_view.tscn
 ```
 
 `test_combat_options_state.tscn` and `test_combat_options_view.tscn` need
@@ -1027,6 +1078,38 @@ difference between a tab strip and an annoying one. Each log is capped at
 `active_log_changed`, because a find that spanned tabs would scroll one the
 player cannot see and count matches in logs they are not reading.
 
+## XP drops ride an event; the session is the client's
+
+Just left of the minimap, right-aligned against it — where OSRS keeps its XP
+counter — and drawn only once something has been earned: a
+strip reading `session 12,345 xp   3,420 xp/hr`, a segmented bar for the skill
+just trained (`strike 42 → 43 · 1,120 to go`), a `level up // strike 43` line
+that fades, and — when Options asks for it — XP per hour for each skill. Each
+award rises into the bottom of that column as one row, `+25 Butchery
++5 Cutting`, coloured by skill category from [SkillPalette].
+
+**Every award arrives on `blackout_xp`, one message per action.** It is sent
+from `xp_awards.grant_xp`, the one seam every player-facing award on the server
+passes through, and carries each skill's progress read after the award landed.
+It is not derived from `char_skills`, because that roster is marked stale on an
+award and built once after the last one — two awards on one tick would reach
+here as one blurred change, a reactor turn late. It is an event channel like
+`blackout_combat` and is never coalesced, for the same reason.
+
+**The session is the client's reading, not a server fact.** `XpTrackerState`
+starts a clock at the first award and ends it at `reset()` — a dropped socket,
+or Options → Reset session. Nothing about totals or rates is sent anywhere, the
+way RuneLite's tracker is a plugin and not a game feature. A rate reads `--`
+for its first 30 seconds: one swing two seconds into a fight is tens of
+thousands an hour, and that is a number a player quotes.
+
+**The level-up line hangs off `SkillsState.levelled`**, the signal the jingle
+already uses, rather than comparing levels on the award. One owner of "a level
+rose".
+
+**Nothing in the HUD takes a click.** It sits over the tiles, and
+`test_xp_hud_view` walks every control in it to prove the mouse passes through.
+
 ## Sound is the client's, and a cue hangs off a fact
 
 `world/sound_cues.gd` is the whole table: a cue NAME (`SoundCues.LEVEL_UP`)
@@ -1110,6 +1193,8 @@ then one constant and one `_STREAMS` row in `sound_cues.gd`.
 | `world/reconnect_policy.gd` | How long to wait before redialling. Pure schedule, no clock. |
 | `world/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
 | `scenes/quests/quests_view.gd` | The quest tab: a bar per objective, drawn from numbers rather than prose. |
+| `world/xp_tracker_state.gd` | This session's XP awards, totals and rates. The clock is injectable; the session is the client's own. |
+| `scenes/xp/xp_hud_view.gd` | XP drops, the session strip and the progress bar over the world. Takes no click. |
 | `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/map_palette.gd` | Room-kind colours, island order, and which map is surfaced with which terrain. Read by BOTH map panes; guarded from Python by path. |
@@ -1155,6 +1240,12 @@ Four rules worth not rediscovering:
    that rather than knowing it.
 4. **The output pane's monospace font is load-bearing**, not cosmetic. Godot's
    default theme font is proportional and the game draws ASCII art constantly.
+   **It is bundled** (`ui/fonts/DejaVuSansMono.ttf`), never a `SystemFont`: a
+   Web export has no OS fonts to ask, so a `SystemFont` listing Consolas
+   resolved on desktop and fell back to the proportional default in the
+   browser — ragged EvMenu tables and `→` drawn as a missing-glyph box, until
+   09/13/2026. One face on every platform also keeps the two clients
+   identical. `tests/test_theme.gd` fails on a `SystemFont` in the theme.
 6. **On the web, Ctrl+V into a LineEdit may not paste, and the failure is
    silent.** Godot's export listens for the DOM `paste` event, but its
    `clipboard_get` reads `navigator.clipboard.readText()` -- the

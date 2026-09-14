@@ -207,6 +207,79 @@ class GlbToGltfTests(unittest.TestCase):
         self.assertFalse(os.path.exists(self.dest))
 
 
+class AsExportedTests(unittest.TestCase):
+    """--as-exported: a .glb that already says how it looks, split and kept."""
+
+    def setUp(self):
+        self._scratch = tempfile.TemporaryDirectory()
+        self.root = self._scratch.name
+        self.dest = os.path.join(self.root, "tri")
+
+    def tearDown(self):
+        self._scratch.cleanup()
+
+    def _write_glb(self, **shape):
+        data, payload = _glb_bytes(**shape)
+        path = os.path.join(self.root, "tri.glb")
+
+        with open(path, "wb") as handle:
+            handle.write(data)
+
+        return path, payload
+
+    def _split_document(self, glb_path):
+        glb_to_gltf.split_as_exported(glb_path, self.dest)
+
+        with open(os.path.join(self.dest, "scene.gltf"),
+                  encoding="utf-8") as handle:
+            return json.load(handle)
+
+    def test_the_materials_pass_through_and_the_buffer_is_exact(self):
+        glb_path, payload = self._write_glb(with_material=True)
+        document = self._split_document(glb_path)
+
+        with open(os.path.join(self.dest, "scene.bin"), "rb") as handle:
+            written = handle.read()
+
+        self.assertEqual(written, payload)
+        self.assertEqual(document["materials"], [{"name": "already"}])
+        self.assertNotIn("images", document)
+
+    def test_the_generator_names_the_mode(self):
+        """ConvertedManifestSourceTests reads this mark to pick its rules."""
+        glb_path, _ = self._write_glb(with_material=True)
+        document = self._split_document(glb_path)
+
+        self.assertIn("--as-exported", document["asset"]["generator"])
+
+    def test_a_glb_with_no_materials_is_refused(self):
+        """That download wants --texture; kept as-is it would render grey."""
+        glb_path, _ = self._write_glb()
+
+        with self.assertRaises(glb_to_gltf.GlbError) as caught:
+            glb_to_gltf.split_as_exported(glb_path, self.dest)
+
+        self.assertIn("--texture", str(caught.exception))
+        self.assertFalse(os.path.exists(self.dest))
+
+    def test_the_command_line_takes_exactly_one_mode(self):
+        cases = {
+            "neither": ["a.glb", "dest"],
+            "both": ["a.glb", "dest", "--texture", "t.png", "--as-exported"],
+            "roughness with nothing to apply it to":
+                ["a.glb", "dest", "--as-exported", "--roughness", "0.5"],
+        }
+
+        for label, arguments in cases.items():
+            with self.subTest(label):
+                with self.assertRaises(glb_to_gltf.GlbError):
+                    glb_to_gltf._parse(arguments)
+
+        parsed = glb_to_gltf._parse(["a.glb", "dest", "--as-exported"])
+
+        self.assertEqual(parsed, ("a.glb", "dest", None, 0.7, True))
+
+
 class ConvertedManifestSourceTests(unittest.TestCase):
     """Every source this converter produced, as the manifest names them."""
 
@@ -215,6 +288,10 @@ class ConvertedManifestSourceTests(unittest.TestCase):
         Derived from the manifest rather than listed: a converted source is one
         whose generator names this tool, so a model converted tomorrow is
         covered with no edit here.
+
+        The OPAQUE rule is about the material this tool WRITES -- an atlas whose
+        alpha is roughness -- so a source kept --as-exported is exempt from it:
+        its materials are the author's, and Blender leaves alphaMode unset.
         """
         seen = set()
 
@@ -234,8 +311,13 @@ class ConvertedManifestSourceTests(unittest.TestCase):
             if "glb_to_gltf.py" not in generator:
                 continue
 
+            as_exported = "--as-exported" in generator
+
             with self.subTest(asset_key=asset_key):
                 for material in document.get("materials", []):
+                    if as_exported:
+                        break
+
                     self.assertEqual(material.get("alphaMode"), "OPAQUE")
 
                 for image in document.get("images", []):

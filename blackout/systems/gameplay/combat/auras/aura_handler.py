@@ -17,6 +17,7 @@ not the caster is swinging at anything.
 
 from evennia.utils import logger
 
+from systems.gameplay.progression.skills import xp_awards
 from systems.interface.statefeed import events as feed
 from systems.interface.statefeed import serializers as feed_serializers
 
@@ -251,17 +252,19 @@ class BlackoutAuraHandler(TickableHandler):
         if skills is None or aura.xp_skill is None:
             return
 
-        award = aura.xp_for(total_dealt)
-        if award <= 0:
+        awards = [(aura.xp_skill, aura.xp_for(total_dealt))]
+        readout = xp_awards.format_xp_readout(awards)
+        if not readout:
             return
+
+        # Announced before it is granted, as every award is, so a level-up
+        # line reads below the award that caused it.
+        caster.msg((readout, _MSG_COMBAT))
 
         try:
-            skills.add_xp(aura.xp_skill, award)
+            xp_awards.grant_xp(caster, awards, feed_const.MESSAGE_TYPE_COMBAT)
         except Exception:
             logger.log_trace()
-            return
-
-        caster.msg((combat_msg.format_aura_xp(aura, award), _MSG_COMBAT))
 
     # ── tick loop ────────────────────────────────────────────────────────
 

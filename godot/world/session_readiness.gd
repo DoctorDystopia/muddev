@@ -21,7 +21,12 @@ extends Node
 ##     a body      char_vitals landed          -> CharState.has_vitals
 ##     a place     room_info named a map       -> WorldState.current_z
 ##     a map       every chunk of it arrived   -> Level.is_complete()
-##     the art     nothing left in flight      -> MeshResolver.in_flight_count()
+##     the art     nothing fetched, unwarmed   -> MeshResolver.in_flight_count()
+##                 or awaiting the manifest
+##
+## "Unwarmed" is load-bearing: a model that has arrived but not yet been drawn
+## by [ShaderWarmer] still has its shader compile ahead of it, and on the web
+## that is a frozen frame of up to seconds. See [method MeshResolver.prefetch_all].
 ##
 ## They genuinely do complete in that order, but nothing here assumes it: each
 ## is tested independently and the phase is whichever is missing FIRST, so a
@@ -67,8 +72,9 @@ enum Phase {
 
 ## How long the art has to stay quiet before it counts as finished.
 ##
-## NOT paranoia. Models are fetched lazily, as whatever needs them is drawn, so
-## the in-flight set legitimately empties between batches: the map completes,
+## NOT paranoia, and still needed now that the veil starts a prefetch of every
+## model: a draw can ask for a model before the prefetch does, so the in-flight
+## set legitimately empties between batches: the map completes,
 ## the terrain layer asks for its tiles, and a moment later the entity layer
 ## asks for the NPCs standing on them. Lifting on the first zero would raise the
 ## veil on a room that is still missing everyone in it.

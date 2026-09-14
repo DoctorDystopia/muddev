@@ -196,6 +196,13 @@ func bind_meshes(resolver: MeshResolver) -> void:
 	_entities.observer_slot_changed.connect(_on_observer_slot)
 	_meshes.refreshed.connect(_on_art_arrived)
 
+	# In THIS pane's world, because a shader is compiled for the lighting it is
+	# drawn under, and this is the lighting every model will be drawn under.
+	var warmer := ShaderWarmer.new()
+
+	add_child(warmer)
+	_meshes.bind_warmer(warmer)
+
 	# Something stands on the marker from the first frame, before char_avatar
 	# has said which asset you are. The generic character figure is the right
 	# placeholder: it is what every OTHER player in the room is drawn as, so you

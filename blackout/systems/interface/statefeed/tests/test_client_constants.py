@@ -152,18 +152,23 @@ _PROTOTYPE_KEY = "key"
 # than restated, which is the same rule this whole module exists to enforce.
 _GENERATED_OUTPUTS: dict = _clientexport.output_paths()
 
-# The map modules to read. Deliberately NOT a directory scan of world/maps:
-# manifest.py is not a map and neo_cairo.py is a map that exists but is not
-# active, and both have to be included for different reasons -- see
-# server_room_kinds. Naming them costs one line per map and cannot pick up
-# something that is not a map at all.
+# Map modules that exist but are NOT in scripts/map_manifest.json. Live maps are
+# read from the manifest itself (see _map_module_names); only a map declared
+# ahead of activation needs a line here. Deliberately NOT a directory scan of
+# world/maps: manifest.py is not a map, and a scan cannot tell the difference.
 #
-# This never reaches blackout/scripts/, which CLAUDE.md marks import-unsafe.
-_MAP_MODULE_NAMES: tuple = (
-    "world.maps.oasis",
-    "world.maps.oasis_outskirts",
+# This used to name every map, live ones included, and went stale the day
+# azm_plains joined the manifest: Godot placed and surfaced a map this module
+# could not see, and two drift checks reported a real map as a typo.
+_INACTIVE_MAP_MODULE_NAMES: tuple = (
     "world.maps.neo_cairo",
 )
+
+# The only package a map module may be imported from. The manifest is a data
+# file, and a row naming anything outside this package -- blackout/scripts/
+# above all, which CLAUDE.md marks import-unsafe -- is refused rather than
+# imported.
+_MAP_PACKAGE_PREFIX = "world.maps."
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -349,9 +354,48 @@ def _packed_asset_keys():
     return {asset_key for _source, asset_key in pack_model.load_manifest()}
 
 
+def _map_module_names():
+    """
+    Purpose: Every map module the server declares, active or not.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        A list of dotted module paths, manifest order first, no duplicates.
+
+    Module Globals:
+        _INACTIVE_MAP_MODULE_NAMES, _MAP_PACKAGE_PREFIX read.
+
+    Methodology:
+        The manifest's modules, then the inactive ones named above. Reading the
+        manifest is what lets a map added the documented way -- one manifest
+        row -- reach these checks with no edit here. Each path is checked
+        against _MAP_PACKAGE_PREFIX before it is returned.
+
+    Notes/References:
+        world/maps/manifest.py is the manifest's one reader and is pure data
+        access; it touches no database.
+    """
+    from world.maps.manifest import load_entries, modules_of
+
+    names = []
+
+    for name in modules_of(load_entries()) + list(_INACTIVE_MAP_MODULE_NAMES):
+        if not name.startswith(_MAP_PACKAGE_PREFIX):
+            raise ValueError(
+                "Map module %r is outside %s; refusing to import it."
+                % (name, _MAP_PACKAGE_PREFIX))
+
+        if name not in names:
+            names.append(name)
+
+    return names
+
+
 def _map_modules():
     """
-    Purpose: Import the map modules named above.
+    Purpose: Import every map module the server declares.
 
     Entry:
         None.
@@ -360,7 +404,7 @@ def _map_modules():
         A list of imported module objects.
 
     Module Globals:
-        _MAP_MODULE_NAMES read.
+        None.
 
     Methodology:
         A plain importlib call per name. The map modules are pure data: they
@@ -369,11 +413,11 @@ def _map_modules():
 
     Notes/References:
         Import-safety is why these are named individually rather than globbed.
-        See _MAP_MODULE_NAMES.
+        See _map_module_names.
     """
     from importlib import import_module
 
-    return [import_module(name) for name in _MAP_MODULE_NAMES]
+    return [import_module(name) for name in _map_module_names()]
 
 
 def _server_room_kinds():

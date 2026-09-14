@@ -118,6 +118,7 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_MAP", const.CHANNEL_MAP),
     ("CH_COMBAT", const.CHANNEL_COMBAT),
     ("CH_AURA", const.CHANNEL_AURA),
+    ("CH_XP_DROP", const.CHANNEL_XP_DROP),
     ("CH_SUBSCRIBED", const.CHANNEL_SUBSCRIBED_ACK),
 )
 

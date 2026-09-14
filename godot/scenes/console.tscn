@@ -10,6 +10,7 @@
 [ext_resource type="Script" uid="uid://cj3vfryvg0mgb" path="res://scenes/minimap/minimap_view.gd" id="10_minimap"]
 [ext_resource type="Script" uid="uid://o68yvcbc0tmk" path="res://scenes/loading/loading_veil.gd" id="11_veil"]
 [ext_resource type="Script" uid="uid://8vadnsx4gkim" path="res://scenes/world/choose_option.gd" id="12_choose"]
+[ext_resource type="Script" path="res://scenes/xp/xp_hud_view.gd" id="13_xphud"]
 
 [node name="Console" type="Control" unique_id=1927313264]
 layout_mode = 3
@@ -110,6 +111,20 @@ offset_top = 8.0
 offset_right = 248.0
 offset_bottom = 72.0
 mouse_filter = 2
+
+[node name="XpHud" type="Control" parent="Split/Right/WorldPane" unique_id=434837266]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -594.0
+offset_top = 8.0
+offset_right = -174.0
+offset_bottom = 220.0
+grow_horizontal = 0
+mouse_filter = 2
+script = ExtResource("13_xphud")
 
 [node name="ChooseOption" type="Control" parent="Split/Right/WorldPane" unique_id=434837265]
 unique_name_in_owner = true

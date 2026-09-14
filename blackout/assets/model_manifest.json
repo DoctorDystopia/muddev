@@ -81,6 +81,14 @@
       "asset_key": "corpse_skeleton"
     },
     {
+      "source": "assets/npcs/lone_android_clark",
+      "asset_key": "lone_android"
+    },
+    {
+      "source": "assets/npcs/little_robot_shopkeep",
+      "asset_key": "shopkeeper"
+    },
+    {
       "source": "assets/world_objects/sm_teleporter",
       "asset_key": "map_transition"
     },

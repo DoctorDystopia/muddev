@@ -40,6 +40,7 @@ func _ready() -> void:
 
 	_every_variation_has_a_real_base(theme, declared)
 	_every_named_variation_is_declared(declared)
+	_every_font_is_bundled(theme)
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -117,6 +118,22 @@ func _every_named_variation_is_declared(declared: Dictionary) -> void:
 	for variation: String in declared:
 		if not named.has(variation):
 			print("  note %s is declared and unused" % variation)
+
+
+## Every font the theme sets must ship inside the export.
+##
+## A [SystemFont] asks the OS for a face, and a Web export has no OS fonts to
+## ask: it falls back to Godot's proportional default, silently. That was the
+## live state of the browser client until 09/13/2026 -- every EvMenu table
+## ragged, and the XP bar's arrow drawn as a missing-glyph box -- while the
+## desktop client, which found Consolas, looked correct.
+func _every_font_is_bundled(theme: Theme) -> void:
+	for type_name: String in theme.get_font_type_list():
+		for slot: String in theme.get_font_list(type_name):
+			var font := theme.get_font(slot, type_name)
+			_expect(not (font is SystemFont),
+				("%s/%s is a bundled font, not a SystemFont the Web export "
+					+ "cannot resolve") % [type_name, slot])
 
 
 ## Read every .gd and .tscn under `path`, recording which variations each names.

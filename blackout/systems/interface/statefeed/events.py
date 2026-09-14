@@ -20,6 +20,8 @@ Description: The adapter layer — game events in, payloads out, emitted.
 
 
 
+from evennia.utils import logger
+
 from . import constants as const
 from . import buffer, serializers, subscriptions
 from .emit import emit, emit_to_area, emit_to_room
@@ -39,6 +41,7 @@ from .payloads import (
     RoomPlayerRemovePayload,
     RoomPlayersDeltaPayload,
     RoomPlayersPayload,
+    XpDropPayload,
 )
 
 
@@ -201,6 +204,59 @@ def _broadcast(payload, attacker, target, room) -> int:
     sent += emit_to_room(room, payload, exclude=(attacker, target))
 
     return sent
+
+
+
+def _xp_drop_rows(observer, awards) -> list:
+    """
+    Purpose: Describe each granted award as a row a client can draw on its own.
+
+    Entry:
+        observer - a character whose .skills is a SkillHandler.
+        awards   - the (skill_key, amount) pairs xp_awards.grant_xp granted.
+
+    Exit/Returns:
+        Returns a list of JSON-safe row dicts, in the award's order.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Progress is read off the handler rather than computed from the amount,
+        because the award has ALREADY landed: add_xp may have levelled the
+        skill, possibly several times, and only the handler knows where the
+        curve now stands.
+
+        The registry is imported inside the routine, for the reason
+        _read_levels gives: this module is imported by typeclasses/mixins.py at
+        startup, and the skills package walks its own registry on import.
+
+    Notes/References:
+        XpDropPayload documents the row shape.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+
+    skills = observer.skills
+    rows = []
+
+    for skill_key, amount in awards:
+        skill_class = SKILL_REGISTRY.get(skill_key)
+        current_xp, needed_xp, _remaining = skills.get_xp_level(skill_key)
+
+        rows.append({
+            "skill_key": str(skill_key),
+            "name": str(getattr(skill_class, "name", skill_key)),
+            "category": str(getattr(skill_class, "category", "")),
+            "amount": int(amount),
+            "level": int(skills.get_level(skill_key)),
+            "current_xp": int(current_xp),
+            "needed_xp": int(needed_xp),
+        })
+
+    return rows
 
 
 
@@ -607,6 +663,62 @@ def emit_skills(observer, force: bool = False) -> int:
 
     return emit(observer, skills_serializer.build_payload(observer),
                 force=force)
+
+
+def emit_xp_drop(observer, awards, kind: str) -> int:
+    """
+    Purpose: Publish one XP award to the observer who earned it.
+
+    Entry:
+        observer - the character just paid. One with no subscriber -- an NPC,
+                   a telnet player, a test stub -- is a supported no-op.
+        awards   - the (skill_key, amount) pairs actually granted.
+        kind     - the MESSAGE_TYPE of the line that announced the award.
+
+    Exit/Returns:
+        Returns the number of sends performed. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check comes first, so an award on a telnet-only server
+        costs one session lookup and reads no handler at all.
+
+        Sent to the earner ALONE. An XP drop is not something onlookers see:
+        the text readout it mirrors is msg'd to the earner and nobody else, and
+        the feed must never tell a graphical client more than the text tells a
+        telnet player.
+
+        Wrapped whole, where most emitters here lean on emit()'s own guard,
+        because the rows are built BEFORE emit() is reached and the caller is
+        a gameplay path -- a harvest, a swing -- that a cosmetic channel must
+        not be able to break.
+
+    Notes/References:
+        Called by systems/gameplay/progression/skills/xp_awards.grant_xp and
+        nothing else. See CHANNEL_XP_DROP.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    try:
+        wants = subscriptions.has_channel_subscribers(
+            observer, XpDropPayload.channel
+        )
+
+        if not wants:
+            return 0
+
+        rows = _xp_drop_rows(observer, awards)
+
+        if not rows:
+            return 0
+
+        return emit(observer, XpDropPayload(kind=str(kind), awards=rows))
+    except Exception:
+        logger.log_trace()
+        return 0
 
 
 def emit_combat_options(observer, force: bool = False) -> int:

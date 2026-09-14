@@ -41,7 +41,13 @@ _ARGUMENT_REGISTRIES = {
 
 
 class RecordingSkills:
-    """Captures every add_xp a reward callback makes."""
+    """Captures every add_xp a reward callback makes.
+
+    Satisfies XpEarner in full, not just add_xp: xp_awards.grant_xp asks
+    `isinstance(skills, XpEarner)` and pays nothing to a handler that fails
+    it -- which would leave `awards` empty and every check below passing on
+    nothing.
+    """
 
     def __init__(self) -> None:
         self.awards = []
@@ -49,6 +55,14 @@ class RecordingSkills:
 
     def add_xp(self, skill_key: str, amount: int) -> None:
         self.awards.append((skill_key, amount))
+
+
+    def get_total_xp(self, skill_key: str) -> int:
+        return sum(amount for key, amount in self.awards if key == skill_key)
+
+
+    def meets_prerequisite(self, skill_key: str, required_level: int) -> bool:
+        return True
 
 
 

@@ -2,6 +2,7 @@
   "corpse_skeleton": "npcs/corpse_skeleton.glb",
   "floating_eye": "npcs/floating_eye.glb",
   "food_meat": "items/food_meat.glb",
+  "lone_android": "npcs/lone_android.glb",
   "map_transition": "world_objects/map_transition.glb",
   "moderator_egg": "items/moderator_egg.glb",
   "mutant_raider_cured_chuck": "items/mutant_raider_cured_chuck.glb",
@@ -14,7 +15,8 @@
   "mutant_raider_steak": "items/mutant_raider_steak.glb",
   "player_character": "characters/player_character.glb",
   "rusty_scrap_shortsword": "items/rusty_scrap_shortsword.glb",
+  "shopkeeper": "npcs/shopkeeper.glb",
+  "tile_azm_plains": "tiles/tile_azm_plains.glb",
   "tile_oasis": "tiles/tile_oasis.glb",
-  "tile_oasis_outskirts": "tiles/tile_oasis_outskirts.glb",
-  "tile_azm_plains": "tiles/tile_azm_plains.glb"
+  "tile_oasis_outskirts": "tiles/tile_oasis_outskirts.glb"
 }

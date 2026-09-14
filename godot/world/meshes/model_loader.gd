@@ -15,6 +15,12 @@ extends Node
 ## downloads the sword; a Godot export can only match that by fetching too. See
 ## [ModelRegistry] on why a served manifest beats convention-plus-404.
 ##
+## Since 09/13/2026 this client does NOT wait for something to need drawing:
+## [method MeshResolver.prefetch_all] asks for every model once the loading veil
+## is up, because a model's first draw compiles shaders and on the web that
+## freezes the window for seconds. Still after the login prompt, still out of
+## the `.pck` -- the reason above holds; only the moment moved.
+##
 ## ## Every model is normalised into a unit box
 ##
 ## Not optional, and not obvious until measured: the packed sword's own bounds
@@ -127,11 +133,20 @@ func can_load(asset_key: String) -> bool:
 ## arrived, never that another has just been asked for. A COUNT read on demand
 ## cannot fall behind the way a tally kept by a listener would.
 ##
-## Zero does not mean finished. Models are fetched lazily as things are drawn,
-## so the set empties between batches; see [constant
-## SessionReadiness.SETTLE_SECONDS].
+## Nor is it the whole answer: [method MeshResolver.in_flight_count] adds the
+## models [ShaderWarmer] has not drawn yet and a manifest a prefetch is waiting
+## on, and that sum is what the veil reads.
+##
+## Zero does not mean finished. A draw can ask for a model before the prefetch
+## reaches it, so fetches still arrive in batches and the set can empty between
+## them; see [constant SessionReadiness.SETTLE_SECONDS].
 func in_flight_count() -> int:
 	return _in_flight.size()
+
+
+## Whether this key's model is already in hand. Never fetches.
+func is_loaded(asset_key: String) -> bool:
+	return _prototypes.has(asset_key)
 
 
 ## A copy of an already-loaded model, or null.
@@ -164,6 +179,9 @@ func cached(asset_key: String) -> Node3D:
 ## stay shared, which is the expensive half. Tier 2 needs none of this —
 ## [MeshBuilder] already builds a fresh material per part — so the cost is paid
 ## only where it is real.
+##
+## Each copy is made glow-ready here, where it is born, so hovering it later is
+## a uniform write rather than a shader compile. See [MeshGlow].
 static func _take_own_materials(root: Node3D) -> void:
 	var stack: Array[Node] = [root]
 
@@ -175,9 +193,13 @@ static func _take_own_materials(root: Node3D) -> void:
 			for surface: int in instance.mesh.get_surface_count():
 				var material := instance.mesh.surface_get_material(surface)
 
-				if material != null:
-					instance.set_surface_override_material(
-						surface, material.duplicate())
+				if material == null:
+					continue
+
+				var own := material.duplicate() as Material
+
+				MeshGlow.prepare(own as BaseMaterial3D)
+				instance.set_surface_override_material(surface, own)
 
 		for child: Node in node.get_children():
 			stack.append(child)
@@ -321,7 +343,43 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 	_normalise(scene)
 	_orient(asset_key, scene)
 
+	# AFTER _orient, which may rewrite these same materials to force them
+	# opaque -- and transparency is part of the shader key being held alive.
+	_prepare_materials(scene)
+
 	return wrapper
+
+
+## Make a prototype's own materials glow-ready, so their shaders outlive every
+## copy.
+##
+## Godot frees a shader the moment the last material using it goes. Every copy
+## handed out is freed with its entity, so without a user that outlives them a
+## shader compiled behind the veil for exactly this -- see [ShaderWarmer] --
+## would be thrown away when the last corpse was looted and compiled again,
+## frozen frame and all, for the next one. The prototype lives until shutdown,
+## so its materials are that user. They are never drawn; they hold the variant.
+##
+## Glow-ready and not merely kept, because the copies are glow-ready: a shader
+## is only held alive for materials of the SAME variant, and emission is part
+## of the variant. [method _take_own_materials] duplicates these, so the copies
+## inherit readiness rather than earning it separately.
+static func _prepare_materials(root: Node3D) -> void:
+	var stack: Array[Node] = [root]
+
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		var instance := node as MeshInstance3D
+
+		if instance != null and instance.mesh != null:
+			for surface: int in instance.mesh.get_surface_count():
+				var material := instance.mesh.surface_get_material(
+					surface) as BaseMaterial3D
+
+				MeshGlow.prepare(material)
+
+		for child: Node in node.get_children():
+			stack.append(child)
 
 
 ## Scale so the longest axis is one unit, and centre on the origin.

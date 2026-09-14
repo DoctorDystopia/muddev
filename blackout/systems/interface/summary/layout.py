@@ -365,3 +365,52 @@ def wrapped_field(label: str, items: list, color: str = HIGHLIGHT_COLOR) -> list
         lines.append(line)
 
     return lines
+
+
+def ranked_rows(entries: list, color: str = HIGHLIGHT_COLOR) -> list:
+    """
+    Purpose: Render a tally -- one row per entry, the count right-aligned in
+    its own column and the name after it.
+
+    Entry:
+        entries is a list of (label, count) pairs, already in display order.
+        label is a plain string of any length; count is an int.
+        color is applied to the count column.
+
+    Exit/Returns:
+        Returns a list of display lines. An empty `entries` yields an empty
+        list.
+
+    Module Globals:
+        const.FIELD_INDENT, const.FIELD_GUTTER read.
+
+    Methodology:
+        Count first, name second, the reverse of every other row here. A tally
+        of hostiles or harvest nodes is open-ended: a name like "Big Mutant
+        Corpse" runs past FIELD_LABEL_WIDTH and fields() would clip it, while
+        the count is always short. Putting the unbounded text last means
+        nothing is ever truncated and the counts still line up.
+
+        The count column is as wide as the widest count in THIS batch, padded
+        plain and only then coloured -- the same pad-then-colour order as
+        _cell.
+
+    Notes/References:
+        The `stats` sheet is the caller -- see panel_defs/records.py.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    if not entries:
+        return []
+
+    count_texts = [str(count) for _label, count in entries]
+    count_width = max(len(text) for text in count_texts)
+    lines = []
+
+    for (label, _count), count_text in zip(entries, count_texts):
+        count_cell = _colored(count_text.rjust(count_width), color)
+        row = f"{const.FIELD_INDENT}{count_cell}{const.FIELD_GUTTER}{label}"
+        lines.append(row)
+
+    return lines

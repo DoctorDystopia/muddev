@@ -238,6 +238,7 @@ band" and "how much of it" are different questions:
 | Combat Readiness | **no** | — your loadout is tactical information |
 | Holdings | **no** | — |
 | World | yes | quests completed, playtime, created — **not** your location or active quests |
+| Records | **no** | — kills, deaths and spending are nobody else's business |
 
 Skills are absent from this table because they are absent from the dossier
 entirely — the band moved out on 08/28/2026. `skills <character>` is what
@@ -249,6 +250,25 @@ OSRS makes between a hiscores entry and a full stat page.
 author says otherwise. The location omission is the load-bearing one: a profile
 command that reported grid coordinates would be a player-tracking tool usable
 from anywhere in the world.
+
+### Lifetime records (`stats`)
+
+```bash
+> stats
+```
+
+Alias: `records`. Every tally `systems/core/stat_tracker/` holds for you —
+kills and deaths per hostile, cuttings and butcherings per node, credits spent
+— each stat under its own heading, every entry named, with a total.
+
+The dossier's **Records** band is the short form of the same read: counters
+paired, and each per-hostile or per-node stat naming its top three with a
+`+N more`. The Godot Character tab gets every entry, uncapped. All three come
+from `StatHandler.recorded()` through `panel_defs/records.py`, and name no stat:
+**adding a stat is one `StatDef` in `registry.py`** — give it a `label` of at
+most 14 characters for the dossier's label column — and it appears on all
+three screens. `StatHandler.increment` marks the dossier stale itself, so the
+tab follows a kill with no call beside it.
 
 ### Refresh all characters
 

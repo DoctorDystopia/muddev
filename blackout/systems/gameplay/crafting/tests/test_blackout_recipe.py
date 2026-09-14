@@ -14,13 +14,38 @@ Run with:
 
 
 
+from unittest import mock
+
 from evennia import create_object
+from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaCommandTest
 
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
 from systems.gameplay.crafting.constants import CATEGORY_METALSMITH
 from systems.gameplay.crafting.recipes.metalsmith_recipes import RustyScrapShortswordRecipe
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from world.item_database import ITEM_DB
+
+
+def _sent_lines(mocked_msg) -> list:
+    """Flatten a mocked .msg into plain strings, in send order.
+
+    Unwraps to any depth: the contrib's CraftingRecipe.msg wraps whatever it
+    is given as `text=(message, {"type": "crafting"})`, and BlackoutRecipe
+    hands it a (text, kwargs) tuple of its own -- so a recipe line arrives
+    nested two tuples deep.
+    """
+    lines = []
+
+    for call in mocked_msg.call_args_list:
+        payload = call.args[0] if call.args else call.kwargs.get("text", "")
+
+        while isinstance(payload, (tuple, list)) and payload:
+            payload = payload[0]
+
+        lines.append(strip_ansi(str(payload)))
+
+    return lines
 
 
 class DustConsumingRecipe(BlackoutRecipe):
@@ -113,6 +138,27 @@ class TestNonStackableMultiInput(EvenniaCommandTest):
         self.assertEqual(result[0].key, "rusty scrap shortsword")
         self.assertNotIn(sheets[0], self.char1.contents)
         self.assertNotIn(sheets[1], self.char1.contents)
+
+    def test_the_success_line_carries_the_xp(self):
+        """Regression: the award was a second line naming the raw skill key,
+        "You gain 50 metalsmith XP.", rather than riding on the success line
+        the way a hit's XP rides on the hit line."""
+        sheets = [
+            ITEM_DB["rusty_scrap_metal"].create(location=self.char1) for _ in range(2)
+        ]
+        recipe = RustyScrapShortswordRecipe(self.char1, self.anvil, self.hammer, *sheets)
+        skill_name = SKILL_REGISTRY[recipe.required_skill].name
+        award_text = f"+{recipe.xp_reward} {skill_name}"
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            recipe.craft()
+
+        award_lines = [
+            line for line in _sent_lines(mocked_msg) if award_text in line
+        ]
+
+        self.assertEqual(len(award_lines), 1)
+        self.assertFalse(award_lines[0].startswith("("))
 
     def test_single_sheet_fails_without_consuming(self):
         sheet = ITEM_DB["rusty_scrap_metal"].create(location=self.char1)

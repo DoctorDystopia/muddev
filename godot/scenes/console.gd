@@ -66,6 +66,10 @@ const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
 ## the pane in the scene, so it covers the map, the minimap and the vitals
 ## rather than sitting under them.
 @onready var _veil: LoadingVeil = %LoadingVeil
+
+## XP drops, the session tracker and the progress bar, just left of the minimap.
+## A view of [member _xp_tracker].
+@onready var _xp_hud: XpHudView = %XpHud
 @onready var _choose: ChooseOption = %ChooseOption
 
 var _channels := PackedStringArray()
@@ -97,6 +101,11 @@ var _combat_options := CombatOptionsState.new()
 
 ## What you have taken and how far through it you are. A model like the others.
 var _quest_log := QuestState.new()
+
+## Every XP award this session, and how fast. A model like the others -- and
+## the one whose SESSION is the client's own reading rather than a server fact;
+## see [XpTrackerState].
+var _xp_tracker := XpTrackerState.new()
 
 ## The world: every island's grid, the links, and where you are standing.
 ##
@@ -248,6 +257,16 @@ func _ready() -> void:
 	add_child(_readiness)
 	_veil.bind(_readiness)
 
+	# Every model is fetched and drawn once, out of sight, the first time the
+	# veil goes up -- so shader compiles freeze the loading screen rather than
+	# the first corpse. At the veil and not at _meshes.start(): a compile
+	# freezes the whole window, and the login form is not a screen to freeze
+	# while somebody types a password. See MeshResolver.prefetch_all.
+	_readiness.changed.connect(
+		func(phase: SessionReadiness.Phase) -> void:
+			if SessionReadiness.is_loading(phase):
+				_meshes.prefetch_all())
+
 	# The veil asks; it does not reach into the model. Same rule as every other
 	# view on this screen.
 	_veil.skip_requested.connect(_readiness.skip)
@@ -297,6 +316,10 @@ func _ready() -> void:
 	_skills.levelled.connect(func(_skill_key: String, _level: int):
 		_sounds.play(SoundCues.LEVEL_UP))
 
+	# The roster as well as the tracker, for the level-up line: SkillsState is
+	# the one owner of "a level rose", and the jingle above already hangs off it.
+	_xp_hud.bind(_xp_tracker, _skills)
+
 	_quests = QuestsView.new()
 	_quests.bind(_quest_log)
 	_panel.add_panel(PanelView.TAB_QUESTS, _quests)
@@ -308,6 +331,10 @@ func _ready() -> void:
 	# The Game half of the options pane is the SERVER's, so it asks rather than
 	# writes -- the same path a clicked tile and an inventory drag use.
 	_options.command_requested.connect(Evennia.command)
+
+	# The XP session is the client's own reading, so starting it over asks the
+	# model directly -- there is nothing on the server to tell.
+	_options.xp_session_reset_requested.connect(_xp_tracker.reset)
 
 	_help = HelpView.new()
 	_panel.add_panel(PanelView.TAB_HELP, _help)
@@ -384,6 +411,7 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_quest_log.reset()
 	_skills.reset()
 	_combat_options.reset()
+	_xp_tracker.reset()
 
 	# A new socket is a new Evennia Session at the connection screen, so the
 	# next login has to be waited for again -- including the player's decision
@@ -604,6 +632,11 @@ func _apply_settings() -> void:
 		PanelView.TAB_INVENTORY, not _settings.show_inventory)
 	_place_vitals()
 
+	# Hidden, not unbound: the tracker keeps counting underneath, so turning the
+	# HUD back on shows the session so far.
+	_xp_hud.visible = _settings.show_xp_drops
+	_xp_hud.set_skill_rates_shown(_settings.show_skill_rates)
+
 	# Assigning an offset does not emit `dragged`, so this cannot loop back into
 	# the debounce below.
 	_split.split_offset = _settings.text_split
@@ -682,6 +715,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _quest_log.ingest(channel, _payload):
+			return
+
+		if _xp_tracker.ingest(channel, _payload):
 			return
 
 		if _world_state.ingest(channel, _payload):

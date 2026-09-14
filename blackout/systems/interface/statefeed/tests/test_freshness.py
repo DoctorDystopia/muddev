@@ -27,6 +27,7 @@ from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.core.stat_tracker import constants as stat_constants
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
@@ -40,6 +41,10 @@ from typeclasses.characters import Character as BlackoutCharacter
 # The dossier band repeating HP, total XP and combat state. A summary panel
 # key, named once so a rename under panel_defs/ fails here in one place.
 _VITALS_PANEL: str = "vitals"
+
+# The dossier band repeating the stat tracker's tallies, and a hostile to tally.
+_RECORDS_PANEL: str = "records"
+_HOSTILE: str = "mutant_raider"
 
 # A skill outside combat, so an award to it cannot move combat level and drag
 # the combat channels into an assertion. From the gathering tree, not invented.
@@ -153,6 +158,16 @@ class TestDossierFollowsItsFacts(_FreshnessTest):
         events.emit_summary(self.char1)
 
         self.assertEqual(buffer.stale_count(), 0)
+
+    def test_a_recorded_stat_reaches_the_dossier(self):
+        """A kill writes only the stat tracker -- no emitter of its own."""
+        self.char1.stats.increment(stat_constants.KILLS_PER_HOSTILE_STAT_KEY, _HOSTILE)
+
+        bodies = self._drain(const.CHANNEL_CHAR_SUMMARY)
+
+        self.assertTrue(bodies)
+        records = bodies[-1]["panels"][_RECORDS_PANEL]
+        self.assertEqual(records[stat_constants.KILLS_PER_HOSTILE_STAT_KEY], {_HOSTILE: 1})
 
 
 class TestRosterFollowsXp(_FreshnessTest):

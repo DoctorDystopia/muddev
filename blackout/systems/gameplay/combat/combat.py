@@ -12,6 +12,7 @@ from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
 from systems.gameplay.ai.constants import AI_BEHAVIOR_ATTR
 from systems.gameplay.ai.registry import get_behavior
+from systems.gameplay.progression.skills import xp_awards
 from systems.interface.statefeed import events as feed
 
 from . import combat_msg
@@ -138,17 +139,6 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
     return awards
 
 
-def _apply_xp_awards(attacker, awards) -> None:
-    """Grant a plan built by _plan_style_xp. Safe to call with an empty plan."""
-    skills = getattr(attacker, "skills", None)
-
-    if not isinstance(skills, XpEarner):
-        return
-
-    for skill_key, amount in awards:
-        skills.add_xp(skill_key, amount)
-
-
 def _award_style_xp(attacker, style: dict, damage: int) -> list:
     """Plan and immediately grant a combat action's XP. Returns the granted plan.
 
@@ -157,30 +147,8 @@ def _award_style_xp(attacker, style: dict, damage: int) -> list:
     only wants the XP to happen.
     """
     awards = _plan_style_xp(attacker, style, damage)
-    _apply_xp_awards(attacker, awards)
 
-    return awards
-
-
-def _labelled_awards(awards) -> list:
-    """Map an XP plan's skill keys to their player-facing display names.
-
-    SKILL_REGISTRY owns skill names, so combat must not title-case keys itself
-    ("brain_farming" is displayed "Brain Farming", not "Brain_Farming"). The
-    import is deferred for the same reason as ObjectDB above: this module is
-    pulled in from typeclass modules during startup, and the registry walks the
-    whole skill_defs package on first import.
-    """
-    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
-
-    labelled = []
-
-    for skill_key, amount in awards:
-        skill_class = SKILL_REGISTRY.get(skill_key)
-        display_name = getattr(skill_class, "name", skill_key)
-        labelled.append((display_name, amount))
-
-    return labelled
+    return xp_awards.grant_xp(attacker, awards, feed_const.MESSAGE_TYPE_COMBAT)
 
 
 # ─── Helper-tool functions (encapsulate repetitive dict accesses) ─────────
@@ -537,7 +505,7 @@ class ActionAttack(_Action):
         killed = (dmg >= hp_before)
 
         awards = _plan_style_xp(attacker, style, dmg)
-        xp_text = combat_msg.format_xp_gain(_labelled_awards(awards))
+        xp_text = xp_awards.format_xp_suffix(awards)
 
         attacker.msg(
             (combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text),
@@ -570,7 +538,7 @@ class ActionAttack(_Action):
 
         # Pay the XP before the damage so a level-up line reads next to the
         # award that caused it, rather than below the target's death.
-        _apply_xp_awards(attacker, awards)
+        xp_awards.grant_xp(attacker, awards, feed_const.MESSAGE_TYPE_COMBAT)
 
         # Publish the structured mirror of everything announced above, while
         # the target still exists. This has to sit on the same side of

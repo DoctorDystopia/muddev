@@ -55,6 +55,10 @@ PANEL_ORDER_READINESS: int = 30
 PANEL_ORDER_HOLDINGS: int = 50
 PANEL_ORDER_PROCESSING: int = 55
 PANEL_ORDER_WORLD: int = 60
+PANEL_ORDER_RECORDS: int = 70
+
+# Records last: lifetime tallies are the least urgent thing on the screen, and
+# the band is the one most likely to grow as stats are added to STAT_REGISTRY.
 
 # 55 rather than a fresh decade, because what is CURING is nearest to what is
 # owned: both answer "what do I have", one of it in the bag and one of it still

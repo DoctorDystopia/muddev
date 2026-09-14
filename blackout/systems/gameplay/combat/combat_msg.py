@@ -13,7 +13,9 @@ Description: Inline ANSI-tagged combat message builders.
 #   outgoing damage  → green/white (|g|w) — positive feedback for the player
 #   miss / zero dmg  → muted gray   (|x)  — fail-state, low visual weight
 #   death            → bright red   (|R)  — terminal event
-#   xp gained        → yellow       (|y)  — reward, distinct from the damage
+#
+# XP readouts are not built here: every system that pays experience shares
+# systems/gameplay/progression/skills/xp_awards.py.
 from systems.interface.ui.colors import (  # noqa: E402  (palette, not behaviour)
     TAG_DEATH,
     TAG_INCOMING,
@@ -22,7 +24,6 @@ from systems.interface.ui.colors import (  # noqa: E402  (palette, not behaviour
     TAG_OUTGOING,
     TAG_OUTGOING_NAME,
     TAG_RESET,
-    TAG_XP,
 )
 
 # The HP bar is drawn by the shared meter wrapper so combat and the skills
@@ -41,9 +42,6 @@ from systems.gameplay.combat import constants as const  # noqa: E402
 
 # Label used when an HP bar is shown to the entity it belongs to.
 SELF_HP_LABEL = "You"
-
-# Separator between the per-skill entries of one hit's XP award.
-XP_ENTRY_SEPARATOR = ", "
 
 # Separator between the items named on one kill's drop line.
 DROP_ENTRY_SEPARATOR = ", "
@@ -80,7 +78,8 @@ def format_outgoing_hit(attacker, target, damage: int, xp_text: str = "") -> str
                    signature so callers can pass through uniformly).
         target   - the entity taking the damage; target.key is rendered.
         damage   - integer damage dealt (post accuracy+damage roll).
-        xp_text  - optional pre-formatted XP suffix from format_xp_gain. It
+        xp_text  - optional pre-formatted XP suffix from
+                   xp_awards.format_xp_suffix. It
                    carries its own leading space and colour tags, so it is
                    appended verbatim.
 
@@ -438,7 +437,8 @@ def format_aura_pulse(aura, target, damage: int) -> str:
         Deliberately carries no XP suffix. An aura pulse hits every enemy in
         radius at once and earns experience on the pulse TOTAL, so a per-target
         award would either repeat the same figure on every line or show shares
-        that do not sum as displayed. format_aura_xp prints it once instead.
+        that do not sum as displayed. The aura handler prints the award once,
+        on its own line, via xp_awards.format_xp_readout.
 
     Author: Nick Hobar
     Creation date: 08/03/2026
@@ -477,34 +477,6 @@ def format_aura_incoming(aura, target, damage: int) -> str:
         f"{TAG_INCOMING}{target.key} is seared by {aura.name} "
         f"for {damage} damage.{TAG_RESET}"
     )
-
-
-def format_aura_xp(aura, amount: int) -> str:
-    """
-    Purpose: Report the experience one aura pulse earned, on its own line.
-
-    Entry:
-        aura   - the aura definition; aura.xp_skill names the earning skill.
-        amount - integer experience granted for the whole pulse.
-
-    Exit/Returns:
-        Formatted single-line string ready for caller.msg(...).
-
-    Module Globals:
-        TAG_XP, TAG_RESET read.
-
-    Methodology:
-        Separate from the burn lines because one pulse produces N burn lines but
-        exactly one award. Title-cases the skill key for display rather than
-        importing the skill registry, keeping this module free of that
-        dependency exactly as format_xp_gain does.
-
-    Author: Nick Hobar
-    Creation date: 08/03/2026
-    """
-    skill_name = str(aura.xp_skill).replace("_", " ").title()
-
-    return f"{TAG_XP}(+{amount} {skill_name} xp){TAG_RESET}"
 
 
 # ─── Equipment stat readouts ─────────────────────────────────────────────────
@@ -552,44 +524,7 @@ def format_combat_stat_bonuses(bonuses: dict) -> list:
     return lines
 
 
-# ─── Progress readouts (XP earned, HP remaining) ────────────────────────────
-
-def format_xp_gain(awards) -> str:
-    """
-    Purpose: Render the per-skill XP one swing earned, as a suffix for the hit
-    line.
-
-    Entry:
-        awards - a sequence of (display_name, amount) pairs, already filtered
-                 to the awards actually granted. An empty sequence is the
-                 normal case for a miss or a zero-damage hit.
-
-    Exit/Returns:
-        Empty string when nothing was awarded, so callers can append it
-        unconditionally. Otherwise a yellow parenthesised list carrying a
-        LEADING SPACE, e.g. " |y(+4 Strike, +1 Fortitude xp)|n".
-
-    Module Globals:
-        XP_ENTRY_SEPARATOR read.
-        TAG_XP read.
-        TAG_RESET read.
-
-    Methodology:
-        Takes display names rather than skill keys so this module needs no
-        dependency on the skill registry — the caller, which already holds the
-        registry, resolves them.
-
-    Author: Nick Hobar
-    Creation date: 08/01/2026
-    """
-    if not awards:
-        return ""
-
-    entries = [f"+{amount} {name}" for name, amount in awards]
-    joined = XP_ENTRY_SEPARATOR.join(entries)
-
-    return f" {TAG_XP}({joined} xp){TAG_RESET}"
-
+# ─── Progress readouts (HP remaining) ───────────────────────────────────────
 
 def format_hp_status(label: str, current_hp: int, max_hp: int) -> str:
     """

@@ -276,7 +276,9 @@ reinvent:
 Adding a skill, recipe, item or NPC should mean **one file or one dict entry**,
 never editing a dispatch chain.
 
-**One owner per fact.** Colours in `systems/interface/ui/colors.py`; crafting
+**One owner per fact.** Colours in `systems/interface/ui/colors.py`; how an XP
+award is shown and paid in `systems/gameplay/progression/skills/xp_awards.py`
+(announce with `format_xp_suffix`, then `grant_xp`); crafting
 and tag categories in `systems/gameplay/crafting/constants.py`; combat tunables
 in `systems/gameplay/combat/constants.py`; slot labels on the `WieldLocation`
 enum. Typing a literal that already has a named constant is how the

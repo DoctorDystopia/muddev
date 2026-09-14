@@ -17,6 +17,7 @@ TRUE about the quest -- its phases, what satisfies them, and what it pays.
 
 from world.item_database import ITEM_DB
 
+from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.quests.quests import QuestBlueprint, QuestStep
 from systems.interface.ui.colors import highlight as _hl
 from systems.interface.statefeed import constants as feed_const
@@ -141,6 +142,10 @@ def award_rewards(character: object) -> None:
         named for, and they are already in the player's hands, so nothing is
         granted here.
 
+        The award is its own readout line, below the closing narration and
+        above any level-up it causes -- announced, then granted, as every
+        award is.
+
     Notes/References:
         This used to call add_xp("[CRAFTING_SKILL]", 100) and message
         "[QUEST AWARD TEXT]" -- authoring placeholders that shipped.
@@ -150,13 +155,15 @@ def award_rewards(character: object) -> None:
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
-    for skill_key, amount in REWARD_XP.items():
-        character.skills.add_xp(skill_key, amount)
+    awards = list(REWARD_XP.items())
 
     character.msg((_hl(
         "The android transmits a route east, out of the sand and toward the "
         "lights. You leave knowing how to cut, to smelt, and to forge."
     ), _MSG_QUEST))
+    character.msg((xp_awards.format_xp_readout(awards), _MSG_QUEST))
+
+    xp_awards.grant_xp(character, awards, feed_const.MESSAGE_TYPE_QUEST)
 
 
 

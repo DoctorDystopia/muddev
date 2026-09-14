@@ -8,8 +8,11 @@ Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings settings.py systems.gameplay.combat
 """
 
+from unittest import mock
+
 from evennia import create_object
 from evennia.scripts.models import ScriptDB
+from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.gameplay.combat import constants as const
@@ -22,6 +25,7 @@ from systems.gameplay.combat.auras.aura_defs.righteous_fire import RighteousFire
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
 from systems.core.tick.engine import get_tick_engine, purge_stale_handlers
 from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npc_combat import HostileNPC
 
@@ -197,6 +201,27 @@ class TestAuraHandlerTick(EvenniaTest):
         after = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY)
 
         self.assertGreater(after, before)
+
+    def test_the_pulse_names_the_xp_it_granted(self):
+        """The readout uses the skill's registry name and the real amount.
+
+        It title-cased the key by hand, which is right for "fortitude" and
+        wrong for any key with an underscore in it.
+        """
+        before = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY)
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            self._tick_to_next_pulse()
+
+        gained = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY) - before
+        skill_name = SKILL_REGISTRY[FORTITUDE_SKILL_KEY].name
+        sent = [
+            strip_ansi(str(call.args[0][0]))
+            for call in mocked_msg.call_args_list
+            if call.args and isinstance(call.args[0], tuple)
+        ]
+
+        self.assertTrue(any(f"+{gained} {skill_name}" in line for line in sent))
 
     def test_does_not_burn_a_player(self):
         del self.char2.db.npc_key

@@ -21,7 +21,9 @@ Run with:
 
 import time
 import unittest
+from unittest import mock
 
+from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.crafting import crafting_service
@@ -29,6 +31,7 @@ from systems.gameplay.crafting.registry import RECIPE_REGISTRY
 from systems.gameplay.curing import constants as curing_constants
 from systems.gameplay.curing.recipe import CuringRecipe
 from systems.gameplay.progression.skills import constants as skill_constants
+from systems.gameplay.progression.skills import xp_awards
 from typeclasses.skill_facilities import CuringChamberFacility
 from world.item_database import ITEM_DB
 
@@ -390,6 +393,29 @@ class TestCollecting(CuringTestBase):
         )
         self.assertEqual(after - before, recipe_cls.xp_reward)
 
+    def test_the_collection_line_names_the_xp(self):
+        """Regression: a finished cure paid its XP without saying so."""
+        recipe_cls = RECIPE_REGISTRY[_CHUCK_RECIPE]
+        awards = [(recipe_cls.required_skill, recipe_cls.xp_reward)]
+        readout = strip_ansi(xp_awards.format_xp_readout(awards))
+        self._give_chuck()
+        self._start()
+        self._finish_everything()
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            self.char1.curing.collect()
+
+        sent = [
+            strip_ansi(str(call.args[0][0]))
+            for call in mocked_msg.call_args_list
+            if call.args and isinstance(call.args[0], tuple)
+        ]
+        ready_lines = [line for line in sent if recipe_cls.name in line]
+
+        self.assertTrue(readout)
+        self.assertEqual(len(ready_lines), 1)
+        self.assertIn(readout, ready_lines[0])
+
     def test_collecting_twice_delivers_once(self):
         self._give_chuck()
         self._start()
@@ -482,12 +508,22 @@ class TestPendingReport(CuringTestBase):
         self.assertEqual(ready, [_CHUCK_RECIPE])
 
     def test_report_order_is_start_order(self):
+        """Two different cures, the second of them level-gated.
+
+        The level must clear both the slot curve and the fatless recipe's
+        gate. The two tables are tuned independently, so neither is assumed
+        to cover the other.
+        """
         second_threshold = curing_constants.CURING_SLOT_LEVELS[1]
-        self._set_curing_level(second_threshold)
+        fatless_level = RECIPE_REGISTRY[_FATLESS_RECIPE].required_level
+        self._set_curing_level(max(second_threshold, fatless_level))
         self._give_chuck()
         self._start()
         self._give("mutant_raider_fatless_meat")
-        self._start(_FATLESS_RECIPE)
+
+        started = self._start(_FATLESS_RECIPE)
+
+        self.assertIsNotNone(started, "the fatless cure was refused")
 
         keys = [entry["recipe_key"] for entry in self.char1.curing.pending()]
 

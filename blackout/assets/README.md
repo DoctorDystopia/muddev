@@ -23,6 +23,9 @@ assets/
 ├── npcs/psx_low_poly_skeleton/       an FBX download, converted in place
 │   ├── skeleton.fbx  base.png  SOURCE.md
 │   └── scene.gltf  scene.bin  textures/   written by fbx_to_gltf.py
+├── npcs/lone_android_clark/          a Blender export, split in place
+│   ├── lone_android_clark.blend  lone_android_clark.glb  SOURCE.md
+│   └── scene.gltf  scene.bin          written by glb_to_gltf.py --as-exported
 ├── characters/quaternius_universal_male/
 ├── world_objects/sm_teleporter/
 └── tiles/desert/                     one download holding 34 tiles
@@ -110,6 +113,32 @@ every step above applies unchanged: a manifest row, a pack, a credit.
 - **Godot's `.import` sidecars and demo scenes are not the download.** Do not
   leave an Asset Library pack where the editor installed it: inside `godot/` it
   ships in the `.pck` before the login prompt. Move it under `assets/`.
+
+## Splitting a Blender export
+
+A `.glb` exported from Blender already says how it looks — its materials are in
+it, often flat colours with no texture at all — and the step above refuses to
+replace them. `--as-exported` is the same converter with nothing added:
+
+```bash
+../evenv/Scripts/python.exe assets/glb_to_gltf.py \
+    assets/npcs/lone_android_clark/lone_android_clark.glb \
+    assets/npcs/lone_android_clark --as-exported
+```
+
+- **Export into the source directory**, under the family the model is for — an
+  NPC under `npcs/` — and keep the `.glb` (and the `.blend`) beside what the
+  converter writes. Re-export over it, re-run, repack.
+- **A flag, not a missing `--texture`.** Forgetting `--texture` on an Asset
+  Library mesh is refused rather than quietly producing a grey source.
+- **It refuses** a `.glb` with no materials (that wants `--texture`) and one
+  carrying images, which `pack_model.py` would ship at authoring size.
+- **Materials pass through as authored**, alpha modes included, so the
+  manifest test's OPAQUE rule does not apply to these sources; the generator
+  string's `--as-exported` mark is how it tells them apart.
+- **Face -Y in Blender with +Z up.** The exporter turns that into glTF's +Z
+  forward and +Y up, which is how the client expects a character to stand;
+  anything else needs a `ModelRegistry.PRESENTATION` rotation.
 
 ## Converting an FBX download
 

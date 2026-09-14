@@ -25,6 +25,7 @@ from systems.gameplay.progression.skills.gatherables import (
     get_yield_item_name,
     yield_menu_label,
 )
+from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 from systems.gameplay.quests import constants as quest_constants
 from systems.gameplay.quests.hooks import notify_quests
@@ -446,7 +447,7 @@ class GatheringSkill(BaseSkill):
             at_damage itself never messages the target -- combat callers do
             their own damage narration, and this is the only non-combat
             caller. Without a message here the player sees the flavor text
-            and the eventual "for N XP" line but nothing in between telling
+            and the eventual harvest line but nothing in between telling
             them they were actually hurt, so this sends the HP-loss line
             explicitly using at_damage's returned delta.
 
@@ -486,16 +487,16 @@ class GatheringSkill(BaseSkill):
 
 
 
-    def _award_xp(self, character: object, chosen) -> None:
+    def _plan_xp(self, chosen) -> list:
         """
-        Purpose: Teach this harvest's XP, primary skill and secondaries alike.
+        Purpose: Work out this harvest's XP, primary skill and secondaries
+        alike, without granting any of it.
 
         Entry:
-            character is a valid Evennia Character object.
-            chosen is the GatherableYield that was harvested.
+            chosen is the GatherableYield being harvested.
 
         Exit/Returns:
-            No conditions.
+            Returns a list of (skill_key, amount) pairs, primary first.
 
         Module Globals:
             None.
@@ -511,19 +512,25 @@ class GatheringSkill(BaseSkill):
             computed here. A rule in code is a rule the content table cannot
             see; a number in the table is one a designer can read off the map.
 
+            Planned apart from granting so the harvest line can name every
+            skill it taught. The secondary award used to be paid silently,
+            under a line reading only "for 25 XP".
+
         Notes/References:
-            None
+            systems/gameplay/progression/skills/xp_awards.py.
 
         Author: Nick Hobar
         Creation date: 09/10/2026
         """
-        character.skills.add_xp(self.key, chosen.xp_reward)
+        awards = [(self.key, chosen.xp_reward)]
 
         for secondary_key, amount in (chosen.secondary_xp or {}).items():
             if secondary_key == self.key:
                 continue
 
-            character.skills.add_xp(secondary_key, amount)
+            awards.append((secondary_key, amount))
+
+        return awards
 
 
 
@@ -625,10 +632,13 @@ class GatheringSkill(BaseSkill):
             ITEM_DB read.
 
         Methodology:
-            Creates the item, arms the cooldown, teaches the XP, reports to
-            quests and stats, then announces it. The consume step is last of
-            the state changes and separate (see consume_node) because a pole
-            survives being cut and a corpse does not.
+            Creates the item, arms the cooldown, announces the harvest with
+            its XP, teaches that XP, then reports to quests and stats. The
+            announcement precedes the grant so a level-up line reads below the
+            award that caused it, and precedes the quest report so objective
+            progress reads below the harvest that made it. The consume step is
+            last of the state changes and separate (see consume_node) because
+            a pole survives being cut and a corpse does not.
 
         Notes/References:
             ItemDef.create builds detached and then move_to()s, which is what
@@ -639,19 +649,22 @@ class GatheringSkill(BaseSkill):
         Creation date: 09/10/2026
         """
         item_name = get_yield_item_name(chosen)
+        awards = self._plan_xp(chosen)
+        xp_text = xp_awards.format_xp_suffix(awards)
 
         ITEM_DB[chosen.item_key].create(location=character, home=character)
 
         self.arm_cooldown(character)
-        self._award_xp(character, chosen)
-        self._notify_quests(character, gatherable_def, chosen)
-        self._record_stat(character, gatherable_def)
 
         character.msg((
             f"You successfully {self.verb} the {target.key} and receive a "
-            f"{item_name} for {chosen.xp_reward} XP.",
+            f"{item_name}.{xp_text}",
             _MSG_GATHERING,
         ))
+
+        xp_awards.grant_xp(character, awards, feed_const.MESSAGE_TYPE_GATHERING)
+        self._notify_quests(character, gatherable_def, chosen)
+        self._record_stat(character, gatherable_def)
 
         self.consume_node(target)
 

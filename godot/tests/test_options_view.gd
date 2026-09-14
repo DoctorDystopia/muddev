@@ -26,6 +26,7 @@ func _ready() -> void:
 	_every_command_button_sends_a_whole_line()
 	_the_skill_detail_choice_offers_every_mode_and_stores_the_value()
 	_the_sfx_slider_writes_the_volume_and_follows_it()
+	_the_xp_tracker_checks_write_settings_and_reset_only_asks()
 
 	_clean()
 
@@ -174,6 +175,35 @@ func _the_sfx_slider_writes_the_volume_and_follows_it() -> void:
 
 	_expect(is_equal_approx(slider.value, ClientSettings.DEFAULT_SFX_VOLUME),
 		"and Reset to defaults puts it back")
+
+
+func _the_xp_tracker_checks_write_settings_and_reset_only_asks() -> void:
+	# The two checks are the player's and write ClientSettings. Reset session is
+	# neither a setting nor a command: it asks the console, and sends nothing.
+	_fresh()
+
+	var resets := {"n": 0}
+	var sent: Array[String] = []
+	_view.xp_session_reset_requested.connect(func(): resets["n"] += 1)
+	_view.command_requested.connect(func(line): sent.append(line))
+
+	_expect(_view._xp_drops_check.button_pressed,
+		"the drops check starts on, as the default is")
+
+	_view._xp_drops_check.toggled.emit(false)
+	_expect(not _settings.show_xp_drops, "unticking it hides the drops")
+	_expect(_view._skill_rates_check.disabled,
+		"and per-skill rates cannot be asked for on a hidden tracker")
+
+	_view._skill_rates_check.toggled.emit(true)
+	_expect(_settings.show_skill_rates, "ticking per-skill rates stores it")
+
+	for button: Button in _buttons(_view, [] as Array[Button]):
+		if button.text == "Reset session":
+			button.pressed.emit()
+
+	_expect(resets["n"] == 1, "Reset session asks once")
+	_expect(sent.is_empty(), "and sends the server nothing")
 
 
 func _expect(passed: bool, what: String) -> void:

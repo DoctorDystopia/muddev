@@ -55,6 +55,21 @@ Description: Turns an untextured .glb download into the source directory shape
              The download is never written to, exactly as pack_model.py never
              writes to one. Re-running produces the same bytes.
 
+             --as-exported: A .GLB THAT ALREADY SAYS HOW IT LOOKS. A model
+             built in Blender and exported as .glb carries its own materials,
+             and pack_model.py still has nothing to point at. With
+             --as-exported the container is split exactly and nothing is
+             added: the materials ship as authored, alpha modes included,
+             because replacing them is a decision rather than a conversion. The
+             mode is a flag rather than implied by a missing --texture, so a
+             forgotten --texture on an Asset Library mesh is refused instead
+             of quietly producing an untextured source. It refuses a .glb with
+             NO materials (that is what --texture is for) and one carrying
+             images (pack_model.py resamples only an image beside scene.gltf,
+             so an embedded one would ship at authoring size, past the family
+             budget). Its sources are marked `--as-exported` in the generator
+             string, which is how the manifest test tells the two apart.
+
              Pure file transformation. Importing this module touches no
              database and boots no Evennia -- but it sits outside the game
              package anyway, because it is a build tool and not game code.
@@ -64,6 +79,9 @@ Description: Turns an untextured .glb download into the source directory shape
                      assets/items/food/kyle_fuji_food/Models/egg.glb
                      assets/items/food/kyle_fuji_food/egg
                      --texture assets/items/food/kyle_fuji_food/Textures/T_protein_atlas_diffuse.png
+                 ../evenv/Scripts/python.exe assets/glb_to_gltf.py
+                     assets/npcs/lone_android_clark/lone_android_clark.glb
+                     assets/npcs/lone_android_clark --as-exported
 """
 
 import json
@@ -81,6 +99,12 @@ _BUFFER_FILENAME = "scene.bin"
 # own. A file that does not say where it came from is one nobody can
 # regenerate.
 _GENERATOR_SUFFIX = " + blackout glb_to_gltf.py"
+
+# The option naming the split-only mode, and the mark it leaves in the
+# generator string. One spelling for both, so a source says which mode wrote it
+# in the words an operator would type to reproduce it.
+_AS_EXPORTED_OPTION = "--as-exported"
+_AS_EXPORTED_GENERATOR_SUFFIX = _GENERATOR_SUFFIX + " " + _AS_EXPORTED_OPTION
 
 # glTF-Binary container, per the spec's Chapter 4. Little-endian throughout.
 # The same constants pack_model.py writes with; this reads what it writes.
@@ -212,6 +236,81 @@ def _split_container(data):
     return document, payload
 
 
+def _check_buffer(document, payload):
+    """
+    Purpose: Refuse a buffer layout pack_model.py cannot read back.
+
+    Entry:
+        document and payload as _split_container returned them.
+
+    Exit/Returns:
+        Returns None. Raises GlbError for anything but one buffer, or a buffer
+        declaring more bytes than the BIN chunk holds.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Shared by both modes: whatever the materials, the written source is
+        one scene.gltf naming one scene.bin, which is the only shape
+        pack_model.py reads.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    buffers = document.get("buffers", [])
+    count = len(buffers)
+
+    if count != 1:
+        raise GlbError("expected exactly 1 buffer, found %d" % count)
+
+    declared = buffers[0].get("byteLength", 0)
+    available = len(payload)
+
+    if declared > available:
+        raise GlbError("buffer declares %d bytes; the BIN chunk holds %d"
+                       % (declared, available))
+
+
+def _check_as_exported(document, payload):
+    """
+    Purpose: Refuse a .glb whose own materials cannot be kept as they are.
+
+    Entry:
+        document and payload as _split_container returned them.
+
+    Exit/Returns:
+        Returns None. Raises GlbError describing the first thing wrong.
+
+    Module Globals:
+        _TEXTURE_OPTION read.
+
+    Methodology:
+        The mirror of _check_document. No materials means the download does
+        NOT say how it looks, and keeping that would serve a grey model with
+        nothing reporting it -- the job --texture exists for. Images mean the
+        look is carried in the buffer, where pack_model.py leaves it at its
+        authoring size and the family's texture ceiling never applies.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    materials = document.get("materials")
+    images = document.get("images")
+
+    if not materials:
+        raise GlbError("the .glb carries no materials, so keeping it as "
+                       "exported would serve it untextured; name a %s instead"
+                       % _TEXTURE_OPTION)
+
+    if images:
+        raise GlbError("the .glb carries %d image(s) inside it; pack_model.py "
+                       "resamples only an image beside scene.gltf, so these "
+                       "would ship at authoring size" % len(images))
+
+    _check_buffer(document, payload)
+
+
 def _check_document(document, payload):
     """
     Purpose: Refuse a document this converter would get wrong.
@@ -240,18 +339,10 @@ def _check_document(document, payload):
         if document.get(key):
             raise GlbError("the .glb already carries %s; this converter adds a "
                            "material to an untextured download, and will not "
-                           "replace one" % key)
+                           "replace one -- %s keeps it as authored"
+                           % (key, _AS_EXPORTED_OPTION))
 
-    buffers = document.get("buffers", [])
-
-    if len(buffers) != 1:
-        raise GlbError("expected exactly 1 buffer, found %d" % len(buffers))
-
-    declared = buffers[0].get("byteLength", 0)
-
-    if declared > len(payload):
-        raise GlbError("buffer declares %d bytes; the BIN chunk holds %d"
-                       % (declared, len(payload)))
+    _check_buffer(document, payload)
 
     for mesh in document.get("meshes", []):
         for primitive in mesh.get("primitives", []):
@@ -348,20 +439,22 @@ def _attach_material(document, uri, roughness):
     return wired
 
 
-def _write_source(dest_dir, document, payload):
+def _write_source(dest_dir, document, payload, generator_suffix):
     """
     Purpose: Write one converted model as a source directory on disk.
 
     Entry:
-        dest_dir - the directory to create. document - checked and given its
-        material. payload - the BIN chunk.
+        dest_dir - the directory to create. document - checked, and given its
+        material unless kept as exported. payload - the BIN chunk.
+        generator_suffix - appended to the exporter's generator string, naming
+        the mode that wrote the source.
 
     Exit/Returns:
         Returns the total bytes written. The directory is created if absent
         and its scene.gltf and scene.bin are overwritten.
 
     Module Globals:
-        _GLTF_FILENAME, _BUFFER_FILENAME, _GENERATOR_SUFFIX read.
+        _GLTF_FILENAME, _BUFFER_FILENAME read.
 
     Methodology:
         The BIN chunk is padded to four bytes and the buffer's byteLength is
@@ -376,7 +469,7 @@ def _write_source(dest_dir, document, payload):
     declared = buffer["byteLength"]
     buffer["uri"] = _BUFFER_FILENAME
     asset = document.setdefault("asset", {})
-    asset["generator"] = asset.get("generator", "") + _GENERATOR_SUFFIX
+    asset["generator"] = asset.get("generator", "") + generator_suffix
     os.makedirs(dest_dir, exist_ok=True)
     text = json.dumps(document, indent=2)
 
@@ -451,7 +544,7 @@ def convert(glb_path, dest_dir, texture_path, roughness=_ROUGHNESS_DEFAULT):
     document, payload = read_glb(glb_path)
     uri = _texture_uri(texture_path, dest_dir)
     primitives = _attach_material(document, uri, roughness)
-    written = _write_source(dest_dir, document, payload)
+    written = _write_source(dest_dir, document, payload, _GENERATOR_SUFFIX)
     report = {
         "meshes": len(document.get("meshes", [])),
         "primitives": primitives,
@@ -463,11 +556,56 @@ def convert(glb_path, dest_dir, texture_path, roughness=_ROUGHNESS_DEFAULT):
     return dest_dir, report
 
 
+def split_as_exported(glb_path, dest_dir):
+    """
+    Purpose: Split one .glb that carries its own materials into a model source
+             directory, adding and replacing nothing.
+
+    Entry:
+        glb_path names the export. dest_dir is the directory to write, under
+        assets/ for pack_model.py to name a family for it.
+
+    Exit/Returns:
+        Returns (dest_dir, report). report holds the mesh, material and node
+        counts and the bytes written. Raises GlbError for a file whose look
+        cannot be kept as it is; nothing is written in that case.
+
+    Module Globals:
+        _AS_EXPORTED_GENERATOR_SUFFIX read.
+
+    Methodology:
+        Read, check, write. The document's materials -- alpha modes, double
+        sidedness, extensions -- pass through untouched.
+
+    Notes/References:
+        The export is never written to. Re-running produces the same bytes.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    with open(glb_path, "rb") as handle:
+        data = handle.read()
+
+    document, payload = _split_container(data)
+    _check_as_exported(document, payload)
+    written = _write_source(
+        dest_dir, document, payload, _AS_EXPORTED_GENERATOR_SUFFIX)
+    report = {
+        "meshes": len(document.get("meshes", [])),
+        "materials": len(document["materials"]),
+        "nodes": len(document.get("nodes", [])),
+        "bytes": written,
+    }
+
+    return dest_dir, report
+
+
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
 _USAGE = """glb_to_gltf.py -- give an untextured .glb a material, as a source dir
 
   glb_to_gltf.py <model.glb> <destination> --texture IMAGE [--roughness R]
+  glb_to_gltf.py <model.glb> <destination> --as-exported
 
 Writes <destination>/scene.gltf and scene.bin -- an ordinary model source
 directory, which assets/pack_model.py then packs into the served .glb like any
@@ -476,6 +614,9 @@ component below it is what names the served family.
 
 --texture names the base colour image, as a path from here. It is referenced
 from the scene.gltf, not copied. --roughness defaults to 0.7.
+
+--as-exported keeps the materials a .glb already carries (a Blender export,
+say) and adds nothing. It refuses a .glb with no materials or with images.
 
   ../evenv/Scripts/python.exe assets/glb_to_gltf.py
       assets/items/food/kyle_fuji_food/Models/egg.glb
@@ -492,13 +633,15 @@ def _parse(arguments):
         arguments is sys.argv[1:].
 
     Exit/Returns:
-        Returns (glb_path, dest_dir, texture_path, roughness). Raises GlbError
-        for a missing positional, a missing --texture, an option with no value
-        or a roughness that is not a number.
+        Returns (glb_path, dest_dir, texture_path, roughness, as_exported).
+        texture_path is None exactly when as_exported is True. Raises GlbError
+        for a missing positional, neither or both of --texture and
+        --as-exported, an option with no value or a roughness that is not a
+        number.
 
     Module Globals:
-        _TEXTURE_OPTION, _ROUGHNESS_OPTION, _POSITIONAL_ARGUMENTS,
-        _ROUGHNESS_DEFAULT read.
+        _TEXTURE_OPTION, _ROUGHNESS_OPTION, _AS_EXPORTED_OPTION,
+        _POSITIONAL_ARGUMENTS read.
 
     Methodology:
         Hand-parsed rather than argparse, matching pack_model.py and
@@ -509,10 +652,16 @@ def _parse(arguments):
     """
     options = {_TEXTURE_OPTION: None, _ROUGHNESS_OPTION: None}
     positionals = []
+    as_exported = False
     index = 0
 
     while index < len(arguments):
         argument = arguments[index]
+
+        if argument == _AS_EXPORTED_OPTION:
+            as_exported = True
+            index += 1
+            continue
 
         if argument in options:
             if index + 1 >= len(arguments):
@@ -528,18 +677,49 @@ def _parse(arguments):
     if len(positionals) != _POSITIONAL_ARGUMENTS:
         raise GlbError("expected a .glb and a destination")
 
-    if options[_TEXTURE_OPTION] is None:
-        raise GlbError("%s is required" % _TEXTURE_OPTION)
+    texture_path = options[_TEXTURE_OPTION]
+    has_texture = texture_path is not None
 
-    roughness = _ROUGHNESS_DEFAULT
+    if has_texture == as_exported:
+        raise GlbError("name exactly one of %s or %s"
+                       % (_TEXTURE_OPTION, _AS_EXPORTED_OPTION))
 
-    if options[_ROUGHNESS_OPTION] is not None:
-        try:
-            roughness = float(options[_ROUGHNESS_OPTION])
-        except ValueError:
-            raise GlbError("%s must be a number" % _ROUGHNESS_OPTION)
+    roughness = _parse_roughness(options[_ROUGHNESS_OPTION], as_exported)
 
-    return positionals[0], positionals[1], options[_TEXTURE_OPTION], roughness
+    return positionals[0], positionals[1], texture_path, roughness, as_exported
+
+
+def _parse_roughness(text, as_exported):
+    """
+    Purpose: Read the --roughness value, if one was given.
+
+    Entry:
+        text is the option's value or None. as_exported is the mode flag.
+
+    Exit/Returns:
+        Returns the roughness as a float, the default when text is None.
+        Raises GlbError for a value that is not a number, or for any value
+        given alongside --as-exported, which writes no material to apply it to.
+
+    Module Globals:
+        _ROUGHNESS_OPTION, _AS_EXPORTED_OPTION, _ROUGHNESS_DEFAULT read.
+
+    Author: Nick Hobar
+    Creation date: 09/13/2026
+    """
+    if text is None:
+        return _ROUGHNESS_DEFAULT
+
+    if as_exported:
+        raise GlbError("%s sets the material this adds, and %s adds none"
+                       % (_ROUGHNESS_OPTION, _AS_EXPORTED_OPTION))
+
+    try:
+        roughness = float(text)
+    except ValueError:
+        raise GlbError("%s must be a number" % _ROUGHNESS_OPTION)
+
+    return roughness
 
 
 def main(argv):
@@ -564,16 +744,25 @@ def main(argv):
         return 1
 
     try:
-        glb_path, dest_dir, texture_path, roughness = _parse(argv[1:])
-        dest_dir, report = convert(glb_path, dest_dir, texture_path, roughness)
+        glb_path, dest_dir, texture_path, roughness, as_exported = _parse(
+            argv[1:])
+
+        if as_exported:
+            dest_dir, report = split_as_exported(glb_path, dest_dir)
+            summary = ("  %(meshes)d mesh(es), %(materials)d material(s) kept "
+                       "as exported, %(nodes)d node(s)" % report)
+        else:
+            dest_dir, report = convert(
+                glb_path, dest_dir, texture_path, roughness)
+            summary = ("  %(meshes)d mesh(es), %(primitives)d primitive(s), "
+                       "%(nodes)d node(s); base colour %(uri)s" % report)
     except (GlbError, OSError) as problem:
         print("glb_to_gltf: %s" % problem)
 
         return 1
 
     print("%s -> %s" % (glb_path, dest_dir))
-    print("  %(meshes)d mesh(es), %(primitives)d primitive(s), %(nodes)d "
-          "node(s); base colour %(uri)s" % report)
+    print(summary)
     print("  %(bytes)d bytes written" % report)
 
     return 0

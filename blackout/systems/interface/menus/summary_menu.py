@@ -41,6 +41,7 @@ DRILL_DOWNS = (
     ("Equipment", "equip"),
     ("Inventory", "inventory"),
     ("Combat options", "combatoptions"),
+    ("Records", "stats"),
 )
 
 REFRESH_DESC = "Refresh"

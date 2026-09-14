@@ -116,6 +116,33 @@ the only record of the grant — see `assets/npcs/psx_low_poly_skeleton/SOURCE.m
   a skeleton until the creature that left it has art of its own. Laid on its
   back by `ModelRegistry.PRESENTATION`; the download stands upright.
 
+## `npcs/lone_android.glb`
+
+"Robot_3D_Model" (https://pensamientoazul.itch.io/robot-3d-model) by
+PensamientoAzul is released under CC0, per that page: usable in free and
+commercial projects, modifiable, with credit appreciated rather than required.
+It is credited here anyway. The download carries no licence file, so the page
+is the only record of the grant.
+
+- Source: `assets/npcs/lone_android_clark/` — a `.blend` and `.glb` exported
+  from the download's FBX; see `SOURCE.md` there
+- The first model split by `assets/glb_to_gltf.py --as-exported`: the `.glb`
+  already carries its material, which the `--texture` mode refuses to replace
+- One flat-colour material and no textures, so packing resampled nothing
+
+## `npcs/shopkeeper.glb`
+
+"Robot" (https://modosa-kun.itch.io/robot2) by Modo (modosa-kun), sold as
+name-your-own-price. **The page states no licence**, and a price of zero is not
+a grant to redistribute. Ask the author, or record whatever terms the download
+itself carries, before this art ships anywhere public — this row records the
+source and not the grant, the way the desert tileset's does.
+
+- Source: `assets/npcs/little_robot_shopkeep/` — a `.glb` exported from the
+  download's `.blend`; see `SOURCE.md` there
+- Split by `assets/glb_to_gltf.py --as-exported` and packed; nine flat-colour
+  materials and no textures, so packing resampled nothing
+
 ## `world_objects/map_transition.glb`
 
 "SM_Teleporter" (https://skfb.ly/osBBE) by Kain Hunter is licensed under
@@ -129,25 +156,25 @@ Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 
 ## `characters/player_character.glb`
 
-"Universal Base Characters" by Quaternius (https://quaternius.com) is released
-under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/),
-which asks for nothing. The row is here anyway, because a file with no row is
-indistinguishable from one whose licence nobody checked.
+A test export of an Old School RuneScape player model. The source glTF's
+generator is `CreatorsKit`, which names a tool for exporting models out of the
+OSRS client, so the art is almost certainly Jagex's. **No grant to
+redistribute it is recorded**, and it should not ship anywhere public until
+one is, or until it is replaced.
 
-- Source download: `assets/characters/quaternius_universal_male/` — the
-  `Base Characters/Godot - UE/` export of `Superhero_Male_FullBody`, with the
-  original `License_Standard.txt` kept alongside it as `license.txt`
-- Packed with `assets/pack_model.py`, textures resampled 2048² → 512²
-- Two of its seven texture `uri`s arrive with a `_png` suffix naming files the
-  download does not contain (`T_Hair_1_Normal_png.png`, `T_Eye_Normal_png.png`)
-  — an exporter slip, not a missing asset. `scene.gltf` is the one file edited
-  on the way in, and only those two strings, to point at the PNGs that are
-  actually there. Copying the images under the wrong names would have been the
-  other fix and costs 4 MiB of duplicate normal map to avoid a two-word edit.
-- A T-POSE, and a bald one. It replaces a Spider-Man model on 08/27/2026
-  because that model is 6.3 MiB and the R2-hosted client drew the fallback mesh
-  rather than it; this is 2.0 MiB. Both facts are temporary — it is a base
-  character kit, which is what a placeholder should look like.
+- Source: `assets/characters/old_school_runescape_models/` —
+  `OSRS_player_model_test.gltf` (the CreatorsKit export, its buffers embedded
+  as data URIs) and `OSRS_player_model_test_blender.glb` (the same model
+  round-tripped through Blender)
+- Split from the Blender `.glb` by `assets/glb_to_gltf.py --as-exported` and
+  packed, 09/13/2026. Until then the served file was that `.glb` copied in
+  unpacked, and the manifest row named a directory holding no `scene.gltf`, so
+  `pack_model.py --all` failed on it
+- 91 flat-colour materials and no textures, so packing resampled nothing
+
+The Quaternius "Universal Base Characters" model it replaced (CC0 1.0) is still
+in `assets/characters/quaternius_universal_male/` with its licence file. No
+manifest row names it, so nothing packs or serves it.
 
 ## `tiles/tile_oasis.glb`, `tiles/tile_oasis_outskirts.glb`
 

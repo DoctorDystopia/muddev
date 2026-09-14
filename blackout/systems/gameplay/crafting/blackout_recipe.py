@@ -20,6 +20,7 @@ from .constants import (
     DEFAULT_CRAFT_SECONDS,
     TOOL_TAG_CATEGORY,
 )
+from systems.gameplay.progression.skills import xp_awards
 from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is crafting, so the routing tag is
@@ -155,7 +156,6 @@ class BlackoutRecipe(CraftingRecipe):
 
     error_skill_too_low = "You need {skill} level {level} to craft this."
     error_locked = "You have not yet learned this recipe."
-    success_xp_message = "You gain {xp} {skill} XP."
 
 
 
@@ -304,21 +304,31 @@ class BlackoutRecipe(CraftingRecipe):
 
 
 
+    def _xp_awards(self) -> list:
+        """The (skill_key, amount) award one success pays; empty if none."""
+        if not self.required_skill:
+            return []
+
+        return [(self.required_skill, self.xp_reward)]
+
+
+
     def post_craft(self, craft_result, **kwargs):
+        # The award rides on the success line, the way a hit's rides on the
+        # hit line. It used to be a second line naming the raw skill KEY.
+        awards = self._xp_awards() if craft_result else []
+
         if craft_result:
-            self.msg((self._format_message(self.success_message), _MSG_CRAFTING))
+            success = self._format_message(self.success_message)
+            xp_text = xp_awards.format_xp_suffix(awards)
+            self.msg((f"{success}{xp_text}", _MSG_CRAFTING))
         elif self.failure_message:
             self.msg((self._format_message(self.failure_message), _MSG_CRAFTING))
 
         if craft_result or self.consume_on_fail:
             self._consume_inputs()
 
-        if craft_result and self.xp_reward > 0 and self.required_skill:
-            self.crafter.skills.add_xp(self.required_skill, self.xp_reward)
-            self.msg(
-                (self.success_xp_message.format(
-                    xp=self.xp_reward, skill=self.required_skill
-                ), _MSG_CRAFTING)
-            )
+        xp_awards.grant_xp(
+            self.crafter, awards, feed_const.MESSAGE_TYPE_CRAFTING)
 
         return craft_result

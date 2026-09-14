@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_xp_hud_view.gd" id="1_xphud"]
+
+[node name="TestXpHudView" type="Node"]
+script = ExtResource("1_xphud")

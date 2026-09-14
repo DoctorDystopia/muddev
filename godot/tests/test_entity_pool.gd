@@ -120,6 +120,7 @@ func _ready() -> void:
 	_a_flash_reaches_every_material()
 	_a_flash_on_nothing_is_harmless()
 	_hover_lights_one_entity_at_a_time()
+	_hover_never_changes_which_shader_draws_it()
 	_hover_does_not_survive_a_rebuild()
 	_a_lone_thing_is_not_drawn_inside_the_observer()
 	_the_observer_takes_a_slot_in_their_own_ring()
@@ -427,6 +428,34 @@ func _hover_lights_one_entity_at_a_time() -> void:
 	_expect(not _is_lit(_node_for(20744)), "leaving everything clears the glow")
 
 
+## The bug behind the hover lag. `emission_enabled` is part of which shader draws
+## a material, so a hover that flipped it compiled a shader every time -- ~1.9 s
+## for a fetched model on the web. Every material must already be glow-ready
+## when it is drawn, and no hover may change the flag.
+func _hover_never_changes_which_shader_draws_it() -> void:
+	_pool.replace_all([RAIDER, SWORD])
+
+	var materials: Array = []
+
+	for entity_id: int in [20743, 20744]:
+		materials.append_array(_materials_of(_node_for(entity_id)))
+
+	_expect(not materials.is_empty(),
+		"the entities carry materials; if this fails the checks below are inert")
+
+	for material: StandardMaterial3D in materials:
+		_expect(MeshGlow.is_ready(material),
+			"every drawn material is glow-ready before any hover")
+
+	_pool.hover(20743)
+	_pool.hover(20744)
+	_pool.hover(0)
+
+	for material: StandardMaterial3D in materials:
+		_expect(material.emission_enabled,
+			"and hovering on and off never switched emission off")
+
+
 ## A stale hovered id would make the new node never light up -- and the ring is
 ## rebuilt on every change to the room, which is most of the time.
 func _hover_does_not_survive_a_rebuild() -> void:
@@ -609,7 +638,7 @@ func _is_lit(node: Node3D) -> bool:
 		return false
 
 	for material: StandardMaterial3D in _materials_of(node):
-		if material.emission_enabled:
+		if MeshGlow.is_lit(material):
 			return true
 
 	return false

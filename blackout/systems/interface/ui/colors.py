@@ -33,7 +33,7 @@ TAG_OUTGOING = SUCCESS_COLOR
 TAG_OUTGOING_NAME = TITLE_COLOR
 TAG_MISS = DIM_COLOR
 TAG_DEATH = DANGER_COLOR
-TAG_XP = HIGHLIGHT_COLOR    # per-hit experience gained, on the same line
+TAG_XP = HIGHLIGHT_COLOR    # any XP award readout -- see progression/skills/xp_awards.py
 TAG_RESET = RESET_COLOR
 
 # Item names on a kill's drop line. The same highlight XP uses, because both

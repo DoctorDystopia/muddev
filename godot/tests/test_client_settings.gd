@@ -23,6 +23,7 @@ func _ready() -> void:
 	await _the_default_world_split_leaves_the_panel_room()
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 	_the_sfx_volume_persists_clamps_and_resets()
+	_the_xp_tracker_toggles_persist_and_reset()
 
 	_clean()
 
@@ -290,6 +291,29 @@ func _the_sfx_volume_persists_clamps_and_resets() -> void:
 	repaired.reset()
 	_expect(is_equal_approx(repaired.sfx_volume, ClientSettings.DEFAULT_SFX_VOLUME),
 		"and reset restores the default")
+
+	_clean()
+
+
+func _the_xp_tracker_toggles_persist_and_reset() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(s.show_xp_drops, "XP drops are on by default")
+	_expect(not s.show_skill_rates, "per-skill rates are off by default")
+
+	s.set_show_xp_drops(false)
+	s.set_show_skill_rates(true)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(not reloaded.show_xp_drops, "hiding the drops persists")
+	_expect(reloaded.show_skill_rates, "and so does asking for per-skill rates")
+
+	reloaded.reset()
+	_expect(reloaded.show_xp_drops == ClientSettings.DEFAULT_SHOW_XP_DROPS
+		and reloaded.show_skill_rates == ClientSettings.DEFAULT_SHOW_SKILL_RATES,
+		"and reset restores both")
 
 	_clean()
 

@@ -436,6 +436,22 @@ class ButcheryYieldTest(EvenniaCommandTest):
             before + chosen.xp_reward)
 
 
+    def test_the_harvest_line_names_every_skill_it_taught(self):
+        """Regression: the line read "for 25 XP" and never mentioned the
+        Cutting the same harvest paid."""
+        for entry in _yields():
+            with self.subTest(cut=entry.item_key):
+                self._set_level(entry.required_level)
+                self._another_corpse()
+
+                response = self._butcher(wanted=yield_menu_label(entry))
+
+                taught = {_BUTCHERY: entry.xp_reward, **entry.secondary_xp}
+                for skill_key, amount in taught.items():
+                    skill_name = SKILL_REGISTRY[skill_key].name
+                    self.assertIn(f"+{amount} {skill_name}", response)
+
+
     def test_a_corpse_cannot_be_cut(self):
         """A skill refuses a node the registry does not give it."""
         from commands.gathering_cmds import CmdCutGatheringNode

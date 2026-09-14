@@ -78,4 +78,22 @@ TABLES = {
             ),
         ],
     ),
+
+    "mutant_crab_drops": LootTableDef(
+        key="mutant_crab_drops",
+        # always=[
+        #     LootEntry(item_key="rusty_metal_chunk", min_quantity=1,
+        #               max_quantity=2),
+        # ],
+        main=[
+            LootEntry(item_key="credits", min_quantity=5, max_quantity=30, weight=128),
+        ],
+        rolls=2,
+        tertiary=[
+            TertiaryDrop(
+                entry=LootEntry(item_key="bit_blade"),
+                chance_denominator=128,
+            ),
+        ],
+    ),
 }

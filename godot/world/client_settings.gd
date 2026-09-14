@@ -43,6 +43,8 @@ const KEY_TEXT_SPLIT := "text_split"
 const KEY_WORLD_SPLIT := "world_split"
 const KEY_SKILL_DETAIL := "skill_detail"
 const KEY_SFX_VOLUME := "sfx_volume"
+const KEY_SHOW_XP_DROPS := "show_xp_drops"
+const KEY_SHOW_SKILL_RATES := "show_skill_rates"
 
 const DEFAULT_FONT_SIZE := 14
 const MIN_FONT_SIZE := 9
@@ -165,6 +167,22 @@ const DEFAULT_SFX_VOLUME := 1.0
 const MIN_SFX_VOLUME := 0.0
 const MAX_SFX_VOLUME := 1.0
 
+## Whether XP drops, the session tracker and the progress bar are drawn over the
+## world.
+##
+## On by default, as OSRS ships its drops: a player should see what an action
+## earned without first finding a setting. Hiding it unsubscribes from nothing --
+## the tracker keeps counting, so turning it back on shows the session so far
+## rather than one that restarted.
+const DEFAULT_SHOW_XP_DROPS := true
+
+## Whether the tracker lists XP per hour for each skill trained this session.
+##
+## Off by default. The session rate answers "is this worth my time"; a row per
+## skill is for a player comparing methods, and on a fight that trains three
+## skills it is three more lines over the world.
+const DEFAULT_SHOW_SKILL_RATES := false
+
 ## Emitted after any change, so every consumer redraws from one place.
 signal changed
 
@@ -176,6 +194,8 @@ var text_split := DEFAULT_TEXT_SPLIT
 var world_split := DEFAULT_WORLD_SPLIT
 var skill_detail := DEFAULT_SKILL_DETAIL
 var sfx_volume := DEFAULT_SFX_VOLUME
+var show_xp_drops := DEFAULT_SHOW_XP_DROPS
+var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
 
 var _path: String
 
@@ -214,6 +234,10 @@ func load_from_disk() -> void:
 		SECTION, KEY_SKILL_DETAIL, DEFAULT_SKILL_DETAIL)))
 	sfx_volume = _clamp_volume(float(config.get_value(
 		AUDIO_SECTION, KEY_SFX_VOLUME, DEFAULT_SFX_VOLUME)))
+	show_xp_drops = bool(config.get_value(
+		SECTION, KEY_SHOW_XP_DROPS, DEFAULT_SHOW_XP_DROPS))
+	show_skill_rates = bool(config.get_value(
+		SECTION, KEY_SHOW_SKILL_RATES, DEFAULT_SHOW_SKILL_RATES))
 
 	changed.emit()
 
@@ -232,6 +256,8 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_WORLD_SPLIT, world_split)
 	config.set_value(SECTION, KEY_SKILL_DETAIL, skill_detail)
 	config.set_value(AUDIO_SECTION, KEY_SFX_VOLUME, sfx_volume)
+	config.set_value(SECTION, KEY_SHOW_XP_DROPS, show_xp_drops)
+	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
 
 	return config.save(_path)
 
@@ -340,6 +366,26 @@ func set_sfx_volume(value: float) -> void:
 	changed.emit()
 
 
+## Show or hide the XP drops and tracker, and persist it.
+func set_show_xp_drops(value: bool) -> void:
+	if value == show_xp_drops:
+		return
+
+	show_xp_drops = value
+	save_to_disk()
+	changed.emit()
+
+
+## Show or hide XP per hour for each skill, and persist it.
+func set_show_skill_rates(value: bool) -> void:
+	if value == show_skill_rates:
+		return
+
+	show_skill_rates = value
+	save_to_disk()
+	changed.emit()
+
+
 ## True when a clicked skill should open the detail view inside the pane.
 ##
 ## Two readers ask this rather than comparing against a mode string, so the
@@ -366,6 +412,8 @@ func reset() -> void:
 	world_split = DEFAULT_WORLD_SPLIT
 	skill_detail = DEFAULT_SKILL_DETAIL
 	sfx_volume = DEFAULT_SFX_VOLUME
+	show_xp_drops = DEFAULT_SHOW_XP_DROPS
+	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
 	save_to_disk()
 	changed.emit()
 

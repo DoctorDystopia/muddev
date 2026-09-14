@@ -444,6 +444,11 @@ func flash(entity_id: int) -> void:
 ## albedo_color, and a hover that wrote the same property would either be
 ## overwritten mid-swing or would restore the WRONG colour when the mouse moved
 ## away during a flash. Two effects, two properties, no ordering to get right.
+##
+## The glow is written as colour and energy ONLY, never by switching emission on
+## and off. Emission is part of which shader draws a material, so toggling it
+## compiled a shader on every hover -- ~1.9 s for a fetched model's first on the
+## web. [MeshGlow] owns that rule and why.
 func hover(entity_id: int) -> void:
 	if entity_id == _hovered:
 		return
@@ -460,9 +465,10 @@ func _light(entity_id: int, lit: bool) -> void:
 		return
 
 	for material: StandardMaterial3D in _materials_of(node):
-		material.emission_enabled = lit
-		material.emission = COLOR_HOVER_GLOW
-		material.emission_energy_multiplier = HOVER_ENERGY
+		if lit:
+			MeshGlow.light(material, COLOR_HOVER_GLOW, HOVER_ENERGY)
+		else:
+			MeshGlow.rest(material)
 
 
 ## Every writable material under one entity.

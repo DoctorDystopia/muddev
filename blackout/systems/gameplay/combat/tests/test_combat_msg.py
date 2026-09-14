@@ -2,9 +2,13 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/01/2026
-Description: Tests for the combat message builders -- specifically the per-hit
-             XP readout and the combat HP bar. Pure string assembly, so a plain
-             TestCase, wrapped in a class so Django's discovery collects it.
+Description: Tests for the combat message builders -- specifically how a hit
+             line carries its XP readout, and the combat HP bar. Pure string
+             assembly, so a plain TestCase, wrapped in a class so Django's
+             discovery collects it.
+
+             The readout itself is tested where it now lives,
+             systems/gameplay/progression/tests/test_xp_awards.py.
 
 Run with:
     evennia test --settings settings.py systems.gameplay.combat
@@ -17,6 +21,7 @@ import unittest
 from evennia.utils.ansi import strip_ansi
 
 from systems.gameplay.combat import combat_msg
+from systems.gameplay.progression.skills import xp_awards
 from systems.interface.ui.meters import METER_WIDTH
 
 
@@ -26,39 +31,6 @@ class _FakeCombatant:
 
     def __init__(self, key: str) -> None:
         self.key = key
-
-
-
-class TestXpGainFormatting(unittest.TestCase):
-    """Per-hit XP has to be visible on the hit line itself."""
-
-    def test_empty_award_renders_nothing(self):
-        """A miss appends this unconditionally, so it must vanish cleanly."""
-        self.assertEqual(combat_msg.format_xp_gain([]), "")
-
-    def test_single_award_names_skill_and_amount(self):
-        visible = strip_ansi(combat_msg.format_xp_gain([("Strike", 4)]))
-
-        self.assertIn("+4 Strike", visible)
-
-    def test_multiple_awards_are_separated(self):
-        awards = [("Strike", 4), ("Fortitude", 1)]
-
-        visible = strip_ansi(combat_msg.format_xp_gain(awards))
-
-        self.assertIn("+4 Strike", visible)
-        self.assertIn("+1 Fortitude", visible)
-        self.assertIn(combat_msg.XP_ENTRY_SEPARATOR, visible)
-
-    def test_award_carries_colour_markup(self):
-        rendered = combat_msg.format_xp_gain([("Strike", 4)])
-
-        self.assertNotEqual(rendered, strip_ansi(rendered))
-
-    def test_award_starts_with_a_space_so_it_can_be_appended(self):
-        rendered = combat_msg.format_xp_gain([("Strike", 4)])
-
-        self.assertTrue(rendered.startswith(" "))
 
 
 
@@ -78,7 +50,8 @@ class TestOutgoingHitCarriesXp(unittest.TestCase):
         self.assertEqual(visible, "You hit Mutant Raider for 3.")
 
     def test_hit_with_xp_appends_the_award_on_one_line(self):
-        xp_text = combat_msg.format_xp_gain([("Strike", 12), ("Fortitude", 4)])
+        awards = [("strike", 12), ("fortitude", 4)]
+        xp_text = xp_awards.format_xp_suffix(awards)
 
         rendered = combat_msg.format_outgoing_hit(
             self.attacker, self.target, 3, xp_text
@@ -87,8 +60,7 @@ class TestOutgoingHitCarriesXp(unittest.TestCase):
 
         self.assertNotIn("\n", visible)
         self.assertIn("for 3.", visible)
-        self.assertIn("+12 Strike", visible)
-        self.assertIn("+4 Fortitude", visible)
+        self.assertIn(strip_ansi(xp_awards.format_xp_readout(awards)), visible)
 
 
 

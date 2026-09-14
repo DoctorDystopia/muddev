@@ -116,6 +116,22 @@ CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
 CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
 
+# One XP award, as the player earned it: every skill one action taught, with
+# each skill's progress AFTER the award. What a graphical client draws an XP
+# drop and a session tracker from.
+#
+# AN EVENT, NOT A SNAPSHOT, and that decides everything else about it. It is
+# not derived from char_skills, because that roster is marked stale on an award
+# and built once after the LAST one -- two actions inside a tick would reach a
+# client as one blurred change, a reactor turn late, with nothing saying which
+# action paid what. It is not in COALESCABLE_CHANNELS for the reason
+# CHANNEL_COMBAT is not: two awards on one tick are two drops, and keeping the
+# newest loses one the text log still prints.
+#
+# Sent from xp_awards.grant_xp, the one seam every player-facing award passes
+# through, so a new system that pays XP reaches the client by calling it.
+CHANNEL_XP_DROP: str = "blackout_xp"       # -> Blackout.Xp
+
 # Every channel a client may subscribe to. A name absent from here is rejected
 # by the subscribe inputfunc rather than silently accepted, so a typo in a
 # client shows up immediately instead of as a channel that never fires.
@@ -136,6 +152,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_MAP,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
+    CHANNEL_XP_DROP,
 ))
 
 # Evennia's websocket `send_default` silently DROPS an outputfunc with this

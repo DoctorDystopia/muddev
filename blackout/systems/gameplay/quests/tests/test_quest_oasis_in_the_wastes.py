@@ -10,9 +10,12 @@ Description: "Oasis in the Wastes" end to end -- the blueprint, the android's
 from unittest import mock
 
 from evennia import create_object
+from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.interface.menus.npc_dialogues import npc_oasis_lone_android as guide
+from systems.gameplay.progression.skills import xp_awards
+from systems.gameplay.progression.skills.logic import calculate_xp_needed
 from systems.gameplay.quests.content import quest_oasis_in_the_wastes
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
 from typeclasses.spawners import SPAWNER_REGISTRY
@@ -95,6 +98,38 @@ class OasisBlueprintTests(EvenniaTest):
             with self.subTest(skill=skill_key):
                 gained = self.char1.skills.get_total_xp(skill_key) - before[skill_key]
                 self.assertEqual(gained, amount)
+
+
+    def test_the_reward_is_announced_above_the_level_up_it_causes(self):
+        """
+        Regression: the quest paid 400 XP across three skills and said
+        nothing about it. The readout must also precede any level-up line,
+        or the player reads the consequence before the cause.
+
+        One XP short of a level in every rewarded skill, so any award at all
+        levels each of them and the ordering is never checked vacuously.
+        """
+        for skill_key in quest_oasis_in_the_wastes.REWARD_XP:
+            self.char1.db.skills[skill_key] = {
+                "level": 0, "xp": calculate_xp_needed(0) - 1}
+
+        awards = list(quest_oasis_in_the_wastes.REWARD_XP.items())
+        readout = strip_ansi(xp_awards.format_xp_readout(awards))
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            quest_oasis_in_the_wastes.award_rewards(self.char1)
+
+        sent = [
+            strip_ansi(str(call.args[0][0]))
+            for call in mocked_msg.call_args_list
+            if call.args and isinstance(call.args[0], tuple)
+        ]
+        level_up_indices = [
+            index for index, line in enumerate(sent) if "LEVEL_UP" in line]
+
+        self.assertIn(readout, sent)
+        self.assertEqual(len(level_up_indices), len(awards))
+        self.assertLess(sent.index(readout), min(level_up_indices))
 
 
 
