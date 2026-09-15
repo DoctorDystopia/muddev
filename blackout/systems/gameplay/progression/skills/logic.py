@@ -5,23 +5,27 @@ Creation date: 06/02/2026
 Description: Decoupled helper functions for skill state evaluation and mutation.
 """
 
+
+
 import math
 
 from evennia.utils import logger
 
 from . import constants as skill_constants
-from .constants import FORTITUDE_SKILL_KEY
+from .constants import SKILL_KEY_FORTITUDE
 from systems.gameplay.combat import constants as combat_constants
 from .registry import SKILL_REGISTRY
 from systems.interface.statefeed import constants as feed_const
+
+
 
 # Every line this module sends a player is progression, so the routing tag is
 # bound once here rather than repeated at every call site.
 #
 # The SERVER says what a line IS; the client decides which tab shows it. See
 # MESSAGE_TYPES in systems/interface/statefeed/constants.py.
-_MSG_PROGRESSION = {
-    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_PROGRESSION}
+_MSG_PROGRESSION = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_PROGRESSION}
+
 
 
 def ensure_skill(obj: object, skill_key: str) -> None:
@@ -61,6 +65,7 @@ def ensure_skill(obj: object, skill_key: str) -> None:
     
     if not is_tracked:
         skills_dict[skill_key] = {"level": skill_constants.DEFAULT_START_LEVEL, "xp": skill_constants.DEFAULT_START_XP}
+
 
 
 def calculate_xp_needed(current_level: int) -> int:
@@ -115,6 +120,7 @@ def calculate_xp_needed(current_level: int) -> int:
     return rounded_xp
 
 
+
 def get_level(obj: object, skill_key: str) -> int:
     """
     Purpose: Returns the current level of a skill.
@@ -146,6 +152,7 @@ def get_level(obj: object, skill_key: str) -> int:
     current_level = skill_data["level"]
     
     return current_level
+
 
 
 def _publish_level_change(obj: object) -> None:
@@ -220,6 +227,7 @@ def _publish_level_change(obj: object) -> None:
     feed.emit_combat_options(obj)
 
 
+
 def _publish_xp_change(obj: object) -> None:
     """
     Purpose: Tell a graphical client that this character's XP moved.
@@ -260,6 +268,7 @@ def _publish_xp_change(obj: object) -> None:
 
     feed.refresh_skills(obj)
     feed.refresh_summary(obj)
+
 
 
 def set_level(obj: object, skill_key: str, level: int) -> int:
@@ -327,6 +336,7 @@ def set_level(obj: object, skill_key: str, level: int) -> int:
     return clamped
 
 
+
 def modify_level(obj: object, skill_key: str, delta: int) -> int:
     """
     Purpose: Shift a skill's level by a signed amount. The drain/buff path.
@@ -360,6 +370,7 @@ def modify_level(obj: object, skill_key: str, delta: int) -> int:
     wanted = current + int(delta)
 
     return set_level(obj, skill_key, wanted)
+
 
 
 def get_total_xp(obj: object, skill_key: str) -> int:
@@ -402,6 +413,7 @@ def get_total_xp(obj: object, skill_key: str) -> int:
     return total_xp
 
 
+
 def get_xp_level(obj: object, skill_key: str) -> tuple[int, int, int]:
     """
     Purpose: Returns the progress into the current level and requirements for the next.
@@ -438,6 +450,7 @@ def get_xp_level(obj: object, skill_key: str) -> tuple[int, int, int]:
     remaining_xp = total_xp_needed - current_progress_xp
 
     return current_progress_xp, total_xp_needed, remaining_xp
+
 
 
 def add_xp(obj: object, skill_key: str, amount: int) -> None:
@@ -508,6 +521,7 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         _publish_level_change(obj)
 
 
+
 def meets_prerequisite(obj: object, skill_key: str, required_level: int) -> bool:
     """
     Purpose: Verifies if a player meets a target level for a specific skill.
@@ -536,6 +550,7 @@ def meets_prerequisite(obj: object, skill_key: str, required_level: int) -> bool
     meets_req = current_lvl >= required_level
     
     return meets_req
+
 
 
 def check_synergy(obj: object, 
@@ -575,6 +590,7 @@ def check_synergy(obj: object,
     synergy_met = a_meets and b_meets
     
     return synergy_met
+
 
 
 def seed_fortitude_on_creation(obj: object) -> None:
@@ -625,10 +641,10 @@ def seed_fortitude_on_creation(obj: object) -> None:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    ensure_skill(obj, FORTITUDE_SKILL_KEY)
+    ensure_skill(obj, SKILL_KEY_FORTITUDE)
 
     skills_dict = obj.db.skills
-    skills_dict[FORTITUDE_SKILL_KEY] = {
+    skills_dict[SKILL_KEY_FORTITUDE] = {
         "level": combat_constants.FORTITUDE_START_LEVEL,
         "xp": skill_constants.DEFAULT_START_XP,
     }
@@ -642,6 +658,7 @@ def seed_fortitude_on_creation(obj: object) -> None:
         )
         obj.db.max_hp = starting_hp
         obj.db.hp = starting_hp
+
 
 
 def sync_max_hp_from_fortitude(obj: object) -> None:
@@ -690,9 +707,10 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    fortitude_level = get_level(obj, FORTITUDE_SKILL_KEY)
+    fortitude_level = get_level(obj, SKILL_KEY_FORTITUDE)
     new_cap = fortitude_level * combat_constants.HP_PER_FORTITUDE_LEVEL
     obj.max_hp = new_cap
+
 
 
 # ─── Level-up side effects ──────────────────────────────────────────────────
@@ -704,7 +722,7 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
 # no callers at all, so every character's max HP stayed pinned at its creation
 # value forever no matter how much Fortitude XP they earned.
 _LEVEL_UP_SIDE_EFFECTS = {
-    FORTITUDE_SKILL_KEY: sync_max_hp_from_fortitude,
+    SKILL_KEY_FORTITUDE: sync_max_hp_from_fortitude,
 }
 
 
@@ -743,6 +761,7 @@ def apply_level_up_side_effects(obj: object, skill_key: str) -> None:
         logger.log_err(
             f"apply_level_up_side_effects: {skill_key} handler failed on {obj}: {exc!r}"
         )
+
 
 
 # ─── Whole-character rollups ────────────────────────────────────────────────
@@ -787,6 +806,7 @@ def get_total_level(obj: object) -> int:
     return total
 
 
+
 def get_combined_xp(obj: object) -> int:
     """
     Purpose: Sum the character's cumulative XP across every registered skill.
@@ -822,6 +842,7 @@ def get_combined_xp(obj: object) -> int:
         total += skill_xp
 
     return total
+
 
 
 def get_closest_to_level_up(obj: object) -> dict:

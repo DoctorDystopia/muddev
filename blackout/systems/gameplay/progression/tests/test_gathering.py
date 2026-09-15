@@ -21,7 +21,7 @@ from systems.gameplay.progression.skills.skill_defs.base_skill import (
     NO_COOLDOWN,
 )
 from commands.gathering_cmds import CmdCutGatheringNode
-from systems.gameplay.progression.skills.constants import CUTTING_SKILL_KEY
+from systems.gameplay.progression.skills.constants import SKILL_KEY_CUTTING
 
 
 
@@ -57,10 +57,10 @@ class TestCuttingProgression(EvenniaCommandTest):
         pole_obj = self.pole
         
         # Inject the full base dictionary for the skill, setting the level to 1
-        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 1, "xp": _STARTING_XP}
+        char_obj.db.skills[SKILL_KEY_CUTTING] = {"level": 1, "xp": _STARTING_XP}
         
         # FIX: Dynamically store the historical XP (which evaluates to 80)
-        initial_xp = handler.get_total_xp(CUTTING_SKILL_KEY)
+        initial_xp = handler.get_total_xp(SKILL_KEY_CUTTING)
         
         response = self.call(
             CmdCutGatheringNode(),        
@@ -75,7 +75,7 @@ class TestCuttingProgression(EvenniaCommandTest):
         self.assertIn(expected_response, response)
         
         # FIX: Verify the new total XP equals the initial XP plus the 10 XP reward
-        new_xp = handler.get_total_xp(CUTTING_SKILL_KEY)
+        new_xp = handler.get_total_xp(SKILL_KEY_CUTTING)
         expected_total = initial_xp + _EXPECTED_XP
         is_expected = (new_xp == expected_total)
         
@@ -99,7 +99,7 @@ class TestCuttingProgression(EvenniaCommandTest):
             MetalPole, key="metal pole", location=char_obj.location)
         required_level = GATHERABLE_REGISTRY["metal_pole"].yields[0].required_level
 
-        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 0, "xp": _STARTING_XP}
+        char_obj.db.skills[SKILL_KEY_CUTTING] = {"level": 0, "xp": _STARTING_XP}
 
         response = self.call(
             CmdCutGatheringNode(),
@@ -128,7 +128,7 @@ class TestCuttingProgression(EvenniaCommandTest):
 
     def test_second_cut_is_refused_while_on_cooldown(self) -> None:
         char_obj = self.char1
-        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 1, "xp": _STARTING_XP}
+        char_obj.db.skills[SKILL_KEY_CUTTING] = {"level": 1, "xp": _STARTING_XP}
 
         self._cut()
         second_response = self._cut()
@@ -139,13 +139,13 @@ class TestCuttingProgression(EvenniaCommandTest):
     def test_cooldown_does_not_consume_a_second_node_use(self) -> None:
         """The refusal must happen before any loot is generated."""
         char_obj = self.char1
-        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 1, "xp": _STARTING_XP}
+        char_obj.db.skills[SKILL_KEY_CUTTING] = {"level": 1, "xp": _STARTING_XP}
 
         self._cut()
-        xp_after_first = self.handler.get_total_xp(CUTTING_SKILL_KEY)
+        xp_after_first = self.handler.get_total_xp(SKILL_KEY_CUTTING)
 
         self._cut()
-        xp_after_second = self.handler.get_total_xp(CUTTING_SKILL_KEY)
+        xp_after_second = self.handler.get_total_xp(SKILL_KEY_CUTTING)
 
         self.assertEqual(xp_after_first, xp_after_second)
 
@@ -155,7 +155,7 @@ class TestCuttingProgression(EvenniaCommandTest):
         kept the timestamp on ndb.last_harvest_time, so every @reload handed
         the player a free harvest."""
         char_obj = self.char1
-        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 1, "xp": _STARTING_XP}
+        char_obj.db.skills[SKILL_KEY_CUTTING] = {"level": 1, "xp": _STARTING_XP}
 
         self._cut()
 
@@ -163,16 +163,16 @@ class TestCuttingProgression(EvenniaCommandTest):
         # on the mapping contract rather than the concrete type.
         stored = char_obj.attributes.get("cooldowns")
         self.assertIsNotNone(stored)
-        self.assertIn(f"{COOLDOWN_KEY_PREFIX}{CUTTING_SKILL_KEY}", stored)
+        self.assertIn(f"{COOLDOWN_KEY_PREFIX}{SKILL_KEY_CUTTING}", stored)
         self.assertIsNone(char_obj.ndb.last_harvest_time)
 
 
     def test_cooldown_clears_once_reset(self) -> None:
         char_obj = self.char1
-        char_obj.db.skills[CUTTING_SKILL_KEY] = {"level": 1, "xp": _STARTING_XP}
+        char_obj.db.skills[SKILL_KEY_CUTTING] = {"level": 1, "xp": _STARTING_XP}
 
         self._cut()
-        char_obj.cooldowns.reset(f"{COOLDOWN_KEY_PREFIX}{CUTTING_SKILL_KEY}")
+        char_obj.cooldowns.reset(f"{COOLDOWN_KEY_PREFIX}{SKILL_KEY_CUTTING}")
         response = self._cut()
 
         self.assertIn("You successfully cut", response)
@@ -186,8 +186,8 @@ class TestSkillCooldownKeying(EvenniaCommandTest):
         """The ndb timestamp this replaced was a single value shared by every
         gathering skill, so harvesting one node would have blocked every
         other gathering skill the moment a second one existed."""
-        cutting = SKILL_REGISTRY[CUTTING_SKILL_KEY]()
-        other_keys = [k for k in SKILL_REGISTRY if k != CUTTING_SKILL_KEY]
+        cutting = SKILL_REGISTRY[SKILL_KEY_CUTTING]()
+        other_keys = [k for k in SKILL_REGISTRY if k != SKILL_KEY_CUTTING]
         other = SKILL_REGISTRY[other_keys[0]]()
 
         self.assertNotEqual(cutting.cooldown_key(), other.cooldown_key())
@@ -196,8 +196,8 @@ class TestSkillCooldownKeying(EvenniaCommandTest):
 
     def test_arming_one_skill_leaves_another_ready(self) -> None:
         char_obj = self.char1
-        cutting = SKILL_REGISTRY[CUTTING_SKILL_KEY]()
-        other_keys = [k for k in SKILL_REGISTRY if k != CUTTING_SKILL_KEY]
+        cutting = SKILL_REGISTRY[SKILL_KEY_CUTTING]()
+        other_keys = [k for k in SKILL_REGISTRY if k != SKILL_KEY_CUTTING]
         other = SKILL_REGISTRY[other_keys[0]]()
 
         cutting.arm_cooldown(char_obj)

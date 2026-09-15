@@ -30,6 +30,7 @@ from systems.gameplay.combat.combat import (
     get_defense_bonuses,
     get_handler_for,
 )
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.combat.rules.context import ActionResult
 from systems.core.tick.tickable import HANDLER_NO_TIMER_INTERVAL
 from systems.core.tick.engine import (
@@ -255,11 +256,11 @@ class TestNpcSeeding(EvenniaTest):
         # OSRS Goblin L2: Attack 1, Strength 1, Defence 1, Hitpoints 5.
         npc = spawn_mutant_raider(self.room1)
 
-        self.assertEqual(npc.skills.get_level("defense"), 1)
-        self.assertEqual(npc.skills.get_level("strike"), 1)
+        self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_DEFENSE), 1)
+        self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_STRIKE), 1)
         # Hitpoints IS the Fortitude axis; before the bridge in
         # NpcDef.to_combat_block this read the old facade's fabricated 1.
-        self.assertEqual(npc.skills.get_level("fortitude"), 5)
+        self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_FORTITUDE), 5)
 
     def test_raider_combat_bonuses_match_goblin_l2(self):
         """OSRS Goblin L2 monster bonuses: attack -21, strength -15,
@@ -583,8 +584,8 @@ class TestNpcAttackerEarnsNothing(EvenniaTest):
     def test_an_npc_swing_grants_the_npc_no_levels(self):
         npc = self._npc_swing_at_char(damage=3)
 
-        self.assertEqual(npc.skills.get_level("strike"), 1)
-        self.assertEqual(npc.skills.get_level("fortitude"), 5)
+        self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_STRIKE), 1)
+        self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_FORTITUDE), 5)
 
     def test_an_npc_killing_blow_runs_no_killer_xp(self):
         """at_death's killer gate. The NPC must not be credited for the kill."""
@@ -674,10 +675,10 @@ class TestSwingReporting(EvenniaTest):
     def test_xp_named_on_the_line_is_the_xp_actually_granted(self):
         """The readout must not drift from the award it describes."""
         handler = ensure_combat_handler(self.char1)
-        before = self.char1.skills.get_total_xp("strike")
+        before = self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_STRIKE)
 
         lines = self._swing_for(damage=3)
-        gained = self.char1.skills.get_total_xp("strike") - before
+        gained = self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_STRIKE) - before
 
         self.assertIn(f"+{gained} Strike", lines[self._index_of(lines, "You hit")])
 

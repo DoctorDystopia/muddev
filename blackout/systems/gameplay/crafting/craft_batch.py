@@ -51,14 +51,17 @@ def _object_by_id(obj_id):
         return None
 
 
+
 def is_batch_active(caller) -> bool:
     """Return True if caller currently has a craft batch in progress."""
     return bool(caller.attributes.get(BATCH_ATTRIBUTE))
 
 
+
 def get_active_batch(caller) -> dict | None:
     """Return caller's active batch state dict, or None if there isn't one."""
     return caller.attributes.get(BATCH_ATTRIBUTE)
+
 
 
 def cancel_batch(caller) -> bool:
@@ -75,6 +78,7 @@ def cancel_batch(caller) -> bool:
     caller.attributes.remove(BATCH_ATTRIBUTE)
 
     return True
+
 
 
 def start_batch(caller, recipe_key, count):
@@ -156,6 +160,7 @@ def start_batch(caller, recipe_key, count):
     return True, message
 
 
+
 def _craft_one(caller, recipe_key) -> None:
     """Craft a single item toward the active batch, then either schedule the
     next one or close the batch out.
@@ -198,6 +203,7 @@ def _craft_one(caller, recipe_key) -> None:
 
     caller.attributes.add(BATCH_ATTRIBUTE, batch)
     delay(recipe_cls.craft_seconds, _continue_batch, caller.id, recipe_key, persistent=True)
+
 
 
 def _continue_batch(caller_id, recipe_key) -> None:

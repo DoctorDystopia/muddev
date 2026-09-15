@@ -233,6 +233,13 @@ measured 09/13/2026):
   - Everything defined is registered
   - Every registered entry is well-formed
   - Every slot is labeled.
+- **Never assert a balance value.** XP rewards and level requirements are
+  balance decisions, and they change at any time. A retune is intended
+  content, like a new recipe. Do not assert a literal `xp_reward` or
+  `required_level`, a lower bound on one, or an order between two recipes.
+  Test the mechanic, and read the value from its owner. For example, the
+  grant pays exactly `recipe.xp_reward`, and the gate refuses a level of
+  `recipe.required_level - 1`.
 - **Wrap registry loops in `self.subTest(...)`.** A bare
   `for item_def in ITEM_DB.values():` stops at the first bad entry and hides the
   rest.

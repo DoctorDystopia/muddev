@@ -101,12 +101,12 @@ _UNMODELLED_MARK: str = " +"
 
 def _aggressive_stance_bonus() -> int:
     """The invisible Brawn boost an aggressive stance grants."""
-    from systems.gameplay.progression.skills.constants import BRAWN_SKILL_KEY
+    from systems.gameplay.progression.skills.constants import SKILL_KEY_BRAWN
 
     combat_const = env.combat_constants()
     boost = combat_const.MELEE_WEAPON_STYLE_LEVEL_BOOST_AGGRESSIVE
 
-    return boost[BRAWN_SKILL_KEY]
+    return boost[SKILL_KEY_BRAWN]
 
 
 def _damage_style_key(profile) -> str:
@@ -148,7 +148,7 @@ def _max_hit_curve(strength_bonus: int, stance_bonus: int) -> list:
 
 def _weapon_rows() -> list:
     """One row per weapon plus unarmed: profile, style, stance, bonus, curve."""
-    from systems.gameplay.progression.skills.constants import BRAWN_SKILL_KEY
+    from systems.gameplay.progression.skills.constants import SKILL_KEY_BRAWN
 
     profiles = env.weapon_profiles()
     unarmed = env.unarmed_profile()
@@ -161,7 +161,7 @@ def _weapon_rows() -> list:
         style_key, is_aggressive = _damage_style_key(profile)
         style = profile.combat_styles[style_key]
         boost = style.get("weapon_style_level_boost") or {}
-        stance = boost.get(BRAWN_SKILL_KEY, env.NO_STANCE_BONUS)
+        stance = boost.get(SKILL_KEY_BRAWN, env.NO_STANCE_BONUS)
         bonus = profile.combat_stat_bonuses.get(STRENGTH_BONUS_KEY, _BONUS_FLOOR)
         curve = _max_hit_curve(bonus, stance)
 

@@ -20,7 +20,13 @@ from systems.gameplay.combat.combat_level.branch_defs.base_branch import CombatB
 from systems.gameplay.combat.combat_level.branch_defs.melee import MeleeBranch
 from systems.gameplay.combat.combat_level.logic import get_combat_level
 from systems.gameplay.combat.combat_level.registry import COMBAT_BRANCH_REGISTRY
-from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+from systems.gameplay.progression.skills.constants import (
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_GUNS,
+    SKILL_KEY_STRIKE,
+)
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npc_combat import HostileNPC
 
@@ -43,7 +49,7 @@ class TestCombatBranchScoreShapes(EvenniaTestCase):
 
     def test_paired_skills_sum_raw(self):
         branch = MeleeBranch()
-        levels = {"strike": 40, "brawn": 20}
+        levels = {SKILL_KEY_STRIKE: 40, SKILL_KEY_BRAWN: 20}
 
         score = branch.compute_score(lambda key: levels[key])
 
@@ -53,7 +59,7 @@ class TestCombatBranchScoreShapes(EvenniaTestCase):
         class SoloBranch(CombatBranch):
             key = "solo_test"
             name = "Solo Test"
-            skill_keys = ("guns",)
+            skill_keys = (SKILL_KEY_GUNS,)
 
         branch = SoloBranch()
         score = branch.compute_score(lambda key: 50)
@@ -82,10 +88,10 @@ class TestGetCombatLevelForCharacter(EvenniaTest):
         self.assertEqual(get_combat_level(self.char1), math.floor(expected_base))
 
     def test_melee_stats_raise_combat_level(self):
-        self._set_level(FORTITUDE_SKILL_KEY, 50)
-        self._set_level("defense", 40)
-        self._set_level("strike", 60)
-        self._set_level("brawn", 30)
+        self._set_level(SKILL_KEY_FORTITUDE, 50)
+        self._set_level(SKILL_KEY_DEFENSE, 40)
+        self._set_level(SKILL_KEY_STRIKE, 60)
+        self._set_level(SKILL_KEY_BRAWN, 30)
 
         base = const.COMBAT_LEVEL_BASE_WEIGHT * (50 + 40)
         melee = const.COMBAT_LEVEL_BRANCH_WEIGHT * (60 + 30)
@@ -102,7 +108,7 @@ class TestGetCombatLevelForCharacter(EvenniaTest):
             self.fail("get_combat_level raised on an unbuilt Combat Specialty skill")
 
     def test_combat_level_property_matches_the_function(self):
-        self._set_level("strike", 25)
+        self._set_level(SKILL_KEY_STRIKE, 25)
         self.assertEqual(self.char1.combat_level, get_combat_level(self.char1))
 
 
@@ -154,7 +160,7 @@ class TestGetCombatLevelForNPC(EvenniaTest):
         # docstring describes -- fortitude must come from max_hp -- and writing
         # 87 here made it a statement about one monster's balance instead.
         self.assertEqual(
-            big_mutant.skills.get_level("fortitude"), definition.max_hp)
+            big_mutant.skills.get_level(SKILL_KEY_FORTITUDE), definition.max_hp)
 
         # Likewise for the rest of the inputs. These were `(87 + 1)` and
         # `(1 + 1)`, hardcoding a Big Mutant whose defense, strike and brawn

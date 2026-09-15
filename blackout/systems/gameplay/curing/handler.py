@@ -181,7 +181,7 @@ class CuringHandler:
         Author: Nick Hobar
         Creation date: 09/11/2026
         """
-        level = self.obj.skills.get_level(skill_constants.CURING_SKILL_KEY)
+        level = self.obj.skills.get_level(skill_constants.SKILL_KEY_CURING)
         total = curing_constants.slots_for_level(level)
 
         return total

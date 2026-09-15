@@ -29,6 +29,7 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.core.stat_tracker import constants as stat_constants
 from systems.gameplay.combat.combat import ensure_combat_handler
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import events
@@ -48,7 +49,7 @@ _HOSTILE: str = "mutant_raider"
 
 # A skill outside combat, so an award to it cannot move combat level and drag
 # the combat channels into an assertion. From the gathering tree, not invented.
-_GATHERING_SKILL: str = "cutting"
+_GATHERING_SKILL: str = skill_constants.SKILL_KEY_CUTTING
 
 
 # ─── Test cases ──────────────────────────────────────────────────────────────

@@ -23,8 +23,8 @@ from unittest import mock
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.crafting.constants import (
-    CATEGORY_CURING,
-    CATEGORY_GASTRONOMY,
+    CRAFT_CATEGORY_CURING,
+    CRAFT_CATEGORY_GASTRONOMY,
 )
 from systems.gameplay.consumables import constants as consumable_const
 from systems.gameplay.consumables import service as consumables
@@ -161,8 +161,8 @@ class TestTheFoodTable(unittest.TestCase):
         fast = consumable_const.CURED_MEAT_ATTACK_DELAY_TICKS
         self.assertLess(fast, standard)
 
-        cured = _outputs_of_category(CATEGORY_CURING)
-        meals = _outputs_of_category(CATEGORY_GASTRONOMY)
+        cured = _outputs_of_category(CRAFT_CATEGORY_CURING)
+        meals = _outputs_of_category(CRAFT_CATEGORY_GASTRONOMY)
         self.assertTrue(cured)
         self.assertTrue(meals)
 
@@ -182,8 +182,8 @@ class TestTheFoodTable(unittest.TestCase):
         A food produced by neither stage would be silently exempt from the
         delay check, which is how a prefix match hid a bug once already.
         """
-        made = _outputs_of_category(CATEGORY_CURING) | _outputs_of_category(
-            CATEGORY_GASTRONOMY)
+        made = _outputs_of_category(CRAFT_CATEGORY_CURING) | _outputs_of_category(
+            CRAFT_CATEGORY_GASTRONOMY)
 
         self.assertEqual(set(_food_keys()) - made, set())
 

@@ -10,11 +10,11 @@ from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_CRAFTING
 from systems.gameplay.crafting.constants import (
-    CATEGORY_CURING,
-    CATEGORY_FOUNDRY,
-    CATEGORY_GASTRONOMY,
-    CATEGORY_METALSMITH,
-    CATEGORY_RENDERING,
+    CRAFT_CATEGORY_CURING,
+    CRAFT_CATEGORY_FOUNDRY,
+    CRAFT_CATEGORY_GASTRONOMY,
+    CRAFT_CATEGORY_METALSMITH,
+    CRAFT_CATEGORY_RENDERING,
 )
 from systems.gameplay.curing import constants as curing_constants
 from systems.interface.statefeed import constants as feed_const
@@ -37,7 +37,7 @@ class FoundryBaseFacility(CraftingFacility):
     Specific facility types (FurnaceFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = [CATEGORY_FOUNDRY]
+    allowed_categories = [CRAFT_CATEGORY_FOUNDRY]
 
     def at_object_creation(self):
         parent_class = super()
@@ -67,7 +67,7 @@ class RenderingBaseFacility(CraftingFacility):
     Specific facility types (RenderingCookerFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = [CATEGORY_RENDERING]
+    allowed_categories = [CRAFT_CATEGORY_RENDERING]
 
     def at_object_creation(self):
         parent_class = super()
@@ -186,7 +186,7 @@ class CuringBaseFacility(CraftingFacility):
     Specific facility types (CuringChamberFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = [CATEGORY_CURING]
+    allowed_categories = [CRAFT_CATEGORY_CURING]
 
     def at_object_creation(self):
         parent_class = super()
@@ -289,7 +289,7 @@ class MetalsmithBaseFacility(CraftingFacility):
     Specific facility types (AnvilFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = [CATEGORY_METALSMITH]
+    allowed_categories = [CRAFT_CATEGORY_METALSMITH]
 
     def at_object_creation(self):
         parent_class = super()
@@ -319,7 +319,7 @@ class GastronomyBaseFacility(CraftingFacility):
     Specific facility types (GastroWorktableFacility, etc.) inherit from this
     and add their own tool tags for recipe tool requirements.
     """
-    allowed_categories = [CATEGORY_GASTRONOMY]
+    allowed_categories = [CRAFT_CATEGORY_GASTRONOMY]
 
     def at_object_creation(self):
         parent_class = super()

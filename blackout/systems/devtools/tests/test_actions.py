@@ -135,7 +135,7 @@ class RestoreTests(EvenniaTest):
         A Fortitude level written without a level-up hook firing leaves
         max_hp stale. Restore must heal to the CURRENT cap, not the old one.
         """
-        fortitude = skill_constants.FORTITUDE_SKILL_KEY
+        fortitude = skill_constants.SKILL_KEY_FORTITUDE
         old_cap = self.char1.max_hp
         self.char1.skills.set_level(fortitude, old_cap + 5)
         dev_actions.restore(self.char2, self.char1)

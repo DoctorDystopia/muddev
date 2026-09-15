@@ -26,7 +26,7 @@ Description: CuringRecipe — a BlackoutRecipe whose output arrives later.
 
 
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
-from systems.gameplay.crafting.constants import CATEGORY_CURING
+from systems.gameplay.crafting.constants import CRAFT_CATEGORY_CURING
 from systems.gameplay.progression.skills import constants as skill_constants
 
 
@@ -63,9 +63,9 @@ class CuringRecipe(BlackoutRecipe):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
-    category = CATEGORY_CURING
-    required_skill = skill_constants.CURING_SKILL_KEY
-    skill_category = "processing"
+    category = CRAFT_CATEGORY_CURING
+    required_skill = skill_constants.SKILL_KEY_CURING
+    skill_category = skill_constants.SKILL_CATEGORY_PROCESSING
 
     # The attribute that makes a cure a cure. crafting_service reads it and
     # routes execution to character.curing instead of producing the output now

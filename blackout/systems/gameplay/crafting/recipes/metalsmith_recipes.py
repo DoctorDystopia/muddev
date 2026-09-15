@@ -7,8 +7,9 @@ Description: Skill category Production - Metalsmith recipe definitions.
 
 
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from ..blackout_recipe import BlackoutRecipe
-from ..constants import CATEGORY_METALSMITH
+from ..constants import CRAFT_CATEGORY_METALSMITH
 
 
 
@@ -20,11 +21,11 @@ class RustyScrapDaggerRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude dagger at an anvil."
 
     name = "rusty scrap dagger"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 0
     xp_reward = 25
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal"]
@@ -42,11 +43,11 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude axe at an anvil."
 
     name = "rusty scrap axe"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 0
     xp_reward = 25
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal"]
@@ -64,11 +65,11 @@ class RustyScrapBootsRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude boots at an anvil."
 
     name = "rusty scrap boots"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 3
     xp_reward = 25
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal"]
@@ -86,11 +87,11 @@ class RustyScrapShortswordRecipe(BlackoutRecipe):
     "Hammer two rusty scrap metal sheets into a crude shortsword at an anvil."
 
     name = "rusty scrap shortsword"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 4
     xp_reward = 50
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal"]
@@ -108,11 +109,11 @@ class RustyScrapScimitarRecipe(BlackoutRecipe):
     "Hammer two rusty scrap metal sheets into a crude scimitar at an anvil."
 
     name = "rusty scrap scimitar"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 5
     xp_reward = 50
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal"]
@@ -130,11 +131,11 @@ class RustyScrapSpearRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude spear at an anvil."
 
     name = "rusty scrap spear"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 5
     xp_reward = 50
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal"]
@@ -152,11 +153,11 @@ class RustyScrapGreatHelmRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude great helm at an anvil."
 
     name = "rusty scrap great helm"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 7
     xp_reward = 50
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal"]
@@ -174,11 +175,11 @@ class RustyScrapSquareShieldRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude square shield at an anvil."
 
     name = "rusty scrap square shield"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 8
     xp_reward = 50
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal"]
@@ -196,11 +197,11 @@ class RustyScrapBattleaxeRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude battleaxe at an anvil."
 
     name = "rusty scrap battleaxe"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 10
     xp_reward = 75
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal", "rusty scrap metal"]
@@ -218,11 +219,11 @@ class RustyScrapChainbodyRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude chainbody at an anvil."
 
     name = "rusty scrap chainbody"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 11
     xp_reward = 75
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal", "rusty scrap metal"]
@@ -240,11 +241,11 @@ class RustyScrapGreatswordRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude greatsword at an anvil."
 
     name = "rusty scrap greatsword"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 12
     xp_reward = 75
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal", "rusty scrap metal"]
@@ -262,11 +263,11 @@ class RustyScrapPlatelegsRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude platelegs at an anvil."
 
     name = "rusty scrap platelegs"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 13
     xp_reward = 75
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["rusty_scrap_metal", "rusty_scrap_metal", "rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal", "rusty scrap metal", "rusty scrap metal"]
@@ -288,11 +289,11 @@ class ScrapDaggerRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude dagger at an anvil."
 
     name = "scrap dagger"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 10
     xp_reward = 35
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal"]
     consumable_names = ["scrap metal"]
@@ -310,11 +311,11 @@ class ScrapAxeRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude axe at an anvil."
 
     name = "scrap axe"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 10
     xp_reward = 35
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal"]
     consumable_names = ["scrap metal"]
@@ -332,11 +333,11 @@ class ScrapBootsRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude boots at an anvil."
 
     name = "scrap boots"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 13
     xp_reward = 35
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal"]
     consumable_names = ["scrap metal"]
@@ -354,11 +355,11 @@ class ScrapShortswordRecipe(BlackoutRecipe):
     "Hammer two scrap metal sheets into a crude shortsword at an anvil."
 
     name = "scrap shortsword"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 14
     xp_reward = 70
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal"]
@@ -376,11 +377,11 @@ class ScrapScimitarRecipe(BlackoutRecipe):
     "Hammer two scrap metal sheets into a crude scimitar at an anvil."
 
     name = "scrap scimitar"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 15
     xp_reward = 70
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal"]
@@ -398,11 +399,11 @@ class ScrapSpearRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude spear at an anvil."
 
     name = "scrap spear"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 15
     xp_reward = 70
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal"]
@@ -420,11 +421,11 @@ class ScrapGreatHelmRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude great helm at an anvil."
 
     name = "scrap great helm"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 17
     xp_reward = 70
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal"]
@@ -442,11 +443,11 @@ class ScrapSquareShieldRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude square shield at an anvil."
 
     name = "scrap square shield"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 18
     xp_reward = 70
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal"]
@@ -464,11 +465,11 @@ class ScrapBattleaxeRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude battleaxe at an anvil."
 
     name = "scrap battleaxe"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 20
     xp_reward = 105
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal", "scrap metal"]
@@ -486,11 +487,11 @@ class ScrapChainbodyRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude chainbody at an anvil."
 
     name = "scrap chainbody"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 21
     xp_reward = 105
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal", "scrap metal"]
@@ -508,11 +509,11 @@ class ScrapGreatswordRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude greatsword at an anvil."
 
     name = "scrap greatsword"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 22
     xp_reward = 105
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal", "scrap metal"]
@@ -530,11 +531,11 @@ class ScrapPlatelegsRecipe(BlackoutRecipe):
     "Hammer scrap metal into a crude platelegs at an anvil."
 
     name = "scrap platelegs"
-    category = CATEGORY_METALSMITH
-    required_skill = "metalsmith"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
     required_level = 23
     xp_reward = 105
-    skill_category = "production"
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     consumable_tags = ["scrap_metal", "scrap_metal", "scrap_metal"]
     consumable_names = ["scrap metal", "scrap metal", "scrap metal"]

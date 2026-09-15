@@ -35,8 +35,7 @@ from systems.interface.statefeed import constants as feed_const
 # every call site. The SERVER says what a line IS; the client decides which
 # tab shows it. See MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
-_MSG_INVENTORY = {
-    feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
+_MSG_INVENTORY = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
 
@@ -61,6 +60,7 @@ PLAYTIME_TOTAL_ATTR = "total_playtime"
 # this project is many per hour -- would silently discard the time since the
 # last one.
 PLAYTIME_SESSION_START_ATTR = "_playtime_session_start"
+
 
 
 def _handler_property(handler_class: type, attr_name: str):
@@ -104,6 +104,7 @@ def _handler_property(handler_class: type, attr_name: str):
         name=attr_name,
         doc=f"Cached {handler_class.__name__} for this character.",
     )
+
 
 
 class Character(CombatEntity, ObjectParent, DefaultCharacter):
@@ -190,6 +191,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         self.inventory
         self.cooldowns
         self.stats
+
 
 
     # ─── Playtime ───────────────────────────────────────────────────────────

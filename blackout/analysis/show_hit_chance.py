@@ -88,12 +88,12 @@ _UNMODELLED_MARK: str = " +"
 
 def _accurate_stance_bonus() -> int:
     """The invisible Strike boost an accurate stance grants."""
-    from systems.gameplay.progression.skills.constants import STRIKE_SKILL_KEY
+    from systems.gameplay.progression.skills.constants import SKILL_KEY_STRIKE
 
     combat_const = env.combat_constants()
     boost = combat_const.MELEE_WEAPON_STYLE_LEVEL_BOOST_ACCURATE
 
-    return boost[STRIKE_SKILL_KEY]
+    return boost[SKILL_KEY_STRIKE]
 
 
 def _attacker_profiles() -> list:

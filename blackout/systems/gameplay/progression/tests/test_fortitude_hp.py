@@ -20,7 +20,10 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.combat import constants as combat_constants
 from systems.gameplay.progression.skills import logic
-from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+from systems.gameplay.progression.skills.constants import (
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_STRIKE,
+)
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed_events
 from typeclasses.characters import Character as BlackoutCharacter
@@ -33,7 +36,7 @@ class TestFortitudeHpScaling(EvenniaTest):
     def test_new_character_starts_at_seed_level(self):
         self.char1.skills.seed_fortitude_on_creation()
 
-        level = self.char1.skills.get_level(FORTITUDE_SKILL_KEY)
+        level = self.char1.skills.get_level(SKILL_KEY_FORTITUDE)
         self.assertEqual(level, combat_constants.FORTITUDE_START_LEVEL)
 
     def test_new_character_max_hp_matches_seed_level(self):
@@ -46,7 +49,7 @@ class TestFortitudeHpScaling(EvenniaTest):
         self.assertEqual(self.char1.db.max_hp, expected)
 
     def test_sync_tracks_fortitude_one_to_one(self):
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 42, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 42, "xp": 0}
 
         self.char1.skills.sync_max_hp_from_fortitude()
 
@@ -57,14 +60,14 @@ class TestFortitudeHpScaling(EvenniaTest):
     def test_levelling_fortitude_raises_max_hp(self):
         """The regression: gaining a Fortitude level must move the HP cap."""
         self.char1.skills.seed_fortitude_on_creation()
-        before_level = self.char1.skills.get_level(FORTITUDE_SKILL_KEY)
+        before_level = self.char1.skills.get_level(SKILL_KEY_FORTITUDE)
         before_cap = self.char1.db.max_hp
 
         # Enough XP to clear at least one level from the seed point.
         needed = logic.calculate_xp_needed(before_level)
-        self.char1.skills.add_xp(FORTITUDE_SKILL_KEY, needed * 2)
+        self.char1.skills.add_xp(SKILL_KEY_FORTITUDE, needed * 2)
 
-        after_level = self.char1.skills.get_level(FORTITUDE_SKILL_KEY)
+        after_level = self.char1.skills.get_level(SKILL_KEY_FORTITUDE)
         self.assertGreater(after_level, before_level)
         self.assertGreater(self.char1.db.max_hp, before_cap)
         self.assertEqual(
@@ -78,7 +81,7 @@ class TestFortitudeHpScaling(EvenniaTest):
         before_cap = self.char1.db.max_hp
 
         needed = logic.calculate_xp_needed(0)
-        self.char1.skills.add_xp("strike", needed * 3)
+        self.char1.skills.add_xp(SKILL_KEY_STRIKE, needed * 3)
 
         self.assertEqual(self.char1.db.max_hp, before_cap)
 
@@ -97,11 +100,11 @@ class TestFortitudeXpRate(EvenniaTest):
 
     def test_fortitude_has_a_dedicated_rate(self):
         self.assertIn(
-            FORTITUDE_SKILL_KEY, combat_constants.XP_PER_DAMAGE_BY_SKILL
+            SKILL_KEY_FORTITUDE, combat_constants.XP_PER_DAMAGE_BY_SKILL
         )
 
     def test_fortitude_rate_is_133_per_damage(self):
-        rate = combat_constants.XP_PER_DAMAGE_BY_SKILL[FORTITUDE_SKILL_KEY]
+        rate = combat_constants.XP_PER_DAMAGE_BY_SKILL[SKILL_KEY_FORTITUDE]
         self.assertAlmostEqual(rate, 4.0 / 3.0)
 
     def test_fortitude_earns_its_own_rate_under_an_accurate_style(self):
@@ -112,13 +115,13 @@ class TestFortitudeXpRate(EvenniaTest):
         style = combat_constants.UNARMED_COMBAT_STYLES["punch"]
         damage = 3
 
-        strike_before = self.char1.skills.get_total_xp("strike")
-        fort_before = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY)
+        strike_before = self.char1.skills.get_total_xp(SKILL_KEY_STRIKE)
+        fort_before = self.char1.skills.get_total_xp(SKILL_KEY_FORTITUDE)
 
         _award_style_xp(self.char1, style, damage)
 
-        strike_gain = self.char1.skills.get_total_xp("strike") - strike_before
-        fort_gain = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY) - fort_before
+        strike_gain = self.char1.skills.get_total_xp(SKILL_KEY_STRIKE) - strike_before
+        fort_gain = self.char1.skills.get_total_xp(SKILL_KEY_FORTITUDE) - fort_before
 
         self.assertEqual(strike_gain, round(combat_constants.XP_PER_DAMAGE_ACCURATE * damage))
         self.assertEqual(fort_gain, round(combat_constants.XP_PER_DAMAGE_FORTITUDE * damage))
@@ -164,7 +167,7 @@ class TestFortitudeLevelUpPublishesTheNewCap(EvenniaTest):
         return [body["max_hp"] for body, _ in self.published]
 
     def test_syncing_the_cap_publishes_it(self):
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 42, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 42, "xp": 0}
 
         self.char1.skills.sync_max_hp_from_fortitude()
 
@@ -173,19 +176,19 @@ class TestFortitudeLevelUpPublishesTheNewCap(EvenniaTest):
 
     def test_levelling_fortitude_publishes_the_new_cap(self):
         """The whole path: XP in, one payload out carrying the raised cap."""
-        before_level = self.char1.skills.get_level(FORTITUDE_SKILL_KEY)
+        before_level = self.char1.skills.get_level(SKILL_KEY_FORTITUDE)
         needed = logic.calculate_xp_needed(before_level)
 
-        self.char1.skills.add_xp(FORTITUDE_SKILL_KEY, needed * 2)
+        self.char1.skills.add_xp(SKILL_KEY_FORTITUDE, needed * 2)
 
-        after_level = self.char1.skills.get_level(FORTITUDE_SKILL_KEY)
+        after_level = self.char1.skills.get_level(SKILL_KEY_FORTITUDE)
         expected = after_level * combat_constants.HP_PER_FORTITUDE_LEVEL
         self.assertGreater(after_level, before_level)
         self.assertIn(expected, self._caps_published())
 
     def test_the_published_cap_agrees_with_the_stored_one(self):
         """The bug's signature was the two disagreeing. Assert they cannot."""
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 48, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 48, "xp": 0}
 
         self.char1.skills.sync_max_hp_from_fortitude()
 
@@ -198,7 +201,7 @@ class TestFortitudeLevelUpPublishesTheNewCap(EvenniaTest):
         hp survives a dropped send because the next tick re-sends it; a cap
         that changes on level-up has no such second chance.
         """
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 42, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 42, "xp": 0}
 
         self.char1.skills.sync_max_hp_from_fortitude()
 
@@ -213,7 +216,7 @@ class TestFortitudeLevelUpPublishesTheNewCap(EvenniaTest):
         self.char1.db.max_hp = 10
         self.char1.hp = 5
         self.published.clear()
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 42, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 42, "xp": 0}
 
         self.char1.skills.sync_max_hp_from_fortitude()
 

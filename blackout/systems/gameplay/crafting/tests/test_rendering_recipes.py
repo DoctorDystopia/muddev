@@ -32,7 +32,7 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.crafting import crafting_service
 from systems.gameplay.crafting.constants import (
-    CATEGORY_RENDERING,
+    CRAFT_CATEGORY_RENDERING,
     TOOL_TAG_CATEGORY,
 )
 from systems.gameplay.crafting.registry import RECIPE_REGISTRY
@@ -81,7 +81,7 @@ def _rendering_recipes():
     matches = [
         (name, recipe_cls)
         for name, recipe_cls in RECIPE_REGISTRY.items()
-        if recipe_cls.category == CATEGORY_RENDERING
+        if recipe_cls.category == CRAFT_CATEGORY_RENDERING
     ]
 
     return matches
@@ -117,7 +117,7 @@ def _butchery_yield_keys():
         entry.item_key
         for gatherable_def in GATHERABLE_REGISTRY.values()
         for entry in gatherable_def.yields
-        if entry.skill_key == skill_constants.BUTCHERY_SKILL_KEY
+        if entry.skill_key == skill_constants.SKILL_KEY_BUTCHERY
     }
 
     return keys
@@ -128,12 +128,12 @@ class TestRenderingSkillExists(unittest.TestCase):
     """The skill the recipes name has to be a real, discovered skill."""
 
     def test_rendering_is_registered(self):
-        self.assertIn(skill_constants.RENDERING_SKILL_KEY, SKILL_REGISTRY)
+        self.assertIn(skill_constants.SKILL_KEY_RENDERING, SKILL_REGISTRY)
 
     def test_rendering_is_a_processing_skill(self):
-        skill_cls = SKILL_REGISTRY[skill_constants.RENDERING_SKILL_KEY]
+        skill_cls = SKILL_REGISTRY[skill_constants.SKILL_KEY_RENDERING]
 
-        self.assertEqual(skill_cls.category, "Processing")
+        self.assertEqual(skill_cls.category, skill_constants.SKILL_CATEGORY_PROCESSING)
 
     def test_rendering_has_no_execute_body(self):
         """A processing skill's behaviour is its recipes.
@@ -143,7 +143,7 @@ class TestRenderingSkillExists(unittest.TestCase):
         than a feature. Asserted by identity against BaseSkill so an override
         is caught even if it happens to do nothing.
         """
-        skill_cls = SKILL_REGISTRY[skill_constants.RENDERING_SKILL_KEY]
+        skill_cls = SKILL_REGISTRY[skill_constants.SKILL_KEY_RENDERING]
 
         self.assertIs(skill_cls.execute, BaseSkill.execute)
 
@@ -167,9 +167,8 @@ class TestRenderingRecipeShape(unittest.TestCase):
             with self.subTest(recipe=name):
                 self.assertEqual(
                     recipe_cls.required_skill,
-                    skill_constants.RENDERING_SKILL_KEY,
+                    skill_constants.SKILL_KEY_RENDERING,
                 )
-                self.assertGreater(recipe_cls.xp_reward, 0)
 
     def test_every_recipe_is_worked_at_the_cooker(self):
         for name, recipe_cls in self.recipes:
@@ -284,23 +283,21 @@ class TestRenderingRecipeShape(unittest.TestCase):
 
 
 
-class TestRenderingLevelLadder(unittest.TestCase):
-    """The spreadsheet's level and XP gates, which only a test can hold.
+class TestRenderingSpreadsheetRows(unittest.TestCase):
+    """Every recipe in the spreadsheet exists in the game.
 
-    A literal table, unlike everything above it. These numbers are not derived
-    from anything -- they are Nick's answer to "what should the curve feel
-    like" -- so there is no source of truth to assert against except the sheet
-    itself, transcribed here.
+    Level requirements and XP rewards are balance values, so no test asserts
+    them.
     """
 
-    # recipe name -> (required_level, xp_reward), from the Recipes tab of
+    # Recipe names from the Recipes tab of
     # `Blackout - Crafting Recipes (3-tab restructure)`.
-    EXPECTED = {
-        "mutant raider tallow": (0, 10),
-        "mutant raider fatless meat": (2, 15),
-        "mutant raider prime tallow": (10, 20),
-        "mutant raider prime meat": (12, 30),
-    }
+    EXPECTED = (
+        "mutant raider tallow",
+        "mutant raider fatless meat",
+        "mutant raider prime tallow",
+        "mutant raider prime meat",
+    )
 
     def test_the_spreadsheet_rows_are_all_registered(self):
         """One direction only: every row in the sheet exists in the game.
@@ -313,53 +310,6 @@ class TestRenderingLevelLadder(unittest.TestCase):
             with self.subTest(recipe=recipe_name):
                 self.assertIn(recipe_name, RECIPE_REGISTRY)
 
-    def test_each_row_carries_the_level_and_xp_from_the_sheet(self):
-        for recipe_name, (level, xp) in self.EXPECTED.items():
-            recipe_cls = RECIPE_REGISTRY[recipe_name]
-            with self.subTest(recipe=recipe_name):
-                self.assertEqual(recipe_cls.required_level, level)
-                self.assertEqual(recipe_cls.xp_reward, xp)
-
-    def test_the_meat_of_a_tier_gates_above_its_tallow(self):
-        """The +2 is the shape of the stage, stated as a relationship.
-
-        Tallow is what Rendering is learned on and the lean cut is the reward
-        for staying with it. Asserted per tier so flattening the curve fails
-        here with a message about the design rather than about two integers.
-        """
-        tiers = (
-            ("mutant raider tallow", "mutant raider fatless meat"),
-            ("mutant raider prime tallow", "mutant raider prime meat"),
-        )
-
-        for tallow_name, meat_name in tiers:
-            with self.subTest(tier=tallow_name):
-                tallow = RECIPE_REGISTRY[tallow_name]
-                meat = RECIPE_REGISTRY[meat_name]
-                self.assertGreater(
-                    meat.required_level, tallow.required_level
-                )
-                self.assertGreater(meat.xp_reward, tallow.xp_reward)
-
-    def test_the_prime_tier_gates_above_the_chuck_tier(self):
-        """A filet product must never be cheaper than a chuck product.
-
-        The filet itself needs Butchery 10; a prime render reachable at
-        Rendering 2 would be a tier the player could see and not use.
-        """
-        chuck_ceiling = max(
-            RECIPE_REGISTRY[name].required_level
-            for name in ("mutant raider tallow", "mutant raider fatless meat")
-        )
-        prime_floor = min(
-            RECIPE_REGISTRY[name].required_level
-            for name in (
-                "mutant raider prime tallow",
-                "mutant raider prime meat",
-            )
-        )
-
-        self.assertGreater(prime_floor, chuck_ceiling)
 
 
 
@@ -401,7 +351,7 @@ class TestRenderingCookerFacility(EvenniaTest):
         found = crafting_service.get_recipes_for_facility(self.cooker)
         categories = {recipe_cls.category for _name, recipe_cls in found}
 
-        self.assertEqual(categories, {CATEGORY_RENDERING})
+        self.assertEqual(categories, {CRAFT_CATEGORY_RENDERING})
 
     def test_the_cooker_cannot_be_picked_up(self):
         """A facility is furniture. The superuser test account walked off with
@@ -489,7 +439,7 @@ class TestRenderingACut(EvenniaTest):
         """
         expected = RECIPE_REGISTRY[self.tallow_recipe].xp_reward
         before, needed, _remaining = self.char1.skills.get_xp_level(
-            skill_constants.RENDERING_SKILL_KEY
+            skill_constants.SKILL_KEY_RENDERING
         )
         self.assertLess(
             before + expected,
@@ -502,7 +452,7 @@ class TestRenderingACut(EvenniaTest):
         crafting_service.perform_craft(self.char1, self.tallow_recipe)
 
         after, _needed, _remaining = self.char1.skills.get_xp_level(
-            skill_constants.RENDERING_SKILL_KEY
+            skill_constants.SKILL_KEY_RENDERING
         )
         self.assertEqual(after - before, expected)
 
@@ -525,13 +475,19 @@ class TestRenderingACut(EvenniaTest):
 
         self.assertFalse(result)
 
-    def test_a_level_gated_render_is_refused_at_level_zero(self):
-        """Fatless meat needs Rendering 2 and a fresh character has 0.
+    def test_a_level_gated_render_is_refused_below_its_level(self):
+        """One level below the fatless meat's requirement is refused.
 
         The gate is BlackoutRecipe.pre_craft's skill check, and the thing
         worth pinning is that being refused costs the player nothing -- a gate
         that ate the chuck on the way to saying no would be worse than no gate.
         """
+        required = RECIPE_REGISTRY[self.fatless_recipe].required_level
+        if required <= skill_constants.MIN_BASE_SKILL_LEVEL:
+            self.skipTest("the fatless render has no level gate to refuse")
+        self.char1.skills.set_level(
+            skill_constants.SKILL_KEY_RENDERING, required - 1
+        )
         self._give_chuck()
         chuck_name = ITEM_DB["mutant_raider_raw_chuck"].name
 
@@ -550,7 +506,7 @@ class TestRenderingACut(EvenniaTest):
         """
         required = RECIPE_REGISTRY[self.fatless_recipe].required_level
         self.char1.skills.set_level(
-            skill_constants.RENDERING_SKILL_KEY, required
+            skill_constants.SKILL_KEY_RENDERING, required
         )
         self._give_chuck()
 
@@ -571,7 +527,7 @@ class TestRenderingACut(EvenniaTest):
         """
         required = RECIPE_REGISTRY[self.fatless_recipe].required_level
         self.char1.skills.set_level(
-            skill_constants.RENDERING_SKILL_KEY, required
+            skill_constants.SKILL_KEY_RENDERING, required
         )
 
         for recipe_key in (

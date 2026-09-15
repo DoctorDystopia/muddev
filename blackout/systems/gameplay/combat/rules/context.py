@@ -12,7 +12,7 @@ import random as _random_module
 from dataclasses import dataclass, field
 
 from systems.gameplay.combat import constants as const
-from systems.gameplay.progression.skills.constants import COMBAT_SKILL_KEYS
+from systems.gameplay.progression.skills.constants import SKILL_KEYS_CATEGORY_COMBAT
 
 from .modifiers import ModifierBag
 
@@ -48,7 +48,7 @@ def read_skill_levels(entity) -> dict:
                  HostileNPC spawned without one is a supported case.
 
     Exit/Returns:
-        dict keyed by every entry in COMBAT_SKILL_KEYS, values integer levels.
+        dict keyed by every entry in SKILL_KEYS_CATEGORY_COMBAT, values integer levels.
         Every key is always present. Missing skills read as
         _MISSING_SKILL_LEVEL rather than being absent.
 
@@ -72,7 +72,7 @@ def read_skill_levels(entity) -> dict:
     skills = getattr(entity, "skills", None)
     levels = {}
 
-    for skill_key in COMBAT_SKILL_KEYS:
+    for skill_key in SKILL_KEYS_CATEGORY_COMBAT:
         if skills is None:
             levels[skill_key] = _MISSING_SKILL_LEVEL
             continue

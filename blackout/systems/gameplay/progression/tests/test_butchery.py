@@ -36,7 +36,7 @@ from world.npc_database import NPC_DB
 
 
 _CORPSE_KEY = "mutant_raider_corpse"
-_BUTCHERY = skill_constants.BUTCHERY_SKILL_KEY
+_BUTCHERY = skill_constants.SKILL_KEY_BUTCHERY
 
 # Far enough past any deadline that a sweep fires every queued entry.
 _LONG_AFTER = 10 ** 12
@@ -618,7 +618,7 @@ class GatheringVerbTableTest(EvenniaTest):
 
 
     def test_every_gathering_skill_key_names_a_real_skill(self):
-        for skill_key in skill_constants.GATHERING_SKILL_KEYS:
+        for skill_key in skill_constants.SKILL_KEYS_CATEGORY_GATHERING:
             with self.subTest(skill=skill_key):
                 self.assertIn(skill_key, SKILL_REGISTRY)
 

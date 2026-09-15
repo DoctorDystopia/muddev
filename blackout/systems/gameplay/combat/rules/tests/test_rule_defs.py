@@ -41,10 +41,10 @@ from systems.gameplay.combat.rules.rule_defs.toy_sword import (
     ToySwordRules,
 )
 from systems.gameplay.progression.skills.constants import (
-    BRAWN_SKILL_KEY,
-    DEFENSE_SKILL_KEY,
-    FORTITUDE_SKILL_KEY,
-    STRIKE_SKILL_KEY,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_STRIKE,
 )
 
 from .rng_stubs import ScriptedRandom
@@ -82,10 +82,10 @@ _ARMOURED_DEFENDER_STATS = {"stab_defense_bonus": 5000}
 def _levels(strike=40, brawn=35, defense=20, fortitude=30) -> dict:
     """Build a skill-level snapshot with every combat axis present."""
     return {
-        STRIKE_SKILL_KEY: strike,
-        BRAWN_SKILL_KEY: brawn,
-        DEFENSE_SKILL_KEY: defense,
-        FORTITUDE_SKILL_KEY: fortitude,
+        SKILL_KEY_STRIKE: strike,
+        SKILL_KEY_BRAWN: brawn,
+        SKILL_KEY_DEFENSE: defense,
+        SKILL_KEY_FORTITUDE: fortitude,
     }
 
 

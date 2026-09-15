@@ -11,7 +11,7 @@ from evennia.utils import logger
 from evennia.utils.utils import lazy_property
 
 from systems.gameplay.combat import constants as combat_constants
-from systems.gameplay.progression.skills.constants import COMBAT_SKILL_KEYS
+from systems.gameplay.progression.skills.constants import SKILL_KEYS_CATEGORY_COMBAT
 from systems.gameplay.progression.skills.stat_block import StatBlockSkills
 from typeclasses.mixins import CombatEntity
 from typeclasses.objects import ObjectParent, Unpocketable
@@ -124,7 +124,7 @@ class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
         self.skills.seed(
             {
                 skill_key: raw_stats[f"{skill_key}_level"]
-                for skill_key in COMBAT_SKILL_KEYS
+                for skill_key in SKILL_KEYS_CATEGORY_COMBAT
                 if f"{skill_key}_level" in raw_stats
             }
         )

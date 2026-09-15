@@ -7,6 +7,7 @@ Description: Implementation of the Brain Farming gathering skill.
 
 
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 
 
@@ -15,9 +16,9 @@ class BrainFarming(BaseSkill):
     """
     Purpose: Manages the mechanics and unlock requirements for Brain Farming.
     """
-    key = "brain_farming"
+    key = skill_constants.SKILL_KEY_BRAIN_FARMING
     name = "Brain Farming"
-    category = "Gathering"
+    category = skill_constants.SKILL_CATEGORY_GATHERING
     description = "Proficiency with harvesting conscious energy from living creatures."
 
 

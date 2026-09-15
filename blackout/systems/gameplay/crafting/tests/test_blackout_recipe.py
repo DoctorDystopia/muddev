@@ -21,8 +21,9 @@ from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaCommandTest
 
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
-from systems.gameplay.crafting.constants import CATEGORY_METALSMITH
+from systems.gameplay.crafting.constants import CRAFT_CATEGORY_METALSMITH
 from systems.gameplay.crafting.recipes.metalsmith_recipes import RustyScrapShortswordRecipe
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from world.item_database import ITEM_DB
 
@@ -55,7 +56,7 @@ class DustConsumingRecipe(BlackoutRecipe):
     """
 
     name = "test dust consumer"
-    category = CATEGORY_METALSMITH
+    category = CRAFT_CATEGORY_METALSMITH
 
     consumable_tags = ["rusty_metal_dust", "rusty_metal_dust"]
     consumable_names = ["rusty metal dust", "rusty metal dust"]
@@ -117,7 +118,7 @@ class TestNonStackableMultiInput(EvenniaCommandTest):
     def setUp(self) -> None:
         super().setUp()
 
-        self.char1.skills.add_xp("metalsmith", 10000)
+        self.char1.skills.add_xp(skill_constants.SKILL_KEY_METALSMITH, 10000)
         self.hammer = ITEM_DB["hammer"].create(location=self.char1)
         self.anvil = create_object(
             "typeclasses.skill_facilities.AnvilFacility",

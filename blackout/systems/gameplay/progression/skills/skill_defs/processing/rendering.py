@@ -46,7 +46,7 @@ class Rendering(BaseSkill):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
-    key = skill_constants.RENDERING_SKILL_KEY
+    key = skill_constants.SKILL_KEY_RENDERING
     name = "Rendering"
-    category = "Processing"
+    category = skill_constants.SKILL_CATEGORY_PROCESSING
     description = "Proficiency with cooking a carcass down into fat and lean meat."

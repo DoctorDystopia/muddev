@@ -24,7 +24,7 @@ from systems.gameplay.combat.auras.aura_handler import (
 from systems.gameplay.combat.auras.aura_defs.righteous_fire import RighteousFire
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
 from systems.core.tick.engine import get_tick_engine, purge_stale_handlers
-from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+from systems.gameplay.progression.skills.constants import SKILL_KEY_FORTITUDE
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npc_combat import HostileNPC
@@ -62,7 +62,7 @@ class TestAuraDamageScaling(EvenniaTest):
         self.aura = AURA_REGISTRY["righteous_fire"]
 
     def _set_fortitude(self, level: int) -> None:
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": level, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": level, "xp": 0}
 
     def test_damage_scales_with_fortitude(self):
         self._set_fortitude(100)
@@ -117,7 +117,7 @@ class TestAuraUnlock(EvenniaTest):
         self.aura = AURA_REGISTRY["righteous_fire"]
 
     def test_refused_below_the_unlock_level(self):
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 1, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 1, "xp": 0}
 
         allowed, reason = self.aura.can_activate(self.char1)
 
@@ -125,7 +125,7 @@ class TestAuraUnlock(EvenniaTest):
         self.assertIn(str(self.aura.unlock_level), reason)
 
     def test_allowed_at_the_unlock_level(self):
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {
             "level": self.aura.unlock_level,
             "xp": 0,
         }
@@ -145,7 +145,7 @@ class TestAuraHandlerTick(EvenniaTest):
         super().setUp()
         self.aura = AURA_REGISTRY["righteous_fire"]
 
-        self.char1.db.skills[FORTITUDE_SKILL_KEY] = {"level": 100, "xp": 0}
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 100, "xp": 0}
 
         self.handler = ensure_aura_handler(self.char1)
         self.handler.activate(self.aura)
@@ -194,11 +194,11 @@ class TestAuraHandlerTick(EvenniaTest):
         self.assertEqual(self.char2.hp, 100 - (2 * expected))
 
     def test_awards_experience_for_the_pulse(self):
-        before = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY)
+        before = self.char1.skills.get_total_xp(SKILL_KEY_FORTITUDE)
 
         self._tick_to_next_pulse()
 
-        after = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY)
+        after = self.char1.skills.get_total_xp(SKILL_KEY_FORTITUDE)
 
         self.assertGreater(after, before)
 
@@ -208,13 +208,13 @@ class TestAuraHandlerTick(EvenniaTest):
         It title-cased the key by hand, which is right for "fortitude" and
         wrong for any key with an underscore in it.
         """
-        before = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY)
+        before = self.char1.skills.get_total_xp(SKILL_KEY_FORTITUDE)
 
         with mock.patch.object(type(self.char1), "msg") as mocked_msg:
             self._tick_to_next_pulse()
 
-        gained = self.char1.skills.get_total_xp(FORTITUDE_SKILL_KEY) - before
-        skill_name = SKILL_REGISTRY[FORTITUDE_SKILL_KEY].name
+        gained = self.char1.skills.get_total_xp(SKILL_KEY_FORTITUDE) - before
+        skill_name = SKILL_REGISTRY[SKILL_KEY_FORTITUDE].name
         sent = [
             strip_ansi(str(call.args[0][0]))
             for call in mocked_msg.call_args_list

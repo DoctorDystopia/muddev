@@ -225,7 +225,7 @@ def _start_level(skill_key: str) -> int:
 
     combat_const = env.combat_constants()
 
-    if skill_key == skill_const.FORTITUDE_SKILL_KEY:
+    if skill_key == skill_const.SKILL_KEY_FORTITUDE:
         return combat_const.FORTITUDE_START_LEVEL
 
     return skill_const.DEFAULT_START_LEVEL

@@ -39,11 +39,11 @@ from world.item_database import ITEM_DB
 
 # Private constant definitions
 
-# The level-0 recipe, used wherever a test needs "a cure" rather than a
+# The starter recipe, used wherever a test needs "a cure" rather than a
 # particular one.
 _CHUCK_RECIPE = "mutant raider cured chuck"
 
-# The level-2 recipe, whose input is a RENDERING output rather than a cut.
+# The level-gated recipe, whose input is a RENDERING output rather than a cut.
 _FATLESS_RECIPE = "mutant raider cured fatless meat"
 
 
@@ -56,8 +56,8 @@ class TestSlotsForLevel(unittest.TestCase):
     """
 
     def test_the_starting_level_gets_a_slot(self):
-        """Zero slots at level 0 would be a deadlock, not a curve."""
-        slots = curing_constants.slots_for_level(0)
+        """Zero slots at the start level would be a deadlock, not a curve."""
+        slots = curing_constants.slots_for_level(skill_constants.DEFAULT_START_LEVEL)
 
         self.assertGreaterEqual(slots, 1)
 
@@ -153,7 +153,7 @@ class CuringTestBase(EvenniaTest):
         return [obj for obj in self.char1.contents if obj.db_key == item_name]
 
     def _set_curing_level(self, level):
-        self.char1.skills.set_level(skill_constants.CURING_SKILL_KEY, level)
+        self.char1.skills.set_level(skill_constants.SKILL_KEY_CURING, level)
 
 
 
@@ -196,14 +196,14 @@ class TestStartingACure(CuringTestBase):
     def test_starting_a_cure_awards_no_xp(self):
         """XP is for the cured meat, and there is none yet."""
         before, _needed, _rest = self.char1.skills.get_xp_level(
-            skill_constants.CURING_SKILL_KEY
+            skill_constants.SKILL_KEY_CURING
         )
         self._give_chuck()
 
         self._start()
 
         after, _needed, _rest = self.char1.skills.get_xp_level(
-            skill_constants.CURING_SKILL_KEY
+            skill_constants.SKILL_KEY_CURING
         )
         self.assertEqual(after, before)
 
@@ -225,7 +225,11 @@ class TestStartingACure(CuringTestBase):
         self.assertEqual(self.char1.curing.slot_used(), 0)
 
     def test_a_level_gated_cure_is_refused_and_costs_nothing(self):
-        """The fatless recipe needs Curing 2; a fresh character has 0."""
+        """One level below the fatless recipe's requirement is refused."""
+        required = RECIPE_REGISTRY[_FATLESS_RECIPE].required_level
+        if required <= skill_constants.MIN_BASE_SKILL_LEVEL:
+            self.skipTest("the fatless cure has no level gate to refuse")
+        self._set_curing_level(required - 1)
         self._give("mutant_raider_fatless_meat")
         meat_name = ITEM_DB["mutant_raider_fatless_meat"].name
 
@@ -292,7 +296,7 @@ class TestSlotLimits(CuringTestBase):
         self.assertEqual(self.char1.curing.slot_used(), 0)
         self.assertTrue(self.char1.curing.has_free_slot())
 
-    def test_level_ten_opens_a_second_slot(self):
+    def test_the_second_threshold_opens_a_second_slot(self):
         second_threshold = curing_constants.CURING_SLOT_LEVELS[1]
         self._set_curing_level(second_threshold)
 
@@ -374,7 +378,7 @@ class TestCollecting(CuringTestBase):
     def test_collecting_pays_the_xp(self):
         recipe_cls = RECIPE_REGISTRY[_CHUCK_RECIPE]
         before, needed, _rest = self.char1.skills.get_xp_level(
-            skill_constants.CURING_SKILL_KEY
+            skill_constants.SKILL_KEY_CURING
         )
         self.assertLess(
             before + recipe_cls.xp_reward,
@@ -389,7 +393,7 @@ class TestCollecting(CuringTestBase):
         self.char1.curing.collect()
 
         after, _needed, _rest = self.char1.skills.get_xp_level(
-            skill_constants.CURING_SKILL_KEY
+            skill_constants.SKILL_KEY_CURING
         )
         self.assertEqual(after - before, recipe_cls.xp_reward)
 

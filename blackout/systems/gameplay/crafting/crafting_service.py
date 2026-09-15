@@ -43,6 +43,7 @@ from systems.interface.statefeed import constants as feed_const
 _MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
 
 
+
 def _iter_candidate_items(caller, include_location):
     """
     Purpose: Yield every object that may satisfy a recipe requirement.
@@ -81,10 +82,12 @@ def _iter_candidate_items(caller, include_location):
         yield from caller.location.contents
 
 
+
 def _has_tag(item, tag_value, tag_category):
     """Return True if item carries tag_value under tag_category."""
     tags = item.tags.get(category=tag_category, return_list=True)
     return tag_value in tags
+
 
 
 def _count_tagged_items(caller, tag_value, tag_category):
@@ -93,6 +96,7 @@ def _count_tagged_items(caller, tag_value, tag_category):
     candidates = _iter_candidate_items(caller, include_location=False)
     matches = [item for item in candidates if _has_tag(item, tag_value, tag_category)]
     return sum(getattr(item, "quantity", 1) for item in matches)
+
 
 
 def _has_tool_available(caller, tag_value):
@@ -104,6 +108,7 @@ def _has_tool_available(caller, tag_value):
             return True
 
     return False
+
 
 
 def get_categories(facility=None):
@@ -130,6 +135,7 @@ def get_categories(facility=None):
     return categories
 
 
+
 def get_recipes_in_category(category, facility=None):
     """Get all recipes belonging to a category, optionally filtered by facility.
 
@@ -148,6 +154,7 @@ def get_recipes_in_category(category, facility=None):
         if getattr(cls, "category", "Uncategorized") == category
         and (allowed is None or category in allowed)
     ]
+
 
 
 def recipe_order(pair):
@@ -169,6 +176,7 @@ def recipe_order(pair):
     _key, recipe_cls = pair
 
     return (recipe_cls.required_skill, recipe_cls.required_level, recipe_cls.name)
+
 
 
 def get_recipes_for_facility(facility):
@@ -198,9 +206,11 @@ def get_recipes_for_facility(facility):
     return matches
 
 
+
 def get_recipe_class(recipe_key):
     """Get the recipe class for a given recipe key, or None if not found."""
     return RECIPE_REGISTRY.get(recipe_key)
+
 
 
 def get_deferred_handler_for_facility(caller, facility):
@@ -240,6 +250,7 @@ def get_deferred_handler_for_facility(caller, facility):
             return handler
 
     return None
+
 
 
 def get_deferred_handlers(caller):
@@ -287,6 +298,7 @@ def get_deferred_handlers(caller):
     return handlers
 
 
+
 def get_recipes_for_skill(skill_key):
     """Get every recipe that unlocks under a given skill.
 
@@ -306,6 +318,7 @@ def get_recipes_for_skill(skill_key):
     matches.sort(key=recipe_order)
 
     return matches
+
 
 
 def get_material_summary(recipe_cls):
@@ -333,6 +346,7 @@ def get_material_summary(recipe_cls):
         parts.append(f"{count}x {mat_name}" if count > 1 else mat_name)
 
     return ", ".join(parts)
+
 
 
 def check_craftable(caller, recipe_key):
@@ -388,6 +402,7 @@ def check_craftable(caller, recipe_key):
     return can_craft, reasons
 
 
+
 def _deferred_capacity_reason(caller, recipe_cls):
     """Why a deferred recipe cannot be started right now, or None.
 
@@ -413,6 +428,7 @@ def _deferred_capacity_reason(caller, recipe_cls):
         return f"No free {recipe_cls.deferred_handler} slot."
 
     return None
+
 
 
 def get_max_craftable(caller, recipe_key):
@@ -469,6 +485,7 @@ def get_max_craftable(caller, recipe_key):
     return max(0, min(max_craftable, MAX_CRAFT_BATCH_SIZE))
 
 
+
 def _deferred_capacity(caller, recipe_cls):
     """How many more of a deferred recipe may be started, or None if immediate.
 
@@ -487,6 +504,7 @@ def _deferred_capacity(caller, recipe_cls):
     remaining = handler.capacity_remaining()
 
     return remaining
+
 
 
 def get_recipe_display_data(caller, recipe_key):
@@ -569,6 +587,7 @@ def get_recipe_display_data(caller, recipe_key):
     }
 
 
+
 def _deliver_output(caller, obj):
     """
     Purpose: Hand one freshly crafted object to the crafter, or to the floor
@@ -633,6 +652,7 @@ def _deliver_output(caller, obj):
     )
 
 
+
 def _publish_inventory(caller):
     """
     Purpose: Push one inventory snapshot once a craft has fully resolved.
@@ -682,6 +702,7 @@ def _publish_inventory(caller):
         feed.emit_inventory(caller)
     except Exception:
         logger.log_trace()
+
 
 
 def perform_craft(caller, recipe_key):
@@ -748,6 +769,7 @@ def perform_craft(caller, recipe_key):
     _publish_inventory(caller)
 
     return result
+
 
 
 def _start_deferred_craft(caller, recipe_cls):

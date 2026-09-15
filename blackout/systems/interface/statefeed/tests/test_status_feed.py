@@ -31,8 +31,11 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.combat import constants as combat_constants
 from systems.gameplay.progression.skills.constants import (
-    COMBAT_SKILL_KEYS,
-    FORTITUDE_SKILL_KEY,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_CUTTING,
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_STRIKE,
+    SKILL_KEYS_CATEGORY_COMBAT,
 )
 from systems.gameplay.progression.skills import logic
 from systems.interface.statefeed import buffer
@@ -48,7 +51,7 @@ from typeclasses.characters import Character as BlackoutCharacter
 # A skill that is deliberately NOT on this channel. Named from the gathering
 # tree rather than invented, so the exclusion is asserted against a skill that
 # really exists and really is left out.
-_NON_COMBAT_SKILL: str = "cutting"
+_NON_COMBAT_SKILL: str = SKILL_KEY_CUTTING
 
 
 # ─── Test cases ──────────────────────────────────────────────────────────────
@@ -100,7 +103,7 @@ class TestStatusShape(_SubscribedCharacterTest):
     def test_every_combat_skill_is_reported(self):
         levels = events._read_levels(self.char1.skills)
 
-        for skill_key in COMBAT_SKILL_KEYS:
+        for skill_key in SKILL_KEYS_CATEGORY_COMBAT:
             with self.subTest(skill=skill_key):
                 self.assertIn(skill_key, levels)
 
@@ -109,7 +112,7 @@ class TestStatusShape(_SubscribedCharacterTest):
         levels = events._read_levels(self.char1.skills)
 
         self.assertNotIn(_NON_COMBAT_SKILL, levels)
-        self.assertEqual(sorted(levels), sorted(COMBAT_SKILL_KEYS))
+        self.assertEqual(sorted(levels), sorted(SKILL_KEYS_CATEGORY_COMBAT))
 
     def test_every_level_is_an_int(self):
         """The client keys on these. A float would arrive as 10.0 and miss."""
@@ -123,11 +126,11 @@ class TestStatusShape(_SubscribedCharacterTest):
         self.assertEqual(events._read_levels(None), {})
 
     def test_the_reported_level_is_the_stored_one(self):
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 42)
 
         levels = events._read_levels(self.char1.skills)
 
-        self.assertEqual(levels[FORTITUDE_SKILL_KEY], 42)
+        self.assertEqual(levels[SKILL_KEY_FORTITUDE], 42)
 
 
 class TestStatusTrigger(_SubscribedCharacterTest):
@@ -135,21 +138,21 @@ class TestStatusTrigger(_SubscribedCharacterTest):
 
     def test_levelling_a_skill_publishes_the_new_level(self):
         """The regression: this channel had no live emitter at all."""
-        before = self.char1.skills.get_level("strike")
+        before = self.char1.skills.get_level(SKILL_KEY_STRIKE)
         needed = logic.calculate_xp_needed(before)
 
-        self.char1.skills.add_xp("strike", needed * 2)
+        self.char1.skills.add_xp(SKILL_KEY_STRIKE, needed * 2)
 
-        after = self.char1.skills.get_level("strike")
+        after = self.char1.skills.get_level(SKILL_KEY_STRIKE)
         self.assertGreater(after, before)
-        self.assertIn(after, [levels["strike"] for levels in self._levels_published()])
+        self.assertIn(after, [levels[SKILL_KEY_STRIKE] for levels in self._levels_published()])
 
     def test_xp_that_does_not_level_publishes_nothing(self):
         """Combat awards XP on every hit; only a LEVEL is worth a send."""
-        needed = logic.calculate_xp_needed(self.char1.skills.get_level("strike"))
+        needed = logic.calculate_xp_needed(self.char1.skills.get_level(SKILL_KEY_STRIKE))
         self.published.clear()
 
-        self.char1.skills.add_xp("strike", max(needed - 1, 0))
+        self.char1.skills.add_xp(SKILL_KEY_STRIKE, max(needed - 1, 0))
 
         self.assertEqual(self._bodies(const.CHANNEL_CHAR_STATUS), [])
 
@@ -157,32 +160,32 @@ class TestStatusTrigger(_SubscribedCharacterTest):
         """set_level is the other write path -- a drain, a builder, the egg."""
         self.published.clear()
 
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 42)
 
-        published = [levels[FORTITUDE_SKILL_KEY] for levels in self._levels_published()]
+        published = [levels[SKILL_KEY_FORTITUDE] for levels in self._levels_published()]
         self.assertIn(42, published)
 
     def test_setting_the_same_level_publishes_nothing(self):
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 42)
         self.published.clear()
 
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 42)
 
         self.assertEqual(self._bodies(const.CHANNEL_CHAR_STATUS), [])
 
     def test_a_drained_level_is_published_too(self):
         """A decrease moves the table exactly as much as an increase does."""
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 42)
         self.published.clear()
 
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 20)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 20)
 
-        published = [levels[FORTITUDE_SKILL_KEY] for levels in self._levels_published()]
+        published = [levels[SKILL_KEY_FORTITUDE] for levels in self._levels_published()]
         self.assertIn(20, published)
 
     def test_the_published_table_agrees_with_the_handler(self):
         """The bug's signature was the two disagreeing. Assert they cannot."""
-        self.char1.skills.set_level("brawn", 33)
+        self.char1.skills.set_level(SKILL_KEY_BRAWN, 33)
 
         last = self._levels_published()[-1]
         for skill_key, level in last.items():
@@ -193,7 +196,7 @@ class TestStatusTrigger(_SubscribedCharacterTest):
         """Refreshed on the same event, once the stale mark is drained."""
         self.published.clear()
 
-        self.char1.skills.set_level("brawn", 33)
+        self.char1.skills.set_level(SKILL_KEY_BRAWN, 33)
         buffer.drain_stale()
 
         self.assertTrue(self._bodies(const.CHANNEL_CHAR_SUMMARY))
@@ -224,7 +227,7 @@ class TestFortitudeOrdering(_SubscribedCharacterTest):
         return 0
 
     def test_the_cap_is_already_updated_when_the_dossier_is_built(self):
-        self.char1.skills.set_level(FORTITUDE_SKILL_KEY, 42)
+        self.char1.skills.set_level(SKILL_KEY_FORTITUDE, 42)
         buffer.drain_stale()
 
         expected = 42 * combat_constants.HP_PER_FORTITUDE_LEVEL

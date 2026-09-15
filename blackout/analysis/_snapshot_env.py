@@ -748,13 +748,13 @@ def _effective_levels(attacker: Combatant, defender: Combatant,
     """
     from systems.gameplay.combat import combat_calc
     from systems.gameplay.progression.skills.constants import (
-        BRAWN_SKILL_KEY,
-        STRIKE_SKILL_KEY,
+        SKILL_KEY_BRAWN,
+        SKILL_KEY_STRIKE,
     )
 
     boost = style.get("weapon_style_level_boost") or {}
-    strike_stance = boost.get(STRIKE_SKILL_KEY, NO_STANCE_BONUS)
-    brawn_stance = boost.get(BRAWN_SKILL_KEY, NO_STANCE_BONUS)
+    strike_stance = boost.get(SKILL_KEY_STRIKE, NO_STANCE_BONUS)
+    brawn_stance = boost.get(SKILL_KEY_BRAWN, NO_STANCE_BONUS)
 
     effective_attack = combat_calc.effective_level(
         attacker.strike_level, stance_bonus=strike_stance
@@ -1123,24 +1123,24 @@ def build_context(attacker: Combatant, style_key: str, defender: Combatant,
     """
     from systems.gameplay.combat.rules.context import ActionContext
     from systems.gameplay.progression.skills.constants import (
-        BRAWN_SKILL_KEY,
-        DEFENSE_SKILL_KEY,
-        FORTITUDE_SKILL_KEY,
-        STRIKE_SKILL_KEY,
+        SKILL_KEY_BRAWN,
+        SKILL_KEY_DEFENSE,
+        SKILL_KEY_FORTITUDE,
+        SKILL_KEY_STRIKE,
     )
 
     style = attacker.profile.combat_styles[style_key]
     attacker_levels = {
-        STRIKE_SKILL_KEY: attacker.strike_level,
-        BRAWN_SKILL_KEY: attacker.brawn_level,
-        DEFENSE_SKILL_KEY: attacker.defense_level,
-        FORTITUDE_SKILL_KEY: attacker.fortitude_level,
+        SKILL_KEY_STRIKE: attacker.strike_level,
+        SKILL_KEY_BRAWN: attacker.brawn_level,
+        SKILL_KEY_DEFENSE: attacker.defense_level,
+        SKILL_KEY_FORTITUDE: attacker.fortitude_level,
     }
     defender_levels = {
-        STRIKE_SKILL_KEY: defender.strike_level,
-        BRAWN_SKILL_KEY: defender.brawn_level,
-        DEFENSE_SKILL_KEY: defender.defense_level,
-        FORTITUDE_SKILL_KEY: defender.fortitude_level,
+        SKILL_KEY_STRIKE: defender.strike_level,
+        SKILL_KEY_BRAWN: defender.brawn_level,
+        SKILL_KEY_DEFENSE: defender.defense_level,
+        SKILL_KEY_FORTITUDE: defender.fortitude_level,
     }
 
     return ActionContext(

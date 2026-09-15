@@ -48,9 +48,9 @@ class Butchery(GatheringSkill):
     Author: Nick Hobar
     Creation date: 09/10/2026
     """
-    key = skill_constants.BUTCHERY_SKILL_KEY
+    key = skill_constants.SKILL_KEY_BUTCHERY
     name = "Butchery"
-    category = "Gathering"
+    category = skill_constants.SKILL_CATEGORY_GATHERING
     description = "Proficiency with breaking a carcass down into usable cuts."
 
     verb = "butcher"

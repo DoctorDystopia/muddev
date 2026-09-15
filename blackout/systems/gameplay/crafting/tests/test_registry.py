@@ -24,9 +24,9 @@ from evennia.contrib.game_systems.crafting.crafting import (
 from systems.gameplay.crafting import crafting_service
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
 from systems.gameplay.crafting.constants import (
-    CATEGORY_FOUNDRY,
-    CATEGORY_METALSMITH,
-    CRAFTING_CATEGORIES,
+    CRAFT_CATEGORY_FOUNDRY,
+    CRAFT_CATEGORY_METALSMITH,
+    CRAFT_CATEGORIES,
 )
 from systems.gameplay.crafting.registry import RECIPE_REGISTRY, _is_registrable_recipe
 
@@ -129,7 +129,7 @@ class TestRecipeDiscovery(unittest.TestCase):
         self.assertNotEqual(defining_module, importing_module)
 
     def test_every_registered_recipe_has_a_real_category(self):
-        """Derived from CRAFTING_CATEGORIES, not a literal pair.
+        """Derived from CRAFT_CATEGORIES, not a literal pair.
 
         BlackoutRecipe.__init_subclass__ already raises at import on a category
         outside that tuple, so what this actually guards is the tuple staying
@@ -140,7 +140,7 @@ class TestRecipeDiscovery(unittest.TestCase):
             with self.subTest(recipe=recipe_name):
                 self.assertIn(
                     recipe_cls.category,
-                    CRAFTING_CATEGORIES,
+                    CRAFT_CATEGORIES,
                     msg=f"{recipe_name} has category {recipe_cls.category!r}",
                 )
 
@@ -160,7 +160,7 @@ class TestServiceUsesRegistry(unittest.TestCase):
         """Asserts the relationship, not a census.
 
         One direction only, deliberately. Every category the service reports
-        must be declared in CRAFTING_CATEGORIES -- the other direction would
+        must be declared in CRAFT_CATEGORIES -- the other direction would
         fail the moment a category is declared ahead of the recipes that fill
         it, which is exactly how Curing and Gastronomy will arrive.
         """
@@ -169,7 +169,7 @@ class TestServiceUsesRegistry(unittest.TestCase):
         self.assertTrue(categories)
         for category in categories:
             with self.subTest(category=category):
-                self.assertIn(category, CRAFTING_CATEGORIES)
+                self.assertIn(category, CRAFT_CATEGORIES)
 
     def test_get_recipe_class_resolves_exactly(self):
         recipe_cls = crafting_service.get_recipe_class("rusty metal dust")
@@ -185,13 +185,13 @@ class TestServiceUsesRegistry(unittest.TestCase):
         self.assertIsNone(crafting_service.get_recipe_class("unknown recipe"))
 
     def test_recipes_in_category_match_the_registry(self):
-        found = crafting_service.get_recipes_in_category(CATEGORY_METALSMITH)
+        found = crafting_service.get_recipes_in_category(CRAFT_CATEGORY_METALSMITH)
         found_names = [key for key, _cls in found]
 
         expected = [
             name
             for name, cls in RECIPE_REGISTRY.items()
-            if cls.category == CATEGORY_METALSMITH
+            if cls.category == CRAFT_CATEGORY_METALSMITH
         ]
         self.assertEqual(sorted(found_names), sorted(expected))
 
@@ -201,27 +201,27 @@ class TestServiceUsesRegistry(unittest.TestCase):
         recipe happens to carry it (a Furnace asking for Metalsmith)."""
 
         class _FakeFacility:
-            allowed_categories = [CATEGORY_FOUNDRY]
+            allowed_categories = [CRAFT_CATEGORY_FOUNDRY]
 
         found = crafting_service.get_recipes_in_category(
-            CATEGORY_METALSMITH, facility=_FakeFacility()
+            CRAFT_CATEGORY_METALSMITH, facility=_FakeFacility()
         )
 
         self.assertEqual(found, [])
 
     def test_recipes_in_category_facility_allows_matching_category(self):
         class _FakeFacility:
-            allowed_categories = [CATEGORY_METALSMITH]
+            allowed_categories = [CRAFT_CATEGORY_METALSMITH]
 
         found = crafting_service.get_recipes_in_category(
-            CATEGORY_METALSMITH, facility=_FakeFacility()
+            CRAFT_CATEGORY_METALSMITH, facility=_FakeFacility()
         )
         found_names = [key for key, _cls in found]
 
         expected = [
             name
             for name, cls in RECIPE_REGISTRY.items()
-            if cls.category == CATEGORY_METALSMITH
+            if cls.category == CRAFT_CATEGORY_METALSMITH
         ]
         self.assertEqual(sorted(found_names), sorted(expected))
 
@@ -230,24 +230,24 @@ class TestServiceUsesRegistry(unittest.TestCase):
         category's recipes, never the other skill's."""
 
         class _FakeFurnace:
-            allowed_categories = [CATEGORY_FOUNDRY]
+            allowed_categories = [CRAFT_CATEGORY_FOUNDRY]
 
         found = crafting_service.get_recipes_for_facility(_FakeFurnace())
         found_categories = {cls.category for _key, cls in found}
 
-        self.assertEqual(found_categories, {CATEGORY_FOUNDRY})
+        self.assertEqual(found_categories, {CRAFT_CATEGORY_FOUNDRY})
 
     def test_recipes_for_facility_spans_multiple_allowed_categories(self):
         """A facility allowing EVERY category sees every recipe.
 
-        allowed_categories is CRAFTING_CATEGORIES rather than the two it used
+        allowed_categories is CRAFT_CATEGORIES rather than the two it used
         to name: the claim is that a facility restricted to nothing and a
         facility allowed everything agree, and naming a subset turned that into
         an accidental census that broke when Rendering landed.
         """
 
         class _FakeMultiTool:
-            allowed_categories = list(CRAFTING_CATEGORIES)
+            allowed_categories = list(CRAFT_CATEGORIES)
 
         found = crafting_service.get_recipes_for_facility(_FakeMultiTool())
         found_names = [key for key, _cls in found]

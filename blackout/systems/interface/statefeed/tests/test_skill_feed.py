@@ -28,6 +28,7 @@ import json
 from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import detail as skill_detail
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.interface.statefeed import constants as feed_const
@@ -131,15 +132,15 @@ class TestRoster(_SkillFeedTest):
 
     def test_progress_and_cumulative_xp_are_separate_fields(self):
         # Deriving one from the other is what once rendered "1154 / 152".
-        self.char1.skills.add_xp("cutting", 40)
-        row = self._row("cutting")
-        current, needed, remaining = self.char1.skills.get_xp_level("cutting")
+        self.char1.skills.add_xp(skill_constants.SKILL_KEY_CUTTING, 40)
+        row = self._row(skill_constants.SKILL_KEY_CUTTING)
+        current, needed, remaining = self.char1.skills.get_xp_level(skill_constants.SKILL_KEY_CUTTING)
 
         self.assertEqual(current, row["current_xp"])
         self.assertEqual(needed, row["needed_xp"])
         self.assertEqual(remaining, row["remaining_xp"])
         self.assertEqual(
-            self.char1.skills.get_total_xp("cutting"), row["total_xp"])
+            self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_CUTTING), row["total_xp"])
         self.assertEqual(row["total_xp"] + remaining, row["next_level_at"])
 
     def test_closest_is_an_empty_dict_rather_than_null(self):
@@ -245,7 +246,7 @@ class TestResolveSkillKey(EvenniaTestCase):
 
     def test_a_unique_prefix_resolves(self):
         # The display name is what the player just read off a screen.
-        self.assertEqual("cutting", skill_detail.resolve_skill_key("cut"))
+        self.assertEqual(skill_constants.SKILL_KEY_CUTTING, skill_detail.resolve_skill_key("cut"))
 
     def test_an_ambiguous_prefix_resolves_to_nothing(self):
         # Two skills starting the same way is a question only the player can

@@ -44,7 +44,7 @@ class Gastronomy(BaseSkill):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
-    key = skill_constants.GASTRONOMY_SKILL_KEY
+    key = skill_constants.SKILL_KEY_GASTRONOMY
     name = "Gastronomy"
-    category = "Production"
+    category = skill_constants.SKILL_CATEGORY_PRODUCTION
     description = "Skill in turning preserved and rendered meat into food worth eating."

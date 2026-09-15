@@ -5,6 +5,7 @@ Creation date: 07/26/2026
 Description: Implementation of the Brawn combat skill (damage axis).
 """
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 
 
@@ -24,7 +25,7 @@ class Brawn(BaseSkill):
     Creation date: 07/26/2026
     """
 
-    key = "brawn"
+    key = skill_constants.SKILL_KEY_BRAWN
     name = "Brawn"
-    category = "Combat"
+    category = skill_constants.SKILL_CATEGORY_COMBAT
     description = "Raw melee power. Determines how hard you hit."

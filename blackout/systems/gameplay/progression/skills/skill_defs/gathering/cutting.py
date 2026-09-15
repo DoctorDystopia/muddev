@@ -44,9 +44,9 @@ class Cutting(GatheringSkill):
     Author: Nick Hobar
     Creation date: 06/02/2026
     """
-    key = skill_constants.CUTTING_SKILL_KEY
+    key = skill_constants.SKILL_KEY_CUTTING
     name = "Cutting"
-    category = "Gathering"
+    category = skill_constants.SKILL_CATEGORY_GATHERING
     description = "Proficiency with harvesting materials from anything cuttable."
 
     verb = "cut"

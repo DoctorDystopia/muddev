@@ -134,7 +134,7 @@ def _read_levels(skills) -> dict:
         channel, not widen this one -- otherwise two channels carry the same
         fact and the client gets to choose which is right.
 
-        Iterates COMBAT_SKILL_KEYS rather than db.skills, so a combat skill
+        Iterates SKILL_KEYS_CATEGORY_COMBAT rather than db.skills, so a combat skill
         added after this character was created reports 0 instead of being
         silently absent from the table -- the same choice get_total_level
         makes for the same reason.
@@ -153,11 +153,11 @@ def _read_levels(skills) -> dict:
     if skills is None:
         return {}
 
-    from systems.gameplay.progression.skills.constants import COMBAT_SKILL_KEYS
+    from systems.gameplay.progression.skills.constants import SKILL_KEYS_CATEGORY_COMBAT
 
     levels = {}
 
-    for skill_key in COMBAT_SKILL_KEYS:
+    for skill_key in SKILL_KEYS_CATEGORY_COMBAT:
         levels[skill_key] = skills.get_level(skill_key)
 
     return levels

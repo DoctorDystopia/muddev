@@ -21,6 +21,7 @@ import unittest
 from evennia.utils.ansi import strip_ansi
 
 from systems.gameplay.combat import combat_msg
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.interface.ui.meters import METER_WIDTH
 
@@ -50,7 +51,7 @@ class TestOutgoingHitCarriesXp(unittest.TestCase):
         self.assertEqual(visible, "You hit Mutant Raider for 3.")
 
     def test_hit_with_xp_appends_the_award_on_one_line(self):
-        awards = [("strike", 12), ("fortitude", 4)]
+        awards = [(skill_constants.SKILL_KEY_STRIKE, 12), (skill_constants.SKILL_KEY_FORTITUDE, 4)]
         xp_text = xp_awards.format_xp_suffix(awards)
 
         rendered = combat_msg.format_outgoing_hit(

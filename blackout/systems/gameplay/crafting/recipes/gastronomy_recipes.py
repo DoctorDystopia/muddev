@@ -31,7 +31,7 @@ Description: Skill category Production - Gastronomy recipe definitions.
 from systems.gameplay.progression.skills import constants as skill_constants
 
 from ..blackout_recipe import BlackoutRecipe
-from ..constants import CATEGORY_GASTRONOMY
+from ..constants import CRAFT_CATEGORY_GASTRONOMY
 
 
 
@@ -62,9 +62,9 @@ class _GastronomyRecipe(BlackoutRecipe):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
-    category = CATEGORY_GASTRONOMY
-    required_skill = skill_constants.GASTRONOMY_SKILL_KEY
-    skill_category = "production"
+    category = CRAFT_CATEGORY_GASTRONOMY
+    required_skill = skill_constants.SKILL_KEY_GASTRONOMY
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
     tool_tags = ["gastro_worktable"]
     tool_names = ["gastro worktable"]

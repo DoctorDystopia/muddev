@@ -45,9 +45,12 @@ character's levels have once the xp is set aside, so a caller that wants "this
 combatant's levels" reads one thing from either implementation.
 """
 
+
+
 from evennia.utils import logger
 
 from . import constants as skill_constants
+
 
 
 # ─── Public constant definitions ────────────────────────────────────────────
@@ -68,6 +71,7 @@ SKILL_LEVELS_ATTR: str = "skill_levels"
 # for both. The shim's 1 was a fabrication chosen to keep a KeyError out of the
 # tick loop, and it hid the missing-Fortitude bug for as long as it existed.
 _ABSENT_SKILL_LEVEL: int = skill_constants.DEFAULT_START_LEVEL
+
 
 
 class StatBlockSkills:
@@ -112,6 +116,7 @@ class StatBlockSkills:
         self.obj = obj
 
 
+
     def _levels(self) -> dict:
         """Return the live level dict, seeding an empty one on first use.
 
@@ -129,9 +134,11 @@ class StatBlockSkills:
         return stored
 
 
+
     def _store(self, levels: dict) -> None:
         """Write the level dict back, so Evennia serialises the change."""
         setattr(self.obj.db, SKILL_LEVELS_ATTR, levels)
+
 
 
     def _clamped(self, level: int) -> int:
@@ -146,6 +153,7 @@ class StatBlockSkills:
             return ceiling
 
         return level
+
 
 
     # ─── SkillSource ────────────────────────────────────────────────────────
@@ -185,6 +193,7 @@ class StatBlockSkills:
         return int(stored)
 
 
+
     def set_level(self, skill_key: str, level: int) -> int:
         """
         Purpose: Set a skill's level directly.
@@ -218,6 +227,7 @@ class StatBlockSkills:
         self._store(levels)
 
         return stored
+
 
 
     def modify_level(self, skill_key: str, delta: int) -> int:
@@ -254,6 +264,7 @@ class StatBlockSkills:
         wanted = current + int(delta)
 
         return self.set_level(skill_key, wanted)
+
 
 
     # ─── Bulk seeding ───────────────────────────────────────────────────────

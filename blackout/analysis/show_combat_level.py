@@ -39,6 +39,7 @@ if _GAME_DIR not in sys.path:
 import matplotlib.pyplot as plt
 
 from analysis import _snapshot_env as env
+from systems.gameplay.progression.skills import constants as skill_const
 
 
 # Public constant definitions
@@ -58,9 +59,14 @@ OSRS_COMBAT_LEVEL_CEILING: int = 126
 # nothing else, the other feeds the branch and nothing else, so together they
 # show how much of a combat level each half of the formula is responsible for.
 BUILD_SHAPES: dict = {
-    "melee maxed": ("fortitude", "defense", "strike", "brawn"),
-    "defense only": ("fortitude", "defense"),
-    "offense only": ("strike", "brawn"),
+    "melee maxed": (
+        skill_const.SKILL_KEY_FORTITUDE,
+        skill_const.SKILL_KEY_DEFENSE,
+        skill_const.SKILL_KEY_STRIKE,
+        skill_const.SKILL_KEY_BRAWN,
+    ),
+    "defense only": (skill_const.SKILL_KEY_FORTITUDE, skill_const.SKILL_KEY_DEFENSE),
+    "offense only": (skill_const.SKILL_KEY_STRIKE, skill_const.SKILL_KEY_BRAWN),
 }
 
 
@@ -205,10 +211,10 @@ def _npc_combat_levels() -> list:
 
     for combatant in npcs.values():
         build = {
-            "strike": combatant.strike_level,
-            "brawn": combatant.brawn_level,
-            "defense": combatant.defense_level,
-            "fortitude": combatant.fortitude_level,
+            skill_const.SKILL_KEY_STRIKE: combatant.strike_level,
+            skill_const.SKILL_KEY_BRAWN: combatant.brawn_level,
+            skill_const.SKILL_KEY_DEFENSE: combatant.defense_level,
+            skill_const.SKILL_KEY_FORTITUDE: combatant.fortitude_level,
         }
         rows.append({
             "name": combatant.name,

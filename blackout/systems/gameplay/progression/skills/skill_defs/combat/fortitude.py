@@ -5,6 +5,7 @@ Creation date: 07/26/2026
 Description: Implementation of the Fortitude combat skill (max HP scaling).
 """
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 
 
@@ -27,7 +28,7 @@ class Fortitude(BaseSkill):
     Creation date: 07/26/2026
     """
 
-    key = "fortitude"
+    key = skill_constants.SKILL_KEY_FORTITUDE
     name = "Fortitude"
-    category = "Combat"
+    category = skill_constants.SKILL_CATEGORY_COMBAT
     description = "Constitution and resilience. Determines maximum hitpoints."

@@ -39,6 +39,8 @@ Description: One skill, described in full -- as the text sheet a telnet player
              module at startup, and it imports nothing at module scope.
 """
 
+
+
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.interface.ui.colors import (
     HIGHLIGHT_COLOR,
@@ -48,6 +50,7 @@ from systems.interface.ui.colors import (
     TITLE_COLOR,
 )
 from systems.interface.ui.meters import build_xp_meter
+
 
 
 # Public constant definitions
@@ -77,6 +80,7 @@ SECTION_CAPACITY = "Capacity Unlocks"
 
 # Printed when a player names something that is not a skill.
 UNKNOWN_SKILL_TEXT = "There is no skill called '{name}'."
+
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -125,6 +129,7 @@ def _recipe_rows(skill_key: str) -> list:
     return rows
 
 
+
 def _gatherable_rows(skill_key: str) -> list:
     """
     Purpose: Build unlock rows for every gathering node this skill unlocks.
@@ -168,6 +173,7 @@ def _gatherable_rows(skill_key: str) -> list:
     return rows
 
 
+
 def _equippable_rows(skill_key: str) -> list:
     """
     Purpose: Build unlock rows for every equippable item this skill unlocks.
@@ -200,6 +206,7 @@ def _equippable_rows(skill_key: str) -> list:
     return rows
 
 
+
 def _aura_rows(skill_key: str) -> list:
     """
     Purpose: Build unlock rows for every ability this skill unlocks.
@@ -230,6 +237,7 @@ def _aura_rows(skill_key: str) -> list:
         rows.append((aura.name, aura.unlock_level, ""))
 
     return rows
+
 
 
 def _capacity_rows(skill_key: str) -> list:
@@ -267,7 +275,7 @@ def _capacity_rows(skill_key: str) -> list:
     from systems.gameplay.curing import constants as curing_constants
     from systems.gameplay.progression.skills import constants as skill_constants
 
-    if skill_key != skill_constants.CURING_SKILL_KEY:
+    if skill_key != skill_constants.SKILL_KEY_CURING:
         return []
 
     rows = []
@@ -281,6 +289,7 @@ def _capacity_rows(skill_key: str) -> list:
         rows.append((f"Curing slot {slot_number}", level, note))
 
     return rows
+
 
 
 # Every skill-gated system, and how to ask it what this skill opens.
@@ -304,6 +313,7 @@ _UNLOCK_SECTIONS: tuple = (
 # nothing to say about the change. A section is still one _UNLOCK_SECTIONS entry
 # plus one builder; this is what keeps that promise true for the guard too.
 SECTION_TITLES: tuple = tuple(title for title, _builder in _UNLOCK_SECTIONS)
+
 
 
 def _section_text(title: str, current_level: int, rows: list) -> str:
@@ -356,6 +366,7 @@ def _section_text(title: str, current_level: int, rows: list) -> str:
         lines.append(line)
 
     return "\n".join(lines)
+
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -418,6 +429,7 @@ def resolve_skill_key(text: str) -> str:
     return ""
 
 
+
 def unlock_sections(skill_key: str) -> list:
     """
     Purpose: Everything one skill opens, section by section.
@@ -451,6 +463,7 @@ def unlock_sections(skill_key: str) -> list:
         sections.append((title, builder(skill_key)))
 
     return sections
+
 
 
 def skill_detail(character: object, skill_key: str) -> dict:
@@ -541,6 +554,7 @@ def skill_detail(character: object, skill_key: str) -> dict:
     return detail
 
 
+
 def command_for(skill_key: str) -> str:
     """
     Purpose: Name the line a player would type to read one skill's sheet.
@@ -575,6 +589,7 @@ def command_for(skill_key: str) -> str:
     command = f"{CmdSkills.key} {skill_key}"
 
     return command
+
 
 
 def render_detail(character: object, skill_key: str) -> str:

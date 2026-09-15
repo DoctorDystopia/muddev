@@ -17,6 +17,7 @@ TRUE about the quest -- its phases, what satisfies them, and what it pays.
 
 from world.item_database import ITEM_DB
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.quests.quests import QuestBlueprint, QuestStep
 from systems.interface.ui.colors import highlight as _hl
@@ -57,9 +58,9 @@ RECIPE_DAGGER = "rusty scrap dagger"
 # What the android is teaching, and what the quest pays out for having
 # learned it.
 REWARD_XP = {
-    "cutting": 150,
-    "foundry": 150,
-    "metalsmith": 100,
+    skill_constants.SKILL_KEY_CUTTING: 150,
+    skill_constants.SKILL_KEY_FOUNDRY: 150,
+    skill_constants.SKILL_KEY_METALSMITH: 100,
 }
 
 # The hammer the android lends the player for the Foundry/Metalsmith lesson.

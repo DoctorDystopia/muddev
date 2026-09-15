@@ -7,6 +7,7 @@ Description: Implementation of the Foundry processing skill.
 
 
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 
 
@@ -19,7 +20,7 @@ class Foundry(BaseSkill):
     system rather than a skill `execute`, so BaseSkill's defaults are
     inherited rather than restated.
     """
-    key = "foundry"
+    key = skill_constants.SKILL_KEY_FOUNDRY
     name = "Foundry"
-    category = "Processing"
+    category = skill_constants.SKILL_CATEGORY_PROCESSING
     description = "Skill in smelting and processing raw gathered materials into usable crafting components."

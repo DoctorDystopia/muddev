@@ -7,7 +7,7 @@ Description: Righteous Fire — a Fortitude-scaled damage aura that burns every
 """
 
 from systems.gameplay.combat import constants as const
-from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+from systems.gameplay.progression.skills.constants import SKILL_KEY_FORTITUDE
 
 from .base_aura import BaseAura
 
@@ -55,6 +55,6 @@ class RighteousFire(BaseAura):
     tick_interval = const.AURA_DEFAULT_TICK_INTERVAL
     damage_pct = RIGHTEOUS_FIRE_DAMAGE_PCT
 
-    scaling_skill = FORTITUDE_SKILL_KEY
-    xp_skill = FORTITUDE_SKILL_KEY
+    scaling_skill = SKILL_KEY_FORTITUDE
+    xp_skill = SKILL_KEY_FORTITUDE
     unlock_level = RIGHTEOUS_FIRE_UNLOCK_LEVEL

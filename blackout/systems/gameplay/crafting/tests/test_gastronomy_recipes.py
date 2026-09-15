@@ -29,9 +29,9 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.crafting import crafting_service
 from systems.gameplay.crafting.constants import (
-    CATEGORY_CURING,
-    CATEGORY_GASTRONOMY,
-    CATEGORY_RENDERING,
+    CRAFT_CATEGORY_CURING,
+    CRAFT_CATEGORY_GASTRONOMY,
+    CRAFT_CATEGORY_RENDERING,
     TOOL_TAG_CATEGORY,
 )
 from systems.gameplay.crafting.registry import RECIPE_REGISTRY
@@ -67,24 +67,6 @@ def _recipes_in(category):
 
 
 
-def _producers_by_output():
-    """item key -> the recipe class that makes it.
-
-    Every output in the game is made by exactly one recipe today, which the
-    per-category uniqueness tests assert separately. Built here rather than
-    hardcoded so a test comparing a meal to its ingredients finds the real
-    producer instead of a name somebody typed.
-    """
-    producers = {
-        recipe_cls.output_item_keys[0]: recipe_cls
-        for _name, recipe_cls in RECIPE_REGISTRY.items()
-        if recipe_cls.output_item_keys
-    }
-
-    return producers
-
-
-
 def _outputs_of(category):
     """The item keys one category produces."""
     keys = {
@@ -100,7 +82,7 @@ class TestGastronomyRecipeShape(unittest.TestCase):
     """What every Gastronomy recipe must be true of."""
 
     def setUp(self):
-        self.recipes = _recipes_in(CATEGORY_GASTRONOMY)
+        self.recipes = _recipes_in(CRAFT_CATEGORY_GASTRONOMY)
 
     def test_the_category_is_populated(self):
         self.assertTrue(
@@ -114,9 +96,8 @@ class TestGastronomyRecipeShape(unittest.TestCase):
             with self.subTest(recipe=name):
                 self.assertEqual(
                     recipe_cls.required_skill,
-                    skill_constants.GASTRONOMY_SKILL_KEY,
+                    skill_constants.SKILL_KEY_GASTRONOMY,
                 )
-                self.assertGreater(recipe_cls.xp_reward, 0)
 
     def test_every_recipe_is_worked_at_the_worktable(self):
         for name, recipe_cls in self.recipes:
@@ -154,7 +135,7 @@ class TestGastronomyRecipeShape(unittest.TestCase):
         nobody wrote, and the "eat to heal" promise would have competition for
         the item.
         """
-        meals = _outputs_of(CATEGORY_GASTRONOMY)
+        meals = _outputs_of(CRAFT_CATEGORY_GASTRONOMY)
         consumed_anywhere = {
             tag
             for _name, recipe_cls in RECIPE_REGISTRY.items()
@@ -175,7 +156,7 @@ class TestTwoDifferentInputs(unittest.TestCase):
     """
 
     def setUp(self):
-        self.recipes = _recipes_in(CATEGORY_GASTRONOMY)
+        self.recipes = _recipes_in(CRAFT_CATEGORY_GASTRONOMY)
 
     def test_every_meal_combines_two_distinct_ingredients(self):
         for name, recipe_cls in self.recipes:
@@ -235,16 +216,16 @@ class TestTheChainLinesUp(unittest.TestCase):
     """
 
     def test_every_ingredient_is_made_by_an_earlier_stage(self):
-        upstream = _outputs_of(CATEGORY_RENDERING) | _outputs_of(CATEGORY_CURING)
+        upstream = _outputs_of(CRAFT_CATEGORY_RENDERING) | _outputs_of(CRAFT_CATEGORY_CURING)
 
-        for name, recipe_cls in _recipes_in(CATEGORY_GASTRONOMY):
+        for name, recipe_cls in _recipes_in(CRAFT_CATEGORY_GASTRONOMY):
             for tag in recipe_cls.consumable_tags:
                 with self.subTest(recipe=name, ingredient=tag):
                     self.assertIn(tag, upstream)
 
     def test_the_steak_is_built_from_rendering_output(self):
         recipe_cls = RECIPE_REGISTRY[_STEAK_RECIPE]
-        rendered = _outputs_of(CATEGORY_RENDERING)
+        rendered = _outputs_of(CRAFT_CATEGORY_RENDERING)
 
         self.assertTrue(set(recipe_cls.consumable_tags) <= rendered)
 
@@ -256,7 +237,7 @@ class TestTheChainLinesUp(unittest.TestCase):
         about a different recipe.
         """
         recipe_cls = RECIPE_REGISTRY[_SANDWICH_RECIPE]
-        cured = _outputs_of(CATEGORY_CURING)
+        cured = _outputs_of(CRAFT_CATEGORY_CURING)
 
         self.assertTrue(set(recipe_cls.consumable_tags) <= cured)
 
@@ -269,7 +250,7 @@ class TestTheChainLinesUp(unittest.TestCase):
         consumer fails here, which is the reminder to either give it one or cut
         it.
         """
-        produced = _outputs_of(CATEGORY_RENDERING) | _outputs_of(CATEGORY_CURING)
+        produced = _outputs_of(CRAFT_CATEGORY_RENDERING) | _outputs_of(CRAFT_CATEGORY_CURING)
         consumed = {
             tag
             for _name, recipe_cls in RECIPE_REGISTRY.items()
@@ -281,68 +262,25 @@ class TestTheChainLinesUp(unittest.TestCase):
 
 
 
-class TestGastronomyLevelLadder(unittest.TestCase):
-    """The spreadsheet's numbers, which nothing but a test can hold."""
+class TestGastronomySpreadsheetRows(unittest.TestCase):
+    """Every recipe in the spreadsheet exists in the game.
 
-    # recipe name -> (required_level, xp_reward), from the Recipes tab.
-    EXPECTED = {
-        "mutant raider steak": (0, 25),
-        "mutant raider cured meat sandwich": (2, 35),
-        "mutant raider prime steak": (10, 45),
-        "mutant raider prime cured meat sandwich": (12, 45),
-    }
+    Level requirements and XP rewards are balance values, so no test asserts
+    them.
+    """
+
+    # Recipe names from the Recipes tab.
+    EXPECTED = (
+        "mutant raider steak",
+        "mutant raider cured meat sandwich",
+        "mutant raider prime steak",
+        "mutant raider prime cured meat sandwich",
+    )
 
     def test_the_spreadsheet_rows_are_all_registered(self):
         for recipe_name in self.EXPECTED:
             with self.subTest(recipe=recipe_name):
                 self.assertIn(recipe_name, RECIPE_REGISTRY)
-
-    def test_each_row_carries_the_level_and_xp_from_the_sheet(self):
-        for recipe_name, (level, xp) in self.EXPECTED.items():
-            recipe_cls = RECIPE_REGISTRY[recipe_name]
-            with self.subTest(recipe=recipe_name):
-                self.assertEqual(recipe_cls.required_level, level)
-                self.assertEqual(recipe_cls.xp_reward, xp)
-
-    def test_a_meal_pays_more_than_either_recipe_that_fed_it(self):
-        """Cooking out-earns the steps that supplied it -- per recipe.
-
-        Compared against the producers of THIS recipe's own inputs, not against
-        the categories at large. The first version of this test took the
-        cheapest meal against the dearest render and failed: the level-0 steak
-        (25) is worth less than the level-12 prime meat render (30). That is not
-        a flaw in the curve, it is two different tiers -- comparing them asks
-        whether an early recipe out-earns a late one, which nothing should
-        promise.
-
-        What the curve does promise is local: whichever meal you cook, it beats
-        either single step that handed you an ingredient, so combining is always
-        worth more than the processing was.
-        """
-        producers = _producers_by_output()
-
-        for name, recipe_cls in _recipes_in(CATEGORY_GASTRONOMY):
-            for tag in recipe_cls.consumable_tags:
-                input_recipe = producers[tag]
-                with self.subTest(recipe=name, ingredient=tag):
-                    self.assertGreater(
-                        recipe_cls.xp_reward, input_recipe.xp_reward
-                    )
-
-    def test_the_prime_tier_gates_above_the_plain_tier(self):
-        plain_ceiling = max(
-            RECIPE_REGISTRY[name].required_level
-            for name in (_STEAK_RECIPE, _SANDWICH_RECIPE)
-        )
-        prime_floor = min(
-            RECIPE_REGISTRY[name].required_level
-            for name in (
-                "mutant raider prime steak",
-                "mutant raider prime cured meat sandwich",
-            )
-        )
-
-        self.assertGreater(prime_floor, plain_ceiling)
 
 
 
@@ -350,15 +288,15 @@ class TestGastronomySkill(unittest.TestCase):
     """The skill the recipes name."""
 
     def test_gastronomy_is_registered(self):
-        self.assertIn(skill_constants.GASTRONOMY_SKILL_KEY, SKILL_REGISTRY)
+        self.assertIn(skill_constants.SKILL_KEY_GASTRONOMY, SKILL_REGISTRY)
 
     def test_gastronomy_is_a_production_skill(self):
-        skill_cls = SKILL_REGISTRY[skill_constants.GASTRONOMY_SKILL_KEY]
+        skill_cls = SKILL_REGISTRY[skill_constants.SKILL_KEY_GASTRONOMY]
 
-        self.assertEqual(skill_cls.category, "Production")
+        self.assertEqual(skill_cls.category, skill_constants.SKILL_CATEGORY_PRODUCTION)
 
     def test_gastronomy_has_no_execute_body(self):
-        skill_cls = SKILL_REGISTRY[skill_constants.GASTRONOMY_SKILL_KEY]
+        skill_cls = SKILL_REGISTRY[skill_constants.SKILL_KEY_GASTRONOMY]
 
         self.assertIs(skill_cls.execute, BaseSkill.execute)
 
@@ -384,14 +322,14 @@ class TestGastroWorktable(EvenniaTest):
         found = crafting_service.get_recipes_for_facility(self.worktable)
         found_names = {name for name, _cls in found}
 
-        expected = {name for name, _cls in _recipes_in(CATEGORY_GASTRONOMY)}
+        expected = {name for name, _cls in _recipes_in(CRAFT_CATEGORY_GASTRONOMY)}
         self.assertEqual(found_names, expected)
 
     def test_the_worktable_offers_nothing_from_another_skill(self):
         found = crafting_service.get_recipes_for_facility(self.worktable)
         categories = {recipe_cls.category for _name, recipe_cls in found}
 
-        self.assertEqual(categories, {CATEGORY_GASTRONOMY})
+        self.assertEqual(categories, {CRAFT_CATEGORY_GASTRONOMY})
 
     def test_the_worktable_has_no_collect_verb(self):
         """Only the curing chamber has a second cmdset.
@@ -513,7 +451,7 @@ class TestCookingAMeal(EvenniaTest):
     def test_cooking_awards_gastronomy_xp(self):
         recipe_cls = RECIPE_REGISTRY[self.recipe_key]
         before, needed, _rest = self.char1.skills.get_xp_level(
-            skill_constants.GASTRONOMY_SKILL_KEY
+            skill_constants.SKILL_KEY_GASTRONOMY
         )
         self.assertLess(
             before + recipe_cls.xp_reward,
@@ -526,7 +464,7 @@ class TestCookingAMeal(EvenniaTest):
         crafting_service.perform_craft(self.char1, self.recipe_key)
 
         after, _needed, _rest = self.char1.skills.get_xp_level(
-            skill_constants.GASTRONOMY_SKILL_KEY
+            skill_constants.SKILL_KEY_GASTRONOMY
         )
         self.assertEqual(after - before, recipe_cls.xp_reward)
 
@@ -562,7 +500,13 @@ class TestCookingAMeal(EvenniaTest):
         self.assertEqual(most, 2)
 
     def test_a_level_gated_meal_is_refused_and_costs_nothing(self):
-        """The sandwich needs Gastronomy 2; a fresh character has 0."""
+        """One level below the sandwich's requirement is refused."""
+        required = RECIPE_REGISTRY[_SANDWICH_RECIPE].required_level
+        if required <= skill_constants.MIN_BASE_SKILL_LEVEL:
+            self.skipTest("the sandwich has no level gate to refuse")
+        self.char1.skills.set_level(
+            skill_constants.SKILL_KEY_GASTRONOMY, required - 1
+        )
         self._give("mutant_raider_cured_chuck")
         self._give("mutant_raider_cured_fatless_meat")
 
@@ -577,7 +521,7 @@ class TestCookingAMeal(EvenniaTest):
     def test_the_sandwich_cooks_once_the_level_is_met(self):
         required = RECIPE_REGISTRY[_SANDWICH_RECIPE].required_level
         self.char1.skills.set_level(
-            skill_constants.GASTRONOMY_SKILL_KEY, required
+            skill_constants.SKILL_KEY_GASTRONOMY, required
         )
         self._give("mutant_raider_cured_chuck")
         self._give("mutant_raider_cured_fatless_meat")

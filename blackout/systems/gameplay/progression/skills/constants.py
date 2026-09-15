@@ -21,57 +21,89 @@ MAX_BASE_SKILL_LEVEL = 127
 
 
 
-# Skill keys referenced by name from code outside the skill_defs tree. Kept
-# here so a rename is a one-line change rather than a grep for string
-# literals, Fortitude in particular is read by the combat layer, the
-# level-up side-effect table, and character creation.
-CUTTING_SKILL_KEY = "cutting"
-BUTCHERY_SKILL_KEY = "butchery"
-BRAIN_FARMING_SKILL_KEY = "brain_farming"
+# ─── Skill categories ───────────────────────────────────────────────────────
+# Each skill class declares one of these as its `category`. The skills pane
+# bands its grid by this value, and the Godot palette colours each band by
+# the same string. A crafting category is a different fact. It lives in
+# systems/gameplay/crafting/constants.py.
+SKILL_CATEGORY_COMBAT = "Combat"
+SKILL_CATEGORY_GATHERING = "Gathering"
+SKILL_CATEGORY_PROCESSING = "Processing"
+SKILL_CATEGORY_PRODUCTION = "Production"
 
-# Processing skills whose recipes name them. A recipe's required_skill is read
-# by BlackoutRecipe.pre_craft and by the skills panel's unlock listing, both of
-# which live outside skill_defs, so the string has the same "named from
-# elsewhere" problem the gathering keys above do.
-#
-# Foundry and Metalsmith predate this block and still spell themselves inline
-# in their recipe modules. That is worth correcting, but correcting it touches
-# shipped recipes for no behavioural gain, so it is left for whoever next has
-# reason to open those files.
-RENDERING_SKILL_KEY = "rendering"
-CURING_SKILL_KEY = "curing"
-
-# Production skills whose recipes name them. Same reasoning as the processing
-# keys above.
-GASTRONOMY_SKILL_KEY = "gastronomy"
-
-# Every skill that works a node in GATHERABLE_REGISTRY. Read by the gathering
-# command set, which builds one verb per entry, and asserted against
-# SKILL_REGISTRY by the gathering tests -- a skill named here with no class
-# behind it would give a node a verb that resolves to nothing.
-GATHERING_SKILL_KEYS = (
-    CUTTING_SKILL_KEY,
-    BUTCHERY_SKILL_KEY,
-    BRAIN_FARMING_SKILL_KEY,
+SKILL_CATEGORIES = (
+    SKILL_CATEGORY_COMBAT,
+    SKILL_CATEGORY_GATHERING,
+    SKILL_CATEGORY_PROCESSING,
+    SKILL_CATEGORY_PRODUCTION,
 )
 
 
 
-FORTITUDE_SKILL_KEY = "fortitude"
+# ─── Skill keys ─────────────────────────────────────────────────────────────
+# The one spelling of each skill key. Each skill class reads its `key` from
+# here. So does every system that names a skill: recipes, gathering nodes,
+# combat maths, equipment gates, and quest rewards. A rename is then a
+# one-line change, not a search for string literals.
 
-# The three combat axes a melee swing resolves against. These are read by the
-# swing pipeline, by the weapon-style level-boost dicts in the combat
-# constants, and by any rules definition that reads a wearer's own stats.
-STRIKE_SKILL_KEY = "strike"
-BRAWN_SKILL_KEY = "brawn"
-DEFENSE_SKILL_KEY = "defense"
+# Combat
+SKILL_KEY_FORTITUDE = "fortitude"
+SKILL_KEY_STRIKE = "strike"
+SKILL_KEY_BRAWN = "brawn"
+SKILL_KEY_DEFENSE = "defense"
+SKILL_KEY_GUNS = "guns"
 
-# Every skill axis an ActionContext snapshots before resolution. Fortitude is in
-# the list because rules definitions read it (the glass cannon amulet keys off
-# the Brawn-over-Fortitude surplus), not because a swing resolves against it.
-COMBAT_SKILL_KEYS = (
-    STRIKE_SKILL_KEY,
-    BRAWN_SKILL_KEY,
-    DEFENSE_SKILL_KEY,
-    FORTITUDE_SKILL_KEY,
+# Gathering
+SKILL_KEY_CUTTING = "cutting"
+SKILL_KEY_BUTCHERY = "butchery"
+SKILL_KEY_BRAIN_FARMING = "brain_farming"
+
+# Processing
+SKILL_KEY_FOUNDRY = "foundry"
+SKILL_KEY_RENDERING = "rendering"
+SKILL_KEY_CURING = "curing"
+
+# Production
+SKILL_KEY_METALSMITH = "metalsmith"
+SKILL_KEY_GUNSMITH = "gunsmith"
+SKILL_KEY_GASTRONOMY = "gastronomy"
+
+
+
+# ─── Skill keys by category ─────────────────────────────────────────────────
+# Each tuple holds every skill that declares that category.
+# progression/tests/test_skill_constants.py compares each tuple with
+# SKILL_REGISTRY, so a tuple cannot drift from the skill classes.
+
+# Every skill axis that an ActionContext snapshots before resolution.
+# Fortitude is in the tuple because rules definitions read it (the glass
+# cannon amulet reads the Brawn-over-Fortitude surplus). A swing does not
+# resolve against it.
+SKILL_KEYS_CATEGORY_COMBAT = (
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_STRIKE,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_GUNS,
+)
+
+# Every skill that works a node in GATHERABLE_REGISTRY. The gathering command
+# set builds one verb for each entry. A key here with no skill class behind it
+# gives a node a verb that resolves to nothing.
+SKILL_KEYS_CATEGORY_GATHERING = (
+    SKILL_KEY_CUTTING,
+    SKILL_KEY_BUTCHERY,
+    SKILL_KEY_BRAIN_FARMING,
+)
+
+SKILL_KEYS_CATEGORY_PROCESSING = (
+    SKILL_KEY_FOUNDRY,
+    SKILL_KEY_RENDERING,
+    SKILL_KEY_CURING,
+)
+
+SKILL_KEYS_CATEGORY_PRODUCTION = (
+    SKILL_KEY_METALSMITH,
+    SKILL_KEY_GUNSMITH,
+    SKILL_KEY_GASTRONOMY,
 )

@@ -7,6 +7,7 @@ Description: Melee combat-level branch -- Strike (accuracy) + Brawn (damage),
 """
 
 from systems.gameplay.combat.combat_level.branch_defs.base_branch import CombatBranch
+from systems.gameplay.progression.skills.constants import SKILL_KEY_BRAWN, SKILL_KEY_STRIKE
 
 
 class MeleeBranch(CombatBranch):
@@ -23,4 +24,4 @@ class MeleeBranch(CombatBranch):
 
     key = "melee"
     name = "Melee"
-    skill_keys = ("strike", "brawn")
+    skill_keys = (SKILL_KEY_STRIKE, SKILL_KEY_BRAWN)

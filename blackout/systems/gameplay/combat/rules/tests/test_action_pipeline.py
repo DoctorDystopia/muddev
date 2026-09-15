@@ -21,10 +21,10 @@ from systems.gameplay.combat.rules.rule_defs.base_rules import (
     BaseActionRules,
 )
 from systems.gameplay.progression.skills.constants import (
-    BRAWN_SKILL_KEY,
-    DEFENSE_SKILL_KEY,
-    FORTITUDE_SKILL_KEY,
-    STRIKE_SKILL_KEY,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_STRIKE,
 )
 
 from .rng_stubs import RecordingRandom, ScriptedRandom
@@ -55,21 +55,21 @@ _DEFENDER_STATS = {
 }
 
 _ATTACKER_LEVELS = {
-    STRIKE_SKILL_KEY: 40,
-    BRAWN_SKILL_KEY: 35,
-    DEFENSE_SKILL_KEY: 20,
-    FORTITUDE_SKILL_KEY: 30,
+    SKILL_KEY_STRIKE: 40,
+    SKILL_KEY_BRAWN: 35,
+    SKILL_KEY_DEFENSE: 20,
+    SKILL_KEY_FORTITUDE: 30,
 }
 
 _DEFENDER_LEVELS = {
-    STRIKE_SKILL_KEY: 15,
-    BRAWN_SKILL_KEY: 15,
-    DEFENSE_SKILL_KEY: 25,
-    FORTITUDE_SKILL_KEY: 22,
+    SKILL_KEY_STRIKE: 15,
+    SKILL_KEY_BRAWN: 15,
+    SKILL_KEY_DEFENSE: 25,
+    SKILL_KEY_FORTITUDE: 22,
 }
 
 # The accurate stance: +3 Strike, nothing else.
-_STANCE_BOOST = {STRIKE_SKILL_KEY: 3}
+_STANCE_BOOST = {SKILL_KEY_STRIKE: 3}
 
 
 def _build_context(rng=None, attacker_rules=(), defender_rules=(),
@@ -101,11 +101,11 @@ def _build_context(rng=None, attacker_rules=(), defender_rules=(),
 def _reference_swing(rng):
     """Run the same swing through combat_calc directly, for comparison."""
     eff_atk = combat_calc.effective_level(
-        _ATTACKER_LEVELS[STRIKE_SKILL_KEY],
-        stance_bonus=_STANCE_BOOST[STRIKE_SKILL_KEY],
+        _ATTACKER_LEVELS[SKILL_KEY_STRIKE],
+        stance_bonus=_STANCE_BOOST[SKILL_KEY_STRIKE],
     )
-    eff_str = combat_calc.effective_level(_ATTACKER_LEVELS[BRAWN_SKILL_KEY])
-    eff_def = combat_calc.effective_level(_DEFENDER_LEVELS[DEFENSE_SKILL_KEY])
+    eff_str = combat_calc.effective_level(_ATTACKER_LEVELS[SKILL_KEY_BRAWN])
+    eff_def = combat_calc.effective_level(_DEFENDER_LEVELS[SKILL_KEY_DEFENSE])
 
     return combat_calc.resolve_melee_swing(
         attacker_eff_atk=eff_atk,
@@ -433,7 +433,7 @@ class TestModifierChannelsReachTheFormula(unittest.TestCase):
 
             def contribute_modifiers(self, context, bag) -> None:
                 levels = context.levels_for(bag)
-                seen[id(bag)] = levels[BRAWN_SKILL_KEY]
+                seen[id(bag)] = levels[SKILL_KEY_BRAWN]
 
         rules = _Reader()
         rules._overridden_seams = frozenset({"contribute_modifiers"})
@@ -444,9 +444,9 @@ class TestModifierChannelsReachTheFormula(unittest.TestCase):
         resolve_action(context)
 
         self.assertEqual(seen[id(context.attacker_bag)],
-                         _ATTACKER_LEVELS[BRAWN_SKILL_KEY])
+                         _ATTACKER_LEVELS[SKILL_KEY_BRAWN])
         self.assertEqual(seen[id(context.defender_bag)],
-                         _DEFENDER_LEVELS[BRAWN_SKILL_KEY])
+                         _DEFENDER_LEVELS[SKILL_KEY_BRAWN])
 
     def test_a_raising_contributor_is_skipped_rather_than_killing_the_action(self):
         class _Broken(BaseActionRules):

@@ -5,6 +5,7 @@ Creation date: 07/26/2026
 Description: Implementation of the Melee combat skill (accuracy axis).
 """
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
 
 
@@ -23,7 +24,7 @@ class Strike(BaseSkill):
     Creation date: 07/26/2026
     """
 
-    key = "strike"
+    key = skill_constants.SKILL_KEY_STRIKE
     name = "Strike"
-    category = "Combat"
-    description = "Proficiency with melee weapons. Determines attack accuracy."
+    category = skill_constants.SKILL_CATEGORY_COMBAT
+    description = "Proficiency with melee weapons. Determines attack accuracy with melee weapons."

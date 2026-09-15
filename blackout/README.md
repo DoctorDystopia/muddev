@@ -787,11 +787,11 @@ Godot client has the same toggle, as a button under Game.
 ```python
 # systems/gameplay/crafting/recipes/my_recipes.py
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
-from systems.gameplay.crafting.constants import CATEGORY_FOUNDRY
+from systems.gameplay.crafting.constants import CRAFT_CATEGORY_FOUNDRY
 
 class MyNewRecipe(BlackoutRecipe):
     name = "My New Recipe"
-    category = CATEGORY_FOUNDRY
+    category = CRAFT_CATEGORY_FOUNDRY
     consumable_tags = ["rusty_metal_chunk"]
     tool_tags = ["hammer"]
     output_item_keys = ["rusty_scrap_metal"]

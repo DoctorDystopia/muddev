@@ -147,7 +147,7 @@ class TestCombatantsMatchTheGame(unittest.TestCase):
                 self.assertIn(style_key, npc.profile.combat_styles)
 
     def test_context_reads_the_fortitude_level_not_hit_points(self):
-        from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+        from systems.gameplay.progression.skills.constants import SKILL_KEY_FORTITUDE
 
         profile = env.unarmed_profile()
         fighter = env.Combatant(
@@ -159,9 +159,9 @@ class TestCombatantsMatchTheGame(unittest.TestCase):
         context = env.build_context(fighter, style_key, fighter,
                                     random.Random(_RNG_SEED))
 
-        self.assertEqual(context.attacker_levels[FORTITUDE_SKILL_KEY],
+        self.assertEqual(context.attacker_levels[SKILL_KEY_FORTITUDE],
                          _DISTINCT_FORTITUDE)
-        self.assertEqual(context.defender_levels[FORTITUDE_SKILL_KEY],
+        self.assertEqual(context.defender_levels[SKILL_KEY_FORTITUDE],
                          _DISTINCT_FORTITUDE)
 
 
@@ -175,10 +175,10 @@ class TestSpawnCombatantMatchesCharacterCreation(EvenniaTest):
         spawned = env.spawn_combatant(env.unarmed_profile())
         levels = read_skill_levels(self.char1)
 
-        self.assertEqual(levels[skill_const.STRIKE_SKILL_KEY], spawned.strike_level)
-        self.assertEqual(levels[skill_const.BRAWN_SKILL_KEY], spawned.brawn_level)
-        self.assertEqual(levels[skill_const.DEFENSE_SKILL_KEY], spawned.defense_level)
-        self.assertEqual(levels[skill_const.FORTITUDE_SKILL_KEY],
+        self.assertEqual(levels[skill_const.SKILL_KEY_STRIKE], spawned.strike_level)
+        self.assertEqual(levels[skill_const.SKILL_KEY_BRAWN], spawned.brawn_level)
+        self.assertEqual(levels[skill_const.SKILL_KEY_DEFENSE], spawned.defense_level)
+        self.assertEqual(levels[skill_const.SKILL_KEY_FORTITUDE],
                          spawned.fortitude_level)
         self.assertEqual(self.char1.max_hp, spawned.max_hp)
 
@@ -202,18 +202,18 @@ class TestXpEconomyUsesThePlanner(unittest.TestCase):
 
     def test_expected_award_averages_misses_and_every_roll(self):
         from systems.gameplay.combat import constants as const
-        from systems.gameplay.progression.skills.constants import FORTITUDE_SKILL_KEY
+        from systems.gameplay.progression.skills.constants import SKILL_KEY_FORTITUDE
 
         metrics = SimpleNamespace(clamped_hit_chance=_HALF_HIT_CHANCE,
                                   max_hit=_SMALL_MAX_HIT)
         style = show_xp_economy._synthetic_style("controlled",
                                                  const.CONTROLLED_XP_SKILLS)
-        rate = const.XP_PER_DAMAGE_BY_SKILL[FORTITUDE_SKILL_KEY]
+        rate = const.XP_PER_DAMAGE_BY_SKILL[SKILL_KEY_FORTITUDE]
         rolls = range(_SMALL_MAX_HIT + 1)
         per_roll = [int(round(rate * damage)) for damage in rolls]
         expected = _HALF_HIT_CHANCE * sum(per_roll) / len(per_roll)
 
-        measured = show_xp_economy._expected_award(style, FORTITUDE_SKILL_KEY,
+        measured = show_xp_economy._expected_award(style, SKILL_KEY_FORTITUDE,
                                                    metrics)
 
         self.assertAlmostEqual(measured, expected)

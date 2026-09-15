@@ -6,14 +6,21 @@ Description: Global tunables for the OSRS-derived Blackout combat engine (0-127 
 """
 
 from systems.core.tick.scheduler import seconds_to_ticks
+from systems.gameplay.progression.skills import constants as skill_constants
+from systems.gameplay.progression.skills.constants import (
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_FORTITUDE,
+    SKILL_KEY_STRIKE,
+)
 
 
 # ─── Skill scaling bounds ────────────────────────────────────────────────────
 # Blackout scales all skills 0..127 (inclusive). OSRS uses 1..99; the formulas
-# are scale-agnostic, so this constant exists purely as documentation and for
-# any UI / cap-check code that wants a single source of truth.
-MIN_BASE_SKILL_LEVEL: int = 0
-MAX_BASE_SKILL_LEVEL: int = 127
+# are scale-agnostic. The skills constants module owns the two bounds. These
+# names give the combat maths and the analysis scripts the same values.
+MIN_BASE_SKILL_LEVEL: int = skill_constants.MIN_BASE_SKILL_LEVEL
+MAX_BASE_SKILL_LEVEL: int = skill_constants.MAX_BASE_SKILL_LEVEL
 
 # ─── Fortitude (HP) seed values ──────────────────────────────────────────────
 # Player characters enter the world with Fortitude forced to this level, and
@@ -106,14 +113,14 @@ MELEE_ATTACK_TYPES: tuple = (
 #   aggressive -> +3 brawn       (Brawn skill)
 #   defensive  -> +3 defense     (Defense skill)
 #   controlled -> +1 to all three
-MELEE_WEAPON_STYLE_LEVEL_BOOST_ACCURATE: dict = {"strike": 3}
-MELEE_WEAPON_STYLE_LEVEL_BOOST_AGGRESSIVE: dict = {"brawn": 3}
+MELEE_WEAPON_STYLE_LEVEL_BOOST_ACCURATE: dict = {SKILL_KEY_STRIKE: 3}
+MELEE_WEAPON_STYLE_LEVEL_BOOST_AGGRESSIVE: dict = {SKILL_KEY_BRAWN: 3}
 MELEE_WEAPON_STYLE_LEVEL_BOOST_CONTROLLED: dict = {
-    "strike": 1,
-    "brawn": 1,
-    "defense": 1,
+    SKILL_KEY_STRIKE: 1,
+    SKILL_KEY_BRAWN: 1,
+    SKILL_KEY_DEFENSE: 1,
 }
-MELEE_WEAPON_STYLE_LEVEL_BOOST_DEFENSIVE: dict = {"defense": 3}
+MELEE_WEAPON_STYLE_LEVEL_BOOST_DEFENSIVE: dict = {SKILL_KEY_DEFENSE: 3}
 
 
 # ─── XP rewards ─────────────────────────────────────────────────────────────
@@ -137,16 +144,21 @@ XP_PER_DAMAGE_FORTITUDE: float = 4.0 / 3.0
 # earns the active style's rate, a skill present earns its own, whichever style
 # named it.
 XP_PER_DAMAGE_BY_SKILL: dict = {
-    "fortitude": XP_PER_DAMAGE_FORTITUDE,
+    SKILL_KEY_FORTITUDE: XP_PER_DAMAGE_FORTITUDE,
 }
 
 # A style's "weapon_style_xp_skill" may name one skill (a plain string) or several (any
 # iterable of skill keys), in which case every named skill receives the full
 # per-skill rate above.
-ACCURATE_XP_SKILLS: tuple = ("strike", "fortitude")
-AGGRESSIVE_XP_SKILLS: tuple = ("brawn", "fortitude")
-CONTROLLED_XP_SKILLS: tuple = ("strike", "brawn", "defense", "fortitude")
-DEFENSIVE_XP_SKILLS: tuple = ("defense", "fortitude")
+ACCURATE_XP_SKILLS: tuple = (SKILL_KEY_STRIKE, SKILL_KEY_FORTITUDE)
+AGGRESSIVE_XP_SKILLS: tuple = (SKILL_KEY_BRAWN, SKILL_KEY_FORTITUDE)
+CONTROLLED_XP_SKILLS: tuple = (
+    SKILL_KEY_STRIKE,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_FORTITUDE,
+)
+DEFENSIVE_XP_SKILLS: tuple = (SKILL_KEY_DEFENSE, SKILL_KEY_FORTITUDE)
 
 
 # ─── Augmentation ───────────────────────
@@ -221,7 +233,7 @@ COMBAT_LEVEL_AUGMENTATION_DIVISOR: int = 2
 # OSRS's Defence + Hitpoints. Augmentation (Blackout's Prayer analog: universal,
 # buff-only, not tied to a style) is handled as its own constant below since
 # it is halved before joining the sum and these two are not.
-COMBAT_LEVEL_BASE_SKILLS: tuple = ("fortitude", "defense")
+COMBAT_LEVEL_BASE_SKILLS: tuple = (SKILL_KEY_FORTITUDE, SKILL_KEY_DEFENSE)
 
 # Augmentation does not exist as a built skill yet (03_Systems/Skills/Combat
 # Skills/Augmentation_Skill.md is still a stub) -- combat_level's skill-level

@@ -19,6 +19,7 @@ Two regressions are guarded here above all others:
 from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.interface.menus import summary_menu
 from systems.interface.summary import constants as const
 from systems.interface.summary import layout, service
@@ -490,15 +491,15 @@ class TestSkillRollups(_SummaryTest):
 
     def test_closest_to_level_up_tracks_awarded_xp(self):
         before = self.char1.skills.closest_to_level_up()
-        self.char1.skills.add_xp("cutting", 1)
+        self.char1.skills.add_xp(skill_constants.SKILL_KEY_CUTTING, 1)
         after = self.char1.skills.closest_to_level_up()
 
         self.assertIsNotNone(before)
-        self.assertEqual("cutting", after["skill_key"])
+        self.assertEqual(skill_constants.SKILL_KEY_CUTTING, after["skill_key"])
 
     def test_combined_xp_rises_when_xp_is_awarded(self):
         before = self.char1.skills.combined_xp()
-        self.char1.skills.add_xp("cutting", 50)
+        self.char1.skills.add_xp(skill_constants.SKILL_KEY_CUTTING, 50)
         after = self.char1.skills.combined_xp()
 
         self.assertEqual(before + 50, after)

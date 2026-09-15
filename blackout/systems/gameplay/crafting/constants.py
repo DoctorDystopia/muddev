@@ -18,11 +18,12 @@ TOOL_TAG_CATEGORY = "crafting_tool"
 # Canonical recipe category names. A recipe's `category` and a facility's
 # `allowed_categories` are matched by exact string equality in
 # crafting_service.get_categories, so both sides MUST import from here.
-CATEGORY_FOUNDRY = "Foundry"
-CATEGORY_METALSMITH = "Metalsmith"
-CATEGORY_RENDERING = "Rendering"
-CATEGORY_CURING = "Curing"
-CATEGORY_GASTRONOMY = "Gastronomy"
+CRAFT_CATEGORY_FOUNDRY = "Foundry"
+CRAFT_CATEGORY_METALSMITH = "Metalsmith"
+CRAFT_CATEGORY_GUNSMITH = "Gunsmith"
+CRAFT_CATEGORY_RENDERING = "Rendering"
+CRAFT_CATEGORY_CURING = "Curing"
+CRAFT_CATEGORY_GASTRONOMY = "Gastronomy"
 
 # Every category the game knows about, for validation and UI ordering.
 #
@@ -31,12 +32,13 @@ CATEGORY_GASTRONOMY = "Gastronomy"
 # tuple is what orders the craft menu's category list. Foundry and Metalsmith
 # are the metal chain; Rendering, Curing and Gastronomy are the food one, in
 # the order a cut of meat passes through them.
-CRAFTING_CATEGORIES = (
-    CATEGORY_FOUNDRY,
-    CATEGORY_METALSMITH,
-    CATEGORY_RENDERING,
-    CATEGORY_CURING,
-    CATEGORY_GASTRONOMY,
+CRAFT_CATEGORIES = (
+    CRAFT_CATEGORY_FOUNDRY,
+    CRAFT_CATEGORY_METALSMITH,
+    CRAFT_CATEGORY_GUNSMITH,
+    CRAFT_CATEGORY_RENDERING,
+    CRAFT_CATEGORY_CURING,
+    CRAFT_CATEGORY_GASTRONOMY,
 )
 
 # Seconds a single craft takes by default. A recipe overrides via its own

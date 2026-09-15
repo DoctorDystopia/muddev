@@ -177,7 +177,7 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         yields=(
             GatherableYield(
                 item_key="rusty_metal_chunk",
-                skill_key=skill_constants.CUTTING_SKILL_KEY,
+                skill_key=skill_constants.SKILL_KEY_CUTTING,
                 required_level=0,
                 xp_reward=10,
             ),
@@ -189,7 +189,7 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         yields=(
             GatherableYield(
                 item_key="metal_chunk",
-                skill_key=skill_constants.CUTTING_SKILL_KEY,
+                skill_key=skill_constants.SKILL_KEY_CUTTING,
                 required_level=10,
                 xp_reward=25,
             ),
@@ -213,23 +213,24 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         yields=(
             GatherableYield(
                 item_key="mutant_raider_raw_chuck",
-                skill_key=skill_constants.BUTCHERY_SKILL_KEY,
+                skill_key=skill_constants.SKILL_KEY_BUTCHERY,
                 required_level=0,
                 xp_reward=25,
-                secondary_xp={skill_constants.CUTTING_SKILL_KEY: 5},
+                secondary_xp={skill_constants.SKILL_KEY_CUTTING: 5},
                 menu_label="chuck",
             ),
             GatherableYield(
                 item_key="mutant_raider_raw_filet",
-                skill_key=skill_constants.BUTCHERY_SKILL_KEY,
+                skill_key=skill_constants.SKILL_KEY_BUTCHERY,
                 required_level=10,
                 xp_reward=45,
-                secondary_xp={skill_constants.CUTTING_SKILL_KEY: 10},
+                secondary_xp={skill_constants.SKILL_KEY_CUTTING: 10},
                 menu_label="filet",
             ),
         ),
     ),
 }
+
 
 
 # Fail at import time if a def points at an item that doesn't exist, rather
@@ -246,6 +247,7 @@ if _missing_items:
     )
 
 
+
 # A node with no yields affords nothing and would serve a client an empty
 # action list while still rendering as a gathering node. Caught here for the
 # same reason the missing-item check is: at import, not at the harvest.
@@ -258,6 +260,7 @@ if _empty_nodes:
     raise ValueError(
         f"GATHERABLE_REGISTRY: no yields declared for: {_empty_nodes}"
     )
+
 
 
 # A menu label is what the client sends back after the `=`, so two cuts of one

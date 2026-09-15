@@ -574,7 +574,7 @@ class CmdCutGatheringNode(CmdGatherFromNode):
     """
     key = "cut"
     aliases = ["chop"]
-    skill_key = skill_constants.CUTTING_SKILL_KEY
+    skill_key = skill_constants.SKILL_KEY_CUTTING
 
 
 
@@ -583,7 +583,7 @@ class CmdButcherGatheringNode(CmdGatherFromNode):
     Purpose: Take a cut of meat off a corpse.
     """
     key = "butcher"
-    skill_key = skill_constants.BUTCHERY_SKILL_KEY
+    skill_key = skill_constants.SKILL_KEY_BUTCHERY
 
 
 

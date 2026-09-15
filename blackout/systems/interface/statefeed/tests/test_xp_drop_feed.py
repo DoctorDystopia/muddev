@@ -33,8 +33,8 @@ from typeclasses.characters import Character as BlackoutCharacter
 # Private constant definitions
 
 # A butcher's award: the primary skill and the secondary it also teaches.
-_PRIMARY = skill_constants.BUTCHERY_SKILL_KEY
-_SECONDARY = skill_constants.CUTTING_SKILL_KEY
+_PRIMARY = skill_constants.SKILL_KEY_BUTCHERY
+_SECONDARY = skill_constants.SKILL_KEY_CUTTING
 _AWARDS = [(_PRIMARY, 25), (_SECONDARY, 5)]
 _KIND = feed_const.MESSAGE_TYPE_GATHERING
 

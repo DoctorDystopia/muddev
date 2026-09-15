@@ -18,6 +18,7 @@ from evennia.utils.test_resources import EvenniaCommandTest
 
 from systems.gameplay.crafting import craft_batch, crafting_service
 from systems.gameplay.crafting.constants import CRAFTING_BUSY_COOLDOWN_KEY, MAX_CRAFT_BATCH_SIZE
+from systems.gameplay.progression.skills import constants as skill_constants
 from world.item_database import ITEM_DB
 
 
@@ -175,7 +176,7 @@ class _SwordRecipeTestCase(EvenniaCommandTest):
     def setUp(self) -> None:
         super().setUp()
 
-        self.char1.skills.add_xp("metalsmith", 10000)
+        self.char1.skills.add_xp(skill_constants.SKILL_KEY_METALSMITH, 10000)
         self.hammer = ITEM_DB["hammer"].create(location=self.char1)
         create_object(
             "typeclasses.skill_facilities.AnvilFacility",

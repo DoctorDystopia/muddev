@@ -27,7 +27,7 @@ from evennia.utils.test_resources import EvenniaTest
 from systems.gameplay.crafting import crafting_service
 from systems.gameplay.crafting.blackout_recipe import BlackoutRecipe
 from systems.gameplay.crafting.constants import (
-    CATEGORY_CURING,
+    CRAFT_CATEGORY_CURING,
     TOOL_TAG_CATEGORY,
 )
 from systems.gameplay.crafting.registry import RECIPE_REGISTRY
@@ -61,7 +61,7 @@ def _curing_recipes():
     matches = [
         (name, recipe_cls)
         for name, recipe_cls in RECIPE_REGISTRY.items()
-        if recipe_cls.category == CATEGORY_CURING
+        if recipe_cls.category == CRAFT_CATEGORY_CURING
     ]
 
     return matches
@@ -110,7 +110,7 @@ class TestEveryCureIsActuallyDeferred(unittest.TestCase):
         producing anything, and the craft menu would look unchanged.
         """
         for name, recipe_cls in RECIPE_REGISTRY.items():
-            if recipe_cls.category == CATEGORY_CURING:
+            if recipe_cls.category == CRAFT_CATEGORY_CURING:
                 continue
             with self.subTest(recipe=name):
                 self.assertIsNone(recipe_cls.deferred_handler)
@@ -135,9 +135,8 @@ class TestCuringRecipeShape(unittest.TestCase):
             with self.subTest(recipe=name):
                 self.assertEqual(
                     recipe_cls.required_skill,
-                    skill_constants.CURING_SKILL_KEY,
+                    skill_constants.SKILL_KEY_CURING,
                 )
-                self.assertGreater(recipe_cls.xp_reward, 0)
 
     def test_every_recipe_takes_real_time(self):
         """A zero duration is an instant craft wearing a Curing label."""
@@ -222,7 +221,7 @@ class TestCuringRecipeShape(unittest.TestCase):
         rendered = {
             recipe_cls.output_item_keys[0]
             for _name, recipe_cls in RECIPE_REGISTRY.items()
-            if recipe_cls.required_skill == skill_constants.RENDERING_SKILL_KEY
+            if recipe_cls.required_skill == skill_constants.SKILL_KEY_RENDERING
         }
         consumed = {
             recipe_cls.consumable_tags[0]
@@ -237,16 +236,16 @@ class TestCuringSkill(unittest.TestCase):
     """The skill the recipes name."""
 
     def test_curing_is_registered(self):
-        self.assertIn(skill_constants.CURING_SKILL_KEY, SKILL_REGISTRY)
+        self.assertIn(skill_constants.SKILL_KEY_CURING, SKILL_REGISTRY)
 
     def test_curing_is_a_processing_skill(self):
-        skill_cls = SKILL_REGISTRY[skill_constants.CURING_SKILL_KEY]
+        skill_cls = SKILL_REGISTRY[skill_constants.SKILL_KEY_CURING]
 
-        self.assertEqual(skill_cls.category, "Processing")
+        self.assertEqual(skill_cls.category, skill_constants.SKILL_CATEGORY_PROCESSING)
 
     def test_curing_has_no_execute_body(self):
         """The timing lives in the handler, not in a skill body."""
-        skill_cls = SKILL_REGISTRY[skill_constants.CURING_SKILL_KEY]
+        skill_cls = SKILL_REGISTRY[skill_constants.SKILL_KEY_CURING]
 
         self.assertIs(skill_cls.execute, BaseSkill.execute)
 
@@ -279,7 +278,7 @@ class TestCuringChamber(EvenniaTest):
         found = crafting_service.get_recipes_for_facility(self.chamber)
         categories = {recipe_cls.category for _name, recipe_cls in found}
 
-        self.assertEqual(categories, {CATEGORY_CURING})
+        self.assertEqual(categories, {CRAFT_CATEGORY_CURING})
 
     def test_the_chamber_keeps_both_craft_and_collect(self):
         """A second cmdset must JOIN the default, not replace it.
@@ -345,7 +344,7 @@ class TestTheCraftMenuRespectsSlots(EvenniaTest):
     def test_craft_all_rises_with_a_second_slot(self):
         second_threshold = curing_constants.CURING_SLOT_LEVELS[1]
         self.char1.skills.set_level(
-            skill_constants.CURING_SKILL_KEY, second_threshold
+            skill_constants.SKILL_KEY_CURING, second_threshold
         )
         self._give_chucks(5)
 

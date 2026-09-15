@@ -45,7 +45,7 @@ class Curing(BaseSkill):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
-    key = skill_constants.CURING_SKILL_KEY
+    key = skill_constants.SKILL_KEY_CURING
     name = "Curing"
-    category = "Processing"
+    category = skill_constants.SKILL_CATEGORY_PROCESSING
     description = "Proficiency with preserving meat so it keeps, and keeps its strength."

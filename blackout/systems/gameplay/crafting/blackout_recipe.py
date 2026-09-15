@@ -16,7 +16,7 @@ from evennia.utils.utils import inherits_from
 
 from .constants import (
     CONSUMABLE_TAG_CATEGORY,
-    CRAFTING_CATEGORIES,
+    CRAFT_CATEGORIES,
     DEFAULT_CRAFT_SECONDS,
     TOOL_TAG_CATEGORY,
 )
@@ -137,10 +137,10 @@ class BlackoutRecipe(CraftingRecipe):
         # allowed_categories against this string exactly, so a typo silently
         # hides every recipe in the category from the craft menu instead of
         # raising anything.
-        if cls.category and cls.category not in CRAFTING_CATEGORIES:
+        if cls.category and cls.category not in CRAFT_CATEGORIES:
             raise ValueError(
                 f"{cls.__name__}: category {cls.category!r} is not one of "
-                f"{CRAFTING_CATEGORIES}. Add it to systems/gameplay/crafting/constants.py."
+                f"{CRAFT_CATEGORIES}. Add it to systems/gameplay/crafting/constants.py."
             )
 
         if cls.output_item_keys:

@@ -14,6 +14,7 @@ from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.interface.menus.npc_dialogues import npc_oasis_lone_android as guide
+from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.progression.skills.logic import calculate_xp_needed
 from systems.gameplay.quests.content import quest_oasis_in_the_wastes
@@ -56,13 +57,14 @@ class OasisBlueprintTests(EvenniaTest):
         )
 
 
-    def test_the_craft_step_gates_on_two_level_zero_recipes(self):
+    def test_the_craft_step_gates_on_two_starter_recipes(self):
         """
         Both must be reachable by a character who arrived with nothing.
 
-        The vault doc says "Rusty Scrap Axe and Sword", but the shortsword is
-        metalsmith level 4 and costs two scrap. A level-0 starter cannot make
-        it, so the dagger stands in.
+        The vault doc says "Rusty Scrap Axe and Sword", but a new character
+        cannot make the shortsword, so the dagger stands in. The check reads
+        the start level, not a literal, because level requirements are
+        balance values.
         """
         from systems.gameplay.crafting.registry import RECIPE_REGISTRY
 
@@ -74,7 +76,9 @@ class OasisBlueprintTests(EvenniaTest):
                 self.assertIn(f"craft:{recipe_name}", step.targets)
 
                 recipe = RECIPE_REGISTRY[recipe_name]
-                self.assertEqual(recipe.required_level, 0)
+                self.assertLessEqual(
+                    recipe.required_level, skill_constants.DEFAULT_START_LEVEL
+                )
 
 
     def test_the_defense_step_names_a_real_hostile(self):
@@ -240,11 +244,11 @@ class BareHandedCuttingTests(EvenniaTest):
     def test_it_still_teaches_normal_xp(self):
         # The bare-hand exemption opens the bootstrap deadlock; it doesn't
         # also make the harvest worthless.
-        before = self.char1.skills.get_total_xp("cutting")
+        before = self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_CUTTING)
 
         self._cut(self.rusty)
 
-        self.assertGreater(self.char1.skills.get_total_xp("cutting"), before)
+        self.assertGreater(self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_CUTTING), before)
 
 
     def test_a_metal_pole_still_demands_an_axe(self):
@@ -474,7 +478,7 @@ class OasisPlaythroughTests(EvenniaTest):
 
     def test_the_closing_conversation_completes_the_quest(self):
         self._advance_to(quest_oasis_in_the_wastes.STEP_RESOLUTION)
-        before = self.char1.skills.get_total_xp("metalsmith")
+        before = self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_METALSMITH)
 
         text, _options = guide.node_step5_resolution(self.char1)
         self.assertIn("Neo Cairo", text)
@@ -482,7 +486,7 @@ class OasisPlaythroughTests(EvenniaTest):
         guide._finish_oasis_quest(self.char1, "")
 
         self.assertTrue(self.char1.quests.is_complete(_QUEST_KEY))
-        self.assertGreater(self.char1.skills.get_total_xp("metalsmith"), before)
+        self.assertGreater(self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_METALSMITH), before)
 
 
     def test_the_conversation_resumes_on_the_right_step(self):

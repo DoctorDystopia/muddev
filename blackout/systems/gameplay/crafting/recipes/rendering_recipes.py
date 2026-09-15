@@ -23,7 +23,7 @@ Description: Skill category Processing - Rendering recipe definitions.
 from systems.gameplay.progression.skills import constants as skill_constants
 
 from ..blackout_recipe import BlackoutRecipe
-from ..constants import CATEGORY_RENDERING
+from ..constants import CRAFT_CATEGORY_RENDERING
 
 
 
@@ -67,9 +67,9 @@ class _RenderingRecipe(BlackoutRecipe):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
-    category = CATEGORY_RENDERING
-    required_skill = skill_constants.RENDERING_SKILL_KEY
-    skill_category = "processing"
+    category = CRAFT_CATEGORY_RENDERING
+    required_skill = skill_constants.SKILL_KEY_RENDERING
+    skill_category = skill_constants.SKILL_CATEGORY_PROCESSING
 
     tool_tags = _COOKER_TOOL_TAGS
     tool_names = _COOKER_TOOL_NAMES

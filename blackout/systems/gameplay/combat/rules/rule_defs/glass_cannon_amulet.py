@@ -8,8 +8,8 @@ Description: Glass cannon amulet — converts surplus Brawn over Defense into
 
 from systems.gameplay.combat import constants as const
 from systems.gameplay.progression.skills.constants import (
-    BRAWN_SKILL_KEY,
-    DEFENSE_SKILL_KEY,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
 )
 
 from .base_rules import BaseActionRules
@@ -71,7 +71,7 @@ class GlassCannonAmuletRules(BaseActionRules):
     def contribute_modifiers(self, context, bag) -> None:
         """Add one bonus Brawn level per whole step of surplus over Defense."""
         levels = context.levels_for(bag)
-        surplus = levels[BRAWN_SKILL_KEY] - levels[DEFENSE_SKILL_KEY]
+        surplus = levels[SKILL_KEY_BRAWN] - levels[SKILL_KEY_DEFENSE]
 
         if surplus < GLASS_CANNON_BRAWN_PER_STEP:
             return

@@ -22,9 +22,9 @@ from __future__ import annotations
 from systems.gameplay.combat import combat_calc
 from systems.gameplay.combat import constants as const
 from systems.gameplay.progression.skills.constants import (
-    BRAWN_SKILL_KEY,
-    DEFENSE_SKILL_KEY,
-    STRIKE_SKILL_KEY,
+    SKILL_KEY_BRAWN,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_STRIKE,
 )
 
 from .. import modifiers
@@ -162,8 +162,8 @@ class BaseActionRules:
 
     def effective_attack_level(self, context) -> int:
         """Return the attacker's effective Strike level for this action."""
-        stance = context.stance_bonus(STRIKE_SKILL_KEY)
-        base_level = context.attacker_levels[STRIKE_SKILL_KEY]
+        stance = context.stance_bonus(SKILL_KEY_STRIKE)
+        base_level = context.attacker_levels[SKILL_KEY_STRIKE]
 
         return modifiers.apply_to_level(
             context.attacker_bag, const.CHANNEL_STRIKE_LEVEL, base_level, stance
@@ -171,8 +171,8 @@ class BaseActionRules:
 
     def effective_strength_level(self, context) -> int:
         """Return the attacker's effective Brawn level for this action."""
-        stance = context.stance_bonus(BRAWN_SKILL_KEY)
-        base_level = context.attacker_levels[BRAWN_SKILL_KEY]
+        stance = context.stance_bonus(SKILL_KEY_BRAWN)
+        base_level = context.attacker_levels[SKILL_KEY_BRAWN]
 
         return modifiers.apply_to_level(
             context.attacker_bag, const.CHANNEL_BRAWN_LEVEL, base_level, stance
@@ -185,7 +185,7 @@ class BaseActionRules:
         stance boost never applies here: the defender is not the one choosing
         a combat style this tick.
         """
-        base_level = context.defender_levels[DEFENSE_SKILL_KEY]
+        base_level = context.defender_levels[SKILL_KEY_DEFENSE]
 
         return modifiers.apply_to_level(
             context.defender_bag, const.CHANNEL_DEFENSE_LEVEL, base_level, 0
