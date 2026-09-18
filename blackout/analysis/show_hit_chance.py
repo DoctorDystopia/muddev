@@ -278,7 +278,7 @@ def _build_structural_surface(levels, stance: int):
 
     for row_index, defense_level in enumerate(levels):
         effective_defense = combat_calc.effective_level(int(defense_level))
-        defense_roll = combat_calc.melee_defense_roll(
+        defense_roll = combat_calc.defense_roll(
             effective_defense, _NEUTRAL_BONUS
         )
 
@@ -286,7 +286,7 @@ def _build_structural_surface(levels, stance: int):
             effective_attack = combat_calc.effective_level(
                 int(strike_level), stance_bonus=stance
             )
-            attack_roll = combat_calc.melee_attack_roll(
+            attack_roll = combat_calc.attack_roll(
                 effective_attack, _NEUTRAL_BONUS
             )
             chance = combat_calc.hit_chance(attack_roll, defense_roll)

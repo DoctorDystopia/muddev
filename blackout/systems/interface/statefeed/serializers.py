@@ -495,7 +495,20 @@ def interact_command(entity, kind: str) -> str:
     if not targeted_verb:
         return ""
 
-    return targeted_verb + " " + str(entity.key)
+    return targeted_verb + " " + _target_token(entity, targeted_verb)
+
+
+def _target_token(entity, verb: str) -> str:
+    """How a command names this entity: its dbref, or its key.
+
+    The dbref is for the verbs that must hit the thing the player clicked.
+    See DBREF_TARGET_VERBS for why a key cannot do that job, and why the
+    answer is a per-verb table rather than a rule about entities.
+    """
+    if verb in const.DBREF_TARGET_VERBS:
+        return const.ENTITY_DBREF_TEMPLATE.format(dbref=entity.id)
+
+    return str(entity.key)
 
 
 def interact_actions(entity, kind: str) -> list:
@@ -560,10 +573,7 @@ def interact_actions(entity, kind: str) -> list:
             continue
 
         seen.add(command)
-        actions.append({
-            "command": command,
-            "label": _action_label(action.get("label", ""), command),
-        })
+        actions.append(_action_row(command, action.get("label", "")))
 
     if actions:
         return actions
@@ -573,7 +583,39 @@ def interact_actions(entity, kind: str) -> list:
     if not primary:
         return []
 
-    return [{"command": primary, "label": _action_label("", primary)}]
+    return [_action_row(primary, "")]
+
+
+def _action_row(command: str, label) -> dict:
+    """One action, as the client reads it.
+
+    Carries `approach` ONLY when the answer is False, which is the rule every
+    optional field on an entity row follows: the common case costs nothing on
+    the wire, and a client that has never heard of the field keeps the
+    behaviour it already had. See SELF_APPROACHING_VERBS for what the field
+    decides and why the server owns it.
+    """
+    row = {
+        "command": command,
+        "label": _action_label(label, command),
+    }
+
+    if _walks_itself(command):
+        row[const.ENTITY_APPROACH_KEY] = False
+
+    return row
+
+
+def _walks_itself(command: str) -> bool:
+    """Whether this command closes its own distance to its target.
+
+    Matched on the VERB, which is the command's first word: the rest of the
+    string is the target's name, and `attack mutant raider` is the same
+    command as `attack scrap hound`.
+    """
+    verb = command.split(" ")[0]
+
+    return verb in const.SELF_APPROACHING_VERBS
 
 
 def _action_label(label, command: str) -> str:
@@ -741,9 +783,16 @@ def serialize_entity(entity, coords=()) -> dict:
         CharItemsPayload sends: the client draws a model for the asset key if
         it has one, and the family's generic mesh if it does not.
 
+        `approach` appears only when it is False, and it says this command
+        closes its own distance -- so the client sends it from wherever it is
+        standing instead of wrapping it in a walk. Absent means walk, which is
+        every other verb in the game. See SELF_APPROACHING_VERBS.
+
         `interact` is the entity's primary verb, exactly as it has always
-        been. `actions` is the FULL list, and appears only when there is more
-        than one -- a corpse can be butchered where it lies or picked up and
+        been. A verb that must hit the thing the player clicked names its
+        target by DBREF rather than by key, because six raiders share one key;
+        see DBREF_TARGET_VERBS. `actions` is the FULL list, and appears only
+        when there is more than one -- a corpse can be butchered where it lies or picked up and
         carried off, and no client should have to choose between those for the
         player. Omitting the single-verb case is not a micro-optimisation: it
         is one duplicated command string per entity on the biggest payload the
@@ -795,6 +844,13 @@ def serialize_entity(entity, coords=()) -> dict:
     # it when the key is absent.
     if len(actions) > 1:
         body["actions"] = actions
+
+    # The primary verb's own answer, mirrored beside `interact` for the same
+    # reason `interact` exists at all: a client that reads only the single
+    # verb must be told everything about it, and the `actions` list is absent
+    # for nearly every entity in the world. Sent only when it is False.
+    if actions and const.ENTITY_APPROACH_KEY in actions[0]:
+        body[const.ENTITY_APPROACH_KEY] = actions[0][const.ENTITY_APPROACH_KEY]
 
     # Sent ONLY by the handful of entities that have something to say, the
     # same rule `actions` and the hp pair above follow. Almost nothing in the

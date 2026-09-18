@@ -26,6 +26,11 @@ STACKABLE_KEY = "credits"
 OTHER_STACKABLE_KEY = "rusty_metal_dust"
 PLAIN_KEY = "rusty_metal_chunk"
 
+# A stackable that DECLARES TAGS, for the copy rule. An arrow carries two in
+# two categories -- the family its bow accepts and its crafting name -- so it
+# fails a copy that drops either one.
+TAGGED_KEY = "rusty_scrap_arrow"
+
 STARTING_UNITS = 10
 INCOMING_UNITS = 4
 PARTIAL_UNITS = 3
@@ -328,6 +333,36 @@ class TestDetachedCopy(_StackingTestBase):
         stacking.detached_copy(source, PARTIAL_UNITS)
 
         self.assertEqual(source.quantity, STARTING_UNITS)
+
+    def test_the_copy_inherits_every_tag(self):
+        """THE TAGS ARE HALF THE ITEM. Nothing in the game reads a family off
+        an attribute: a bow matches its ammunition by tag, a recipe finds its
+        material by tag, and the pane picks a mesh from one. A copy built from
+        attributes alone looked identical on `examine` and could no longer be
+        fired, crafted with, or drawn.
+
+        Stated over the DEF, so a new tag on an item is covered here without
+        an edit."""
+        source = self._stack(STARTING_UNITS, item_key=TAGGED_KEY)
+
+        copy = stacking.detached_copy(source, PARTIAL_UNITS)
+        carried = set(copy.tags.all(return_key_and_category=True))
+
+        for tag in ITEM_DB[TAGGED_KEY].tags:
+            with self.subTest(tag=tag):
+                self.assertIn(tuple(tag), carried)
+
+    def test_a_split_stack_inherits_every_tag(self):
+        """The path that actually makes one: ammunition recovery, a bank
+        withdrawal, a partial deposit."""
+        source = self._stack(STARTING_UNITS, item_key=TAGGED_KEY)
+
+        taken = stacking.split(source, PARTIAL_UNITS)
+        carried = set(taken.tags.all(return_key_and_category=True))
+
+        for tag in ITEM_DB[TAGGED_KEY].tags:
+            with self.subTest(tag=tag):
+                self.assertIn(tuple(tag), carried)
 
 
 class TestSplit(_StackingTestBase):

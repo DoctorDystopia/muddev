@@ -96,8 +96,10 @@ class GatherableDef:
 
         Exit/Returns:
             Returns a list of GatherableYield sorted by required_level
-            ascending, so a caller picking "the best one unlocked" walks it
-            backwards and one picking "the first one" gets the starter cut.
+            ascending. The sort is stable, so yields that share a level keep
+            their declaration order. GatheringSkill._default_yield depends on
+            that order to break a tie, so "the last one" is NOT "the best
+            one" where two yields share the top level.
 
         Module Globals:
             None.
@@ -183,6 +185,7 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
             ),
         ),
     ),
+
     "metal_pole": GatherableDef(
         key="metal_pole",
         node_name="Metal Pole",
@@ -196,6 +199,21 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         ),
     ),
 
+    "copper_pole": GatherableDef(
+        key="copper_pole",
+        node_name="Copper Pole",
+        yields=(
+            GatherableYield(
+                item_key="copper_chunk",
+                skill_key=skill_constants.SKILL_KEY_CUTTING,
+                required_level=20,
+                xp_reward=45,
+            ),
+        ),
+    ),
+
+
+
     # ─── Corpses ──────────────────────────────────────────────────────────
     # A corpse is a node like any other here, which is the point: it is left
     # by NpcDef.corpse_key rather than spawned onto a tile, but everything
@@ -206,6 +224,11 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
     # the skill-tree map is the secondary award. Level 0 gets the chuck, and
     # the filet opens at 10 -- from then on both are offered and the player
     # picks (see GatheringSkill._choose_yield).
+    #
+    # DECLARATION ORDER IS THE DEFAULT. Inside one level, the yield declared
+    # first is what an unasked harvest gives. Each hide is declared AFTER the
+    # cut of its level, so it is available by name and never the default.
+    
     "mutant_raider_corpse": GatherableDef(
         key="mutant_raider_corpse",
         node_name="Mutant Raider corpse",
@@ -220,12 +243,32 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
                 menu_label="chuck",
             ),
             GatherableYield(
+                item_key="mutant_raider_raw_hide",
+                skill_key=skill_constants.SKILL_KEY_BUTCHERY,
+                required_level=0,
+                xp_reward=25,
+                secondary_xp={skill_constants.SKILL_KEY_CUTTING: 5},
+                menu_label="hide",
+            ),
+            GatherableYield(
                 item_key="mutant_raider_raw_filet",
                 skill_key=skill_constants.SKILL_KEY_BUTCHERY,
                 required_level=10,
                 xp_reward=45,
                 secondary_xp={skill_constants.SKILL_KEY_CUTTING: 10},
                 menu_label="filet",
+            ),
+            # The level 10 hide, beside the level 10 cut. Curing turns it
+            # into prime sinew, which is the string the tier 2 bow needs --
+            # so the projectile chain opens at the same level the food chain
+            # does, off the same corpse.
+            GatherableYield(
+                item_key="mutant_raider_prime_hide",
+                skill_key=skill_constants.SKILL_KEY_BUTCHERY,
+                required_level=10,
+                xp_reward=45,
+                secondary_xp={skill_constants.SKILL_KEY_CUTTING: 10},
+                menu_label="prime hide",
             ),
         ),
     ),

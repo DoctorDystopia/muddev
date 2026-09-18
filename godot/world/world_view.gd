@@ -515,7 +515,7 @@ func _act_on(screen_point: Vector2) -> void:
 
 func _act_on_entity(entity: Dictionary) -> void:
 	var command := approach_command(_interaction(entity), entity,
-		_state.current_cell, _state.current_z)
+		_state.current_cell, _state.current_z, walks_there(entity))
 
 	if command.is_empty():
 		return
@@ -598,6 +598,7 @@ static func options_for(entity: Dictionary) -> Array:
 			"command": command,
 			"label": str(action.get("label", "")),
 			"target": target,
+			"approach": walks_there(action),
 		})
 
 	if not rows.is_empty():
@@ -608,7 +609,15 @@ static func options_for(entity: Dictionary) -> Array:
 	if single.is_empty():
 		return []
 
-	return [{"command": single, "label": "", "target": target}]
+	# The fallback row's answer comes off the ENTITY, which is where the
+	# server mirrors the primary verb's -- the same place `interact` itself
+	# comes from.
+	return [{
+		"command": single,
+		"label": "",
+		"target": target,
+		"approach": walks_there(entity),
+	}]
 
 
 ## The whole command the server said this entity affords, or "".
@@ -639,6 +648,26 @@ static func _interaction(entity: Dictionary) -> String:
 	return str(entity.get("interact", ""))
 
 
+## Whether a click on this has to WALK there before the command can act.
+##
+## `source` is either an entity row or one of its `actions` rows: the server
+## mirrors the primary verb's answer onto the entity beside `interact`, so the
+## same key answers for both.
+##
+## TRUE IS THE DEFAULT AND THE COMMON CASE. `cut`, `talk`, `bank` and `get` all
+## act where the player stands, and the server sends the key only to say
+## otherwise. So a payload from a server that has never heard of the field
+## keeps the behaviour this pane has always had.
+##
+## The one verb that answers false today is `attack`, and the reason is the
+## reason this field exists rather than a client-side reach check: how far a
+## weapon carries is a rule, it changes with what the player holds, and a bow
+## reaching seven tiles made the wrap walk an archer onto the raider it was
+## already able to shoot. `CmdAttack` walks by itself when it has to.
+static func walks_there(source: Dictionary) -> bool:
+	return bool(source.get("approach", true))
+
+
 ## The command that acts on `entity` from where the observer stands, or "".
 ##
 ## An entity on the observer's own tile gets `command` verbatim, exactly as
@@ -659,9 +688,14 @@ static func _interaction(entity: Dictionary) -> String:
 ##
 ## Static and public so a test can pin every branch with hand-built payloads.
 static func approach_command(command: String, entity: Dictionary,
-		here: Vector2i, here_z: String) -> String:
+		here: Vector2i, here_z: String, walks := true) -> String:
 	if command.is_empty():
 		return ""
+
+	# A command that closes its own distance is sent from wherever the player
+	# is standing. See [method walks_there].
+	if not walks:
+		return command
 
 	var coords: Variant = entity.get("coords", [])
 
@@ -697,7 +731,8 @@ static func approach_options(options: Array, entity: Dictionary,
 	for option: Dictionary in options:
 		var command := str(option.get("command", ""))
 		var label := str(option.get("label", ""))
-		var sent := approach_command(command, entity, here, here_z)
+		var sent := approach_command(command, entity, here, here_z,
+			walks_there(option))
 
 		if sent != command and label.is_empty():
 			label = command.split(" ")[0]

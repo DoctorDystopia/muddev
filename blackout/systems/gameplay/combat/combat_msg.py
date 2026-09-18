@@ -5,6 +5,8 @@ Creation date: 07/26/2026
 Description: Inline ANSI-tagged combat message builders.
 """
 
+
+
 # ─── Color palette ─────────────────────────────────────────────────────────
 # Sourced from the game-wide palette in systems/interface/ui/colors.py
 #
@@ -38,6 +40,7 @@ from systems.interface.ui.meters import build_hp_meter  # noqa: E402
 from systems.gameplay.combat import constants as const  # noqa: E402
 
 
+
 # ─── Public constant definitions ───────────────────────────────────────────
 
 # Label used when an HP bar is shown to the entity it belongs to.
@@ -53,7 +56,24 @@ DROP_ENTRY_SEPARATOR = ", "
 STAT_KEY_BONUS_SUFFIX = "_bonus"
 
 
+
 # ─── Private helper routines ────────────────────────────────────────────────
+
+def _miss_verb(damage_type, person_key: str) -> str:
+    """Return one wording of the miss verb for a damage type.
+
+    An unknown or absent damage type reads the fallback row rather than
+    raising: this is called from the message layer, on the tick, and a missing
+    row must cost a word and not a fight.
+    """
+    row = const.MISS_VERBS.get(damage_type)
+
+    if row is None:
+        row = const.MISS_VERBS[const.MISS_VERB_FALLBACK_TYPE]
+
+    return row[person_key]
+
+
 
 def _label_for_stat_key(stat_key: str) -> str:
     """Derive a player-facing label from a combat_stat_bonuses key.
@@ -65,6 +85,7 @@ def _label_for_stat_key(stat_key: str) -> str:
     spaced = stripped.replace("_", " ")
 
     return spaced.title()
+
 
 
 # ─── Outgoing perspective (the attacker sees these) ────────────────────────
@@ -108,13 +129,18 @@ def format_outgoing_hit(attacker, target, damage: int, xp_text: str = "") -> str
     return f"{hit_line}{xp_text}"
 
 
-def format_outgoing_miss(attacker, target) -> str:
+
+def format_outgoing_miss(attacker, target, damage_type=None) -> str:
     """
-    Purpose: One-line message describing a missed swing the caller made.
+    Purpose: One-line message describing a missed action the caller made.
 
     Entry:
-        attacker - the attacker (unused, signature parity with format_*_hit).
-        target   - the entity that dodged.
+        attacker    - the attacker (unused, signature parity with
+                      format_*_hit).
+        target      - the entity that dodged.
+        damage_type - the DAMAGE_TYPE_* constant this action deals, which
+                      decides the verb. None reads the fallback row, so a
+                      caller with no context in hand still gets a sentence.
 
     Exit/Returns:
         Gray single-line string.
@@ -123,9 +149,13 @@ def format_outgoing_miss(attacker, target) -> str:
         TAG_MISS read.
         TAG_OUTGOING_NAME read.
         TAG_RESET read.
+        const.MISS_VERBS read through _miss_verb.
 
     Methodology:
         Muted gray tone — a whiff is non-critical feedback.
+
+        The verb comes from the damage type. It was the literal "swing" until
+        09/17/2026, which read as a bug the moment a bow could miss.
 
     Notes/References:
         Research doc §"Combat Logging and ANSI Formatting".
@@ -133,7 +163,59 @@ def format_outgoing_miss(attacker, target) -> str:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    return f"{TAG_MISS}You swing at {TAG_OUTGOING_NAME}{target.key}{TAG_MISS} and miss.{TAG_RESET}"
+    verb = _miss_verb(damage_type, const.MISS_VERB_SELF_KEY)
+
+    return (
+        f"{TAG_MISS}You {verb} {TAG_OUTGOING_NAME}{target.key}"
+        f"{TAG_MISS} and miss.{TAG_RESET}"
+    )
+
+
+
+def format_out_of_reach(target, distance, reach: int) -> str:
+    """
+    Purpose: One-line message refusing an action because the target is too far.
+
+    Entry:
+        target   - the entity out of range.
+        distance - tiles between the two, from reach.tile_distance. None when
+                   the two cannot be compared at all: a different map, a
+                   different Z, or either one off the grid.
+        reach    - how many tiles the attacker covers, from reach.reach_tiles.
+
+    Exit/Returns:
+        Gray single-line string.
+
+    Module Globals:
+        TAG_MISS, TAG_OUTGOING_NAME, TAG_RESET read.
+
+    Methodology:
+        NAMES BOTH NUMBERS. "Out of range" tells a player nothing they can
+        act on -- a player who reads "9 tiles away, your weapon reaches 7"
+        knows to take two steps. The refusal is also the only screen that
+        ever states a weapon's reach.
+
+        A distance of None drops to the shorter line rather than printing
+        "None tiles away". That case is a target on another map or another
+        floor, where no number of steps would help.
+
+    Notes/References:
+        The two numbers come from one module, systems/gameplay/combat/reach.py,
+        so the message cannot quote a reach the check did not use.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    name = f"{TAG_OUTGOING_NAME}{target.key}{TAG_MISS}"
+
+    if distance is None:
+        return f"{TAG_MISS}You cannot reach {name} from here.{TAG_RESET}"
+
+    return (
+        f"{TAG_MISS}{name} is {distance} tiles away. "
+        f"You reach {reach}.{TAG_RESET}"
+    )
+
 
 
 # ─── Incoming perspective (the defender sees these) ─────────────────────────
@@ -168,13 +250,16 @@ def format_incoming_hit(attacker, target, damage: int) -> str:
     return f"{TAG_INCOMING}{TAG_OUTGOING_NAME}{attacker.key}{TAG_INCOMING} hits you for {damage}.{TAG_RESET}"
 
 
-def format_incoming_miss(attacker, target) -> str:
+
+def format_incoming_miss(attacker, target, damage_type=None) -> str:
     """
-    Purpose: One-line message describing an incoming swing that missed.
+    Purpose: One-line message describing an incoming action that missed.
 
     Entry:
-        attacker - the entity whose swing failed to land.
-        target   - the would-be victim.
+        attacker    - the entity whose action failed to land.
+        target      - the would-be victim.
+        damage_type - the DAMAGE_TYPE_* constant this action deals, which
+                      decides the verb. None reads the fallback row.
 
     Exit/Returns:
         Gray single-line string.
@@ -183,10 +268,15 @@ def format_incoming_miss(attacker, target) -> str:
         TAG_MISS read.
         TAG_OUTGOING_NAME read.
         TAG_RESET read.
+        const.MISS_VERBS read through _miss_verb.
 
     Methodology:
         Same gray fallback as the outgoing miss; a dodge is a non-critical
         event for the defender too.
+
+        Reads the OTHER-person wording of the same row the attacker's line
+        reads. One table, two persons, so the two sides of one miss cannot
+        name two different actions.
 
     Notes/References:
         Research doc §"Combat Logging and ANSI Formatting".
@@ -194,7 +284,13 @@ def format_incoming_miss(attacker, target) -> str:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    return f"{TAG_MISS}{TAG_OUTGOING_NAME}{attacker.key}{TAG_MISS} swings at you and misses.{TAG_RESET}"
+    verb = _miss_verb(damage_type, const.MISS_VERB_OTHER_KEY)
+
+    return (
+        f"{TAG_MISS}{TAG_OUTGOING_NAME}{attacker.key}{TAG_MISS} {verb} you "
+        f"and misses.{TAG_RESET}"
+    )
+
 
 
 # ─── Public room broadcasts ─────────────────────────────────────────────────

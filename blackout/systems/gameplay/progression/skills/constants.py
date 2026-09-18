@@ -52,6 +52,7 @@ SKILL_KEY_STRIKE = "strike"
 SKILL_KEY_BRAWN = "brawn"
 SKILL_KEY_DEFENSE = "defense"
 SKILL_KEY_GUNS = "guns"
+SKILL_KEY_BALLISTICS = "ballistics"
 
 # Gathering
 SKILL_KEY_CUTTING = "cutting"
@@ -85,6 +86,7 @@ SKILL_KEYS_CATEGORY_COMBAT = (
     SKILL_KEY_BRAWN,
     SKILL_KEY_DEFENSE,
     SKILL_KEY_GUNS,
+    SKILL_KEY_BALLISTICS,
 )
 
 # Every skill that works a node in GATHERABLE_REGISTRY. The gathering command

@@ -66,16 +66,23 @@ def effective_level(
 
 # ─── Max hit ───────────────────────────────────────────────────
 
-def max_melee_hit(eff_str: int, equip_str_bonus: int) -> int:
+def max_hit(eff_str: int, equip_str_bonus: int) -> int:
     """
-    Purpose: Compute the maximum melee damage for one swing.
+    Purpose: Compute the maximum damage for one action, melee or projectile.
+
+    NAMED GENERICALLY BECAUSE IT ALWAYS WAS. Melee and projectile share one
+    formula and differ only in what feeds it: melee passes the Brawn level
+    and melee_strength_bonus, projectile passes the Ballistics level and
+    projectile_strength_bonus. The old name `max_melee_hit` described the first
+    caller, not the routine.
 
     Entry:
-        eff_str          - Effective Strength level (output of effective_level
-                           with the aggressive/controlled weapon style bonus applied
-                           to the melee strength stat).
+        eff_str          - Effective damage level (output of effective_level
+                           on the Brawn axis for melee, or the Ballistics
+                           axis for projectile, with the style bonus applied).
         equip_str_bonus  - the cumulative B_equip_str integer from all
-                           equipped gear (weapon + armor + jewellery).
+                           equipped gear (weapon + armor + jewellery), or
+                           from the ammunition for a projectile shot.
 
     Exit/Returns:
         Integer max hit. The damage roll is uniform on [0, max_hit] inclusive.
@@ -99,13 +106,18 @@ def max_melee_hit(eff_str: int, equip_str_bonus: int) -> int:
 
 # ─── Attack and defense rolls ──────────────────────────────
 
-def melee_attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
+def attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
     """
     Purpose: Compute the attacker's maximum attack roll for hit resolution.
 
+    Melee and projectile share this routine. Only the inputs differ: melee
+    passes the Strike level and a stab/slash/crush bonus, projectile passes the
+    Guns level and a light/standard/heavy bonus.
+
     Entry:
-        eff_atk         - Effective Strike level (effective_level output
-                          on the strike skill axis).
+        eff_atk         - Effective accuracy level (effective_level output
+                          on the Strike axis for melee, or the Guns axis for
+                          projectile).
         equip_atk_bonus - cumulative attack bonus for the active attack style
                           from the equipped weapon.
 
@@ -126,7 +138,7 @@ def melee_attack_roll(eff_atk: int, equip_atk_bonus: int) -> int:
     return eff_atk * (equip_atk_bonus + combat_constants.MAX_HIT_K)
 
 
-def melee_defense_roll(eff_def: int, equip_def_bonus: int) -> int:
+def defense_roll(eff_def: int, equip_def_bonus: int) -> int:
     """
     Purpose: Compute the defender's maximum defense roll for hit resolution.
 
@@ -135,7 +147,8 @@ def melee_defense_roll(eff_def: int, equip_def_bonus: int) -> int:
                           the defense axis; NPC combat_stats.defense_level for
                           non-Player combatants).
         equip_def_bonus - cumulative defense bonus for the active attack
-                          style's damage type (slash/stab/crush) from armor.
+                          style's type (stab/slash/crush for melee,
+                          light/standard/heavy for projectile) from armor.
 
     Exit/Returns:
         Integer R_def.
@@ -293,23 +306,99 @@ def resolve_melee_swing(
         None (delegates to other module functions).
 
     Methodology:
-        1. Compute R_atk and R_def via melee_attack_roll / melee_defense_roll.
+        1. Compute R_atk and R_def via attack_roll / defense_roll.
         2. Compute hit_prob via hit_chance.
         3. Roll against hit_prob; if miss, return damage=0.
-        4. Compute max_melee_hit and roll uniform damage.
+        4. Compute max_hit and roll uniform damage.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
     source = rng if rng is not None else _random_module
 
-    r_atk = melee_attack_roll(attacker_eff_atk, attacker_equip_atk)
-    r_def = melee_defense_roll(defender_eff_def, defender_equip_def)
+    r_atk = attack_roll(attacker_eff_atk, attacker_equip_atk)
+    r_def = defense_roll(defender_eff_def, defender_equip_def)
     chance = hit_chance(r_atk, r_def)
 
     if source.random() >= chance:
         return {"hit": False, "damage": 0, "hit_prob": chance}
 
-    dmg = roll_damage(max_melee_hit(attacker_eff_str, attacker_equip_str), source)
+    dmg = roll_damage(max_hit(attacker_eff_str, attacker_equip_str), source)
+
+    return {"hit": True, "damage": dmg, "hit_prob": chance}
+
+
+def resolve_projectile_shot(
+    attacker_eff_guns: int,
+    attacker_equip_atk: int,
+    attacker_eff_ballistics: int,
+    attacker_equip_projectile_str: int,
+    defender_eff_def: int,
+    defender_equip_def: int,
+    rng: Optional[_random_module.Random] = None,
+) -> dict:
+    """
+    Purpose: For projectile combat. Resolve one shot end-to-end. The reference
+    implementation the projectile action rules must reproduce, exactly as
+    resolve_melee_swing is for melee.
+
+    Entry:
+        attacker_eff_guns       - effective_level on the Guns skill axis
+                                  (boosted per the active style's
+                                  weapon_style_level_boost).
+        attacker_equip_atk      - combat_stat_bonuses[attack_type +
+                                  "_attack_bonus"], where attack_type is one
+                                  of light / standard / heavy.
+        attacker_eff_ballistics - effective_level on the Ballistics skill
+                                  axis (boosted per the same style).
+        attacker_equip_projectile_str - combat_stat_bonuses["projectile_strength_bonus"].
+                                  Carried by the AMMUNITION, not by the bow.
+        defender_eff_def        - effective_level on the Defense skill axis
+                                  (or NPC's combat_stats.defense_level).
+        defender_equip_def      - defender's combat_stat_bonuses for the
+                                  matching projectile defense key, e.g.
+                                  "standard_defense_bonus".
+        rng                     - optional random.Random for tests.
+
+    Exit/Returns:
+        dict with keys:
+            hit       - bool, True iff the accuracy roll succeeded.
+            damage    - int, 0 on miss OR on a successful accuracy roll that
+                        then rolled 0.
+            hit_prob  - float, the probability the accuracy roll used.
+
+    Module Globals:
+        None (delegates to other module functions).
+
+    Methodology:
+        Identical to resolve_melee_swing, because OSRS resolves a shot with
+        the same three formulas a swing uses. The ONLY divergences are which
+        skill feeds accuracy (Guns, not Strike), which skill feeds damage
+        (Ballistics, not Brawn), and which equipment key each reads. The
+        defense roll is the defender's Defense level either way -- OSRS has
+        no separate projectile-defence skill and neither does Blackout.
+
+        Two draws, accuracy first, in the same order as the melee reference.
+        A seeded rng therefore produces comparable sequences across the two.
+
+    Notes/References:
+        The strength bonus comes off the AMMUNITION. That is the OSRS rule
+        and it is what makes an arrow an upgrade path of its own rather than
+        a consumable with no numbers on it.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    source = rng if rng is not None else _random_module
+
+    r_atk = attack_roll(attacker_eff_guns, attacker_equip_atk)
+    r_def = defense_roll(defender_eff_def, defender_equip_def)
+    chance = hit_chance(r_atk, r_def)
+
+    if source.random() >= chance:
+        return {"hit": False, "damage": 0, "hit_prob": chance}
+
+    ceiling = max_hit(attacker_eff_ballistics, attacker_equip_projectile_str)
+    dmg = roll_damage(ceiling, source)
 
     return {"hit": True, "damage": dmg, "hit_prob": chance}

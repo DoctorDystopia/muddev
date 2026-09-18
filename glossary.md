@@ -44,3 +44,52 @@ the name.
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
 server. A pane is a region of the client screen. A Godot node class such as
 `PanelContainer` is an identifier, so this rule does not apply to it.
+
+## Skills and crafting
+
+The skill framework in the Obsidian vault
+(`03_Systems/Skills/Skill_Framework.md`) is the source of these nouns. It says
+what each item means and which rule uses it.
+
+| Use | For | Not |
+|---|---|---|
+| skill cycle | the loop Gathering → Processing → Production → Combat and Utility → Gathering | pipeline, skill tree, chain |
+| category | the group a skill belongs to, for example Processing | skill type, tier, branch |
+| stage | the position of an item in the skill cycle | tier, level, grade |
+| world resource | an item that a Gathering skill takes from a node | raw material, raw resource |
+| crafting component | an item that a Processing skill makes, and that another recipe consumes | intermediate material, refined material |
+| finished product | an item that a Production skill makes, and that no recipe consumes | finished item, finished gear, end product |
+| forward pass | a recipe that takes inputs from the previous stage | normal recipe |
+| same-stage pass | a Processing recipe that takes a crafting component and makes another one | treatment, second pass, sideways recipe |
+| placement | an action that consumes items and makes a gathering node | planting, seeding |
+| secondary XP | the smaller XP award that a second skill of the same category gets | bonus XP, synergy XP |
+
+The tag `crafting_material` and the field `consumable_tags` are identifiers.
+Write them as the code does. In prose, the item they hold is a crafting
+component or a world resource.
+
+## Combat
+
+DESIGN-0009 named these on 09/17/2026. The important row is the first one.
+"Ranged" is the OSRS skill name, and the code uses "projectile" for every
+Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
+`DAMAGE_TYPE_PROJECTILE`. Write the noun the same way in prose.
+
+| Use | For | Not |
+|---|---|---|
+| projectile | a shot that travels to a tile away from the shooter | ranged, missile, distance attack |
+| projectile weapon | a weapon that fires ammunition, for example a shortbow | ranged weapon, gun, bow class |
+| ammunition | what a projectile weapon spends per shot | ammo, projectiles, arrows |
+| family | the group that matches an ammunition item to a weapon | ammo type, calibre |
+| reach | how many tiles an attacker covers, from `max_range` plus the style | range, distance, radius |
+| combat axes | the table naming which skills an action resolves against | skill mapping, stat map |
+| combat style | one entry in a weapon's `combat_styles` table, for example snipe | stance, attack mode |
+| weapon style | the manner a style fights in: accurate, aggressive, defensive, controlled | style class |
+| attack type | the bonus a style reads: stab, slash, crush, light, standard, heavy | damage class |
+| damage type | what `at_damage` is told the hit was, for example projectile | attack type |
+| grace | the ticks an attacker holds after its target leaves reach | grace period, timeout |
+| leash | the tiles a chasing NPC follows before it returns | tether, aggro range |
+| recovery | the chance a spent projectile drops instead of breaking | salvage, refund |
+
+Guns and Ballistics are skill names, so they are identifiers. Guns decides
+whether a shot lands. Ballistics decides how hard it lands.

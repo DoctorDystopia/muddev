@@ -11,8 +11,17 @@ never messages, and never mutates handler state. That keeps every behaviour
 callable directly from a test with no tick engine running.
 """
 
-from .constants import AI_BEHAVIOR_AGGRESSIVE_MELEE, LAST_ATTACKER_ID_ATTR
+
+
+from .constants import (
+    AI_BEHAVIOR_AGGRESSIVE_MELEE,
+    AI_BEHAVIOR_CHASING_MELEE,
+    LAST_ATTACKER_ID_ATTR,
+    LEASH_DISTANCE_TILES,
+    LEASH_ORIGIN_ATTR,
+)
 from .registry import register_behavior
+
 
 
 def _last_attacker(npc):
@@ -59,6 +68,7 @@ def _last_attacker(npc):
     return attacker
 
 
+
 def _can_be_fought(npc, target) -> bool:
     """
     Purpose: Decide whether `target` is a legal thing for `npc` to swing at.
@@ -103,6 +113,7 @@ def _can_be_fought(npc, target) -> bool:
         return False
 
     return True
+
 
 
 @register_behavior(AI_BEHAVIOR_AGGRESSIVE_MELEE)
@@ -156,3 +167,161 @@ def aggressive_melee(handler):
     action = {"kind": "attack", "target": target}
 
     return action
+
+
+
+def _leash_origin(npc):
+    """The tile this NPC is leashed to, recording it on the first call.
+
+    Recorded lazily, when a chase starts, rather than stamped at spawn. An
+    NPC that has never chased anything needs no leash, and "where I was when
+    this began" is the tile a chase should return to -- which is not
+    necessarily where the spawner put it.
+    """
+    origin = getattr(npc.db, LEASH_ORIGIN_ATTR, None)
+
+    if origin is not None and getattr(origin, "pk", None) is not None:
+        return origin
+
+    room = npc.location
+
+    if room is None:
+        return None
+
+    setattr(npc.db, LEASH_ORIGIN_ATTR, room)
+
+    return room
+
+
+
+def _release_leash(npc) -> None:
+    """Forget the chase origin. The next chase records a new one."""
+    setattr(npc.db, LEASH_ORIGIN_ATTR, None)
+
+
+
+def _beyond_leash(npc, target) -> bool:
+    """Whether the target has drawn this NPC past its leash.
+
+    Measured from the LEASH ORIGIN to the target, not from the NPC to the
+    target. Measuring from the NPC would make the leash a maximum chase
+    distance that resets with every step, which is not a leash at all.
+
+    A distance of None -- a different map, a different Z, an off-grid room --
+    counts as beyond. Nothing the NPC can walk would close it.
+    """
+    from systems.gameplay.combat import reach
+
+    origin = _leash_origin(npc)
+
+    if origin is None:
+        return False
+
+    distance = reach.room_distance(origin, getattr(target, "location", None))
+
+    if distance is None:
+        return True
+
+    return distance > LEASH_DISTANCE_TILES
+
+
+
+def _go_home(npc) -> None:
+    """Walk one step back toward the leash origin, and release it on arrival.
+
+    One step per tick, through the same greedy chooser the chase uses, so an
+    NPC returning home walks the map rather than teleporting across it.
+    """
+    from systems.gameplay.combat import reach
+
+    origin = getattr(npc.db, LEASH_ORIGIN_ATTR, None)
+
+    if origin is None or getattr(origin, "pk", None) is None:
+        return
+
+    if npc.location is origin:
+        _release_leash(npc)
+
+        return
+
+    # step_toward_room, not step_toward: the destination is a ROOM, and a
+    # room has no `.location` for step_toward to read. Passing one there
+    # reports a dead end and the leashed NPC never moves.
+    reach.step_toward_room(npc, origin)
+
+
+
+@register_behavior(AI_BEHAVIOR_CHASING_MELEE)
+def chasing_melee(handler):
+    """
+    Purpose: Retaliate, and close the distance when the attacker is out of
+             reach.
+
+    Entry:
+        handler - the NPC's BlackoutCombatHandler. Consulted when it has no
+                  pending action, AND on every tick its pending action is
+                  stalled -- which is the tick a chase step belongs on.
+
+    Exit/Returns:
+        An attack action dict when the attacker is reachable, an approach
+        action dict when it is not, or None.
+
+    Module Globals:
+        LEASH_DISTANCE_TILES read through _beyond_leash.
+
+    Methodology:
+        THIS IS WHAT KEEPS THE PROJECTILE NUMBERS HONEST. Without it a player
+        shoots a melee NPC from seven tiles and takes no damage ever, and
+        every balance figure for a bow is a fiction.
+
+        It is aggressive_melee plus one branch, and the branch returns
+        another ACTION rather than moving the NPC itself. Movement that
+        bypassed queue_action would land at whatever point in the tick
+        rotation this behaviour happened to be consulted, which is exactly
+        the advantage over players the engine's INPUT phase removes.
+
+        The leash is checked BEFORE the step, never after. An NPC that
+        stepped first and then discovered it had gone too far would end one
+        tile further out every time.
+
+    Notes/References:
+        Reuses _last_attacker and _can_be_fought from aggressive_melee. The
+        two behaviours answer the same question about WHO; they differ only
+        on what to do when that answer is out of range.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    npc = handler.obj
+
+    if npc is None:
+        return None
+
+    target = _last_attacker(npc)
+
+    if target is None:
+        _go_home(npc)
+
+        return None
+
+    from systems.gameplay.combat.combat import target_unusable
+
+    if target_unusable(target):
+        _go_home(npc)
+
+        return None
+
+    if _can_be_fought(npc, target):
+        # In the same room, which is every melee weapon's reach. Attacking
+        # releases the leash: the NPC is where it needs to be, and the next
+        # chase should measure from here.
+        _release_leash(npc)
+
+        return {"kind": "attack", "target": target}
+
+    if _beyond_leash(npc, target):
+        _go_home(npc)
+
+        return None
+
+    return {"kind": "approach", "target": target}

@@ -81,7 +81,7 @@ class MutantRaiderTallowRecipe(_RenderingRecipe):
 
     name = "mutant raider tallow"
     required_level = 0
-    xp_reward = 10
+    xp_reward = 20
 
     consumable_tags = ["mutant_raider_raw_chuck"]
     consumable_names = ["mutant raider raw chuck"]
@@ -97,7 +97,7 @@ class MutantRaiderFatlessMeatRecipe(_RenderingRecipe):
 
     name = "mutant raider fatless meat"
     required_level = 2
-    xp_reward = 15
+    xp_reward = 25
 
     consumable_tags = ["mutant_raider_raw_chuck"]
     consumable_names = ["mutant raider raw chuck"]

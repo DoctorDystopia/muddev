@@ -12,13 +12,14 @@ from evennia.utils import logger
 
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
-from systems.gameplay.ai.constants import AI_BEHAVIOR_ATTR
-from systems.gameplay.ai.registry import get_behavior
+from systems.gameplay.ai.registry import behavior_key_for, get_behavior
 from systems.gameplay.progression.skills import xp_awards
 from systems.interface.statefeed import events as feed
 
+from . import ammunition
 from . import combat_msg
 from . import constants as const
+from . import reach
 from systems.core.tick import states
 from systems.core.tick.states import ActivityEvent
 from systems.core.tick.tickable import TickableHandler, ensure_handler, register_tickable
@@ -36,7 +37,7 @@ COMBAT_HANDLER_KEY = "blackout_combat_handler"
 # Every action kind queue_action will accept. A table rather than a branch
 # chain, so adding an action means adding an entry and an apply_action case
 # rather than editing a validation ladder.
-_QUEUEABLE_ACTION_KINDS = frozenset({"attack", "hold", "flee", "wield"})
+_QUEUEABLE_ACTION_KINDS = frozenset({"attack", "approach", "hold", "flee", "wield"})
 from .protocols import Combatant, XpEarner
 from .rules.context import ActionContext, read_skill_levels
 from .rules.contributors import collect_contributors
@@ -104,9 +105,18 @@ def _plan_style_xp(attacker, style: dict, damage: int) -> list:
     Every skill the style names receives the style's full per-skill rate. The
     rates in constants.py are already per-skill shares, so this must NOT
     divide again.
+
+    A style may also name its OWN rate, which wins over the weapon_style
+    table. Snipe is why: it is a "defensive" weapon_style, but it names two
+    skills where melee defensive names one, so it pays each of them half. See
+    STYLE_XP_RATE_KEY in the combat constants for why that is a style field
+    and not a branch here.
     """
     style_name = style.get("weapon_style")
-    xp_per_damage = _WEAPON_STYLE_XP_MAP.get(style_name)
+    xp_per_damage = style.get(const.STYLE_XP_RATE_KEY)
+
+    if xp_per_damage is None:
+        xp_per_damage = _WEAPON_STYLE_XP_MAP.get(style_name)
 
     if xp_per_damage is None:
         logger.log_err(
@@ -224,11 +234,18 @@ def _unarmed_weapon_data() -> dict:
 
     Centralizes the unarmed-fallback structure used by at_script_creation
     and _refresh_weapon.
+
+    max_range is MELEE_REACH_TILES, which is zero: bare hands reach their own
+    tile. accepted_ammo is None, which is what lets the ammunition check be
+    one question asked of every combatant instead of a branch on whether the
+    weapon is a bow.
     """
     return {
         "combat_stat_bonuses": const.UNARMED_DEFAULT_COMBAT_STATS.copy(),
         "active_combat_style": const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE].copy(),
         "attack_speed": const.UNARMED_ATTACK_SPEED_TICKS,
+        "max_range": const.MELEE_REACH_TILES,
+        "accepted_ammo": None,
     }
 
 
@@ -328,14 +345,39 @@ def set_combat_style(weapon, style_key: str, combatant=None) -> bool:
     return True
 
 
+def _style_attack_speed(style: dict, base_speed: int) -> int:
+    """Apply a style's attack_speed_delta to its weapon's base speed.
+
+    Rapid declares -1 and every other style declares nothing. Floored at
+    MIN_ATTACK_SPEED_TICKS, because an action cannot resolve more than once
+    per tick and a lower number would be one nothing could honour.
+
+    RESOLVED HERE, not in _charge_cooldown. The cooldown is one of two
+    readers -- the combat options screen is the other, through
+    style_options.combat_options -- and a delta applied at only one of them
+    would show the player a speed the fight does not use.
+    """
+    if not style:
+        return base_speed
+
+    delta = int(style.get(const.STYLE_ATTACK_SPEED_DELTA_KEY, 0) or 0)
+
+    return max(const.MIN_ATTACK_SPEED_TICKS, base_speed + delta)
+
+
 def _resolve_style_and_speed(style_source, unarmed: dict) -> tuple:
     """Return (active_combat_style, attack_speed) for one style source.
 
     style_source is the wielded weapon, an NPC carrying its own block, or
     None -- which falls back to the unarmed profile untouched.
+
+    The speed returned is the EFFECTIVE one: the weapon's own attack_speed
+    with the active style's delta already applied. See _style_attack_speed.
     """
     if style_source is None:
-        return unarmed["active_combat_style"], unarmed["attack_speed"]
+        style = unarmed["active_combat_style"]
+
+        return style, _style_attack_speed(style, unarmed["attack_speed"])
 
     styles = _stored_combat_styles(style_source)
 
@@ -344,7 +386,8 @@ def _resolve_style_and_speed(style_source, unarmed: dict) -> tuple:
     )
 
     active_combat_style = styles.get(default_key) or unarmed["active_combat_style"]
-    speed = getattr(style_source.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
+    base_speed = getattr(style_source.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
+    speed = _style_attack_speed(active_combat_style, base_speed)
 
     return active_combat_style, speed
 
@@ -373,6 +416,29 @@ def _resolve_stat_bonuses(entity, style_source, unarmed: dict) -> dict:
     return dict(stats) if stats else dict(unarmed["combat_stat_bonuses"])
 
 
+def _resolve_reach_and_ammo(style_source, unarmed: dict) -> tuple:
+    """Return (max_range, accepted_ammo) for one style source.
+
+    Both come off the SAME object the style and speed do, and for the same
+    reason: how far a weapon reaches and what it fires are properties of that
+    one weapon, never a sum across equipped slots. Wearing two bows would not
+    make either of them shoot further.
+
+    An NPC carries neither, so it reads the unarmed values and fights on its
+    own tile -- which is every hostile in the game today.
+    """
+    if style_source is None:
+        return unarmed["max_range"], unarmed["accepted_ammo"]
+
+    reach = getattr(style_source.db, "max_range", None)
+    ammo_family = getattr(style_source.db, "accepted_ammo", None)
+
+    if reach is None:
+        reach = unarmed["max_range"]
+
+    return int(reach), ammo_family
+
+
 def combat_profile(entity) -> dict:
     """Build the full active_weapon_data snapshot for `entity`.
 
@@ -395,11 +461,14 @@ def combat_profile(entity) -> dict:
 
     active_combat_style, speed = _resolve_style_and_speed(style_source, unarmed)
     stats = _resolve_stat_bonuses(entity, style_source, unarmed)
+    reach, ammo_family = _resolve_reach_and_ammo(style_source, unarmed)
 
     return {
         "combat_stat_bonuses": stats,
         "active_combat_style": dict(active_combat_style),
         "attack_speed": speed,
+        "max_range": reach,
+        "accepted_ammo": ammo_family,
     }
 
 
@@ -451,6 +520,24 @@ class _Action:
         """Return the action to queue after this one resolves (None = idle)."""
         return None
 
+    def is_stalled(self, handler) -> bool:
+        """Whether this action cannot act from where the combatant stands.
+
+        False for every action but an attack. A hold, a flee and a wield are
+        things a combatant does to itself, and none of them can be too far
+        away from anything.
+
+        A stalled action is NOT a failed one. The tick loop neither resolves
+        it nor charges a cooldown for it -- it holds the action pending and
+        asks the controller what to do, which is the seam the chase
+        behaviour hangs off. See BlackoutCombatHandler.tick.
+        """
+        return False
+
+    def announce_stall(self, handler) -> None:
+        """Say why this action cannot act. Called once per stall."""
+        return None
+
 
 class ActionAttack(_Action):
     """An on-pace combat action (e.g., melee swing) resolved against the combatant's current target."""
@@ -470,6 +557,21 @@ class ActionAttack(_Action):
     def _get_target(self):
         target = _object_by_id(self.target_id)
         return target
+
+
+    def is_stalled(self, handler) -> bool:
+        """True when the target is alive but beyond this weapon's reach.
+
+        A target that is GONE is not stalled, it is invalid -- resolve()
+        reports that and the fight ends. The distinction matters: one is
+        waited out, the other is not.
+        """
+        target = self._get_target()
+
+        if target_unusable(target):
+            return False
+
+        return not reach.in_reach(handler.obj, target, handler.reach_tiles())
 
 
     def _land_hit(self, context, result) -> bool:
@@ -708,8 +810,25 @@ class ActionAttack(_Action):
             self._announce_lost_target(attacker, target)
             return ActivityEvent.TARGET_INVALID
 
+        # Checked again here, not only at queue time: the quiver empties
+        # DURING the fight, which is the whole point of ammunition. An empty
+        # one ends the activity rather than holding, because no amount of
+        # waiting refills it.
+        weapon_data = handler.ndb.active_weapon_data
+        armed, reason = ammunition.check(attacker, weapon_data)
+
+        if not armed:
+            attacker.msg((f"|x{reason}|n", _MSG_COMBAT))
+            return ActivityEvent.RESOURCES_EXHAUSTED
+
         context = self._build_context(handler, attacker, target)
         result = resolve_action(context)
+
+        # One unit leaves per shot, on a hit and on a miss alike, and only
+        # then does the recovery roll decide whether it drops or breaks. It
+        # is spent BEFORE the damage lands: at_damage can delete the target,
+        # and a recovered arrow has to have a tile to fall on.
+        ammunition.spend(attacker, weapon_data, target)
 
         if result.hit and result.damage > 0:
             killed = self._land_hit(context, result)
@@ -742,13 +861,42 @@ class ActionAttack(_Action):
         name = getattr(target, "key", "something")
         attacker.msg((f"|x{name} is already dead.|n", _MSG_COMBAT))
 
-    def _announce_miss(self, attacker, target, context) -> None:
-        """Broadcast a combat action that connected with nothing."""
+    def announce_stall(self, handler) -> None:
+        """Tell the attacker the target has moved beyond the weapon's reach.
+
+        Printed once per stall, not once per tick. The tick loop owns that
+        decision -- see _hold_stalled_action -- because only the loop knows
+        which tick is the first one.
+        """
+        target = self._get_target()
+
+        if target is None:
+            return
+
+        attacker = handler.obj
+        radius = handler.reach_tiles()
+        distance = reach.tile_distance(attacker, target)
         attacker.msg(
-            (combat_msg.format_outgoing_miss(attacker, target), _MSG_COMBAT)
+            (combat_msg.format_out_of_reach(target, distance, radius), _MSG_COMBAT)
+        )
+
+    def _announce_miss(self, attacker, target, context) -> None:
+        """Broadcast a combat action that connected with nothing.
+
+        The damage type comes off the CONTEXT, which reads it from the style
+        rather than from whichever contributor won the resolve seam -- so a
+        bow cannot report a missed swing because some other rule owned the
+        action. See ActionContext.damage_type.
+        """
+        damage_type = context.damage_type()
+
+        attacker.msg(
+            (combat_msg.format_outgoing_miss(attacker, target, damage_type),
+             _MSG_COMBAT)
         )
         target.msg(
-            (combat_msg.format_incoming_miss(attacker, target), _MSG_COMBAT)
+            (combat_msg.format_incoming_miss(attacker, target, damage_type),
+             _MSG_COMBAT)
         )
         feed.emit_miss(context)
 
@@ -783,6 +931,62 @@ class ActionFlee(_Action):
         # used to call end_combat() itself and return True purely so the loop
         # would stop touching a deleted row.
         return ActivityEvent.ACTIVITY_ABANDONED
+
+
+class ActionApproach(_Action):
+    """One step toward a target that is out of reach.
+
+    THE MOVE IS AN ACTION, not a method on the behaviour, for the same reason
+    an attack is: everything a combatant does has to arrive through
+    queue_action and land in the tick engine's INPUT phase. A behaviour that
+    called move_to itself would move the NPC at whatever point in the tick
+    rotation it happened to be consulted, which is the half-tick advantage
+    over players the INPUT phase exists to remove.
+
+    It costs NO cooldown. A chase that paid a weapon cycle per tile would
+    lose every race to a walking player, and the chase exists precisely to
+    stop a projectile weapon from being free damage.
+
+    next_action hands the combatant back to attacking. The attack stalls
+    again while the target is still too far, the controller is asked again,
+    and the NPC takes another step -- so one behaviour that only ever says
+    "step" or "swing" produces the whole chase.
+    """
+
+    consumes_cooldown = False
+
+    def __init__(self, target_id: int) -> None:
+        super().__init__("approach")
+        self.target_id = target_id
+
+    def _get_target(self):
+        return _object_by_id(self.target_id)
+
+    def next_action(self, handler):
+        """Go back to attacking, from wherever the step landed."""
+        return ActionAttack(self.target_id)
+
+    def resolve(self, handler):
+        """Take the one exit that leaves us closer to the target.
+
+        Moves through move_to so every hook fires: the room's arrival feed,
+        the departure delta, and anything a tile does to what stands on it.
+        Assigning `location` would skip all of them, and CLAUDE.md records
+        what that costs.
+
+        """
+        mover = handler.obj
+        target = self._get_target()
+
+        if target_unusable(target):
+            return ActivityEvent.TARGET_INVALID
+
+        # A step that finds nowhere closer is reported the same way as one
+        # that moves. The action did what it could, and the fight ends
+        # through the grace like any other target that got away.
+        reach.step_toward(mover, target)
+
+        return ActivityEvent.ACTION_RESOLVED
 
 
 class ActionWield(_Action):
@@ -899,6 +1103,9 @@ class BlackoutCombatHandler(TickableHandler):
         if self.ndb.active_weapon_data is None:
             self.ndb.active_weapon_data = _unarmed_weapon_data()
 
+        if self.ndb.out_of_reach_ticks is None:
+            self.ndb.out_of_reach_ticks = 0
+
         # target_id (dbref int) and pending_action (an _Action subclass
         # instance) are legitimately None when idle, so they need no seeding.
 
@@ -976,6 +1183,24 @@ class BlackoutCombatHandler(TickableHandler):
 
         An entity is an enemy of ours if we are targeting it, or if it is
         targeting us.
+
+        THE SCAN IS OVER THE FIGHT, NOT OVER THE GROUND. It walked the tiles
+        within our own REACH until 09/17/2026, and a melee defender reaches
+        zero of them -- so a raider being shot from seven tiles found no
+        enemy on its own tick, spent the grace, and ended its combat. That
+        deleted the very handler its attacker was reading, and the archer was
+        then told it had won against a raider standing at four hitpoints.
+
+        Asking the tick rotation instead is both the correct question and the
+        cheaper one. The rotation holds one entry per combatant IN PLAY, so
+        this walks the handful of handlers in fights rather than the contents
+        of every tile in a radius -- and the radius that would have to cover a
+        bow is 625 tiles of bounding box.
+
+        Distance still bounds the fight, at ENGAGEMENT_RADIUS_TILES, which is
+        the same number for both sides. It is what lets a player leave a fight
+        by walking away. It is NOT a reach: nobody can act at that distance,
+        they can only still be in it.
         """
         obj = self.obj
         location = getattr(obj, "location", None)
@@ -989,23 +1214,93 @@ class BlackoutCombatHandler(TickableHandler):
         my_target_id = self.ndb.target_id
         enemies = []
 
-        for comb in location.contents:
-            if comb is obj:
+        for their_handler in engine.handlers_by_key(COMBAT_HANDLER_KEY):
+            # db_obj_id, not .obj. The id is a column on the row already in
+            # hand; the object behind it is a foreign key that has to be
+            # fetched. This runs for every combatant in play, on every tick,
+            # so the fetch is paid only for the ones actually in this fight.
+            owner_id = their_handler.db_obj_id
+
+            if owner_id is None or owner_id == obj.id:
                 continue
 
-            # A dict lookup against the tick rotation, NOT obj.scripts.all().
-            # This runs for every occupant, of every combatant, on every tick;
-            # as a query it was O(N*M) round trips per 0.6s and the only
-            # symptom would have been tick drift.
-            their_handler = engine.handler_for(comb.id, COMBAT_HANDLER_KEY)
+            engaged = (
+                owner_id == my_target_id
+                or their_handler.ndb.target_id == obj.id
+            )
 
-            if their_handler is None:
+            if not engaged:
                 continue
 
-            if comb.id == my_target_id or their_handler.ndb.target_id == obj.id:
-                enemies.append(comb)
+            comb = their_handler.obj
+
+            if comb is None:
+                continue
+
+            if not reach.in_reach(obj, comb, const.ENGAGEMENT_RADIUS_TILES):
+                continue
+
+            enemies.append(comb)
 
         return [obj], enemies
+
+    def reach_tiles(self) -> int:
+        """How far this combatant reaches, in tiles, with what it holds now.
+
+        Reads the cached weapon snapshot, falling back to a fresh profile
+        when the handler has not been armed yet -- queue_action asks this
+        before the first tick has run.
+        """
+        weapon_data = self.ndb.active_weapon_data or combat_profile(self.obj)
+
+        return reach.reach_tiles(weapon_data)
+
+    def _grace_applies(self) -> bool:
+        """Whether this fight's target could still walk back into reach.
+
+        THE GRACE IS FOR A TARGET THAT STEPPED AWAY, and only for that. It
+        waits out movement, so it must not wait out anything walking cannot
+        undo: a target that died, one whose row is gone, or one now on a
+        different map, a different Z, or off the grid entirely.
+
+        reach.tile_distance already answers the last question. It returns a
+        number for two tiles on one map and None for every case where no
+        number of steps would close the gap.
+
+        A player killed by an NPC is exactly that case. Respawn moves them to
+        another map, and without this the NPC stood swinging at an empty room
+        for the whole grace -- the punching-bag bug, in a new form.
+        """
+        target = _object_by_id(self.ndb.target_id)
+
+        if target_unusable(target):
+            return False
+
+        distance = reach.tile_distance(self.obj, target)
+
+        return distance is not None
+
+    def _grace_expired(self) -> bool:
+        """Count one tick with no enemy, and say if the grace ran out.
+
+        Without the grace, one tile of movement by either party empties the
+        enemy list, and the fight ends with "You won!" on the tick after the
+        player walked around a corner. With it, the attacker holds position
+        for OUT_OF_REACH_GRACE_TICKS and the fight resumes the moment the
+        target comes back into range.
+
+        A fight the grace does not apply to ends at once. See _grace_applies.
+
+        The counter lives on ndb beside the rest of the per-tick state: it is
+        rebuilt from zero every fight and means nothing between them.
+        """
+        if not self._grace_applies():
+            return True
+
+        elapsed = (self.ndb.out_of_reach_ticks or 0) + 1
+        self.ndb.out_of_reach_ticks = elapsed
+
+        return elapsed > const.OUT_OF_REACH_GRACE_TICKS
 
     def check_stop_combat(self) -> bool:
         """Per-tick keep-alive guard. Mirrors tutorial combat_twitch.py:221.
@@ -1013,8 +1308,15 @@ class BlackoutCombatHandler(TickableHandler):
         Returns True if combat was ended by this call so the caller can
         short-circuit further tick work.
 
-        A side has lost if no combatant on that side is both alive *and*
-        still in the same room (the tutorial's flee-by-walking-away rule).
+        A side has lost when no combatant on that side is alive and still
+        ENGAGED. Engagement is get_sides's question, and it is deliberately
+        not this handler's own reach: a melee defender reaches one tile, so
+        reading the reach here let the party being SHOT decide the fight was
+        over. See get_sides for what that cost.
+
+        An enemy that is alive but out of the engagement radius does NOT end
+        the fight at once. It starts the grace, and only an expired grace
+        counts as the enemy being gone -- see _grace_expired.
         """
         location = getattr(self.obj, "location", None)
 
@@ -1023,8 +1325,14 @@ class BlackoutCombatHandler(TickableHandler):
             return True
 
         allies, enemies = self.get_sides()
-        allies = [c for c in allies if c.is_alive() and c.location is location]
-        enemies = [c for c in enemies if c.is_alive() and c.location is location]
+        allies = [c for c in allies if c.is_alive()]
+        enemies = [c for c in enemies if c.is_alive()]
+
+        if enemies:
+            # Back in range. Spend the grace only on consecutive ticks, so a
+            # target that steps out and back resets it rather than banking
+            # the ticks it was away.
+            self.ndb.out_of_reach_ticks = 0
 
         if not allies and not enemies:
             self.obj.msg(("|xThe combat is over. No one stands.|n", _MSG_COMBAT))
@@ -1037,6 +1345,9 @@ class BlackoutCombatHandler(TickableHandler):
             return True
         
         if not enemies:
+            if not self._grace_expired():
+                return False
+
             self.obj.msg(("|xThe combat is over. You won!|n", _MSG_COMBAT))
             self.end_combat()
             return True
@@ -1083,6 +1394,10 @@ class BlackoutCombatHandler(TickableHandler):
             self._consult_controller()
             return
 
+        if action.is_stalled(self):
+            self._hold_stalled_action(action)
+            return
+
         event = action.resolve(self)
 
         finished = self._settle(event)
@@ -1091,6 +1406,29 @@ class BlackoutCombatHandler(TickableHandler):
             return
 
         self._charge_cooldown(action)
+
+    def _hold_stalled_action(self, action) -> None:
+        """Keep a pending action that cannot act, and ask the controller why.
+
+        NO RESOLVE AND NO COOLDOWN. A combatant whose target has walked out
+        of range has not acted, so charging it a weapon cycle would punish it
+        for the other party's movement -- and would make a chase cost one
+        attack cycle per tile.
+
+        The controller is consulted every stalled tick, which is what turns
+        this into a chase for anything that has one: a hostile running the
+        chasing behaviour queues one step per tick and closes the distance at
+        walking pace. A player has no controller, so this is exactly a hold,
+        and check_stop_combat's grace decides how long the hold lasts.
+
+        The line is printed ONCE, on the first stalled tick.
+        check_stop_combat has already counted this tick by the time the tick
+        loop reaches here, so a counter of 1 is the transition.
+        """
+        if self.ndb.out_of_reach_ticks == 1:
+            action.announce_stall(self)
+
+        self._consult_controller()
 
     def _consult_controller(self) -> None:
         """
@@ -1131,7 +1469,7 @@ class BlackoutCombatHandler(TickableHandler):
         Creation date: 08/23/2026
         """
         obj = self.obj
-        behavior_key = getattr(obj.db, AI_BEHAVIOR_ATTR, None)
+        behavior_key = behavior_key_for(obj)
 
         if not behavior_key:
             return
@@ -1293,20 +1631,59 @@ class BlackoutCombatHandler(TickableHandler):
             self.obj.msg((f"|x{target.key} is already dead.|n", _MSG_COMBAT))
             return False
 
-        # Same room, checked HERE rather than left to check_stop_combat.
+        # Within reach, checked HERE rather than left to check_stop_combat.
         # That guard runs on the first tick and answers "no enemy is standing
         # where you are", which it reports as |xThe combat is over. You won!|n
         # -- so attacking something you are carrying, or something one room
         # away, announced a victory over a combatant that was never engaged.
         # A refusal at queue time is both truthful and immediate, which is the
         # reason this routine exists at all.
+        #
+        # Reach, not the room. A melee weapon reaches zero tiles, so this is
+        # the same same-room test it has always been for a sword. A bow
+        # reaches further, and the refusal names both numbers.
         location = getattr(self.obj, "location", None)
 
-        if location is None or getattr(target, "location", None) is not location:
+        if location is None:
             self.obj.msg((f"|x{target.key} is not here.|n", _MSG_COMBAT))
             return False
 
-        return True
+        if not self._validate_reach(target):
+            return False
+
+        return self._validate_ammunition()
+
+    def _validate_reach(self, target) -> bool:
+        """Refuse a target the weapon cannot carry to, naming both numbers."""
+        radius = self.reach_tiles()
+
+        if reach.in_reach(self.obj, target, radius):
+            return True
+
+        distance = reach.tile_distance(self.obj, target)
+        self.obj.msg(
+            (combat_msg.format_out_of_reach(target, distance, radius), _MSG_COMBAT)
+        )
+
+        return False
+
+    def _validate_ammunition(self) -> bool:
+        """Refuse a shot with an empty or wrong quiver.
+
+        Checked at queue time for the same reason the reach check is: the
+        player finds out when they type the command, not after a fight that
+        could never land a shot. A melee weapon needs no ammunition and
+        always passes.
+        """
+        weapon_data = self.ndb.active_weapon_data or combat_profile(self.obj)
+        armed, reason = ammunition.check(self.obj, weapon_data)
+
+        if armed:
+            return True
+
+        self.obj.msg((f"|x{reason}|n", _MSG_COMBAT))
+
+        return False
 
     def apply_action(self, action_dict: dict) -> None:
         """
@@ -1347,6 +1724,15 @@ class BlackoutCombatHandler(TickableHandler):
                 return
 
             self.ndb.pending_action = ActionAttack(target.id)
+            self.ndb.target_id = target.id
+
+        elif kind == "approach":
+            target = action_dict.get("target")
+
+            if target is None or target.pk is None:
+                return
+
+            self.ndb.pending_action = ActionApproach(target.id)
             self.ndb.target_id = target.id
 
         elif kind == "hold":

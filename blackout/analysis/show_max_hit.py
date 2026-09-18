@@ -2,7 +2,7 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/22/2026
-Description: Snapshot of the melee damage ceiling -- combat_calc.max_melee_hit
+Description: Snapshot of the melee damage ceiling -- combat_calc.max_hit
              swept across the whole Brawn band and the whole equipment-bonus
              band, with every weapon in ITEM_DB plotted on it.
 
@@ -140,7 +140,7 @@ def _max_hit_curve(strength_bonus: int, stance_bonus: int) -> list:
 
     for level in levels:
         effective = combat_calc.effective_level(level, stance_bonus=stance_bonus)
-        hit = combat_calc.max_melee_hit(effective, strength_bonus)
+        hit = combat_calc.max_hit(effective, strength_bonus)
         curve.append(hit)
 
     return curve
@@ -232,7 +232,7 @@ def _print_gear_ceiling(totals: dict, items: list) -> None:
     top_level = combat_const.MAX_BASE_SKILL_LEVEL
     stance = _aggressive_stance_bonus()
     effective = combat_calc.effective_level(top_level, stance_bonus=stance)
-    ceiling = combat_calc.max_melee_hit(effective, bonus)
+    ceiling = combat_calc.max_hit(effective, bonus)
 
     print()
     print("Best strength loadout currently in ITEM_DB")
@@ -256,7 +256,7 @@ def _build_surface(levels, bonuses, stance: int):
     for row_index, bonus in enumerate(bonuses):
         for col_index, level in enumerate(levels):
             effective = combat_calc.effective_level(int(level), stance_bonus=stance)
-            hit = combat_calc.max_melee_hit(effective, int(bonus))
+            hit = combat_calc.max_hit(effective, int(bonus))
             surface[row_index, col_index] = hit
 
     return surface

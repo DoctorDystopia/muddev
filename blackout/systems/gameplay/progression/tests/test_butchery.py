@@ -23,6 +23,7 @@ from commands.gathering_cmds import (
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.gatherables import (
     GATHERABLE_REGISTRY,
+    get_yield_item_name,
     yield_menu_label,
 )
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
@@ -50,6 +51,30 @@ def _corpse_def():
 def _yields():
     """Butchery's yields off a raider corpse, easiest first."""
     return _corpse_def().yields_for_skill(_BUTCHERY)
+
+
+def _default_at(level):
+    """The yield an unasked harvest must give at this Butchery level.
+
+    Read from the DECLARED tuple, not from yields_for_skill, so the tie rule
+    is derived independently of the code under test: the highest unlocked
+    level wins, and inside that level the first declared yield wins.
+    """
+    unlocked = [
+        entry for entry in _corpse_def().yields
+        if entry.skill_key == _BUTCHERY and entry.required_level <= level
+    ]
+    top_level = max(entry.required_level for entry in unlocked)
+
+    return next(
+        entry for entry in unlocked if entry.required_level == top_level)
+
+
+def _tied_levels():
+    """Every Butchery level on the corpse that more than one yield shares."""
+    levels = [entry.required_level for entry in _yields()]
+
+    return sorted({level for level in levels if levels.count(level) > 1})
 
 
 
@@ -278,8 +303,9 @@ class ButcheryYieldTest(EvenniaCommandTest):
 
 
     def test_a_beginner_gets_the_starter_cut(self):
-        starter = _yields()[0]
-        self._set_level(starter.required_level)
+        level = _yields()[0].required_level
+        starter = _default_at(level)
+        self._set_level(level)
 
         response = self._butcher()
 
@@ -288,12 +314,52 @@ class ButcheryYieldTest(EvenniaCommandTest):
 
     def test_the_best_unlocked_cut_is_the_default(self):
         """Levelling changes what happens by DEFAULT, not just what is legal."""
-        best = _yields()[-1]
-        self._set_level(best.required_level)
+        level = _yields()[-1].required_level
+        best = _default_at(level)
+        self._set_level(level)
 
         response = self._butcher()
 
         self.assertIn(ITEM_DB[best.item_key].name, response)
+
+
+    def test_a_tie_goes_to_the_yield_declared_first(self):
+        """Regression: a hide added at level 0 beside the chuck became the
+        default, because the old rule took the LAST yield in the list.
+
+        One added yield must not change what an existing character gets.
+        """
+        for level in _tied_levels():
+            with self.subTest(level=level):
+                self._set_level(level)
+                self._another_corpse()
+                expected = _default_at(level)
+
+                response = self._butcher()
+
+                self.assertIn(ITEM_DB[expected.item_key].name, response)
+
+                for entry in _yields():
+                    if entry.required_level == level and entry is not expected:
+                        self.assertNotIn(
+                            ITEM_DB[entry.item_key].name, response)
+
+
+    def test_a_yield_that_loses_a_tie_can_still_be_named(self):
+        for level in _tied_levels():
+            for entry in _yields():
+                if entry.required_level != level:
+                    continue
+                if entry is _default_at(level):
+                    continue
+
+                with self.subTest(cut=entry.item_key):
+                    self._set_level(level)
+                    self._another_corpse()
+
+                    response = self._butcher(wanted=yield_menu_label(entry))
+
+                    self.assertIn(ITEM_DB[entry.item_key].name, response)
 
 
     def test_a_locked_cut_is_refused_with_its_level(self):
@@ -387,15 +453,29 @@ class ButcheryYieldTest(EvenniaCommandTest):
 
     def test_a_word_that_could_mean_two_cuts_names_them_both(self):
         """
-        "Yields nothing called 'raw'" is false where every cut is raw, and
-        sends the player looking for a different word rather than a longer
-        one.
+        "Yields nothing called 'raw'" is false where two cuts are both raw,
+        and sends the player looking for a different word rather than a
+        longer one.
+
+        The expectation is DERIVED from which yields the word actually
+        matches, not from every yield the corpse has. A cut whose name does
+        not contain the word must not be offered as something the word could
+        have meant -- and the corpse gained exactly such a cut, the prime
+        hide, when the projectile chain landed.
         """
         self._set_level(_yields()[-1].required_level)
 
-        response = self._butcher(wanted="raw")
+        wanted = "raw"
+        expected = [
+            entry for entry in _yields()
+            if wanted in get_yield_item_name(entry).lower()
+        ]
 
-        for entry in _yields():
+        self.assertGreater(len(expected), 1, "the word must still be ambiguous")
+
+        response = self._butcher(wanted=wanted)
+
+        for entry in expected:
             self.assertIn(yield_menu_label(entry), response)
 
 
@@ -409,8 +489,9 @@ class ButcheryYieldTest(EvenniaCommandTest):
 
     def test_the_harvest_teaches_the_secondary_skills_too(self):
         """The skill-tree map's dashed 'cutting + butchery XP' arrow."""
-        chosen = _yields()[0]
-        self._set_level(chosen.required_level)
+        level = _yields()[0].required_level
+        chosen = _default_at(level)
+        self._set_level(level)
         before = {
             key: self.char1.skills.get_total_xp(key)
             for key in chosen.secondary_xp
@@ -425,8 +506,9 @@ class ButcheryYieldTest(EvenniaCommandTest):
 
 
     def test_butchery_itself_takes_the_whole_primary_award(self):
-        chosen = _yields()[0]
-        self._set_level(chosen.required_level)
+        level = _yields()[0].required_level
+        chosen = _default_at(level)
+        self._set_level(level)
         before = self.char1.skills.get_total_xp(_BUTCHERY)
 
         self._butcher()

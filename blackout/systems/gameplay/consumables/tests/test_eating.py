@@ -65,6 +65,27 @@ def _outputs_of_category(category):
     return keys
 
 
+def _food_outputs_of_category(category):
+    """The FOOD one crafting category produces.
+
+    A stage makes more than food. Curing makes sinew, which is the string a
+    Gunsmith puts on a bow, and prime sinew beside it -- both Curing outputs
+    and neither edible. A delay rule written for food must not judge them:
+    attack_delay_ticks_or_default returns the standard delay for anything
+    with no heal_amount, and nothing reads that number on an item nobody can
+    eat.
+
+    heal_amount IS the field that makes an item food, per the ItemDef
+    comment, so it is the field that decides membership here.
+    """
+    from world.item_database import ITEM_DB
+
+    return {
+        key for key in _outputs_of_category(category)
+        if ITEM_DB[key].heal_amount is not None
+    }
+
+
 
 def _food_keys():
     """Every ItemDef that declares a heal amount.
@@ -156,13 +177,17 @@ class TestTheFoodTable(unittest.TestCase):
         which is a Gastronomy meal whose name happens to start that way -- the
         exact reason CLAUDE.md wants a relationship derived from the source of
         truth rather than a naming convention.
+
+        FOOD outputs, not every output. Curing also makes sinew, which a
+        Gunsmith puts on a bow and nobody eats. An eating delay says nothing
+        about a bowstring.
         """
         standard = consumable_const.STANDARD_ATTACK_DELAY_TICKS
         fast = consumable_const.CURED_MEAT_ATTACK_DELAY_TICKS
         self.assertLess(fast, standard)
 
-        cured = _outputs_of_category(CRAFT_CATEGORY_CURING)
-        meals = _outputs_of_category(CRAFT_CATEGORY_GASTRONOMY)
+        cured = _food_outputs_of_category(CRAFT_CATEGORY_CURING)
+        meals = _food_outputs_of_category(CRAFT_CATEGORY_GASTRONOMY)
         self.assertTrue(cured)
         self.assertTrue(meals)
 

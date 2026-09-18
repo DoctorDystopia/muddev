@@ -179,6 +179,14 @@ class TestTickCostIsBounded(_CrowdedRoomTestCase):
         self.engine._registry()
         handler_id = self.handlers[0].id
 
+        # One tick of warm-up, because the measurement is of the STEADY state
+        # and the first tick of a fight is not it. get_sides resolves the
+        # combatant behind each engaged handler, which is a foreign key: it is
+        # fetched once and cached on the row for every tick afterwards. Two
+        # cold ticks measured against each other would report the cache, not
+        # the scaling.
+        self.engine._advance_one(handler_id)
+
         with CaptureQueriesContext(connection) as small:
             self.engine._advance_one(handler_id)
 

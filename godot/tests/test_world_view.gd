@@ -50,6 +50,9 @@ func _ready() -> void:
 	_an_entity_without_coords_is_acted_on_directly()
 	_nothing_to_send_stays_nothing()
 	_a_walked_to_menu_row_still_reads_as_its_verb()
+	_a_self_approaching_command_is_never_walked_to()
+	_a_self_approaching_menu_row_is_never_walked_to()
+	_a_payload_that_says_nothing_still_walks()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -143,6 +146,9 @@ func _a_diagonal_splits_its_two_cardinals() -> void:
 # ─── Approach ────────────────────────────────────────────────────────────────
 
 const POLE_COMMAND := "cut rusty pole"
+# A dbref, because that is how the server names a target that has to be
+# exactly the one clicked. See DBREF_TARGET_VERBS.
+const RAIDER_COMMAND := "attack #75931"
 const HERE := Vector2i(2, 3)
 const HERE_Z := "oasis"
 
@@ -208,6 +214,54 @@ func _a_walked_to_menu_row_still_reads_as_its_verb() -> void:
 	_expect(str(row["command"]).ends_with(POLE_COMMAND), "the row walks, then cuts")
 	_expect(not text.to_lower().begins_with("goto"),
 		"the row reads as the verb, not the walk: %s" % text)
+
+
+## The bug the `approach` field exists for. A bow reaches seven tiles, so the
+## wrap walked the archer onto the raider before firing a shot that was already
+## legal from where it stood. How far a weapon carries is a rule, so the SERVER
+## decides, and CmdAttack walks by itself when it has to.
+func _a_self_approaching_command_is_never_walked_to() -> void:
+	var raider := {
+		"name": "Mutant Raider",
+		"interact": RAIDER_COMMAND,
+		"coords": [4.0, 7.0, HERE_Z],
+		"approach": false,
+	}
+
+	var sent := WorldView.approach_command(RAIDER_COMMAND, raider, HERE, HERE_Z,
+		WorldView.walks_there(raider))
+
+	_expect(sent == RAIDER_COMMAND, "a far raider is attacked from here")
+
+
+func _a_self_approaching_menu_row_is_never_walked_to() -> void:
+	var raider := {
+		"name": "Mutant Raider",
+		"interact": RAIDER_COMMAND,
+		"coords": [4.0, 7.0, HERE_Z],
+		"approach": false,
+	}
+
+	var rows := WorldView.approach_options(WorldView.options_for(raider), raider,
+		HERE, HERE_Z)
+
+	_expect(rows.size() == 1, "one verb, one row")
+	_expect(str(rows[0]["command"]) == RAIDER_COMMAND,
+		"the menu row attacks from here too")
+
+
+## ABSENT MEANS WALK. Every other verb acts where it stands, the server sends
+## the key only to say otherwise, and a payload from a server that never heard
+## of the field has to keep the behaviour this pane always had.
+func _a_payload_that_says_nothing_still_walks() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+
+	_expect(WorldView.walks_there(pole), "an entity that says nothing is walked to")
+
+	var rows := WorldView.approach_options(WorldView.options_for(pole), pole,
+		HERE, HERE_Z)
+
+	_expect(str(rows[0]["command"]) != POLE_COMMAND, "and its menu row walks")
 
 
 # ─── Harness ─────────────────────────────────────────────────────────────────

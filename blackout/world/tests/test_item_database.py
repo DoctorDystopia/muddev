@@ -15,6 +15,7 @@ Run with:
 from evennia.prototypes.spawner import spawn
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
+from systems.gameplay.combat import constants as combat_constants
 from systems.interface.statefeed.constants import ITEM_FAMILIES, ITEM_FAMILY_WEAPON
 from typeclasses.characters import Character as BlackoutCharacter
 from world.item_database import ITEM_DB
@@ -266,6 +267,81 @@ class TestSpawnedAttributesMatchDefinition(EvenniaTestCase):
                         f"declare.",
                 )
 
+    def test_a_projectile_weapon_declares_a_reach_and_an_ammunition_family(self):
+        """A bow with no max_range is a bow that fights on its own tile.
+
+        Both fields default to the melee answer, which is correct for every
+        sword and silently wrong for a bow: reach.reach_tiles reads 0 and the
+        weapon refuses every target it should be able to hit. Nothing raises,
+        so only this assertion catches it.
+
+        A projectile weapon is identified by its STYLES, not by a tag or a
+        tool_type. The styles are what decide which skills a shot resolves
+        against, so they are the fact that makes a weapon projectile.
+        """
+        for item_key, item_def in ITEM_DB.items():
+            projectile = any(
+                style.get(combat_constants.STYLE_COMBAT_AXES_KEY)
+                is combat_constants.PROJECTILE_COMBAT_AXES
+                for style in item_def.combat_styles.values()
+            )
+
+            if not projectile:
+                continue
+
+            with self.subTest(item=item_key):
+                self.assertGreater(
+                    item_def.max_range,
+                    combat_constants.MELEE_REACH_TILES,
+                    msg=f"{item_key} resolves as a projectile weapon but "
+                        f"reaches only its own tile.",
+                )
+                self.assertTrue(
+                    item_def.accepted_ammo,
+                    msg=f"{item_key} resolves as a projectile weapon but "
+                        f"names no ammunition family, so it can never fire.",
+                )
+
+    def test_every_accepted_ammunition_family_has_something_in_it(self):
+        """A bow that names a family nothing declares can never be loaded.
+
+        Derived from ITEM_DB on both sides rather than from a list of
+        families, so a new bow and a new arrow prove each other.
+        """
+        families = set()
+
+        for item_def in ITEM_DB.values():
+            for tag_key, category in item_def.tags:
+                if category == combat_constants.AMMO_FAMILY_TAG_CATEGORY:
+                    families.add(tag_key)
+
+        for item_key, item_def in ITEM_DB.items():
+            if not item_def.accepted_ammo:
+                continue
+
+            with self.subTest(item=item_key):
+                self.assertIn(item_def.accepted_ammo, families)
+
+    def test_every_ammunition_item_carries_a_damage_bonus(self):
+        """The ammunition is where a shot's damage bonus lives.
+
+        An arrow with none is not broken, it is invisible: the shot resolves,
+        the max hit reads 0 from the missing key, and the only symptom is a
+        bow that hits softly for no stated reason.
+        """
+        for item_key, item_def in ITEM_DB.items():
+            families = {category for _key, category in item_def.tags}
+
+            if combat_constants.AMMO_FAMILY_TAG_CATEGORY not in families:
+                continue
+
+            with self.subTest(item=item_key):
+                self.assertIn(
+                    combat_constants.PROJECTILE_STRENGTH_BONUS_KEY,
+                    item_def.combat_stat_bonuses,
+                    msg=f"{item_key} is ammunition but carries no "
+                        f"{combat_constants.PROJECTILE_STRENGTH_BONUS_KEY}.",
+                )
 
 
 class TestPrototypeContent(EvenniaTestCase):

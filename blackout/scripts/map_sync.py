@@ -47,11 +47,35 @@ Description: Operator script. Reconciles the live XYZ grid with
              a test collector walking the package -- must not be able to wipe
              the grid.
 
+             A run is SCOPED by --map and --tile. Without either flag it
+             rebuilds every map in the manifest, which is what it always did.
+             With them it purges and respawns only what the operator named, so
+             a one-tile edit no longer pays for the largest map on the grid.
+             world/maps/scope.py owns the flag format and the resolution
+             rules; this script only acts on the RebuildScope it returns.
+
+             Only an UNSCOPED run prunes. Removing a map is about maps that
+             are listed nowhere, and a run told to touch one map must not
+             reach a second one on its own.
+
+             A tile-scoped run repairs its neighbours. Deleting a room takes
+             the exits INTO it with it (DefaultObject.clear_exits), and those
+             exits belong to the neighbouring nodes, not to the rebuilt tile.
+             So the link pass covers every node on the grid whose links end on
+             a rebuilt tile -- see spawn_scope.
+
 Usage:
     ../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run]
+        [--map ZCOORD ...] [--tile ZCOORD:X,Y ...]
 
     --dry-run reports what would be removed, purged and registered, and
     changes nothing. It is read-only, so it is safe with the server running.
+
+    --map rebuilds one listed map end to end. Repeat it for several maps.
+
+    --tile rebuilds one tile of one map, with its exits and the exits of its
+    neighbours. Repeat it for several tiles. A map named by both flags is
+    rebuilt whole.
 """
 
 import os
@@ -65,6 +89,8 @@ import sys
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _DRY_RUN_FLAG = "--dry-run"
+_MAP_FLAG = "--map"
+_TILE_FLAG = "--tile"
 _DRY_RUN_PREFIX = "[dry run] "
 _LIVE_PREFIX = ""
 
@@ -87,6 +113,12 @@ def _bootstrap_evennia():
 
     evennia._init()
 
+    # Import the tile typeclass, so that XYZRoom.__subclasses__() knows about
+    # it. The contrib's own filter_family builds its typeclass list from that
+    # call, and XYMap.spawn_nodes uses it to delete rooms that fell off the
+    # map. Left unimported, that cleanup finds nothing and reports success.
+    import typeclasses.rooms  # noqa: F401
+
 
 def _get_grid():
     """Fetch the XYZGrid Script, echoing the grid's own log lines to console."""
@@ -106,6 +138,56 @@ def _objects_tagged_zcoord(zcoord):
     return ObjectDB.objects.filter(
         db_tags__db_key__iexact=zcoord,
         db_tags__db_category=MAP_Z_TAG_CATEGORY,
+    )
+
+
+def _objects_at_xyz(zcoord, x, y):
+    """
+    Purpose: Every object standing at one map coordinate, as a queryset.
+
+    Entry:
+        zcoord is a map name; x and y are map coordinates.
+
+    Exit/Returns:
+        Returns an ObjectDB queryset.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Filter ObjectDB on all three xyzgrid coordinate tag categories at once.
+
+    Notes/References:
+        ObjectDB and the tag table, NOT XYZRoom.objects.filter_xyz. The
+        contrib's manager calls filter_family, which builds its typeclass list
+        from XYZRoom.__subclasses__() -- so it finds a GridTile only if
+        something already imported typeclasses.rooms. An operator script that
+        has not imported it gets an empty queryset and reports a tile as
+        already clean. This query cannot go wrong that way, for the same
+        reason _objects_tagged_zcoord does not.
+
+        This catches the exits OUT of the tile as well as the room, because an
+        XYZExit carries its source room's coordinates. The exits INTO the tile
+        carry their own source coordinates and are destroyed by clear_exits
+        when the room goes.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    from evennia.contrib.grid.xyzgrid.xyzroom import (
+        MAP_X_TAG_CATEGORY,
+        MAP_Y_TAG_CATEGORY,
+        MAP_Z_TAG_CATEGORY,
+    )
+    from evennia.objects.models import ObjectDB
+
+    return (
+        ObjectDB.objects.filter(
+            db_tags__db_key__iexact=zcoord,
+            db_tags__db_category=MAP_Z_TAG_CATEGORY,
+        )
+        .filter(db_tags__db_key=str(x), db_tags__db_category=MAP_X_TAG_CATEGORY)
+        .filter(db_tags__db_key=str(y), db_tags__db_category=MAP_Y_TAG_CATEGORY)
     )
 
 
@@ -215,6 +297,73 @@ def load_map_data(grid, entries):
         map_data_list.extend(maps)
 
     return map_data_list
+
+
+def validate_scope_tiles(grid, scope, map_data_list):
+    """
+    Purpose: Confirm that every tile the operator named is really a node on
+             its map, before anything is deleted.
+
+    Entry:
+        grid is the XYZGrid Script; scope is a RebuildScope; map_data_list
+        comes from load_map_data.
+
+    Exit/Returns:
+        Returns None. Raises RuntimeError naming the first tile that is not a
+        node on its map.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Parse a THROWAWAY XYMap from the map data just loaded, and ask it for
+        a node at each coordinate.
+
+    Notes/References:
+        The parse is against the map data on disk, not against the grid's
+        stored copy. That is what makes a dry run and a live run give the same
+        answer for a tile the operator added to the map string one minute ago:
+        the stored copy is still the previous map, and only a live run may
+        replace it.
+
+        calculate_path_matrix is deliberately not called. Node lookup does not
+        need the pathfinding solution, and baking one for a validation pass
+        would cost more than the rebuild it guards.
+
+        A tile with no node is an error rather than a no-op. spawn_nodes
+        silently spawns nothing for a coordinate that carries no node, so an
+        operator mistyping a coordinate would otherwise watch a rebuild report
+        success while changing nothing.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    from evennia.contrib.grid.xyzgrid.xymap import XYMap
+
+    if not scope.tiles:
+        return
+
+    by_zcoord = {mapdata.get("zcoord"): mapdata for mapdata in map_data_list}
+
+    for zcoord in scope.zcoords:
+        tiles = scope.tiles_of(zcoord)
+        if not tiles:
+            continue
+
+        xymap = XYMap(dict(by_zcoord[zcoord]), Z=zcoord, xyzgrid=grid)
+        xymap.parse()
+
+        for tile in tiles:
+            try:
+                node = xymap.get_node_from_coord(tile.xy)
+            except Exception as exc:
+                raise RuntimeError(f"Tile ({tile.x},{tile.y}) on map '{zcoord}': {exc}") from exc
+
+            if node is None:
+                raise RuntimeError(
+                    f"Map '{zcoord}' has no room at ({tile.x},{tile.y}). "
+                    "Check the coordinate against the map string."
+                )
 
 
 def prune_unlisted_maps(grid, wanted_zcoords, dry_run):
@@ -338,6 +487,107 @@ def purge_zcoords(zcoords, dry_run):
     return deleted
 
 
+def purge_tiles(tiles, dry_run):
+    """
+    Purpose: Delete the room standing at each named tile, so that tile
+             respawns from source instead of being updated in place.
+
+    Entry:
+        tiles is an iterable of scope.TileRef; dry_run suppresses the deletion.
+
+    Exit/Returns:
+        Returns the number of rooms deleted (or that would be).
+
+    Module Globals:
+        _DRY_RUN_PREFIX, _LIVE_PREFIX read
+
+    Methodology:
+        Look the room up by its XYZ coordinate and delete it. Everything
+        standing on it goes with it through GridTile.at_object_delete.
+
+    Notes/References:
+        The room is DELETED rather than respawned over the top of itself, and
+        that is the whole reason a tile rebuild works. Evennia fires
+        at_object_post_spawn only when a prototype update actually changes the
+        object (see prototypes/spawner.py), so an unchanged tile would keep
+        its old shopkeep, node or facility and the operator would see no
+        effect. A fresh room always changes, so its spawners always run.
+
+        The queryset is materialised before the loop. Deleting a room destroys
+        the exits standing in it, and those exits are in the same queryset --
+        so a lazy queryset would be re-evaluated mid-deletion.
+
+        A missing room is not an error. The coordinate was already checked
+        against the map by validate_scope_tiles, so nothing there simply means
+        the tile was never built, and the spawn will build it.
+
+        The count is of deletions that actually happened, matching
+        purge_zcoords: an exit already destroyed with its room returns False
+        from delete() without raising.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    prefix = _LIVE_PREFIX
+    if dry_run:
+        prefix = _DRY_RUN_PREFIX
+
+    deleted = 0
+
+    for tile in tiles:
+        standing = list(_objects_at_xyz(tile.zcoord, tile.x, tile.y))
+        print(
+            f"  {prefix}purging tile ({tile.x},{tile.y}) on '{tile.zcoord}': "
+            f"{len(standing)} object(s)"
+        )
+
+        if dry_run:
+            deleted += len(standing)
+            continue
+
+        for obj in standing:
+            try:
+                removed = obj.delete()
+                if removed:
+                    deleted += 1
+            except Exception as exc:
+                print(f"    skipping #{obj.id} '{obj.key}': {exc}")
+
+    return deleted
+
+
+def purge_scope(scope, dry_run):
+    """
+    Purpose: Delete everything the scope says this run rebuilds.
+
+    Entry:
+        scope is a RebuildScope; dry_run suppresses the deletion.
+
+    Exit/Returns:
+        Returns the total number of objects deleted (or that would be).
+
+    Module Globals:
+        None
+
+    Methodology:
+        Send the whole maps through the z-tag purge and the individual tiles
+        through the coordinate purge, and add the two tallies.
+
+    Notes/References:
+        The two purges cannot be merged. A whole map is found by its z-tag,
+        which catches its exits and anything else the map ever tagged. A tile
+        is found by its XYZ coordinate, because a z-tag query would take the
+        entire map with it.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    deleted = purge_zcoords(scope.whole_maps, dry_run)
+    deleted += purge_tiles(scope.tiles, dry_run)
+
+    return deleted
+
+
 def register_maps(grid, map_data_list, dry_run):
     """
     Purpose: (Re)register the manifest's maps on the grid and verify they took.
@@ -383,13 +633,75 @@ def register_maps(grid, map_data_list, dry_run):
         raise RuntimeError(f"Maps missing from the grid after add_maps: {missing}")
 
 
-def spawn_maps(grid, dry_run):
+def neighbours_of_tiles(grid, tiles):
     """
-    Purpose: Build the in-game rooms and exits for every registered map.
+    Purpose: Find every node on the grid whose exits lead INTO one of the
+             rebuilt tiles.
+
+    Entry:
+        grid is the XYZGrid Script, reloaded and parsed; tiles is an iterable
+        of scope.TileRef.
+
+    Exit/Returns:
+        Returns a dict of z-coordinate to a list of MapNode.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Walk every node of every parsed map and read MapNode.links, which maps
+        a direction to the node that link ENDS on. A node with any link ending
+        on a rebuilt tile is a neighbour whose exits need respawning.
+
+    Notes/References:
+        Deleting a room destroys the exits pointing at it as well as the exits
+        leading out of it (DefaultObject.clear_exits). The exits leading out
+        come back with the tile. The exits pointing at it belong to other
+        nodes, and the contrib only respawns links for the nodes it is asked
+        about -- so without this pass, a tile rebuild leaves its neighbours
+        one-way and the map looks correct while the player cannot walk back.
+
+        Every map is scanned, not just the tile's own. The xyzgrid links maps
+        to each other, so a neighbour is not always on the same map.
+
+        Reading links is pure memory work on already-parsed maps. Only the
+        matched nodes cost a database write.
+
+        A node that is itself a rebuilt tile is skipped. Its own links are
+        already in the main spawn pass, and spawning them twice would double
+        the work for no effect.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    targets = {(tile.zcoord, tile.x, tile.y) for tile in tiles}
+    found = {}
+
+    if not targets:
+        return found
+
+    for zcoord, xymap in grid.grid.items():
+        for node in xymap.node_index_map.values():
+            is_target = (node.Z, node.X, node.Y) in targets
+            if is_target:
+                continue
+
+            ends = [(end.Z, end.X, end.Y) for end in node.links.values()]
+            leads_in = any(end in targets for end in ends)
+
+            if leads_in:
+                found.setdefault(zcoord, []).append(node)
+
+    return found
+
+
+def spawn_scope(grid, scope, dry_run):
+    """
+    Purpose: Build the in-game rooms and exits for everything the scope covers.
 
     Entry:
         grid is the XYZGrid Script, already carrying the manifest's maps;
-        dry_run suppresses the spawn.
+        scope is a RebuildScope; dry_run suppresses the spawn.
 
     Exit/Returns:
         Returns None. Propagates whatever the contrib raises.
@@ -398,17 +710,21 @@ def spawn_maps(grid, dry_run):
         _DRY_RUN_PREFIX, _LIVE_PREFIX read
 
     Methodology:
-        Call XYZGrid.spawn over the full wildcard coordinate, which creates
-        missing rooms, updates existing ones from their prototypes and deletes
-        any that no longer appear on their map.
+        Three passes, in order: every room in scope, then every exit out of
+        those rooms, then every exit leading back into a rebuilt tile.
 
     Notes/References:
-        This is what `evennia xyzgrid spawn` does once its confirmation prompt
-        is answered. Calling the grid directly is not a shortcut around an
-        operator safeguard -- the prompt guards an interactive typo, and this
-        script has already read a manifest, validated every module and printed
-        what it is about to do. It IS the safeguard, and unlike the prompt it
-        also works when nothing is attached to stdin.
+        ALL rooms before ANY exit, across every map in scope. An exit needs
+        its destination to exist, and the xyzgrid links maps to each other, so
+        finishing one map before starting the next would leave a cross-map
+        exit pointing at a room that is still one pass away. XYZGrid.spawn
+        takes the same two passes for the same reason, and an unscoped run
+        here does exactly what XYZGrid.spawn does.
+
+        The wildcard pass over a whole map also deletes rooms that fell off
+        the map string. The tile pass cannot: it is told one coordinate, and a
+        room that no longer appears on the map is at a coordinate the operator
+        did not name. That is the one job a tile rebuild leaves to a full one.
 
     Author: Nick Hobar
     Creation date: 08/28/2026
@@ -417,12 +733,40 @@ def spawn_maps(grid, dry_run):
     if dry_run:
         prefix = _DRY_RUN_PREFIX
 
-    print(f"  {prefix}spawning rooms and exits for every registered map")
+    print(f"  {prefix}spawning rooms and exits for {scope.describe()}")
 
     if dry_run:
         return
 
-    grid.spawn()
+    wildcard = "*"
+
+    for zcoord in scope.zcoords:
+        xymap = grid.get_map(zcoord)
+        whole = scope.is_whole_map(zcoord)
+
+        if whole:
+            xymap.spawn_nodes(xy=(wildcard, wildcard))
+            continue
+
+        for tile in scope.tiles_of(zcoord):
+            xymap.spawn_nodes(xy=tile.xy)
+
+    for zcoord in scope.zcoords:
+        xymap = grid.get_map(zcoord)
+        whole = scope.is_whole_map(zcoord)
+
+        if whole:
+            xymap.spawn_links(xy=(wildcard, wildcard))
+            continue
+
+        for tile in scope.tiles_of(zcoord):
+            xymap.spawn_links(xy=tile.xy)
+
+    neighbours = neighbours_of_tiles(grid, scope.tiles)
+
+    for zcoord, nodes in neighbours.items():
+        print(f"  restoring exits into rebuilt tiles from {len(nodes)} node(s) on '{zcoord}'")
+        grid.get_map(zcoord).spawn_links(nodes=nodes)
 
 
 def relocate_stranded_characters(dry_run):
@@ -496,12 +840,13 @@ def relocate_stranded_characters(dry_run):
     return relocated
 
 
-def _sync(dry_run):
+def _sync(scope, dry_run):
     """
-    Purpose: Run the whole manifest-to-grid reconciliation.
+    Purpose: Run the manifest-to-grid reconciliation over one scope.
 
     Entry:
-        dry_run is True to report without changing anything.
+        scope is a RebuildScope; dry_run is True to report without changing
+        anything.
 
     Exit/Returns:
         Returns None. Raises ManifestError or RuntimeError on any failure.
@@ -510,12 +855,18 @@ def _sync(dry_run):
         None
 
     Methodology:
-        Read and validate the manifest, load every listed module, then prune
-        the unlisted maps, purge the listed ones, register them and spawn.
+        Read and validate the manifest, load every listed module, check the
+        scope's tiles against those modules, then prune, purge, register and
+        spawn.
 
     Notes/References:
         Loading comes first on purpose: nothing is deleted until every listed
         module has proven it exists and declares the promised z-coordinate.
+        Tile validation joins it there for the same reason.
+
+        The manifest is read in full even for a one-tile run. Registration
+        keeps every listed map on the grid, so a scoped run never leaves the
+        grid's stored map data behind the operator's files.
 
         The net ObjectDB delta is reported because the per-step tallies no
         longer describe the run. A purged room now destroys everything
@@ -535,23 +886,30 @@ def _sync(dry_run):
     zcoords = map_manifest.zcoords_of(entries)
     grid = _get_grid()
     map_data_list = load_map_data(grid, entries)
+    validate_scope_tiles(grid, scope, map_data_list)
     objects_before = _total_object_count()
 
     print(f"Manifest lists {len(entries)} map(s): {', '.join(zcoords)}")
+    print(f"This run rebuilds {scope.describe()}.")
 
     print("=== Removing maps no longer in the manifest ===")
-    pruned = prune_unlisted_maps(grid, zcoords, dry_run)
-    if not pruned:
-        print("  none")
+    pruned = []
 
-    print("=== Purging objects of listed maps ===")
-    purged = purge_zcoords(zcoords, dry_run)
+    if not scope.is_full:
+        print("  skipped: a scoped run never removes a map")
+    else:
+        pruned = prune_unlisted_maps(grid, zcoords, dry_run)
+        if not pruned:
+            print("  none")
+
+    print("=== Purging objects in scope ===")
+    purged = purge_scope(scope, dry_run)
 
     print("=== Registering listed maps ===")
     register_maps(grid, map_data_list, dry_run)
 
     print("=== Spawning rooms and exits ===")
-    spawn_maps(grid, dry_run)
+    spawn_scope(grid, scope, dry_run)
 
     print("=== Relocating stranded player characters ===")
     relocated = relocate_stranded_characters(dry_run)
@@ -568,14 +926,66 @@ def _sync(dry_run):
     print(f"ObjectDB: {objects_before} -> {objects_after} ({net:+d}).")
 
 
+def _values_after(argv, flag):
+    """
+    Purpose: Collect the value of every occurrence of one repeatable flag.
+
+    Entry:
+        argv is the argument list without the program name; flag is the
+        literal flag string.
+
+    Exit/Returns:
+        Returns a list of values, in the order they were given. Raises
+        RuntimeError if the flag appears with nothing after it.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Walk the list and take the next argument after each match.
+
+    Notes/References:
+        Hand-rolled rather than argparse, because this script already reads
+        `--dry-run` as a plain membership test and the two styles must not sit
+        side by side. Both flags stay repeatable, which argparse would need an
+        action for anyway.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    values = []
+
+    for index, argument in enumerate(argv):
+        if argument != flag:
+            continue
+
+        has_value = index + 1 < len(argv)
+
+        if not has_value:
+            raise RuntimeError(f"{flag} needs a value after it.")
+
+        values.append(argv[index + 1])
+
+    return values
+
+
 def main(argv):
-    """Entry point. Bootstraps Evennia, then syncs the grid to the manifest."""
+    """Entry point. Bootstraps Evennia, then syncs the scoped part of the grid."""
     dry_run = _DRY_RUN_FLAG in argv
 
     _bootstrap_evennia()
 
+    from world.maps import manifest as map_manifest
+    from world.maps import scope as map_scope
+
     try:
-        _sync(dry_run)
+        entries = map_manifest.load_entries()
+        scope = map_scope.build_scope(
+            _values_after(argv, _MAP_FLAG),
+            _values_after(argv, _TILE_FLAG),
+            entries,
+        )
+        _sync(scope, dry_run)
     except Exception as exc:
         print(f"Aborting: {exc}")
         sys.exit(1)

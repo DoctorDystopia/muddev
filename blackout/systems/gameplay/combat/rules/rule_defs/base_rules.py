@@ -21,11 +21,7 @@ from __future__ import annotations
 
 from systems.gameplay.combat import combat_calc
 from systems.gameplay.combat import constants as const
-from systems.gameplay.progression.skills.constants import (
-    SKILL_KEY_BRAWN,
-    SKILL_KEY_DEFENSE,
-    SKILL_KEY_STRIKE,
-)
+from systems.gameplay.progression.skills.constants import SKILL_KEY_DEFENSE
 
 from .. import modifiers
 from ..context import ActionResult
@@ -161,21 +157,33 @@ class BaseActionRules:
     # ─── Effective levels ────────────────────────────────────────────────────
 
     def effective_attack_level(self, context) -> int:
-        """Return the attacker's effective Strike level for this action."""
-        stance = context.stance_bonus(SKILL_KEY_STRIKE)
-        base_level = context.attacker_levels[SKILL_KEY_STRIKE]
+        """Return the attacker's effective ACCURACY level for this action.
+
+        Strike for a melee swing, Guns for a projectile shot. The context
+        names both the skill and the modifier channel, from the axes table
+        the active style points at -- so this routine reads the same for
+        every weapon family and the bow needed no subclass.
+        """
+        skill_key = context.accuracy_skill()
+        stance = context.stance_bonus(skill_key)
+        base_level = context.attacker_levels[skill_key]
 
         return modifiers.apply_to_level(
-            context.attacker_bag, const.CHANNEL_STRIKE_LEVEL, base_level, stance
+            context.attacker_bag, context.accuracy_channel(), base_level, stance
         )
 
     def effective_strength_level(self, context) -> int:
-        """Return the attacker's effective Brawn level for this action."""
-        stance = context.stance_bonus(SKILL_KEY_BRAWN)
-        base_level = context.attacker_levels[SKILL_KEY_BRAWN]
+        """Return the attacker's effective DAMAGE level for this action.
+
+        Brawn for a melee swing, Ballistics for a projectile shot. See
+        effective_attack_level.
+        """
+        skill_key = context.damage_skill()
+        stance = context.stance_bonus(skill_key)
+        base_level = context.attacker_levels[skill_key]
 
         return modifiers.apply_to_level(
-            context.attacker_bag, const.CHANNEL_BRAWN_LEVEL, base_level, stance
+            context.attacker_bag, context.damage_channel(), base_level, stance
         )
 
     def effective_defense_level(self, context) -> int:
@@ -224,7 +232,7 @@ class BaseActionRules:
         equip_str = modifiers.apply_to_int(
             context.attacker_bag, const.CHANNEL_STRENGTH_BONUS, base_equip
         )
-        raw_max = combat_calc.max_melee_hit(eff_str, equip_str)
+        raw_max = combat_calc.max_hit(eff_str, equip_str)
         modified = modifiers.apply_to_int(
             context.attacker_bag, const.CHANNEL_MAX_HIT, raw_max
         )
@@ -275,8 +283,8 @@ class BaseActionRules:
             context.defense_equip_bonus(),
         )
 
-        r_atk = combat_calc.melee_attack_roll(eff_atk, equip_atk)
-        r_def = combat_calc.melee_defense_roll(eff_def, equip_def)
+        r_atk = combat_calc.attack_roll(eff_atk, equip_atk)
+        r_def = combat_calc.defense_roll(eff_def, equip_def)
         chance = combat_calc.hit_chance(r_atk, r_def)
         modified = modifiers.apply_to_scalar(
             context.attacker_bag, const.CHANNEL_HIT_CHANCE, chance
@@ -377,7 +385,11 @@ class BaseActionRules:
         Creation date: 08/04/2026
         """
         seams = _seams(context)
-        result = ActionResult(damage_type=const.DAMAGE_TYPE_MELEE) # Melee only existing action type right now
+        # The damage type comes off the STYLE, through the context, not off
+        # this class. The default rules own the resolve seam in every
+        # ordinary fight, so a type hard-coded here would make a bow deal
+        # melee damage. See ActionContext.damage_type.
+        result = ActionResult(damage_type=context.damage_type())
 
         eff_atk = seams.effective_attack_level(context)
         eff_def = seams.effective_defense_level(context)

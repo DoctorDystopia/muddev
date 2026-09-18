@@ -207,8 +207,69 @@ _GREATSWORD_COMBAT_STYLES = {
 
 
 
+# ─── Common 4-combat-style projectile map ────────────────────────────────────
+# A projectile style carries three keys no melee style does:
+#   combat_axes        — which skills the shot resolves against. Guns for
+#                        accuracy, Ballistics for damage. Melee styles name
+#                        no table and read the melee one.
+#   attack_speed_delta — ticks added to the weapon's speed. Only rapid.
+#   range_bonus        — tiles added to the weapon's max_range. Only snipe.
+#
+# The attack_type is light / standard / heavy rather than stab / slash /
+# crush. It selects the equipment bonus the same way: "light_attack_bonus",
+# "standard_defense_bonus", and so on.
+
+# Shortbow styles
+_SHORTBOW_COMBAT_STYLES = {
+    # Drawn slowly to the anchor point, aimed down the shaft.
+    "accurate": {
+        "attack_type": combat_constants.PROJECTILE_ATTACK_TYPE_STANDARD,
+        "weapon_style": "accurate",
+        "weapon_style_xp_skill": combat_constants.PROJECTILE_ACCURATE_XP_SKILLS,
+        "weapon_style_level_boost": combat_constants.PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_ACCURATE,
+        "combat_axes": combat_constants.PROJECTILE_COMBAT_AXES,
+    },
+    # A short draw and a fast release. It buys the tick with accuracy it
+    # never gets back, which is why its level boost is empty.
+    "rapid": {
+        "attack_type": combat_constants.PROJECTILE_ATTACK_TYPE_LIGHT,
+        "weapon_style": "aggressive",
+        "weapon_style_xp_skill": combat_constants.PROJECTILE_AGGRESSIVE_XP_SKILLS,
+        "weapon_style_level_boost": combat_constants.PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_RAPID,
+        "combat_axes": combat_constants.PROJECTILE_COMBAT_AXES,
+        "attack_speed_delta": -1,
+    },
+    # A full draw held for the heavy shaft, aimed at the gaps in plate.
+    "penetrate": {
+        "attack_type": combat_constants.PROJECTILE_ATTACK_TYPE_HEAVY,
+        "weapon_style": "aggressive",
+        "weapon_style_xp_skill": combat_constants.PROJECTILE_AGGRESSIVE_XP_SKILLS,
+        "weapon_style_level_boost": combat_constants.PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_PENETRATE,
+        "combat_axes": combat_constants.PROJECTILE_COMBAT_AXES,
+    },
+    # Braced and patient, from as far back as the bow will carry.
+    #
+    # THE ONLY STYLE THAT NAMES ITS OWN XP RATE. It trains Guns AND Defense,
+    # so the 4.0 budget every style pays splits between them. Without the
+    # rate it would take the melee defensive rate of 4.0 each and pay half
+    # again as much XP as every other style in the game.
+    "snipe": {
+        "attack_type": combat_constants.PROJECTILE_ATTACK_TYPE_STANDARD,
+        "weapon_style": "defensive",
+        "weapon_style_xp_skill": combat_constants.PROJECTILE_DEFENSIVE_XP_SKILLS,
+        "weapon_style_level_boost": combat_constants.PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_SNIPE,
+        "weapon_style_xp_rate": combat_constants.XP_PER_DAMAGE_PROJECTILE_DEFENSIVE_EACH,
+        "combat_axes": combat_constants.PROJECTILE_COMBAT_AXES,
+        "range_bonus": 2,
+    },
+}
+
+
+
 ITEMS = {
-    # ─── Rusty scrap melee weapons ───────────────────────────────────────────────
+    # ---------------------------------
+    # --- RUSTY SCRAP MELEE WEAPONS ---
+    # ---------------------------------
     "rusty_scrap_dagger": ItemDef(
         key="rusty_scrap_dagger",
         name="rusty scrap dagger",
@@ -397,7 +458,9 @@ ITEMS = {
 
 
 
-    # ─── Scrap melee weapons ───────────────────────────────────────────────
+    # ---------------------------
+    # --- SCRAP MELEE WEAPONS ---
+    # ---------------------------
     "scrap_dagger": ItemDef(
         key="scrap_dagger",
         name="scrap dagger",
@@ -582,5 +645,99 @@ ITEMS = {
         },
         combat_styles=_GREATSWORD_COMBAT_STYLES,
         default_combat_style="slash",
+    ),
+
+
+
+    # --------------------------------------
+    # --- RUSTY SCRAP PROJECTILE WEAPONS ---
+    # --------------------------------------
+    #
+    # A bow carries NO projectile_strength_bonus. The ammunition does. That is
+    # the OSRS rule, and it is what makes an arrow an upgrade path of its own
+    # rather than a consumable with no numbers on it.
+    #
+    # max_range is the tiles it covers, and the snipe style adds two more.
+    # accepted_ammo names the family it fires; an arrow declares the same
+    # family through a tag, so one arrow fits every bow that says so.
+
+    "rusty_scrap_shortbow": ItemDef(
+        key="rusty_scrap_shortbow",
+        name="rusty scrap shortbow",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="A rusty scrap shortbow. The first kind of gun!",
+        value=150,
+        weight=3.628,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="bow",
+        tier=1,
+        req_level=0,
+        tags=[("rusty_scrap_shortbow", "weapon")],
+        attack_speed=3,
+        max_range=7,
+        accepted_ammo=combat_constants.AMMO_FAMILY_ARROW,
+        combat_stat_bonuses={
+            # Melee attack bonuses. A bow is a poor club and says so.
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": -4,
+            # Projectile attack bonuses. A short bow favours the light shaft.
+            "light_attack_bonus": 7,
+            "standard_attack_bonus": 6,
+            "heavy_attack_bonus": 4,
+            # Defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+            # Other bonuses
+            "melee_strength_bonus": 0,
+        },
+        combat_styles=_SHORTBOW_COMBAT_STYLES,
+        default_combat_style="accurate",
+    ),
+
+
+
+    # --------------------------------
+    # --- SCRAP PROJECTILE WEAPONS ---
+    # --------------------------------
+
+    "scrap_shortbow": ItemDef(
+        key="scrap_shortbow",
+        name="scrap shortbow",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="A scrap shortbow, strung with prime sinew. It draws clean.",
+        value=340,
+        weight=3.628,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="bow",
+        tier=1,
+        req_level=10,
+        tags=[("scrap_shortbow", "weapon")],
+        attack_speed=3,
+        max_range=7,
+        accepted_ammo=combat_constants.AMMO_FAMILY_ARROW,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": -4,
+            # Projectile attack bonuses
+            "light_attack_bonus": 11,
+            "standard_attack_bonus": 9,
+            "heavy_attack_bonus": 6,
+            # Defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+            # Other bonuses
+            "melee_strength_bonus": 0,
+        },
+        combat_styles=_SHORTBOW_COMBAT_STYLES,
+        default_combat_style="accurate",
     ),
 }

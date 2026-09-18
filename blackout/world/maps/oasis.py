@@ -29,7 +29,7 @@ MAPSTR = r'''
         |     |           |
     7   #-#---#-#-#-#-#   |
         |         | | |   |
-    6   #-#-#-A   #-#-#-#-#
+    6   #-#-#-A   B-#-#-#-#
            \      | | |
     5   #---#-#---#-#-#
        /    |
@@ -81,9 +81,23 @@ class FurnaceFacilityNode(MapNode):
 
 class AnvilFacilityNode(MapNode):
     """
-    Custom MapNode for blacksmith anvils.
+    Custom MapNode for metalsmith anvils.
     """
     display_symbol = "|wA|n"
+    prototype = "xyz_room"
+
+
+
+class GunbenchFacilityNode(MapNode):
+    """
+    Custom MapNode for gunsmith benches.
+
+    "B" for bench, not "G". The Gastronomy worktable was already using "G",
+    and LEGEND is a dict: two rows claiming one symbol is not an error, the
+    second row simply wins. The bench drew as a worktable and the map had no
+    gun bench at all.
+    """
+    display_symbol = "|wB|n"
     prototype = "xyz_room"
 
 
@@ -157,6 +171,7 @@ LEGEND = {
     "ß": BankNode,
     "F": FurnaceFacilityNode,
     "A": AnvilFacilityNode,
+    "B": GunbenchFacilityNode,
     "R": RenderingCookerFacilityNode,
     "C": CuringChamberFacilityNode,
     "G": GastroWorktableFacilityNode,
@@ -196,6 +211,13 @@ _anvil = {
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Metalsmith Anvil Facility",
     "desc": "A Metalsmith's heavy steel anvil.",
+}
+
+_gunbench = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Gunsmith Bench Facility",
+    "desc": "A Gunsmith's workbench.",
 }
 
 # The facility standing on this tile spawns off the room KEY, matched against
@@ -408,6 +430,8 @@ PROTOTYPES = {
     (6, 3): _signed(_furnace, "Foundry Furnace"),
     (4, 6): _anvil,
     (4, 6): _signed(_anvil, "Metalsmith Anvil"),
+    (6, 6): _gunbench,
+    (6, 6): _signed(_gunbench, "Gunsmith Bench"),
     (0, 10): _rendering_cooker,
     (0, 10): _signed(_rendering_cooker, "Rendering Cooker"),
     (4, 10): _curing_chamber,

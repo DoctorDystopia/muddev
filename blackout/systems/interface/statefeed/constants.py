@@ -698,6 +698,53 @@ TARGETED_VERB_BY_KIND: dict = {
     ASSET_KIND_ITEM: "get",
 }
 
+# ─── Who walks ───────────────────────────────────────────────────────────────
+# A click on a thing the player is not standing with has to walk there first,
+# and the client wraps such a command in the server's own
+# ENTITY_APPROACH_TEMPLATE -- `goto (4,7) then cut rusty pole`. That is right
+# for every verb that acts where it stands, and WRONG for the one that does
+# not: a bow reaches seven tiles, so wrapping `attack` walked the archer onto
+# the raider before firing a shot that was already legal from where it stood.
+#
+# The client cannot decide this. How far a weapon carries is a rule, it
+# changes with what the player holds, and a client that branched on it would
+# hold the fourth copy of a verb table this codebase has already deleted three
+# times. So the SERVER says which commands walk for themselves, and the client
+# sends those verbatim from wherever it is.
+#
+# Named for the COMMAND rather than the entity, because that is what the fact
+# is about: `attack` closes its own distance (see CmdAttack), and it does so
+# whatever it is aimed at.
+SELF_APPROACHING_VERBS: frozenset = frozenset({"attack"})
+
+
+# ─── Which one ───────────────────────────────────────────────────────────────
+# A NAME IS NOT AN IDENTITY. Six raiders on one island are six objects with one
+# key, so `attack mutant raider` reached the player as a multimatch list of
+# `Mutant Raider-1` through `Mutant Raider-6` -- a question about the thing the
+# player had already clicked on.
+#
+# The inventory answered this long ago: `serialize_inventory` names a SLOT, not
+# an item name. An entity's equivalent handle is its dbref, and it is the only
+# one that cannot repeat. The commands below therefore name the target that
+# way, and the client sends the string exactly as it always did.
+#
+# It is still a command a telnet player could type. `attack #75931` resolves
+# for anyone, because CmdAttack asks for the dbref explicitly -- and it
+# resolves only inside the candidate list the command already builds, so
+# nobody can name a dbref into a fight they cannot see.
+DBREF_TARGET_VERBS: frozenset = frozenset({"attack"})
+
+# How a dbref is written into a command. One owner, because the command that
+# builds it and the command that parses it are in different files.
+ENTITY_DBREF_TEMPLATE: str = "#{dbref}"
+
+# The payload key carrying the answer. Present and False only for a
+# self-approaching command; ABSENT means the client walks, which is what every
+# client did before this field existed and what nearly every entity still
+# wants.
+ENTITY_APPROACH_KEY: str = "approach"
+
 # Room prototype key used when a room carries none. Matches the wildcard
 # behaviour of the ('*', '*') entry in a map's PROTOTYPES table.
 ROOM_KIND_DEFAULT: str = "default"

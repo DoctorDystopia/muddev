@@ -14,9 +14,14 @@ must never become one: CLAUDE.md records that bulk-importing modules under
 blackout/ once executed an operator script and deleted 347 grid rooms.
 """
 
+
+
 import importlib
 
 from evennia.utils import logger
+
+from .constants import AI_BEHAVIOR_ATTR
+
 
 
 # key -> callable(handler) -> action dict | None
@@ -29,6 +34,7 @@ _BEHAVIOR_MODULES = [
 ]
 
 _LOADED = False
+
 
 
 def load_all_behaviors() -> None:
@@ -68,6 +74,7 @@ def load_all_behaviors() -> None:
 
     for module_name in _BEHAVIOR_MODULES:
         importlib.import_module(module_name)
+
 
 
 def register_behavior(behavior_key: str):
@@ -111,6 +118,7 @@ def register_behavior(behavior_key: str):
     return decorator
 
 
+
 def get_behavior(behavior_key: str):
     """
     Purpose: Look a behaviour up by key, loading the registry if needed.
@@ -145,3 +153,55 @@ def get_behavior(behavior_key: str):
     behavior = BEHAVIOR_REGISTRY.get(behavior_key)
 
     return behavior
+
+
+
+def behavior_key_for(npc) -> str:
+    """
+    Purpose: Name the behaviour this NPC runs, from its DEFINITION.
+
+    Entry:
+        npc - the NPC being asked for an action.
+
+    Exit/Returns:
+        Returns a key into BEHAVIOR_REGISTRY, or "" for an NPC that acts on
+        nothing -- which is every player Character, and is not an error.
+
+    Module Globals:
+        AI_BEHAVIOR_ATTR read.
+
+    Methodology:
+        THE DEF IS READ BEFORE THE ROW, AND THE ORDER IS THE POINT. NpcDef
+        stamps ai_behavior onto every NPC it spawns, so a changed default
+        reaches new NPCs and no others: the raiders already standing in the
+        world keep the key their spawn wrote, forever, and a retune of the AI
+        looks like a retune that did nothing. Reading the def first means the
+        fix to one line of content corrects every instance already in the
+        database, with no migration and no map rebuild.
+
+        This is TalkativeNPC._dialogue_module_for's arrangement, applied to
+        the other fact NpcDef stamps. CLAUDE.md records both halves of the
+        lesson under "An import path belongs in the code, never in a database
+        row".
+
+        The row is still the answer for an NPC that names no def -- a
+        hand-built one, or a test fixture -- which is why it stays a fallback
+        rather than being deleted.
+
+    Notes/References:
+        The NPC_DB import is deferred. This module is reached from
+        systems/gameplay/combat/combat.py, which typeclass modules import at
+        startup, and world/npc_database.py pulls in every NpcDef module.
+
+    Author: Nick Hobar
+    Creation date: 09/17/2026
+    """
+    from world.npc_database import NPC_DB, NPC_KEY_ATTR
+
+    npc_key = getattr(npc.db, NPC_KEY_ATTR, None)
+    definition = NPC_DB.get(npc_key) if npc_key else None
+
+    if definition is not None:
+        return definition.ai_behavior or ""
+
+    return getattr(npc.db, AI_BEHAVIOR_ATTR, None) or ""

@@ -12,7 +12,9 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
-    # Rusty metal items
+    # -------------------------
+    # --- RUSTY METAL ITEMS ---
+    # -------------------------
     "rusty_metal_chunk": ItemDef(
         key="rusty_metal_chunk",
         name="rusty metal chunk",
@@ -46,6 +48,78 @@ ITEMS = {
         tags=[("rusty_scrap_metal", "crafting_material")],
     ),
 
+    # -------------------
+    # --- METAL ITEMS ---
+    # -------------------
+    "metal_chunk": ItemDef(
+        key="metal_chunk",
+        name="metal chunk",
+        desc="A chunk of metal. Weirdly fresh.",
+        value=17,
+        weight=2.267,
+        tradeable=True,
+        stackable=False,
+        tags=[("metal_chunk", "crafting_material")],
+    ),
+
+    "metal_dust": ItemDef(
+        key="metal_dust",
+        name="metal dust",
+        desc="A fine, grey dust ground from metal.",
+        value=19,
+        weight=0.2,
+        tradeable=True,
+        stackable=True,
+        tags=[("metal_dust", "crafting_material")],
+    ),
+    
+    "scrap_metal": ItemDef(
+        key="scrap_metal",
+        name="scrap metal",
+        desc="A rough piece of scrap metal, smelted down from a metal chunk.",
+        value=28,
+        weight=1.814,
+        tradeable=True,
+        stackable=False,
+        tags=[("scrap_metal", "crafting_material")],
+    ),
+
+    # --------------------
+    # --- COPPER ITEMS ---
+    # --------------------
+    "copper_chunk": ItemDef(
+        key="copper_chunk",
+        name="copper chunk",
+        desc="A chunk of copper. Weirdle fresh.",
+        value=25,
+        weight=2.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("copper_chunk", "crafting_material")],
+    ),
+
+    "copper_dust": ItemDef(
+        key="copper_dust",
+        name="copper dust",
+        desc="A fine, dust ground from copper.",
+        value=30,
+        weight=0.2,
+        tradeable=True,
+        stackable=True,
+        tags=[("copper_dust", "crafting_material")],
+    ),
+
+    "scrap_copper": ItemDef(
+        key="scrap_copper",
+        name="scrap copper",
+        desc="A rough piece of scrap copper, smelted down from a copper chunk.",
+        value=35,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("scrap_copper", "crafting_material")],
+    ),
+
 
 
     # ─── Mutant raider cuts (Butchery) ────────────────────────────────────
@@ -61,6 +135,7 @@ ITEMS = {
     # `mutant_raider_chuck` would be the one nobody could name -- which is why
     # the crafting spreadsheet, the source of truth for this chain, spells it
     # with the prefix.
+    
     "mutant_raider_raw_chuck": ItemDef(
         key="mutant_raider_raw_chuck",
         name="mutant raider raw chuck",
@@ -71,6 +146,7 @@ ITEMS = {
         stackable=False,
         tags=[("mutant_raider_raw_chuck", "crafting_material")],
     ),
+
     "mutant_raider_raw_filet": ItemDef(
         key="mutant_raider_raw_filet",
         name="mutant raider raw filet",
@@ -80,6 +156,28 @@ ITEMS = {
         tradeable=True,
         stackable=False,
         tags=[("mutant_raider_raw_filet", "crafting_material")],
+    ),
+
+    "mutant_raider_raw_hide": ItemDef(
+        key="mutant_raider_raw_hide",
+        name="mutant raider raw hide",
+        desc="A thick, leathery piece of skin from a mutant raider.",
+        value=12,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_raider_raw_hide", "crafting_material")],
+    ),
+
+    "mutant_raider_prime_hide": ItemDef(
+        key="mutant_raider_prime_hide",
+        name="mutant raider prime hide",
+        desc="A whole back hide, taken off clean. The grain runs one way the length of it.",
+        value=30,
+        weight=1.4,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_raider_prime_hide", "crafting_material")],
     ),
 
 
@@ -97,6 +195,7 @@ ITEMS = {
     # Neither is food. Nothing here is edible and the spreadsheet's "eat to
     # heal HP" column is empty for every Rendering row -- these are the
     # INGREDIENTS Curing and Gastronomy turn into food.
+
     "mutant_raider_tallow": ItemDef(
         key="mutant_raider_tallow",
         name="mutant raider tallow",
@@ -143,37 +242,32 @@ ITEMS = {
 
 
 
-    # Metal items
-    "metal_chunk": ItemDef(
-        key="metal_chunk",
-        name="metal chunk",
-        desc="A chunk of metal. Weirdly fresh.",
-        value=17,
-        weight=2.267,
-        tradeable=True,
-        stackable=False,
-        tags=[("metal_chunk", "crafting_material")],
-    ),
+    # ─── Cured mutant raider products (Curing) ──────────────────────
+    # This is used for a Gunsmith recipe, so it's not in food.py.
+    # mutant_raider_raw_hide is used to make mutant_raider_sinew
 
-    "metal_dust": ItemDef(
-        key="metal_dust",
-        name="metal dust",
-        desc="A fine, grey dust ground from metal.",
-        value=19,
+    "mutant_raider_sinew": ItemDef(
+        key="mutant_raider_sinew",
+        name="mutant raider sinew",
+        desc="A tough, fibrous strand of muscle, still attached to the bone.",
+        value=15,
         weight=0.2,
         tradeable=True,
         stackable=True,
-        tags=[("metal_dust", "crafting_material")],
+        tags=[("mutant_raider_sinew", "crafting_material")],
     ),
-    
-    "scrap_metal": ItemDef(
-        key="scrap_metal",
-        name="scrap metal",
-        desc="A rough piece of scrap metal, smelted down from a metal chunk.",
-        value=28,
-        weight=1.814,
+
+    # The tier 2 string. Cured off the prime hide, which the level 10 cut
+    # yields beside the filet -- so the Gunsmith's second bow and the
+    # Gastronomy chain open at the same Butchery level, off one corpse.
+    "mutant_raider_prime_sinew": ItemDef(
+        key="mutant_raider_prime_sinew",
+        name="mutant raider prime sinew",
+        desc="A long, even cord drawn off a whole hide and twisted tight. It does not fray.",
+        value=45,
+        weight=0.2,
         tradeable=True,
-        stackable=False,
-        tags=[("scrap_metal", "crafting_material")],
+        stackable=True,
+        tags=[("mutant_raider_prime_sinew", "crafting_material")],
     ),
 }

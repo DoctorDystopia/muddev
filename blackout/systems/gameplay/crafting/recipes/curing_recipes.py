@@ -58,6 +58,46 @@ class MutantRaiderCuredChuckRecipe(CuringRecipe):
 
 
 
+class MutantRaiderSinewRecipe(CuringRecipe):
+    "Salt and hang a raw chuck until it keeps."
+
+    name = "mutant raider sinew"
+    required_level = 0
+    xp_reward = 25
+    cure_seconds = _CHUCK_TIER_SECONDS
+
+    consumable_tags = ["mutant_raider_raw_hide"]
+    consumable_names = ["mutant raider raw hide"]
+
+    output_item_keys = ["mutant_raider_sinew"]
+
+    success_message = "You draw the sinew out of the chamber."
+
+
+
+class MutantRaiderPrimeSinewRecipe(CuringRecipe):
+    """Draw a whole prime hide down into one even cord.
+
+    The tier 2 string, and the Gunsmith's only reason to level Curing. It
+    sits at the same level the filet does, and takes the hide the same cut
+    yields, so one corpse at Butchery 10 feeds the food chain and the
+    projectile chain alike.
+    """
+
+    name = "mutant raider prime sinew"
+    required_level = 10
+    xp_reward = 50
+    cure_seconds = _PRIME_TIER_SECONDS
+
+    consumable_tags = ["mutant_raider_prime_hide"]
+    consumable_names = ["mutant raider prime hide"]
+
+    output_item_keys = ["mutant_raider_prime_sinew"]
+
+    success_message = "You draw the prime sinew out of the chamber."
+
+
+
 class MutantRaiderCuredFatlessMeatRecipe(CuringRecipe):
     """Cure meat the cooker has already rendered lean.
 

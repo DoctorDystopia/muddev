@@ -205,6 +205,19 @@ class WeaponItem(EquippableItem):
     """
 
 
+class AmmunitionItem(EquippableItem):
+    """
+    What a projectile weapon fires. Stackable, and equipped into
+    WieldLocation.AMMO.
+
+    As with ToolItem, every value comes from the spawning ItemDef. The class
+    exists so the 3D pane and a future fletching recipe can ask what an
+    object IS without reading a tag, the same reason CurrencyItem exists --
+    and because an arrow is the one equippable the combat action DESTROYS,
+    one unit at a time, which no other EquippableItem does.
+    """
+
+
 class ArmorItem(EquippableItem):
     """
     Tiered armor like chest pieces and shields.

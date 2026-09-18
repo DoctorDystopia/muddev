@@ -743,6 +743,10 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
     answer for a target in your own bag is the |xYou won!|n branch -- so
     `get mutant raider` followed by `attack mutant raider` reported a win
     over an NPC that was never engaged and took no damage.
+
+    The check is now a REACH check, and these cases still hold because bare
+    hands reach zero tiles. The refusal wording moved with it: a fight
+    refused for distance says so, and names the weapon's reach.
     """
 
     def test_a_carried_target_is_refused(self):
@@ -762,7 +766,7 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
 
         self.assertFalse(accepted)
 
-    def test_the_refusal_says_the_target_is_not_here(self):
+    def test_the_refusal_says_the_target_cannot_be_reached(self):
         handler = ensure_combat_handler(self.char1)
         target = spawn_mutant_raider(self.room2)
         seen = []
@@ -770,7 +774,7 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
 
         handler._validate_attack({"kind": "attack", "target": target})
 
-        self.assertIn("not here", seen[0][0])
+        self.assertIn("cannot reach", seen[0][0].lower())
 
     def test_a_target_in_the_same_room_is_still_accepted(self):
         handler = ensure_combat_handler(self.char1)
@@ -779,3 +783,94 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
         accepted = handler._validate_attack({"kind": "attack", "target": target})
 
         self.assertTrue(accepted)
+
+
+class TestTheDefenderDoesNotEndTheFight(EvenniaTest):
+    """The defect: `The combat is over. You won!` over a live raider.
+
+    A melee NPC reaches one tile. check_stop_combat used to ask for an enemy
+    inside the handler's OWN reach, so a raider being shot from seven tiles
+    found none, spent the grace, and ended ITS combat -- which deleted the
+    handler the archer's own check was reading. The archer was then told it
+    had won, against a raider standing at four hitpoints.
+
+    Engagement replaced reach on that question. Reach still decides who can
+    ACT, and nothing here changes that.
+    """
+
+    def setUp(self):
+        super().setUp()
+
+        bootstrap_tick()
+
+        self.archer_tile = self._tile(0, 0)
+        self.raider_tile = self._tile(5, 0)
+
+        self.char1.location = self.archer_tile
+        self.raider = spawn_mutant_raider(self.raider_tile)
+
+        self.archer = ensure_combat_handler(self.char1)
+        self.defender = ensure_combat_handler(self.raider)
+
+        self.archer.init_runtime_state()
+        self.defender.init_runtime_state()
+
+        # A bow's reach, without a bow: the profile is what reach reads, and
+        # this case is about the fight ending, not about the equipment.
+        self.archer.ndb.active_weapon_data = dict(
+            combat_profile(self.char1), max_range=7
+        )
+        self.archer.ndb.target_id = self.raider.id
+
+    def _tile(self, x, y):
+        from typeclasses.rooms import GridTile
+
+        room, _err = GridTile.create(f"engage-{x}-{y}", xyz=(x, y, "engagemap"))
+
+        return room
+
+    def test_the_archer_counts_the_raider_as_an_enemy(self):
+        _allies, enemies = self.archer.get_sides()
+
+        self.assertIn(self.raider, enemies)
+
+    def test_the_raider_counts_the_archer_as_an_enemy(self):
+        """The half that was broken. The raider reaches zero tiles, so the
+        archer is not in its reach and never was."""
+        _allies, enemies = self.defender.get_sides()
+
+        self.assertIn(self.char1, enemies)
+
+    def test_the_raider_does_not_end_its_own_combat(self):
+        for _ in range(const.OUT_OF_REACH_GRACE_TICKS + 2):
+            ended = self.defender.check_stop_combat()
+
+            self.assertFalse(ended)
+
+    def test_the_archer_is_never_told_it_won(self):
+        seen = []
+        self.char1.msg = lambda text=None, **kwargs: seen.append(text)
+
+        for _ in range(const.OUT_OF_REACH_GRACE_TICKS + 2):
+            self.archer.check_stop_combat()
+
+        self.assertEqual(seen, [])
+
+    def test_walking_out_of_the_engagement_radius_still_ends_it(self):
+        """The grace is what lets a player leave a fight, and it still does.
+        Only the distance it measures against changed."""
+        # Measured from the RAIDER's tile, not from the origin: the raider
+        # stands at x=5, and a boundary case would pass this test by accident.
+        far_x = 5 + const.ENGAGEMENT_RADIUS_TILES + 5
+        far = self._tile(far_x, 0)
+        self.char1.location = far
+
+        ended = False
+
+        for _ in range(const.OUT_OF_REACH_GRACE_TICKS + 2):
+            ended = self.defender.check_stop_combat()
+
+            if ended:
+                break
+
+        self.assertTrue(ended)

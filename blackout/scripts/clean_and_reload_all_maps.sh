@@ -10,6 +10,15 @@
 #
 # Pass --dry-run to report what a rebuild would add and remove without
 # touching the database or the running server.
+#
+# Without a scope flag this rebuilds every map in the manifest, which is what
+# it always did. --map and --tile narrow it:
+#
+#   ./scripts/clean_and_reload_all_maps.sh --map oasis
+#   ./scripts/clean_and_reload_all_maps.sh --tile oasis:12,4 --tile oasis:12,5
+#
+# Both flags repeat, and every argument is passed through to map_sync.py
+# unchanged. world/maps/scope.py owns their format.
 
 set -u
 
@@ -43,7 +52,7 @@ done
 
 # A dry run only reads, so it neither stops the server nor spawns afterwards.
 if [ "$DRY_RUN" -eq 1 ]; then
-    "$PYTHON" "$MAP_SYNC" --dry-run
+    "$PYTHON" "$MAP_SYNC" "$@"
     exit $?
 fi
 
@@ -51,7 +60,7 @@ echo "=== Stopping Evennia ==="
 "$EVENNIA" stop
 
 echo "=== Syncing grid to map manifest ==="
-if ! "$PYTHON" "$MAP_SYNC"; then
+if ! "$PYTHON" "$MAP_SYNC" "$@"; then
     echo "Error: map sync failed; server left stopped" >&2
     exit 1
 fi

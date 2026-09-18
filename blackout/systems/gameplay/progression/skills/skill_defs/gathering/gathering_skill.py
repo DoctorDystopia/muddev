@@ -243,10 +243,11 @@ class GatheringSkill(BaseSkill):
 
         Methodology:
             Unasked, the harvest gives the BEST cut the character has unlocked
-            -- the highest required_level they meet. Level 0 knows only the
-            chuck, so the default is the only thing they can do; at Butchery
-            10 the filet becomes the default and the chuck stays available by
-            name. That is the design rule read forwards: levelling should
+            -- the highest required_level they meet, and of the yields tied at
+            that level, the one declared first (see _default_yield). At level
+            0 the chuck is the default and the hide is available by name. At
+            Butchery 10 the filet becomes the default, and the chuck and both
+            hides stay available by name. That is the design rule read forwards: levelling should
             change what happens by default, and naming a cut should still be
             possible afterwards.
 
@@ -306,8 +307,6 @@ class GatheringSkill(BaseSkill):
 
             return matched, ""
 
-        # yields_for_skill sorts ascending, so the last one they qualify for
-        # is the best one they qualify for.
         unlocked = [
             entry for entry in candidates
             if character.skills.meets_prerequisite(self.key, entry.required_level)
@@ -320,7 +319,57 @@ class GatheringSkill(BaseSkill):
                 f"{self.name} level {lowest.required_level}."
             )
 
-        return unlocked[-1], ""
+        default = self._default_yield(unlocked)
+
+        return default, ""
+
+
+    def _default_yield(self, unlocked: list):
+        """
+        Purpose: The yield an unasked harvest gives, from the ones unlocked.
+
+        Entry:
+            unlocked is a non-empty list of GatherableYield, in the order
+            yields_for_skill returns them.
+
+        Exit/Returns:
+            Returns the FIRST-DECLARED yield of the highest required_level in
+            the list.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The highest level is the tier the character has most recently
+            reached. Inside that tier, declaration order breaks a tie. The
+            sort in yields_for_skill is stable, so the list keeps the
+            declaration order of yields that share a level.
+
+            "The last one in the list" was the rule until the corpse gained a
+            hide beside the chuck at level 0 and beside the filet at level
+            10. The ladder had no ties before, so "last" and "best" meant the
+            same thing. With a tie, "last" meant "declared last", and one
+            added yield silently changed the default of every character at
+            that tier.
+
+            First-declared makes the addition safe. A new yield at an
+            existing level is available by name and never displaces the
+            default. To make a new yield the default, declare it first, or
+            give it a level of its own.
+
+        Notes/References:
+            GatherableDef.yields_for_skill owns the order this reads.
+
+        Author: Nick Hobar
+        Creation date: 09/17/2026
+        """
+        top_level = unlocked[-1].required_level
+
+        for entry in unlocked:
+            if entry.required_level == top_level:
+                return entry
+
+        return unlocked[-1]
 
 
 

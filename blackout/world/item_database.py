@@ -62,6 +62,15 @@ class ItemDef:
     #     conditional stat modifier, or a whole-action override.
     #     A LIST, not one key, so behaviours combine without a bespoke class
     #     per combination. Unknown keys are logged and skipped, not raised.
+    # max_range — how far this weapon reaches, in tiles. ZERO means the same
+    #     tile, which is every melee weapon and bare hands, so no melee def
+    #     declares it. A style may add to it through its own range_bonus.
+    # accepted_ammo — the ammunition FAMILY this weapon fires, matched against
+    #     the (family, AMMO_FAMILY_TAG_CATEGORY) tag an ammunition item
+    #     carries. None means the weapon needs no ammunition, which is every
+    #     melee weapon. The WEAPON names the family, not the other way round:
+    #     one arrow must fit every bow that says it does, with no edit to the
+    #     arrow.
     # ─── Consumable fields (food only; None on everything else) ──
     # heal_amount — hit points restored when eaten. This is the field that
     #     makes an item FOOD: None means not edible, and nothing else decides
@@ -88,6 +97,8 @@ class ItemDef:
     attack_delay_ticks: int | None = None
 
     attack_speed: int | None = None
+    max_range: int = 0
+    accepted_ammo: str | None = None
     combat_stat_bonuses: dict = field(default_factory=dict)
     combat_styles: dict = field(default_factory=dict)
     default_combat_style: str | None = None
@@ -144,6 +155,13 @@ class ItemDef:
         # stay clean.
         if self.attack_speed is not None:
             attrs["attack_speed"] = self.attack_speed
+        # Emitted only when it reaches past its own tile. A melee weapon
+        # carrying an explicit max_range of 0 would be a row of noise on every
+        # sword in the game, and combat reads an absent value as 0 anyway.
+        if self.max_range:
+            attrs["max_range"] = self.max_range
+        if self.accepted_ammo is not None:
+            attrs["accepted_ammo"] = self.accepted_ammo
         if self.combat_stat_bonuses:
             attrs["combat_stat_bonuses"] = dict(self.combat_stat_bonuses)
         if self.combat_styles:
@@ -280,6 +298,7 @@ from .item_defs.materials import ITEMS as _MATERIALS
 from .item_defs.tools import ITEMS as _TOOLS
 from .item_defs.currencies import ITEMS as _CURRENCIES
 from .item_defs.weapons import ITEMS as _WEAPONS
+from .item_defs.ammunition import ITEMS as _AMMUNITION
 from .item_defs.gadgets import ITEMS as _GADGETS
 from .item_defs.jewellery import ITEMS as _JEWELLERY
 from .item_defs.armor_head import ITEMS as _ARMOR_HEAD
@@ -297,5 +316,5 @@ from .item_defs.food import ITEMS as _FOOD
 # out of the loop contributes nothing and raises nothing -- its items simply
 # do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _AMMUNITION, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD]:
     ITEM_DB.update(_d)

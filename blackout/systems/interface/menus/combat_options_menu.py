@@ -51,6 +51,21 @@ def _boost_text(boosts) -> str:
     return ", ".join(parts) if parts else NONE_TEXT
 
 
+def _pace_text(row: dict) -> str:
+    """Render the speed a style fights at, and the reach it adds.
+
+    The reach is printed only when the weapon has one. Every melee weapon
+    reaches its own tile, and a row saying "Reach: 0" on every sword in the
+    game tells the player nothing.
+    """
+    parts = [f"{row['speed_seconds']}s"]
+
+    if row.get("range_tiles"):
+        parts.append(f"{row['range_tiles']} tiles")
+
+    return ", ".join(parts)
+
+
 def _style_line(row: dict) -> str:
     """One style as the menu prints it."""
     marker = f" {SUCCESS_COLOR}{ACTIVE_MARKER}{RESET_COLOR}" if row["active"] else ""
@@ -62,7 +77,8 @@ def _style_line(row: dict) -> str:
     return (
         f"  {HIGHLIGHT_COLOR}{row['name']}{RESET_COLOR}{marker} "
         f"— {attack_type}. Style: {weapon_style}. "
-        f"Boosts: {boost_text}. XP: {xp_text}"
+        f"Boosts: {boost_text}. XP: {xp_text}. "
+        f"Pace: {_pace_text(row)}"
     )
 
 

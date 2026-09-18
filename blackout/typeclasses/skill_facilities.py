@@ -13,6 +13,7 @@ from systems.gameplay.crafting.constants import (
     CRAFT_CATEGORY_CURING,
     CRAFT_CATEGORY_FOUNDRY,
     CRAFT_CATEGORY_GASTRONOMY,
+    CRAFT_CATEGORY_GUNSMITH,
     CRAFT_CATEGORY_METALSMITH,
     CRAFT_CATEGORY_RENDERING,
 )
@@ -313,6 +314,41 @@ class AnvilFacility(MetalsmithBaseFacility):
         self.db.desc = "A solid steel anvil, scarred from years of use. Perfect for shaping metal."
 
 
+class GunsmithBaseFacility(CraftingFacility):
+    """
+    The base crafting facility for Gunsmith-skill production.
+    Specific facility types (GunbenchFacility, etc.) inherit from this
+    and add their own tool tags for recipe tool requirements.
+    """
+    allowed_categories = [CRAFT_CATEGORY_GUNSMITH]
+
+    def at_object_creation(self):
+        parent_class = super()
+        parent_class.at_object_creation()
+        self.locks.add("get:false()")
+        self.db.desc = "A Gunsmith facility for building projectile weapons and the ammunition they fire."
+
+
+class GunbenchFacility(GunsmithBaseFacility):
+    """
+    A bench where players build bows and arrows via the Gunsmith skill.
+    Only Gunsmith-category recipes are shown in the craft menu.
+    Tagged as a 'gunbench' tool so it satisfies recipe tool requirements.
+
+    ONE TOOL TAG, NOT the anvil's. The two bow recipes named "hammer" and
+    "anvil" while their comment claimed they matched this bench, so every
+    Gunsmith recipe was craftable at the Metalsmith anvil and nowhere else.
+    The bench is the place, and the tag is what says so.
+    """
+    asset_key = "gunbench"
+
+    def at_object_creation(self):
+        parent_class = super()
+        parent_class.at_object_creation()
+        self.tags.add("gunbench", category="crafting_tool")
+        self.db.desc = "A long bench under a strip light, laid out with jigs, a vice and a coil of drawn wire."
+
+
 class GastronomyBaseFacility(CraftingFacility):
     """
     The base crafting facility for Gastronomy-skill production.
@@ -384,6 +420,15 @@ def spawn_curing_chamber_facility(room):
         room,
         "typeclasses.skill_facilities.CuringChamberFacility",
         key="Curing Chamber",
+    )
+
+
+@register_spawner("Gunsmith Bench Facility")
+def spawn_gunbench_facility(room):
+    spawn_once(
+        room,
+        "typeclasses.skill_facilities.GunbenchFacility",
+        key="Gunsmith Bench",
     )
 
 

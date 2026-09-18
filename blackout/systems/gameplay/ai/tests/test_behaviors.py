@@ -25,9 +25,11 @@ from systems.gameplay.ai.constants import (
 )
 from systems.gameplay.ai.registry import (
     BEHAVIOR_REGISTRY,
+    behavior_key_for,
     get_behavior,
     load_all_behaviors,
 )
+from world.npc_database import NPC_DB, NPC_KEY_ATTR
 from systems.gameplay.combat.combat import ensure_combat_handler, get_handler_for
 from systems.gameplay.combat.rules.context import ActionResult
 from systems.core.tick.engine import bootstrap_tick, get_tick_engine
@@ -161,6 +163,9 @@ class TestControllerSeam(EvenniaTest):
 
     def test_an_unknown_behavior_key_is_logged_and_survives(self):
         npc = spawn_mutant_raider(self.room1)
+        # The ROW is the answer only for an NPC that names no definition, so
+        # the key is cleared to reach it. See behavior_key_for.
+        setattr(npc.db, NPC_KEY_ATTR, None)
         setattr(npc.db, AI_BEHAVIOR_ATTR, "no_such_behavior")
         handler = ensure_combat_handler(npc)
         handler.init_runtime_state()
@@ -169,6 +174,21 @@ class TestControllerSeam(EvenniaTest):
             handler._consult_controller()
 
         self.assertTrue(mocked_log.called)
+
+    def test_the_definition_wins_over_a_stale_stamped_row(self):
+        """The reason behavior_key_for exists.
+
+        NpcDef.create stamps ai_behavior onto every NPC it spawns. A retune of
+        that field would otherwise reach new NPCs only, and every raider
+        already standing in the world would keep fighting the old way with
+        nothing to say why.
+        """
+        npc = spawn_mutant_raider(self.room1)
+        setattr(npc.db, AI_BEHAVIOR_ATTR, "no_such_behavior")
+
+        definition = NPC_DB[getattr(npc.db, NPC_KEY_ATTR)]
+
+        self.assertEqual(behavior_key_for(npc), definition.ai_behavior)
 
     def test_a_raising_behavior_is_caught_and_logged(self):
         """The gotcha this whole seam is shaped around.

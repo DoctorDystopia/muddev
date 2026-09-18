@@ -26,6 +26,8 @@ Description: What a character's combat options ARE -- the wielded weapon, its
              that is the style _resolve_style_and_speed falls back to for it.
 """
 
+
+
 from systems.core.tick import constants as tick_const
 from systems.gameplay.combat import constants as const
 from systems.gameplay.combat.combat import (
@@ -36,6 +38,7 @@ from systems.gameplay.combat.combat import (
 )
 
 
+
 # ─── Public constant definitions ─────────────────────────────────────────────
 
 # Printed when a style is switched, by the command and the menu alike, so the
@@ -43,11 +46,13 @@ from systems.gameplay.combat.combat import (
 STYLE_SWITCHED_TEMPLATE: str = "You switch to {name} style."
 
 
+
 # ─── Private constant definitions ────────────────────────────────────────────
 
 # Decimal places the attack speed in seconds is rounded to. A whole number of
 # 0.6s ticks is exact at one place; the rounding only removes float noise.
 _SPEED_SECONDS_DIGITS: int = 1
+
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -61,6 +66,7 @@ def _skill_keys(value) -> tuple:
         return (value,)
 
     return tuple(value)
+
 
 
 def _skill_entry(skill_key: str, amount=None) -> dict:
@@ -84,9 +90,18 @@ def _skill_entry(skill_key: str, amount=None) -> dict:
     return entry
 
 
+
 def _style_row(style_key: str, style: dict, active: bool,
-               selectable: bool) -> dict:
-    """One style as plain values. `command` is empty when it cannot be picked."""
+               selectable: bool, base_speed: int = 0,
+               base_range: int = 0) -> dict:
+    """One style as plain values. `command` is empty when it cannot be picked.
+
+    Carries the SPEED AND REACH THIS STYLE WOULD GIVE, not the speed and
+    reach the weapon has now. A player choosing between styles has to be able
+    to see what rapid buys and what snipe buys before picking one -- a screen
+    that only reported the active style's numbers would make both invisible
+    until after the choice.
+    """
     boosts = []
 
     for skill_key, amount in (style.get("weapon_style_level_boost") or {}).items():
@@ -99,6 +114,15 @@ def _style_row(style_key: str, style: dict, active: bool,
 
     command = command_for(style_key) if selectable else ""
 
+    speed_ticks = max(
+        const.MIN_ATTACK_SPEED_TICKS,
+        base_speed + int(style.get(const.STYLE_ATTACK_SPEED_DELTA_KEY, 0) or 0),
+    )
+    range_tiles = max(
+        const.MELEE_REACH_TILES,
+        base_range + int(style.get(const.STYLE_RANGE_BONUS_KEY, 0) or 0),
+    )
+
     return {
         "key": str(style_key),
         "name": str(style_key).title(),
@@ -106,22 +130,38 @@ def _style_row(style_key: str, style: dict, active: bool,
         "weapon_style": str(style.get("weapon_style", "")),
         "boosts": boosts,
         "xp_skills": xp_skills,
+        "speed_ticks": speed_ticks,
+        "speed_seconds": round(speed_ticks * tick_const.TICK_SECONDS,
+                               _SPEED_SECONDS_DIGITS),
+        "range_tiles": range_tiles,
         "active": bool(active),
         "command": command,
     }
 
 
+
 def _weapon_rows(weapon) -> list:
-    """Every style the weapon declares, in its ItemDef's order."""
+    """Every style the weapon declares, in its ItemDef's order.
+
+    The weapon's OWN speed and reach are read once and passed to each row,
+    which then applies that style's delta. Reading them per row would read
+    the same two attributes four times on a screen that opens often.
+    """
     styles = available_combat_styles(weapon)
     active_key = active_combat_style_key(weapon)
+    base_speed = getattr(weapon.db, "attack_speed", None) or const.UNARMED_ATTACK_SPEED_TICKS
+    base_range = getattr(weapon.db, "max_range", None) or const.MELEE_REACH_TILES
     rows = []
 
     for style_key, style in styles.items():
         is_active = style_key == active_key
-        rows.append(_style_row(style_key, style, is_active, selectable=True))
+        rows.append(
+            _style_row(style_key, style, is_active, selectable=True,
+                       base_speed=base_speed, base_range=base_range)
+        )
 
     return rows
+
 
 
 def _unarmed_rows() -> list:
@@ -129,7 +169,12 @@ def _unarmed_rows() -> list:
     style_key = const.UNARMED_DEFAULT_COMBAT_STYLE
     style = const.UNARMED_COMBAT_STYLES[style_key]
 
-    return [_style_row(style_key, style, active=True, selectable=False)]
+    return [
+        _style_row(style_key, style, active=True, selectable=False,
+                   base_speed=const.UNARMED_ATTACK_SPEED_TICKS,
+                   base_range=const.MELEE_REACH_TILES)
+    ]
+
 
 
 def _combat_level(character) -> int:
@@ -146,6 +191,7 @@ def _combat_level(character) -> int:
     level = get_combat_level(character)
 
     return int(level)
+
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -185,6 +231,7 @@ def command_for(style_key: str) -> str:
     return command
 
 
+
 def resolve_style_key(weapon, argument: str) -> str:
     """
     Purpose: Turn what a player typed into a style key on `weapon`.
@@ -218,6 +265,7 @@ def resolve_style_key(weapon, argument: str) -> str:
             return style_key
 
     return ""
+
 
 
 def combat_options(character) -> dict:

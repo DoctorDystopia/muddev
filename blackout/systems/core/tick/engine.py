@@ -26,6 +26,8 @@ actually does, and it is the prerequisite for augmentation-flicking (see
 state at the exact tick it lands.
 """
 
+
+
 import time
 from collections import deque
 
@@ -39,6 +41,8 @@ from . import debug as tick_debug
 from . import tickable
 from .scheduler import TickScheduler
 from systems.core.managers import get_singleton_script, register_manager
+
+
 
 # ─── module constants ──────────────────────────────────────────────────────
 
@@ -58,6 +62,7 @@ PHASE_FEED = "feed"
 _PHASE_HOOKS: dict = {PHASE_START: [], PHASE_FEED: []}
 
 
+
 def register_phase_hook(phase: str, hook) -> None:
     """Attach a zero-argument callable to a tick phase.
 
@@ -69,6 +74,7 @@ def register_phase_hook(phase: str, hook) -> None:
     which is the failure mode the old hand-maintained handler-key list had.
     """
     _PHASE_HOOKS[phase].append(hook)
+
 
 
 def _run_phase_hooks(phase: str) -> None:
@@ -83,6 +89,7 @@ def _run_phase_hooks(phase: str) -> None:
             hook()
         except Exception:
             logger.log_trace()
+
 
 
 # ─── the engine ────────────────────────────────────────────────────────────
@@ -240,6 +247,39 @@ class BlackoutTickEngine(DefaultScript):
             owners = self.ndb._owner_index
 
         return owners
+
+
+    def handlers_by_key(self, handler_key: str) -> list:
+        """Every handler of `handler_key` currently in the rotation.
+
+        The rotation is the whole population of a given handler, so this is
+        how a handler finds its PEERS rather than its neighbours. combat's
+        get_sides asks it for the fight it is in: a fight is a relationship
+        between two handlers, and looking for one by walking the tiles around
+        a combatant only worked while every weapon reached one tile.
+
+        A dict walk over the registry, which holds one entry per ACTIVE
+        handler -- the combatants in play, not the objects in the world. A
+        stale entry is evicted on the way past, the same as handler_for does.
+        """
+        registry = self._registry()
+        found = []
+        stale = []
+
+        for handler_id, handler in registry.items():
+            if handler.pk is None:
+                stale.append(handler_id)
+                continue
+
+            if handler.key != handler_key:
+                continue
+
+            found.append(handler)
+
+        for handler_id in stale:
+            self._drop(handler_id)
+
+        return found
 
 
     def handler_for(self, owner_id: int, handler_key: str):

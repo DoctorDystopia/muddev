@@ -53,11 +53,16 @@ NO_STANCE_BONUS: int = 0
 # parent up. Derived rather than hardcoded so a snapshot runs from any cwd.
 _BLACKOUT_ROOT: Path = Path(__file__).resolve().parents[1]
 
-# Per-damage-type equipment keys. The attack type ("stab"/"slash"/"crush") is
-# interpolated in, exactly as systems/gameplay/combat/combat.py does it.
+# Per-damage-type equipment keys. The attack type is interpolated in, exactly
+# as systems/gameplay/combat/combat.py does it: stab / slash / crush for a
+# melee style, light / standard / heavy for a projectile one.
+#
+# There is no strength-bonus constant here. Which key carries the damage bonus
+# depends on the style's axes -- melee_strength_bonus or
+# projectile_strength_bonus -- so _equipment_bonuses reads it off the axes
+# table rather than off a name written once.
 _ATTACK_BONUS_TEMPLATE: str = "{attack_type}_attack_bonus"
 _DEFENSE_BONUS_TEMPLATE: str = "{attack_type}_defense_bonus"
-_STRENGTH_BONUS_KEY: str = "melee_strength_bonus"
 
 # Value assumed for an equipment key no item in a loadout declares.
 _ABSENT_BONUS: int = 0
@@ -154,6 +159,44 @@ class Combatant:
     fortitude_level: int
     max_hp: int
     profile: AttackProfile
+
+    # The projectile axes. Guns decides whether a shot lands and Ballistics
+    # decides how hard it lands, the same split Strike and Brawn make for
+    # melee. They default to 0 so every Combatant written before projectile
+    # weapons existed still builds.
+    guns_level: int = 0
+    ballistics_level: int = 0
+
+    def level_for(self, skill_key: str) -> int:
+        """This combatant's level in one combat skill, by key.
+
+        THE ONE PLACE A SKILL KEY BECOMES A FIELD. Every reader below asks
+        for the skill the active style names rather than for a field name,
+        which is what lets one swing model cover a sword and a bow. Adding a
+        seventh combat axis is one more row here.
+
+        An unknown key reads 0 rather than raising: this is a snapshot tool,
+        and a missing axis must print a zero row, not stop the report.
+        """
+        from systems.gameplay.progression.skills.constants import (
+            SKILL_KEY_BALLISTICS,
+            SKILL_KEY_BRAWN,
+            SKILL_KEY_DEFENSE,
+            SKILL_KEY_FORTITUDE,
+            SKILL_KEY_GUNS,
+            SKILL_KEY_STRIKE,
+        )
+
+        by_key = {
+            SKILL_KEY_STRIKE: self.strike_level,
+            SKILL_KEY_BRAWN: self.brawn_level,
+            SKILL_KEY_DEFENSE: self.defense_level,
+            SKILL_KEY_FORTITUDE: self.fortitude_level,
+            SKILL_KEY_GUNS: self.guns_level,
+            SKILL_KEY_BALLISTICS: self.ballistics_level,
+        }
+
+        return by_key.get(skill_key, 0)
 
 
 @dataclass
@@ -465,6 +508,11 @@ def npc_combatants() -> dict:
             combat_rules=block["combat_rules"],
             default_style=block["default_combat_style"],
         )
+        # Guns and Ballistics take the Combatant default of 0. No NpcDef
+        # declares them, because no NPC fires anything yet -- and a defender
+        # never reads them at all, since the defence roll is Defense for
+        # every weapon family. The day a projectile NPC ships, the two fields
+        # come from to_combat_block like the rest.
         combatants[npc_key] = Combatant(
             name=npc_def.name,
             strike_level=block["strike_level"],
@@ -487,8 +535,9 @@ def player_combatant(level: int, profile: AttackProfile,
         level is on the 0..127 scale. profile is what the character swings.
 
     Exit/Returns:
-        Returns a Combatant whose strike, brawn, defense and Fortitude all sit
-        at `level`, with max_hp derived from Fortitude.
+        Returns a Combatant whose every combat axis sits at `level`, with
+        max_hp derived from Fortitude. That is Strike, Brawn, Defense,
+        Fortitude, Guns and Ballistics.
 
     Module Globals:
         None.
@@ -514,6 +563,8 @@ def player_combatant(level: int, profile: AttackProfile,
         brawn_level=level,
         defense_level=level,
         fortitude_level=level,
+        guns_level=level,
+        ballistics_level=level,
         max_hp=hit_points,
         profile=profile,
     )
@@ -736,6 +787,35 @@ def best_loadout(stat_key: str, include_hands: bool = True) -> tuple:
 
 # Private helper routines -- swing maths
 
+def style_combat_axes(style: dict) -> dict:
+    """The axes table a combat style resolves against.
+
+    Reads the live constant rather than restating which skills a bow uses:
+    a snapshot that named its own pair would be a second owner of the fact,
+    and the whole point of this module is to model the game, not to repeat it.
+    """
+    combat_const = combat_constants()
+    axes = style.get(combat_const.STYLE_COMBAT_AXES_KEY)
+
+    if not axes:
+        return combat_const.MELEE_COMBAT_AXES
+
+    return axes
+
+
+def style_attack_speed(profile: AttackProfile, style: dict) -> int:
+    """The ticks between actions for one style on one weapon.
+
+    The style's own delta applies, so rapid measures one tick faster than the
+    bow's declared speed. A DPS row that ignored it would understate the one
+    style whose entire cost-benefit is speed.
+    """
+    combat_const = combat_constants()
+    delta = int(style.get(combat_const.STYLE_ATTACK_SPEED_DELTA_KEY, 0) or 0)
+
+    return max(combat_const.MIN_ATTACK_SPEED_TICKS, profile.attack_speed + delta)
+
+
 def _effective_levels(attacker: Combatant, defender: Combatant,
                       style: dict) -> tuple:
     """Return (eff_atk, eff_str, eff_def) for one swing.
@@ -745,22 +825,30 @@ def _effective_levels(attacker: Combatant, defender: Combatant,
     live BaseActionRules.effective_defense_level passes a zero stance too --
     a defensive stance raises the DEFENDER's own defense on the swings they
     take, not the defense of whoever they are hitting.
+
+    WHICH two offensive axes is read off the style, exactly as the live seams
+    read it. Strike and Brawn for a sword, Guns and Ballistics for a bow. The
+    field names are gone from this routine, which is what keeps one swing
+    model honest about both.
+
+    The defence axis is Defense for every weapon family. OSRS has no separate
+    projectile-defence skill and neither does Blackout.
     """
     from systems.gameplay.combat import combat_calc
-    from systems.gameplay.progression.skills.constants import (
-        SKILL_KEY_BRAWN,
-        SKILL_KEY_STRIKE,
-    )
 
+    axes = style_combat_axes(style)
     boost = style.get("weapon_style_level_boost") or {}
-    strike_stance = boost.get(SKILL_KEY_STRIKE, NO_STANCE_BONUS)
-    brawn_stance = boost.get(SKILL_KEY_BRAWN, NO_STANCE_BONUS)
+
+    accuracy_key = axes["accuracy_skill"]
+    damage_key = axes["damage_skill"]
 
     effective_attack = combat_calc.effective_level(
-        attacker.strike_level, stance_bonus=strike_stance
+        attacker.level_for(accuracy_key),
+        stance_bonus=boost.get(accuracy_key, NO_STANCE_BONUS),
     )
     effective_strength = combat_calc.effective_level(
-        attacker.brawn_level, stance_bonus=brawn_stance
+        attacker.level_for(damage_key),
+        stance_bonus=boost.get(damage_key, NO_STANCE_BONUS),
     )
     effective_defense = combat_calc.effective_level(
         defender.defense_level, stance_bonus=NO_STANCE_BONUS
@@ -770,20 +858,30 @@ def _effective_levels(attacker: Combatant, defender: Combatant,
 
 
 def _equipment_bonuses(attacker: Combatant, defender: Combatant,
-                       attack_type: str) -> tuple:
+                       attack_type: str, style: dict) -> tuple:
     """Return (attack_bonus, strength_bonus, defense_bonus) for one swing.
 
     The defence number is read off the DEFENDER's stat block. Reading it from
     the attacker's is the specific bug get_defense_bonuses() exists to prevent.
+
+    The damage bonus key comes off the style's axes, so a bow reads
+    projectile_strength_bonus and a sword reads melee_strength_bonus. A model
+    that read one key for both would report every bow as hitting for nothing,
+    because a bow deliberately carries no melee strength bonus.
+
+    NOT MODELLED: the AMMUNITION's own bonus. It lives in the AMMO equipment
+    slot on a live character, and an AttackProfile here is a weapon plus
+    armour. A bow snapshot therefore shows the floor, not the loaded number.
     """
     attack_key = _ATTACK_BONUS_TEMPLATE.format(attack_type=attack_type)
     defense_key = _DEFENSE_BONUS_TEMPLATE.format(attack_type=attack_type)
+    strength_key = style_combat_axes(style)["strength_bonus_key"]
 
     attacker_stats = attacker.profile.combat_stat_bonuses
     defender_stats = defender.profile.combat_stat_bonuses
 
     attack_bonus = attacker_stats.get(attack_key, _ABSENT_BONUS)
-    strength_bonus = attacker_stats.get(_STRENGTH_BONUS_KEY, _ABSENT_BONUS)
+    strength_bonus = attacker_stats.get(strength_key, _ABSENT_BONUS)
     defense_bonus = defender_stats.get(defense_key, _ABSENT_BONUS)
 
     return attack_bonus, strength_bonus, defense_bonus
@@ -839,18 +937,19 @@ def swing_metrics(attacker: Combatant, style_key: str,
         attacker, defender, style
     )
     attack_bonus, strength_bonus, defense_bonus = _equipment_bonuses(
-        attacker, defender, attack_type
+        attacker, defender, attack_type, style
     )
 
-    attack_roll = combat_calc.melee_attack_roll(effective_attack, attack_bonus)
-    defense_roll = combat_calc.melee_defense_roll(effective_defense, defense_bonus)
+    attack_roll = combat_calc.attack_roll(effective_attack, attack_bonus)
+    defense_roll = combat_calc.defense_roll(effective_defense, defense_bonus)
     raw_chance = combat_calc.hit_chance(attack_roll, defense_roll)
     capped_chance = min(raw_chance, combat_const.HIT_CHANCE_CEILING)
     clamped_chance = max(capped_chance, combat_const.HIT_CHANCE_FLOOR)
 
-    max_hit = combat_calc.max_melee_hit(effective_strength, strength_bonus)
+    max_hit = combat_calc.max_hit(effective_strength, strength_bonus)
     average_damage = clamped_chance * max_hit / UNIFORM_ROLL_MEAN_DIVISOR
-    seconds_per_swing = attacker.profile.attack_speed * tick_const.TICK_SECONDS
+    speed_ticks = style_attack_speed(attacker.profile, style)
+    seconds_per_swing = speed_ticks * tick_const.TICK_SECONDS
     damage_per_second = average_damage / seconds_per_swing
 
     return SwingMetrics(
@@ -1123,24 +1222,22 @@ def build_context(attacker: Combatant, style_key: str, defender: Combatant,
     """
     from systems.gameplay.combat.rules.context import ActionContext
     from systems.gameplay.progression.skills.constants import (
-        SKILL_KEY_BRAWN,
-        SKILL_KEY_DEFENSE,
-        SKILL_KEY_FORTITUDE,
-        SKILL_KEY_STRIKE,
+        SKILL_KEYS_CATEGORY_COMBAT,
     )
 
     style = attacker.profile.combat_styles[style_key]
+
+    # Every combat axis, derived from the tuple that owns which axes exist.
+    # Written out field by field until 09/17/2026, and a Guns-driven style
+    # then raised KeyError('guns') out of the live seam the moment the first
+    # bow reached ITEM_DB -- a model missing a key the game reads.
     attacker_levels = {
-        SKILL_KEY_STRIKE: attacker.strike_level,
-        SKILL_KEY_BRAWN: attacker.brawn_level,
-        SKILL_KEY_DEFENSE: attacker.defense_level,
-        SKILL_KEY_FORTITUDE: attacker.fortitude_level,
+        skill_key: attacker.level_for(skill_key)
+        for skill_key in SKILL_KEYS_CATEGORY_COMBAT
     }
     defender_levels = {
-        SKILL_KEY_STRIKE: defender.strike_level,
-        SKILL_KEY_BRAWN: defender.brawn_level,
-        SKILL_KEY_DEFENSE: defender.defense_level,
-        SKILL_KEY_FORTITUDE: defender.fortitude_level,
+        skill_key: defender.level_for(skill_key)
+        for skill_key in SKILL_KEYS_CATEGORY_COMBAT
     }
 
     return ActionContext(

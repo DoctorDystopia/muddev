@@ -13,6 +13,7 @@ Run with:
 
 import importlib
 import inspect
+import pathlib
 import unittest
 
 from django.conf import settings
@@ -87,6 +88,45 @@ class TestRecipeDiscovery(unittest.TestCase):
                 names.append(candidate.name)
 
         return names
+
+    def test_every_recipe_module_on_disk_is_configured(self):
+        """A recipe module that settings does not name contributes nothing.
+
+        THIS IS THE ONE THE GUNSMITH MODULE NEEDED. Discovery is
+        settings-driven, so a module can be written, imported by nothing, and
+        hold perfectly valid recipes that no facility ever shows. Nothing
+        raises. The only symptom is a craft menu that opens empty at a bench
+        someone just built, which is what happened on 09/17/2026.
+
+        Derived from the directory rather than from a list of module names,
+        the same way test_every_recipe_in_a_configured_module_is_registered
+        derives its expectation. So a seventh recipe module proves itself the
+        day it is written.
+
+        The private-module filter matches the registry's own rule for a
+        module-private base: a leading underscore means "not a content
+        module".
+        """
+        from systems.gameplay.crafting import recipes as recipes_package
+
+        package_dir = pathlib.Path(recipes_package.__file__).parent
+        configured = set(settings.CRAFT_RECIPE_MODULES)
+
+        for module_file in sorted(package_dir.glob("*.py")):
+            stem = module_file.stem
+
+            if stem.startswith("_"):
+                continue
+
+            dotted = f"{recipes_package.__name__}.{stem}"
+
+            with self.subTest(module=stem):
+                self.assertIn(
+                    dotted,
+                    configured,
+                    msg=f"{dotted} defines recipes that no facility can "
+                        f"show. Add it to settings.CRAFT_RECIPE_MODULES.",
+                )
 
     def test_an_abstract_recipe_base_is_not_registered(self):
         """A module-private base class must not reach the craft menu.

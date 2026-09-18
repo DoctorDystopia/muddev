@@ -443,8 +443,17 @@ def detached_copy(item, count: int):
         None
 
     Methodology:
-        Create detached, copy every attribute across, stamp the quantity last
-        so it wins over the copied one, and hand the object back unplaced.
+        Create detached, copy every TAG and every attribute across, stamp the
+        quantity last so it wins over the copied one, and hand the object back
+        unplaced.
+
+        THE TAGS ARE HALF THE ITEM, not decoration. Nothing in the game reads
+        an item's family off an attribute: an arrow declares the family its
+        bow accepts as a tag, a recipe finds its material by a tag, and the
+        statefeed picks a mesh from one. A copy built from attributes alone is
+        an object that renders wrong and can no longer be fired, crafted with,
+        or found -- and it looks identical on an `examine`, because every
+        attribute is there.
 
     Notes/References:
         CLAUDE.md gotcha 4. Building at the destination instead fires
@@ -454,6 +463,11 @@ def detached_copy(item, count: int):
         copy_object() cannot be used here -- it batch-adds attributes after
         placing the object.
 
+        The tags come from ItemDef.to_prototype, which is the only thing that
+        ever stamps them. A split is the one path that makes a stackable
+        without going through a prototype, so it is the one path that has to
+        carry them itself.
+
     Author: Nick Hobar
     Creation date: 08/18/2026
     """
@@ -462,6 +476,9 @@ def detached_copy(item, count: int):
         key=item.key,
         location=None,
     )
+
+    for tag_key, tag_category in item.tags.all(return_key_and_category=True):
+        new_obj.tags.add(tag_key, category=tag_category)
 
     for attr in item.attributes.all():
         new_obj.attributes.add(attr.key, attr.value, category=attr.category)

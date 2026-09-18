@@ -21,6 +21,7 @@ import unittest
 from evennia.utils.ansi import strip_ansi
 
 from systems.gameplay.combat import combat_msg
+from systems.gameplay.combat import constants as const
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.interface.ui.meters import METER_WIDTH
@@ -144,3 +145,66 @@ class TestCombatStatBonusFormatting(unittest.TestCase):
 
         self.assertNotEqual(positive, negative)
         self.assertNotEqual(strip_ansi(positive), positive)
+
+
+class TestMissVerbs(unittest.TestCase):
+    """A bow that "swings at" its target is the only thing a player can read
+    on a missed shot, and it was the literal word in the line until the
+    damage type started deciding it."""
+
+    def setUp(self):
+        self.attacker = _FakeCombatant("Archer")
+        self.target = _FakeCombatant("Mutant Raider")
+
+    def _outgoing(self, damage_type):
+        return strip_ansi(
+            combat_msg.format_outgoing_miss(self.attacker, self.target, damage_type)
+        )
+
+    def _incoming(self, damage_type):
+        return strip_ansi(
+            combat_msg.format_incoming_miss(self.attacker, self.target, damage_type)
+        )
+
+    def test_a_melee_miss_still_swings(self):
+        expected = const.MISS_VERBS[const.DAMAGE_TYPE_MELEE][
+            const.MISS_VERB_SELF_KEY
+        ]
+
+        self.assertIn(expected, self._outgoing(const.DAMAGE_TYPE_MELEE))
+
+    def test_a_projectile_miss_does_not_swing(self):
+        melee = const.MISS_VERBS[const.DAMAGE_TYPE_MELEE][const.MISS_VERB_SELF_KEY]
+
+        self.assertNotIn(melee, self._outgoing(const.DAMAGE_TYPE_PROJECTILE))
+
+    def test_a_projectile_miss_reads_its_own_verb(self):
+        expected = const.MISS_VERBS[const.DAMAGE_TYPE_PROJECTILE][
+            const.MISS_VERB_SELF_KEY
+        ]
+
+        self.assertIn(expected, self._outgoing(const.DAMAGE_TYPE_PROJECTILE))
+
+    def test_both_sides_of_one_miss_name_one_action(self):
+        """Two persons of one row, so the attacker and the defender cannot
+        read two different events."""
+        row = const.MISS_VERBS[const.DAMAGE_TYPE_PROJECTILE]
+
+        self.assertIn(
+            row[const.MISS_VERB_OTHER_KEY], self._incoming(const.DAMAGE_TYPE_PROJECTILE)
+        )
+
+    def test_an_unknown_damage_type_still_makes_a_sentence(self):
+        """This runs on the tick. A missing row costs a word, never a fight."""
+        fallback = const.MISS_VERBS[const.MISS_VERB_FALLBACK_TYPE][
+            const.MISS_VERB_SELF_KEY
+        ]
+
+        self.assertIn(fallback, self._outgoing(None))
+        self.assertIn(fallback, self._outgoing("no_such_damage_type"))
+
+    def test_every_declared_row_carries_both_persons(self):
+        for damage_type, row in const.MISS_VERBS.items():
+            with self.subTest(damage_type=damage_type):
+                self.assertTrue(row[const.MISS_VERB_SELF_KEY])
+                self.assertTrue(row[const.MISS_VERB_OTHER_KEY])

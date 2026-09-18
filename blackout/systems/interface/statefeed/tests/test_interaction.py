@@ -215,14 +215,36 @@ class TestInteractionVerbs(EvenniaTest):
         self.assertEqual(body["family"], const.ASSET_KIND_CORPSE)
         self.assertEqual(body["asset"], "mutant_raider")
 
-    def test_a_hostile_npc_is_attacked_by_name(self):
+    def test_a_hostile_npc_is_attacked_by_dbref(self):
         # `attack` lives on the CHARACTER's cmdset, so unlike the stations
-        # above it has to name its target.
+        # above it has to name its target -- and it names it by DBREF, because
+        # six raiders share one key and a click has to reach the one that was
+        # clicked. See DBREF_TARGET_VERBS.
+        npc = spawn_mutant_raider(self.room1)
+        expected = const.ENTITY_DBREF_TEMPLATE.format(dbref=npc.id)
+
+        body = serializers.serialize_entity(npc)
+
+        self.assertEqual(body["interact"], "attack " + expected)
+
+    def test_a_click_on_a_hostile_never_walks_first(self):
+        """`attack` closes its own distance, so the client must not wrap it.
+
+        The flag rides the entity beside `interact`, and its ABSENCE means
+        walk -- so this asserts the value, not merely the key.
+        """
         npc = spawn_mutant_raider(self.room1)
 
         body = serializers.serialize_entity(npc)
 
-        self.assertEqual(body["interact"], "attack " + npc.key)
+        self.assertFalse(body[const.ENTITY_APPROACH_KEY])
+
+    def test_a_verb_that_acts_where_it_stands_says_nothing_about_walking(self):
+        item = ITEM_DB[TEST_ITEM_KEY].create(location=self.room1)
+
+        body = serializers.serialize_entity(item)
+
+        self.assertNotIn(const.ENTITY_APPROACH_KEY, body)
 
     def test_an_item_is_taken_by_name(self):
         item = ITEM_DB[TEST_ITEM_KEY].create(location=self.room1)

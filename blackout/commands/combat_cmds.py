@@ -8,7 +8,7 @@ Description: Twitch combat commands — attack, hold, flee, wield.
 from evennia import CmdSet, Command
 
 from commands.constants import HELP_CATEGORY_COMBAT
-from systems.gameplay.combat import combat_msg, constants as const, style_options
+from systems.gameplay.combat import combat_msg, constants as const, reach, style_options
 from systems.gameplay.combat.protocols import Combatant
 from systems.gameplay.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
@@ -16,6 +16,7 @@ from systems.core.tick import debug as tick_debug
 from systems.gameplay.combat.combat import (
     active_combat_style_key,
     available_combat_styles,
+    combat_profile,
     ensure_combat_handler,
     held_weapon,
     set_combat_style,
@@ -41,7 +42,12 @@ COMBAT_RULES_ALL_ARG = "all"
 
 
 class CmdAttack(Command):
-    """Culture: attack <target> — begin twitch melee against the designated creature."""
+    """Culture: attack <target> — begin twitch combat against the designated creature.
+
+    A target your weapon cannot reach is walked to, not refused. The walk ends
+    at the nearest tile the weapon covers it from, so a sword closes onto the
+    tile and a bow stops at its own range and opens fire.
+    """
 
     key = "attack"
     aliases = ["kill", "hit", "fight"]
@@ -55,12 +61,40 @@ class CmdAttack(Command):
             caller.msg(("Attack what?", _MSG_COMBAT))
             return
 
-        target = caller.search(target_name)
+        # The search must cover everything this command can act on, and this
+        # command walks to what it cannot reach -- so it covers the whole
+        # engagement radius, not the weapon's. caller.search looks in the room
+        # and the inventory, which is one tile of the world, and a player who
+        # clicked a raider four tiles away read "You see no such thing".
+        #
+        # The walk used to be the CLIENT's: it wrapped every far entity's verb
+        # in `goto (x,y) then ...`. That is right for a verb that acts where it
+        # stands and wrong for `attack`, which walked an archer onto a raider
+        # to fire a shot that was legal from where it stood. See
+        # SELF_APPROACHING_VERBS.
+        # use_dbref, so `attack #75931` resolves for an ordinary player. A
+        # name is not an identity: six raiders on one island share one key,
+        # and a click on the third of them asked the player which one they
+        # meant. The client now sends the dbref the server named, and the
+        # candidate list still bounds it -- a dbref outside this radius
+        # resolves to nothing, exactly as a name outside it does.
+        radius = reach.reach_tiles(combat_profile(caller))
+        candidates = reach.search_candidates(caller, const.ENGAGEMENT_RADIUS_TILES)
+
+        target = caller.search(target_name, candidates=candidates, use_dbref=True)
         if target is None:
             return
 
         if not isinstance(target, Combatant):
             caller.msg((f"You can't attack {target.key}.", _MSG_COMBAT))
+            return
+
+        # Out of reach is not a refusal any more. It is a walk, to the NEAREST
+        # tile the weapon covers the target from -- which is the target's own
+        # tile for every melee weapon, so nothing about closing on a raider
+        # with a sword changed.
+        if not reach.in_reach(caller, target, radius):
+            self._walk_into_range(target, radius)
             return
 
         # Per twitch-tutorial combat_twitch.py:335, give EACH side its own
@@ -92,6 +126,67 @@ class CmdAttack(Command):
             target.key, target.hp, target.max_hp
         )
         caller.msg((opening_hp, _MSG_COMBAT))
+
+    def _walk_into_range(self, target, radius: int) -> None:
+        """
+        Purpose: Walk the caller to the nearest tile its weapon covers
+                 `target` from, and attack on arrival.
+
+        Entry:
+            target - the entity to close on.
+            radius - the caller's reach in tiles, from reach.reach_tiles.
+
+        Exit/Returns:
+            No return value. Messages the caller and starts a walk, or
+            messages the refusal and starts nothing.
+
+        Module Globals:
+            feed_const.ENTITY_APPROACH_TEMPLATE read.
+
+        Methodology:
+            THE DESTINATION IS A RING, NOT THE TARGET'S TILE. rooms_in_reach
+            asked of the TARGET returns every tile this weapon could shoot it
+            from, and the walk goes to whichever of them is nearest. A melee
+            weapon covers one tile, its own, so a sword walks exactly where it
+            always walked; a bow stops seven tiles out and opens fire from
+            there.
+
+            The walk goes through `goto (x,y) then attack <name>` -- the same
+            string the client used to build for itself, parsed by the same
+            command. The follow-up runs on ARRIVAL and only on arrival, so a
+            blocked path ends in a walk that stopped, never in a second
+            attempt to close.
+
+        Notes/References:
+            A target that shares no geometry with the caller -- another map,
+            another Z, a room off the grid -- has no ring to walk to. That is
+            the refusal the reach message already words, and it names both
+            numbers.
+
+        Author: Nick Hobar
+        Creation date: 09/17/2026
+        """
+        caller = self.caller
+        destination = reach.nearest_tile_in_reach(caller, target, radius)
+
+        if destination is None:
+            distance = reach.tile_distance(caller, target)
+            caller.msg(
+                (combat_msg.format_out_of_reach(target, distance, radius),
+                 _MSG_COMBAT)
+            )
+            return
+
+        x, y, _z = destination.xyz
+        dbref = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref=target.id)
+        command = (
+            feed_const.ENTITY_APPROACH_TEMPLATE
+            .replace("{x}", str(x))
+            .replace("{y}", str(y))
+            .replace("{command}", f"{self.key} {dbref}")
+        )
+
+        caller.execute_cmd(command)
 
 
 class CmdHold(Command):

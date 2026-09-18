@@ -5,14 +5,19 @@ Creation date: 07/26/2026
 Description: Global tunables for the OSRS-derived Blackout combat engine (0-127 skill scaling).
 """
 
+
+
 from systems.core.tick.scheduler import seconds_to_ticks
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.constants import (
+    SKILL_KEY_BALLISTICS,
     SKILL_KEY_BRAWN,
     SKILL_KEY_DEFENSE,
     SKILL_KEY_FORTITUDE,
+    SKILL_KEY_GUNS,
     SKILL_KEY_STRIKE,
 )
+
 
 
 # ─── Skill scaling bounds ────────────────────────────────────────────────────
@@ -105,6 +110,33 @@ MELEE_ATTACK_TYPES: tuple = (
     ATTACK_TYPE_CRUSH,
 )
 
+# ─── Projectile attack types ─────────────────────────────────────────────────────
+# The projectile mirror of the three strings above, and interpolated the same way:
+# f"{attack_type}_attack_bonus" gives "light_attack_bonus", and
+# f"{attack_type}_defense_bonus" gives "light_defense_bonus". Three types
+# therefore produce all six keys, and no key is written out anywhere.
+#
+# A sub-type, not a damage kind. A bow declares an attack bonus for each of
+# the three and its styles pick one, exactly as a sword picks stab or slash.
+# An arrow is not "light damage"; DAMAGE_TYPE_PROJECTILE further down is what
+# names the kind.
+PROJECTILE_ATTACK_TYPE_LIGHT: str = "light"
+PROJECTILE_ATTACK_TYPE_STANDARD: str = "standard"
+PROJECTILE_ATTACK_TYPE_HEAVY: str = "heavy"
+
+PROJECTILE_ATTACK_TYPES: tuple = (
+    PROJECTILE_ATTACK_TYPE_LIGHT,
+    PROJECTILE_ATTACK_TYPE_STANDARD,
+    PROJECTILE_ATTACK_TYPE_HEAVY,
+)
+
+# The equipment key carrying a projectile shot's damage bonus, the mirror of
+# "melee_strength_bonus". Named here rather than typed at its two readers
+# because the AMMUNITION carries it, not the bow -- so the key travels from
+# an ItemDef in one slot to a formula that never names that slot.
+PROJECTILE_STRENGTH_BONUS_KEY: str = "projectile_strength_bonus"
+MELEE_STRENGTH_BONUS_KEY: str = "melee_strength_bonus"
+
 # ─── Weapon Style invisible bonuses ────────────────────────
 # Four combat styles map to four discrete bonus profiles. Each dict maps
 # Blackout skill keys to invisible level boosts consumed by
@@ -122,6 +154,23 @@ MELEE_WEAPON_STYLE_LEVEL_BOOST_CONTROLLED: dict = {
 }
 MELEE_WEAPON_STYLE_LEVEL_BOOST_DEFENSIVE: dict = {SKILL_KEY_DEFENSE: 3}
 
+# ─── Projectile weapon style invisible bonuses ───────────────────────────────────
+# The projectile mirror of the four dicts above. The four bow styles are accurate,
+# rapid, penetrate and snipe.
+#   accurate  -> +3 guns        (accuracy)
+#   rapid     -> nothing        (it buys one tick of speed instead)
+#   penetrate -> +3 ballistics  (damage)
+#   snipe     -> +3 defense     (and two extra tiles of range)
+#
+# RAPID DECLARES AN EMPTY DICT ON PURPOSE. Its whole cost-benefit is the
+# attack_speed_delta on the style, and a style with no level boost must still
+# carry the key so every reader can treat the four the same way.
+PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_ACCURATE: dict = {SKILL_KEY_GUNS: 3}
+PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_RAPID: dict = {}
+PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_PENETRATE: dict = {SKILL_KEY_BALLISTICS: 3}
+PROJECTILE_WEAPON_STYLE_LEVEL_BOOST_SNIPE: dict = {SKILL_KEY_DEFENSE: 3}
+
+
 
 # ─── XP rewards ─────────────────────────────────────────────────────────────
 # Blackout grants XP per damage based on the *combat style*.
@@ -135,6 +184,15 @@ XP_PER_DAMAGE_ACCURATE: float = 4.0
 XP_PER_DAMAGE_AGGRESSIVE: float = 4.0
 XP_PER_DAMAGE_CONTROLLED_EACH: float = 4.0 / 3.0  # three stats split 4 XP
 XP_PER_DAMAGE_DEFENSIVE: float = 4.0
+
+# The projectile snipe style names Guns AND Defense, so the 4.0 pool splits between
+# them. ALREADY DIVIDED, the same as XP_PER_DAMAGE_CONTROLLED_EACH above --
+# dividing again in the award path is the bug that constant's comment records.
+#
+# Snipe therefore pays 2.0 + 2.0 + the Fortitude rate of 1.33 = 5.33 per point
+# of damage, which is what every other style pays. One action, one XP budget:
+# a style that names more skills divides it, it does not earn more.
+XP_PER_DAMAGE_PROJECTILE_DEFENSIVE_EACH: float = 4.0 / 2.0
 # XP_PER_DAMAGE_TAKEN_DEFENSE: float = 1.33  # Defense XP on being hit
 
 # Fortitude does NOT earn at the style rate since all combat styles award it.
@@ -159,6 +217,49 @@ CONTROLLED_XP_SKILLS: tuple = (
     SKILL_KEY_FORTITUDE,
 )
 DEFENSIVE_XP_SKILLS: tuple = (SKILL_KEY_DEFENSE, SKILL_KEY_FORTITUDE)
+
+# The projectile mirrors. Guns is the accuracy skill and Ballistics the damage one,
+# so the accurate style trains Guns and the two aggressive styles train
+# Ballistics -- the same accuracy/damage split the melee tuples make between
+# Strike and Brawn.
+PROJECTILE_ACCURATE_XP_SKILLS: tuple = (SKILL_KEY_GUNS, SKILL_KEY_FORTITUDE)
+PROJECTILE_AGGRESSIVE_XP_SKILLS: tuple = (SKILL_KEY_BALLISTICS, SKILL_KEY_FORTITUDE)
+PROJECTILE_DEFENSIVE_XP_SKILLS: tuple = (
+    SKILL_KEY_GUNS,
+    SKILL_KEY_DEFENSE,
+    SKILL_KEY_FORTITUDE,
+)
+
+# ─── Per-style XP rate override ──────────────────────────────────────────────
+# The key a combat style may carry to name its own per-skill XP rate, instead
+# of the rate _WEAPON_STYLE_XP_MAP gives its weapon_style.
+#
+# It exists because snipe is a "defensive" weapon_style that must NOT pay the
+# defensive rate: melee defensive names one skill and pays it 4.0, snipe names
+# two and pays each 2.0. Without this key the fix would be a branch on
+# "is this style projectile" in the award path, which is exactly the dispatch chain
+# the repo's data-over-branches rule exists to prevent.
+#
+# A style that omits it takes its weapon_style's rate, which is every melee
+# style and three of the four projectile ones.
+STYLE_XP_RATE_KEY: str = "weapon_style_xp_rate"
+
+# ─── Per-style speed and reach modifiers ─────────────────────────────────────
+# Two more optional style keys, read by _resolve_style_and_speed and by
+# reach.py. Both default to 0, so a style that declares neither behaves exactly
+# as every melee style does today.
+#
+#   attack_speed_delta - ticks ADDED to the weapon's attack speed. Rapid
+#                        declares -1. Floored at MIN_ATTACK_SPEED_TICKS.
+#   range_bonus        - tiles ADDED to the weapon's max_range. Snipe
+#                        declares +2.
+STYLE_ATTACK_SPEED_DELTA_KEY: str = "attack_speed_delta"
+STYLE_RANGE_BONUS_KEY: str = "range_bonus"
+
+# The floor a style's attack_speed_delta may not push a weapon below. One tick
+# is the engine's whole resolution: an action cannot resolve more than once per
+# tick, so a faster number would be a number nothing could honour.
+MIN_ATTACK_SPEED_TICKS: int = 1
 
 
 # ─── Augmentation ───────────────────────
@@ -250,6 +351,7 @@ COMBAT_LEVEL_AUGMENTATION_SKILL: str = "augmentation"
 # vocabularies look interchangeable and are not. An ATTACK_TYPE_* string is
 # interpolated into "<type>_attack_bonus".
 DAMAGE_TYPE_MELEE: str = "melee"    # a connecting weapon or unarmed swing
+DAMAGE_TYPE_PROJECTILE: str = "projectile"  # a projectile that reached its target
 DAMAGE_TYPE_ENERGY: str = "energy"  # a gadget discharging at a target -- itself included
 DAMAGE_TYPE_BURN: str = "burn"      # an aura pulse
 DAMAGE_TYPE_TOXIN: str = "toxin"    # reserved for poison / venom / etc. mechanics
@@ -259,6 +361,50 @@ DAMAGE_TYPE_TOXIN: str = "toxin"    # reserved for poison / venom / etc. mechani
 # whatever the source actually deals -- a malfunctioning energy gizmo backfires
 # as DAMAGE_TYPE_ENERGY. "Who got hit" is self_inflicted on the death path
 # (CombatEntity.at_death / combat_msg.format_death), not a damage type.
+
+
+
+# ─── Miss vocabulary ─────────────────────────────────────────────────────────
+# WHAT AN ACTION THAT CONNECTED WITH NOTHING IS CALLED, one row per damage
+# type. A bow that "swings at" its target is the only thing a player can read
+# on a missed shot, and the line had that word baked into it because melee was
+# the only action there was.
+#
+# The damage type is the right owner rather than the weapon or the style: it
+# is already what the action carries to at_damage and to the death line, and
+# it is the axis that actually changes the word. Two bows and four styles miss
+# in exactly the same way.
+#
+# BOTH PERSONS ARE WRITTEN OUT. Deriving "swings" from "swing" is a rule that
+# holds for these three verbs and breaks on the first irregular one, and the
+# breakage would be a typo shipped to players rather than an error.
+
+# Keys into one row of MISS_VERBS.
+MISS_VERB_SELF_KEY: str = "self"    # what the actor reads: "You swing at ..."
+MISS_VERB_OTHER_KEY: str = "other"  # what everyone else reads: "X swings at ..."
+
+MISS_VERBS: dict = {
+    DAMAGE_TYPE_MELEE: {
+        MISS_VERB_SELF_KEY: "swing at",
+        MISS_VERB_OTHER_KEY: "swings at",
+    },
+    DAMAGE_TYPE_PROJECTILE: {
+        MISS_VERB_SELF_KEY: "shoot at",
+        MISS_VERB_OTHER_KEY: "shoots at",
+    },
+    DAMAGE_TYPE_ENERGY: {
+        MISS_VERB_SELF_KEY: "fire at",
+        MISS_VERB_OTHER_KEY: "fires at",
+    },
+}
+
+# Read for a damage type with no row. DAMAGE_TYPE_BURN and DAMAGE_TYPE_TOXIN
+# have none because neither can miss: an aura pulse and a poison tick do not
+# roll accuracy, and both print their own lines. A row is what a new damage
+# type adds when it CAN miss, so the fallback is the melee wording rather than
+# a neutral verb that reads as placeholder text.
+MISS_VERB_FALLBACK_TYPE: str = DAMAGE_TYPE_MELEE
+
 
 
 # ─── Pluggable action rules ───────────────────────────────────────────────────
@@ -271,6 +417,8 @@ DAMAGE_TYPE_TOXIN: str = "toxin"    # reserved for poison / venom / etc. mechani
 # wires up potion_boost / augmentation_mult / set_mult.
 CHANNEL_STRIKE_LEVEL: str = "strike_level"
 CHANNEL_BRAWN_LEVEL: str = "brawn_level"
+CHANNEL_GUNS_LEVEL: str = "guns_level"
+CHANNEL_BALLISTICS_LEVEL: str = "ballistics_level"
 CHANNEL_DEFENSE_LEVEL: str = "defense_level"
 CHANNEL_ATTACK_BONUS: str = "attack_bonus"
 CHANNEL_STRENGTH_BONUS: str = "strength_bonus"
@@ -286,10 +434,61 @@ CHANNEL_HIT_CHANCE: str = "hit_chance"
 # number. It is reserved so the key does not get invented twice.
 CHANNEL_ATTACK_SPEED: str = "attack_speed"
 
+# ─── Combat axes ─────────────────────────────────────────────────────────────
+# WHICH SKILLS AN ACTION RESOLVES AGAINST, as one table for each family of
+# weapon. A combat style names the table it uses, so the action pipeline never
+# asks whether a weapon is a bow.
+#
+# THIS IS WHY THERE IS NO ProjectileActionRules CLASS. A projectile shot and a
+# melee swing run the identical nine seams over the identical three formulas.
+# Everything that differs between them is in these two dicts: two skills, two
+# modifier channels, one equipment key and one damage type. A rules subclass
+# would have restated all nine seams to change six values, and the tenth
+# weapon family would have restated them again.
+#
+# Each key:
+#   accuracy_skill      - the skill whose level feeds the attack roll.
+#   accuracy_channel    - the modifier channel that boosts that level.
+#   damage_skill        - the skill whose level feeds the max hit.
+#   damage_channel      - the modifier channel that boosts that level.
+#   strength_bonus_key  - the combat_stat_bonuses key the max hit reads.
+#   damage_type         - what at_damage and the death line are told.
+#
+# A style that names no table reads the melee one, so every melee style in
+# world/item_defs/ stays exactly as it was written.
+MELEE_COMBAT_AXES: dict = {
+    "accuracy_skill": SKILL_KEY_STRIKE,
+    "accuracy_channel": CHANNEL_STRIKE_LEVEL,
+    "damage_skill": SKILL_KEY_BRAWN,
+    "damage_channel": CHANNEL_BRAWN_LEVEL,
+    "strength_bonus_key": MELEE_STRENGTH_BONUS_KEY,
+    "damage_type": DAMAGE_TYPE_MELEE,
+}
+
+# Guns is the accuracy half and Ballistics the damage half, the same split
+# Strike and Brawn make for melee.
+#
+# THE CHANNELS ARE THEIR OWN, and that is the point of listing them. An amulet
+# that adds to CHANNEL_BRAWN_LEVEL must not make an arrow hit harder, and it
+# cannot, because a projectile action never reads that channel.
+PROJECTILE_COMBAT_AXES: dict = {
+    "accuracy_skill": SKILL_KEY_GUNS,
+    "accuracy_channel": CHANNEL_GUNS_LEVEL,
+    "damage_skill": SKILL_KEY_BALLISTICS,
+    "damage_channel": CHANNEL_BALLISTICS_LEVEL,
+    "strength_bonus_key": PROJECTILE_STRENGTH_BONUS_KEY,
+    "damage_type": DAMAGE_TYPE_PROJECTILE,
+}
+
+# The optional style key naming one of the two tables above.
+STYLE_COMBAT_AXES_KEY: str = "combat_axes"
+
 # Every channel the action pipeline knows about, for validation and iteration.
 ACTION_MODIFIER_CHANNELS: tuple = (
     CHANNEL_STRIKE_LEVEL,
     CHANNEL_BRAWN_LEVEL,
+    CHANNEL_GUNS_LEVEL,
+    CHANNEL_BALLISTICS_LEVEL,
     CHANNEL_DEFENSE_LEVEL,
     CHANNEL_ATTACK_BONUS,
     CHANNEL_STRENGTH_BONUS,
@@ -325,20 +524,107 @@ ACTION_DAMAGE_FLOOR: int = 0
 COMBAT_RULES_ATTR: str = "combat_rules"
 
 
+# ─── Reach ───────────────────────────────────────────────────────────────────
+# How far an action can travel, in tiles. A weapon declares its own max_range
+# on its ItemDef; ZERO means the same tile, which is every melee weapon and
+# bare hands. So nothing in the melee data changes to gain this field.
+
+# Distance metric for reach. Read from the aura metric deliberately: a player
+# who has learnt that an aura covers a circle must not find that a bow covers a
+# square. One geometry for the whole game, one knob to retune it.
+REACH_DISTANCE_METRIC: str = AURA_DISTANCE_METRIC
+
+# Reach of an attacker holding nothing, and of every melee weapon. Same tile.
+MELEE_REACH_TILES: int = 0
+
+# Ticks an attacker holds position after its target leaves reach, before the
+# fight ends.
+#
+# WITHOUT THE GRACE, ONE STEP BY EITHER PARTY CANCELS THE FIGHT. A target that
+# walks one tile out of range and back in on the next tick would end the combat
+# and clear the attacker's queued action, which reads to the player as the
+# fight dropping at random. Four ticks is 2.4 seconds -- long enough to cover
+# ordinary movement, short enough that walking away still works.
+OUT_OF_REACH_GRACE_TICKS: int = 4
+
+# How far apart two combatants can stand and still be IN THE SAME FIGHT.
+#
+# THIS IS NOT A REACH, AND IT IS NOT THE ATTACKER'S. Reach answers "can I act
+# on that". Engagement answers "is this fight still happening", and the two
+# came apart the moment one weapon outranged another. A melee NPC shot from
+# seven tiles reaches zero, so it found no enemy on its own tick, spent the
+# grace, and ended ITS combat -- which deleted the handler its attacker was
+# counting. The archer's fight then reported `You won!` over a raider standing
+# at four hitpoints.
+#
+# One number for both sides, so neither can decide the fight is over while the
+# other is still in it. It must exceed the longest reach in the game, or a
+# weapon could shoot from outside the fight it started;
+# test_engagement_covers_every_weapon in systems/gameplay/combat/tests asserts
+# exactly that against ITEM_DB.
+#
+# It bounds the fight in SPACE, which is what still lets a player leave one by
+# walking away. The scan is over the engaged, not over the area -- see
+# BlackoutCombatHandler.get_sides -- so a generous number costs no query.
+ENGAGEMENT_RADIUS_TILES: int = 12
+
+
+# ─── Ammunition ──────────────────────────────────────────────────────────────
+# The Evennia tag category an ammunition item files its FAMILY under. A bow
+# declares the family it accepts in ItemDef.accepted_ammo, and the two are
+# matched by exact string equality -- so both sides read this constant rather
+# than typing the category.
+#
+# A category of its own rather than a reuse of the "weapon" family: an arrow is
+# not a weapon that a player can wield, and the projectile action asks a question
+# ("does this ammo fit this bow") that no other family answers.
+AMMO_FAMILY_TAG_CATEGORY: str = "ammo_family"
+
+# The families themselves. A bow's accepted_ammo and an arrow's family tag are
+# matched by exact string equality, so both sides read the constant. A second
+# family (a bolt, a cartridge) is one more line here plus the two ItemDefs
+# that name it.
+AMMO_FAMILY_ARROW: str = "arrow"
+
+# Probability that a spent projectile survives and drops on the target's tile.
+# The remainder breaks and is gone.
+#
+# One number for every projectile, not a per-item field. Recovery is a property
+# of the MECHANIC -- it is what makes ammunition a cost the player manages
+# rather than a tax -- and a per-arrow rate would make two arrows differ in a
+# way no screen could explain.
+AMMO_RECOVERY_CHANCE: float = 0.8
+
+
 # ─── Unarmed fallback (no weapon wielded) ───────────────────────────────────
 # When a CombatEntity has nothing in either hand, the combat handler substitutes
 # these unarmed defaults.
+#
+# EVERY BONUS KEY THE GAME READS APPEARS HERE. The ATTACK_TYPE_* warning above
+# points at this dict for the canonical spellings, so the six projectile keys are
+# listed even though no unarmed action reads one. A key missing from an
+# item's own block still reads 0 through .get, but a key missing from HERE has
+# no spelling anyone can check against.
 UNARMED_DEFAULT_COMBAT_STATS: dict = {
-    # attack bonuses
+    # melee attack bonuses
     "stab_attack_bonus": 0,
     "slash_attack_bonus": 0,
     "crush_attack_bonus": 0,
-    # defense bonuses
+    # melee defense bonuses
     "stab_defense_bonus": 0,
     "slash_defense_bonus": 0,
     "crush_defense_bonus": 0,
+    # projectile attack bonuses
+    "light_attack_bonus": 0,
+    "standard_attack_bonus": 0,
+    "heavy_attack_bonus": 0,
+    # projectile defense bonuses
+    "light_defense_bonus": 0,
+    "standard_defense_bonus": 0,
+    "heavy_defense_bonus": 0,
     # other bonuses
     "melee_strength_bonus": 0,
+    "projectile_strength_bonus": 0,
 }
 UNARMED_ATTACK_SPEED_TICKS: int = 4  # 2.4s no weapons equipped cycle
 UNARMED_DEFAULT_COMBAT_STYLE: str = "punch"

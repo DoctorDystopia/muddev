@@ -1111,6 +1111,45 @@ Preview a rebuild with no changes (this is safe while the server runs):
 ./scripts/clean_and_reload_all_maps.sh --dry-run
 ```
 
+### Rebuild one map, or one tile
+
+A bare rebuild covers every map in the manifest, and the largest map decides
+how long it takes. Two flags narrow it. Both repeat, and both work with
+`-DryRun`.
+
+```powershell
+.\scripts\clean_and_reload_all_maps.ps1 -Map oasis
+.\scripts\clean_and_reload_all_maps.ps1 -Tile "oasis:12,4","oasis:12,5"
+.\scripts\clean_and_reload_all_maps.ps1 -Map oasis -Tile "azm_plains:3,3"
+```
+
+```bash
+./scripts/clean_and_reload_all_maps.sh --map oasis
+./scripts/clean_and_reload_all_maps.sh --tile oasis:12,4 --tile oasis:12,5
+```
+
+| Flag | Rebuilds |
+|---|---|
+| none | Every map in the manifest |
+| `--map ZCOORD` | That map end to end |
+| `--tile ZCOORD:X,Y` | That one tile, its exits, and the exits back into it |
+
+The coordinates are the X,Y that `evennia xyzgrid show <map>` prints, not
+character positions in the map string. A coordinate that carries no room stops
+the run before it deletes anything.
+
+Three rules apply to a scoped run:
+
+- **It never removes a map.** Removal is about a map the manifest lists
+  nowhere, so only a bare rebuild prunes. Delete a manifest row, then run a
+  bare rebuild.
+- **It never deletes a room that fell off the map string.** A tile rebuild is
+  told one coordinate, and a stale room sits at a coordinate you did not name.
+  Run `--map` or a bare rebuild after you shrink a map.
+- **A map named by both flags is rebuilt whole.** The whole map is the
+  superset. The run prints the scope it resolved to, on the line that starts
+  `This run rebuilds`.
+
 ---
 
 ## Color Reference
@@ -1173,9 +1212,9 @@ evennia reload
 | Script | Purpose | How to run |
 |---|---|---|
 | `scripts/reload_characters.py` | Re-runs `at_object_creation()` on all Character objects | `py -3 scripts/reload_characters.py` (from `blackout/`) |
-| `scripts/map_sync.py` | Reconciles the grid with `map_manifest.json`: removes unlisted maps, purges and re-registers listed ones | `../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run]` (from `blackout/`) |
-| `scripts/clean_and_reload_all_maps.ps1` | Full automated map rebuild (stop → sync → spawn → reload) | `.\scripts\clean_and_reload_all_maps.ps1 [-DryRun]` |
-| `scripts/clean_and_reload_all_maps.sh` | Same rebuild from Git Bash | `./scripts/clean_and_reload_all_maps.sh [--dry-run]` |
+| `scripts/map_sync.py` | Reconciles the grid with `map_manifest.json`: removes unlisted maps, purges and re-registers listed ones. `--map` and `--tile` narrow the run | `../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run] [--map ZCOORD] [--tile ZCOORD:X,Y]` (from `blackout/`) |
+| `scripts/clean_and_reload_all_maps.ps1` | Automated map rebuild (stop → sync → spawn → reload), over the whole manifest or one scope | `.\scripts\clean_and_reload_all_maps.ps1 [-DryRun] [-Map oasis] [-Tile "oasis:12,4"]` |
+| `scripts/clean_and_reload_all_maps.sh` | Same rebuild from Git Bash | `./scripts/clean_and_reload_all_maps.sh [--dry-run] [--map oasis] [--tile oasis:12,4]` |
 | `scripts/backup_db.py` | Snapshots the live sqlite3 database into `server/backups/` (gzip, timestamped), pruning old backups beyond `--keep` | `../evenv/Scripts/python.exe scripts/backup_db.py [--keep N] [--dest DIR]` (from `blackout/`) |
 | `scripts/backup_db.ps1` / `.sh` | Argument-light wrappers around `backup_db.py`, meant for Task Scheduler / cron | `.\scripts\backup_db.ps1 [-Keep N] [-Dest DIR]` |
 

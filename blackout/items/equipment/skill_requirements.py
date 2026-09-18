@@ -14,6 +14,7 @@ Description: Weapon-type → skill-key map. Lets the EquipmentHandler dispatch
 from systems.gameplay.progression.skills.constants import (
     SKILL_KEY_CUTTING,
     SKILL_KEY_DEFENSE,
+    SKILL_KEY_GUNS,
     SKILL_KEY_STRIKE,
 )
 
@@ -43,6 +44,17 @@ WEAPON_SKILL_MAP: dict[str, str | None] = {
     "dagger":     SKILL_KEY_STRIKE,
     "battleaxe":  SKILL_KEY_STRIKE,
     "greatsword": SKILL_KEY_STRIKE,
+
+    # Projectile categories — gated via the Guns skill, which is the
+    # projectile ACCURACY axis. Ballistics is the damage axis and gates
+    # nothing: a player who can draw a bow can draw it, and how hard the
+    # arrow lands is what Ballistics decides afterwards.
+    "bow":        SKILL_KEY_GUNS,
+
+    # Ammunition is ungated. The bow carries the requirement, and gating the
+    # arrow too would refuse a player their own quiver for a reason no screen
+    # could explain.
+    "ammo":       None,
 
     # Gadgets are salvage anyone can point at anything. Their behaviour comes
     # from an action rules definition rather than from the wielder's accuracy,

@@ -141,6 +141,17 @@ class MetalPole(GatheringNode):
 
 
 
+class CopperPole(GatheringNode):
+    """
+    Purpose: The level 20 gathering node for the Cutting skill.
+
+    Author: Nick Hobar
+    Creation date: 09/14/2026
+    """
+    gatherable_key = "copper_pole"
+
+
+
 @register_spawner("Rusty pole clearing")
 def spawn_rusty_pole(room):
     spawn_once(
@@ -157,4 +168,14 @@ def spawn_metal_pole(room):
         room,
         "typeclasses.gathering_nodes.MetalPole",
         key="metal pole",
+    )
+
+
+
+@register_spawner("Copper pole clearing")
+def spawn_copper_pole(room):
+    spawn_once(
+        room,
+        "typeclasses.gathering_nodes.CopperPole",
+        key="copper pole",
     )

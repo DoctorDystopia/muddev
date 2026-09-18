@@ -14,6 +14,13 @@ from systems.gameplay.ai import constants as ai_constants
 from systems.gameplay.combat import constants as combat_constants
 
 
+# The attribute an NPC carries to name the NpcDef it was spawned from. It is
+# the identity every live lookup goes through -- the loot table, the corpse,
+# the respawn, and now the behaviour -- so the answer to "what is this thing"
+# stays in this file even for an NPC that spawned a month ago.
+NPC_KEY_ATTR: str = "npc_key"
+
+
 @dataclass
 class NpcDef:
     """Data-driven definition of a combatant NPC.
@@ -139,16 +146,25 @@ class NpcDef:
     #     action. None means the NPC never acts on its own, which is what every
     #     hostile did before this field existed.
     #
-    #     Defaults to retaliation rather than to None: a hostile that stands
-    #     still while being hit is the bug this field exists to fix, so the
-    #     safe default is the one that makes a monster behave like one. A
+    #     Defaults to CHASING retaliation rather than to None: a hostile that
+    #     stands still while being hit is the bug this field exists to fix, so
+    #     the safe default is the one that makes a monster behave like one. A
     #     genuinely passive NPC (a training dummy, a quest-giver that can be
     #     attacked) sets this to None explicitly.
     #
-    #     Stamped onto the object by create(), alongside npc_key -- NOT part of
-    #     to_combat_block. It is not a combat statistic; it decides who is
-    #     asked for an action, not how one resolves.
-    ai_behavior: str | None = ai_constants.AI_BEHAVIOR_AGGRESSIVE_MELEE
+    #     IT CHASES BECAUSE A BOW EXISTS. The default was aggressive_melee
+    #     until 09/17/2026, which retaliates only against something standing on
+    #     its own tile -- so an archer seven tiles away took no damage ever,
+    #     and every balance figure for a projectile weapon was a fiction. The
+    #     leash still bounds it; see LEASH_DISTANCE_TILES.
+    #
+    #     Stamped onto the object by create(), alongside npc_key, but READ
+    #     BACK THROUGH THIS DEF rather than off the row -- see
+    #     ai/registry.behavior_key_for. A changed default has to reach the
+    #     NPCs already standing in the world, and a stamped row is exactly
+    #     what stops it. CLAUDE.md, "An import path belongs in the code, never
+    #     in a database row", records the same lesson twice already.
+    ai_behavior: str | None = ai_constants.AI_BEHAVIOR_CHASING_MELEE
 
 
     def to_combat_block(self) -> dict:
@@ -228,9 +244,14 @@ class NpcDef:
         obj.db.respawn_seconds = self.respawn_seconds
 
         # Which behaviour the combat handler's controller seam consults for
-        # this NPC. Stamped rather than looked up live because the seam runs on
-        # every idle combat tick, and an NPC_DB round trip per tick per
-        # combatant is the cost this avoids.
+        # this NPC.
+        #
+        # STAMPED, BUT NOT AUTHORITATIVE. behavior_key_for reads this def
+        # first, through npc_key, and falls back to the row only for an NPC
+        # that names no def at all. The row is kept so `examine` answers the
+        # question and so a hand-built NPC has somewhere to declare one -- not
+        # so the game can read it. Reading it first is what froze every raider
+        # already in the world on the behaviour it spawned with.
         obj.db.ai_behavior = self.ai_behavior
 
         return obj

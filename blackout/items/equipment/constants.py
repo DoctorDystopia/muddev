@@ -21,6 +21,11 @@ class WieldLocation(Enum):
     NECK = "neck"
     MAIN_HAND_FINGER = "main_hand_finger"
     OFF_HAND_FINGER = "off_hand_finger"
+    # What a projectile weapon fires. A slot rather than a bag check, so the
+    # ammunition's own stat block joins total_combat_stat_bonuses like every
+    # other piece of gear -- which is how an arrow's projectile_strength_bonus
+    # reaches the max-hit formula without combat knowing where it came from.
+    AMMO = "ammo"
 
     @property
     def label(self) -> str:
@@ -72,6 +77,7 @@ SLOT_DISPLAY_ORDER = (
     WieldLocation.NECK,
     WieldLocation.MAIN_HAND_FINGER,
     WieldLocation.OFF_HAND_FINGER,
+    WieldLocation.AMMO,
 )
 
 # Max number of unequipped items a character can carry in their Evennia inventory (contents).
@@ -89,6 +95,8 @@ SLOT_DISPLAY_ORDER = (
 # ITEM_DB yet, which is the only reason that never lost anyone an item.
 #
 # Slots not listed here conflict with nothing but themselves.
+# AMMO conflicts with nothing. A two-handed bow and its arrows are worn at the
+# same time, which is the whole point of giving ammunition a slot of its own.
 SLOT_CONFLICTS: dict = {
     WieldLocation.TWO_HANDS: (WieldLocation.MAIN_HAND, WieldLocation.OFF_HAND),
     WieldLocation.MAIN_HAND: (WieldLocation.TWO_HANDS,),

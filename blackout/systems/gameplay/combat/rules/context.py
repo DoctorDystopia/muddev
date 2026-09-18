@@ -6,6 +6,8 @@ Description: ActionContext and ActionResult — the input snapshot and output sl
              a rules definition reads and writes during one action.
 """
 
+
+
 from __future__ import annotations
 
 import random as _random_module
@@ -15,6 +17,7 @@ from systems.gameplay.combat import constants as const
 from systems.gameplay.progression.skills.constants import SKILL_KEYS_CATEGORY_COMBAT
 
 from .modifiers import ModifierBag
+
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -30,11 +33,13 @@ _ACTION_RNG = _random_module.Random()
 _MISSING_SKILL_LEVEL = 1
 
 
+
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _default_rng() -> _random_module.Random:
     """Return the shared live action RNG. Used as a dataclass default_factory."""
     return _ACTION_RNG
+
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -82,6 +87,7 @@ def read_skill_levels(entity) -> dict:
     return levels
 
 
+
 @dataclass
 class ActionResult:
     """
@@ -127,6 +133,7 @@ class ActionResult:
     self_damage: int = 0
     hit_prob: float = 0.0
     damage_type: str = const.DAMAGE_TYPE_MELEE
+
 
 
 @dataclass
@@ -215,11 +222,13 @@ class ActionContext:
     rules: object = None
     rng: _random_module.Random = field(default_factory=_default_rng)
 
+
     def attack_equip_bonus(self) -> int:
         """Return the attacker's equipment attack bonus for the active type."""
         bonus_key = f"{self.attack_type}_attack_bonus"
 
         return self.attacker_stats.get(bonus_key, 0)
+
 
     def defense_equip_bonus(self) -> int:
         """Return the DEFENDER's equipment defense bonus for the active type."""
@@ -227,13 +236,71 @@ class ActionContext:
 
         return self.defender_stats.get(bonus_key, 0)
 
+
+    def combat_axes(self) -> dict:
+        """Return the axes table the active style resolves against.
+
+        Melee for every style that names none, which is every style written
+        before projectile weapons existed. See MELEE_COMBAT_AXES and
+        PROJECTILE_COMBAT_AXES in the combat constants for what a table holds
+        and why a projectile shot needs no rules subclass of its own.
+        """
+        axes = self.style.get(const.STYLE_COMBAT_AXES_KEY)
+
+        if not axes:
+            return const.MELEE_COMBAT_AXES
+
+        return axes
+
+
+    def accuracy_skill(self) -> str:
+        """The skill key whose level feeds this action's attack roll."""
+        return self.combat_axes()["accuracy_skill"]
+
+
+    def accuracy_channel(self) -> str:
+        """The modifier channel that boosts this action's accuracy level."""
+        return self.combat_axes()["accuracy_channel"]
+
+
+    def damage_skill(self) -> str:
+        """The skill key whose level feeds this action's max hit."""
+        return self.combat_axes()["damage_skill"]
+
+
+    def damage_channel(self) -> str:
+        """The modifier channel that boosts this action's damage level."""
+        return self.combat_axes()["damage_channel"]
+
+
+    def damage_type(self) -> str:
+        """The DAMAGE_TYPE_* constant this action deals.
+
+        Read off the STYLE, not off whichever contributor won the resolve
+        seam. A bow whose damage type came from the resolve winner would
+        deal melee damage the moment any other rule owned that seam, because
+        the default rules own it in every ordinary fight.
+        """
+        return self.combat_axes()["damage_type"]
+
+
     def strength_equip_bonus(self) -> int:
-        """Return the attacker's melee strength bonus."""
-        return self.attacker_stats.get("melee_strength_bonus", 0)
+        """Return the attacker's equipment damage bonus for this action.
+
+        Melee reads melee_strength_bonus off the wielded weapon and armour.
+        A projectile shot reads projectile_strength_bonus, which the
+        AMMUNITION carries -- and reaches the same total because the ammo
+        occupies an equipment slot like every other piece of gear.
+        """
+        bonus_key = self.combat_axes()["strength_bonus_key"]
+
+        return self.attacker_stats.get(bonus_key, 0)
+
 
     def stance_bonus(self, skill_key: str) -> int:
         """Return the style's invisible level boost for one combat axis."""
         return self.stance_boost.get(skill_key, 0)
+
 
     def levels_for(self, bag: ModifierBag) -> dict:
         """Return the skill levels of whoever owns the given modifier bag.
@@ -248,6 +315,7 @@ class ActionContext:
             return self.defender_levels
 
         return self.attacker_levels
+
 
     def stats_for(self, bag: ModifierBag) -> dict:
         """Return the equipment stat block of whoever owns the given bag."""

@@ -17,25 +17,57 @@ from ..constants import CRAFT_CATEGORY_GUNSMITH
 # --- RUSTY SCRAP METAL RECIPES ---
 # ---------------------------------
 
-class RustyScrapBowRecipe(BlackoutRecipe):
-    "Hammer rusty scrap metal into a crude bow at an anvil."
+class RustyScrapShortbowRecipe(BlackoutRecipe):
+    "Bend rusty scrap metal around a scrap frame and string it at a Gunsmith Bench."
 
-    name = "rusty scrap bow"
+    name = "rusty scrap shortbow"
     category = CRAFT_CATEGORY_GUNSMITH
     required_skill = skill_constants.SKILL_KEY_GUNSMITH
     required_level = 0
     xp_reward = 25
     skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
-    consumable_tags = ["rusty_scrap_metal"] # TBD: mutant raider sinew/bowstring
+    consumable_tags = ["rusty_scrap_metal", "mutant_raider_sinew"]
+    consumable_names = ["rusty scrap metal", "mutant raider sinew"]
+
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
+
+    output_item_keys = ["rusty_scrap_shortbow"]
+
+    success_message = "You bend the rusty scrap metal to a curve and string it with sinew."
+
+
+
+class RustyScrapArrowRecipe(BlackoutRecipe):
+    """Cut and head ten arrows from one piece of rusty scrap metal.
+
+    TEN OUTPUTS FROM ONE INPUT, and the first recipe in the game to make more
+    than one item. output_item_keys is a LIST of keys and the crafting
+    service builds one object per entry, so ten identical keys make ten
+    objects -- and the arrow is stackable, so a character's at_object_receive
+    merges them into one stack of ten as they arrive.
+
+    No sinew. The bow takes the string, so the bow and the arrow compete for
+    metal alone and a player chooses which to spend it on.
+    """
+
+    name = "rusty scrap arrow"
+    category = CRAFT_CATEGORY_GUNSMITH
+    required_skill = skill_constants.SKILL_KEY_GUNSMITH
+    required_level = 0
+    xp_reward = 15
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["rusty_scrap_metal"]
     consumable_names = ["rusty scrap metal"]
 
-    tool_tags = ["hammer", "anvil"]
-    tool_names = ["hammer", "anvil"]
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
 
-    output_item_keys = ["rusty_scrap_bow"]
+    output_item_keys = ["rusty_scrap_arrow"] * 10
 
-    success_message = "You hammer the rusty scrap metal into a rough but serviceable bow."
+    success_message = "You cut and head a bundle of ten rusty scrap arrows."
 
 
 
@@ -285,25 +317,54 @@ class RustyScrapBowRecipe(BlackoutRecipe):
 # --- SCRAP METAL RECIPES ---
 # ---------------------------
 
-class ScrapBowRecipe(BlackoutRecipe):
-    "Hammer scrap metal into a crude bow at an anvil."
+class ScrapShortbowRecipe(BlackoutRecipe):
+    """Build the tier 2 bow at a Gunsmith Bench.
 
-    name = "scrap bow"
+    TAKES PRIME SINEW BESIDE THE METAL. The tier 1 recipe already takes
+    ordinary sinew, so a tier 2 recipe on metal alone would have been the
+    NARROWER of the two -- which runs against the fan-out the skill framework
+    asks for: a later recipe should draw on more of the tree, not less.
+    """
+
+    name = "scrap shortbow"
     category = CRAFT_CATEGORY_GUNSMITH
     required_skill = skill_constants.SKILL_KEY_GUNSMITH
     required_level = 10
     xp_reward = 35
     skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
 
+    consumable_tags = ["scrap_metal", "mutant_raider_prime_sinew"]
+    consumable_names = ["scrap metal", "mutant raider prime sinew"]
+
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
+
+    output_item_keys = ["scrap_shortbow"]
+
+    success_message = "You bend the scrap metal to a curve and string it with prime sinew."
+
+
+
+class ScrapArrowRecipe(BlackoutRecipe):
+    """Cut and head ten arrows from one piece of scrap metal.
+    """
+
+    name = "scrap arrow"
+    category = CRAFT_CATEGORY_GUNSMITH
+    required_skill = skill_constants.SKILL_KEY_GUNSMITH
+    required_level = 10
+    xp_reward = 15
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
     consumable_tags = ["scrap_metal"]
     consumable_names = ["scrap metal"]
 
-    tool_tags = ["hammer", "anvil"]
-    tool_names = ["hammer", "anvil"]
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
 
-    output_item_keys = ["scrap_bow"]
+    output_item_keys = ["scrap_arrow"] * 10
 
-    success_message = "You hammer the scrap metal into a rough but serviceable bow."
+    success_message = "You cut and head a bundle of ten scrap arrows."
 
 
 

@@ -45,6 +45,7 @@ PROTOTYPE_MODULES += ['evennia.contrib.grid.xyzgrid.prototypes']
 CRAFT_RECIPE_MODULES = [
     "systems.gameplay.crafting.recipes.foundry_recipes",
     "systems.gameplay.crafting.recipes.metalsmith_recipes",
+    "systems.gameplay.crafting.recipes.gunsmith_recipes",
     "systems.gameplay.crafting.recipes.rendering_recipes",
     "systems.gameplay.crafting.recipes.curing_recipes",
     "systems.gameplay.crafting.recipes.gastronomy_recipes",
