@@ -10,9 +10,9 @@ Description: Custom commands for players to interact with the progression system
 from commands.command import Command
 from commands.constants import HELP_CATEGORY_ADMIN, HELP_CATEGORY_PROGRESSION
 from evennia import CmdSet
+from systems.interface.menus import constants as menu_const
 from systems.interface.menus.base_menu import start_blackout_menu
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
-from systems.interface.ui.meters import build_xp_meter
 from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is progression, so the routing tag is
@@ -22,6 +22,68 @@ from systems.interface.statefeed import constants as feed_const
 # MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_PROGRESSION = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_PROGRESSION}
+
+# What `profile`, `skills` and `stats` say about a target that is not a
+# character.
+_NOT_A_CHARACTER_MSG = "You can only read a profile for a character."
+
+
+def _find_character(caller, name: str):
+    """
+    Purpose: Find the character that `profile`, `skills` or `stats` names.
+
+    Entry:
+        caller - the character who searches.
+        name   - what the player typed: a name, or a dbref such as `#42`.
+
+    Exit/Returns:
+        Returns the character, or None. On None the player was already told
+        why.
+
+    Module Globals:
+        _NOT_A_CHARACTER_MSG read.
+
+    Methodology:
+        A global search, so a profile is readable from anywhere.
+
+        `use_dbref=True`, because a click on a player sends that player's
+        dbref. A name cannot do that job: `skills Guns` reads the Guns skill
+        first, and two names can share a prefix. Evennia gives a dbref search
+        to Builders only unless the caller asks for it.
+
+        The target must have a `skills` handler, not a Character typeclass. A
+        chair found by its dbref is refused, and an object that grows real
+        skills later is readable with no edit here.
+
+    Notes/References:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    target = caller.search(name, global_search=True, use_dbref=True)
+
+    if target is None:
+        return None
+
+    has_skills = getattr(target, "skills", None) is not None
+
+    if not has_skills:
+        caller.msg((_NOT_A_CHARACTER_MSG, _MSG_PROGRESSION))
+        return None
+
+    return target
+
+
+def _open_profile(caller, target, page: str) -> None:
+    """Open the profile menu of `target` at one page.
+
+    The import is deferred to keep the summary panel registry's package walk
+    out of cmdset import time, as CmdProfile always did.
+    """
+    from systems.interface.menus.profile_menu import start_profile_menu
+
+    start_profile_menu(caller, target, startnode=page)
 
 
 
@@ -46,8 +108,9 @@ class CmdSkills(Command):
 
     SKILLS_MENU_PATH = "systems.interface.menus.skills_menu"
 
-    OTHER_HEADER = "|c--- {name}'s Skills ---|n"
-    NO_SKILLS_MSG = "{name} has not acquired any skills yet."
+    # The label of this command on the click menu of another player. See
+    # Character.extra_actions.
+    ENTITY_ACTION_LABEL = "Skills"
 
 
     def func(self) -> None:
@@ -118,7 +181,7 @@ class CmdSkills(Command):
 
     def _show_other(self, name: str) -> None:
         """
-        Purpose: Print another character's skill levels.
+        Purpose: Open another character's profile at the skills page.
 
         Entry:
             name is what the player typed, already stripped and known not to
@@ -128,56 +191,31 @@ class CmdSkills(Command):
             No conditions.
 
         Module Globals:
-            SKILL_REGISTRY read.
-            OTHER_HEADER, NO_SKILLS_MSG read.
+            None.
 
         Methodology:
-            Unchanged from the behaviour this command has always had, lifted
-            out of func so the three readings of the argument read as three
-            branches rather than as one branch and forty lines.
+            Until 09/18/2026 this printed the levels as one block of text. It
+            now opens the profile menu at its skills page, so `skills
+            <character>`, `profile <character>` and `stats <character>` are
+            three doors into one screen. A Godot client shows that screen as
+            a pop-up.
 
             A failed search reports itself -- caller.search already told the
             player -- so this returns silently rather than adding a second
             complaint about the same miss.
 
         Notes/References:
-            The levels shown are read through the target's own handler, so a
-            skill added since that character was created reports 0 rather than
-            being absent.
+            systems/interface/menus/profile_menu.py renders the levels.
 
         Author: Nick Hobar
         Creation date: 06/02/2026
         """
-        caller = self.caller
-        target = caller.search(name, global_search=True)
+        target = _find_character(self.caller, name)
 
         if target is None:
             return
 
-        target_name = target.name
-        skills_dict = target.db.skills
-
-        if not skills_dict:
-            caller.msg((self.NO_SKILLS_MSG.format(name=target_name),
-                        _MSG_PROGRESSION))
-            return
-
-        output_lines = [self.OTHER_HEADER.format(name=target_name)]
-
-        for skill_key, skill_data in skills_dict.items():
-            if skill_key not in SKILL_REGISTRY:
-                continue
-
-            skill_class = SKILL_REGISTRY[skill_key]
-            current_xp, total_xp_needed, _remaining = (
-                target.skills.get_xp_level(skill_key))
-            xp_meter = build_xp_meter(current_xp, total_xp_needed)
-
-            output_lines.append(
-                f"|w{skill_class.name}:|n Level {skill_data['level']} {xp_meter}")
-
-        screen = "\n".join(output_lines)
-        caller.msg((screen, _MSG_PROGRESSION))
+        _open_profile(self.caller, target, menu_const.PROFILE_NODE_SKILLS)
 
 
 
@@ -223,11 +261,9 @@ class CmdScore(Command):
             web-client panel) should be able to open the same screen without
             going through a command.
 
-            Deliberately takes no target argument. `skills <name>` already
-            exposes another player's skills; a full dossier is private state
-            (holdings, bank, quest progress), and the public subset belongs in
-            its own command with its own per-panel filtering rather than as an
-            argument here that would leak everything by default.
+            Takes no target argument, because the drill-downs below the
+            dossier open the CALLER's own screens. `profile <name>` shows the
+            same dossier of any other character. Everything on it is public.
 
         Notes/References:
             The MUD convention for this command is `score`; `sc`, `dossier`
@@ -243,27 +279,34 @@ class CmdScore(Command):
 
 class CmdStats(Command):
     """
-    Show your lifetime records: kills and deaths per hostile, harvests per
-    node, credits spent.
+    Show lifetime records: kills and deaths per hostile, harvests per node,
+    credits spent.
 
     Your dossier (`score`) carries the short form of the same tallies; this
-    names every entry.
+    names every entry. Name another character to read their records.
 
     Usage:
       stats
+      stats <character>
     """
     key = "stats"
     aliases = ["records"]
     locks = "cmd:all()"
     help_category = HELP_CATEGORY_PROGRESSION
 
+    # The label of this command on the click menu of another player. See
+    # Character.extra_actions.
+    ENTITY_ACTION_LABEL = "Records"
+
 
     def func(self) -> None:
         """
-        Purpose: Prints the caller's full records sheet.
+        Purpose: Prints the caller's full records sheet, or opens another
+                 character's profile at its records page.
 
         Entry:
             self.caller is a valid Evennia Character object.
+            self.args optionally names a character.
 
         Exit/Returns:
             No conditions.
@@ -276,9 +319,8 @@ class CmdStats(Command):
             same module that draws the dossier band, so the two cannot describe
             a tally differently.
 
-            Takes no target, for the reason `score` gives -- the tallies are
-            private until the Records band is deliberately made public, and an
-            argument here would publish them by the back door.
+            With an argument, it opens the profile menu at its records page,
+            the same screen `profile <character>` opens. Records are public.
 
         Notes/References:
             The panel is imported inside func, as CmdProfile imports the
@@ -290,14 +332,27 @@ class CmdStats(Command):
         """
         from systems.interface.summary.panel_defs.records import RecordsPanel
 
+        clean_args = self.args.strip()
+
+        if clean_args:
+            target = _find_character(self.caller, clean_args)
+
+            if target is not None:
+                _open_profile(self.caller, target, menu_const.PROFILE_NODE_RECORDS)
+
+            return
+
         screen = RecordsPanel.sheet(self.caller)
         self.caller.msg((screen, _MSG_PROGRESSION))
 
 
 class CmdProfile(Command):
     """
-    Show the public profile of another character -- what anyone may read about
-    them. With no argument, shows your own, so you can see what others see.
+    Show the profile of a character: their dossier, their skills and their
+    records. With no argument, shows your own.
+
+    Everything on a profile is public. Another player reads the same dossier
+    that you read with `score`.
 
     Usage:
       profile
@@ -308,13 +363,14 @@ class CmdProfile(Command):
     locks = "cmd:all()"
     help_category = HELP_CATEGORY_PROGRESSION
 
-
-    NOT_A_CHARACTER_MSG = "You can only read a profile for a character."
+    # The label of this command on the click menu of another player. See
+    # Character.extra_actions.
+    ENTITY_ACTION_LABEL = "Profile"
 
 
     def func(self) -> None:
         """
-        Purpose: Renders a character's public profile.
+        Purpose: Opens a character's profile at the dossier page.
 
         Entry:
             self.caller is a valid Evennia Character object.
@@ -328,49 +384,31 @@ class CmdProfile(Command):
 
         Methodology:
             Empty argument targets the caller. That is the useful default here
-            rather than an error: the first question a player has about a
-            public profile is what it says about them.
+            rather than an error.
 
-            A global search matches the behaviour `skills <name>` already has,
-            so the two lookups behave the same way from the player's side.
-
-            The target is checked for a `skills` handler rather than for a
-            Character typeclass. Same reason CombatEntity gates on the optional
-            API surface instead of isinstance: an NPC or a future typeclass
-            that grows real skills should be readable, and a chair should not,
-            and that is decided by what the object can answer, not by what it
-            inherits from.
+            There was a narrower "public" dossier until 09/18/2026. It hid
+            hitpoints, location, holdings, equipment and records. The game
+            now treats all of it as public, so the profile renders the full
+            dossier, and the panels carry no public flag.
 
         Notes/References:
-            Renders through service.render_public_summary, which walks only the
-            panels flagged public and calls each through its narrowed public
-            renderer. This command decides WHO is shown, never WHAT.
+            systems/interface/menus/profile_menu.py owns the pages.
+            _find_character owns the search and the character check.
 
         Author: Nick Hobar
         Creation date: 08/08/2026
         """
-        from systems.interface.summary.service import render_public_summary
-
         caller = self.caller
         clean_args = self.args.strip()
+        target = caller
 
-        if not clean_args:
-            target = caller
-        else:
-            target = caller.search(clean_args, global_search=True)
+        if clean_args:
+            target = _find_character(caller, clean_args)
 
-            if target is None:
-                # caller.search already reported the failure.
-                return
-
-        has_skills = getattr(target, "skills", None) is not None
-
-        if not has_skills:
-            caller.msg((self.NOT_A_CHARACTER_MSG, _MSG_PROGRESSION))
+        if target is None:
             return
 
-        screen = render_public_summary(target)
-        caller.msg((screen, _MSG_PROGRESSION))
+        _open_profile(caller, target, menu_const.PROFILE_NODE_DOSSIER)
 
 
 class CmdAddXP(Command):

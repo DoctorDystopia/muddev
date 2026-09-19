@@ -43,13 +43,6 @@ extends RefCounted
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
-## Smallest amount a quantity prompt may be set to, whatever the server said.
-##
-## A floor rather than a trusted value: the server sends a `min` and it is 1,
-## but a prompt that could be driven to zero is one where confirming does
-## nothing, which reads as a broken dialog rather than as a declined action.
-const ACTION_AMOUNT_FLOOR := 1
-
 signal changed
 
 ## How many carried frames to draw, and how many are full.
@@ -150,65 +143,17 @@ func swap_command(from_index: int, to_index: int) -> String:
 ##
 ## An action carrying an `input` block is one whose AMOUNT only this client
 ## holds — Sell X, Deposit X — the same split [method swap_command] describes
-## for a drag. Everything else the server named whole.
-##
-## Read as a question rather than as a flag so the caller gets the bounds and
-## the wording in the same call it learns there is a prompt at all.
+## for a drag. The rule itself is [method ServerAction.prompt], shared with the
+## pop-up, which reads the same shape.
 func action_prompt(action: Dictionary) -> Dictionary:
-	var prompt: Variant = action.get("input")
-
-	if typeof(prompt) != TYPE_DICTIONARY:
-		return {}
-
-	if str(prompt.get(_Const.ACTION_INPUT_KIND_KEY, "")) \
-			!= _Const.ACTION_INPUT_KIND_QUANTITY:
-		return {}
-
-	var maximum := int(prompt.get(_Const.ACTION_INPUT_MAX_KEY, 1))
-	var minimum := int(prompt.get(
-		_Const.ACTION_INPUT_MIN_KEY, ACTION_AMOUNT_FLOOR))
-
-	return {
-		_Const.ACTION_INPUT_MIN_KEY: maxi(minimum, ACTION_AMOUNT_FLOOR),
-		_Const.ACTION_INPUT_MAX_KEY: maxi(maximum, minimum),
-		_Const.ACTION_INPUT_LABEL_KEY: str(
-			prompt.get(_Const.ACTION_INPUT_LABEL_KEY, "")),
-	}
+	return ServerAction.prompt(action)
 
 
 ## What to send for one of the server's actions, given the amount the player
-## chose.
-##
-## Three cases, and the middle one is the whole reason this exists:
-##
-##     a non-empty `command`  -> send it verbatim, `amount` ignored
-##     a prompted action      -> substitute into its `template`
-##     anything else          -> "", the server declining
-##
-## **The empty string is not an error and must never be guessed at.** An action
-## with no command is the server saying "do not offer this", exactly as an
-## empty tile action is, and a prompted action on a client that could not
-## prompt would arrive here as one. Returning "" rather than a half-built
-## string is what makes the payload's contract degrade safely.
-##
-## The placeholder is [code]ACTION_AMOUNT_PLACEHOLDER[/code], generated from
-## the server's constants, never a literal here — the same rule
-## [method swap_command] follows for its two.
+## chose. See [method ServerAction.command] for the three cases, and for why
+## "" is the server declining rather than an error.
 func action_command(action: Dictionary, amount: int = 0) -> String:
-	var command := str(action.get("command", ""))
-
-	if not command.is_empty():
-		return command
-
-	if action_prompt(action).is_empty():
-		return ""
-
-	var template := str(action.get("template", ""))
-
-	if template.is_empty():
-		return ""
-
-	return template.replace(_Const.ACTION_AMOUNT_PLACEHOLDER, str(amount))
+	return ServerAction.command(action, amount)
 
 
 ## Carried rows keyed by their slot index.

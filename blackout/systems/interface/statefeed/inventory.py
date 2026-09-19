@@ -24,6 +24,8 @@ Description: Turn a character's inventory grid and equipment slots into the
              Inspect action and reads it in the text pane, where it lives.
 """
 
+from evennia.utils import logger
+
 from . import commerce
 from systems.gameplay.consumables import service as consumables
 
@@ -207,6 +209,66 @@ def _equip_slot_value(item) -> str:
     return str(use_slot.value)
 
 
+def _declared_item_actions(item) -> list:
+    """
+    Purpose: Read the actions an item declares for its inventory row.
+
+    Entry:
+        item - a live carried object. Most items declare no actions.
+
+    Exit/Returns:
+        Returns action dictionaries with a command and a label.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read the typeclass method through getattr, so this serializer does not
+        import a typeclass. The method's order is the item's default-action
+        order. Ignore malformed entries because a state feed must not break an
+        inventory update.
+
+    Notes/References:
+        ModeratorEgg declares `egg` here. Its command exists only while the
+        player carries the egg, so it must not use the room interaction list.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    source = getattr(item, "inventory_actions", None)
+
+    if source is None:
+        return []
+
+    try:
+        declared = list(source() or [])
+    except Exception as exception:
+        logger.log_err(
+            f"_declared_item_actions: {item} inventory_actions failed: "
+            f"{exception!r}")
+        return []
+
+    actions = []
+
+    for action in declared:
+        if not isinstance(action, dict):
+            continue
+
+        command = str(action.get("command", "")).strip()
+
+        if not command:
+            continue
+
+        label = str(action.get("label", "")).strip()
+
+        if not label:
+            label = command.split(" ")[0].capitalize()
+
+        actions.append({"label": label, "command": command})
+
+    return actions
+
+
 def _build_actions(templates, item, slot_number: int, equip_slot: str) -> list:
     """
     Purpose: Render an action template table into concrete commands.
@@ -327,7 +389,7 @@ def _units_by_key(occupied) -> dict:
     return totals
 
 
-def _serialize_carried(handler, context) -> list:
+def _serialize_carried(handler, context, lens=None) -> list:
     """Render every occupied slot in the 32-slot grid.
 
     Empty slots are OMITTED rather than sent as nulls. The client is told
@@ -338,6 +400,12 @@ def _serialize_carried(handler, context) -> list:
     Order is Equip, then the commerce group, then Inspect and Drop. Commerce
     sits ABOVE Drop on purpose: Drop is the destructive neighbour and it
     should stay at the bottom, where the hand expects it.
+
+    AN OPEN POP-UP LEADS. `lens` is popups.service.carried_lens: while the
+    vault or a shop is open, its Deposit or Sell actions go FIRST, so a left
+    click deposits or sells, as in the OSRS bag beside an interface. They
+    replace the commerce group, which offers the same verb. `detail` gives
+    the row a short line, for example the price the shop pays.
     """
     rows = []
     occupied = handler.all_items()
@@ -362,14 +430,25 @@ def _serialize_carried(handler, context) -> list:
         if consumables.is_edible(item):
             leading.append(const.INVENTORY_ACTION_EAT)
 
-        actions = _build_actions(leading, item, slot_number, equip_slot)
-        actions.extend(
-            _commerce_actions(item, slot_number, equip_slot, context, units))
+        led = lens.actions(item, slot_index, units) if lens is not None else []
+        actions = list(led)
+        actions.extend(_declared_item_actions(item))
+        actions.extend(_build_actions(leading, item, slot_number, equip_slot))
+
+        if not led:
+            actions.extend(
+                _commerce_actions(item, slot_number, equip_slot, context, units))
+
         actions.extend(_build_actions(
             (const.INVENTORY_ACTION_INSPECT, const.INVENTORY_ACTION_DROP),
             item, slot_number, equip_slot,
         ))
         row = _serialize_item(item, slot_index, actions)
+        detail = lens.detail(item) if lens is not None else ""
+
+        if detail:
+            row["detail"] = detail
+
         rows.append(row)
 
     return rows
@@ -433,6 +512,21 @@ def _serialize_equipped(handler, context) -> list:
     return rows
 
 
+def _popup_lens(observer):
+    """The open pop-up's CarriedLens, or None. Never raises.
+
+    Imported late: the pop-up service reaches the registry, and the registry
+    imports every pop-up definition, which import this module.
+    """
+    try:
+        from systems.interface.popups import service as popup_service
+
+        return popup_service.carried_lens(observer)
+    except Exception:
+        logger.log_trace()
+        return None
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def build_payload(observer, ignore=None):
@@ -493,7 +587,8 @@ def build_payload(observer, ignore=None):
     # scan for each of up to thirty-two rows, on the most expensive payload
     # the feed builds.
     context = commerce.build_context(observer)
-    carried = _serialize_carried(inventory, context)
+    lens = _popup_lens(observer)
+    carried = _serialize_carried(inventory, context, lens)
     equipment = getattr(observer, "equipment", None)
     equipped = []
 

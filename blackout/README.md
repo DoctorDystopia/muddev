@@ -714,15 +714,31 @@ something that you wear.
 > deposit main hand
 ```
 
-This command opens the full banking menu:
+This command opens the bank:
 
 ```bash
 > bank
 ```
 
-The deposit and withdraw lists of the menu show identical items as one row
-with a total (`rusty scrap metal (x11)`). Then they prompt for a quantity, so
-bulk transfers do not need the command form.
+In the Godot client, `bank` opens a pop-up over the world. The vault is on the
+left and your inventory is on the right. A left click on a vault item
+withdraws the active quantity, and a left click on a carried item deposits it.
+A right click lists every action. The 1 / 5 / 10 / X / All buttons set the
+quantity, and the game remembers it after you log out. Walk away, click Close,
+or press Escape to close it.
+
+The buttons type these commands for you, and you can type them too:
+
+```bash
+> popup quantity 5
+> popup quantity all
+> popup close
+```
+
+Every other client gets the banking menu. The deposit and withdraw lists of the
+menu show identical items as one row with a total (`rusty scrap metal (x11)`).
+Then they prompt for a quantity, so bulk transfers do not need the command
+form.
 
 ### Python inspection
 
@@ -742,6 +758,36 @@ bulk transfers do not need the command form.
 
 ---
 
+## Shops
+
+Stand beside a shopkeeper. These commands work there:
+
+```bash
+> trade
+> buy rusty metal chunk
+> buy rusty metal chunk 5
+> buy rusty metal chunk all
+> sell 7
+> sell 7 all
+```
+
+- `buy` without a quantity buys one. `all` buys as many as the shop has and
+  you can pay for. If you cannot pay for the full quantity, you buy as many as
+  you can.
+- `sell` takes an inventory slot number or an item name, as `deposit` does.
+- `talk` opens the conversation, which also has the buy and sell menus.
+
+In the Godot client, `trade` opens a pop-up. The stock is on the left, with
+each unit price under the item, and your inventory is on the right. A left
+click buys or sells the active quantity, and a right click lists every action.
+A ware that you cannot pay for is dim. An item that the shop will not buy is
+dim and has no actions. A right click on the shopkeeper in the world offers
+Talk and Trade.
+
+Every other client gets the shop menu from `trade`.
+
+---
+
 ## Crafting System
 
 ### In-game crafting
@@ -750,10 +796,26 @@ Stand at a crafting facility (furnace, anvil) and use:
 
 ```bash
 > craft
+> craft rusty metal dust
+> craft rusty metal dust 5
+> craft rusty metal dust all
+> craft cancel
 ```
 
-The command opens a menu. In it, select a category, browse recipes, check the
-material and tool requirements, and craft with optional confirmation.
+A bare `craft` opens the facility. `craft <recipe>` makes that recipe here:
+one, a number, or `all` that your materials allow. The recipe is a key or a
+name. `craft cancel` stops a batch that is running.
+
+In the Godot client, a bare `craft` opens a pop-up. Every recipe of the
+facility shows, with its skill level under the item and its materials on
+hover. A recipe that you cannot make yet is dim. A click on it tells you what
+is missing. A left click makes the active quantity. The buttons under the
+grids stop a batch, or collect a cure at the curing chamber. The pop-up does
+not ask for confirmation, because a click names the recipe and the quantity.
+
+Every other client gets the crafting menu. In it, select a category, browse
+recipes, check the material and tool requirements, and craft with optional
+confirmation.
 
 ### Toggle craft confirmation prompt
 
@@ -1249,7 +1311,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**2532 tests, ~16 minutes** (measured 09/13/2026). Run it before a merge, or
+**2742 tests, ~20 minutes** (measured 09/18/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

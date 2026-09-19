@@ -59,30 +59,9 @@ DEFERRED_NONE_READY = "Nothing is ready to collect yet."
 
 
 def _skill_requirement(skill_key, required_level):
-    """Name a recipe's skill gate the way the skills sheet does.
-
-    Entry:
-        skill_key is a recipe's required_skill; "" for an ungated recipe.
-        required_level is its required_level.
-
-    Exit/Returns:
-        Returns e.g. "Metalsmith Lv.4", or "" for an ungated recipe.
-
-    Methodology:
-        The skill's DISPLAY name, not its key -- "Metalsmith Lv.4" is what a
-        player just read on the skills sheet, and "metalsmith Lv.4" is not.
-        The import is deferred because the skills registry has no business
-        being walked when this module is imported at startup.
-    """
-    if not skill_key:
-        return ""
-
-    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
-
-    skill_class = SKILL_REGISTRY.get(skill_key)
-    skill_name = getattr(skill_class, "name", skill_key)
-
-    return f"{skill_name} Lv.{required_level}"
+    """Name a recipe's skill gate. crafting_service owns the wording, which
+    the crafting pop-up prints too."""
+    return crafting_service.skill_requirement_text(skill_key, required_level)
 
 
 def _recipe_line(recipe_cls):

@@ -620,6 +620,46 @@ def format_combat_stat_bonuses(bonuses: dict) -> list:
     return lines
 
 
+# The heading of the bonus block under an item's look text.
+COMBAT_BONUSES_HEADING: str = "Combat Bonuses:"
+
+
+def append_combat_stat_bonuses(base_desc: str, bonuses) -> str:
+    """
+    Purpose: Put an item's combat bonus block under its description.
+
+    Entry:
+        base_desc - the item's description.
+        bonuses   - a combat_stat_bonuses dict, or None.
+
+    Exit/Returns:
+        Returns base_desc unchanged when no bonus is non-zero. Else returns
+        base_desc, a blank line, the heading and one line for each bonus.
+
+    Module Globals:
+        COMBAT_BONUSES_HEADING read.
+
+    Methodology:
+        One routine for two readers: EquippableItem.get_display_desc for a
+        carried item, and the shop's `value` for a ware that has no object
+        yet. So the two show a weapon with the same words.
+
+    Notes/References:
+        Moved out of typeclasses/items.py on 09/18/2026 for the shop.
+
+    Author: Nick Hobar
+    Creation date: 08/04/2026
+    """
+    bonus_lines = format_combat_stat_bonuses(bonuses or {})
+
+    if not bonus_lines:
+        return base_desc
+
+    bonus_block = "\n".join(bonus_lines)
+
+    return f"{base_desc}\n\n{COMBAT_BONUSES_HEADING}\n{bonus_block}"
+
+
 # ─── Progress readouts (HP remaining) ───────────────────────────────────────
 
 def format_hp_status(label: str, current_hp: int, max_hp: int) -> str:

@@ -22,7 +22,8 @@ extends PanelContainer
 ## It decides **nothing about the game**. Whether a drop is legal is
 ## [method InventoryState.can_equip], which compares two server-supplied values.
 ## What a click can do is the row's own `actions`, which are whole commands the
-## server named. This control turns a gesture into a request and emits it; the
+## server named. A left click selects the first action. This control turns a
+## gesture into a request and emits it; the
 ## view sends it. There is no verb here, and there must never be one — the
 ## browser pane had a verb table once, it was wrong within a week, and a
 ## superuser walked off with a Foundry Furnace.
@@ -39,6 +40,11 @@ signal dropped(from_kind: String, from_key: Variant, to_kind: String, to_key: Va
 ## Emitted when the player picks one of the server's named actions.
 signal action_chosen(command: String)
 
+## Emitted when the mouse enters and leaves this cell. The VIEW owns the
+## [HoverBar] and reads [method hover_text] from the cell.
+signal hovered
+signal unhovered
+
 ## The client's Theme, preloaded for ONE use: the drag preview.
 ##
 ## Every other Control in this file inherits the theme down the tree from the
@@ -48,29 +54,30 @@ signal action_chosen(command: String)
 ## keeps the caption's size in the theme rather than back in a literal here.
 const _THEME := preload("res://ui/blackout_theme.tres")
 
-## The generated server constants, for the keys of a prompted action's `input`
-## block. Preloaded rather than reached through the autoload so this control
-## can be built in a headless test with no scene tree above it.
-const _CONST := preload("res://autoload/blackout_constants.gd")
-
 const COLOR_EMPTY := Color(1, 1, 1, 0.25)
 const COLOR_FILLED := Color(1, 1, 1, 0.9)
 
-## Widest an item name may draw before it is clipped, in characters. Frames are
-## small and a long name would push the grid around.
-const NAME_CLIP := 14
+## Separates the hover bar's parts without hiding where one fact ends.
+const HOVER_SEPARATOR := "  -  "
 
 ## How tall the item's picture is, in pixels.
-const ART_HEIGHT := 44
+const ART_HEIGHT := 36
+
+## The cell's size, in pixels: a touch wider than tall, so a two-line name
+## fits beside no count line. The count sits in the corner, over the art.
+const CELL_SIZE := Vector2(104, 0)
 
 var kind := KIND_CARRIED
 var key: Variant = 0
 
 var _state: InventoryState
 var _row: Dictionary = {}
-var _title: Label
-var _detail: Label
+var _title: ItemNameLabel
+var _count: StackCountLabel
 var _menu: PopupMenu
+
+## True after this cell starts a drag. Its left-button release does not act.
+var _skip_left_release := false
 
 ## The item's picture: one rectangle of [ItemStage]'s shared render target.
 ##
@@ -87,7 +94,9 @@ var _art: TextureRect
 ## what lets the view construct and bind in one pass.
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_PASS
-	custom_minimum_size = Vector2(96, ART_HEIGHT + 34)
+	custom_minimum_size = CELL_SIZE
+	mouse_entered.connect(hovered.emit)
+	mouse_exited.connect(unhovered.emit)
 
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -103,15 +112,12 @@ func _init() -> void:
 	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	column.add_child(_art)
 
-	_title = Label.new()
-	_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_title.theme_type_variation = &"CellTitle"
+	_title = ItemNameLabel.new()
 	column.add_child(_title)
 
-	_detail = Label.new()
-	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_detail.theme_type_variation = &"CellDetail"
-	column.add_child(_detail)
+	# AFTER the column, so the count draws over the art and not under it.
+	_count = StackCountLabel.new()
+	add_child(_count)
 
 	_menu = PopupMenu.new()
 	_menu.id_pressed.connect(_on_menu_id)
@@ -158,8 +164,8 @@ func _redraw(label: String) -> void:
 	modulate = COLOR_FILLED if occupied else COLOR_EMPTY
 
 	if occupied:
-		_title.text = _clip(str(_row.get("name", "")))
-		_detail.text = _quantity_text()
+		_title.text = str(_row.get("name", ""))
+		_count.show_quantity(int(_row.get("quantity", 1)))
 		tooltip_text = _tooltip()
 		return
 
@@ -167,7 +173,7 @@ func _redraw(label: String) -> void:
 	# as a doll rather than as a row of blank squares. An empty CARRIED square
 	# is just a square.
 	_title.text = label
-	_detail.text = ""
+	_count.show_quantity(0)
 	tooltip_text = label
 
 
@@ -181,30 +187,62 @@ func _current_row() -> Dictionary:
 	return _state.equipped_at(str(key))
 
 
-func _quantity_text() -> String:
-	var quantity := int(_row.get("quantity", 1))
-
-	if quantity > 1:
-		return "x%d" % quantity
-
-	return ""
-
-
+## The name, the count, the server's `detail`, and the default action.
 func _tooltip() -> String:
+	return "\n".join(_description())
+
+
+## The one-line form for the [HoverBar].
+func hover_text() -> String:
+	return HOVER_SEPARATOR.join(_description())
+
+
+## The item's name, its count, and the left-click action it gives to the
+## player. The server names the action. This control joins that action to the
+## item's already-sent name, as [ChooseOption] does for a world entity.
+func _description() -> PackedStringArray:
 	var parts: PackedStringArray = [str(_row.get("name", ""))]
-	var quantity := int(_row.get("quantity", 1))
+	var count := StackCountLabel.count_text(int(_row.get("quantity", 1)))
+	var detail := str(_row.get("detail", ""))
 
-	if quantity > 1:
-		parts.append("x%d" % quantity)
+	if not count.is_empty():
+		parts[0] += " %s" % count
 
-	return " ".join(parts)
+	if not detail.is_empty():
+		parts.append(detail)
+
+	var action_text := _default_action_text()
+
+	if not action_text.is_empty():
+		parts.append("Click: %s" % action_text)
+
+	return parts
 
 
-func _clip(text: String) -> String:
-	if text.length() <= NAME_CLIP:
-		return text
+## The default action's server label, followed by this row's server name.
+func _default_action_text() -> String:
+	var action := _default_action()
 
-	return text.substr(0, NAME_CLIP - 1) + "…"
+	if action.is_empty():
+		return ""
+
+	var label := str(action.get("label", "")).strip_edges()
+
+	if label.is_empty():
+		var command := str(action.get("command", "")).strip_edges()
+		label = command.split(" ")[0]
+
+	if label.is_empty():
+		return ""
+
+	var item_name := str(_row.get("name", "")).strip_edges()
+
+	return label + " " + item_name
+
+
+## The count this cell draws in its corner. For tests.
+func count_text() -> String:
+	return _count.text
 
 
 # ─── Drag and drop, all of it Godot's ────────────────────────────────────────
@@ -213,6 +251,7 @@ func _get_drag_data(_at: Vector2) -> Variant:
 	if _row.is_empty():
 		return null
 
+	_skip_left_release = true
 	set_drag_preview(_preview())
 
 	return {"kind": kind, "key": key, "row": _row}
@@ -221,9 +260,12 @@ func _get_drag_data(_at: Vector2) -> Variant:
 ## What the cursor carries. A label rather than the cell itself, because
 ## reparenting a live cell into the drag layer would empty the grid square the
 ## drag started from.
+##
+## The full name on one line. The preview is not in a grid, so it has no width
+## to fit.
 func _preview() -> Control:
 	var preview := Label.new()
-	preview.text = _clip(str(_row.get("name", "")))
+	preview.text = str(_row.get("name", ""))
 	preview.theme = _THEME
 	preview.theme_type_variation = &"CellTitle"
 
@@ -263,11 +305,45 @@ func _gui_input(event: InputEvent) -> void:
 
 	var click := event as InputEventMouseButton
 
-	if not click.pressed or click.button_index != MOUSE_BUTTON_RIGHT:
+	if click.button_index == MOUSE_BUTTON_LEFT:
+		if click.pressed:
+			_skip_left_release = false
+			return
+
+		if _skip_left_release:
+			_skip_left_release = false
+			return
+
+		activate()
+		accept_event()
 		return
 
-	_open_menu()
-	accept_event()
+	if click.pressed and click.button_index == MOUSE_BUTTON_RIGHT:
+		_open_menu()
+		accept_event()
+
+
+## Do the server's first action. Public so a test can click without a window.
+func activate() -> void:
+	var action := _default_action()
+
+	if action.is_empty():
+		return
+
+	_perform(action)
+
+
+## The first action is the default action. The server orders the list.
+func _default_action() -> Dictionary:
+	if _state == null or _row.is_empty():
+		return {}
+
+	var actions := _state.actions_for(_row)
+
+	if actions.is_empty():
+		return {}
+
+	return actions[0]
 
 
 ## Offer exactly what the server offered, in the order it offered it.
@@ -302,6 +378,11 @@ func _on_menu_id(index: int) -> void:
 		return
 
 	var action: Dictionary = actions[index]
+	_perform(action)
+
+
+## Send one action, asking for an amount when the server requires one.
+func _perform(action: Dictionary) -> void:
 	var prompt := _state.action_prompt(action)
 
 	# Checked BEFORE the empty-command guard below, because a prompted action
@@ -321,42 +402,7 @@ func _on_menu_id(index: int) -> void:
 	action_chosen.emit(command)
 
 
-## Ask for the one value the server left blank, then send.
-##
-## The server named the verb, the bounds and the question; this builds a box
-## for them and substitutes through [method InventoryState.action_command],
-## which owns the placeholder. There is no verb here and no arithmetic — the
-## maximum is the row's own quantity as the server counted it.
-##
-## Built per prompt and freed on close rather than kept as a member: a stale
-## dialog bound to an action from a snapshot ago is a click that sells the
-## wrong thing, and a cell is rebound whenever the payload changes.
+## Ask for the one value the server left blank, then send. The box is
+## [AmountPrompt], shared with the pop-up.
 func _ask_amount(action: Dictionary, prompt: Dictionary) -> void:
-	var minimum := int(prompt.get(_CONST.ACTION_INPUT_MIN_KEY, 1))
-	var maximum := int(prompt.get(_CONST.ACTION_INPUT_MAX_KEY, minimum))
-
-	var spin := SpinBox.new()
-	spin.min_value = minimum
-	spin.max_value = maximum
-	spin.value = minimum
-	spin.step = 1
-	spin.select_all_on_focus = true
-
-	var dialog := AcceptDialog.new()
-	dialog.title = str(action.get("label", ""))
-	dialog.dialog_text = str(prompt.get(_CONST.ACTION_INPUT_LABEL_KEY, ""))
-	dialog.theme = _THEME
-	dialog.add_child(spin)
-	dialog.confirmed.connect(func() -> void:
-		var command := _state.action_command(action, int(spin.value))
-
-		if not command.is_empty():
-			action_chosen.emit(command)
-	)
-	# QUEUE_FREE on close, not hide: the dialog is bound to one action from one
-	# snapshot, and the next payload replaces the row it describes.
-	dialog.close_requested.connect(dialog.queue_free)
-	dialog.confirmed.connect(dialog.queue_free)
-
-	add_child(dialog)
-	dialog.popup_centered()
+	AmountPrompt.ask(self, action, prompt, action_chosen.emit)

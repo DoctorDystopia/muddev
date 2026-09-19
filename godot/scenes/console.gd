@@ -58,6 +58,10 @@ const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
 ## aura channels off the feed itself.
 @onready var _world: Node3D = %World
 
+## The SubViewportContainer that shows [member _world]. Read for one signal:
+## the mouse leaving the pane. See [method WorldView.clear_hover].
+@onready var _world_view: SubViewportContainer = %WorldView
+
 ## The map, drawn small over the corner of the world pane. A second VIEW of
 ## [member _world_state], never a second copy of it.
 @onready var _minimap: MinimapView = %Minimap
@@ -101,6 +105,10 @@ var _combat_options := CombatOptionsState.new()
 
 ## What you have taken and how far through it you are. A model like the others.
 var _quest_log := QuestState.new()
+
+## The pop-up the server holds open over the world pane: the bank today. A
+## model like the others; [PopupView] is the view of it.
+var _popup := PopupState.new()
 
 ## Every XP award this session, and how fast. A model like the others -- and
 ## the one whose SESSION is the client's own reading rather than a server fact;
@@ -184,6 +192,15 @@ var _options: OptionsView
 var _help: HelpView
 var _quests: QuestsView
 var _find: FindBar
+var _popup_view: PopupView
+
+## What a left click in the world would act on, along the bottom of the world
+## pane. The same [HoverBar] the bag and the pop-up use.
+var _world_hover: HoverBar
+
+## How far the world hover bar stays inside the pane's edges, in pixels. The
+## same margin the vitals and the minimap keep in console.tscn.
+const WORLD_HOVER_MARGIN := 8
 
 ## Your hit points, and whatever resources follow them. ONE control, moved
 ## between two slots -- see [method _place_vitals].
@@ -246,6 +263,20 @@ func _ready() -> void:
 	# cannot and every lock and cooldown still applies with nothing to audit.
 	_world.options_requested.connect(_choose.open)
 	_choose.chosen.connect(Evennia.command)
+
+	# The pop-up, over the world pane and UNDER the right-click menu and the
+	# veil, so both still cover it. Built in code for the reason the panel
+	# bodies are: its contents depend on nothing in the scene. Every slot and
+	# button sends a line the server named, through the one path everything on
+	# this screen uses.
+	_popup_view = PopupView.new()
+	_popup_view.bind(_popup, _meshes)
+	_world_pane.add_child(_popup_view)
+	_world_pane.move_child(_popup_view, _choose.get_index())
+	_popup_view.command_requested.connect(Evennia.command)
+	_popup_view.keyboard_released.connect(func(): _set_typing(true))
+
+	_build_world_hover()
 
 	# After both panes are bound, so the manifest landing finds consumers ready
 	# rather than arriving at a pane that has not been given the resolver yet.
@@ -380,6 +411,28 @@ func _ready() -> void:
 		_note("could not open socket: error %d" % err)
 
 
+## Put the world's [HoverBar] along the bottom of the world pane.
+##
+## Bottom-left and not top-left as in OSRS, because the vitals hold the top
+## left of this pane. It stands UNDER the pop-up, the right-click menu and the
+## veil, so each of them covers it. It ignores the mouse, so a click through it
+## still reaches the world.
+##
+## The pane gets no mouse motion after the mouse leaves it, so the leave clears
+## the hover. Without that, the bar names a tile that the mouse left behind.
+func _build_world_hover() -> void:
+	_world_hover = HoverBar.new()
+	_world_hover.outline()
+	_world_hover.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE,
+		Control.PRESET_MODE_MINSIZE, WORLD_HOVER_MARGIN)
+	_world_hover.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_world_pane.add_child(_world_hover)
+	_world_pane.move_child(_world_hover, _popup_view.get_index())
+
+	_world.hover_text_changed.connect(_world_hover.show_text)
+	_world_view.mouse_exited.connect(_world.clear_hover)
+
+
 func _on_opened() -> void:
 	_note("connected to %s" % Evennia.url())
 
@@ -412,6 +465,7 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_skills.reset()
 	_combat_options.reset()
 	_xp_tracker.reset()
+	_popup.reset()
 
 	# A new socket is a new Evennia Session at the connection screen, so the
 	# next login has to be waited for again -- including the player's decision
@@ -715,6 +769,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _quest_log.ingest(channel, _payload):
+			return
+
+		if _popup.ingest(channel, _payload):
 			return
 
 		if _xp_tracker.ingest(channel, _payload):

@@ -202,6 +202,33 @@ class ModeratorEgg(BaseItem):
     Creation date: 08/25/2026
     """
 
+    def inventory_actions(self) -> list:
+        """
+        Purpose: Name the action a carried egg gives to the inventory pane.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns the egg command as the row's first action.
+
+        Module Globals:
+            CmdEgg.key read.
+
+        Methodology:
+            Let the inventory serializer read this method through getattr.
+            The command stays on the egg's cmdset, so the normal command lock
+            still controls access.
+
+        Notes/References:
+            A room action cannot name this command. The cmdset is active only
+            while the caller carries the egg.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        return [{"command": CmdEgg.key}]
+
     def at_object_creation(self) -> None:
         """
         Purpose: Attach the egg's command set on first creation.

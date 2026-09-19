@@ -313,7 +313,8 @@ class CuringHandler:
             slot is a stored slot dict. now is a time.time() reading.
 
         Exit/Returns:
-            Returns a dict with recipe_key, item_name, state and remaining.
+            Returns a dict with recipe_key, item_name, state, remaining and
+            duration, in seconds.
 
         Module Globals:
             curing_constants read.
@@ -345,11 +346,16 @@ class CuringHandler:
         else:
             state = curing_constants.SLOT_STATE_CURING
 
+        # The whole cure's length, for a progress bar. 0 when the recipe no
+        # longer resolves: a bar then cannot say how far along it is.
+        duration = float(getattr(recipe_cls, "cure_seconds", 0.0) or 0.0)
+
         return {
             "recipe_key": recipe_key,
             "item_name": item_name,
             "state": state,
             "remaining": remaining,
+            "duration": duration,
         }
 
 
@@ -420,6 +426,50 @@ class CuringHandler:
             lines.append(curing_constants.SLOT_LINE_INDENT + line)
 
         return lines
+
+
+    def timer_report(self) -> dict:
+        """
+        Purpose: The slot display as data, for a screen that draws bars.
+
+        Entry:
+            No conditions. Safe with nothing curing.
+
+        Exit/Returns:
+            Returns {title, total, slots}. Each slot is {name, ready,
+            remaining, duration}, remaining and duration in seconds, in start
+            order. `total` counts free slots too.
+
+        Module Globals:
+            curing_constants.TIMER_PANEL_TITLE read.
+
+        Methodology:
+            The data twin of status_lines, built from the same pending(). The
+            name is generic, like capacity_remaining: the crafting pop-up asks
+            any deferred handler for it and never names curing.
+
+        Notes/References:
+            systems/interface/popups/popup_defs/crafting.py reads it.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        ready_state = curing_constants.SLOT_STATE_READY
+        slots = []
+
+        for entry in self.pending():
+            slots.append({
+                "name": str(entry["item_name"]),
+                "ready": entry["state"] == ready_state,
+                "remaining": float(entry["remaining"]),
+                "duration": float(entry["duration"]),
+            })
+
+        return {
+            "title": curing_constants.TIMER_PANEL_TITLE,
+            "total": self.slot_total(),
+            "slots": slots,
+        }
 
 
     def _status_header(self, used: int, ready: int) -> str:
@@ -551,6 +601,8 @@ class CuringHandler:
 
         try:
             feed.refresh_summary(self.obj, delay=seconds)
+            # The chamber's pop-up shows the same deadline, as a bar.
+            feed.refresh_popup(self.obj, delay=seconds)
         except Exception:
             logger.log_trace()
 

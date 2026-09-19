@@ -72,9 +72,14 @@ func _init() -> void:
 	margin.theme_type_variation = &"PaneMargin"
 	add_child(margin)
 
+	var scroller := ScrollContainer.new()
+	scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	margin.add_child(scroller)
+
 	var column := VBoxContainer.new()
+	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.theme_type_variation = &"FormColumn"
-	margin.add_child(column)
+	scroller.add_child(column)
 
 	column.add_child(_heading("Text size"))
 	var font_row := HBoxContainer.new()

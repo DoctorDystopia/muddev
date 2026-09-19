@@ -177,12 +177,18 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (2532 tests, ~16 min,
-measured 09/13/2026):
+**Before a merge or a major change**, run the full suite (2742 tests, ~20 min,
+measured 09/18/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
 ```
+
+**Keep that count current.** After each full run that gives a different count,
+change the number, the time and the date above. Change the same numbers in
+the "Full test suite" section of `blackout/README.md`. A count that drifts
+hides a lost test root: a suite that silently runs fewer tests looks like
+this number.
 
 `--durations 20` on either shows where the time went.
 
@@ -708,6 +714,77 @@ attacker *before* the immunity check, so an immune moderator still draws aggro.
 
 Every effect writes one `[MODTOOL]` audit line that names the actor, the verb,
 and the target.
+
+## Pop-ups
+
+A pop-up is a box that the server opens over the Godot world pane: the bank
+(`bank`), a shop (`trade`), and a crafting facility (`craft`). The model is the
+OSRS bank, shop and smithing interfaces. The channel is `char_popup`.
+`godot/README.md` owns the client half.
+
+| Module | Holds |
+|---|---|
+| `systems/interface/popups/constants.py` | The `popup` command vocabulary, the quantity modes, the ndb and db attribute names |
+| `systems/interface/popups/service.py` | Open, close, quantity mode, and the snapshot. One pop-up for each character |
+| `systems/interface/popups/registry.py` | Auto-discovery of `popup_defs/`, the skill registry's pattern |
+| `systems/interface/popups/popup_defs/` | One file for each pop-up: `bank.py`, `shop.py`, `crafting.py` |
+| `systems/interface/popups/menu.py` | An EvMenu node as a pop-up: text, option buttons, a text box |
+| `systems/interface/statefeed/popup.py` | The payload builder. It composes nothing |
+| `server/conf/bbcode.py` | The ANSI-to-BBCode parser, shared by the Portal and the menu pop-up |
+
+**A new pop-up is one file under `popup_defs/`,** a `BasePopup` subclass with
+a `key`. It gives its title, its status line, its grids, and its footer
+actions. Opening, closing, the quantity mode and the send belong to the
+service.
+
+**A pop-up moves nothing.** Each slot carries whole commands that a telnet
+player can type: `withdraw`, `deposit`, `buy`, `sell`, `craft <recipe> <n>`.
+The commands do the work, so the pop-up, the EvMenu and the typed line cannot
+act differently. The server puts the active quantity mode first in each list,
+and a left click sends the first action.
+
+**A pop-up draws no copy of the bag.** The inventory pane is the bag.
+`carried_actions` on the definition puts its verb FIRST on each pane row
+while the pop-up is open: Deposit for the bank, Sell for a shop.
+`statefeed/inventory.py` reads it through `service.carried_lens`, one time
+for each payload. Open, close, and a quantity change send the inventory
+again.
+
+**A timed station fills the side panel.** `timers()` on the definition
+returns `{title, total, slots}`. The crafting pop-up reads it from the
+deferred handler's `timer_report`, so a second timed stage is one method on
+its handler. The handler schedules `refresh_popup(delay=...)` at each
+deadline, and that snapshot says `ready`.
+
+**No payload field is named `options`.** The statefeed sends a payload as
+the keyword arguments of `msg()`. Evennia reserves `options` for protocol
+flags, and the socket drops it. The menu pop-up's `choices` had that name
+until 09/18/2026, and every menu showed text with no buttons.
+`test_emit.py` refuses the name on every payload dataclass.
+
+**A pop-up never opens beside an EvMenu.** `EvMenuCmdSet` replaces the cmdset
+of the caller, so the lines that the pop-up sends would reach the menu. The
+command that opens one (`CmdBank`, `CmdTrade`, `CmdCraft`) asks
+`service.wants_popup` and picks one or the other. A session that does not
+subscribe to `char_popup`, telnet included, gets the menu.
+
+**The pop-up follows its facts through `emit_inventory`.** Every change that a
+bank, a shop or a batch shows moves an item on or off the character.
+`emit_inventory` calls `refresh_popup`, which marks an open pop-up stale. A
+change that moves no item must send the pop-up itself:
+`crafting_facilities.cancel_craft` calls `service.publish_if_open`.
+
+**It is room-bound.** `Character.at_post_move` calls `service.close_if_left`
+beside the room-bound EvMenu close. A deleted anchor closes the pop-up at the
+next build.
+
+**Every EvMenu is a pop-up too.** No menu module needed an edit.
+`BlackoutEvMenu.display_nodetext` sends the node as a pop-up to a session that
+subscribes to `char_popup`. Every other session gets the text. A button sends
+the option KEY. The text box sends the typed line. Thus, `parse_input` reads
+both as before. A node with no options is an ending. Its text goes to the log,
+and the pop-up closes. An open EvMenu wins over a grid pop-up.
+`BlackoutEvMenu.__init__` drops the grid pop-up.
 
 ## The website
 

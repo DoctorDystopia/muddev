@@ -36,6 +36,12 @@ TALK_CMD_SET_PRIORITY = 10
 # counterparty, so there is no shop to name and none to disambiguate.
 SELL_COMMAND_KEY = "sell"
 SELL_COMMAND_LOCKS = "cmd:all()"
+BUY_COMMAND_KEY = "buy"
+TRADE_COMMAND_KEY = "trade"
+# OSRS's name for the shop slot option that tells the price. It also tells
+# what the ware is, because `inspect` on this cmdset would replace the
+# character's own `inspect <slot>` near every shopkeeper.
+VALUE_COMMAND_KEY = "value"
 SHOPKEEP_CMD_SET_KEY = "npc_shopkeep_cmdset"
 SHOPKEEP_CMD_SET_PRIORITY = 10
 
@@ -456,6 +462,115 @@ class CmdSell(Command):
         perform_sell(self.caller, self.obj, self.args)
 
 
+class CmdBuy(Command):
+    """
+    Buy something from the shopkeeper standing here.
+
+    Usage:
+        buy <item>
+        buy <item> <quantity>
+        buy <item> all
+
+    Without a quantity you buy one. `all` buys as many as the shop has and
+    you can pay for. A quantity you cannot pay for in full buys as many as
+    you can. The reply names what you paid.
+    """
+    key = BUY_COMMAND_KEY
+    locks = SELL_COMMAND_LOCKS
+    help_category = HELP_CATEGORY_GENERAL
+
+    def func(self) -> None:
+        """Hand the raw argument to the shared buy routine, as CmdSell does.
+
+        The shop pop-up sends this line from each stock slot. The import is
+        function-level for the reason CmdSell.func gives.
+        """
+        from systems.gameplay.shop.shop_service import perform_buy
+
+        perform_buy(self.caller, self.obj, self.args)
+
+
+class CmdValue(Command):
+    """
+    Look at something the shopkeeper standing here sells.
+
+    Usage:
+        value <item>
+
+    Shows what the item is, what it costs, and how many the shop has.
+    """
+    key = VALUE_COMMAND_KEY
+    locks = SELL_COMMAND_LOCKS
+    help_category = HELP_CATEGORY_GENERAL
+
+    def func(self) -> None:
+        """Hand the raw argument to the shared value routine, as CmdBuy does.
+
+        The shop pop-up sends this line from the Inspect action of each stock
+        slot. The import is function-level for the reason CmdSell.func gives.
+        """
+        from systems.gameplay.shop.shop_service import perform_value
+
+        perform_value(self.caller, self.obj, self.args)
+
+
+class CmdTrade(Command):
+    """
+    Open the shop of the shopkeeper standing here.
+
+    Usage:
+        trade
+
+    A graphical client shows the shop as a pop-up: the stock on the left and
+    your inventory on the right. Every other client gets the shop menu.
+    """
+    key = TRADE_COMMAND_KEY
+    aliases = ["shop"]
+    locks = SELL_COMMAND_LOCKS
+    help_category = HELP_CATEGORY_GENERAL
+
+    def func(self) -> None:
+        """
+        Purpose: Open the shop as a pop-up, or as the dialogue menu.
+
+        Entry:
+            self.obj is the shopkeeper this cmdset hangs on.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. If a session of the caller draws pop-ups, open the shop pop-up.
+            2. Else, or if the pop-up refuses, start the NPC's dialogue menu.
+
+        Notes/References:
+            CmdBank.func makes the same choice, for the reason it gives: the
+            pop-up must not open beside a menu, because the menu takes every
+            line the pop-up sends.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        from systems.interface.popups import service
+        from systems.interface.popups.popup_defs.shop import SHOP_POPUP_KEY
+
+        caller = self.caller
+        wants = service.wants_popup(caller)
+
+        if wants:
+            opened = service.open_popup(caller, SHOP_POPUP_KEY, self.obj)
+
+            if opened:
+                return
+
+        start_blackout_menu(
+            caller, _dialogue_module_for(self.obj), startnode="start",
+            npc=self.obj)
+
+
 class ShopkeepCmdSet(CmdSet):
     """
     Purpose: Stores the sell command for a shopkeeper.
@@ -489,9 +604,16 @@ class ShopkeepCmdSet(CmdSet):
 
 
     def at_cmdset_creation(self) -> None:
-        """Populate the cmdset with the sell command."""
-        sell_command = CmdSell()
-        self.add(sell_command)
+        """Populate the cmdset with the sell, buy, trade and value commands.
+
+        A cmdset rebuilds from this class on every load, so a shopkeeper
+        already in the database gains `buy`, `trade` and `value` with no
+        migration.
+        """
+        self.add(CmdSell())
+        self.add(CmdBuy())
+        self.add(CmdTrade())
+        self.add(CmdValue())
 
 
 class ShopkeepNPC(TalkativeNPC):
@@ -501,7 +623,7 @@ class ShopkeepNPC(TalkativeNPC):
     """
 
     asset_key = "shopkeeper"
-
+    interact_verb = TRADE_COMMAND_KEY
     dialogue_module = SHOPKEEP_DIALOGUE_MODULE
 
     # What standing near this NPC lets you do with what you are carrying. Read
@@ -513,11 +635,83 @@ class ShopkeepNPC(TalkativeNPC):
 
     def at_object_creation(self) -> None:
         super().at_object_creation()
-        self.cmdset.add(ShopkeepCmdSet, persistent=True)
+        self.ensure_shop_cmdset()
         self.db.shopdef_key = "oasis_shop"
         self.db.desc = "A shopkeeper attending a stall of salvaged goods."
         self.db.max_held_items = SHOPKEEP_MAX_HELD_ITEMS
         self.ensure_cleanup_script()
+
+    def extra_actions(self) -> list:
+        """
+        Purpose: Both things a player may do with a shopkeeper, for a right
+                 click.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns `trade` first and `talk` second, as {"command"} dicts.
+
+        Module variables:
+            None.
+
+        Methodology:
+            `trade` leads, so a left click opens the shop directly, as it does
+            for the bank. A right click offers `Trade` first and `Talk` second.
+            Neither row names a label: _action_label capitalises the verb, and
+            both verbs are read from their commands here.
+
+        Notes/References:
+            systems/interface/statefeed/serializers.py interact_actions
+            consumes this.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        return [{"command": TRADE_COMMAND_KEY}, {"command": TALK_COMMAND_KEY}]
+
+    def ensure_shop_cmdset(self) -> None:
+        """
+        Purpose: Make sure this shopkeep carries exactly one ShopkeepCmdSet.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns nothing. Removes every extra copy, and adds the cmdset if
+            it is missing.
+
+        Module Globals:
+            SHOPKEEP_CMD_SET_KEY read.
+
+        Methodology:
+            1. Count the copies on the cmdset stack, by key.
+            2. If the count is one, stop. Nothing touches the database.
+            3. Else remove every copy, then add one.
+
+        Notes/References:
+            CmdSetHandler.add has no presence check. It appends to the stack
+            and to cmdset_storage on every call. The cmdset is
+            `duplicates = True`, so two copies give two `trade` commands on
+            one shopkeep, and the player gets "More than one match".
+            at_object_creation and spawn_shopkeep each added one, so every
+            spawned shopkeep had two, and each map rebuild added one more.
+            spawn_shopkeep calls this on each rebuild, so the rebuild heals
+            the shopkeeps already in the database.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        copies = [cmdset for cmdset in self.cmdset.all()
+                  if cmdset.key == SHOPKEEP_CMD_SET_KEY]
+
+        if len(copies) == 1:
+            return
+
+        if copies:
+            self.cmdset.remove(SHOPKEEP_CMD_SET_KEY)
+
+        self.cmdset.add(ShopkeepCmdSet, persistent=True)
 
     def ensure_cleanup_script(self) -> None:
         """
@@ -600,9 +794,9 @@ def spawn_shopkeep(room):
 
     # Same reasoning, applied to the cmdset rather than an attribute:
     # at_object_creation runs once, so a shopkeep placed before ShopkeepCmdSet
-    # existed carries `talk` and no `sell`. Adding an already-present cmdset is
-    # a no-op, so this is safe to run on every rebuild.
-    shopkeep.cmdset.add(ShopkeepCmdSet, persistent=True)
+    # existed carries `talk` and no `sell`. cmdset.add is NOT idempotent, so
+    # ensure_shop_cmdset also removes the extra copies of old rebuilds.
+    shopkeep.ensure_shop_cmdset()
 
     # Same reasoning, applied to the cleanup script rather than an attribute:
     # this is what re-points a shopkeep persisted under the old

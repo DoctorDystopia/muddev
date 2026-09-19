@@ -63,6 +63,7 @@ def build_payload(observer) -> CharCombatPayload:
         attack_speed_ticks=options["attack_speed_ticks"],
         attack_speed_seconds=options["attack_speed_seconds"],
         styles=options["styles"],
+        pvp=options["pvp"],
     )
 
     return payload

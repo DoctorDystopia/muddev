@@ -38,6 +38,8 @@ func _ready() -> void:
 	_state.ingest(_Const.CH_CHAR_ITEMS, _payload())
 
 	_a_whole_command_is_sent_verbatim()
+	_a_left_click_sends_the_first_action()
+	_a_drag_does_not_send_the_first_action()
 	_an_empty_command_sends_nothing()
 	_a_prompted_action_opens_a_dialog()
 	_the_dialog_is_bounded_by_the_servers_numbers()
@@ -124,6 +126,39 @@ func _a_whole_command_is_sent_verbatim() -> void:
 
 	_expect(_sent == ["sell 7 1"], "a named command is sent as named")
 	cell.free()
+
+
+func _a_left_click_sends_the_first_action() -> void:
+	_sent.clear()
+	var cell := _cell()
+
+	cell._gui_input(_left_click(true))
+	_expect(_sent.is_empty(), "a left-button press waits for its release")
+	cell._gui_input(_left_click(false))
+
+	_expect(_sent == ["sell 7 1"], "a left click sends the first action")
+	cell.free()
+
+
+func _a_drag_does_not_send_the_first_action() -> void:
+	_sent.clear()
+	var cell := _cell()
+
+	cell._gui_input(_left_click(true))
+	var drag_data := cell._get_drag_data(Vector2.ZERO)
+	cell._gui_input(_left_click(false))
+
+	_expect(drag_data != null, "a populated cell starts a drag")
+	_expect(_sent.is_empty(), "a drag does not send the first action")
+	cell.free()
+
+
+func _left_click(pressed: bool) -> InputEventMouseButton:
+	var click := InputEventMouseButton.new()
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = pressed
+
+	return click
 
 
 func _an_empty_command_sends_nothing() -> void:

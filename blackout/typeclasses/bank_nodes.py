@@ -34,6 +34,9 @@ NOTHING_NAMED_ERROR = "What do you want to deposit?"
 DEPOSIT_COMMAND_KEY = "deposit"
 WITHDRAW_COMMAND_KEY = "withdraw"
 
+# The EvMenu that `bank` starts for a client that cannot draw a pop-up.
+BANK_MENU_MODULE = "systems.interface.menus.banking_menu"
+
 # The quantity below which a slot-addressed deposit means the clicked slot
 # alone rather than the whole group. Named so the rule reads the same here as
 # shop_service._MIN_SELL_COUNT makes it read there.
@@ -506,18 +509,60 @@ class CmdBalance(Command):
 
 class CmdBank(Command):
     """
-    Open the banking menu to deposit, withdraw, and browse items.
+    Open the bank to deposit, withdraw, and browse items.
 
     Usage:
         bank
+
+    A graphical client shows the vault as a pop-up beside your inventory.
+    Every other client gets the banking menu.
     """
     key = "bank"
     locks = "cmd:all()"
     help_category = HELP_CATEGORY_BANKING
 
     def func(self):
+        """
+        Purpose: Open the bank as a pop-up or as the banking menu.
+
+        Entry:
+            self.obj is the terminal whose cmdset holds this command.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            BANK_MENU_MODULE read.
+
+        Methodology:
+            1. If a session of the caller draws pop-ups, open the bank pop-up.
+            2. Else, or if the pop-up refuses, start the banking menu.
+
+        Notes/References:
+            The pop-up is NOT opened beside the menu. EvMenuCmdSet replaces
+            the caller's cmdset while a menu is open, so the `withdraw` and
+            `deposit` lines that the pop-up sends would reach the menu, not
+            the commands on this terminal.
+
+            The pop-up service is imported inside the routine. Its registry
+            imports the bank pop-up, which imports this module.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        from systems.interface.popups import service
+        from systems.interface.popups.popup_defs.bank import BANK_POPUP_KEY
+
         caller = self.caller
-        start_blackout_menu(caller, "systems.interface.menus.banking_menu", startnode="start")
+        wants = service.wants_popup(caller)
+
+        if wants:
+            opened = service.open_popup(caller, BANK_POPUP_KEY, self.obj)
+
+            if opened:
+                return
+
+        start_blackout_menu(caller, BANK_MENU_MODULE, startnode="start")
 
 
 class BankCmdSet(CmdSet):

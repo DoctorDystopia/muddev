@@ -49,12 +49,70 @@ NOT_WANTED_TEMPLATE: str = "{keeper} has no interest in {item}."
 # the rule parse_quantity already follows, so this exists only for zero.
 NOTHING_TO_SELL: str = "You have none of that to sell."
 
+# A bare `buy` with no argument, phrased as `sell` phrases its own.
+NOTHING_NAMED_TO_BUY: str = "What do you want to buy?"
+
+# A `buy` naming nothing this shopkeeper stocks. Formatted with the keeper's
+# key and the text the player typed.
+NOT_FOR_SALE_TEMPLATE: str = "{keeper} has no {item} for sale."
+
 # A bare `sell` with no argument. Phrased as a question rather than as usage,
 # matching what `deposit` with no argument already asks.
 NOTHING_NAMED: str = "What do you want to sell?"
 
 
+# A bare `value` with no argument, phrased as `buy` phrases its own.
+NOTHING_NAMED_TO_VALUE: str = "What do you want to value?"
+
+# The trade half of a `value` line, under the ware's own description.
+VALUE_PRICE_TEMPLATE: str = "{keeper} sells it for {price} credits each."
+STOCK_COUNT_TEMPLATE: str = "In stock: {count}."
+ENDLESS_STOCK_LINE: str = "In stock: plenty."
+OUT_OF_STOCK_LINE: str = "Out of stock."
+
+
 # ─── Public routines ────────────────────────────────────────────────────────
+
+def format_value(description: str, keeper_name: str, price: int,
+                 count: int, endless: bool) -> str:
+    """
+    Purpose: Say what one ware is, what it costs, and how many the shop has.
+
+    Entry:
+        description - the ware's own look text.
+        keeper_name - the shopkeeper's key.
+        price       - the buy price of one unit.
+        count       - the units the shop has now.
+        endless     - True for a ware that never runs out.
+
+    Exit/Returns:
+        Returns the description, a blank line, then the price and the stock.
+
+    Module Globals:
+        VALUE_PRICE_TEMPLATE, STOCK_COUNT_TEMPLATE, ENDLESS_STOCK_LINE and
+        OUT_OF_STOCK_LINE read.
+
+    Methodology:
+        OSRS's Value option tells the price, and Examine tells the item. The
+        shop pop-up has one Inspect action, so this line tells both.
+
+    Notes/References:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    if endless:
+        stock_line = ENDLESS_STOCK_LINE
+    elif count <= 0:
+        stock_line = OUT_OF_STOCK_LINE
+    else:
+        stock_line = STOCK_COUNT_TEMPLATE.format(count=count)
+
+    price_line = VALUE_PRICE_TEMPLATE.format(keeper=keeper_name, price=price)
+
+    return f"{description}\n\n{price_line} {stock_line}"
+
 
 def format_trade(result, verb: str, count: int) -> str:
     """
@@ -132,3 +190,8 @@ def format_not_wanted(keeper_name: str, item_name: str) -> str:
     Creation date: 09/02/2026
     """
     return NOT_WANTED_TEMPLATE.format(keeper=keeper_name, item=item_name)
+
+
+def format_not_for_sale(keeper_name: str, item_text: str) -> str:
+    """Say that this shopkeeper stocks nothing by that name."""
+    return NOT_FOR_SALE_TEMPLATE.format(keeper=keeper_name, item=item_text)

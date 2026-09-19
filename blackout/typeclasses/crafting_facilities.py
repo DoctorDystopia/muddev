@@ -29,10 +29,108 @@ CRAFT_CMD_SET_KEY = "crafting_facility_cmdset"
 CRAFT_CMD_SET_PRIORITY = 10
 CRAFT_MENU_MODULE_PATH = "systems.interface.menus.crafting_menu"
 
+# `craft cancel` stops the running batch. No recipe is keyed or named
+# "cancel", and find_facility_recipe is never asked for this word.
+CRAFT_CANCEL_ARG = "cancel"
+
+MSG_NO_SUCH_RECIPE = "You cannot make '{recipe}' here."
+MSG_CANCELLED = "Crafting cancelled."
+MSG_NOTHING_TO_CANCEL = "You are not crafting anything."
+
+
+def _craft_count(caller, recipe_key, count) -> int:
+    """Map a parsed quantity to a batch size. Omitted is one, `all` is the
+    most the materials allow. start_batch clamps every count again."""
+    from systems.gameplay.crafting import crafting_service
+    from systems.interface.menus.base_menu import QUANTITY_ALL_KEYWORD
+
+    if count is None:
+        return 1
+
+    if count == QUANTITY_ALL_KEYWORD:
+        most = crafting_service.get_max_craftable(caller, recipe_key)
+        return max(1, most)
+
+    return max(1, int(count))
+
+
+def perform_craft(caller, facility, args: str) -> bool:
+    """
+    Purpose: Start a craft batch that a typed line names.
+
+    Entry:
+        caller   - the crafting Character.
+        facility - the facility the command hangs on.
+        args     - "<recipe> [quantity|all]", a key or a name.
+
+    Exit/Returns:
+        Returns True when a batch started. Messages the caller on every exit.
+
+    Module Globals:
+        MSG_NO_SUCH_RECIPE read.
+
+    Methodology:
+        1. Split the recipe from the count, as `sell` and `buy` do.
+        2. Find the recipe among this facility's own. If there is none, refuse.
+        3. Start the batch through craft_batch, the routine the menu uses.
+
+        No confirm step. The menu confirms because a player walks a list to
+        reach its craft row. This line names the recipe and the count, and a
+        pop-up click is a choice the player made on purpose, as in OSRS.
+
+    Notes/References:
+        The crafting pop-up sends this line from each recipe slot.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from commands.inventory_cmds import split_item_and_count
+    from systems.gameplay.crafting import craft_batch, crafting_service
+
+    recipe_text, count = split_item_and_count(args.strip())
+    recipe_key, _recipe_cls = crafting_service.find_facility_recipe(
+        facility, recipe_text)
+
+    if recipe_key is None:
+        caller.msg((MSG_NO_SUCH_RECIPE.format(recipe=recipe_text), _MSG_CRAFTING))
+        return False
+
+    batch_size = _craft_count(caller, recipe_key, count)
+    started, message = craft_batch.start_batch(caller, recipe_key, batch_size)
+    caller.msg((message, _MSG_CRAFTING))
+
+    return started
+
+
+def cancel_craft(caller) -> bool:
+    """Stop the running batch, say so, and redraw an open pop-up.
+
+    A cancel moves no item, so emit_inventory never hears of it. The pop-up
+    shows the batch, so this sends it again itself.
+    """
+    from systems.gameplay.crafting import craft_batch
+    from systems.interface.popups import service as popup_service
+
+    cancelled = craft_batch.cancel_batch(caller)
+    message = MSG_CANCELLED if cancelled else MSG_NOTHING_TO_CANCEL
+    caller.msg((message, _MSG_CRAFTING))
+    popup_service.publish_if_open(caller)
+
+    return cancelled
+
 
 class CmdCraft(Command):
     """
-    Purpose: Opens the crafting menu at this crafting facility.
+    Purpose: Opens this crafting facility, or crafts at it.
+
+    Usage:
+        craft
+        craft <recipe> [quantity|all]
+        craft cancel
+
+    A bare `craft` opens a pop-up in a graphical client and the crafting menu
+    everywhere else. `craft <recipe>` starts making that recipe here, and
+    `craft cancel` stops what you are making.
 
     Entry:
         self.caller is a valid Evennia Character object
@@ -87,6 +185,28 @@ class CmdCraft(Command):
         """
         caller = self.caller
         facility = self.obj
+        argument = self.args.strip()
+
+        if argument.lower() == CRAFT_CANCEL_ARG:
+            cancel_craft(caller)
+            return
+
+        if argument:
+            perform_craft(caller, facility, argument)
+            return
+
+        # A pop-up, if a session can draw one. Not beside the menu: the
+        # menu takes every line the pop-up sends. See CmdBank.func.
+        from systems.interface.popups import service as popup_service
+        from systems.interface.popups.popup_defs.crafting import CRAFTING_POPUP_KEY
+
+        wants = popup_service.wants_popup(caller)
+
+        if wants:
+            opened = popup_service.open_popup(caller, CRAFTING_POPUP_KEY, facility)
+
+            if opened:
+                return
 
         caller.msg((f"(You approach the {facility.key}.)", _MSG_CRAFTING))
 

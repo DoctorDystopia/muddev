@@ -60,21 +60,14 @@ class BasePanel:
     # be the screen's title bar instead of a section like the others.
     title: str = ""
 
-    # Heading for the public view, when narrowing the panel's content also
-    # changes what the band honestly IS. Empty means "reuse `title`", which is
-    # the right answer for most panels. Vitals is the case that needs it: with
-    # hitpoints and combat state removed, what remains is progression standing,
-    # and a heading reading "VITALS" over three level totals is a small lie.
-    public_title: str = ""
-
     # Sort position. See constants.PANEL_ORDER_* for the assigned values.
     order: int = 0
 
-    # Whether this panel appears at all in another player's view of this
-    # character. Defaults to False so a NEW panel is private until its author
-    # decides otherwise -- the safe direction for a flag that gates what
-    # strangers can read about you.
-    public: bool = False
+    # There is no `public` flag. Until 09/18/2026 a panel declared whether
+    # another player could read it, and `profile` showed a narrower view. The
+    # game now treats the whole dossier as public, so `profile <name>` renders
+    # every panel through `render`. A panel that must stay private needs a
+    # viewer argument, and no panel has a reason for one yet.
 
 
     @classmethod
@@ -103,53 +96,6 @@ class BasePanel:
         Creation date: 08/08/2026
         """
         return []
-
-
-    @classmethod
-    def render_public(cls, character: object) -> list:
-        """
-        Purpose: Build this panel's display lines for someone ELSE looking at
-        `character`.
-
-        Entry:
-            character is the Character being looked at, not the viewer.
-
-        Exit/Returns:
-            Returns a list of display strings, same contract as render.
-
-        Module Globals:
-            None.
-
-        Methodology:
-            Defaults to the full render. Two separate controls, because
-            "should strangers see this band at all" and "how much of it should
-            they see" are different questions and collapsing them into one flag
-            forces every partly-public panel to be all or nothing:
-
-              public = False        -> the band never appears. Holdings.
-              public = True, no
-                override            -> strangers see exactly what you see.
-                                       Identity, Skills.
-              public = True, with
-                an override         -> strangers see a subset. Vitals shows
-                                       combat level but not current HP; World
-                                       shows playtime but not where you are
-                                       standing.
-
-            A panel is only reachable here when `public` is True, so an
-            override is about narrowing content, never about access.
-
-        Notes/References:
-            OSRS makes the same split: combat level and skill levels are public
-            on the hiscores and above a player's head, current hitpoints are
-            not.
-
-        Author: Nick Hobar
-        Creation date: 08/08/2026
-        """
-        lines = cls.render(character)
-
-        return lines
 
 
     @classmethod

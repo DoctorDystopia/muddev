@@ -47,6 +47,15 @@ var attack_speed_seconds := 0.0
 ## in the weapon's order. `command` is empty on a row that cannot be picked.
 var styles: Array = []
 
+## The PvP flag, as the LAST snapshot said. A click changes nothing here: the
+## server's republish moves it, for the reason a style row gives.
+var pvp_enabled := false
+
+## The whole line that flips the flag — `pvp on` or `pvp off`. The SERVER
+## names it; this client sends it verbatim. Empty from a server that sends no
+## `pvp` block, which the view reads as "no toggle".
+var pvp_command := ""
+
 
 ## Fold one feed message into this model.
 ##
@@ -62,6 +71,7 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 	attack_speed_ticks = int(payload.get("attack_speed_ticks", 0))
 	attack_speed_seconds = float(payload.get("attack_speed_seconds", 0.0))
 	styles = _rows(payload.get("styles", []))
+	_read_pvp(payload.get("pvp", {}))
 	has_data = true
 
 	changed.emit()
@@ -79,6 +89,8 @@ func reset() -> void:
 	attack_speed_ticks = 0
 	attack_speed_seconds = 0.0
 	styles = []
+	pvp_enabled = false
+	pvp_command = ""
 
 	changed.emit()
 
@@ -102,6 +114,19 @@ func has_choice() -> bool:
 			return true
 
 	return false
+
+
+## Read the `{enabled, command}` block. Anything that is not a dictionary is
+## the same as no block at all.
+func _read_pvp(raw: Variant) -> void:
+	pvp_enabled = false
+	pvp_command = ""
+
+	if typeof(raw) != TYPE_DICTIONARY:
+		return
+
+	pvp_enabled = bool(raw.get("enabled", false))
+	pvp_command = str(raw.get("command", ""))
 
 
 func _rows(raw: Variant) -> Array:

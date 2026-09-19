@@ -348,6 +348,11 @@ class CharCombatPayload(_Payload):
 
     `attack_speed_seconds` ships beside the ticks because the tick length is
     the server's and no client is told it.
+
+    `pvp` is `{enabled, command}`: the PvP flag, and the whole line that flips
+    it (`pvp on` or `pvp off`). The client draws one toggle from it and sends
+    the command verbatim. The server refuses `pvp off` during a fight, so
+    the payload carries no lock state. See systems/gameplay/combat/pvp.py.
     """
 
     channel = const.CHANNEL_CHAR_COMBAT
@@ -358,6 +363,69 @@ class CharCombatPayload(_Payload):
     attack_speed_ticks: int = 0
     attack_speed_seconds: float = 0.0
     styles: list = field(default_factory=list)   # [{key, name, ...}, ...]
+    pvp: dict = field(default_factory=dict)      # {enabled, command}
+
+
+@dataclass
+class CharPopupPayload(_Payload):
+    """The pop-up the observer has open, or the closed state. Char.Popup.
+
+    A SNAPSHOT, for the reason CharItemsPayload gives, and more so: a bank
+    pop-up repeats the whole carried inventory beside the vault.
+
+    `open` is False and every other field is empty when nothing is open. The
+    closed state is sent, not implied, so a client that missed a close learns
+    it from the next snapshot or resync.
+
+    `grids` is a LIST in display order. Each grid is `{key, title,
+    slots_total, items}`, and each item row has the shape of a char_items_list
+    row: `{id, slot, name, asset, family, quantity, stackable, equip_slot,
+    actions}`. The FIRST action of a row is what a left click sends.
+
+    `quantity` is the 1 / 5 / 10 / X / All row, each `{label, command,
+    active}`. The X button is a prompted action: an empty `command` with a
+    `template` and an `input` block, as in char_items_list.
+
+    A row also carries `detail`, one short line such as a price, `info`, more
+    lines for the tooltip, and `enabled`. A slot with `enabled` False is
+    something the player cannot do yet, and `detail` says why.
+
+    `actions` is the row of buttons under the grids, each `{label, command}`,
+    for what the pop-up affords as a whole: cancel a craft, collect a cure.
+
+    An EvMenu node arrives in the same channel, with no grids: `text` is the
+    node text as escaped BBCode, `choices` is `[{key, label, command}]` in
+    the node's order, and `input` is `{label}` when the node reads typed
+    text, or `{}`. See systems/interface/popups/menu.py.
+
+    The field is `choices`, NEVER `options`. emit() sends a payload as the
+    keyword arguments of msg(), and Evennia reserves the `options` keyword
+    for protocol flags. The socket pops it, so a field of that name never
+    reaches a client. test_emit.py refuses any payload field of that name.
+
+    `timers` is the side panel of a station whose work ends later, or `{}`:
+    `{title, total, slots}`, each slot `{name, ready, remaining, duration}`
+    in seconds. `total` counts free slots too. The client draws one bar per
+    slot and counts `remaining` down between snapshots. A delayed
+    refresh_popup sends the snapshot that says `ready`.
+
+    `close_command` is the whole line the close button sends.
+    """
+
+    channel = const.CHANNEL_CHAR_POPUP
+
+    open: bool = False
+    key: str = ""
+    title: str = ""
+    status: str = ""
+    grids: list = field(default_factory=list)      # [{key, title, ...}, ...]
+    quantity: list = field(default_factory=list)   # [{label, command, active}]
+    actions: list = field(default_factory=list)    # [{label, command}]
+    text: str = ""                                 # an EvMenu node, BBCode
+    choices: list = field(default_factory=list)    # [{key, label, command}]
+    input: dict = field(default_factory=dict)      # {label} or {}
+    timers: dict = field(default_factory=dict)     # {title, total, slots}
+    close_command: str = ""
 
 
 @dataclass

@@ -19,6 +19,7 @@ from systems.interface.statefeed import events as feed
 from . import ammunition
 from . import combat_msg
 from . import constants as const
+from . import pvp
 from . import reach
 from systems.core.tick import states
 from systems.core.tick.states import ActivityEvent
@@ -1629,6 +1630,16 @@ class BlackoutCombatHandler(TickableHandler):
 
         if not target.is_alive():
             self.obj.msg((f"|x{target.key} is already dead.|n", _MSG_COMBAT))
+            return False
+
+        # The PvP rule, checked HERE because every attack passes through this
+        # routine, whoever queued it. CmdAttack asks the same question before
+        # it walks, but a second caller of queue_action must not be a way
+        # around the flag. See systems/gameplay/combat/pvp.py.
+        refusal = pvp.attack_refusal(self.obj, target)
+
+        if refusal:
+            self.obj.msg((f"|x{refusal}|n", _MSG_COMBAT))
             return False
 
         # Within reach, checked HERE rather than left to check_stop_combat.

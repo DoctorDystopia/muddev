@@ -17,6 +17,8 @@ func _ready() -> void:
 	_the_active_style_is_found()
 	_bare_hands_offer_no_choice()
 	_malformed_rows_are_skipped()
+	_the_pvp_block_is_read()
+	_a_missing_pvp_block_means_no_toggle()
 	_reset_forgets_everything()
 
 	if _failures > 0:
@@ -45,6 +47,7 @@ static func armed_payload() -> Dictionary:
 			 "xp_skills": [{"skill_key": "defense", "name": "Defense"}],
 			 "active": false, "command": "combatoptions guard"},
 		],
+		"pvp": {"enabled": false, "command": "pvp on"},
 	}
 
 
@@ -129,6 +132,26 @@ func _malformed_rows_are_skipped() -> void:
 	_expect(state.active_style().is_empty(), "with no active style to report")
 
 
+func _the_pvp_block_is_read() -> void:
+	var state := CombatOptionsState.new()
+	var payload := armed_payload()
+	payload["pvp"] = {"enabled": true, "command": "pvp off"}
+
+	state.ingest(_Const.CH_CHAR_COMBAT, payload)
+
+	_expect(state.pvp_enabled, "the PvP flag is read")
+	_expect(state.pvp_command == "pvp off", "and its command is kept verbatim")
+
+
+func _a_missing_pvp_block_means_no_toggle() -> void:
+	var state := CombatOptionsState.new()
+	state.ingest(_Const.CH_CHAR_COMBAT, armed_payload())
+	state.ingest(_Const.CH_CHAR_COMBAT, unarmed_payload())
+
+	_expect(not state.pvp_enabled and state.pvp_command.is_empty(),
+		"a snapshot with no pvp block clears the one before it")
+
+
 func _reset_forgets_everything() -> void:
 	var state := CombatOptionsState.new()
 	state.ingest(_Const.CH_CHAR_COMBAT, armed_payload())
@@ -137,6 +160,7 @@ func _reset_forgets_everything() -> void:
 	_expect(not state.has_data, "a dropped socket forgets the snapshot")
 	_expect(state.styles.is_empty() and state.weapon_name.is_empty(),
 		"and every field with it")
+	_expect(state.pvp_command.is_empty(), "the PvP command included")
 
 
 func _expect(passed: bool, what: String) -> void:

@@ -38,6 +38,9 @@ from systems.interface.statefeed import serializers as feed_serializers
 # MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_DIALOGUE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_DIALOGUE}
 
+# A node shown as text, tagged as EvMenu.msg tags it.
+_MSG_MENU = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_MENU}
+
 
 # Public constant definitions
 NODE_BORDER_CHAR = "="
@@ -310,6 +313,34 @@ def _module_room_bound(menudata: object) -> bool:
     return bool(_module_attribute(menudata, ROOM_BOUND_ATTR, False))
 
 
+def _forget_grid_popup(caller: object) -> None:
+    """Drop any grid pop-up the caller has open. Never raises.
+
+    Imported late: the pop-up service reaches the registry, and the registry
+    imports every pop-up definition.
+    """
+    try:
+        from systems.interface.popups import service as popup_service
+
+        popup_service.forget_popup(caller)
+    except Exception:
+        logger.log_trace()
+
+
+def _publish_popup(caller: object) -> None:
+    """Send the caller's pop-up snapshot: this menu's node, or closed.
+
+    events.emit_popup checks the subscription first, so a telnet-only caller
+    costs one lookup. Never raises, like every feed call.
+    """
+    try:
+        from systems.interface.statefeed import events as feed
+
+        feed.emit_popup(caller)
+    except Exception:
+        logger.log_trace()
+
+
 def _names_an_exit(location: object, cmd: str) -> bool:
     """Report whether `cmd` is the key or an alias of an exit out of `location`."""
     for exit_obj in getattr(location, "exits", ()):
@@ -506,6 +537,14 @@ class BlackoutEvMenu(EvMenu):
         self.room_bound = _module_room_bound(menudata)
         self._back_offered = False
 
+        # What a pop-up draws of the node on screen. Filled by _format_node.
+        self.popup_text = ""
+        self.popup_options = []
+
+        # A grid pop-up cannot live beside a menu: this menu's cmdset takes
+        # every line the grid would send. The first node replaces it on screen.
+        _forget_grid_popup(caller)
+
         super().__init__(caller, menudata, **kwargs)
 
 
@@ -586,6 +625,10 @@ class BlackoutEvMenu(EvMenu):
                 self.msg((closing_text, _MSG_DIALOGUE))
 
         super().close_menu()
+
+        # After the parent, so ndb._evmenu is gone and the snapshot says
+        # closed. A client that drew this menu as a pop-up takes it down.
+        _publish_popup(self.caller)
 
 
     def parse_input(self, raw_string: str) -> None:
@@ -796,9 +839,56 @@ class BlackoutEvMenu(EvMenu):
         Creation date: 08/20/2026
         """
         self._back_offered = _offers_back(optionlist)
+        self.popup_text = nodetext
+        self.popup_options = list(optionlist)
         formatted_node = super()._format_node(nodetext, optionlist)
 
         return formatted_node
+
+
+    def display_nodetext(self) -> None:
+        """
+        Purpose: Show the node: as a pop-up to a session that draws one, and
+                 as text to every other session.
+
+        Entry:
+            No conditions. _format_node has run for the node on screen.
+
+        Exit/Returns:
+            None.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. Ask popups/menu.py which target sessions draw a pop-up.
+            2. If any do, send the pop-up snapshot.
+            3. Send the node text to the other target sessions, as EvMenu does.
+
+            A session that gets the pop-up does not get the text too. The log
+            of a graphical client would otherwise fill with every screen of
+            every menu, which is what the pop-up replaces.
+
+        Notes/References:
+            The parent's display_nodetext is one self.msg. Messages that do not
+            show a node -- "Choose an option", a refusal, the closing line --
+            still go through self.msg to every session.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        from systems.interface.popups import menu as menu_popup
+
+        shown = menu_popup.popup_sessions(self)
+
+        if not shown:
+            super().display_nodetext()
+            return
+
+        _publish_popup(self.caller)
+
+        for session in menu_popup.text_sessions(self, shown):
+            self.caller.msg(text=(self.nodetext, _MSG_MENU), session=session)
 
 
     def node_formatter(self, nodetext: str, optionstext: str) -> str:

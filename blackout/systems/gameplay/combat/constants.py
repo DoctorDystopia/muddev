@@ -637,3 +637,29 @@ UNARMED_COMBAT_STYLES = {
     "headbutt": {"attack_type": "crush", "weapon_style": "aggressive", "weapon_style_xp_skill": AGGRESSIVE_XP_SKILLS, "weapon_style_level_boost": MELEE_WEAPON_STYLE_LEVEL_BOOST_AGGRESSIVE},
     "guard":    {"attack_type": "crush", "weapon_style": "defensive", "weapon_style_xp_skill": DEFENSIVE_XP_SKILLS, "weapon_style_level_boost": MELEE_WEAPON_STYLE_LEVEL_BOOST_DEFENSIVE},
 }
+
+# ─── Player versus player ────────────────────────────────────────────────────
+# systems/gameplay/combat/pvp.py owns the rule. These are its vocabulary.
+#
+# The flag lives on the CHARACTER as an Attribute, because it is a choice the
+# player makes and it must survive a reload. It is OFF for every character
+# until its owner turns it on, so a character already in the database is safe
+# with no migration.
+PVP_ENABLED_ATTR: str = "pvp_enabled"
+
+# The two arguments `pvp` accepts. The Combat tab sends the same line.
+PVP_ARG_ON: str = "on"
+PVP_ARG_OFF: str = "off"
+
+PVP_TURNED_ON_MSG: str = (
+    "|rPvP is ON.|n Other players with PvP on can attack you, "
+    "and you can attack them.")
+PVP_TURNED_OFF_MSG: str = "|gPvP is OFF.|n Other players cannot attack you."
+PVP_ALREADY_MSG: str = "PvP is already {state}."
+PVP_LOCKED_IN_COMBAT_MSG: str = "You cannot turn PvP off during a fight."
+PVP_ATTACKER_OFF_MSG: str = (
+    "Turn PvP on in the Combat tab (|wpvp on|n) before you attack a player.")
+PVP_TARGET_OFF_MSG: str = "{name} does not have PvP on."
+PVP_USAGE_MSG: str = "Usage: pvp [on|off]. PvP is {state}."
+PVP_STATE_ON: str = "on"
+PVP_STATE_OFF: str = "off"

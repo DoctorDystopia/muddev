@@ -111,6 +111,23 @@ CHANNEL_CHAR_SKILLS: str = "char_skills"              # -> Char.Skills
 # so the tab and the menu cannot disagree.
 CHANNEL_CHAR_COMBAT: str = "char_combat"              # -> Char.Combat
 
+# The one pop-up the observer has open over the world pane, or the closed
+# state: the bank today, the shop and the crafting stations next. See
+# systems/interface/popups/.
+#
+# A Char.* channel for the reason the ones above give: it is about what YOUR
+# character is looking at, and nobody else receives it.
+#
+# STRUCTURED, NOT RENDERED. A pop-up is item grids, and each slot carries the
+# whole commands that act on it -- `withdraw`, `deposit` -- in the shape of a
+# char_items_list row. So a client draws a vault slot with the code that
+# draws a bag slot, and sends what the server named, byte for byte.
+#
+# A SNAPSHOT, and coalescable: the newest open or closed state is the whole
+# truth. `emit_inventory` marks it stale, because every change a bank shows
+# moves an item on or off the character.
+CHANNEL_CHAR_POPUP: str = "char_popup"                # -> Char.Popup
+
 # Blackout-specific extensions.
 CHANNEL_MAP: str = "blackout_map"          # -> Blackout.Map
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
@@ -149,6 +166,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_QUESTS,
     CHANNEL_CHAR_SKILLS,
     CHANNEL_CHAR_COMBAT,
+    CHANNEL_CHAR_POPUP,
     CHANNEL_MAP,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
@@ -228,6 +246,11 @@ MESSAGE_TYPE_SAY: str = "say"
 MESSAGE_TYPE_WHISPER: str = "whisper"
 MESSAGE_TYPE_HELP: str = "help"
 MESSAGE_TYPE_EXAMINE: str = "examine"
+
+# One screen of an EvMenu. evennia/utils/evmenu.py EvMenu.msg tags every node
+# with it. Declared because BlackoutEvMenu.display_nodetext sends a node to a
+# session that draws no pop-up, and names the tag as EvMenu spells it.
+MESSAGE_TYPE_MENU: str = "menu"
 
 # An arrival or a departure. `announce_move_from`/`_to` tag with whatever
 # `move_type` they were given, so the tag is the MOVE KIND rather than one fixed
@@ -322,6 +345,7 @@ MESSAGE_TYPES: frozenset = frozenset((
     MESSAGE_TYPE_WHISPER,
     MESSAGE_TYPE_HELP,
     MESSAGE_TYPE_EXAMINE,
+    MESSAGE_TYPE_MENU,
     MESSAGE_TYPE_MOVE,
     MESSAGE_TYPE_TELEPORT,
     MESSAGE_TYPE_GENERAL,
@@ -527,6 +551,7 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_SUMMARY,
     CHANNEL_CHAR_SKILLS,
     CHANNEL_CHAR_COMBAT,
+    CHANNEL_CHAR_POPUP,
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,
@@ -692,7 +717,9 @@ ASSET_KEY_CHARACTER: str = "player_character"
 #
 # A CHARACTER is absent on purpose, and its absence is the policy: everything
 # else a misclick can do is recoverable, and opening combat on another player
-# is not.
+# is not. A character publishes its own list through extra_actions instead,
+# and `Attack` is on it only when that player has PvP on. Even then it is the
+# LAST row, so a left click never opens a fight.
 TARGETED_VERB_BY_KIND: dict = {
     ASSET_KIND_NPC: "attack",
     ASSET_KIND_ITEM: "get",
@@ -715,7 +742,13 @@ TARGETED_VERB_BY_KIND: dict = {
 # Named for the COMMAND rather than the entity, because that is what the fact
 # is about: `attack` closes its own distance (see CmdAttack), and it does so
 # whatever it is aimed at.
-SELF_APPROACHING_VERBS: frozenset = frozenset({"attack"})
+#
+# `profile`, `skills` and `stats` are here for a different reason: they need
+# no distance at all. Each one finds its target by a global search, so a walk
+# in front of it only moves the player for no purpose. These three are what a
+# click on another player offers (see Character.extra_actions).
+SELF_APPROACHING_VERBS: frozenset = frozenset(
+    {"attack", "profile", "skills", "stats"})
 
 
 # ─── Which one ───────────────────────────────────────────────────────────────

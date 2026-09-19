@@ -55,10 +55,6 @@ class ProcessingPanel(BasePanel):
         makes about panels generally: a client iterates them and never names
         one.
 
-        Private, the default. What is in your chamber is no stranger's
-        business, and `public = True` is a decision about a band rather than
-        something it should inherit.
-
     Notes/References:
         systems/gameplay/curing/handler.py owns the slot state and its wording.
 
@@ -69,7 +65,6 @@ class ProcessingPanel(BasePanel):
     key = "processing"
     title = PANEL_TITLE
     order = const.PANEL_ORDER_PROCESSING
-    public = False
 
 
     @classmethod

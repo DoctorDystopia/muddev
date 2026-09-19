@@ -39,6 +39,13 @@ const BOOSTS_TEXT := "Boosts: %s"
 const XP_TEXT := "Trains: %s"
 const NONE_TEXT := "(none)"
 const BUTTON_TEXT := "%s\n%s"
+const PVP_HEADING := "Player versus player"
+const PVP_ON_TEXT := "PvP: ON"
+const PVP_OFF_TEXT := "PvP: off"
+const PVP_TOOLTIP := "With PvP on, you and other players with PvP on can attack each other."
+## A plain String, not a StringName literal: `test_theme` reads every `&"..."`
+## in this file as a theme variation.
+const PVP_BUTTON_NAME := "PvpToggle"
 
 var _state: CombatOptionsState
 var _body: VBoxContainer
@@ -111,7 +118,45 @@ func _rebuild() -> void:
 	if not _state.has_choice():
 		_body.add_child(_wrapped(NO_CHOICE_TEXT))
 
+	_add_pvp_toggle()
 	_add_active_detail(_state.active_style())
+
+
+## The PvP flag, drawn as one toggle. Lit when the server says the flag is on.
+##
+## The click sends the server's `command` verbatim — `pvp on` or `pvp off` —
+## and puts the button straight back, for the rule the style buttons follow.
+## The server refuses `pvp off` during a fight and says why in the log, so the
+## pane carries no lock of its own.
+##
+## Absent when the server named no command: a server that predates the flag.
+func _add_pvp_toggle() -> void:
+	if _state.pvp_command.is_empty():
+		return
+
+	_body.add_child(HSeparator.new())
+	_body.add_child(_label(PVP_HEADING, &"SectionHeading"))
+
+	var button := Button.new()
+	button.name = PVP_BUTTON_NAME
+	button.toggle_mode = true
+	button.button_pressed = _state.pvp_enabled
+	button.text = PVP_ON_TEXT if _state.pvp_enabled else PVP_OFF_TEXT
+	button.focus_mode = Control.FOCUS_NONE
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.tooltip_text = PVP_TOOLTIP
+	button.pressed.connect(_on_pvp_pressed.bind(button))
+	_body.add_child(button)
+
+
+func _on_pvp_pressed(button: Button) -> void:
+	button.set_pressed_no_signal(_state.pvp_enabled)
+	command_requested.emit(_state.pvp_command)
+
+
+## The PvP toggle, or null when none is drawn. Read by tests.
+func pvp_button() -> Button:
+	return _body.get_node_or_null(NodePath(PVP_BUTTON_NAME)) as Button
 
 
 ## One style. Lit when the server says it is active; disabled when the server

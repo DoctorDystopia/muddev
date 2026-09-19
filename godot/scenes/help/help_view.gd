@@ -61,4 +61,3 @@ func _init() -> void:
 		does.custom_minimum_size = Vector2(250, 0)
 		does.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(does)
-

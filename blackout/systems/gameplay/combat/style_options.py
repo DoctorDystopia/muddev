@@ -30,6 +30,7 @@ Description: What a character's combat options ARE -- the wielded weapon, its
 
 from systems.core.tick import constants as tick_const
 from systems.gameplay.combat import constants as const
+from systems.gameplay.combat import pvp
 from systems.gameplay.combat.combat import (
     active_combat_style_key,
     available_combat_styles,
@@ -284,6 +285,7 @@ def combat_options(character) -> dict:
             attack_speed_ticks   - ticks between swings
             attack_speed_seconds - the same, in seconds
             styles               - [style row, ...] in the weapon's order
+            pvp                  - {enabled, command}, from pvp.status
 
     Module Globals:
         const.UNARMED_WEAPON_NAME, tick_const.TICK_SECONDS read.
@@ -328,4 +330,5 @@ def combat_options(character) -> dict:
         "attack_speed_ticks": ticks,
         "attack_speed_seconds": seconds,
         "styles": rows,
+        "pvp": pvp.status(character),
     }

@@ -42,6 +42,7 @@ MENU_MODULE_PATHS = (
     "systems.interface.menus.dev_egg_menu",
     "systems.interface.menus.dialogue",
     "systems.interface.menus.equipment_menu",
+    "systems.interface.menus.profile_menu",
     "systems.interface.menus.skills_menu",
     "systems.interface.menus.summary_menu",
     "systems.interface.menus.npc_dialogues.npc_oasis_lone_android",

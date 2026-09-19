@@ -79,6 +79,7 @@ ARMOR_SKILL_MAP: dict[str, str | None] = {
     "platelegs": SKILL_KEY_DEFENSE,
     "boots": SKILL_KEY_DEFENSE,
     "square_shield": SKILL_KEY_DEFENSE,
+    "cape": SKILL_KEY_DEFENSE,
 }
 
 

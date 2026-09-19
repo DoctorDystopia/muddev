@@ -14,6 +14,8 @@ Description: The vocabulary, bounds and message templates for player-written
              can that cannot be sprayed with nothing raised either way.
 """
 
+
+
 # ─── The medium ──────────────────────────────────────────────────────────────
 
 # The tag category an item declares to say it can write on the world.

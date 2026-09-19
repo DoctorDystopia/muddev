@@ -207,6 +207,70 @@ def get_recipes_for_facility(facility):
 
 
 
+def skill_requirement_text(skill_key, required_level) -> str:
+    """Name a recipe's skill gate the way the skills sheet does.
+
+    Returns e.g. "Metalsmith Lv.4", or "" for an ungated recipe. The skill's
+    DISPLAY name, not its key, because that is what the player just read on
+    the skills sheet. The crafting menu and the crafting pop-up both print
+    it, so it lives here, with one spelling.
+
+    The import is deferred: the skills registry has no business being walked
+    when this module is imported at startup.
+    """
+    if not skill_key:
+        return ""
+
+    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+
+    skill_class = SKILL_REGISTRY.get(skill_key)
+    skill_name = getattr(skill_class, "name", skill_key)
+
+    return f"{skill_name} Lv.{required_level}"
+
+
+def find_facility_recipe(facility, recipe_text: str):
+    """
+    Purpose: Find the recipe a player names, among those this facility makes.
+
+    Entry:
+        facility    - a crafting facility, or None for every recipe.
+        recipe_text - a recipe key or a recipe name, whole or a prefix.
+
+    Exit/Returns:
+        Returns (recipe_key, recipe_cls), or (None, None).
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Match the key or the name exactly, ignoring case.
+        2. If nothing matches, take the first name that starts with the text.
+
+        Only the facility's own recipes are searched. A furnace must refuse
+        an anvil recipe that a typed command names, as its menu never lists
+        one.
+
+    Notes/References:
+        The crafting pop-up sends the KEY, which never collides.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    wanted = recipe_text.strip().lower()
+    recipes = get_recipes_for_facility(facility)
+
+    for recipe_key, recipe_cls in recipes:
+        if wanted in (recipe_key.lower(), recipe_cls.name.lower()):
+            return recipe_key, recipe_cls
+
+    for recipe_key, recipe_cls in recipes:
+        if recipe_cls.name.lower().startswith(wanted):
+            return recipe_key, recipe_cls
+
+    return None, None
+
+
 def get_recipe_class(recipe_key):
     """Get the recipe class for a given recipe key, or None if not found."""
     return RECIPE_REGISTRY.get(recipe_key)

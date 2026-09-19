@@ -187,6 +187,7 @@ class TestInventoryActions(EvenniaTest):
         row = payload.items[0]
 
         self.assertEqual(row["equip_slot"], WieldLocation.NECK.value)
+        self.assertEqual(row["actions"][0]["command"], "equip 1")
         self.assertTrue(any(c.startswith("equip ") for c in _commands(row)))
 
     def test_a_non_equippable_item_is_not_offered_equip(self):
@@ -197,6 +198,16 @@ class TestInventoryActions(EvenniaTest):
 
         self.assertEqual(row["equip_slot"], "")
         self.assertFalse(any(c.startswith("equip ") for c in _commands(row)))
+
+    def test_the_moderator_egg_names_its_own_default_action(self):
+        from typeclasses.dev_tools import CmdEgg
+
+        ITEM_DB["moderator_egg"].create(location=self.char1)
+
+        payload = feed_inventory.build_payload(self.char1)
+        row = payload.items[0]
+
+        self.assertEqual(row["actions"][0]["command"], CmdEgg.key)
 
     def test_every_item_can_be_dropped(self):
         ITEM_DB["rusty_metal_chunk"].create(location=self.char1)

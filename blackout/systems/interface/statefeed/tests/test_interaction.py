@@ -157,8 +157,11 @@ class TestInteractionVerbs(EvenniaTest):
 
         body = serializers.serialize_entity(shopkeep)
 
+        # The verb is the class's own, `trade` since the shop pop-up. Read,
+        # not typed, so the next verb change does not break this case.
         self.assertEqual(body["kind"], const.ASSET_KIND_NPC)
-        self.assertEqual(body["interact"], "talk")
+        self.assertEqual(body["interact"], ShopkeepNPC.interact_verb)
+        self.assertNotIn("attack", body["interact"])
 
     def test_a_gathering_node_is_cut_not_taken(self):
         """The point of the case: a node affords `cut`, never `get`.
@@ -253,12 +256,16 @@ class TestInteractionVerbs(EvenniaTest):
 
         self.assertEqual(body["interact"], "get " + item.key)
 
-    def test_a_character_affords_nothing(self):
+    def test_a_left_click_on_a_character_never_attacks(self):
         # Deliberate: everything else a misclick can do is recoverable, and
-        # opening combat on another player is not.
+        # opening combat on another player is not. A character offers its
+        # profile first, and Attack (with PvP on) only last. The full list is
+        # tested in systems/gameplay/combat/tests/test_pvp.py.
         body = serializers.serialize_entity(self.char1)
+        verb = body["interact"].split(" ")[0]
 
-        self.assertEqual(body["interact"], "")
+        self.assertTrue(body["interact"])
+        self.assertNotEqual("attack", verb)
 
     def test_a_station_that_declares_no_verb_still_affords_nothing(self):
         # The fallback has to be silence rather than a guess. TARGETED_VERB_BY

@@ -121,6 +121,9 @@ MSG_SLOT_HEADER_READY = (
 # would drift the first time either was edited.
 SLOT_LINE_INDENT = "  "
 
+# The heading of the chamber's side panel in the crafting pop-up.
+TIMER_PANEL_TITLE = "Curing slots"
+
 # What `collect` says when a stored slot names a recipe the game no longer
 # has. The slot is freed rather than retried, and the line is deliberately not
 # an apology: the player did nothing wrong and there is nothing for them to do

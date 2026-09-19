@@ -642,6 +642,72 @@ def _confirm_sell(caller, raw_string, **kwargs) -> str:
 # -------------------------------------------------------------
 
 
+def _open_shop_on_exit(caller, menu) -> None:
+    """
+    Purpose: Open the shop grid pop-up after the dialogue menu is gone.
+
+    Entry:
+        caller - the Character speaking to the shopkeeper.
+        menu   - the closing EvMenu, carrying `npc`.
+
+    Exit/Returns:
+        Returns nothing.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        EvMenu.close_menu calls this after it removes EvMenuCmdSet and
+        ndb._evmenu. Thus, the pop-up opens with no menu beside it.
+
+    Notes/References:
+        It replaces EvMenu's default cmd_on_exit, which runs `look`.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from systems.interface.popups import service as popup_service
+    from systems.interface.popups.popup_defs.shop import SHOP_POPUP_KEY
+
+    popup_service.open_popup(caller, SHOP_POPUP_KEY, getattr(menu, "npc", None))
+
+
+def node_trade_popup(caller, **kwargs) -> tuple:
+    """
+    Purpose: End the conversation and hand the player to the shop pop-up.
+
+    Entry:
+        caller - the Character speaking to the shopkeeper.
+        kwargs - menu kwargs.
+
+    Exit/Returns:
+        Returns ("", None), an ending node, so EvMenu closes the menu.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Clear `close_text` on the menu so closing speaks no farewell.
+        2. Set cmd_on_exit to _open_shop_on_exit.
+        3. Return no options. EvMenu then closes the menu and calls the hook.
+
+    Notes/References:
+        A node, not a goto callable. A goto callable must return a node
+        name, and EvMenu runs that node on the menu even after a close.
+        Only an ending node closes the menu with no node after it.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    menu = caller.ndb._evmenu
+
+    if menu is not None:
+        menu.close_text = ""
+        menu.cmd_on_exit = _open_shop_on_exit
+
+    return "", None
+
+
 def start(caller, **kwargs) -> tuple:
     npc = kwargs.get("npc", _get_npc(caller))
     npc_name = npc.key if npc else "Shopkeeper"
@@ -658,11 +724,19 @@ def start(caller, **kwargs) -> tuple:
     ]
     text = "\n".join(text_lines)
 
-    options = [
-        {"desc": "Buy items", "goto": "node_buy"},
-        {"desc": "Sell items", "goto": "node_sell"},
-        {"desc": "Goodbye", "goto": "node_goodbye"},
-    ]
+    from systems.interface.popups import service as popup_service
+
+    if popup_service.wants_popup(caller):
+        options = [
+            {"desc": "Trade", "goto": "node_trade_popup"},
+            {"desc": "Goodbye", "goto": "node_goodbye"},
+        ]
+    else:
+        options = [
+            {"desc": "Buy items", "goto": "node_buy"},
+            {"desc": "Sell items", "goto": "node_sell"},
+            {"desc": "Goodbye", "goto": "node_goodbye"},
+        ]
 
     return text, options
 

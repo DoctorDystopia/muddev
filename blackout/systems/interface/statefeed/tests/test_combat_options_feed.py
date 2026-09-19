@@ -28,6 +28,7 @@ from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTest
 from commands.combat_cmds import CmdCombatOptions
 from systems.core.tick import constants as tick_const
 from systems.gameplay.combat import constants as combat_const
+from systems.gameplay.combat import pvp
 from systems.gameplay.combat import style_options
 from systems.gameplay.combat.combat import (
     active_combat_style_key,
@@ -222,17 +223,29 @@ class TestMenu(_Fixture, EvenniaTest):
 
         text, options = combat_options_menu.start(self.char1)
 
-        self.assertEqual(len(self._item_styles()), len(options))
+        # One option for each style, and one PvP toggle after them.
+        self.assertEqual(len(self._item_styles()) + 1, len(options))
         self.assertEqual(1, text.count(combat_options_menu.ACTIVE_MARKER))
 
         for row in self._payload()["styles"]:
             with self.subTest(style=row["key"]):
                 self.assertIn(row["name"], text)
 
-    def test_bare_hands_end_the_menu(self):
+    def test_bare_hands_still_offer_the_pvp_toggle(self):
+        """No weapon means no style, but the PvP flag does not need one."""
         _text, options = combat_options_menu.start(self.char1)
 
-        self.assertIsNone(options)
+        self.assertEqual(1, len(options))
+        self.assertEqual(combat_options_menu.PVP_TURN_ON_DESC,
+                         options[0]["desc"])
+
+    def test_the_pvp_toggle_moves_the_flag(self):
+        _text, options = combat_options_menu.start(self.char1)
+        _node, kwargs = options[-1]["goto"]
+
+        combat_options_menu.node_set_pvp(self.char1, **kwargs)
+
+        self.assertTrue(pvp.pvp_enabled(self.char1))
 
 
 class TestCommand(_Fixture, EvenniaCommandTest):

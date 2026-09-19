@@ -11,8 +11,9 @@ from evennia.utils import logger
 
 from typeclasses.items import CurrencyItem
 from world.item_database import ITEM_DB
-from world.shop_defs import SHOP_DB, ShopDef
+from world.shop_defs import ShopDef, shop_def_for
 from systems.core.stat_tracker import constants as stat_constants
+from systems.gameplay.shop import stock
 from systems.interface.statefeed import constants as feed_const
 
 # Every line perform_sell sends a player is a completed or refused trade, so
@@ -61,6 +62,9 @@ class BuyEntry:
     count: int = 1
     is_prototype: bool = True
     content_items: list = field(default_factory=list)
+    # False for a ware with a WareStock rule. Its count is then the units in
+    # stock plus the units the keeper holds, and a buy lowers the stock.
+    endless: bool = True
 
 
 @dataclass
@@ -91,10 +95,7 @@ class SellResult:
 
 
 def _get_shop_def(shopkeep) -> ShopDef | None:
-    key = getattr(shopkeep.db, "shopdef_key", None)
-    if key:
-        return SHOP_DB.get(key)
-    return None
+    return shop_def_for(shopkeep)
 
 
 def get_upsell_factor(shopkeep) -> float:
@@ -178,8 +179,9 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
         if item_def is None:
             continue
         buy_price = max(1, int(item_def.value * upsell))
+        in_stock = stock.level(shopkeep, key)
         affordable = credits // buy_price if caller else 1
-        count = max(1, affordable)
+        count = max(1, affordable) if in_stock is None else in_stock
         if key not in groups:
             groups[key] = BuyEntry(
                 key=key,
@@ -189,6 +191,7 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
                 count=0,
                 is_prototype=True,
                 content_items=[],
+                endless=in_stock is None,
             )
             group_order.append(key)
         groups[key].count += count
@@ -209,6 +212,7 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
                 count=0,
                 is_prototype=False,
                 content_items=[],
+                endless=False,
             )
             group_order.append(key)
         groups[key].count += 1
@@ -669,6 +673,71 @@ def _buy_stock(caller, npc, entry: BuyEntry, buy_count: int) -> tuple[int, bool]
     return delivered, False
 
 
+def _deliver_ware(caller, npc, entry: BuyEntry, buy_count: int) -> tuple[int, bool]:
+    """
+    Purpose: Hand over up to `buy_count` of one ware, held units first.
+
+    Entry:
+        caller    - the buying Character.
+        npc       - the shopkeeper.
+        entry     - the BuyEntry chosen from get_buy_items.
+        buy_count - how many were asked for.
+
+    Exit/Returns:
+        (delivered, refused), read as in _buy_prototype.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Hand over the objects the keeper holds, which players sold to it.
+        2. Spawn the rest from the ItemDef, for a buy_list ware only. A
+           finite ware spawns no more than its stock level, and the spawn
+           lowers that level.
+
+    Notes/References:
+        Held units go first, as OSRS sells a player's sale back before its
+        own stock. Before 09/18/2026 a buy_list ware ignored held units, so
+        they stayed with the keeper until ShopkeepCleanup trimmed them.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    bought, refused = 0, False
+
+    if entry.content_items:
+        bought, refused = _buy_stock(caller, npc, entry, buy_count)
+
+    remaining = buy_count - bought
+
+    if refused or remaining <= 0 or not entry.is_prototype:
+        return bought, refused
+
+    if not entry.endless:
+        in_stock = stock.level(npc, entry.key) or 0
+        remaining = min(remaining, in_stock)
+
+    item_def = ITEM_DB[entry.key]
+    spawned, refused = _buy_prototype(caller, item_def, remaining)
+    stock.take(npc, entry.key, spawned)
+
+    return bought + spawned, refused
+
+
+def _publish_stock(npc) -> None:
+    """Refresh every open shop pop-up on this keeper, for a stock change.
+
+    The buyer's own pop-up already follows emit_inventory. This reaches the
+    other players who look at the same shop. Never raises.
+    """
+    from systems.interface.popups import service as popup_service
+
+    try:
+        popup_service.refresh_anchor_viewers(npc)
+    except Exception:
+        logger.log_trace()
+
+
 def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
     """
     Purpose: Charge for and hand over up to `buy_count` of one ware.
@@ -713,16 +782,11 @@ def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
     if not paid:
         return BuyResult(success=False, error="Insufficient credits.")
 
-    if entry.is_prototype:
-        item_def = ITEM_DB.get(entry.key)
+    if entry.is_prototype and ITEM_DB.get(entry.key) is None:
+        credits_add(caller, total_price)
+        return BuyResult(success=False, error="Item definition missing.")
 
-        if item_def is None:
-            credits_add(caller, total_price)
-            return BuyResult(success=False, error="Item definition missing.")
-
-        bought, refused = _buy_prototype(caller, item_def, buy_count)
-    else:
-        bought, refused = _buy_stock(caller, npc, entry, buy_count)
+    bought, refused = _deliver_ware(caller, npc, entry, buy_count)
 
     charged = bought * entry.buy_price
     refund = total_price - charged
@@ -731,6 +795,9 @@ def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
         credits_add(caller, refund)
 
     _publish_inventory(caller)
+
+    if bought > 0:
+        _publish_stock(npc)
 
     if bought == 0:
         error = _NO_ROOM_ERROR if refused else _OUT_OF_STOCK_ERROR
@@ -836,6 +903,11 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
 
     credits_add(caller, total_price)
 
+    # A sold object joins the keeper's held units, which every open shop
+    # pop-up on this keeper counts.
+    if sold_count > 0:
+        _publish_stock(npc)
+
     _publish_inventory(caller)
 
     return SellResult(
@@ -927,6 +999,244 @@ def perform_sell(caller, npc, args: str) -> bool:
 
     result = execute_sell(caller, npc, entry, sell_count)
     line = messages.format_trade(result, messages.VERB_SOLD, result.sold_count)
+    caller.msg((line, _MSG_COMMERCE))
+
+    return result.success
+
+
+def find_buy_entry(npc, caller, item_text: str) -> BuyEntry | None:
+    """
+    Purpose: Find the ware a player names, among what this shopkeeper sells.
+
+    Entry:
+        npc       - the shopkeeper.
+        caller    - the buying Character, so each entry counts what it can
+                    afford.
+        item_text - an ITEM_DB key ("rusty_metal_dust") or a display name,
+                    whole or a prefix.
+
+    Exit/Returns:
+        Returns the BuyEntry, or None when nothing matches.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Match the key or the name exactly, ignoring case.
+        2. If nothing matches, take the first name that starts with the text.
+
+        The KEY form is what the shop pop-up sends, because a key never
+        collides. The NAME form is what a telnet player types.
+
+    Notes/References:
+        The same exact-then-prefix rule BankHandler.find_items_by_name uses.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    wanted = item_text.strip().lower()
+    entries = get_buy_items(npc, caller)
+
+    for entry in entries:
+        if wanted in (entry.key.lower(), entry.name.lower()):
+            return entry
+
+    for entry in entries:
+        if entry.name.lower().startswith(wanted):
+            return entry
+
+    return None
+
+
+def _ware_description(caller, entry: BuyEntry) -> str:
+    """
+    Purpose: Give the look text of one ware, as the player would read it.
+
+    Entry:
+        caller - the Character who asks.
+        entry  - the BuyEntry of the ware.
+
+    Exit/Returns:
+        Returns the ware's name and description.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A ware the keeper holds is an object, so `at_look` renders it, as
+        `inspect` renders a carried item. A buy_list ware has no object
+        until a buy spawns it, so its ItemDef gives the same fields: the
+        name, the desc and the combat bonus block.
+
+    Notes/References:
+        A look at a spawned copy would write rows to the database for each
+        look. The ItemDef is what the copy is spawned from.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from systems.gameplay.combat.combat_msg import append_combat_stat_bonuses
+
+    if entry.content_items:
+        return caller.at_look(entry.content_items[0])
+
+    item_def = ITEM_DB[entry.key]
+    desc = append_combat_stat_bonuses(item_def.desc, item_def.combat_stat_bonuses)
+
+    return f"{item_def.name}\n{desc}"
+
+
+def perform_value(caller, npc, args: str) -> bool:
+    """
+    Purpose: Parse and answer one `value`: what a ware is, its price, its
+             stock.
+
+    Entry:
+        caller - the Character who asks.
+        npc    - the shopkeeper.
+        args   - the ware, by ITEM_DB key or by name, whole or a prefix.
+
+    Exit/Returns:
+        Returns True when a ware was found. Messages the caller on every exit.
+
+    Module Globals:
+        _MSG_COMMERCE read.
+
+    Methodology:
+        1. Find the ware the way `buy` does, so a key from the pop-up and a
+           name from a telnet player reach the same ware.
+        2. Send the look text, the price and the stock as one look line.
+
+    Notes/References:
+        Sent under MESSAGE_TYPE_LOOK, as `inspect` sends, so the text lands
+        in the same tab as the look at a carried item.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from . import messages
+
+    item_text = args.strip()
+
+    if not item_text:
+        caller.msg((messages.NOTHING_NAMED_TO_VALUE, _MSG_COMMERCE))
+        return False
+
+    entry = find_buy_entry(npc, caller, item_text)
+
+    if entry is None or (not entry.content_items and entry.key not in ITEM_DB):
+        line = messages.format_not_for_sale(str(npc.key), item_text)
+        caller.msg((line, _MSG_COMMERCE))
+        return False
+
+    description = _ware_description(caller, entry)
+    line = messages.format_value(
+        description, str(npc.key), entry.buy_price, entry.count, entry.endless)
+    caller.msg((line, {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_LOOK}))
+
+    return True
+
+
+def _buy_count(entry: BuyEntry, count, credits: int) -> int:
+    """
+    Purpose: Decide how many units one `buy` asks execute_buy for.
+
+    Entry:
+        entry   - the chosen BuyEntry.
+        count   - an int, QUANTITY_ALL_KEYWORD, or None for omitted.
+        credits - what the buyer holds.
+
+    Exit/Returns:
+        Returns an int >= 1.
+
+    Module Globals:
+        _MIN_SELL_COUNT read.
+
+    Methodology:
+        1. An omitted count is one unit.
+        2. Clamp every count to the stock and to what the buyer can afford.
+        3. Never go below one: execute_buy then says "Insufficient credits",
+           which tells the player more than a silent zero.
+
+        OSRS clamps a Buy 10 that the player cannot pay for in full, and so
+        does this. A clamp is the rule parse_quantity already follows.
+
+    Notes/References:
+        entry.count is the STOCK for a physical ware and the affordable
+        count for endless stock. See get_buy_items.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from systems.interface.menus.base_menu import QUANTITY_ALL_KEYWORD
+
+    affordable = credits // entry.buy_price if entry.buy_price > 0 else 0
+    ceiling = min(entry.count, affordable)
+
+    if count is None:
+        wanted = _MIN_SELL_COUNT
+    elif count == QUANTITY_ALL_KEYWORD:
+        wanted = ceiling
+    else:
+        wanted = min(int(count), ceiling)
+
+    return max(_MIN_SELL_COUNT, wanted)
+
+
+def perform_buy(caller, npc, args: str) -> bool:
+    """
+    Purpose: Parse, execute and report one `buy`.
+
+    Entry:
+        caller - the buying Character.
+        npc    - the shopkeeper.
+        args   - the raw argument, e.g. "rusty spear", "rusty_metal_dust 5",
+                 "rusty metal dust all".
+
+    Exit/Returns:
+        Returns True when anything was bought. Messages the caller on every
+        exit.
+
+    Module Globals:
+        _MSG_COMMERCE read.
+
+    Methodology:
+        1. Split the name from the count, the way `sell` does.
+        2. Find the ware. If there is none, say so in the keeper's name.
+        3. Clamp the count, then let execute_buy charge and deliver.
+
+        The shop menu buys through the same execute_buy, so the pop-up, the
+        typed command and the menu charge the same price.
+
+    Notes/References:
+        Until 09/18/2026 buying was reachable only inside the dialogue menu.
+        The shop pop-up needed a line it could name on each slot, and a
+        telnet player gains the same line.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from commands.inventory_cmds import split_item_and_count
+
+    from . import messages
+
+    item_text, count = split_item_and_count(args.strip())
+
+    if not item_text:
+        caller.msg((messages.NOTHING_NAMED_TO_BUY, _MSG_COMMERCE))
+        return False
+
+    entry = find_buy_entry(npc, caller, item_text)
+
+    if entry is None:
+        line = messages.format_not_for_sale(str(npc.key), item_text)
+        caller.msg((line, _MSG_COMMERCE))
+        return False
+
+    credits = credits_count(caller)
+    buy_count = _buy_count(entry, count, credits)
+    result = execute_buy(caller, npc, entry, buy_count)
+    line = messages.format_trade(result, messages.VERB_BOUGHT, result.bought_count)
     caller.msg((line, _MSG_COMMERCE))
 
     return result.success

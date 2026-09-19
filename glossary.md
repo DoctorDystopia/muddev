@@ -26,12 +26,18 @@ the name.
 | tile | one room on an XYZ grid map (`GridTile`) | cell, square |
 | map rebuild | a run of `scripts/clean_and_reload_all_maps.ps1` | grid rebuild, respawn |
 | shopkeep | an NPC that sells items (`ShopkeepNPC`) | shopkeeper, vendor, merchant |
+| ware | one item kind that a shop sells, one row of `get_buy_items` | good, product |
+| stock level | how many units of a ware a shop has now (`stock.level`) | inventory, supply |
+| restock | the return of one unit to a ware below its `max_stock` | refill, replenish |
+| endless stock | a ware with no `WareStock` rule, which never runs out | infinite stock, unlimited |
 | moderator egg | the `egg` item and its staff menu | dev egg, admin tool |
 | god mode | the damage-immunity flag that the moderator egg sets | godmode, invulnerability |
 | family | the look an item renders with, from `ITEM_FAMILY_PRIORITY` | item type, item class |
 | dossier | the summary screen of a character (`score`, `char_summary`) | character summary, character sheet |
 | panel | one band of the dossier (`summary/panel_defs/`) | section, block |
 | roster | the skills payload that `CHANNEL_CHAR_SKILLS` sends | skill list |
+| profile | the menu that shows the dossier, skills and records of any character (`profile`, `profile_menu.py`) | inspect screen, public dossier, honours |
+| PvP flag | the per-character choice that allows attacks between two players (`pvp on`, `systems/gameplay/combat/pvp.py`) | PvP mode, PvP toggle, PK flag |
 
 ## Client
 
@@ -40,6 +46,7 @@ the name.
 | Godot client | the one canonical client, in `godot/` | frontend, game client |
 | webclient | the retired browser client in `archive/webclient-js/`, and nothing else | web client, JS client |
 | pane | one region of the Godot client UI | window, view |
+| pop-up | a box that the server opens over the world pane, for example the bank (`char_popup`) | window, dialog, interface, modal |
 
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
 server. A pane is a region of the client screen. A Godot node class such as

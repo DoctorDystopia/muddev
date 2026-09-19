@@ -35,12 +35,21 @@ const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
 const COLUMNS := 8
 
 ## Floor on the carried grid, in pixels: roughly two rows of cells.
-const MIN_GRID_HEIGHT := 120
+const MIN_GRID_HEIGHT := 160
 
 var _state: InventoryState
 var _heading: Label
 var _grid: GridContainer
 var _doll: HBoxContainer
+
+## The full text of the cell under the mouse. See [HoverBar].
+var _bar: HoverBar
+
+## `[kind, key]` of the cell under the mouse, or `[]`.
+##
+## A key and not the cell, because a rebuild frees every cell. The mouse did
+## not move, so the cell at the same key is the one under it now.
+var _hover_key: Array = []
 
 ## Where every item's picture is drawn. One render target for the whole bag;
 ## see [ItemStage].
@@ -81,6 +90,10 @@ func _ready() -> void:
 	_doll = HBoxContainer.new()
 	add_child(_doll)
 
+	# Below BOTH halves, because the mouse can be on the grid or on the doll.
+	_bar = HoverBar.new()
+	add_child(_bar)
+
 	# A child of this pane so it is hidden with it -- the stage stops rendering
 	# when not visible, which is what makes text-only mode actually free.
 	_stage = ItemStage.new()
@@ -109,6 +122,10 @@ func _rebuild() -> void:
 
 	_heading.text = _heading_text()
 
+	# Kept BEFORE the fill. Godot can send mouse_exited from an old cell as
+	# _fill removes it, and that clears _hover_key.
+	var hovered_key := _hover_key
+
 	# Indices are allocated HERE and the layout is the stage's: carried slots
 	# first, then worn frames, so the two halves cannot claim the same pixels.
 	var carried := _carried_cells()
@@ -120,6 +137,7 @@ func _rebuild() -> void:
 
 	_fill(_grid, carried)
 	_fill(_doll, worn)
+	_restore_hover(hovered_key, carried + worn)
 
 
 func _heading_text() -> String:
@@ -190,6 +208,8 @@ func _cell() -> InventorySlotCell:
 	var cell := SlotCell.new()
 	cell.dropped.connect(_on_dropped)
 	cell.action_chosen.connect(_on_action_chosen)
+	cell.hovered.connect(_on_cell_hovered.bind(cell))
+	cell.unhovered.connect(_on_cell_unhovered.bind(cell))
 
 	return cell
 
@@ -257,3 +277,38 @@ func _named_action(row: Dictionary, verb: String) -> String:
 
 func _on_action_chosen(command: String) -> void:
 	command_requested.emit(command)
+
+
+# ─── The hover bar ───────────────────────────────────────────────────────────
+
+func _on_cell_hovered(cell: InventorySlotCell) -> void:
+	_hover_key = [cell.kind, cell.key]
+	_bar.show_text(cell.hover_text())
+
+
+## Clears only when the cell that leaves is the one the bar names. Godot sends
+## the exit of the old cell before the entry of the new one, but a stale exit
+## from a freed cell must not clear a newer entry.
+func _on_cell_unhovered(cell: InventorySlotCell) -> void:
+	if _hover_key != [cell.kind, cell.key]:
+		return
+
+	_hover_key = []
+	_bar.clear()
+
+
+## Point the bar at the new cell under the mouse after a rebuild.
+##
+## Without this, a drop or a swap under the mouse leaves the bar on the OLD
+## row. Godot sends no mouse_entered to the new cell until the mouse moves.
+func _restore_hover(hovered_key: Array, cells: Array) -> void:
+	_hover_key = []
+	_bar.clear()
+
+	if hovered_key.is_empty():
+		return
+
+	for cell: InventorySlotCell in cells:
+		if [cell.kind, cell.key] == hovered_key:
+			_on_cell_hovered(cell)
+			return

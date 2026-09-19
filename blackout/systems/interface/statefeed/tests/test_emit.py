@@ -357,6 +357,23 @@ class TestReservedChannelGuard(unittest.TestCase):
     def test_no_subscribable_channel_uses_the_reserved_name(self):
         self.assertNotIn(const.RESERVED_CHANNEL_NAME, const.SUBSCRIBABLE_CHANNELS)
 
+    def test_no_payload_field_uses_the_reserved_name(self):
+        """A payload is msg()'s kwargs, so a field named "options" is popped
+        as protocol flags and never reaches a client. The menu pop-up's
+        choices were lost this way."""
+        import dataclasses
+        import inspect
+
+        from systems.interface.statefeed import payloads
+
+        for _name, cls in inspect.getmembers(payloads, inspect.isclass):
+            if not dataclasses.is_dataclass(cls):
+                continue
+
+            with self.subTest(payload=cls.__name__):
+                names = {field.name for field in dataclasses.fields(cls)}
+                self.assertNotIn(const.RESERVED_CHANNEL_NAME, names)
+
 
 class TestEmitToRoom(unittest.TestCase):
     """A room broadcast must reach exactly who the text reaches."""

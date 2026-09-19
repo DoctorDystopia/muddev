@@ -9,6 +9,7 @@ Description: Summary panel: hitpoints, combat level, and whole-character
 from evennia.utils import logger
 
 from systems.gameplay.combat import constants as combat_const
+from systems.gameplay.combat import pvp
 from systems.interface.ui.meters import build_hp_meter
 
 from .. import constants as const
@@ -19,10 +20,6 @@ from .base_panel import BasePanel
 # Public constant definitions
 
 PANEL_TITLE = "Vitals"
-
-# What this band is once hitpoints and combat state are stripped out for the
-# public view -- see the public_title note on BasePanel.
-PANEL_PUBLIC_TITLE = "Standing"
 
 LABEL_HITPOINTS = "Hitpoints"
 LABEL_REGEN = "Regen"
@@ -36,6 +33,10 @@ LABEL_STATUS = "Status"
 STATUS_IN_COMBAT = "In combat"
 STATUS_IDLE = "Out of combat"
 STATUS_AURA_PREFIX = "aura: "
+
+# Shown when the character has the PvP flag on. Absent when it is off, which is
+# the default, so the line does not grow for most players.
+STATUS_PVP_ON = "PvP on"
 
 
 class VitalsPanel(BasePanel):
@@ -71,9 +72,7 @@ class VitalsPanel(BasePanel):
 
     key = "vitals"
     title = PANEL_TITLE
-    public_title = PANEL_PUBLIC_TITLE
     order = const.PANEL_ORDER_VITALS
-    public = True
 
 
     @classmethod
@@ -195,6 +194,11 @@ class VitalsPanel(BasePanel):
         if aura_name:
             parts.append(f"{STATUS_AURA_PREFIX}{aura_name}")
 
+        pvp_on = pvp.pvp_enabled(character)
+
+        if pvp_on:
+            parts.append(STATUS_PVP_ON)
+
         text = ", ".join(parts)
 
         return text
@@ -245,47 +249,6 @@ class VitalsPanel(BasePanel):
 
 
     @classmethod
-    def render_public(cls, character: object) -> list:
-        """
-        Purpose: Render the vitals band as a stranger sees it.
-
-        Entry:
-            character is the Character being looked at.
-
-        Exit/Returns:
-            Returns a list of display lines: the three progression totals only.
-
-        Module Globals:
-            LABEL_COMBAT_LEVEL, LABEL_TOTAL_LEVEL, LABEL_TOTAL_XP read.
-
-        Methodology:
-            Drops current HP, combat state and active aura. Those three are
-            live tactical information: an opponent who can read your remaining
-            hitpoints and whether your aura is burning knows when to open on
-            you, and a profile command that leaked them would be a combat tool
-            rather than a social one.
-
-            Combat level and the progression totals stay, matching OSRS, where
-            combat level is public over a player's head and total level and
-            total XP are public on the hiscores.
-
-        Notes/References:
-            None
-
-        Author: Nick Hobar
-        Creation date: 08/08/2026
-        """
-        pairs = [
-            (LABEL_COMBAT_LEVEL, f"{character.combat_level:,}"),
-            (LABEL_TOTAL_LEVEL, f"{character.skills.total_level():,}"),
-            (LABEL_TOTAL_XP, f"{character.skills.combined_xp():,}"),
-        ]
-        lines = layout.fields(pairs)
-
-        return lines
-
-
-    @classmethod
     def data(cls, character: object) -> dict:
         """
         Purpose: Structured form of the vitals band.
@@ -318,6 +281,7 @@ class VitalsPanel(BasePanel):
             "total_xp": int(character.skills.combined_xp()),
             "in_combat": bool(getattr(character, "in_combat", False)),
             "aura": cls._aura_key(character),
+            "pvp": pvp.pvp_enabled(character),
         }
 
         return payload

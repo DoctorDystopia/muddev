@@ -76,7 +76,6 @@ class ReadinessPanel(BasePanel):
     key = "readiness"
     title = PANEL_TITLE
     order = const.PANEL_ORDER_READINESS
-    public = False
 
 
     @classmethod

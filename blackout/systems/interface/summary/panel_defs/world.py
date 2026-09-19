@@ -75,7 +75,6 @@ class WorldPanel(BasePanel):
     key = "world"
     title = PANEL_TITLE
     order = const.PANEL_ORDER_WORLD
-    public = True
 
 
     @classmethod
@@ -297,53 +296,6 @@ class WorldPanel(BasePanel):
         lines.extend(
             layout.wrapped_field(LABEL_ACTIVE_LIST, cls._quest_titles(character))
         )
-
-        return lines
-
-
-    @classmethod
-    def render_public(cls, character: object) -> list:
-        """
-        Purpose: Render the world band as a stranger sees it.
-
-        Entry:
-            character is the Character being looked at.
-
-        Exit/Returns:
-            Returns a list of display lines: completed quests, playtime and
-            creation date.
-
-        Module Globals:
-            LABEL_QUESTS_DONE, LABEL_PLAYED, LABEL_CREATED read.
-
-        Methodology:
-            Drops the location and both the active-quest count and titles.
-
-            Location is the important one: a profile command that reported grid
-            coordinates would be a player-tracking tool usable from anywhere in
-            the world, which is a far stronger capability than anything else on
-            this screen. Finding someone should require looking for them.
-
-            Active quests go too, for a smaller reason -- what a player is
-            working on right now is theirs to mention. What they have FINISHED
-            is an achievement, and achievements are the point of a public
-            profile.
-
-        Notes/References:
-            None
-
-        Author: Nick Hobar
-        Creation date: 08/08/2026
-        """
-        completed = character.quests.completed_keys()
-        playtime = getattr(character, "playtime_seconds", 0)
-
-        pairs = [
-            (LABEL_QUESTS_DONE, f"{len(completed)}"),
-            (LABEL_PLAYED, cls._format_duration(playtime)),
-            (LABEL_CREATED, cls._created_text(character)),
-        ]
-        lines = layout.fields(pairs)
 
         return lines
 

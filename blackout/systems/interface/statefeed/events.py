@@ -24,12 +24,14 @@ from evennia.utils import logger
 
 from . import constants as const
 from . import buffer, serializers, subscriptions
+from systems.interface.popups import constants as popup_const
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
     CharAvatarPayload,
     CharCombatPayload,
     CharItemsPayload,
+    CharPopupPayload,
     CharQuestsPayload,
     CharSkillsPayload,
     CharStatusPayload,
@@ -778,6 +780,64 @@ def emit_combat_options(observer, force: bool = False) -> int:
                 force=force)
 
 
+def emit_popup(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the observer's open pop-up, or the closed state, to the
+    observer alone.
+
+    Entry:
+        observer - the puppeted Character. One with nothing open is a
+                   supported case and sends the closed state.
+        force    - True to bypass rate caps. The channel is uncapped, so this
+                   is a formality that keeps the resync call shape identical to
+                   every other send.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed,
+        which is the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the reason emit_inventory does
+        it: a bank pop-up walks the vault AND the carried grid.
+
+        Called by the pop-up service when a pop-up opens, closes or changes
+        its quantity mode, by the stale drain after refresh_popup, and by
+        resync. The closed state is sent like any other snapshot, so a client
+        never has to infer a close from silence.
+
+        systems.interface.statefeed.popup is imported inside the routine. It
+        reaches the pop-up registry, which imports every pop-up definition,
+        and this module is imported by typeclasses/mixins.py at startup.
+
+    Notes/References:
+        The payload is built by systems/interface/popups/service.py.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    from . import popup as popup_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharPopupPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    buffer.discard_stale(observer, emit_popup)
+
+    try:
+        payload = popup_serializer.build_payload(observer)
+    except Exception:
+        logger.log_trace()
+        return 0
+
+    return emit(observer, payload, force=force)
+
+
 def emit_quests(observer, force: bool = False) -> int:
     """
     Purpose: Publish the observer's quest log to the observer alone.
@@ -887,6 +947,11 @@ def emit_inventory(observer, force: bool = False, ignore=None) -> int:
     # The dossier's holdings band repeats credits, slot counts and the vault.
     # A deposit reaches here too -- see BankHandler._publish_inventory.
     refresh_summary(observer)
+
+    # An open pop-up repeats the carried grid, and a bank pop-up the vault as
+    # well. Every change to either moves an item on or off the character, and
+    # every such move comes through here.
+    refresh_popup(observer)
 
     wants = subscriptions.has_channel_subscribers(
         observer, CharItemsPayload.channel
@@ -1367,6 +1432,35 @@ def refresh_status(observer) -> bool:
     """
     marked = _mark_stale_if_heard(
         observer, CharStatusPayload.channel, emit_status, 0.0
+    )
+
+    return marked
+
+
+
+def refresh_popup(observer, delay: float = 0.0) -> bool:
+    """Mark the observer's open pop-up out of date. See refresh_summary.
+
+    A no-op when nothing is open, which is nearly every call: emit_inventory
+    calls this on every item move in the game, and a closed pop-up has nothing
+    to follow. The check reads one ndb attribute before the session lookup.
+
+    A DELAYED mark skips that check. A cure that comes due in ten minutes
+    must reach a pop-up that the player opens in five. The build at the
+    deadline sends the closed state when nothing is open, which costs one
+    small send.
+    """
+    if observer is None:
+        return False
+
+    ndb = getattr(observer, "ndb", None)
+    open_popup = getattr(ndb, popup_const.OPEN_POPUP_ATTR, None)
+
+    if not open_popup and delay <= 0:
+        return False
+
+    marked = _mark_stale_if_heard(
+        observer, CharPopupPayload.channel, emit_popup, delay
     )
 
     return marked

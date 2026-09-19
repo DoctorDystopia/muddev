@@ -26,6 +26,7 @@ const CH_CHAR_ITEMS := "char_items_list"
 const CH_CHAR_QUESTS := "char_quests"
 const CH_CHAR_SKILLS := "char_skills"
 const CH_CHAR_COMBAT := "char_combat"
+const CH_CHAR_POPUP := "char_popup"
 const CH_MAP := "blackout_map"
 const CH_COMBAT := "blackout_combat"
 const CH_AURA := "blackout_aura"
@@ -73,6 +74,7 @@ const MSG_SAY := "say"
 const MSG_WHISPER := "whisper"
 const MSG_HELP := "help"
 const MSG_EXAMINE := "examine"
+const MSG_MENU := "menu"
 const MSG_MOVE := "move"
 const MSG_TELEPORT := "teleport"
 const MSG_ROOM := "room"
@@ -107,6 +109,6 @@ const CLIENT_INBOUND_BUFFER_BYTES := 2097152
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
-const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]
+const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

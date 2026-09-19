@@ -61,7 +61,6 @@ class TestRegistry(_SummaryTest):
             with self.subTest(panel=key):
                 self.assertTrue(key)
                 self.assertIsInstance(panel.order, int)
-                self.assertIsInstance(panel.public, bool)
 
     def test_panels_are_ordered_by_declared_order(self):
         orders = [panel.order for panel in PANEL_REGISTRY.values()]
@@ -305,23 +304,11 @@ class TestMenuNodes(_SummaryTest):
         )
 
 
-class TestPublicSummary(_SummaryTest):
-    """The public view is a privacy boundary, so these assert on what is
-    ABSENT at least as hard as on what is present."""
+class TestDossierContent(_SummaryTest):
+    """What the one dossier carries. `score` and `profile <name>` both show
+    it, so there is no second view to guard."""
 
-    def _public(self):
-        from evennia.utils.ansi import strip_ansi as _strip
-
-        return _strip(service.render_public_summary(self.char1))
-
-    def test_public_view_shows_identity_and_combat_level(self):
-        screen = self._public()
-
-        self.assertIn(self.char1.key, screen)
-        self.assertIn("Combat Level", screen)
-        self.assertIn("Total Level", screen)
-
-    def test_no_view_of_the_dossier_carries_a_skill_roster(self):
+    def test_the_dossier_carries_no_skill_roster(self):
         """Skills left the dossier on 08/28/2026 for a screen of their own.
 
         Asserted on the BAND rather than on skill names, and the difference is
@@ -330,110 +317,74 @@ class TestPublicSummary(_SummaryTest):
         fact about the weapon in your hands and not a roster entry. What must
         not come back is the band: a section listing every skill and its level.
 
-        Both views, and the registry itself, because the panel is what would
-        return. The aggregates stay -- combat level, total level and total XP
-        are the vitals panel's -- and the per-skill breakdown is what `skills`
-        and CHANNEL_CHAR_SKILLS own.
+        The registry itself too, because the panel is what would return. The
+        aggregates stay -- combat level, total level and total XP are the
+        vitals panel's -- and the per-skill breakdown is what `skills` and
+        CHANNEL_CHAR_SKILLS own.
         """
-        private = strip_ansi(service.render_summary(self.char1))
-        public = self._public()
+        screen = strip_ansi(service.render_summary(self.char1))
 
         self.assertNotIn("skills", PANEL_REGISTRY)
-        self.assertNotIn("SKILLS", private)
-        self.assertNotIn("SKILLS", public)
-        self.assertNotIn("Closest", private)
+        self.assertNotIn("SKILLS", screen)
+        self.assertNotIn("Closest", screen)
 
-    def test_the_public_view_keeps_the_aggregate_progress_figures(self):
-        screen = self._public()
+    def test_every_panel_renders_through_one_path(self):
+        """No panel keeps a second, narrower renderer. A `render_public` left
+        on one panel would be dead code that claims a privacy rule the game
+        no longer has."""
+        for key, panel in PANEL_REGISTRY.items():
+            with self.subTest(panel=key):
+                self.assertFalse(hasattr(panel, "render_public"))
+                self.assertFalse(hasattr(panel, "public"))
 
-        self.assertIn("Total Level", screen)
-        self.assertIn("Total XP", screen)
+    def test_vitals_status_names_the_pvp_flag_only_when_it_is_on(self):
+        from systems.gameplay.combat import pvp
+        from systems.interface.summary.panel_defs import vitals
 
-    def test_public_view_hides_holdings_entirely(self):
-        screen = self._public()
+        before = strip_ansi(service.render_summary(self.char1))
+        pvp.set_pvp(self.char1, True)
+        after = strip_ansi(service.render_summary(self.char1))
 
-        self.assertNotIn("HOLDINGS", screen)
-        self.assertNotIn("Credits", screen)
-        self.assertNotIn("Inventory", screen)
-
-    def test_public_view_hides_the_equipment_loadout(self):
-        screen = self._public()
-
-        self.assertNotIn("COMBAT READINESS", screen)
-        self.assertNotIn("Wielding", screen)
-
-    def test_public_view_hides_current_hitpoints_and_combat_state(self):
-        screen = self._public()
-
-        self.assertNotIn("Hitpoints", screen)
-        self.assertNotIn("Status", screen)
-
-    def test_public_view_hides_location(self):
-        screen = self._public()
-
-        self.assertNotIn("Location", screen)
-        self.assertNotIn(str(self.char1.location.key), screen)
-
-    def test_public_view_hides_active_quests_but_keeps_completed(self):
-        screen = self._public()
-
-        self.assertNotIn("Working on", screen)
-        self.assertIn("Completed", screen)
-
-    def test_private_view_still_shows_everything(self):
-        from evennia.utils.ansi import strip_ansi as _strip
-
-        screen = _strip(service.render_summary(self.char1))
-
-        self.assertIn("HOLDINGS", screen)
-        self.assertIn("Hitpoints", screen)
-        self.assertIn("Location", screen)
-
-    def test_public_render_defaults_to_the_full_render(self):
-        """A panel that sets public without overriding render_public shows the
-        same lines in both views -- Identity is the live example."""
-        self.assertEqual(
-            IdentityPanel.render(self.char1), IdentityPanel.render_public(self.char1)
-        )
-
-    def test_a_new_panel_is_private_by_default(self):
-        from systems.interface.summary.panel_defs.base_panel import BasePanel
-
-        self.assertFalse(BasePanel.public)
-
-    def test_vitals_is_retitled_in_the_public_view_only(self):
-        from evennia.utils.ansi import strip_ansi as _strip
-
-        public = self._public()
-        private = _strip(service.render_summary(self.char1))
-
-        self.assertIn(VitalsPanel.public_title.upper(), public)
-        self.assertNotIn(VitalsPanel.title.upper(), public)
-        self.assertIn(VitalsPanel.title.upper(), private)
-        self.assertNotIn(VitalsPanel.public_title.upper(), private)
+        self.assertNotIn(vitals.STATUS_PVP_ON, before)
+        self.assertIn(vitals.STATUS_PVP_ON, after)
+        self.assertTrue(VitalsPanel.data(self.char1)["pvp"])
 
 
 class TestProfileCommand(_SummaryTest):
+    """`profile` opens the profile menu. Its pages are tested in
+    systems/interface/menus/tests/test_profile_menu.py."""
+
+    def _run(self, line: str) -> str:
+        """Everything char1 was told. EvMenu sends a node as `text=`, so the
+        keyword arguments are captured too."""
+        self._captured = []
+        self.char1.msg = lambda *args, **kwargs: self._captured.append(
+            (args, kwargs))
+        self.char1.execute_cmd(line)
+
+        return " ".join(str(entry) for entry in self._captured)
 
     def test_profile_with_no_argument_shows_your_own(self):
-        self.char1.msg = lambda *args, **kwargs: self._captured.append(args)
-        self._captured = []
-        self.char1.execute_cmd("profile")
-
-        joined = " ".join(str(entry) for entry in self._captured)
+        joined = self._run("profile")
 
         self.assertIn("DOSSIER", joined)
+        self.assertIn(self.char1.key, joined)
+
+    def test_profile_of_another_player_shows_their_full_dossier(self):
+        """The whole dossier is public: hitpoints, holdings and location."""
+        joined = strip_ansi(self._run(f"profile {self.char2.key}"))
+
+        self.assertIn(self.char2.key, joined)
+        self.assertIn("HOLDINGS", joined)
+        self.assertIn("Hitpoints", joined)
+        self.assertIn("Location", joined)
 
     def test_profile_refuses_a_non_character(self):
-        from commands.progression_cmds import CmdProfile
+        from commands import progression_cmds
 
-        self._captured = []
-        self.char1.msg = lambda *args, **kwargs: self._captured.append(args)
-        self.char1.execute_cmd(f"profile {self.obj1.key}")
+        joined = self._run(f"profile {self.obj1.key}")
 
-        joined = " ".join(str(entry) for entry in self._captured)
-
-        self.assertIn(CmdProfile.NOT_A_CHARACTER_MSG, joined)
+        self.assertIn(progression_cmds._NOT_A_CHARACTER_MSG, joined)
 
 
 class TestSummaryFeed(_SummaryTest):

@@ -592,6 +592,101 @@ it.
 > about the viewport hints at it, so `test_inventory_view` asserts that the two
 > worlds differ and does not trust a comment.
 
+## A pop-up is item grids, and every slot carries its commands
+
+The server opens a pop-up over the world pane on `char_popup`: the bank
+(`bank`), a shop (`trade`), and a crafting facility (`craft`). The model is the
+OSRS bank, shop and smithing interfaces: a left click on a slot sends its first
+action, and a right click lists all of its actions.
+
+```
+char_popup -> {open, key, title, status, grids: [...], quantity: [...],
+			   actions: [...], text, choices: [...], input, timers,
+			   close_command}
+```
+
+Each grid is `{key, title, slots_total, items}`, and each item row has the
+shape of a `char_items_list` row. A row also carries `detail` (one short line
+under the name, for example a price or a skill level), `info` (more lines for
+the tooltip), and `enabled`. A slot with `enabled` false is dim, and a click
+still sends, so the server can say why the action fails. `actions` is the row
+of buttons under the grids, for what the pop-up affords as a whole: stop a
+craft, collect a cure.
+
+**The pop-up draws no copy of the bag.** The inventory pane is the bag. While
+a pop-up is open, the server puts its verb FIRST on each bag row: Deposit for
+the vault, Sell for a shop. Thus, a left click in the pane deposits or sells,
+as in OSRS. A shop also sends the row's price as `detail`, and the bag cell
+shows it in the tooltip. The pane follows the pop-up, because the server sends
+`char_items_list` again when a pop-up opens, closes, or changes its quantity
+mode.
+
+**A timed station has a side panel.** `timers` is `{title, total, slots}`, and
+each slot is `{name, ready, remaining, duration}` in seconds. `TimerPanel`
+draws a bar for each slot, and an empty row for each free slot up to `total`.
+It counts `remaining` down between snapshots, so the bar moves. At zero it
+says "Finishing...", not "Ready": `ready` is the server's word. The server
+marks the pop-up stale at the deadline, and that snapshot says `ready`. The
+curing chamber is the first station. A second timed station needs only a
+`timer_report` on its server-side handler.
+
+**The player moves and sizes the box.** A drag on the title bar moves it. A
+drag on the grip in the bottom-right corner sizes it. The grid fits its
+columns to the new width. The box stays inside the pane, also when the pane
+changes size. The rect lives for the session, not on disk.
+
+The server orders the actions of a row, and
+it puts the active quantity mode first. Thus, "Withdraw 5" is what a left click
+means after the player picks 5, and the client never learns what 5 is.
+
+**The client sends only what the server named.** A vault slot carries
+`withdraw rusty metal dust 5`, the same line that a telnet player types at the
+terminal. The X entries are prompted actions, the shape that the inventory's
+Deposit X already uses. `ServerAction` reads that shape and `AmountPrompt`
+asks for the amount, so the two panes share one rule and one box.
+
+**It is a Control over the pane, not a `Window`.** On the web, a `Window` is a
+subwindow that cannot move beside the game, the lesson that `SummaryView`
+records. `PopupView` is a full-pane Control, as `ChooseOption` is. While it
+shows, it takes every click on the pane, so a click beside the box does not
+walk the player.
+
+**It closes when the server says so.** The close button and Escape send
+`close_command`. The box goes away when the closed snapshot arrives. The
+server also closes it when the player walks away from the terminal.
+
+**A rebuild keeps the scroll.** Every snapshot rebuilds every slot, as the
+inventory does. A withdraw sends a snapshot, so each grid keeps its scroll
+position through a rebuild of the same pop-up.
+
+**The quantity mode is server state.** The 1 / 5 / 10 / X / All buttons send
+`popup quantity <n|all>`. The button lights only when the next snapshot says
+so, the rule that the Combat tab follows.
+
+A new pop-up is one Python file under
+`blackout/systems/interface/popups/popup_defs/`, and no client edit.
+
+**An EvMenu node uses the same channel.** It has no grids. It has three other
+fields:
+
+- `text`: the node as escaped BBCode, from the parser that the log uses.
+- `choices`: `[{key, label, command}]`, in the order of the node.
+- `input`: `{label}` when the node reads typed text, else `{}`.
+
+> **The field is `choices`, never `options`.** The statefeed sends a payload
+> as the keyword arguments of `msg()`, and Evennia reserves `options` for
+> protocol flags. The socket removes it before the message leaves. Until
+> 09/18/2026 the field had that name, and every menu pop-up showed its text
+> with no buttons. `test_emit.py` now refuses any payload field of that name.
+
+The view draws the text with the `ChatLog` variation of the log. Thus, a menu
+table lines up as it does in the log. The text and the choice buttons share
+one scroll, so a long node scrolls down to its choices. A button sends the
+choice key. The box sends the typed line. A number key picks the choice with
+that key. The node text does not also go into the log. If the box had the
+keyboard when it hides, `keyboard_released` gives the keyboard back to the
+game input.
+
 ## Three screens cover the way in, and they hand off in order
 
 A login is not an arrival. Until 08/29/2026, the client behaved as if it were.
@@ -786,8 +881,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All forty-one tests are headless and exit non-zero on failure. Thirty-eight
-need nothing running. Three of the four `smoke_*` scenes need an Evennia, and
+All forty-three tests are headless and exit non-zero on failure. Forty need
+nothing running. Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -1295,7 +1390,14 @@ To add a sound:
 | `world/inventory_state.gd` | Carried grid and worn slots. |
 | `scenes/inventory/inventory_view.gd` | Draws the grid and the paper doll; turns a gesture into a command. |
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |
+| `scenes/inventory/stack_count_label.gd` | The stack count in the top-right corner of a slot. Shared by the bag and the pop-up. |
 | `scenes/inventory/item_stage.gd` | Every item in 3D, into ONE render target. Cells read sub-rects of it. |
+| `scenes/inventory/amount_prompt.gd` | The box that asks for the amount of a prompted action. Shared by the inventory and the pop-up. |
+| `world/server_action.gd` | How to read one action the server named: send it whole, or fill in the amount. |
+| `world/popup_state.gd` | The pop-up the server holds open. Knows no pop-up, grid or verb. |
+| `scenes/popup/popup_view.gd` | The pop-up over the world pane: grids or a menu, the side panel, the quantity row. The player moves and sizes it. |
+| `scenes/popup/popup_slot.gd` | One slot. Left click sends the first action, right click lists them all. |
+| `scenes/popup/timer_panel.gd` | The side panel of a timed station: one bar for each slot, counted down between snapshots. |
 | `world/summary_state.gd` | The dossier. Knows no panel names and must not learn any. |
 | `scenes/summary/summary_view.gd` | The sheet, a native `Window`. Iterates panels, never enumerates them. |
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |

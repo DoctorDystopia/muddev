@@ -127,7 +127,6 @@ Creation date: 08/25/2026
 """
 
 import json
-import re
 
 from autobahn.twisted import WebSocketServerFactory
 from autobahn.websocket.compress import (
@@ -136,161 +135,26 @@ from twisted.application import internet
 
 from django.conf import settings
 from evennia.contrib.base_systems.godotwebsocket.text2bbcode import (
-    TextToBBCODEparser, parse_to_bbcode)
+    parse_to_bbcode)
 from evennia.contrib.base_systems.godotwebsocket.webclient import (
     GodotWebSocketClient)
 from evennia.server.portal.portalsessionhandler import PORTAL_SESSIONS
-from evennia.utils.ansi import parse_ansi
 
+# The parser moved to a pure module on 09/18/2026, so the Server can convert a
+# menu node without importing the Portal. Imported back here, so this module
+# and every import of these names from it are unchanged.
+from server.conf.bbcode import (  # noqa: F401
+    BLACKOUT_BBCODE_PARSER,
+    BlackoutBBCodeParser,
+    _TAG_OPEN,
+    _TAG_OPEN_ESCAPED,
+    escape_bbcode,
+)
 from server.conf.websocket import KeepAliveWebSocketClient
 
 
-# The only character that can open a BBCode tag, and the only one escaped.
-#
-# NOT the one immediately after an ESC: by the time this runs, markup has
-# already become ANSI, and the `[` of a `CSI` sequence is the conversion's own
-# input rather than the game's prose. Escaping it is what left every menu table
-# printing raw escape codes at players -- see the module docstring.
-#
-# `]` closes nothing on its own and is deliberately left alone, which is what
-# keeps the `[MODTOOL]` audit line rendering as itself.
-_TAG_OPEN = re.compile(r"(?<!\x1b)\[")
-
-# Godot's RichTextLabel escape for a literal `[`. `[rb]` is its counterpart for
-# `]` and is deliberately unused here.
-_TAG_OPEN_ESCAPED = "[lb]"
-
 # Loopback-only when Evennia is in lockdown, matching the contrib exactly.
 _LOCKDOWN_INTERFACE = "127.0.0.1"
-
-
-def escape_bbcode(text: str) -> str:
-    """
-    Purpose: Neutralise BBCode a player could have typed into game text.
-
-    Entry:
-        text - one line of game output that has ALREADY been through
-        parse_ansi, so that every `[` still in it is one the game wrote.
-        A non-string is returned unchanged.
-
-    Exit/Returns:
-        The same text with every such `[` replaced by `[lb]`, which a
-        RichTextLabel renders as a literal `[`.
-
-    Module Globals:
-        _TAG_OPEN, _TAG_OPEN_ESCAPED read.
-
-    Methodology:
-        A single substitution, deliberately. A denylist of known-dangerous
-        tags (`img`, `url`, `color`) would have to be revised every time Godot
-        adds a tag, and would be wrong the moment it did. Escaping the
-        character that can open ANY tag cannot go stale.
-
-        The one exclusion is the `[` of an ANSI CSI sequence, which always
-        follows ESC. Those are the conversion's INPUT, not the game's prose,
-        and escaping them is what broke every table and every coloured bar in
-        the game until 08/27/2026.
-
-        WHERE this runs is the rest of the fix and it is not this function's
-        to decide -- see [BlackoutBBCodeParser].
-
-    Notes/References:
-        Godot RichTextLabel BBCode escapes: `[lb]` and `[rb]`.
-
-    Author: Nick Hobar
-    Creation date: 08/25/2026
-    """
-    if not isinstance(text, str):
-        return text
-
-    return _TAG_OPEN.sub(_TAG_OPEN_ESCAPED, text)
-
-
-class BlackoutBBCodeParser(TextToBBCODEparser):
-    """
-    Purpose: The contrib's ANSI-to-BBCode parser, with the escape moved to the
-             one point in the conversion where the game's own brackets can
-             still be told apart from the tags it is about to write, and with
-             the HTML parser's character handling undone.
-
-    Notes/References:
-        The body of `parse` is the contrib's, with one line inserted after the
-        ANSI conversion. It is copied rather than wrapped because there is no
-        seam: `parse` calls parse_ansi itself and hands the result straight to
-        the MXP substitutions, which are the first step that writes a bracket
-        of its own. Calling super().parse on already-converted text would run
-        parse_ansi TWICE, and that is not a no-op -- `||n`, the escape for a
-        literal `|n`, survives one pass and becomes a real reset on the next.
-
-        KEEP IN STEP WITH THE CONTRIB, the same way start_plugin_services
-        below is kept in step with the contrib's own.
-
-    Author: Nick Hobar
-    Creation date: 08/27/2026
-    """
-
-    def sub_text(self, match):
-        """
-        Purpose: Replace one match of `re_string`, which covers line endings,
-                 tabs, and the three characters HTML has to escape.
-
-        Entry:
-            match - a match of TextToHTMLparser.re_string.
-
-        Exit/Returns:
-            A line ending is normalised to "\\n"; everything else is returned
-            as itself.
-
-        Module Globals:
-            None.
-
-        Methodology:
-            The contrib inherits this substitution from the HTML parser, where
-            `<`, `&`, `>` and tabs all have to become entities -- and then
-            returns None for every one of them, which DELETES them. Measured
-            08/27/2026, on the real parser:
-
-                'HP -> 40'          -> 'HP - 40'
-                'usage: get <item>' -> 'usage: get item'
-                'Tom & Jerry'       -> 'Tom  Jerry'
-
-            None of the three means anything to a RichTextLabel, which escapes
-            `[` and nothing else, so all three travel as themselves. The tab
-            travels too: the label has its own `tab_size` and aligns to real
-            tab stops, which expanding to a fixed run of spaces here could not.
-
-        Notes/References:
-            This is why the MXP substitutions two lines below can work at all:
-            they match on markers the deletion was eating.
-
-        Author: Nick Hobar
-        Creation date: 08/27/2026
-        """
-        if match.groupdict()["lineend"]:
-            return "\n"
-
-        return match.group(0)
-
-    def parse(self, text: str, strip_ansi: bool = False) -> str:
-        """Convert one line of game text to BBCode, escaping what it wrote."""
-        text = parse_ansi(text, strip_ansi=strip_ansi, xterm256=True, mxp=True)
-        text = escape_bbcode(text)
-
-        result = re.sub(self.re_string, self.sub_text, text)
-        result = re.sub(self.re_mxplink, self.sub_mxp_links, result)
-        result = re.sub(self.re_mxpurl, self.sub_mxp_urls, result)
-        result = self.remove_bells(result)
-        result = self.format_styles(result)
-        result = self.remove_backspaces(result)
-        result = self.convert_urls(result)
-
-        return result
-
-
-# The one parser every frame on 4008 goes through. Built once, like the
-# contrib's own BBCODE_PARSER, because it holds no per-session state.
-BLACKOUT_BBCODE_PARSER = BlackoutBBCodeParser()
-
 
 class BlackoutGodotWebSocketClient(KeepAliveWebSocketClient,
                                    GodotWebSocketClient):

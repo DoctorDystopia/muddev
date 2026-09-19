@@ -53,6 +53,11 @@ func _ready() -> void:
 	_a_self_approaching_command_is_never_walked_to()
 	_a_self_approaching_menu_row_is_never_walked_to()
 	_a_payload_that_says_nothing_still_walks()
+	_the_hover_names_what_a_left_click_does()
+	_the_hover_counts_the_other_menu_rows()
+	_an_entity_that_affords_nothing_hovers_as_its_name()
+	_a_tile_hovers_as_its_menu_row()
+	_a_tile_with_no_action_hovers_as_nothing()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -262,6 +267,62 @@ func _a_payload_that_says_nothing_still_walks() -> void:
 		HERE, HERE_Z)
 
 	_expect(str(rows[0]["command"]) != POLE_COMMAND, "and its menu row walks")
+
+
+# ─── Hover text ──────────────────────────────────────────────────────────────
+
+## The bar and the right-click menu must word the default action the same way.
+## Asserted against ChooseOption.row_text, not against a literal, so a change
+## to the menu's wording cannot make the two disagree.
+func _the_hover_names_what_a_left_click_does() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+	var first: Dictionary = WorldView.options_for(pole)[0]
+
+	_expect(WorldView.entity_hover_text(pole) == ChooseOption.row_text(first),
+		"the hover text is the menu's first row")
+
+
+func _the_hover_counts_the_other_menu_rows() -> void:
+	var corpse := {
+		"name": "Mutant Raider corpse",
+		"interact": "butcher #75931",
+		"actions": [
+			{"label": "Butcher", "command": "butcher #75931"},
+			{"label": "Get", "command": "get #75931"},
+			{"label": "Search", "command": "search #75931"}],
+	}
+
+	var text := WorldView.entity_hover_text(corpse)
+
+	_expect(text.begins_with("Butcher Mutant Raider corpse"),
+		"the default action comes first: %s" % text)
+	_expect(text.ends_with(WorldView.MORE_OPTIONS_TEXT % 2),
+		"and the two other rows are counted")
+
+	corpse["actions"].pop_back()
+
+	_expect(WorldView.entity_hover_text(corpse).ends_with(
+		WorldView.ONE_MORE_OPTION_TEXT), "one other row reads as singular")
+
+
+## Another player affords nothing. A click there does nothing, but the bar still
+## names who it is.
+func _an_entity_that_affords_nothing_hovers_as_its_name() -> void:
+	var player := {"name": "Nick", "interact": ""}
+
+	_expect(WorldView.entity_hover_text(player) == "Nick",
+		"an entity with no action hovers as its name")
+
+
+func _a_tile_hovers_as_its_menu_row() -> void:
+	var text := WorldView.tile_hover_text({"command": "north", "kind": "exit"})
+
+	_expect(text == "North", "a tile hovers as its action: %s" % text)
+
+
+func _a_tile_with_no_action_hovers_as_nothing() -> void:
+	_expect(WorldView.tile_hover_text({}).is_empty(),
+		"a tile the server named no action for shows no text")
 
 
 # ─── Harness ─────────────────────────────────────────────────────────────────

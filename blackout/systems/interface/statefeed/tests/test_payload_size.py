@@ -112,11 +112,16 @@ def _synthetic_entity(index: int) -> dict:
         "asset": _LONG_ASSET,
         "family": "weapon",
         "interact": f"attack {_LONG_NAME}",
+        # Sent only when the primary verb needs no walk. A click on another
+        # player sends it on every row (see Character.extra_actions), so the
+        # ceiling carries it on the row AND on each action.
+        "approach": False,
         # Present on the synthetic row even though serialize_entity omits it
         # for a one-verb entity, because this row is the CEILING: a room full
         # of bodies is the case that has to fit, not a room full of NPCs.
         "actions": [
-            {"command": f"butcher {_LONG_NAME}", "label": "butcher"}
+            {"command": f"butcher {_LONG_NAME}", "label": "butcher",
+             "approach": False}
             for _ in range(_WORST_CASE_ACTIONS)
         ],
         "coords": [index % 32, index // 32, "oasis_outskirts"],

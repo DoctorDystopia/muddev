@@ -36,7 +36,10 @@ func _ready() -> void:
 	_a_republish_moves_the_highlight()
 	_the_buttons_never_take_the_keyboard()
 	_the_active_style_is_described()
+	_the_pvp_toggle_sends_the_servers_command()
+	_a_republish_lights_the_pvp_toggle()
 	_bare_hands_draw_a_style_that_cannot_be_clicked()
+	_no_pvp_block_draws_no_toggle()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -129,6 +132,45 @@ func _the_active_style_is_described() -> void:
 	_expect(text.contains("Combat level: 12"), "with the combat level")
 	_expect(text.contains("2.4s"), "and the server's attack speed in seconds")
 	_expect(text.contains("Defense +3"), "the active style's boost is listed")
+
+
+func _the_pvp_toggle_sends_the_servers_command() -> void:
+	var toggle := _view.pvp_button()
+	_sent.clear()
+
+	_expect(toggle != null, "the PvP toggle is drawn")
+	_expect(not toggle.button_pressed, "and is unlit while the flag is off")
+	_expect(toggle.focus_mode == Control.FOCUS_NONE, "and refuses focus")
+
+	_click(toggle)
+
+	_expect(_sent == ["pvp on"], "a click sends exactly the server's command")
+	_expect(not toggle.button_pressed,
+		"and does not light the toggle before the server says so")
+
+
+func _a_republish_lights_the_pvp_toggle() -> void:
+	var payload := _StateTest.armed_payload()
+	payload["pvp"] = {"enabled": true, "command": "pvp off"}
+
+	_state.ingest(_Const.CH_CHAR_COMBAT, payload)
+
+	var toggle := _view.pvp_button()
+
+	_expect(toggle.button_pressed, "the snapshot lights the PvP toggle")
+
+	_sent.clear()
+	_click(toggle)
+
+	_expect(_sent == ["pvp off"], "and the next click sends the off command")
+
+
+func _no_pvp_block_draws_no_toggle() -> void:
+	# unarmed_payload carries no `pvp` block, as a server from before the
+	# flag would send.
+	_state.ingest(_Const.CH_CHAR_COMBAT, _StateTest.unarmed_payload())
+
+	_expect(_view.pvp_button() == null, "no pvp block, no toggle")
 
 
 func _bare_hands_draw_a_style_that_cannot_be_clicked() -> void:

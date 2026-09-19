@@ -263,12 +263,12 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
             # so the projectile chain opens at the same level the food chain
             # does, off the same corpse.
             GatherableYield(
-                item_key="mutant_raider_prime_hide",
+                item_key="mutant_raider_prime_raw_hide",
                 skill_key=skill_constants.SKILL_KEY_BUTCHERY,
                 required_level=10,
                 xp_reward=45,
                 secondary_xp={skill_constants.SKILL_KEY_CUTTING: 10},
-                menu_label="prime hide",
+                menu_label="prime raw hide",
             ),
         ),
     ),

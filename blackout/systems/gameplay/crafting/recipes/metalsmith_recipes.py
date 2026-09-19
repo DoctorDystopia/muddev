@@ -61,6 +61,28 @@ class RustyScrapAxeRecipe(BlackoutRecipe):
 
 
 
+class RustyScrapHideCapeRecipe(BlackoutRecipe):
+    "Hammer rusty scrap metal and mutant raider cured hide into a crude cape at an anvil."
+
+    name = "rusty scrap hide cape"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 1
+    xp_reward = 25
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["rusty_scrap_metal", "mutant_raider_cured_hide"]
+    consumable_names = ["rusty scrap metal", "mutant raider cured hide"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["rusty_scrap_hide_cape"]
+
+    success_message = "You hammer the rusty scrap metal and mutant raider cured hide into a rough but serviceable rusty scrap hide cape."
+
+
+
 class RustyScrapBootsRecipe(BlackoutRecipe):
     "Hammer rusty scrap metal into a crude boots at an anvil."
 
@@ -327,6 +349,27 @@ class ScrapAxeRecipe(BlackoutRecipe):
 
     success_message = "You hammer the scrap metal into a rough but serviceable axe."
 
+
+
+class ScrapCapeRecipe(BlackoutRecipe):
+    "Hammer scrap metal and mutant raider prime cured hide into a crude cape at an anvil."
+
+    name = "scrap hide cape"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 11
+    xp_reward = 50
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_metal", "mutant_raider_prime_cured_hide"]
+    consumable_names = ["scrap metal", "mutant raider prime cured hide"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["scrap_hide_cape"]
+
+    success_message = "You hammer the scrap metal and prime cured hide into a rough but serviceable scrap hide cape."
 
 
 class ScrapBootsRecipe(BlackoutRecipe):

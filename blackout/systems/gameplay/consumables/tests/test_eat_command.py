@@ -184,6 +184,7 @@ class TestEatAffordance(EatCommandTestBase):
 
         labels = self._actions_for(ITEM_DB[_CHUCK].name)
 
+        self.assertEqual(labels[0], feed_const.INVENTORY_ACTION_EAT[0])
         self.assertIn(feed_const.INVENTORY_ACTION_EAT[0], labels)
 
     def test_an_ordinary_item_offers_no_eat_action(self):

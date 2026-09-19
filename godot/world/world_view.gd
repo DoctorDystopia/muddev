@@ -38,6 +38,17 @@ const Const := preload("res://autoload/blackout_constants.gd")
 ## scene stays 3D and the menu can be tested without a camera.
 signal options_requested(options: Array, at: Vector2)
 
+## Emitted when what a left click would act on changes, with the text that
+## names it: "Attack Mutant Raider / 1 more option", "North", or "" for nothing.
+## The console shows it in a [HoverBar] over the pane, for the reason
+## [signal options_requested] gives for the menu: this Node3D draws no Controls.
+signal hover_text_changed(text: String)
+
+## Added to the hover text when the right-click menu has more than the default.
+## OSRS prints the same count, so a player knows a right click has more.
+const MORE_OPTIONS_TEXT := " / %d more options"
+const ONE_MORE_OPTION_TEXT := " / 1 more option"
+
 const AURA_EVENT_DEACTIVATE := "deactivate"
 const AURA_EVENT_PULSE := "pulse"
 const AURA_RING_THICKNESS := 0.06
@@ -176,6 +187,10 @@ var _tile_meshes: Dictionary = {}
 ## Which tile is currently lit, and on which island. Empty z means none.
 var _hover_z := ""
 var _hover_cell := Vector2i.ZERO
+
+## The last text sent on [signal hover_text_changed]. Kept so a mouse move
+## inside one tile emits nothing.
+var _hover_text := ""
 
 
 func _ready() -> void:
@@ -442,13 +457,73 @@ func _hover_at(screen_point: Vector2) -> void:
 		# too -- so nothing lights and nothing happens. Falling through would
 		# mean a cursor aimed at another player lights the ground under them
 		# and a click walks you there.
-		var affords := _interaction(_entities.entity(entity_id))
+		var entity := _entities.entity(entity_id)
+		var affords := _interaction(entity)
 
 		_entities.hover(entity_id if not affords.is_empty() else 0)
+		_set_hover_text(entity_hover_text(entity))
 		return
 
+	var cell := _cell_under(screen_point)
+
 	_entities.hover(0)
-	_hover_tile(_cell_under(screen_point))
+	_hover_tile(cell)
+	_set_hover_text(tile_hover_text(_state.tile_action(cell)))
+
+
+## Put out every hover: the lit entity, the lit tile, and the text.
+##
+## The console calls this when the mouse leaves the pane. The pane gets no
+## mouse motion after that, so without this call the last tile stays lit and
+## the bar keeps naming a thing the mouse is not on.
+func clear_hover() -> void:
+	_entities.hover(0)
+	_clear_tile_hover()
+	_set_hover_text("")
+
+
+## The hover text for one entity: its default action as the right-click menu
+## words it, and a count of the other rows.
+##
+## Static and public so a test can assert the wording with no scene. The words
+## come from [method ChooseOption.row_text], so the bar and the menu cannot name
+## one action two ways. An entity that affords nothing, such as another player,
+## gives its name alone. A click does nothing there, but the name is still news.
+static func entity_hover_text(entity: Dictionary) -> String:
+	var options := options_for(entity)
+
+	if options.is_empty():
+		return str(entity.get("name", ""))
+
+	var text := ChooseOption.row_text(options[0])
+	var more := options.size() - 1
+
+	if more == 1:
+		return text + ONE_MORE_OPTION_TEXT
+
+	if more > 1:
+		return text + MORE_OPTIONS_TEXT % more
+
+	return text
+
+
+## The hover text for one tile action: "North", "Goto (4,3)", or "" when the
+## server named no action for the tile. The same row the right-click menu shows.
+static func tile_hover_text(tile: Dictionary) -> String:
+	var command := str(tile.get("command", ""))
+
+	if command.is_empty():
+		return ""
+
+	return ChooseOption.row_text({"command": command, "label": "", "target": ""})
+
+
+func _set_hover_text(text: String) -> void:
+	if text == _hover_text:
+		return
+
+	_hover_text = text
+	hover_text_changed.emit(text)
 
 
 ## Brighten one tile, and put the last one back.

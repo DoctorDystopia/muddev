@@ -10,7 +10,7 @@
 [ext_resource type="Script" uid="uid://cj3vfryvg0mgb" path="res://scenes/minimap/minimap_view.gd" id="10_minimap"]
 [ext_resource type="Script" uid="uid://o68yvcbc0tmk" path="res://scenes/loading/loading_veil.gd" id="11_veil"]
 [ext_resource type="Script" uid="uid://8vadnsx4gkim" path="res://scenes/world/choose_option.gd" id="12_choose"]
-[ext_resource type="Script" path="res://scenes/xp/xp_hud_view.gd" id="13_xphud"]
+[ext_resource type="Script" uid="uid://ckr8i6h1t1y83" path="res://scenes/xp/xp_hud_view.gd" id="13_xphud"]
 
 [node name="Console" type="Control" unique_id=1927313264]
 layout_mode = 3

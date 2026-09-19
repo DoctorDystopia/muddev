@@ -5,7 +5,11 @@ Creation date: 07/13/2026
 Description: ShopDef entry for the oasis shopkeeper's stock and pricing.
 """
 
-from world.shop_defs import ShopDef
+
+
+from world.shop_defs import ShopDef, WareStock
+
+
 
 ITEMS = {
     "oasis_shop": ShopDef(
@@ -18,5 +22,10 @@ ITEMS = {
         miser_factor=0.5,
         max_held_items=20,
         buy_list=["rusty_scrap_axe", "hammer", "rusty_metal_chunk"],
+        stock={
+            "rusty_scrap_axe": WareStock(max_stock=10, restock_seconds=60.0),
+            "hammer": WareStock(max_stock=10, restock_seconds=60.0),
+            "rusty_metal_chunk": WareStock(max_stock=30, restock_seconds=10.0),
+        },
     ),
 }

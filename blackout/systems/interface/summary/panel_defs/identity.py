@@ -52,7 +52,6 @@ class IdentityPanel(BasePanel):
     key = "identity"
     title = ""
     order = const.PANEL_ORDER_IDENTITY
-    public = True
 
 
     @classmethod

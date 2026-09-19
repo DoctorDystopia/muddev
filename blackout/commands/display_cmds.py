@@ -17,6 +17,7 @@ from evennia import Command
 from evennia import CmdSet
 
 from commands.constants import HELP_CATEGORY_GENERAL
+from systems.interface.popups import constants as popup_const
 from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is the server speaking as itself, so
@@ -176,6 +177,77 @@ class CmdAutomap(Command):
         self.caller.msg((message, _MSG_SYSTEM))
 
 
+class CmdPopup(Command):
+    """
+    close a pop-up, or set its quantity
+
+    Usage:
+      popup close
+      popup quantity <1-1000000|all>
+
+    A graphical client shows some things, such as the bank, as a pop-up over
+    the world. Its close button and its 1 / 5 / 10 / X / All buttons send these
+    lines, and you can type them too.
+
+    The quantity is what a left click moves: `popup quantity 5` makes a click
+    on a vault item withdraw five. Each pop-up remembers its own quantity, and
+    it outlives a logout.
+    """
+
+    key = popup_const.POPUP_COMMAND_KEY
+    locks = "cmd:all()"
+    help_category = HELP_CATEGORY_GENERAL
+
+    def func(self):
+        """
+        Purpose: Close the open pop-up, or set its quantity mode.
+
+        Entry:
+            self.args carries "close" or "quantity <amount>".
+
+        Exit/Returns:
+            Returns nothing. Messages the caller in every branch.
+
+        Module Globals:
+            popup_const.POPUP_ARG_* and popup_const.MSG_* read.
+
+        Methodology:
+            A thin parser over systems/interface/popups/service.py, which owns
+            the state and the send. The service is imported inside the
+            routine, because its registry imports every pop-up definition.
+
+        Notes/References:
+            In DisplayCmdSet because a pop-up is how the game draws itself.
+            It changes nothing in the world.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        from systems.interface.popups import service
+
+        verb, _sep, rest = self.args.strip().partition(" ")
+        verb = verb.lower()
+
+        if verb == popup_const.POPUP_ARG_CLOSE:
+            title = service.close_popup(self.caller)
+            message = popup_const.MSG_NOTHING_OPEN
+
+            if title:
+                message = popup_const.MSG_CLOSED.format(title=title.lower())
+
+            self.caller.msg((message, _MSG_SYSTEM))
+            return
+
+        if verb == popup_const.POPUP_ARG_QUANTITY:
+            _succeeded, message = service.set_quantity_mode(self.caller, rest)
+            self.caller.msg((message, _MSG_SYSTEM))
+            return
+
+        usage = popup_const.MSG_USAGE.format(
+            maximum=popup_const.QUANTITY_MAX_CUSTOM)
+        self.caller.msg((usage, _MSG_SYSTEM))
+
+
 class DisplayCmdSet(CmdSet):
     """Commands for how the game draws itself."""
 
@@ -183,3 +255,4 @@ class DisplayCmdSet(CmdSet):
 
     def at_cmdset_creation(self):
         self.add(CmdAutomap())
+        self.add(CmdPopup())

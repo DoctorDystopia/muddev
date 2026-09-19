@@ -154,6 +154,9 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             # The weapon and all its styles in one message; the newest names
             # the active style on its own.
             const.CHANNEL_CHAR_COMBAT,
+            # The open pop-up whole, or the closed state. A close after an
+            # open in one tick must arrive as the close, which is the newest.
+            const.CHANNEL_CHAR_POPUP,
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,

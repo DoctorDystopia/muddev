@@ -106,7 +106,7 @@ const LABEL_GAP := 0.14
 ## of rooms is not a cosmetic complaint.
 const LABEL_FONT_SIZE := 64
 const LABEL_PIXEL_SIZE := 0.0025
-const LABEL_WRAP_PIXELS := 400.0
+const LABEL_WRAP_PIXELS := 800.0
 
 ## A dark rim around every glyph, in font pixels. Not decoration: the world
 ## pane draws sand, steel and night sky behind these, and text with one colour

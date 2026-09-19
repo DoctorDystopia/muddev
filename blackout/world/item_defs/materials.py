@@ -169,15 +169,15 @@ ITEMS = {
         tags=[("mutant_raider_raw_hide", "crafting_material")],
     ),
 
-    "mutant_raider_prime_hide": ItemDef(
-        key="mutant_raider_prime_hide",
-        name="mutant raider prime hide",
+    "mutant_raider_prime_raw_hide": ItemDef(
+        key="mutant_raider_prime_raw_hide",
+        name="mutant raider prime raw hide",
         desc="A whole back hide, taken off clean. The grain runs one way the length of it.",
         value=30,
         weight=1.4,
         tradeable=True,
         stackable=False,
-        tags=[("mutant_raider_prime_hide", "crafting_material")],
+        tags=[("mutant_raider_prime_raw_hide", "crafting_material")],
     ),
 
 
@@ -257,6 +257,17 @@ ITEMS = {
         tags=[("mutant_raider_sinew", "crafting_material")],
     ),
 
+    "mutant_raider_cured_hide": ItemDef(
+        key="mutant_raider_cured_hide",
+        name="mutant raider cured hide",
+        desc="A thick, leathery piece of skin from a mutant raider.",
+        value=12,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_raider_cured_hide", "crafting_material")],
+    ),
+
     # The tier 2 string. Cured off the prime hide, which the level 10 cut
     # yields beside the filet -- so the Gunsmith's second bow and the
     # Gastronomy chain open at the same Butchery level, off one corpse.
@@ -269,5 +280,16 @@ ITEMS = {
         tradeable=True,
         stackable=True,
         tags=[("mutant_raider_prime_sinew", "crafting_material")],
+    ),
+
+    "mutant_raider_prime_cured_hide": ItemDef(
+        key="mutant_raider_prime_cured_hide",
+        name="mutant raider prime cured hide",
+        desc="A thick, leathery piece of skin from a mutant raider.",
+        value=12,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_raider_prime_cured_hide", "crafting_material")],
     ),
 }

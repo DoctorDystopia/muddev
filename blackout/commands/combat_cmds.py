@@ -8,7 +8,7 @@ Description: Twitch combat commands — attack, hold, flee, wield.
 from evennia import CmdSet, Command
 
 from commands.constants import HELP_CATEGORY_COMBAT
-from systems.gameplay.combat import combat_msg, constants as const, reach, style_options
+from systems.gameplay.combat import combat_msg, constants as const, pvp, reach, style_options
 from systems.gameplay.combat.protocols import Combatant
 from systems.gameplay.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
@@ -87,6 +87,15 @@ class CmdAttack(Command):
 
         if not isinstance(target, Combatant):
             caller.msg((f"You can't attack {target.key}.", _MSG_COMBAT))
+            return
+
+        # The PvP rule, BEFORE the walk. The combat handler refuses the same
+        # attack at queue time, but by then a far target has already walked
+        # the player across the map for nothing.
+        refusal = pvp.attack_refusal(caller, target)
+
+        if refusal:
+            caller.msg((refusal, _MSG_COMBAT))
             return
 
         # Out of reach is not a refusal any more. It is a walk, to the NEAREST
@@ -481,6 +490,53 @@ class CmdCombatOptions(Command):
              f"Choose from: {names}.", _MSG_COMBAT))
 
 
+class CmdPvp(Command):
+    """Command pvp [on|off] — let other players fight you, or stop them.
+
+    With PvP on, you can attack another player who also has PvP on, and that
+    player can attack you. With PvP off, no player can attack you, and you
+    cannot attack a player. Hostile creatures attack you either way.
+
+    You cannot turn PvP off during a fight.
+
+    Usage:
+        pvp          show whether PvP is on
+        pvp on       turn PvP on
+        pvp off      turn PvP off
+
+    The Combat tab of the graphical client sends the same line.
+    """
+
+    key = "pvp"
+    locks = "cmd:all()"
+    help_category = HELP_CATEGORY_COMBAT
+
+    def func(self) -> None:
+        caller = self.caller
+        argument = self.args.strip().lower()
+
+        if argument == const.PVP_ARG_ON:
+            self._set(True)
+            return
+
+        if argument == const.PVP_ARG_OFF:
+            self._set(False)
+            return
+
+        enabled = pvp.pvp_enabled(caller)
+        state = const.PVP_STATE_ON if enabled else const.PVP_STATE_OFF
+        caller.msg((const.PVP_USAGE_MSG.format(state=state), _MSG_COMBAT))
+
+    def _set(self, enabled: bool) -> None:
+        """Move the flag, and say what happened.
+
+        pvp.set_pvp owns the lock and the republish, so this command and any
+        later caller cannot move the flag differently.
+        """
+        _changed, message = pvp.set_pvp(self.caller, enabled)
+        self.caller.msg((message, _MSG_COMBAT))
+
+
 class CmdTickDebug(Command):
     """Command tickdebug [all|quiet|status|off] — watch the engine's 0.6s tick.
 
@@ -644,8 +700,10 @@ class CombatCmdSet(CmdSet):
         combat_rules_cmd = CmdCombatRules()
         combat_options_cmd = CmdCombatOptions()
         tick_debug_cmd = CmdTickDebug()
+        pvp_cmd = CmdPvp()
 
         self.add(attack_cmd)
+        self.add(pvp_cmd)
         self.add(hold_cmd)
         self.add(flee_cmd)
         self.add(wield_cmd)

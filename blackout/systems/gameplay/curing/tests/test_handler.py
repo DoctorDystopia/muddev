@@ -535,6 +535,51 @@ class TestPendingReport(CuringTestBase):
 
 
 
+class TestTimerReport(CuringTestBase):
+    """The data twin of status_lines, which the chamber's pop-up draws as bars."""
+
+    def test_the_report_counts_every_slot_the_level_allows(self):
+        report = self.char1.curing.timer_report()
+
+        self.assertEqual(report["total"], self.char1.curing.slot_total())
+        self.assertEqual(report["slots"], [])
+
+    def test_a_running_cure_carries_its_whole_length(self):
+        self._give_chuck()
+        self._start()
+
+        slot = self.char1.curing.timer_report()["slots"][0]
+
+        self.assertFalse(slot["ready"])
+        self.assertEqual(slot["duration"], RECIPE_REGISTRY[_CHUCK_RECIPE].cure_seconds)
+        self.assertGreater(slot["remaining"], 0)
+        self.assertLessEqual(slot["remaining"], slot["duration"])
+
+    def test_a_finished_cure_is_ready(self):
+        self._give_chuck()
+        self._start()
+        self._finish_everything()
+
+        slot = self.char1.curing.timer_report()["slots"][0]
+
+        self.assertTrue(slot["ready"])
+        self.assertEqual(slot["remaining"], 0)
+
+    def test_the_chamber_pop_up_carries_the_report(self):
+        from systems.interface.popups.popup_defs.crafting import CraftingPopup
+
+        self._give_chuck()
+        self._start()
+
+        timers = CraftingPopup().timers(self.char1, self.chamber)
+        report = self.char1.curing.timer_report()
+
+        self.assertEqual(timers["title"], report["title"])
+        self.assertEqual(timers["total"], report["total"])
+        self.assertEqual(len(timers["slots"]), 1)
+
+
+
 class TestARenamedRecipe(CuringTestBase):
     """A slot stores a recipe KEY, and a key is a string in a database row.
 

@@ -133,6 +133,75 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     # cooldown survives @reload. Poll-based -- nothing ticks.
     cooldowns = _handler_property(CooldownHandler, "cooldowns")
 
+    # Marks a player character for the PvP rule. A class attribute, so every
+    # character already in the database has it with no migration. An NPC does
+    # not declare it. Read by systems/gameplay/combat/pvp.py through getattr.
+    pvp_capable = True
+
+
+    def extra_actions(self) -> list:
+        """
+        Purpose: Everything another player can do with this character, for a
+                 click in the world pane.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns {"command", "label"} dicts in menu order: Profile, Skills
+            and Records, then Attack when this character has PvP on.
+
+        Module Globals:
+            feed_const.ENTITY_DBREF_TEMPLATE read.
+
+        Methodology:
+            Every command names this character by DBREF, not by key. Two
+            reasons: `skills <name>` reads a skill name before a character
+            name, so a player called Guns would open the Guns skill sheet.
+            And a dbref cannot match a second character by prefix.
+
+            Profile comes first, so a left click opens the profile. Attack
+            comes last, so a left click never opens a fight.
+
+            THE LIST DOES NOT KNOW WHO IS LOOKING. serialize_entity has no
+            observer, because the feed sends one row to every observer in the
+            area. So `Attack` depends on this character's flag only. An
+            observer with PvP off who picks it is refused by CmdAttack, and
+            the refusal says how to turn PvP on.
+
+            The command keys are read off the command classes, not typed
+            again. The import is deferred, because the command modules import
+            the typeclass layer.
+
+        Notes/References:
+            systems/interface/statefeed/serializers.py interact_actions reads
+            this. systems/gameplay/combat/pvp.py owns the flag.
+
+        Author: Nick Hobar
+        Creation date: 09/18/2026
+        """
+        from commands.combat_cmds import CmdAttack
+        from commands.progression_cmds import CmdProfile, CmdSkills, CmdStats
+        from systems.gameplay.combat import pvp
+
+        target = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref=self.id)
+        verbs = [
+            (CmdProfile.key, CmdProfile.ENTITY_ACTION_LABEL),
+            (CmdSkills.key, CmdSkills.ENTITY_ACTION_LABEL),
+            (CmdStats.key, CmdStats.ENTITY_ACTION_LABEL),
+        ]
+        attackable = pvp.pvp_enabled(self)
+
+        if attackable:
+            verbs.append((CmdAttack.key, ""))
+
+        actions = []
+
+        for verb, label in verbs:
+            actions.append({"command": f"{verb} {target}", "label": label})
+
+        return actions
+
 
     def at_object_creation(self) -> None:
         """
@@ -577,6 +646,13 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Creation date: 09/02/2026
         """
         super().at_post_move(source_location, move_type=move_type, **kwargs)
+
+        # A pop-up is the graphical twin of a room-bound menu, under the same
+        # rule. The service never raises. It is imported here, because its
+        # registry imports the bank pop-up and so reaches the typeclasses.
+        from systems.interface.popups import service as popup_service
+
+        popup_service.close_if_left(self)
 
         menu = self.ndb._evmenu
 

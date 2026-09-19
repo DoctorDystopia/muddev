@@ -16,7 +16,7 @@ from .registry import PANEL_REGISTRY
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
-def _panel_lines(panel: type, character: object, public: bool = False) -> list:
+def _panel_lines(panel: type, character: object) -> list:
     """
     Purpose: Render one panel, converting a failure into a visible row rather
     than an exception.
@@ -24,7 +24,6 @@ def _panel_lines(panel: type, character: object, public: bool = False) -> list:
     Entry:
         panel is a registered BasePanel subclass.
         character is a Character.
-        public selects render_public over render.
 
     Exit/Returns:
         Returns the panel's display lines. On failure, returns a single row
@@ -51,13 +50,8 @@ def _panel_lines(panel: type, character: object, public: bool = False) -> list:
     Author: Nick Hobar
     Creation date: 08/08/2026
     """
-    if public:
-        renderer = panel.render_public
-    else:
-        renderer = panel.render
-
     try:
-        lines = renderer(character)
+        lines = panel.render(character)
     except Exception as exc:
         logger.log_err(f"[SUMMARY] Panel '{panel.key}' render failed: {exc!r}")
         error_row = layout.wide_field("", const.PANEL_ERROR_TEXT, color=ERROR_COLOR)
@@ -67,14 +61,12 @@ def _panel_lines(panel: type, character: object, public: bool = False) -> list:
     return list(lines)
 
 
-def _assemble(character: object, public: bool) -> str:
+def _assemble(character: object) -> str:
     """
     Purpose: Walk the registry and build the finished screen.
 
     Entry:
         character is a Character with its handlers available.
-        public restricts the walk to panels flagged public, and switches each
-        one to its public renderer.
 
     Exit/Returns:
         Returns the screen, newline-joined and bracketed by heavy rules.
@@ -90,12 +82,10 @@ def _assemble(character: object, public: bool) -> str:
         A panel returning no lines is skipped ENTIRELY, heading included, so a
         band with nothing to say costs no vertical space. That is what lets a
         future panel -- guild, faction standing, housing -- ship before the
-        system behind it has anything to report, and it is also what makes the
-        public view fall out of the same code path rather than needing its own.
+        system behind it has anything to report.
 
-        The `public` gate is applied here, once, rather than inside each panel.
-        A panel cannot opt itself into the public view by accident, and a panel
-        author who forgets the flag gets the private-only default.
+        The screen is the same for every reader. `score` and `profile <name>`
+        both build it here.
 
     Notes/References:
         Rendered width is const.SUMMARY_WIDTH, matched to the option separator
@@ -107,18 +97,12 @@ def _assemble(character: object, public: bool) -> str:
     lines = [layout.rule(heavy=True)]
 
     for panel in PANEL_REGISTRY.values():
-        if public and not panel.public:
-            continue
-
-        panel_body = _panel_lines(panel, character, public=public)
+        panel_body = _panel_lines(panel, character)
 
         if not panel_body:
             continue
 
         heading = panel.title
-
-        if public and panel.public_title:
-            heading = panel.public_title
 
         if heading:
             lines.extend(layout.section(heading))
@@ -135,10 +119,11 @@ def _assemble(character: object, public: bool) -> str:
 
 def render_summary(character: object) -> str:
     """
-    Purpose: Build the character's own full dossier.
+    Purpose: Build the full dossier of a character.
 
     Entry:
-        character is a Character with its handlers available.
+        character is a Character with its handlers available. The reader may
+        be that character or any other player.
 
     Exit/Returns:
         Returns the screen, newline-joined and bracketed by heavy rules.
@@ -149,49 +134,18 @@ def render_summary(character: object) -> str:
     Methodology:
         Every registered panel, every panel's full renderer.
 
+        Takes no viewer argument. The whole dossier is public, so nothing
+        depends on who reads it. When a rule makes a band depend on the
+        reader, the viewer becomes a parameter here.
+
     Notes/References:
-        None
+        `score` shows the dossier of the caller. `profile <name>` shows this
+        same screen for any character.
 
     Author: Nick Hobar
     Creation date: 08/08/2026
     """
-    screen = _assemble(character, public=False)
-
-    return screen
-
-
-def render_public_summary(character: object) -> str:
-    """
-    Purpose: Build the version of the dossier another player may read.
-
-    Entry:
-        character is a Character with its handlers available.
-
-    Exit/Returns:
-        Returns the screen, newline-joined and bracketed by heavy rules.
-
-    Module Globals:
-        None.
-
-    Methodology:
-        Panels flagged `public`, each through its `render_public`. Two gates
-        rather than one, because "may strangers see this band" and "how much of
-        it" are different questions -- see BasePanel.render_public.
-
-        Takes no viewer argument. Nothing in Blackout yet makes what you can
-        read about someone depend on who you are; when factions, guilds or the
-        Mutant path change that, the viewer becomes a parameter here and the
-        panels grow a second argument. Adding it before there is a rule to
-        enforce would be a parameter nothing could answer questions about.
-
-    Notes/References:
-        Achaea's HONOURS is the same idea: a deliberately narrower, public
-        counterpart to a private SCORE.
-
-    Author: Nick Hobar
-    Creation date: 08/08/2026
-    """
-    screen = _assemble(character, public=True)
+    screen = _assemble(character)
 
     return screen
 

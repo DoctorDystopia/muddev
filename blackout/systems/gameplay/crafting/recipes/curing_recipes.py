@@ -75,6 +75,23 @@ class MutantRaiderSinewRecipe(CuringRecipe):
 
 
 
+class MutantRaiderCuredHideRecipe(CuringRecipe):
+    "Salt and hang a raw chuck until it keeps."
+
+    name = "mutant raider cured hide"
+    required_level = 1
+    xp_reward = 25
+    cure_seconds = _CHUCK_TIER_SECONDS
+
+    consumable_tags = ["mutant_raider_raw_hide"]
+    consumable_names = ["mutant raider raw hide"]
+
+    output_item_keys = ["mutant_raider_cured_hide"]
+
+    success_message = "You draw the cured hide out of the chamber."
+
+
+
 class MutantRaiderPrimeSinewRecipe(CuringRecipe):
     """Draw a whole prime hide down into one even cord.
 
@@ -89,8 +106,8 @@ class MutantRaiderPrimeSinewRecipe(CuringRecipe):
     xp_reward = 50
     cure_seconds = _PRIME_TIER_SECONDS
 
-    consumable_tags = ["mutant_raider_prime_hide"]
-    consumable_names = ["mutant raider prime hide"]
+    consumable_tags = ["mutant_raider_prime_raw_hide"]
+    consumable_names = ["mutant raider prime raw hide"]
 
     output_item_keys = ["mutant_raider_prime_sinew"]
 

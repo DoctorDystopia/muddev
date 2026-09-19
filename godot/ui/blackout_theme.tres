@@ -1,6 +1,6 @@
 [gd_resource type="Theme" format=3 uid="uid://blvlnaat101gs"]
 
-[ext_resource type="FontFile" path="res://ui/fonts/DejaVuSansMono.ttf" id="1_mono"]
+[ext_resource type="FontFile" uid="uid://csey7oe4ses08" path="res://ui/fonts/DejaVuSansMono.ttf" id="1_mono"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_skill_cell"]
 content_margin_left = 6.0
@@ -18,9 +18,30 @@ corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
+[sub_resource type="StyleBoxFlat" id="StyleBox_popup_box"]
+content_margin_left = 2.0
+content_margin_top = 2.0
+content_margin_right = 2.0
+content_margin_bottom = 2.0
+bg_color = Color(0.1, 0.11, 0.13, 0.97)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.38, 0.44, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
 [resource]
 BonusGroup/base_type = &"PanelContainer"
 BonusGroup/styles/panel = SubResource("StyleBox_skill_cell")
+CellCount/base_type = &"Label"
+CellCount/colors/font_color = Color(1, 0.86, 0.35, 1)
+CellCount/colors/font_outline_color = Color(0, 0, 0, 1)
+CellCount/constants/outline_size = 3
+CellCount/font_sizes/font_size = 11
 CellDetail/base_type = &"Label"
 CellDetail/colors/font_color = Color(0.7, 0.74, 0.79, 1)
 CellDetail/font_sizes/font_size = 10
@@ -46,6 +67,8 @@ PaneMargin/constants/margin_top = 12
 PanelHeading/base_type = &"Label"
 PanelHeading/colors/font_color = Color(1, 1, 1, 1)
 PanelHeading/font_sizes/font_size = 13
+PopupBox/base_type = &"PanelContainer"
+PopupBox/styles/panel = SubResource("StyleBox_popup_box")
 RowKey/base_type = &"Label"
 RowKey/colors/font_color = Color(0.7, 0.74, 0.79, 1)
 RowKey/font_sizes/font_size = 12

@@ -26,6 +26,8 @@ Description: The clock behind the sweep. The only module in this package that
              here is reached by key alone.
 """
 
+
+
 from evennia import DefaultScript
 from evennia.utils import logger
 
@@ -33,6 +35,7 @@ from systems.core.managers import get_singleton_script, register_manager
 
 from . import constants as const
 from . import service
+
 
 
 class GraffitiDecayScript(DefaultScript):
@@ -65,11 +68,14 @@ class GraffitiDecayScript(DefaultScript):
     Creation date: 09/11/2026
     """
 
+
+
     def at_script_creation(self):
         self.key = const.DECAY_SCRIPT_KEY
         self.desc = "Hourly sweep of expired player graffiti"
         self.interval = const.SWEEP_INTERVAL_SECONDS
         self.persistent = True
+
 
 
     def _ensure_running(self) -> None:
@@ -91,6 +97,7 @@ class GraffitiDecayScript(DefaultScript):
         self.start()
 
 
+
     def at_server_start(self) -> None:
         """
         The one hook guaranteed to run after any reload or restart --
@@ -98,6 +105,7 @@ class GraffitiDecayScript(DefaultScript):
         not.
         """
         self._ensure_running()
+
 
 
     def at_repeat(self, **kwargs) -> None:
@@ -109,6 +117,7 @@ class GraffitiDecayScript(DefaultScript):
             service.sweep()
         except Exception:
             logger.log_trace()
+
 
 
 # ─── Module helpers ──────────────────────────────────────────────────────────
@@ -143,6 +152,7 @@ def get_decay_script() -> GraffitiDecayScript:
     script._ensure_running()
 
     return script
+
 
 
 @register_manager

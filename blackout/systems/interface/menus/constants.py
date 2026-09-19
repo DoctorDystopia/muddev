@@ -72,3 +72,11 @@ FOOTER_GAP = "   "
 # Restated here rather than imported out of evmenu because the name there is
 # private and its value is ours to word.
 NO_OPTION_MATCH = "Choose an option or try 'help'."
+
+# The three pages of the profile menu, by node name. Here and not in
+# profile_menu.py, because `profile`, `skills` and `stats` each open one page,
+# and an import of the menu module at command load time would walk the
+# summary panel registry.
+PROFILE_NODE_DOSSIER = "start"
+PROFILE_NODE_SKILLS = "node_skills"
+PROFILE_NODE_RECORDS = "node_records"

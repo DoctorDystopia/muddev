@@ -64,7 +64,6 @@ class HoldingsPanel(BasePanel):
     key = "holdings"
     title = PANEL_TITLE
     order = const.PANEL_ORDER_HOLDINGS
-    public = False
 
 
     @classmethod

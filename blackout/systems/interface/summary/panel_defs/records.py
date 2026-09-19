@@ -74,10 +74,6 @@ class RecordsPanel(BasePanel):
         Silent when nothing is recorded, like Processing: a fresh character's
         dossier should not open on a band of zeroes.
 
-        Private, the default. What someone has spent and how often they have
-        died is not a stranger's to read; making tallies public is a decision
-        about this band, not something it should inherit.
-
     Notes/References:
         systems/core/stat_tracker/registry.py owns what a stat is.
 
@@ -88,7 +84,6 @@ class RecordsPanel(BasePanel):
     key = "records"
     title = PANEL_TITLE
     order = const.PANEL_ORDER_RECORDS
-    public = False
 
 
     @classmethod

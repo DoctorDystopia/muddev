@@ -22,6 +22,8 @@ Description: The effects: writing a scrawl, spending a charge, and taking the
              tag could be stamped on a signpost by mistake; a typeclass cannot.
 """
 
+
+
 import time
 
 from django.conf import settings
@@ -32,6 +34,7 @@ from systems.interface.statefeed import labels
 from typeclasses.signs import Graffiti
 
 from . import constants as const
+
 
 
 # ─── Public interface ────────────────────────────────────────────────────────
@@ -102,6 +105,7 @@ def write(writer, text) -> tuple:
     return True, _spend_one(medium)
 
 
+
 def medium_of(writer):
     """
     Purpose: The thing in a writer's hands that can write, if any.
@@ -139,6 +143,7 @@ def medium_of(writer):
             return carried
 
     return None
+
 
 
 def charges_left(medium) -> int:
@@ -183,6 +188,7 @@ def charges_left(medium) -> int:
         return 0
 
 
+
 def author_id_of(scrawl) -> int:
     """
     Purpose: Which character wrote this, as a dbref id.
@@ -214,6 +220,7 @@ def author_id_of(scrawl) -> int:
         return int(stored or 0)
     except (TypeError, ValueError):
         return 0
+
 
 
 def is_refused(label: str) -> bool:
@@ -264,6 +271,7 @@ def is_refused(label: str) -> bool:
     return False
 
 
+
 def expired(scrawl, now=None) -> bool:
     """
     Purpose: Whether a scrawl has outlived its welcome.
@@ -308,6 +316,7 @@ def expired(scrawl, now=None) -> bool:
         return True
 
     return age >= const.LIFETIME_SECONDS
+
 
 
 def sweep(now=None) -> int:
@@ -358,6 +367,7 @@ def sweep(now=None) -> int:
     return _destroy_all(doomed)
 
 
+
 def erase_by_author(author) -> int:
     """
     Purpose: Destroy everything one character has ever written.
@@ -402,6 +412,7 @@ def erase_by_author(author) -> int:
     return _destroy_all(doomed)
 
 
+
 def written_by(author) -> int:
     """
     Purpose: How many scrawls one character has standing in the world.
@@ -441,6 +452,7 @@ def written_by(author) -> int:
             found += 1
 
     return found
+
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -486,6 +498,7 @@ def _stand_up(writer, room, label: str) -> None:
         const.MSG_ROOM_WROTE.format(author=writer.key), exclude=[writer])
 
 
+
 def _spend_one(medium) -> str:
     """
     Purpose: Take one charge off a medium, destroying it when that was the
@@ -526,6 +539,7 @@ def _spend_one(medium) -> str:
     medium.attributes.add(const.CHARGES_ATTR, left)
 
     return const.MSG_WROTE.format(left=left, medium=name)
+
 
 
 def _destroy_all(doomed) -> int:
