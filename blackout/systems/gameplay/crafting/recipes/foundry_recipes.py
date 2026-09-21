@@ -98,3 +98,47 @@ class MetalDustRecipe(BlackoutRecipe):
     output_item_keys = ["metal_dust"]
 
     success_message = "You grind the metal chunk into a fine dust."
+
+
+
+class ScrapCopperRecipe(BlackoutRecipe):
+    "Smelt a copper chunk into usable scrap copper in a foundry furnace."
+
+    name = "scrap copper"
+    category = CRAFT_CATEGORY_FOUNDRY
+    required_skill = skill_constants.SKILL_KEY_FOUNDRY
+    required_level = 0
+    xp_reward = 40
+    skill_category = skill_constants.SKILL_CATEGORY_PROCESSING
+
+    consumable_tags = ["copper_chunk"]
+    consumable_names = ["copper chunk"]
+
+    tool_tags = ["furnace"]
+    tool_names = ["furnace"]
+
+    output_item_keys = ["scrap_copper"]
+
+    success_message = "You smelt the copper chunk into a piece of scrap copper."
+
+
+
+class CopperDustRecipe(BlackoutRecipe):
+    "Grind a copper chunk into fine dust using a hammer."
+
+    name = "copper dust"
+    category = CRAFT_CATEGORY_FOUNDRY
+    required_skill = skill_constants.SKILL_KEY_FOUNDRY
+    required_level = 0
+    xp_reward = 60
+    skill_category = skill_constants.SKILL_CATEGORY_PROCESSING
+
+    consumable_tags = ["copper_chunk"]
+    consumable_names = ["copper chunk"]
+
+    tool_tags = ["hammer"]
+    tool_names = ["hammer"]
+
+    output_item_keys = ["copper_dust"]
+
+    success_message = "You grind the copper chunk into a fine dust."

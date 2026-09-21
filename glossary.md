@@ -100,3 +100,20 @@ Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
 
 Guns and Ballistics are skill names, so they are identifiers. Guns decides
 whether a shot lands. Ballistics decides how hard it lands.
+
+## 3D models
+
+The model pipeline in `blackout/assets/`. "Recipe" is a crafting noun, so a
+model file is never a recipe.
+
+| Use | For | Not |
+|---|---|---|
+| source | one download in `assets/sources/`, exactly as it arrived | pack, asset, download folder |
+| source record | the `source.toml` of a source: author, URL, license, file hashes | license file, SOURCE.md |
+| model record | the `.toml` in `assets/models/<family>/` that says how to build one served model | recipe, manifest row, model config |
+| alias | a second asset key that draws the same served model | duplicate, copy |
+| fix | a correction to a bad export, baked into the served file by the build | presentation, override |
+| license gate | the build's refusal of a source whose license is not allowed | license check, whitelist |
+| exception | a reason in a source record that waives the license gate | override, waiver |
+| served tree | `web/static/webclient/models/`, the files the client fetches | model tree, static models |
+| credits box | the box in the Godot client that the Options pane opens | credits pop-up, credits window |

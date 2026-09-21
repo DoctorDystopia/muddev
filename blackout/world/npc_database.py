@@ -257,7 +257,10 @@ class NpcDef:
         return obj
 
 
+
 from .npc_defs.hostile import NPCS as _HOSTILE
+
+
 
 NPC_DB: dict[str, NpcDef] = {}
 

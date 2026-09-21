@@ -96,8 +96,13 @@ def perform_craft(caller, facility, args: str) -> bool:
         return False
 
     batch_size = _craft_count(caller, recipe_key, count)
-    started, message = craft_batch.start_batch(caller, recipe_key, batch_size)
-    caller.msg((message, _MSG_CRAFTING))
+    started, refusal = craft_batch.start_batch(caller, recipe_key, batch_size)
+
+    # Only a refusal comes back as text. start_batch announces a batch it
+    # accepted, because that line has to reach the player before the first
+    # item's own lines do.
+    if refusal:
+        caller.msg((refusal, _MSG_CRAFTING))
 
     return started
 

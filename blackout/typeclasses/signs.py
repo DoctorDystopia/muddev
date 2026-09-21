@@ -174,7 +174,7 @@ class Sign(Unpocketable, ObjectParent, DefaultObject):
         self.db.desc = self.default_desc
 
 
-    def extra_actions(self) -> list:
+    def extra_actions(self, observer=None) -> list:
         """
         Purpose: The one thing a client may send about a sign.
 

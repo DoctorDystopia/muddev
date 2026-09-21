@@ -85,6 +85,7 @@ TICKABLE_REGISTRY: dict = {}
 _TICKABLE_MODULES = (
     "systems.gameplay.combat.combat",
     "systems.gameplay.combat.auras.aura_handler",
+    "systems.gameplay.progression.skills.skill_defs.gathering.gather_handler",
 )
 
 

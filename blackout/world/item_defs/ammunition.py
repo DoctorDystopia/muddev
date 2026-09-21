@@ -40,6 +40,7 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
+
     # ------------------------
     # --- RUSTY SCRAP AMMO ---
     # ------------------------
@@ -55,7 +56,7 @@ ITEMS = {
         stackable=True,
         use_slot=WieldLocation.AMMO,
         tool_type="ammo",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[
             (combat_constants.AMMO_FAMILY_ARROW,
@@ -63,9 +64,33 @@ ITEMS = {
             ("rusty_scrap_arrow", "crafting_material"),
         ],
         combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
             "projectile_strength_bonus": 7,
         },
     ),
+
+
 
     # ------------------
     # --- SCRAP AMMO ---
@@ -82,7 +107,7 @@ ITEMS = {
         stackable=True,
         use_slot=WieldLocation.AMMO,
         tool_type="ammo",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[
             (combat_constants.AMMO_FAMILY_ARROW,
@@ -90,7 +115,80 @@ ITEMS = {
             ("scrap_arrow", "crafting_material"),
         ],
         combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
             "projectile_strength_bonus": 10,
+        },
+    ),
+
+
+
+    # -------------------
+    # --- COPPER AMMO ---
+    # -------------------
+
+    "copper_arrow": ItemDef(
+        key="copper_arrow",
+        name="copper arrow",
+        typeclass="typeclasses.items.AmmunitionItem",
+        desc="A short shaft with a bent copper head. It flies straight enough.",
+        value=4,
+        weight=0.02,
+        tradeable=True,
+        stackable=True,
+        use_slot=WieldLocation.AMMO,
+        tool_type="ammo",
+        tier=1,
+        req_level=10,
+        tags=[
+            (combat_constants.AMMO_FAMILY_ARROW,
+             combat_constants.AMMO_FAMILY_TAG_CATEGORY),
+            ("copper_arrow", "crafting_material"),
+        ],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 16,
         },
     ),
 }

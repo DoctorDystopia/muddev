@@ -44,4 +44,20 @@ ITEMS = {
         gatherable_key="mutant_raider_corpse",
         tags=[("mutant_raider_corpse", ITEM_FAMILY_CORPSE)],
     ),
+
+    # Twice the raider's weight and value, by the same rule every giant entry
+    # in materials.py and food.py follows. A player who wants to butcher this
+    # one somewhere else carries 60 units to get it there.
+    "mutant_giant_corpse": ItemDef(
+        key="mutant_giant_corpse",
+        name="Mutant Giant corpse",
+        typeclass="typeclasses.corpses.Corpse",
+        desc="What is left of a mutant giant. It takes up most of the tile.",
+        value=4,
+        weight=60.0,
+        tradeable=True,
+        stackable=False,
+        gatherable_key="mutant_giant_corpse",
+        tags=[("mutant_giant_corpse", ITEM_FAMILY_CORPSE)],
+    ),
 }

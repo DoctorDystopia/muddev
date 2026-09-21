@@ -139,7 +139,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     pvp_capable = True
 
 
-    def extra_actions(self) -> list:
+    def extra_actions(self, observer=None) -> list:
         """
         Purpose: Everything another player can do with this character, for a
                  click in the world pane.
@@ -163,11 +163,16 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             Profile comes first, so a left click opens the profile. Attack
             comes last, so a left click never opens a fight.
 
-            THE LIST DOES NOT KNOW WHO IS LOOKING. serialize_entity has no
-            observer, because the feed sends one row to every observer in the
-            area. So `Attack` depends on this character's flag only. An
-            observer with PvP off who picks it is refused by CmdAttack, and
-            the refusal says how to turn PvP on.
+            THIS LIST DOES NOT USE THE OBSERVER, and must not start.
+            serialize_entity can pass one now -- a gathering node needs it,
+            because depletion is per player and the same node really does
+            afford nothing to one person and something to the next. Nothing
+            about a CHARACTER is like that.
+
+            So `Attack` depends on this character's flag only. An observer
+            with PvP off who picks it is refused by CmdAttack, and the
+            refusal says how to turn PvP on. A button that quietly vanished
+            instead would teach them nothing.
 
             The command keys are read off the command classes, not typed
             again. The import is deferred, because the command modules import
@@ -646,6 +651,21 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Creation date: 09/02/2026
         """
         super().at_post_move(source_location, move_type=move_type, **kwargs)
+
+        # A gathering channel is room-bound for the same reason a shop menu
+        # is: the node is a thing you STAND at. Stopped here rather than left
+        # to the handler's own check, so the player is not still swinging at
+        # a pole in the last room for up to one tick -- and so a walk through
+        # a clearing cannot bank a swing.
+        #
+        # Deferred, because the skill package walks its own registry at
+        # import time and this module is imported during that walk.
+        from systems.gameplay.progression.skills.skill_defs.gathering import (
+            constants as gather_constants,
+            gather_handler,
+        )
+
+        gather_handler.stop_gathering(self, gather_constants.STOP_REASON_MOVED)
 
         # A pop-up is the graphical twin of a room-bound menu, under the same
         # rule. The service never raises. It is imported here, because its

@@ -9,6 +9,8 @@ Description: Blackout armor ItemDef entries — body armor
                melee_strength_bonus) plus per-damage-type defense.
 """
 
+
+
 import systems.gameplay.combat.constants as combat_constants
 from items.equipment.constants import WieldLocation
 from world.item_database import ItemDef
@@ -16,7 +18,11 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
-    # ─── Rusty scrap melee armor body ───────────────────────────────────────────────
+
+    # ------------------------------------
+    # --- RUSTY SCRAP MELEE ARMOR BODY ---
+    # ------------------------------------
+
     "rusty_scrap_chainbody": ItemDef(
         key="rusty_scrap_chainbody",
         name="rusty scrap chainbody",
@@ -28,29 +34,42 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.BODY,
         tool_type="chainbody",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_chainbody", "armor")],
-        # attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 0,
             "slash_attack_bonus": 0,
             "crush_attack_bonus": 0,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 7,
             "slash_defense_bonus": 11,
             "crush_defense_bonus": 13,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 7,
+            "standard_defense_bonus": 8,
+            "heavy_defense_bonus": 9,
+
             # Other bonuses
             "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
         },
-        # combat_styles=_SHORTSWORD_COMBAT_STYLES,
-        # default_combat_style="irimi",
     ),
 
 
 
-    # ─── Scrap melee armor body ───────────────────────────────────────────────
+    # ------------------------------
+    # --- SCRAP MELEE ARMOR BODY ---
+    # ------------------------------
+
     "scrap_chainbody": ItemDef(
         key="scrap_chainbody",
         name="scrap chainbody",
@@ -67,18 +86,76 @@ ITEMS = {
         tags=[("scrap_chainbody", "armor")],
         # attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 0,
             "slash_attack_bonus": 0,
             "crush_attack_bonus": 0,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 10,
             "slash_defense_bonus": 15,
             "crush_defense_bonus": 19,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 10,
+            "standard_defense_bonus": 11,
+            "heavy_defense_bonus": 12,
+
             # Other bonuses
             "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
         },
-        # combat_styles=_SHORTSWORD_COMBAT_STYLES,
-        # default_combat_style="irimi",
+    ),
+
+
+
+    # -------------------------------
+    # --- COPPER MELEE ARMOR BODY ---
+    # -------------------------------
+
+    "copper_chainbody": ItemDef(
+        key="copper_chainbody",
+        name="copper chainbody",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Copper chainbody. A little shiny.",
+        value=750,
+        weight=3.0,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.BODY,
+        tool_type="chainbody",
+        tier=2,
+        req_level=20,
+        tags=[("copper_chainbody", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 17,
+            "slash_defense_bonus": 25,
+            "crush_defense_bonus": 30,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 17,
+            "standard_defense_bonus": 18,
+            "heavy_defense_bonus": 19,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
     ),
 }

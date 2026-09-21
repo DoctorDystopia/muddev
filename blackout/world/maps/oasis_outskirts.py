@@ -24,13 +24,13 @@ MAPSTR = r'''
         |     |     | |   
     7   #-#---#-#-#-#-#   
         |         | | |   
-    6   #-#-#-#-#-#-#-#-#-#
+    6   #-#-#-#-#-#-#-G-#-#
            \  | | | | | | |
     5   #---#-#-#-#-#-#-#-#
        /    | | |   | | | |
     4 #-#---+-#-#---#-#-#-m
        \|   | |  \ / \| | |
-    3 #-#-m-#-#-m-#-#-#-#-†
+    3 #-#-m-#-#-m-#-#-G-#-†
       | | | | | | | | | | |
     2 #-#-M-M-e-#-m-#-#-#-#
       | | | | | | | | | | |
@@ -83,6 +83,15 @@ class FloatingEyeNPCNode(MapNode):
 
 
 
+class MutantGiantNPCNode(MapNode):
+    """
+    Custom MapNode for Mutant Giant characters.
+    """
+    display_symbol = "|#8B7355G|n"
+    prototype = "xyz_room"
+
+
+
 class ToOasisNode(MapTransitionNode):
     """
     MapNode to teleport to the Oasis.
@@ -106,6 +115,7 @@ LEGEND = {
     "†": MetalPoleNode,
     "m": MutantRaiderNPCNode,
     "M": BigMutantNPCNode,
+    "G": MutantGiantNPCNode,
     "e": FloatingEyeNPCNode,
     "T": ToOasisNode,
     "a": ToAzmPlainsNode,
@@ -134,6 +144,13 @@ _npc_big_mutant = {
     "typeclass": "typeclasses.rooms.GridTile",
     "key": "Big Mutant Tile",
     "desc": "A large mutant with a crude weapon.",
+}
+
+_npc_mutant_giant = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Mutant Giant Tile",
+    "desc": "A mutant giant, slow and enormous.",
 }
 
 _npc_floating_eye = {
@@ -181,6 +198,10 @@ PROTOTYPES = {
     (3, 2): _npc_big_mutant,
     (2, 2): _npc_big_mutant,
     (4, 2): _npc_floating_eye,
+    # The two giants sit east of the raiders and away from the big mutants, so
+    # a player meets the tier in the order the skill ladder expects.
+    (8, 3): _npc_mutant_giant,
+    (8, 6): _npc_mutant_giant,
 }
 
 

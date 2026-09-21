@@ -589,3 +589,301 @@ class ScrapPlatelegsRecipe(BlackoutRecipe):
     output_item_keys = ["scrap_platelegs"]
 
     success_message = "You hammer the scrap metal into a rough but serviceable platelegs."
+
+
+
+# ----------------------------
+# --- COPPER METAL RECIPES ---
+# ----------------------------
+
+class CopperDaggerRecipe(BlackoutRecipe):
+    "Hammer copper metal into a dagger at an anvil."
+
+    name = "copper dagger"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 20
+    xp_reward = 50
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper"]
+    consumable_names = ["scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_dagger"]
+
+    success_message = "You hammer the scrap copper into a clean, bright dagger."
+
+
+
+class CopperAxeRecipe(BlackoutRecipe):
+    "Hammer scrap copper into an axe at an anvil."
+
+    name = "copper axe"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 20
+    xp_reward = 50
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper"]
+    consumable_names = ["scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_axe"]
+
+    success_message = "You hammer the scrap copper into a clean, bright axe."
+
+
+
+class CopperHideCapeRecipe(BlackoutRecipe):
+    """Hammer scrap copper and mutant giant cured hide into a cape at an anvil.
+
+    THE HIDE MOVED UP A CORPSE ON 09/21/2026. Both capes took the raider's
+    prime cured hide, so the copper tier asked for nothing the scrap tier had
+    not already asked for -- the metal changed and the leather did not, which
+    made the second cape a repeat rather than a step. It now takes a giant
+    cured hide, so the cape ladder follows the corpse ladder the way the bow
+    ladder follows the sinew ladder.
+    """
+
+    name = "copper hide cape"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 21
+    xp_reward = 100
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "mutant_giant_cured_hide"]
+    consumable_names = ["scrap copper", "mutant giant cured hide"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_hide_cape"]
+
+    success_message = "You hammer the scrap copper and giant cured hide into a copper hide cape."
+
+
+
+class CopperBootsRecipe(BlackoutRecipe):
+    "Hammer scrap copper into boots at an anvil."
+
+    name = "copper boots"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 23
+    xp_reward = 50
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper"]
+    consumable_names = ["scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_boots"]
+
+    success_message = "You hammer the scrap copper into a clean, bright pair of boots."
+
+
+
+class CopperShortswordRecipe(BlackoutRecipe):
+    "Hammer two scrap copper sheets into a shortsword at an anvil."
+
+    name = "copper shortsword"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 24
+    xp_reward = 100
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_shortsword"]
+
+    success_message = "You hammer the scrap copper into a clean, bright shortsword."
+
+
+
+class CopperScimitarRecipe(BlackoutRecipe):
+    "Hammer two scrap copper sheets into a scimitar at an anvil."
+
+    name = "copper scimitar"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 25
+    xp_reward = 100
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_scimitar"]
+
+    success_message = "You hammer the scrap copper into a clean, bright scimitar."
+
+
+
+class CopperSpearRecipe(BlackoutRecipe):
+    "Hammer two scrap copper sheets into a spear at an anvil."
+
+    name = "copper spear"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 25
+    xp_reward = 100
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_spear"]
+
+    success_message = "You hammer the scrap copper into a clean, bright spear."
+
+
+
+class CopperGreatHelmRecipe(BlackoutRecipe):
+    "Hammer two scrap copper sheets into a great helm at an anvil."
+
+    name = "copper great helm"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 27
+    xp_reward = 100
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_great_helm"]
+
+    success_message = "You hammer the scrap copper into a clean, bright great helm."
+
+
+
+class CopperSquareShieldRecipe(BlackoutRecipe):
+    "Hammer two scrap copper sheets into a square shield at an anvil."
+
+    name = "copper square shield"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 28
+    xp_reward = 100
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_square_shield"]
+
+    success_message = "You hammer the scrap copper into a clean, bright square shield."
+
+
+
+class CopperBattleaxeRecipe(BlackoutRecipe):
+    "Hammer three scrap copper sheets into a battleaxe at an anvil."
+
+    name = "copper battleaxe"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 30
+    xp_reward = 150
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_battleaxe"]
+
+    success_message = "You hammer the scrap copper into a clean, bright battleaxe."
+
+
+
+class CopperChainbodyRecipe(BlackoutRecipe):
+    "Hammer three scrap copper sheets into a chainbody at an anvil."
+
+    name = "copper chainbody"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 31
+    xp_reward = 150
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_chainbody"]
+
+    success_message = "You hammer the scrap copper into a clean, bright chainbody."
+
+
+
+class CopperGreatswordRecipe(BlackoutRecipe):
+    "Hammer three scrap copper sheets into a greatsword at an anvil."
+
+    name = "copper greatsword"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 32
+    xp_reward = 150
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_greatsword"]
+
+    success_message = "You hammer the scrap copper into a clean, bright greatsword."
+
+
+
+class CopperPlatelegsRecipe(BlackoutRecipe):
+    "Hammer three scrap copper sheets into platelegs at an anvil."
+
+    name = "copper platelegs"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 33
+    xp_reward = 150
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "scrap_copper", "scrap_copper"]
+    consumable_names = ["scrap copper", "scrap copper", "scrap copper"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_platelegs"]
+
+    success_message = "You hammer the scrap copper into a clean, bright pair of platelegs."

@@ -11,9 +11,12 @@ combat_stat_bonuses here exist only so the item resolves through the same
 profile path as a sword, not because the numbers do much.
 """
 
+
+
 import systems.gameplay.combat.constants as combat_constants
 from items.equipment.constants import WieldLocation
 from world.item_database import ItemDef
+
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -62,13 +65,29 @@ _BIT_BLADE_COMBAT_STYLES = {
 
 # A gadget carries no stat bonuses of its own.
 _NO_COMBAT_BONUSES = {
+    # Melee attack bonuses
     "stab_attack_bonus": 0,
     "slash_attack_bonus": 0,
     "crush_attack_bonus": 0,
+
+    # Projectile attack bonuses
+    "light_attack_bonus": 0,
+    "standard_attack_bonus": 0,
+    "heavy_attack_bonus": 0,
+
+    # Melee defense bonuses
     "stab_defense_bonus": 0,
     "slash_defense_bonus": 0,
     "crush_defense_bonus": 0,
+
+    # Projectile defense bonuses
+    "light_defense_bonus": 0,
+    "standard_defense_bonus": 0,
+    "heavy_defense_bonus": 0,
+
+    # Other bonuses
     "melee_strength_bonus": 0,
+    "projectile_strength_bonus": 0,
 }
 
 
@@ -85,7 +104,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="gadget",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("malfunctioning_gizmo", "weapon")],
         attack_speed=4,
@@ -106,7 +125,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="gadget",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("toy_sword", "weapon")],
         attack_speed=4,
@@ -127,7 +146,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="gadget",
-        tier=1,
+        tier=3,
         req_level=31,
         tags=[("bit_blade", "weapon")],
         attack_speed=4,
@@ -148,7 +167,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="gadget",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("broken_bit_blade", "weapon")],
         attack_speed=4,
@@ -169,7 +188,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="gadget",
-        tier=1,
+        tier=6,
         req_level=63,
         tags=[("mk2_bit_blade", "weapon")],
         attack_speed=4,
@@ -190,7 +209,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="gadget",
-        tier=1,
+        tier=12,
         req_level=127,
         tags=[("legendary_bit_blade", "weapon")],
         attack_speed=4,

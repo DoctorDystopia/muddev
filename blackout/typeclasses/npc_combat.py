@@ -401,5 +401,34 @@ def spawn_mutant_crab(room):
     # to be loaded first.
     if npc_present("mutant_crab", room):
         return None
-    
+
     return NPC_DB["mutant_crab"].create(location=room)
+
+
+
+@register_spawner("Mutant Giant Tile")
+def spawn_mutant_giant(room):
+    """Spawner entry for the Mutant Giant.
+
+    Stat block lives in world/npc_defs/hostile.py (NpcDef "mutant_giant") and
+    is looked up via NPC_DB — the same data-driven shape every other spawner in
+    this module uses. The tile prototype named "Mutant Giant Tile" dispatches
+    here through SPAWNER_REGISTRY.
+
+    The presence guard keys on db.npc_key rather than is_typeclass, because
+    every hostile shares the HostileNPC typeclass. Paired with the same guard
+    inside the respawn manager, it stops `xyzgrid spawn` stacking a second
+    giant on a tile that already holds one.
+
+    Entry: room (Evennia Room).
+    Exit: the created NPC, or None if one was already standing here.
+    Module Globals: None.
+    """
+    from systems.gameplay.spawning.respawn import npc_present
+    from world.npc_database import NPC_DB  # local import: matches the style of
+    # every other spawner in this module and keeps it importable in isolation.
+
+    if npc_present("mutant_giant", room):
+        return None
+
+    return NPC_DB["mutant_giant"].create(location=room)

@@ -43,13 +43,13 @@ MAPSTR = r'''
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
    10 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-†-#-#-#
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
-    9 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-†-#-#-#
+    9 #-#-#-#-#-#-#-#-#-#-#-#-#-#-G-#-#-†-#-#-#
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
     8 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-†-#-#-#
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
     7 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-†-#-#-#
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
-    6 #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-†-#-#-#
+    6 #-#-#-#-#-#-#-#-#-#-#-#-G-#-#-#-#-†-#-#-#
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
     5 #-#-#-#-#-#-#-c-#-#-#-#-#-#-#-#-#-†-#-#-#
       |x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|
@@ -70,9 +70,9 @@ MAPSTR = r'''
 
 
 
-class RustyPoleNode(MapNode):
+class CopperPoleNode(MapNode):
     """
-    Custom MapNode for Rusty Poles.
+    Custom MapNode for Copper Poles.
     Uses a distinct 'P' symbol on the map so rooms at these
     coordinates actually get spawned (prototype must be set).
     """
@@ -171,6 +171,15 @@ class MutantCrabNPCNode(MapNode):
 
 
 
+class MutantGiantNPCNode(MapNode):
+    """
+    Custom MapNode for Mutant Giant characters.
+    """
+    display_symbol = "|#8B7355G|n"
+    prototype = "xyz_room"
+
+
+
 class ToOasisOutskirtsNode(MapTransitionNode):
     """
     MapNode to teleport to the Oasis Outskirts.
@@ -182,17 +191,20 @@ class ToOasisOutskirtsNode(MapTransitionNode):
 
 
 LEGEND = {
-    "†": RustyPoleNode,
+    "†": CopperPoleNode,
     # "ß": BankNode,
     # "F": FurnaceFacilityNode,
     # "A": AnvilFacilityNode,
     # "R": RenderingCookerFacilityNode,
     # "C": CuringChamberFacilityNode,
+    # "G" now belongs to the Mutant Giant, on both maps that hold one. The
+    # Gastronomy worktable below needs a different letter when it comes back.
     # "G": GastroWorktableFacilityNode,
     # "!": NPCNode,
     # "§": ShopNPCNode,
     "m": MutantRaiderNPCNode,
     "c": MutantCrabNPCNode,
+    "G": MutantGiantNPCNode,
     "T": ToOasisOutskirtsNode,
 }
 
@@ -200,11 +212,11 @@ LEGEND = {
 
 # The PROTOTYPES dictionary allows for map-wide defaults and exact coordinate overrides.
 # The '*' characters act as wildcards for (X, Y) nodes and (X, Y, direction) links.
-_rusty_pole = {
+_copper_pole = {
     "prototype_parent": "xyz_room",
     "typeclass": "typeclasses.rooms.GridTile",
-    "key": "Rusty pole clearing",
-    "desc": "A rusted pole. Maybe I can cut it down?",
+    "key": "Copper pole clearing",
+    "desc": "A copper pole. Maybe I can cut it down?",
 }
 
 # _bank = {
@@ -308,7 +320,7 @@ def _signed(prototype, label, desc=""):
         COPIES rather than mutates, and this is the whole reason the helper
         exists instead of a line adding `attrs` at the call site. Every
         facility prototype in this file is ONE dict shared by every coordinate
-        that names it -- `_rusty_pole` is at four -- so mutating one to sign a
+        that names it -- `_copper_pole` is at four -- so mutating one to sign a
         single tile would sign all of them, and the symptom would be four
         identical signs appearing on a rebuild nobody asked to change.
 
@@ -412,6 +424,14 @@ _npc_mutant_crab = {
 }
 
 
+_npc_mutant_giant = {
+    "prototype_parent": "xyz_room",
+    "typeclass": "typeclasses.rooms.GridTile",
+    "key": "Mutant Giant Tile",
+    "desc": "A mutant giant, slow and enormous.",
+}
+
+
 
 PROTOTYPES = {
     # Default Room Prototype (applies to all undefined coordinates)
@@ -433,11 +453,11 @@ PROTOTYPES = {
         "desc": "The main entryway of the Oasis. The desert sprawls to the north and east.",
     },
 
-    # Gathering node overrides for Rusty Poles
-    (6, 0): _rusty_pole,
-    (9, 1): _rusty_pole,
-    (4, 1): _rusty_pole,
-    (10, 3): _rusty_pole,
+    # Gathering node overrides for Copper Poles
+    (6, 0): _copper_pole,
+    (9, 1): _copper_pole,
+    (4, 1): _copper_pole,
+    (10, 3): _copper_pole,
 
     # Skill node overrides
     # (10, 0): _bank,
@@ -459,6 +479,11 @@ PROTOTYPES = {
     (7, 3): _npc_mutant_crab,
     (7, 5): _npc_mutant_crab,
     (8, 4): _npc_mutant_crab,
+
+    # The two giants stand deep in the plains, well past the crabs and the
+    # entrance at (0, 2). A player walks to this tier rather than meeting it.
+    (12, 6): _npc_mutant_giant,
+    (14, 9): _npc_mutant_giant,
 }
 
 

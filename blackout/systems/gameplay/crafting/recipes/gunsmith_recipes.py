@@ -368,6 +368,39 @@ class ScrapArrowRecipe(BlackoutRecipe):
 
 
 
+class CopperShortbowRecipe(BlackoutRecipe):
+    """Build the tier 3 bow at a Gunsmith Bench.
+
+    TAKES GIANT SINEW, WHICH IS WHY THE MUTANT GIANT EXISTS AT THIS LEVEL.
+    The copper_shortbow ItemDef has been in world/item_defs/weapons.py since
+    the copper tier shipped, with no recipe to make one -- the bow ladder
+    stopped at scrap because the string ladder did.
+
+    The string tier follows the metal tier one for one: rusty scrap and raider
+    sinew at 0, scrap and raider prime sinew at 10, copper and giant sinew at
+    20. A player who reaches Cutting 20 for the copper pole reaches Butchery
+    20 for the giant corpse at about the same time.
+    """
+
+    name = "copper shortbow"
+    category = CRAFT_CATEGORY_GUNSMITH
+    required_skill = skill_constants.SKILL_KEY_GUNSMITH
+    required_level = 20
+    xp_reward = 50
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper", "mutant_giant_sinew"]
+    consumable_names = ["scrap copper", "mutant giant sinew"]
+
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
+
+    output_item_keys = ["copper_shortbow"]
+
+    success_message = "You bend the copper to a curve and string it with giant sinew."
+
+
+
 # class ScrapAxeRecipe(BlackoutRecipe):
 #     "Hammer scrap metal into a crude axe at an anvil."
 

@@ -167,3 +167,108 @@ class MutantRaiderPrimeCuredMeatSandwichRecipe(_GastronomyRecipe):
         "Cured prime meat against a cured filet. You have never made anything "
         "this deliberate."
     )
+
+
+
+# ─── Mutant giant tier ──────────────────────────────────────────────────────
+# The same four meals at 20 to 32, every XP value twice the raider's. The
+# multi-input shape is unchanged: two different tags in consumable_tags asks
+# for one of each.
+#
+# The giant prime cured meat sandwich is the deepest item in the game. It
+# heals 24 against a 127 cap, and it costs two giant corpses, two renders and
+# two cures -- so a player who wants one plans a trip for it.
+
+
+class MutantGiantSteakRecipe(_GastronomyRecipe):
+    "Sear lean giant meat in its own rendered fat."
+
+    name = "mutant giant steak"
+    required_level = 20
+    xp_reward = 50
+
+    consumable_tags = ["mutant_giant_tallow", "mutant_giant_fatless_meat"]
+    consumable_names = ["mutant giant tallow", "mutant giant fatless meat"]
+
+    output_item_keys = ["mutant_giant_steak"]
+
+    success_message = (
+        "The giant tallow floods the pan and the meat goes in after it. You "
+        "plate a steak the size of a shield."
+    )
+
+
+
+class MutantGiantCuredMeatSandwichRecipe(_GastronomyRecipe):
+    "Press two cured giant cuts together. Still no bread."
+
+    name = "mutant giant cured meat sandwich"
+    required_level = 22
+    xp_reward = 70
+
+    consumable_tags = [
+        "mutant_giant_cured_chuck",
+        "mutant_giant_cured_fatless_meat",
+    ]
+    consumable_names = [
+        "mutant giant cured chuck",
+        "mutant giant cured fatless meat",
+    ]
+
+    output_item_keys = ["mutant_giant_cured_meat_sandwich"]
+
+    success_message = (
+        "You press the two cured giant cuts together. It needs both hands."
+    )
+
+
+
+class MutantGiantPrimeSteakRecipe(_GastronomyRecipe):
+    "Sear a prime giant cut in prime giant fat."
+
+    name = "mutant giant prime steak"
+    required_level = 30
+    xp_reward = 90
+
+    consumable_tags = [
+        "mutant_giant_prime_tallow",
+        "mutant_giant_prime_meat",
+    ]
+    consumable_names = [
+        "mutant giant prime tallow",
+        "mutant giant prime meat",
+    ]
+
+    output_item_keys = ["mutant_giant_prime_steak"]
+
+    success_message = "The prime giant tallow does not smoke at all. You plate a prime steak."
+
+
+
+class MutantGiantPrimeCuredMeatSandwichRecipe(_GastronomyRecipe):
+    """The deepest item in the game.
+
+    Both halves are cured, one of them was rendered first, and the corpse it
+    all came off weighs 60 units. This single sandwich is two giants' worth of
+    Butchery, a render and two cures.
+    """
+
+    name = "mutant giant prime cured meat sandwich"
+    required_level = 32
+    xp_reward = 90
+
+    consumable_tags = [
+        "mutant_giant_cured_prime_meat",
+        "mutant_giant_cured_filet",
+    ]
+    consumable_names = [
+        "mutant giant cured prime meat",
+        "mutant giant cured filet",
+    ]
+
+    output_item_keys = ["mutant_giant_prime_cured_meat_sandwich"]
+
+    success_message = (
+        "Cured prime giant meat against a cured giant filet. Two giants went "
+        "into this, and you can taste both of them."
+    )

@@ -96,6 +96,69 @@ NPCS = {
         # is restated here.
         corpse_key="mutant_raider_corpse",
     ),
+    # ─── Mutant Giant ─────────────────────────────────────────────────────
+    # OSRS source: Hill Giant — Combat level 28.
+    #   https://oldschool.runescape.wiki/w/Hill_Giant
+    #
+    # Combat stats (raw, transferred verbatim):
+    #   Hitpoints 35, Attack 18, Strength 22, Defence 26, Magic 1, Ranged 1
+    #   Max hit 4, Attack style Crush, Attack speed 6 ticks (3.6s)
+    #   Aggressive: Yes
+    # Monster attack bonus (crush): +18
+    # Monster strength bonus:      +16
+    # Defence stab/slash/crush:      0 /  0 /  0
+    #
+    # THE FIRST NPC IN THE GAME THAT SWINGS SLOWER THAN 4 TICKS. Every other
+    # entry in this dict uses 4, which made attack_speed look like a constant
+    # rather than a stat. The Hill Giant's 6 is what the wiki says, and the
+    # combat maths reads the field per NPC, so the number transfers with the
+    # rest of the block and needs nothing else.
+    #
+    # THE WIKI'S "Aggressive: Yes" HAS NO HOME YET. Both behaviour keys in
+    # systems/gameplay/ai/constants.py retaliate: aggressive_melee swings back
+    # at what hit it, and chasing_melee follows what hit it. Neither one starts
+    # a fight. The giant therefore chases what attacks it and ignores a player
+    # who walks past. An unprovoked-aggression behaviour is one more key in
+    # that registry when a design wants one.
+    #
+    # The tier between the Mutant Raider (5 hp) and the Big Mutant (87 hp),
+    # and the source of the second food chain. The body carries its own yields
+    # through the ItemDef's gatherable_key, so nothing about the cuts is
+    # restated here.
+    "mutant_giant": NpcDef(
+        key="mutant_giant",
+        name="Mutant Giant",
+        desc="Huge, slow, and in no hurry about it.",
+        strike_level=18,
+        brawn_level=22,
+        defense_level=26,
+        max_hp=35,
+        attack_speed=6,
+        combat_stat_bonuses={
+            # Attack bonuses. The Hill Giant is crush-only, and the math reads
+            # whichever *_attack_bonus the active style names, so the wiki's
+            # single "Monster attack bonus" of +18 is stamped across all three.
+            "stab_attack_bonus": 18,
+            "slash_attack_bonus": 18,
+            "crush_attack_bonus": 18,
+            # Defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+            # Other bonuses
+            "melee_strength_bonus": 16,
+        },
+        combat_styles=_headbutt_crush_aggressive_combat_style(),
+        default_combat_style="headbutt",
+        # 30s timed respawn, matching the Big Mutant rather than the raider's
+        # 15s. A tier the player clears deliberately should not refill behind
+        # them while they butcher the last one.
+        respawn_seconds=30,
+        # Drop table in world/loot_defs/hostile.py.
+        loot_table="mutant_giant_drops",
+        # Butchery's second node, and the whole giant food chain's source.
+        corpse_key="mutant_giant_corpse",
+    ),
     "big_mutant": NpcDef(
         key="big_mutant",
         name="Big Mutant",

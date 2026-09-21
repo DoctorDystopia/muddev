@@ -53,6 +53,25 @@ TABLES = {
         nothing_weight=40,
     ),
 
+    # ─── Mutant Giant ─────────────────────────────────────────────────────
+    # The clean metal tier, one step above the raider's rusty one. It pays the
+    # same material the metal pole yields at Cutting 10, so a player who
+    # cannot reach that pole yet has a second route to it.
+    #
+    # A quarter of all kills give nothing, against the raider's half: the
+    # giant is a longer fight and the table says so.
+    "mutant_giant_drops": LootTableDef(
+        key="mutant_giant_drops",
+        main=[
+            LootEntry(item_key="credits", min_quantity=20, max_quantity=60,
+                      weight=48),
+            LootEntry(item_key="metal_chunk", weight=32),
+            LootEntry(item_key="metal_dust", min_quantity=1,
+                      max_quantity=3, weight=16),
+        ],
+        nothing_weight=32,
+    ),
+
     # ─── Big Mutant ───────────────────────────────────────────────────────
     # ~ boss tier right now (OSRS Greater Demon, 87 hp). Guaranteed scrap,
     # two rolls on tertiary, and source of the Glass Cannon amulet at 1/128.

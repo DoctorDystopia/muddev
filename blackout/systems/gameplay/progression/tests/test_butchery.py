@@ -27,6 +27,11 @@ from systems.gameplay.progression.skills.gatherables import (
     yield_menu_label,
 )
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from systems.gameplay.progression.skills.skill_defs.gathering import (
+    constants as gather_constants,
+    gather_handler,
+)
+from systems.gameplay.progression.tests import gathering_support
 from systems.gameplay.spawning.respawn import get_respawn_manager, npc_present
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import serializers
@@ -195,13 +200,21 @@ class CorpseSerializationTest(EvenniaTest):
         self.assertEqual(body["interact"], body["actions"][0]["command"])
 
 
-    def test_the_corpse_names_its_source_npc_as_its_asset(self):
+    def test_the_corpse_names_its_own_body_as_its_asset(self):
+        """The stamped NPC is provenance, and the picture never reads it.
+
+        This asserted the opposite until 09/21/2026, when art for the mutant
+        raider arrived and a body drew a live goblin standing on the tile
+        where it died. A model is one file in one pose, so the NPC key and
+        the body key cannot be the same key. See `Corpse.asset_key`.
+        """
         corpse = self._corpse()
         corpse.attributes.add(CORPSE_NPC_KEY_ATTR, "mutant_raider")
 
         body = serializers.serialize_entity(corpse)
 
-        self.assertEqual(body["asset"], "mutant_raider")
+        self.assertEqual(body["asset"], corpse.db.gatherable_key)
+        self.assertNotEqual(body["asset"], "mutant_raider")
 
 
     def test_every_offered_command_starts_with_a_real_verb(self):
@@ -264,12 +277,26 @@ class ButcheryYieldTest(EvenniaCommandTest):
 
 
     def _butcher(self, wanted=""):
+        """Open the channel, take one guaranteed swing, return both lines.
+
+        A harvest is a channel now. The command answers with "You start to
+        butcher ..." and the SWING is what produces the cut, so a test asking
+        which cut it got has to drive one. gathering_support.swing_once does
+        that with a scripted draw, and every assertion below is unchanged by
+        the move.
+
+        The corpse cannot deplete (deplete_chance is 0.0 on a node the first
+        success deletes), so the second scripted draw never matters here. It
+        is passed all the same, because the helper's default is what every
+        other caller reads and a special case here would be one more thing to
+        keep in step.
+        """
         args = " corpse"
 
         if wanted:
             args = f"{args} = {wanted}"
 
-        return self.call(
+        opening = self.call(
             CmdButcherGatheringNode(),
             args,
             cmdstring="butcher",
@@ -277,20 +304,28 @@ class ButcheryYieldTest(EvenniaCommandTest):
             obj=self.corpse,
         )
 
+        if not gathering_support.channel_is_open(self.char1):
+            return opening
+
+        swing, _stop = gathering_support.swing_once(
+            self.char1, SKILL_REGISTRY[_BUTCHERY](), self.corpse, wanted)
+
+        return f"{opening}\n{swing}"
+
 
     def _another_corpse(self):
-        """A fresh body and a cleared timer, for a case that harvests twice.
+        """A fresh body and a stopped channel, for a case that harvests twice.
 
-        One corpse is one harvest by design, and the skill arms a two-second
-        cooldown on a success -- so a loop over the registry's cuts needs both
-        undone between iterations or the second one measures the cooldown
-        rather than the cut.
+        One corpse is one harvest by design. The channel that was working the
+        last one has to be torn down too, or the second `butcher` is refused
+        as "already busy" and the test measures the refusal rather than the
+        cut.
         """
         if self.corpse.pk:
             self.corpse.delete()
 
-        self.char1.cooldowns.reset(
-            SKILL_REGISTRY[_BUTCHERY]().cooldown_key())
+        gather_handler.stop_gathering(
+            self.char1, gather_constants.STOP_REASON_ABANDONED)
         self.corpse = ITEM_DB[_CORPSE_KEY].create(location=self.room1)
 
 
@@ -716,13 +751,19 @@ class HarvestVerbTest(EvenniaCommandTest):
         self.char1.db.skills[_BUTCHERY] = {
             "level": _yields()[0].required_level, "xp": 0}
 
-        response = self.call(
+        self.call(
             CmdHarvestGatheringNode(),
             " corpse",
             cmdstring="harvest",
             caller=self.char1,
             obj=corpse,
         )
+
+        # The generic verb's job is to pick the SKILL from the tool in hand.
+        # The proof is which skill the channel it opened is running, and the
+        # line that skill's swing then sends.
+        response, _stop = gathering_support.swing_once(
+            self.char1, SKILL_REGISTRY[_BUTCHERY](), corpse)
 
         self.assertIn("You successfully butcher", response)
 
@@ -764,12 +805,38 @@ class VerbSurvivesItsTargetTest(EvenniaCommandTest):
     """
 
     def _butcher(self, args=""):
-        return self.call(
+        """Open the channel, then take one guaranteed swing at what it found.
+
+        These tests are about TARGETING -- which corpse a bare verb reaches,
+        and whether the verb still answers once that corpse is gone. The
+        swing matters only because it is what deletes the corpse, so the
+        second call has nothing to find.
+
+        The node the channel picked is read back off the handler rather than
+        searched for again here. The whole question these tests ask is which
+        one the command chose, and a second search in the test would be the
+        test answering it instead of the code.
+        """
+        opening = self.call(
             CmdButcherGatheringNode(),
             args,
             cmdstring="butcher",
             caller=self.char1,
         )
+
+        handler = gather_handler.get_gathering_handler(self.char1)
+
+        if handler is None:
+            return opening
+
+        node = handler.node()
+        swing, _stop = gathering_support.swing_once(
+            self.char1, SKILL_REGISTRY[_BUTCHERY](), node)
+
+        gather_handler.stop_gathering(
+            self.char1, gather_constants.STOP_REASON_ABANDONED)
+
+        return f"{opening}\n{swing}"
 
 
     def setUp(self) -> None:

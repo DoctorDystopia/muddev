@@ -82,6 +82,13 @@ ITEMS = {
     # profile, less strength behind it, one tick quicker. It stays gated on
     # `cutting` rather than `strike`, because WEAPON_SKILL_MAP keys on
     # tool_type and the tool_type of an axe is what a tree checks too.
+
+
+
+    # -------------------------
+    # --- RUSTY SCRAP TOOLS ---
+    # -------------------------
+
     "rusty_scrap_axe": ItemDef(
         key="rusty_scrap_axe",
         name="rusty scrap axe",
@@ -93,7 +100,7 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="axe",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[
             ("rusty_scrap_axe", TOOL_TAG_CATEGORY),
@@ -101,20 +108,39 @@ ITEMS = {
         ],
         attack_speed=5,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": -2,
             "slash_attack_bonus": 4,
             "crush_attack_bonus": 2,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 1,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 5,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_AXE_COMBAT_STYLES,
         default_combat_style="chop",
     ),
+
+
+
+    # -------------------
+    # --- SCRAP TOOLS ---
+    # -------------------
 
     "scrap_axe": ItemDef(
         key="scrap_axe",
@@ -135,20 +161,92 @@ ITEMS = {
         ],
         attack_speed=5,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": -2,
             "slash_attack_bonus": 5,
             "crush_attack_bonus": 3,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 1,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 7,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_AXE_COMBAT_STYLES,
         default_combat_style="chop",
     ),
+
+
+
+    # --------------------
+    # --- COPPER TOOLS ---
+    # --------------------
+
+    "copper_axe": ItemDef(
+        key="copper_axe",
+        name="copper axe",
+        typeclass="typeclasses.items.ToolItem",
+        desc="An axe hammered out of scrap copper. It cuts what it is pointed at.",
+        value=200,
+        weight=1.36,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="axe",
+        tier=2,
+        req_level=20,
+        tags=[
+            ("copper_axe", TOOL_TAG_CATEGORY),
+            ("copper_axe", ITEM_FAMILY_WEAPON),
+        ],
+        attack_speed=5,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": -2,
+            "slash_attack_bonus": 8,
+            "crush_attack_bonus": 6,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 1,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 9,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_AXE_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
+
+
+    # -------------------
+    # --- OTHER TOOLS ---
+    # -------------------
 
     "hammer": ItemDef(
         key="hammer",
@@ -161,27 +259,24 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="hammer",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("hammer", TOOL_TAG_CATEGORY)],
     ),
     
-    # TWO families, and CLAUDE.md blesses it: Evennia files each (key,
-    # category) pair independently, so one item declares as many families as it
-    # belongs to. TOOL_TAG_CATEGORY is the string the 3D pane picks a mesh out
-    # of -- it and statefeed's ITEM_FAMILY_TOOL are the same value under two
-    # names -- and GRAFFITI_MEDIUM_CATEGORY is what
-    # systems/gameplay/graffiti/service.py searches a writer's bag for. Neither
-    # reader sees the other's tag.
-    #
+    # TWO families: Evennia files each (key, category) pair independently,
+    # so one item declares as many families as it belongs to.
+    # TOOL_TAG_CATEGORY is the string the 3D pane picks a mesh out
+    # of (it and statefeed's ITEM_FAMILY_TOOL are the same value under two
+    # names) and GRAFFITI_MEDIUM_CATEGORY is what systems/gameplay/graffiti/service.py
+    # searches a writer's bag for.
+
     # The medium category is IMPORTED, not typed. The service finds a medium by
     # it and this stamps it, so two spellings would be a can that cannot be
-    # sprayed with nothing raised either way -- the same reasoning
-    # dev_tools.py gives for DEV_TOOL_TAG_CATEGORY.
-    #
+    # sprayed with nothing raised either way.
+
     # Carries no charge count. systems/gameplay/graffiti/constants.py owns the
-    # default and the service applies it on READ, so a capacity here would be a
-    # second place to be wrong about how much paint is in a can.
+    # default and the service applies it on READ.
     "spray_can": ItemDef(
         key="spray_can",
         name="spray can",
@@ -192,12 +287,8 @@ ITEMS = {
         value=8,
         weight=0.4,
         tradeable=True,
-        # NOT stackable, and that is the charge count's doing rather than a
-        # style choice: a stack is one object with a quantity, so two cans in
-        # one slot would share one charge attribute and spending from either
-        # would empty both.
         stackable=False,
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[
             ("spray_can", TOOL_TAG_CATEGORY),

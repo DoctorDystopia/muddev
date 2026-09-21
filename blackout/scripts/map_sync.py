@@ -130,6 +130,56 @@ def _get_grid():
     return grid
 
 
+def repair_map_data(grid, dry_run):
+    """
+    Purpose: Clear the grid's stored map data when Evennia can no longer read
+             it, so the run that follows rebuilds it from source.
+
+    Entry:
+        grid is the XYZGrid Script; dry_run suppresses the write.
+
+    Exit/Returns:
+        Returns True when the row was unreadable, False when it was fine.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Runs BEFORE anything reads map_data, which is the whole value of it.
+        An unreadable row does not raise where it is read -- it raises three
+        steps later, in `add_maps`, after the purge has already deleted rooms
+        and the wrapper has already stopped the server. That is the failure
+        this function exists to move earlier.
+
+        Clearing is safe because map data is regenerable in full.
+        `register_maps` calls `add_maps` for EVERY manifest map on every run,
+        scoped or not, so the row is refilled from `world/maps/*.py` before
+        this function returns to a caller that needs it.
+
+    Notes/References:
+        world/maps/gridstate.py owns the test and the wording, and holds the
+        explanation of how a row becomes unreadable. It is importable and
+        tested; this directory is neither.
+
+    Author: Nick Hobar
+    Creation date: 09/20/2026
+    """
+    from world.maps import gridstate
+
+    stored = grid.attributes.get("map_data", default=None)
+
+    if gridstate.map_data_is_readable(stored):
+        return False
+
+    print("=== Repairing unreadable grid map data ===")
+    print(gridstate.describe_unreadable_map_data(stored, dry_run=dry_run))
+
+    if not dry_run:
+        grid.attributes.add("map_data", {})
+
+    return True
+
+
 def _objects_tagged_zcoord(zcoord):
     """Every object carrying `zcoord` as its xyzgrid map z-tag, as a queryset."""
     from evennia.contrib.grid.xyzgrid.xyzroom import MAP_Z_TAG_CATEGORY
@@ -885,6 +935,7 @@ def _sync(scope, dry_run):
     entries = map_manifest.load_entries()
     zcoords = map_manifest.zcoords_of(entries)
     grid = _get_grid()
+    repair_map_data(grid, dry_run)
     map_data_list = load_map_data(grid, entries)
     validate_scope_tiles(grid, scope, map_data_list)
     objects_before = _total_object_count()

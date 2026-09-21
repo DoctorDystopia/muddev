@@ -159,6 +159,21 @@ class BlackoutRecipe(CraftingRecipe):
 
 
 
+    def msg(self, message, **kwargs):
+        """Send one crafting line to the crafter, tagged for the crafting tab.
+
+        The contrib's own `msg` builds `text=(message, {"type": "crafting"})`
+        with that dict typed in place. A call site that passed its OWN
+        (text, tag) tuple therefore handed the contrib a tuple to wrap a
+        SECOND time, and the client printed the inner dict as a line of its
+        own: `{ "type": "crafting" }` under every craft message. The tag has
+        one owner, `feed_const`, and this override is the only place it goes
+        on. Every call site here passes a plain string.
+        """
+        self.crafter.msg(text=(message, _MSG_CRAFTING), **kwargs)
+
+
+
     def unlock_requirement_check(self, crafter):
         return self.unlocked
 
@@ -212,7 +227,7 @@ class BlackoutRecipe(CraftingRecipe):
                         else tagkey.capitalize()
                     ),
                 )
-                self.msg((err, _MSG_CRAFTING))
+                self.msg(err)
                 raise CraftingValidationError(err)
 
         self.validated_tools = validated
@@ -259,7 +274,7 @@ class BlackoutRecipe(CraftingRecipe):
                         else tagkey.capitalize()
                     ),
                 )
-                self.msg((err, _MSG_CRAFTING))
+                self.msg(err)
                 raise CraftingValidationError(err)
 
         self.validated_consumables = validated
@@ -284,7 +299,7 @@ class BlackoutRecipe(CraftingRecipe):
         self._consumption_plan = {}
 
         if not self.unlock_requirement_check(crafter):
-            self.msg((self.error_locked, _MSG_CRAFTING))
+            self.msg(self.error_locked)
             raise CraftingValidationError
 
         if self.required_skill:
@@ -293,9 +308,9 @@ class BlackoutRecipe(CraftingRecipe):
             )
             if not meets_req:
                 self.msg(
-                    (self.error_skill_too_low.format(
+                    self.error_skill_too_low.format(
                         skill=self.required_skill, level=self.required_level
-                    ), _MSG_CRAFTING)
+                    )
                 )
                 raise CraftingValidationError
 
@@ -321,9 +336,9 @@ class BlackoutRecipe(CraftingRecipe):
         if craft_result:
             success = self._format_message(self.success_message)
             xp_text = xp_awards.format_xp_suffix(awards)
-            self.msg((f"{success}{xp_text}", _MSG_CRAFTING))
+            self.msg(f"{success}{xp_text}")
         elif self.failure_message:
-            self.msg((self._format_message(self.failure_message), _MSG_CRAFTING))
+            self.msg(self._format_message(self.failure_message))
 
         if craft_result or self.consume_on_fail:
             self._consume_inputs()

@@ -248,18 +248,37 @@ class TestTheFoodTable(unittest.TestCase):
             with self.subTest(ingredient=ingredient):
                 self.assertGreater(meal_heal, ITEM_DB[ingredient].heal_amount)
 
-    def test_no_food_can_fill_a_starting_character_from_empty(self):
-        """A 10 HP pool against a ladder topping out at 12.
+    def test_no_food_a_new_character_can_make_fills_them_from_empty(self):
+        """A 10 HP pool against what a level 0 player can actually cook.
 
-        The deepest sandwich nearly fills a new character and no food exceeds
-        the pool by much, which is the shape "a supplement, not a reset button"
-        was chosen for. A food healing 40 would make the rest of the ladder
-        pointless, and nothing else in the repo would notice.
+        "A supplement, not a reset button" is a claim about the food a player
+        can REACH, not about the deepest food in the game. A food healing 40 at
+        level 0 would make the rest of the ladder pointless, and nothing else
+        in the repo would notice.
+
+        THE BOUND COMES FROM THE RECIPE, NOT FROM A NUMBER TYPED HERE. The
+        test read `max(...)` over every food until the mutant giant tier landed
+        on 09/21/2026, and the giant prime cured sandwich heals 24 -- which is
+        intended content behind Butchery 20 and Gastronomy 32, and which a new
+        character cannot make, buy or find. A flat ceiling could not tell that
+        apart from a food that broke the early game, so it read every new tier
+        as a regression. See CLAUDE.md, "Never assert a balance value".
         """
-        starting_max_hp = 10
-        dearest = max(ITEM_DB[key].heal_amount for key in _food_keys())
+        from systems.gameplay.crafting.registry import RECIPE_REGISTRY
 
-        self.assertLessEqual(dearest, starting_max_hp + 2)
+        starting_max_hp = 10
+        reachable = [
+            ITEM_DB[key].heal_amount
+            for recipe_cls in RECIPE_REGISTRY.values()
+            for key in recipe_cls.output_item_keys
+            if recipe_cls.required_level == 0 and key in set(_food_keys())
+        ]
+
+        self.assertTrue(reachable, "no food is craftable at level 0")
+
+        for heal in reachable:
+            with self.subTest(heal=heal):
+                self.assertLessEqual(heal, starting_max_hp + 2)
 
 
 

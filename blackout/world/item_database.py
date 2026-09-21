@@ -16,6 +16,35 @@ from evennia.prototypes.spawner import spawn
 from items.equipment.constants import WieldLocation
 
 
+
+# Public constant definitions
+
+# How many skill levels one tier step covers. A req_level of 0 is tier 0, 10
+# is tier 1, 20 is tier 2, and so on.
+#
+# The two fields are not redundant. req_level is the GATE -- who may wield
+# the item. tier is the LADDER POSITION -- how good the item is at the job,
+# which is what a gathering node's chance table reads (see
+# systems/gameplay/progression/skills/gatherables.GatherChance). One number
+# could not carry both, because a node must tell two axes apart without
+# knowing what level either one asks for.
+#
+# They must still agree, and the step is the rule that keeps them together.
+# Before 09/21/2026 they did not: every rusty weapon declared tier 1 beside
+# req_level 0, the axes ran 1/2/3 against req_levels 0/10/20, and one copper
+# helm read tier 1 while the copper boots beside it read tier 2. Nothing
+# failed, because tier only changes a roll. The axes simply paid the wrong
+# row of every table in the world.
+TIER_LEVEL_STEP: int = 10
+
+
+
+def tier_for_level(req_level: int) -> int:
+    """The tier a req_level belongs to. The one owner of the step rule."""
+    return req_level // TIER_LEVEL_STEP
+
+
+
 @dataclass
 class ItemDef:
     key: str
@@ -92,6 +121,7 @@ class ItemDef:
     #
     #     They are read only when heal_amount is set and _get_attrs emits them
     #     only then, so a sword carries no eat delay.
+
     heal_amount: int | None = None
     eat_delay_ticks: int | None = None
     attack_delay_ticks: int | None = None
@@ -103,6 +133,7 @@ class ItemDef:
     combat_styles: dict = field(default_factory=dict)
     default_combat_style: str | None = None
     combat_rules: list = field(default_factory=list)
+
 
     def _get_attrs(self, quantity: int = 1) -> dict:
         """
@@ -182,6 +213,7 @@ class ItemDef:
 
         return attrs
 
+
     def eat_delay_ticks_or_default(self) -> int:
         """Ticks before this food's eater may eat again.
 
@@ -196,6 +228,7 @@ class ItemDef:
 
         return self.eat_delay_ticks
 
+
     def attack_delay_ticks_or_default(self) -> int:
         """Ticks added to this food's eater's combat cooldown."""
         from systems.gameplay.consumables import constants as consumable_const
@@ -204,6 +237,7 @@ class ItemDef:
             return consumable_const.STANDARD_ATTACK_DELAY_TICKS
 
         return self.attack_delay_ticks
+
 
     def to_prototype(self, quantity: int = 1) -> dict:
         """
@@ -240,6 +274,7 @@ class ItemDef:
         }
 
         return proto
+
 
     def create(self, location=None, home=None, quantity=1, **kwargs):
         """

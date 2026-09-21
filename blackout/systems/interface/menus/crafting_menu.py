@@ -321,9 +321,12 @@ def _start_batch_and_render(caller, recipe_key, facility, count):
     callable, which must return a node name, and from a node's typed-input
     pass, which must return rendered (text, options).
     """
-    started, message = craft_batch.start_batch(caller, recipe_key, count)
-    color = SUCCESS_COLOR if started else ERROR_COLOR
-    caller.msg((f"{color}{message}{RESET_COLOR}", _MSG_CRAFTING))
+    started, refusal = craft_batch.start_batch(caller, recipe_key, count)
+
+    # start_batch sends its own announcement, ahead of the first item's
+    # lines. Only a refusal comes back here to be coloured and shown.
+    if refusal:
+        caller.msg((f"{ERROR_COLOR}{refusal}{RESET_COLOR}", _MSG_CRAFTING))
 
     return start(caller, facility=facility)
 
@@ -538,9 +541,10 @@ def execute_craft_batch(caller, raw_string, **kwargs):
     facility = kwargs.get("facility")
     count = kwargs.get("count", 1)
 
-    started, message = craft_batch.start_batch(caller, recipe_key, count)
-    color = SUCCESS_COLOR if started else ERROR_COLOR
-    caller.msg((f"{color}{message}{RESET_COLOR}", _MSG_CRAFTING))
+    started, refusal = craft_batch.start_batch(caller, recipe_key, count)
+
+    if refusal:
+        caller.msg((f"{ERROR_COLOR}{refusal}{RESET_COLOR}", _MSG_CRAFTING))
 
     return "start", {"facility": facility}
 

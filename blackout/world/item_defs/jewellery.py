@@ -10,8 +10,11 @@ rather than from the wielded weapon alone: an amulet changes how an action
 resolves without being the thing performing it.
 """
 
+
+
 from items.equipment.constants import WieldLocation
 from world.item_database import ItemDef
+
 
 
 ITEMS = {
@@ -28,7 +31,7 @@ ITEMS = {
         tradeable=True,
         stackable=False,
         use_slot=WieldLocation.NECK,
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("glass_cannon_amulet", "jewellery")],
         combat_rules=["glass_cannon_amulet"],

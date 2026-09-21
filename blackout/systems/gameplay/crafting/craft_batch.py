@@ -91,8 +91,9 @@ def start_batch(caller, recipe_key, count):
         count is the requested batch size, an int >= 1.
 
     Exit/Returns:
-        Returns (started: bool, message: str). message is always safe to
-        show the caller directly.
+        Returns (started: bool, refusal: str | None). A refusal is always
+        safe to show the caller directly. On success the refusal is None,
+        because this routine already sent the line that announces the batch.
 
     Module Globals:
         BATCH_ATTRIBUTE read/written.
@@ -107,6 +108,13 @@ def start_batch(caller, recipe_key, count):
         allow, then crafts the first item synchronously (matching "craft 1"
         completing instantly) before handing subsequent items to the paced
         loop in _craft_one/_continue_batch.
+
+        THE ANNOUNCEMENT GOES OUT BEFORE THAT FIRST CRAFT. It used to be the
+        return value, which every caller sent after this routine returned --
+        so the first item's success line and "Crafting complete" both reached
+        the player ahead of "You begin crafting", and a log of back-to-back
+        crafts read as though each one finished before it started. A line
+        this routine's own work must precede is this routine's to send.
 
     Notes/References:
         The pacing timer (evennia.utils.delay, persistent=True) survives a
@@ -151,13 +159,15 @@ def start_batch(caller, recipe_key, count):
         },
     )
 
-    _craft_one(caller, recipe_key)
-
     message = f"You begin crafting {recipe_cls.name} x{count}."
     if count > 1:
         message += f" ({recipe_cls.craft_seconds:.1f}s per item.)"
 
-    return True, message
+    caller.msg((message, _MSG_CRAFTING))
+
+    _craft_one(caller, recipe_key)
+
+    return True, None
 
 
 

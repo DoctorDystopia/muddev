@@ -18,7 +18,7 @@ from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 from systems.gameplay.combat import constants as combat_constants
 from systems.interface.statefeed.constants import ITEM_FAMILIES, ITEM_FAMILY_WEAPON
 from typeclasses.characters import Character as BlackoutCharacter
-from world.item_database import ITEM_DB
+from world.item_database import ITEM_DB, tier_for_level
 
 
 
@@ -341,6 +341,84 @@ class TestSpawnedAttributesMatchDefinition(EvenniaTestCase):
                     item_def.combat_stat_bonuses,
                     msg=f"{item_key} is ammunition but carries no "
                         f"{combat_constants.PROJECTILE_STRENGTH_BONUS_KEY}.",
+                )
+
+
+class TestTierFollowsTheRequirement(EvenniaTestCase):
+    """tier is the ladder position, and req_level is the gate.
+
+    They are separate fields because a gathering node reads the tier and
+    knows nothing about levels. They still describe one ladder, so they
+    cannot disagree. Derived from TIER_LEVEL_STEP rather than from a list of
+    tiers, so a rescale of the step moves this test with it.
+    """
+
+    character_typeclass = BlackoutCharacter
+
+    def test_every_tier_is_the_tier_of_its_own_requirement(self):
+        """A tier typed by hand drifts. This is the drift, made loud.
+
+        A wrong tier breaks nothing that raises. It pays the wrong row of
+        every GatherChance table in the world, and the only symptom is a
+        tool that yields at a rate nobody tuned.
+        """
+        for item_key, item_def in ITEM_DB.items():
+            with self.subTest(item=item_key):
+                self.assertEqual(
+                    item_def.tier,
+                    tier_for_level(item_def.req_level),
+                    msg=f"{item_key} declares tier {item_def.tier} beside "
+                        f"req_level {item_def.req_level}.",
+                )
+
+
+class TestCombatStatBonusKeys(EvenniaTestCase):
+    """Every bonus key an item declares, checked against the one spelling."""
+
+    character_typeclass = BlackoutCharacter
+
+    def test_no_item_declares_a_bonus_key_the_game_cannot_read(self):
+        """A misspelled key is silent. Combat reads the real one as 0.
+
+        UNARMED_DEFAULT_COMBAT_STATS is the canonical spelling table -- see
+        the comment above it in combat/constants.py.
+        """
+        known = set(combat_constants.UNARMED_DEFAULT_COMBAT_STATS)
+
+        for item_key, item_def in ITEM_DB.items():
+            unknown = set(item_def.combat_stat_bonuses) - known
+
+            with self.subTest(item=item_key):
+                self.assertEqual(
+                    unknown,
+                    set(),
+                    msg=f"{item_key} declares {sorted(unknown)}, which "
+                        f"nothing reads.",
+                )
+
+    def test_an_item_that_declares_any_bonus_declares_them_all(self):
+        """A half-filled block is a balance decision nobody made.
+
+        Armor written before the projectile keys existed carried no
+        *_defense_bonus for light, standard or heavy. It read as 0 against
+        every arrow in the game, and the screen showed a full set of melee
+        numbers beside the gap. The missing row and a deliberate 0 must not
+        look the same.
+        """
+        known = set(combat_constants.UNARMED_DEFAULT_COMBAT_STATS)
+
+        for item_key, item_def in ITEM_DB.items():
+            if not item_def.combat_stat_bonuses:
+                continue
+
+            missing = known - set(item_def.combat_stat_bonuses)
+
+            with self.subTest(item=item_key):
+                self.assertEqual(
+                    missing,
+                    set(),
+                    msg=f"{item_key} declares a combat block but omits "
+                        f"{sorted(missing)}.",
                 )
 
 

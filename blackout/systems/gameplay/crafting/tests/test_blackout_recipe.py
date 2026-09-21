@@ -28,23 +28,30 @@ from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from world.item_database import ITEM_DB
 
 
+def _sent_payloads(mocked_msg) -> list:
+    """The raw `text` argument of each mocked .msg call, in send order."""
+    return [
+        call.args[0] if call.args else call.kwargs.get("text", "")
+        for call in mocked_msg.call_args_list
+    ]
+
+
 def _sent_lines(mocked_msg) -> list:
     """Flatten a mocked .msg into plain strings, in send order.
 
-    Unwraps to any depth: the contrib's CraftingRecipe.msg wraps whatever it
-    is given as `text=(message, {"type": "crafting"})`, and BlackoutRecipe
-    hands it a (text, kwargs) tuple of its own -- so a recipe line arrives
-    nested two tuples deep.
+    Unwraps exactly ONE level, which is Evennia's `text=(message, kwargs)`
+    form and the only nesting a crafting line is allowed to have. This used
+    to unwrap to any depth, and that is why nobody saw the double wrap: the
+    contrib's own `msg` wrapped a (text, tag) tuple a second time, the client
+    printed the inner dict as a line of its own, and this helper quietly
+    reached past it. See test_a_crafting_line_carries_one_routing_tag.
     """
     lines = []
 
-    for call in mocked_msg.call_args_list:
-        payload = call.args[0] if call.args else call.kwargs.get("text", "")
+    for payload in _sent_payloads(mocked_msg):
+        body = payload[0] if isinstance(payload, (tuple, list)) and payload else payload
 
-        while isinstance(payload, (tuple, list)) and payload:
-            payload = payload[0]
-
-        lines.append(strip_ansi(str(payload)))
+        lines.append(strip_ansi(str(body)))
 
     return lines
 
@@ -125,6 +132,33 @@ class TestNonStackableMultiInput(EvenniaCommandTest):
             key="Anvil",
             location=self.room1,
         )
+
+    def test_a_crafting_line_carries_one_routing_tag(self):
+        """Every line a recipe sends is `(text, tag)` and nothing deeper.
+
+        The contrib's CraftingRecipe.msg types `{"type": "crafting"}` in
+        place and wraps whatever it is handed. A call site that passed its
+        own (text, tag) tuple got it wrapped a second time, and the Godot
+        chat pane printed the inner dict on a line of its own under every
+        craft message. Asserts the SHAPE, not the tag's value, which
+        feed_const owns.
+        """
+        sheets = [
+            ITEM_DB["rusty_scrap_metal"].create(location=self.char1) for _ in range(2)
+        ]
+        recipe = RustyScrapShortswordRecipe(self.char1, self.anvil, self.hammer, *sheets)
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            recipe.craft()
+
+        payloads = _sent_payloads(mocked_msg)
+
+        self.assertTrue(payloads)
+
+        for payload in payloads:
+            with self.subTest(payload=payload):
+                self.assertIsInstance(payload, tuple)
+                self.assertIsInstance(payload[0], str)
 
     def test_two_sheets_produce_one_sword(self):
         sheets = [

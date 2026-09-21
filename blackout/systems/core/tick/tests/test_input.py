@@ -19,6 +19,7 @@ from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.gameplay.combat import pvp
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.core.tick.engine import get_tick_engine
 
@@ -32,6 +33,12 @@ class _InputTestCase(EvenniaTest):
         self.engine.ndb._handler_ids = {}
         self.engine.ndb._handler_strikes = {}
         self.engine.ndb._inbound_actions = []
+
+        # The two test characters are players, so an attack between them
+        # needs the PvP flag on both sides. See systems/gameplay/combat/pvp.py.
+        pvp.set_pvp(self.char1, True)
+        pvp.set_pvp(self.char2, True)
+
         self.handler = ensure_combat_handler(self.char1)
         ensure_combat_handler(self.char2)
 

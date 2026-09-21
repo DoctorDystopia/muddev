@@ -6,6 +6,8 @@ Description: Per-skill crafting facility typeclasses (furnace, anvil) and
              their room spawners.
 """
 
+
+
 from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_CRAFTING
@@ -23,10 +25,12 @@ from typeclasses.crafting_facilities import CraftingFacility
 from .spawners import register_spawner, spawn_once
 
 
+
 # Every line `collect` sends a player is crafting, so the routing tag is bound
 # once here. Same value CraftingFacility and BlackoutRecipe use -- a cure's
 # lines must land in the same tab as every other crafting line.
 _MSG_CRAFTING = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_CRAFTING}
+
 
 
 # ------------------------------------
@@ -47,6 +51,7 @@ class FoundryBaseFacility(CraftingFacility):
         self.db.desc = "A Foundry facility for processing raw materials into crafting components."
 
 
+
 class FurnaceFacility(FoundryBaseFacility):
     """
     A furnace where players smelt raw materials via the Foundry skill.
@@ -62,6 +67,7 @@ class FurnaceFacility(FoundryBaseFacility):
         self.db.desc = "A roaring foundry furnace, hot enough to smelt scrap metal into something usable."
 
 
+
 class RenderingBaseFacility(CraftingFacility):
     """
     The base crafting facility for Rendering-skill processing.
@@ -75,6 +81,7 @@ class RenderingBaseFacility(CraftingFacility):
         parent_class.at_object_creation()
         self.locks.add("get:false()")
         self.db.desc = "A Rendering facility for cooking carcass cuts down into fat and lean meat."
+
 
 
 class RenderingCookerFacility(RenderingBaseFacility):
@@ -96,6 +103,7 @@ class RenderingCookerFacility(RenderingBaseFacility):
         parent_class.at_object_creation()
         self.tags.add("rendering_cooker", category="crafting_tool")
         self.db.desc = "A squat rendering cooker, its vat crusted with old fat and smelling of every animal that went into it."
+
 
 
 class CmdCollect(Command):
@@ -196,6 +204,7 @@ class CuringBaseFacility(CraftingFacility):
         self.db.desc = "A Curing facility for preserving cuts of meat."
 
 
+
 class CuringChamberFacility(CuringBaseFacility):
     """
     A chamber where players cure meat via the Curing skill.
@@ -211,7 +220,7 @@ class CuringChamberFacility(CuringBaseFacility):
     asset_key = "curing_chamber"
 
 
-    def extra_actions(self) -> list:
+    def extra_actions(self, observer=None) -> list:
         """
         Purpose: Both things a player may do at a chamber, for a right click.
 
@@ -238,12 +247,13 @@ class CuringChamberFacility(CuringBaseFacility):
             menu's own Collect row is what makes the second verb reachable
             from inside, so neither client has to be the one that knows.
 
-            Neither command is filtered on whether anything is ready. The feed
-            has no observer to filter against -- serialize_entity draws one
-            chamber for every player who can see it -- and `collect` refuses
-            with a countdown, which tells the player something a missing row
-            does not. That is the same call corpses.extra_actions makes about
-            gathering levels.
+            Neither command is filtered on whether anything is ready, and the
+            observer is ignored on purpose. serialize_entity can pass one
+            now, for a gathering node that one player has stripped and
+            another has not -- a fact that is really two facts. Readiness is
+            not: `collect` refuses with a countdown, which tells the player
+            something a missing row does not. That is the same call
+            corpses.extra_actions makes about gathering levels.
 
             The verbs take no target because both cmdsets hang on this object,
             which is what interact_command documents about a facility's own
@@ -281,9 +291,11 @@ class CuringChamberFacility(CuringBaseFacility):
         self.db.desc = "A sealed curing chamber, cold and dry inside, hung with hooks and smelling of salt."
 
 
+
 # ------------------------------------
 # --- PRODUCTION SKILLS FACILITIES ---
 # ------------------------------------
+
 class MetalsmithBaseFacility(CraftingFacility):
     """
     The base crafting facility for Metalsmith-skill producing.
@@ -297,6 +309,7 @@ class MetalsmithBaseFacility(CraftingFacility):
         parent_class.at_object_creation()
         self.locks.add("get:false()")
         self.db.desc = "A Metalsmith facility for processing crafting components into finished goods."
+
 
 
 class AnvilFacility(MetalsmithBaseFacility):
@@ -314,6 +327,7 @@ class AnvilFacility(MetalsmithBaseFacility):
         self.db.desc = "A solid steel anvil, scarred from years of use. Perfect for shaping metal."
 
 
+
 class GunsmithBaseFacility(CraftingFacility):
     """
     The base crafting facility for Gunsmith-skill production.
@@ -327,6 +341,7 @@ class GunsmithBaseFacility(CraftingFacility):
         parent_class.at_object_creation()
         self.locks.add("get:false()")
         self.db.desc = "A Gunsmith facility for building projectile weapons and the ammunition they fire."
+
 
 
 class GunbenchFacility(GunsmithBaseFacility):
@@ -349,6 +364,7 @@ class GunbenchFacility(GunsmithBaseFacility):
         self.db.desc = "A long bench under a strip light, laid out with jigs, a vice and a coil of drawn wire."
 
 
+
 class GastronomyBaseFacility(CraftingFacility):
     """
     The base crafting facility for Gastronomy-skill production.
@@ -362,6 +378,7 @@ class GastronomyBaseFacility(CraftingFacility):
         parent_class.at_object_creation()
         self.locks.add("get:false()")
         self.db.desc = "A Gastronomy facility for turning prepared meat into food."
+
 
 
 class GastroWorktableFacility(GastronomyBaseFacility):
@@ -384,9 +401,11 @@ class GastroWorktableFacility(GastronomyBaseFacility):
         self.db.desc = "A scrubbed steel worktable with a pan, a flame, and a row of knives worn thin."
 
 
+
 # -------------------------
 # --- SPAWNER FUNCTIONS ---
 # -------------------------
+
 @register_spawner("Foundry Furnace Facility")
 def spawn_foundry_facility(room):
     spawn_once(

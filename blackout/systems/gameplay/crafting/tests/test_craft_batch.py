@@ -11,6 +11,7 @@ Run with:
 
 
 
+from unittest import mock
 from unittest.mock import patch
 
 from evennia import create_object
@@ -146,6 +147,65 @@ class TestStartBatch(_CraftBatchTestCase):
 
         self.assertFalse(started)
         self.assertIn("Cannot craft", message)
+
+
+class TestBatchAnnouncementOrder(_CraftBatchTestCase):
+    """The batch announces itself BEFORE the first item's own lines.
+
+    start_batch used to return that line for its caller to send, and the
+    caller could only send it after start_batch returned -- by which time
+    the synchronous first craft had already reported its success and its
+    "Crafting complete". A log of back-to-back crafts read as though each
+    one finished before it started.
+    """
+
+    def _sent_lines(self, mocked_msg) -> list:
+        """The strings a player reads, in send order."""
+        lines = []
+
+        for call in mocked_msg.call_args_list:
+            payload = call.args[0] if call.args else call.kwargs.get("text", "")
+            body = payload[0] if isinstance(payload, tuple) and payload else payload
+
+            lines.append(str(body))
+
+        return lines
+
+    def _index_of(self, lines, keyword) -> int:
+        """Position of the first line containing keyword, or -1."""
+        for position, line in enumerate(lines):
+            if keyword in line.lower():
+                return position
+
+        return -1
+
+    def test_begin_precedes_the_first_success_and_the_completion(self):
+        self._give_chunks(1)
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            craft_batch.start_batch(self.char1, RECIPE_KEY, 1)
+
+        lines = self._sent_lines(mocked_msg)
+        begin = self._index_of(lines, "begin crafting")
+        success = self._index_of(lines, "grind the rusty metal chunk")
+        complete = self._index_of(lines, "crafting complete")
+
+        self.assertNotEqual(begin, -1, lines)
+        self.assertNotEqual(success, -1, lines)
+        self.assertNotEqual(complete, -1, lines)
+        self.assertLess(begin, success, lines)
+        self.assertLess(success, complete, lines)
+
+    def test_a_started_batch_returns_no_message_to_resend(self):
+        """A caller that sends the return value must not duplicate the
+        announcement start_batch has already made."""
+        self._give_chunks(3)
+
+        with patch.object(craft_batch, "delay"):
+            started, refusal = craft_batch.start_batch(self.char1, RECIPE_KEY, 3)
+
+        self.assertTrue(started)
+        self.assertIsNone(refusal)
 
 
 class TestCancelBatch(_CraftBatchTestCase):

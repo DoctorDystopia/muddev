@@ -33,8 +33,9 @@ from typeclasses.items import BaseItem
 #   where the body is.
 #
 # Naming it differently is what makes both of those structurally impossible
-# rather than a thing to remember. The corpse's own identity for the client
-# comes from its asset key, and its yields from db.gatherable_key.
+# rather than a thing to remember. This attribute is PROVENANCE only: which
+# NPC died here, for butchery and for a designer reading a body. Both the
+# picture and the yields come from db.gatherable_key. See `asset_key` below.
 CORPSE_NPC_KEY_ATTR = "corpse_npc_key"
 
 
@@ -88,7 +89,7 @@ class Corpse(BaseItem):
     consumed_by_harvest = True
 
 
-    def extra_actions(self) -> list:
+    def extra_actions(self, observer=None) -> list:
         """
         Purpose: Everything a player may do with a body.
 
@@ -113,9 +114,16 @@ class Corpse(BaseItem):
             nodes use, so a corpse that gains a Brain Farming yield gains its
             button with no edit here.
 
-            No level filtering. Two reasons: serialize_entity has no observer
-            to filter against, and the skill already refuses with the level it
-            wants, which tells the player something a missing button does not.
+            No level filtering, and the observer is ignored on purpose.
+            serialize_entity can pass one now, but the reason it can is
+            per-player DEPLETION -- a fact that is genuinely different for
+            two people in one room. A level is not: the skill refuses with
+            the level it wants, which tells the player something a missing
+            button does not.
+
+            A corpse cannot be spent in any case. The first success deletes
+            it (consumed_by_harvest), so there is never a corpse standing
+            there that one player has stripped and another has not.
 
         Notes/References:
             None
@@ -138,19 +146,31 @@ class Corpse(BaseItem):
             No conditions.
 
         Exit/Returns:
-            Returns the source NPC's key when one was stamped, else this
-            corpse's own gatherable key, else "".
+            Returns this corpse's own gatherable key, for example
+            "mutant_raider_corpse". Returns "" when it carries none.
 
         Module variables:
-            CORPSE_NPC_KEY_ATTR read.
+            None.
 
         Methodology:
-            The source NPC first, so a client that has art for a mutant
-            raider can reuse it lying down. The gatherable key is the fallback
-            rather than "" so a hand-built corpse still names something
-            specific, and a client with neither falls through to the corpse
-            FAMILY mesh -- which is the guarantee that adding a corpse never
-            requires a client edit.
+            THE BODY NAMES ITSELF, NEVER THE NPC THAT LEFT IT. This property
+            returned CORPSE_NPC_KEY_ATTR first until 09/21/2026, so that a
+            creature with art could reuse it "lying down". The mutant raider
+            got art on that day, and the reuse drew a mutant raider STANDING
+            UP on the tile where it died -- the exact picture that
+            FamilyShapes.MODELS exists to prevent.
+
+            The pose is the reason. A client model is one file in one pose,
+            and nothing in the ladder can lay down a model that also has to
+            stand up. One key cannot name both. This one names the body, so
+            art for a body is a record under THIS key and every tier below
+            keeps working meanwhile: nothing answers to "mutant_raider_corpse"
+            today, so a corpse falls to the corpse FAMILY mesh -- which is the
+            guarantee that adding a corpse never requires a client edit.
+
+            Provenance did not move. CORPSE_NPC_KEY_ATTR still says which NPC
+            died here, and butchery still reads it. Only the picture stopped
+            reading it.
 
         Notes/References:
             serializers._asset_identity reads `asset_kind`/`asset_key` off the
@@ -159,9 +179,4 @@ class Corpse(BaseItem):
         Author: Nick Hobar
         Creation date: 09/10/2026
         """
-        source_key = self.attributes.get(CORPSE_NPC_KEY_ATTR, default=None)
-
-        if source_key:
-            return str(source_key)
-
         return str(self.attributes.get("gatherable_key", default="") or "")

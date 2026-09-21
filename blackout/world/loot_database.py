@@ -18,9 +18,12 @@ Description: LootEntry / LootTableDef dataclasses and the LOOT_DB registry,
              the monster stat blocks in world/npc_defs/hostile.py do.
 """
 
+
+
 import random as _random_module
 from dataclasses import dataclass, field
 from typing import Optional
+
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -35,6 +38,7 @@ _EMPTY_WEIGHT = 0
 
 # The single value out of chance_denominator that makes a tertiary drop fire.
 _TERTIARY_HIT_VALUE = 1
+
 
 
 @dataclass
@@ -65,6 +69,7 @@ class LootEntry:
     weight: int = 1
 
 
+
 @dataclass
 class TertiaryDrop:
     """An independent 1-in-N roll that ignores the main table entirely.
@@ -76,6 +81,7 @@ class TertiaryDrop:
 
     entry: LootEntry
     chance_denominator: int
+
 
 
 @dataclass
@@ -265,6 +271,7 @@ class LootTableDef:
         return drops
 
 
+
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _resolve_quantity(entry: LootEntry, source) -> int:
@@ -298,6 +305,7 @@ def _resolve_quantity(entry: LootEntry, source) -> int:
     quantity = source.randint(entry.min_quantity, entry.max_quantity)
 
     return quantity
+
 
 
 def _pick_weighted(entries: list, total_weight: int, source):
@@ -342,6 +350,7 @@ def _pick_weighted(entries: list, total_weight: int, source):
     return None
 
 
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def validate_loot_tables() -> list:
@@ -384,6 +393,7 @@ def validate_loot_tables() -> list:
         problems.extend(table_problems)
 
     return problems
+
 
 
 def _validate_table(table_key: str, table: LootTableDef, item_db: dict) -> list:
@@ -443,6 +453,7 @@ def _validate_table(table_key: str, table: LootTableDef, item_db: dict) -> list:
     return problems
 
 
+
 def _validate_pools(table_key: str, table: LootTableDef) -> list:
     """
     Purpose: Report the errors that live on a table's pools rather than on an
@@ -491,6 +502,7 @@ def _validate_pools(table_key: str, table: LootTableDef) -> list:
     return problems
 
 
+
 def _collect_entries(table: LootTableDef) -> list:
     """
     Purpose: Flatten a table's three stages into one list of LootEntry.
@@ -524,7 +536,10 @@ def _collect_entries(table: LootTableDef) -> list:
     return entries
 
 
+
 from .loot_defs.hostile import TABLES as _HOSTILE
+
+
 
 # Every def module must appear in BOTH lists below. A module imported but left
 # out of the loop contributes nothing and raises nothing -- its tables simply

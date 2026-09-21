@@ -23,6 +23,7 @@ from commands.combat_cmds import CmdTickDebug
 from systems.core.tick import constants as const
 from systems.interface.statefeed.text import line_of
 from systems.core.tick import debug as tick_debug
+from systems.gameplay.combat import pvp
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.core.tick.engine import get_tick_engine
 
@@ -77,7 +78,12 @@ class TickDebugTestCase(EvenniaTest):
         The pending action is then replaced with a hold, so the ticks under
         test resolve without rolling real damage and killing the sparring
         partner mid-assertion.
+
+        Both characters are players, so the attack needs the PvP flag on both
+        sides. See systems/gameplay/combat/pvp.py.
         """
+        pvp.set_pvp(self.char1, True)
+        pvp.set_pvp(self.char2, True)
         ensure_combat_handler(self.char2)
         handler = ensure_combat_handler(self.char1)
 

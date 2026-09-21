@@ -267,9 +267,11 @@ _SHORTBOW_COMBAT_STYLES = {
 
 
 ITEMS = {
+
     # ---------------------------------
     # --- RUSTY SCRAP MELEE WEAPONS ---
     # ---------------------------------
+
     "rusty_scrap_dagger": ItemDef(
         key="rusty_scrap_dagger",
         name="rusty scrap dagger",
@@ -281,21 +283,34 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="dagger",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_dagger", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 4,
             "slash_attack_bonus": 2,
             "crush_attack_bonus": -4,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 3,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_DAGGER_COMBAT_STYLES,
         default_combat_style="jab",
@@ -312,21 +327,34 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="shortsword",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_shortsword", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 4,
             "slash_attack_bonus": 3,
             "crush_attack_bonus": -2,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 2,
             "crush_defense_bonus": 1,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 2,
+            "heavy_defense_bonus": 1,
+
             # Other bonuses
             "melee_strength_bonus": 5,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SHORTSWORD_COMBAT_STYLES,
         default_combat_style="irimi",
@@ -343,21 +371,34 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="scimitar",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_scimitar", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 1,
             "slash_attack_bonus": 7,
             "crush_attack_bonus": -2,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 1,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 6,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SCIMITAR_COMBAT_STYLES,
         default_combat_style="chop",
@@ -374,21 +415,34 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.TWO_HANDS,
         tool_type="spear",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_spear", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 5,
             "slash_attack_bonus": 5,
             "crush_attack_bonus": 5,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 1,
             "slash_defense_bonus": 1,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 1,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 6,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SPEAR_COMBAT_STYLES,
         default_combat_style="lunge",
@@ -405,21 +459,34 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.MAIN_HAND,
         tool_type="battleaxe",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_battleaxe", "weapon")],
         attack_speed=6,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": -2,
             "slash_attack_bonus": 6,
             "crush_attack_bonus": 3,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 9,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_BATTLEAXE_COMBAT_STYLES,
         default_combat_style="chop",
@@ -436,21 +503,34 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.TWO_HANDS,
         tool_type="greatsword",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_greatsword", "weapon")],
         attack_speed=7,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": -4,
             "slash_attack_bonus": 9,
             "crush_attack_bonus": 8,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 10,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_GREATSWORD_COMBAT_STYLES,
         default_combat_style="slash",
@@ -461,6 +541,7 @@ ITEMS = {
     # ---------------------------
     # --- SCRAP MELEE WEAPONS ---
     # ---------------------------
+
     "scrap_dagger": ItemDef(
         key="scrap_dagger",
         name="scrap dagger",
@@ -477,16 +558,29 @@ ITEMS = {
         tags=[("scrap_dagger", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 5,
             "slash_attack_bonus": 3,
             "crush_attack_bonus": -4,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 4,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_DAGGER_COMBAT_STYLES,
         default_combat_style="jab",
@@ -508,16 +602,29 @@ ITEMS = {
         tags=[("scrap_shortsword", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 6,
             "slash_attack_bonus": 4,
             "crush_attack_bonus": -2,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 2,
             "crush_defense_bonus": 1,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 2,
+            "heavy_defense_bonus": 1,
+
             # Other bonuses
             "melee_strength_bonus": 7,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SHORTSWORD_COMBAT_STYLES,
         default_combat_style="irimi",
@@ -539,16 +646,29 @@ ITEMS = {
         tags=[("scrap_scimitar", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 2,
             "slash_attack_bonus": 10,
             "crush_attack_bonus": -2,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 1,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 9,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SCIMITAR_COMBAT_STYLES,
         default_combat_style="chop",
@@ -570,16 +690,29 @@ ITEMS = {
         tags=[("scrap_spear", "weapon")],
         attack_speed=4,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 8,
             "slash_attack_bonus": 8,
             "crush_attack_bonus": 8,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 1,
             "slash_defense_bonus": 1,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 1,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 10,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SPEAR_COMBAT_STYLES,
         default_combat_style="lunge",
@@ -601,16 +734,29 @@ ITEMS = {
         tags=[("scrap_battleaxe", "weapon")],
         attack_speed=6,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": -2,
             "slash_attack_bonus": 8,
             "crush_attack_bonus": 5,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 13,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_BATTLEAXE_COMBAT_STYLES,
         default_combat_style="chop",
@@ -632,16 +778,299 @@ ITEMS = {
         tags=[("scrap_greatsword", "weapon")],
         attack_speed=7,
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": -4,
             "slash_attack_bonus": 13,
             "crush_attack_bonus": 10,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 14,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_GREATSWORD_COMBAT_STYLES,
+        default_combat_style="slash",
+    ),
+
+
+
+    # ----------------------------
+    # --- COPPER MELEE WEAPONS ---
+    # ----------------------------
+
+    "copper_dagger": ItemDef(
+        key="copper_dagger",
+        name="copper dagger",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Copper dagger. Bright enough to see your own mistake in.",
+        value=125,
+        weight=0.453,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="dagger",
+        tier=2,
+        req_level=20,
+        tags=[("copper_dagger", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 8,
+            "slash_attack_bonus": 4,
+            "crush_attack_bonus": -4,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 7,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_DAGGER_COMBAT_STYLES,
+        default_combat_style="jab",
+    ),
+
+    "copper_shortsword": ItemDef(
+        key="copper_shortsword",
+        name="copper shortsword",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Copper shortsword. It holds an edge and it holds a shine.",
+        value=325,
+        weight=1.814,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="shortsword",
+        tier=2,
+        req_level=20,
+        tags=[("copper_shortsword", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 11,
+            "slash_attack_bonus": 8,
+            "crush_attack_bonus": -2,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 2,
+            "crush_defense_bonus": 1,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 2,
+            "heavy_defense_bonus": 1,
+
+            # Other bonuses
+            "melee_strength_bonus": 12,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SHORTSWORD_COMBAT_STYLES,
+        default_combat_style="irimi",
+    ),
+
+    "copper_scimitar": ItemDef(
+        key="copper_scimitar",
+        name="copper scimitar",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Copper scimitar. The curve does most of the work.",
+        value=400,
+        weight=1.814,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="scimitar",
+        tier=2,
+        req_level=20,
+        tags=[("copper_scimitar", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 3,
+            "slash_attack_bonus": 15,
+            "crush_attack_bonus": -2,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 1,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 14,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SCIMITAR_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
+    "copper_spear": ItemDef(
+        key="copper_spear",
+        name="copper spear",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Copper spear. Reach, and a point on the end of it.",
+        value=325,
+        weight=2.267,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="spear",
+        tier=2,
+        req_level=20,
+        tags=[("copper_spear", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 12,
+            "slash_attack_bonus": 12,
+            "crush_attack_bonus": 12,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 1,
+            "slash_defense_bonus": 1,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 1,
+            "standard_defense_bonus": 1,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 12,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SPEAR_COMBAT_STYLES,
+        default_combat_style="lunge",
+    ),
+
+    "copper_battleaxe": ItemDef(
+        key="copper_battleaxe",
+        name="copper battleaxe",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Copper battleaxe. Heavy at the head, which is the idea.",
+        value=650,
+        weight=2.721,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="battleaxe",
+        tier=2,
+        req_level=20,
+        tags=[("copper_battleaxe", "weapon")],
+        attack_speed=6,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": -2,
+            "slash_attack_bonus": 16,
+            "crush_attack_bonus": 11,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 20,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_BATTLEAXE_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
+    "copper_greatsword": ItemDef(
+        key="copper_greatsword",
+        name="copper greatsword",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Copper greatsword. Two hands, and no second opinion.",
+        value=1000,
+        weight=3.628,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="greatsword",
+        tier=2,
+        req_level=20,
+        tags=[("copper_greatsword", "weapon")],
+        attack_speed=7,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": -4,
+            "slash_attack_bonus": 21,
+            "crush_attack_bonus": 16,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 22,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_GREATSWORD_COMBAT_STYLES,
         default_combat_style="slash",
@@ -652,13 +1081,13 @@ ITEMS = {
     # --------------------------------------
     # --- RUSTY SCRAP PROJECTILE WEAPONS ---
     # --------------------------------------
-    #
-    # A bow carries NO projectile_strength_bonus. The ammunition does. That is
-    # the OSRS rule, and it is what makes an arrow an upgrade path of its own
-    # rather than a consumable with no numbers on it.
-    #
+
+    # A bow carries NO projectile_strength_bonus. The ammunition does.
+    # It is what makes an arrow an upgrade path of its own rather than
+    # a consumable with no numbers on it.
+
     # max_range is the tiles it covers, and the snipe style adds two more.
-    # accepted_ammo names the family it fires; an arrow declares the same
+    # accepted_ammo names the family it fires. An arrow declares the same
     # family through a tag, so one arrow fits every bow that says so.
 
     "rusty_scrap_shortbow": ItemDef(
@@ -672,27 +1101,36 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.TWO_HANDS,
         tool_type="bow",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_shortbow", "weapon")],
         attack_speed=3,
         max_range=7,
         accepted_ammo=combat_constants.AMMO_FAMILY_ARROW,
         combat_stat_bonuses={
-            # Melee attack bonuses. A bow is a poor club and says so.
+            # Melee attack bonuses.
             "stab_attack_bonus": 0,
             "slash_attack_bonus": 0,
             "crush_attack_bonus": -4,
-            # Projectile attack bonuses. A short bow favours the light shaft.
+
+            # Projectile attack bonuses.
             "light_attack_bonus": 7,
             "standard_attack_bonus": 6,
             "heavy_attack_bonus": 4,
-            # Defense bonuses
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SHORTBOW_COMBAT_STYLES,
         default_combat_style="accurate",
@@ -726,16 +1164,77 @@ ITEMS = {
             "stab_attack_bonus": 0,
             "slash_attack_bonus": 0,
             "crush_attack_bonus": -4,
+
             # Projectile attack bonuses
             "light_attack_bonus": 11,
             "standard_attack_bonus": 9,
             "heavy_attack_bonus": 6,
-            # Defense bonuses
+
+            # Melee defense bonuses
             "stab_defense_bonus": 0,
             "slash_defense_bonus": 0,
             "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
             # Other bonuses
             "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SHORTBOW_COMBAT_STYLES,
+        default_combat_style="accurate",
+    ),
+
+
+
+    # ---------------------------------
+    # --- COPPER PROJECTILE WEAPONS ---
+    # ---------------------------------
+
+    "copper_shortbow": ItemDef(
+        key="copper_shortbow",
+        name="copper shortbow",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="A copper shortbow. It draws clean.",
+        value=340,
+        weight=3.628,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="bow",
+        tier=2,
+        req_level=20,
+        tags=[("copper_shortbow", "weapon")],
+        attack_speed=3,
+        max_range=7,
+        accepted_ammo=combat_constants.AMMO_FAMILY_ARROW,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 20,
+            "standard_attack_bonus": 19,
+            "heavy_attack_bonus": 16,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 0,
+            "slash_defense_bonus": 0,
+            "crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 0,
+            "standard_defense_bonus": 0,
+            "heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
         },
         combat_styles=_SHORTBOW_COMBAT_STYLES,
         default_combat_style="accurate",

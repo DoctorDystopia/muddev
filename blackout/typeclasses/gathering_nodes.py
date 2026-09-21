@@ -5,9 +5,12 @@ Creation date: 06/05/2026
 Description: Typeclasses for gatherable resource nodes in the world.
 """
 
+
+
 from typeclasses.objects import DefaultObject
 from commands.gathering_cmds import gathering_verbs
 from systems.gameplay.progression.skills.gatherables import GATHERABLE_REGISTRY
+from systems.gameplay.progression.skills.skill_defs.gathering import depletion
 from .spawners import register_spawner, spawn_once
 
 
@@ -64,21 +67,36 @@ class GatheringNode(DefaultObject):
     interact_verb = ""
 
 
-    def extra_actions(self) -> list:
+    def extra_actions(self, observer=None) -> list:
         """
         Purpose: One clickable verb per skill that can work this node.
 
         Entry:
-            No conditions.
+            observer is who the list is being built for, or None for a row
+            built for many readers. See serialize_entity.
 
         Exit/Returns:
             Returns a list of {"command", "label"} dicts, one per skill named
-            on this node's yields. Empty for an unregistered node.
+            on this node's yields. Empty for an unregistered node, and empty
+            for a node this observer has stripped.
 
         Module variables:
             GATHERABLE_REGISTRY read, through gathering_verbs.
 
         Methodology:
+            A SPENT NODE AFFORDS NOTHING, and the node is the right place to
+            say so. Depletion is per player (see
+            skill_defs/gathering/depletion.py), so the same node genuinely
+            offers a verb to one person in the room and none to the person
+            beside them. A client that drew the button anyway would draw one
+            the server refuses, which is the broken button the whole
+            server-names-the-verbs rule exists to prevent.
+
+            No observer means the whole-node answer. That is right for every
+            caller that has none: a node ARRIVING is whole for everybody, and
+            a node going spent reaches its one player through the
+            per-observer contents list rather than through a broadcast.
+
             Read from the registry rather than declared here, which is the
             whole reason `interact_verb` was not enough. Every gathering node
             in the game was a CUTTING node when that attribute was written,
@@ -97,6 +115,12 @@ class GatheringNode(DefaultObject):
         Author: Nick Hobar
         Creation date: 09/10/2026
         """
+        if observer is not None:
+            spent = depletion.is_spent_for(self, observer)
+
+            if spent:
+                return []
+
         return gathering_verbs(self)
 
 

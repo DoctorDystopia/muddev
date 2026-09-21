@@ -18,7 +18,11 @@ from world.item_database import ItemDef
 
 
 ITEMS = {
-    # ─── Rusty scrap melee armor feet ───────────────────────────────────────────────
+
+    # ------------------------------------
+    # --- RUSTY SCRAP MELEE ARMOR FEET ---
+    # ------------------------------------
+
     "rusty_scrap_boots": ItemDef(
         key="rusty_scrap_boots",
         name="rusty scrap boots",
@@ -30,26 +34,42 @@ ITEMS = {
         stackable=False,
         use_slot=WieldLocation.FEET,
         tool_type="boots",
-        tier=1,
+        tier=0,
         req_level=0,
         tags=[("rusty_scrap_boots", "armor")],
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 0,
             "slash_attack_bonus": 0,
             "crush_attack_bonus": 0,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 1,
             "slash_defense_bonus": 2,
             "crush_defense_bonus": 3,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 1,
+            "standard_defense_bonus": 2,
+            "heavy_defense_bonus": 3,
+
             # Other bonuses
             "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
         },
     ),
 
 
 
-    # ─── Scrap melee armor feet ───────────────────────────────────────────────
+    # ------------------------------
+    # --- SCRAP MELEE ARMOR FEET ---
+    # ------------------------------
+
     "scrap_boots": ItemDef(
         key="scrap_boots",
         name="scrap boots",
@@ -65,16 +85,76 @@ ITEMS = {
         req_level=10,
         tags=[("scrap_boots", "armor")],
         combat_stat_bonuses={
-            # Attack bonuses
+            # Melee attack bonuses
             "stab_attack_bonus": 0,
             "slash_attack_bonus": 0,
             "crush_attack_bonus": 0,
-            # Defense bonuses
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
             "stab_defense_bonus": 2,
             "slash_defense_bonus": 3,
             "crush_defense_bonus": 4,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 2,
+            "standard_defense_bonus": 3,
+            "heavy_defense_bonus": 4,
+
             # Other bonuses
             "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+    ),
+
+
+
+    # -------------------------------
+    # --- COPPER MELEE ARMOR FEET ---
+    # -------------------------------
+
+    "copper_boots": ItemDef(
+        key="copper_boots",
+        name="copper boots",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Copper boots. Solid over the toe, where it counts.",
+        value=300,
+        weight=1.36,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.FEET,
+        tool_type="boots",
+        tier=2,
+        req_level=20,
+        tags=[("copper_boots", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "stab_attack_bonus": 0,
+            "slash_attack_bonus": 0,
+            "crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "light_attack_bonus": 0,
+            "standard_attack_bonus": 0,
+            "heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "stab_defense_bonus": 5,
+            "slash_defense_bonus": 6,
+            "crush_defense_bonus": 7,
+
+            # Projectile defense bonuses
+            "light_defense_bonus": 5,
+            "standard_defense_bonus": 6,
+            "heavy_defense_bonus": 7,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
         },
     ),
 }

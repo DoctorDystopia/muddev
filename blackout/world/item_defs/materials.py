@@ -292,4 +292,152 @@ ITEMS = {
         stackable=False,
         tags=[("mutant_raider_prime_cured_hide", "crafting_material")],
     ),
+
+
+
+    # ─── Mutant giant cuts (Butchery) ─────────────────────────────────────
+    # The second corpse in the game, and the same four cuts one tier up. The
+    # giant opens at Butchery 20 and its filet at 30, which is the 10-per-tier
+    # spacing the Cutting poles already use: rusty at 0, metal at 10, copper
+    # at 20.
+    #
+    # EVERY VALUE AND WEIGHT HERE IS TWICE THE RAIDER COUNTERPART. One rule,
+    # applied across all 17 giant entries in this module and food.py, so a
+    # retune is one multiplication rather than 17 judgements. The heal ladder
+    # in food.py doubles by the same rule.
+    #
+    # The doubled WEIGHT is the cost of the tier. A giant cut heals twice as
+    # much and fills twice as much of the bag, so the trip back is the same
+    # trip it always was.
+
+    "mutant_giant_raw_chuck": ItemDef(
+        key="mutant_giant_raw_chuck",
+        name="mutant giant raw chuck",
+        desc="A slab off a mutant giant. It takes two hands.",
+        value=12,
+        weight=3.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_raw_chuck", "crafting_material")],
+    ),
+
+    "mutant_giant_raw_filet": ItemDef(
+        key="mutant_giant_raw_filet",
+        name="mutant giant raw filet",
+        desc="A clean, boneless portion of a mutant giant. The grain is coarse.",
+        value=36,
+        weight=1.6,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_raw_filet", "crafting_material")],
+    ),
+
+    "mutant_giant_raw_hide": ItemDef(
+        key="mutant_giant_raw_hide",
+        name="mutant giant raw hide",
+        desc="A heavy, scarred piece of skin from a mutant giant.",
+        value=24,
+        weight=2.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_raw_hide", "crafting_material")],
+    ),
+
+    # The level 30 hide. NOTHING CURES IT YET, and that is deliberate: the
+    # cut exists so the corpse reads the same as the raider's at every level,
+    # and the tier that needs a giant prime sinew or a giant prime cured hide
+    # adds the Curing recipe then. A gathered material with no recipe is a
+    # material a player can sell. A CRAFTED item with no recipe is the bug
+    # that left both hide capes uncraftable -- see curing_recipes.py.
+    "mutant_giant_prime_raw_hide": ItemDef(
+        key="mutant_giant_prime_raw_hide",
+        name="mutant giant prime raw hide",
+        desc="A whole back hide off a giant. One piece, and almost too wide to fold.",
+        value=60,
+        weight=2.8,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_prime_raw_hide", "crafting_material")],
+    ),
+
+
+
+    # ─── Rendered mutant giant products (Rendering) ───────────────────────
+    # The same two-per-tier choice the raider offers: the fat boiled out of a
+    # cut, or what is left once the fat is gone. Stackable follows the raider
+    # rule, which follows metal_dust against metal_chunk -- a substance with
+    # no shape of its own has nothing to lose by stacking.
+
+    "mutant_giant_tallow": ItemDef(
+        key="mutant_giant_tallow",
+        name="mutant giant tallow",
+        desc="A yellow cake of rendered fat, heavy for its size.",
+        value=20,
+        weight=0.8,
+        tradeable=True,
+        stackable=True,
+        tags=[("mutant_giant_tallow", "crafting_material")],
+    ),
+
+    "mutant_giant_fatless_meat": ItemDef(
+        key="mutant_giant_fatless_meat",
+        name="mutant giant fatless meat",
+        desc="A lean, dry cut boiled clean of fat. It still weighs on the arm.",
+        value=24,
+        weight=2.2,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_fatless_meat", "crafting_material")],
+    ),
+
+    "mutant_giant_prime_tallow": ItemDef(
+        key="mutant_giant_prime_tallow",
+        name="mutant giant prime tallow",
+        desc="Pale fat rendered off a giant filet. It sets hard and smells of nothing.",
+        value=52,
+        weight=0.6,
+        tradeable=True,
+        stackable=True,
+        tags=[("mutant_giant_prime_tallow", "crafting_material")],
+    ),
+
+    "mutant_giant_prime_meat": ItemDef(
+        key="mutant_giant_prime_meat",
+        name="mutant giant prime meat",
+        desc="A dense cut off a giant filet, trimmed down to the part worth keeping.",
+        value=64,
+        weight=1.2,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_prime_meat", "crafting_material")],
+    ),
+
+
+
+    # ─── Cured mutant giant products (Curing) ─────────────────────────────
+    # The two cures that are not food. The sinew strings the copper shortbow
+    # and the cured hide backs the copper hide cape, so both have a consumer
+    # the day they ship.
+
+    "mutant_giant_sinew": ItemDef(
+        key="mutant_giant_sinew",
+        name="mutant giant sinew",
+        desc="A thick fibrous cord off a giant. It creaks when you pull it.",
+        value=30,
+        weight=0.4,
+        tradeable=True,
+        stackable=True,
+        tags=[("mutant_giant_sinew", "crafting_material")],
+    ),
+
+    "mutant_giant_cured_hide": ItemDef(
+        key="mutant_giant_cured_hide",
+        name="mutant giant cured hide",
+        desc="Giant skin cured stiff. It turns a blade better than it should.",
+        value=24,
+        weight=2.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_cured_hide", "crafting_material")],
+    ),
 }

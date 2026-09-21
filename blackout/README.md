@@ -788,6 +788,104 @@ Every other client gets the shop menu from `trade`.
 
 ---
 
+## Gathering System
+
+A harvest is a **channel**, not one command. The verb commits you to a node,
+and the server swings at it every **4 ticks (2.4 s)** until something stops
+you. The model is OSRS woodcutting.
+
+### In-game commands
+
+```bash
+> cut rusty pole
+> butcher corpse
+> butcher corpse = filet
+> harvest corpse
+```
+
+`harvest` is the generic verb. It picks the skill from the tool in your hand.
+Type the verb again at the same node and the server tells you that you are
+already on it. Name a different node and it refuses, because a channel that
+switched targets quietly would make the verb mean "abandon what I was doing".
+
+### What one swing does
+
+1. It picks the best cut your level has unlocked, or the one you named.
+2. It rolls. A **miss is silent.** This is why the channel says
+   "You start to cut the rusty pole." one time at the start.
+3. A hit creates the item, teaches the XP, and reports to quests and stats.
+4. A hit with bare hands costs **1 hit point**. A miss costs nothing.
+5. A hit rolls depletion. A miss never depletes a node.
+
+### The roll
+
+Each node declares a `low` and a `high` numerator for each tool tier, in
+**1/255 units**. The chance moves along a straight line between them, from
+`low` at level 0 to `high` at level 127. OSRS quotes its woodcutting tables
+the same way, so a pair copied off the wiki means here what it means there.
+
+**The tool tier changes the chance and nothing else.** A better axe hits more
+often. It does not swing faster. Two knobs multiply, and no table can predict
+how fast the tiers then separate.
+
+**A tier is the requirement divided by `TIER_LEVEL_STEP`**, which is 10 and
+lives in `world/item_database.py`. `tier_for_level` is its one owner, and
+`test_item_database.py` asserts the rule over every entry in `ITEM_DB`.
+
+| Tool | `req_level` | `ItemDef.tier` |
+|---|---|---|
+| `rusty_scrap_axe`, `rusty_scrap_dagger` | 0 | 0 |
+| `scrap_axe`, `scrap_dagger` | 10 | 1 |
+| `copper_axe`, `copper_dagger` | 20 | 2 |
+
+The two fields are not one field. `req_level` is the gate, and it says who
+may wield the tool. `tier` is the ladder position, and it says what the swing
+is worth. A node reads the tier and knows nothing about levels.
+
+A tier the node does not name inherits the best row below it. A new axe tier
+therefore needs no edit to any node.
+
+### Depletion is per player
+
+A node you strip stays where it is. It keeps its place in the world pane, it
+renders as spent, and it offers **you** nothing until it recovers. Everyone
+else sees a whole node. Two players at one pole never compete, and nothing
+vanishes under anyone's feet.
+
+The state is `{character_id: expiry}` on the node's own `spent_until`
+Attribute, so a deleted node takes the fact with it.
+
+### What ends a channel
+
+| Reason | What you read |
+|---|---|
+| The node gave out | "You have stripped the ... bare." |
+| Your bag filled | "You stop: you have no room to carry any more." |
+| You walked away | *(nothing — the room description says it)* |
+| A fight started, or you died | "You are interrupted ..." |
+| The node was consumed | *(nothing — the harvest line said it)* |
+
+Nothing restarts on its own. Type the verb again.
+
+### Adding a node
+
+One entry in `GATHERABLE_REGISTRY`
+(`systems/gameplay/progression/skills/gatherables.py`). It needs `yields`, a
+`chances` row per tool tier, and `deplete_chance` with `respawn_seconds`. A
+node that allows bare hands also needs `bare_hand_chance`. Every one of those
+is checked at import, so a bad row fails at server start and not at a swing.
+
+| Where a fact lives | Module |
+|---|---|
+| What a node yields, to which skill, at what chance | `skills/gatherables.py` |
+| The cadence, the units, the stop messages | `skill_defs/gathering/constants.py` |
+| The maths, with no database in it | `skill_defs/gathering/roll.py` |
+| Who has stripped a node, and until when | `skill_defs/gathering/depletion.py` |
+| The channel on the global tick | `skill_defs/gathering/gather_handler.py` |
+| The swing, the item, the XP, the depletion | `skill_defs/gathering/gathering_skill.py` |
+
+---
+
 ## Crafting System
 
 ### In-game crafting
@@ -981,7 +1079,7 @@ tile. `_signed` **copies** the prototype that it gets. Every facility prototype
 is one dict, shared by every coordinate that names it. If `_signed` changed
 that dict, it would sign all of those tiles.
 
-The change takes effect on the next run of `clean_and_reload_all_maps.ps1`.
+The change takes effect on the next run of `clean_and_reload_all_maps.sh`.
 
 ### Player graffiti (`write`)
 
@@ -1311,11 +1409,11 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**2742 tests, ~20 minutes** (measured 09/18/2026). Run it before a merge, or
+**2879 tests, ~23 minutes** (measured 09/21/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash
-../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling
+../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
 ```
 
 Append `--durations 20` to see the slowest tests.

@@ -137,3 +137,77 @@ class MutantRaiderPrimeMeatRecipe(_RenderingRecipe):
     output_item_keys = ["mutant_raider_prime_meat"]
 
     success_message = "You render the filet down to a dense cut of prime meat."
+
+
+
+# ─── Mutant giant tier ──────────────────────────────────────────────────────
+# The same four recipes at 20 to 32, and every XP value is twice the raider
+# counterpart. The +2 between a tier's tallow and its meat carries over
+# unchanged: tallow is still what the skill is learned on.
+#
+# The economic decision carries over too, and it costs more here. A giant
+# steak needs one giant tallow AND one giant fatless meat, so it is two giant
+# corpses and two renders -- and a giant corpse weighs 60 units.
+
+
+class MutantGiantTallowRecipe(_RenderingRecipe):
+    "Boil the fat out of a giant chuck. It gives up a great deal of it."
+
+    name = "mutant giant tallow"
+    required_level = 20
+    xp_reward = 40
+
+    consumable_tags = ["mutant_giant_raw_chuck"]
+    consumable_names = ["mutant giant raw chuck"]
+
+    output_item_keys = ["mutant_giant_tallow"]
+
+    success_message = "The giant chuck renders down, and you skim off a heavy cake of tallow."
+
+
+
+class MutantGiantFatlessMeatRecipe(_RenderingRecipe):
+    "Cook a giant chuck down until nothing but lean meat is left."
+
+    name = "mutant giant fatless meat"
+    required_level = 22
+    xp_reward = 50
+
+    consumable_tags = ["mutant_giant_raw_chuck"]
+    consumable_names = ["mutant giant raw chuck"]
+
+    output_item_keys = ["mutant_giant_fatless_meat"]
+
+    success_message = "You cook the giant chuck down to a lean, dry cut of fatless meat."
+
+
+
+class MutantGiantPrimeTallowRecipe(_RenderingRecipe):
+    "Render a giant filet for the pale fat a good cut carries."
+
+    name = "mutant giant prime tallow"
+    required_level = 30
+    xp_reward = 40
+
+    consumable_tags = ["mutant_giant_raw_filet"]
+    consumable_names = ["mutant giant raw filet"]
+
+    output_item_keys = ["mutant_giant_prime_tallow"]
+
+    success_message = "The giant filet renders clean, and you set aside a block of prime tallow."
+
+
+
+class MutantGiantPrimeMeatRecipe(_RenderingRecipe):
+    "Cook a giant filet down to its dense, close-grained core."
+
+    name = "mutant giant prime meat"
+    required_level = 32
+    xp_reward = 60
+
+    consumable_tags = ["mutant_giant_raw_filet"]
+    consumable_names = ["mutant giant raw filet"]
+
+    output_item_keys = ["mutant_giant_prime_meat"]
+
+    success_message = "You render the giant filet down to a dense cut of prime meat."

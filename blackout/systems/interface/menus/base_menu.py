@@ -622,7 +622,7 @@ class BlackoutEvMenu(EvMenu):
             closing_text = self._resolve_closing_text()
 
             if closing_text:
-                self.msg((closing_text, _MSG_DIALOGUE))
+                self.msg(closing_text, _MSG_DIALOGUE)
 
         super().close_menu()
 
@@ -844,6 +844,40 @@ class BlackoutEvMenu(EvMenu):
         formatted_node = super()._format_node(nodetext, optionlist)
 
         return formatted_node
+
+
+    def msg(self, txt, msg_type=None) -> None:
+        """
+        Purpose: Send one menu line to the caller, tagged for the right tab.
+
+        Entry:
+            txt is a plain string. msg_type is a routing tag from
+            feed_const, or None for the menu tag.
+
+        Exit/Returns:
+            None.
+
+        Module Globals:
+            _MSG_MENU read.
+
+        Methodology:
+            The parent's `msg` builds `text=(txt, {"type": "menu"})` with that
+            dict typed in place. A call site that passed its OWN (text, tag)
+            tuple handed the parent a tuple to wrap a SECOND time, and the
+            client printed the inner dict as a line of its own. So the tag is
+            an ARGUMENT here, never part of `txt`. The default keeps every
+            parent-side call (the option prompt, a refusal) on the menu tag.
+
+        Notes/References:
+            BlackoutRecipe.msg carries the same fix against the crafting
+            contrib, which wraps the same way.
+
+        Author: Nick Hobar
+        Creation date: 09/20/2026
+        """
+        tag = msg_type or _MSG_MENU
+
+        self.caller.msg(text=(txt, tag), session=self._session)
 
 
     def display_nodetext(self) -> None:

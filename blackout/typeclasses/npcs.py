@@ -5,6 +5,8 @@ Creation date: 07/13/2026
 Description: Talkative and shopkeeper NPC typeclasses, plus the talk command.
 """
 
+
+
 from evennia import Command, CmdSet
 from evennia import DefaultObject
 from evennia.utils import logger
@@ -16,6 +18,8 @@ from .scripts import Script
 from .spawners import register_spawner, spawn_once
 from systems.interface.menus.base_menu import start_blackout_menu
 from systems.interface.statefeed import constants as feed_const
+
+
 
 # Every line this module sends a player is about the room around you, so the
 # routing tag is bound once here rather than repeated at every call site.
@@ -641,7 +645,7 @@ class ShopkeepNPC(TalkativeNPC):
         self.db.max_held_items = SHOPKEEP_MAX_HELD_ITEMS
         self.ensure_cleanup_script()
 
-    def extra_actions(self) -> list:
+    def extra_actions(self, observer=None) -> list:
         """
         Purpose: Both things a player may do with a shopkeeper, for a right
                  click.
