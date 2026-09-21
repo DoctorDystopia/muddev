@@ -340,18 +340,17 @@ def _packed_asset_keys():
         None.
 
     Methodology:
-        Read from assets/model_manifest.json through pack_model, which CLAUDE.md
-        already names as the one file deciding which models exist. NOT from the
-        served tree: a key whose .glb has simply not been packed on this
-        machine yet is a build state, not a client typo, and failing on it
-        would make the check depend on whether someone had run the packer.
+        Read from the model records in assets/models/, which decide which
+        models exist: every record's key and every alias. NOT from the served
+        tree: a key whose .glb has not been built on this machine yet is a
+        build state, not a client typo. The pipeline check owns that state.
 
     Notes/References:
         assets/ is import-safe by design; see test_model_budgets.py.
     """
-    from assets import pack_model
+    from assets.pipeline import records
 
-    return {asset_key for _source, asset_key in pack_model.load_manifest()}
+    return {key for record in records.load_all() for key in record.keys}
 
 
 def _map_module_names():
@@ -734,7 +733,7 @@ class ClientTerrainTileTests(unittest.TestCase):
                 self.assertIn(
                     asset_key, known,
                     "%s surfaces '%s' with '%s', which assets/"
-                    "model_manifest.json does not build. The map keeps its "
+                    "models/ has no record for. The map keeps its "
                     "plain slab and nothing reports it."
                     % (client, name, asset_key))
 
@@ -803,7 +802,7 @@ class ClientFamilyModelTests(unittest.TestCase):
                 self.assertIn(
                     asset_key, known,
                     "%s stands a family in for '%s', which assets/"
-                    "model_manifest.json does not build. The family keeps its "
+                    "models/ has no record for. The family keeps its "
                     "procedural shape and nothing reports it."
                     % (client, asset_key))
 

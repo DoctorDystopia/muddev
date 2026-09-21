@@ -511,7 +511,7 @@ def _target_token(entity, verb: str) -> str:
     return str(entity.key)
 
 
-def interact_actions(entity, kind: str) -> list:
+def interact_actions(entity, kind: str, observer=None) -> list:
     """
     Purpose: Name EVERY command a client may send to act on this entity.
 
@@ -566,7 +566,7 @@ def interact_actions(entity, kind: str) -> list:
     actions = []
     seen = set()
 
-    for action in _declared_actions(entity):
+    for action in _declared_actions(entity, observer):
         command = str(action.get("command", "")).strip()
 
         if not command or command in seen:
@@ -660,7 +660,7 @@ def _action_label(label, command: str) -> str:
     return words[:1].upper() + words[1:]
 
 
-def _declared_actions(entity) -> list:
+def _declared_actions(entity, observer=None) -> list:
     """
     Purpose: Read an entity's own action list, if it publishes one.
 
@@ -695,12 +695,76 @@ def _declared_actions(entity) -> list:
         return []
 
     try:
-        return list(source() or [])
+        return list(source(observer=observer) or [])
     except Exception as exc:
         logger.log_err(
             f"_declared_actions: {entity} extra_actions failed: {exc!r}")
 
         return []
+
+
+def _is_spent_for(entity, observer) -> bool:
+    """
+    Purpose: Whether this observer has already stripped this node.
+
+    Entry:
+        entity - a live object. Almost none of them are gathering nodes.
+        observer - who is looking, or None for a row built for many readers.
+
+    Exit/Returns:
+        Returns True only for a gathering node this observer has spent.
+        False for everything else, including every failure.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Guarded twice before the import, because this runs once per entity in
+        the neighbourhood on every move and most of those entities are
+        people. No observer means a broadcast row, which is always the whole
+        node -- see serialize_entity's Entry. No gatherable_key means the
+        object is not a node at all, and that is one Attribute read against
+        an import and a dict walk.
+
+        The import is deferred for the reason every reach from the feed into
+        a game system is: the skills package imports the feed back, and a
+        module-level import here closes the ring.
+
+        Wrapped, like _declared_actions beside it. A cosmetic feed runs
+        during combat and room broadcasts and must never raise into a
+        gameplay path. A node whose spent state cannot be read renders as
+        whole, which is the state it was in before any of this existed.
+
+    Notes/References:
+        systems/gameplay/progression/skills/skill_defs/gathering/depletion.py
+        owns the fact and carries why it lives on the node.
+
+    Author: Nick Hobar
+    Creation date: 09/20/2026
+    """
+    if observer is None:
+        return False
+
+    attributes = getattr(entity, "attributes", None)
+
+    if attributes is None:
+        return False
+
+    gatherable_key = attributes.get("gatherable_key", default=None)
+
+    if not gatherable_key:
+        return False
+
+    from systems.gameplay.progression.skills.skill_defs.gathering import (
+        depletion,
+    )
+
+    try:
+        return depletion.is_spent_for(entity, observer)
+    except Exception as exc:
+        logger.log_err(f"_is_spent_for: {entity} failed: {exc!r}")
+
+        return False
 
 
 def _world_label(entity) -> tuple:
@@ -757,7 +821,7 @@ def _world_label(entity) -> tuple:
     return label, str(kind or const.LABEL_KIND_SIGN)
 
 
-def serialize_entity(entity, coords=()) -> dict:
+def serialize_entity(entity, coords=(), observer=None) -> dict:
     """
     Purpose: Render one visible entity as a plain dict for a graphical client.
 
@@ -765,6 +829,27 @@ def serialize_entity(entity, coords=()) -> dict:
         entity - a live, non-deleted object.
         coords - the [x, y, z] of the room it is standing in, or () when the
                  caller has not resolved one.
+        observer - who this row is being built FOR, or None when the caller
+                 is building one row for many readers.
+
+        THE LIST USED NOT TO KNOW WHO WAS LOOKING, and for every entity but
+        one it still does not. Four typeclasses cite that rule in their own
+        comments as the reason they do no level filtering, and none of them
+        should start: a verb a client draws and the server refuses is a
+        broken button, but a verb drawn for someone too low to use it is an
+        honest one that says "not yet".
+
+        Gathering nodes deplete PER PLAYER (see
+        skill_defs/gathering/depletion.py), and that is not a matter of
+        taste: the same node genuinely affords something to one person in
+        the room and nothing to the person beside them. One fact, two
+        answers, so the row has to know who asked.
+
+        None is the supported case and stays supported. Every broadcast path
+        -- emit_entity_arrived, the menu's verb lookup -- passes nothing and
+        gets the whole-node answer, which is correct for them: a node
+        appearing is whole for everyone, and it goes spent through the
+        per-observer list rather than through a broadcast.
 
     Exit/Returns:
         Returns a dict of JSON-safe primitives. Always carries id, name, kind,
@@ -824,7 +909,8 @@ def serialize_entity(entity, coords=()) -> dict:
     """
     kind, asset_key = _classify(entity)
     family = _mesh_family(entity, kind)
-    actions = interact_actions(entity, kind)
+    actions = interact_actions(entity, kind, observer=observer)
+    spent = _is_spent_for(entity, observer)
     body = {
         "id": entity.id,
         "name": str(entity.key),
@@ -844,6 +930,13 @@ def serialize_entity(entity, coords=()) -> dict:
     # it when the key is absent.
     if len(actions) > 1:
         body["actions"] = actions
+
+    # Sent ONLY when it is True, the rule every optional field on this row
+    # follows. A client that has never heard of it keeps the behaviour it
+    # had, and a spent node still reports an empty `interact` -- so the
+    # button goes whether or not the client draws the stump.
+    if spent:
+        body[const.ENTITY_SPENT_KEY] = True
 
     # The primary verb's own answer, mirrored beside `interact` for the same
     # reason `interact` exists at all: a client that reads only the single
@@ -943,7 +1036,7 @@ def area_entity_ids(rooms, exclude=()) -> set:
     return visible
 
 
-def serialize_area(rooms, exclude=(), only_ids=None) -> list:
+def serialize_area(rooms, exclude=(), only_ids=None, observer=None) -> list:
     """
     Purpose: Render everything visible across a group of rooms.
 
@@ -1020,13 +1113,13 @@ def serialize_area(rooms, exclude=(), only_ids=None) -> list:
             continue
 
         coords = coords_by_room.get(obj.location.id, [])
-        entry = serialize_entity(obj, coords=coords)
+        entry = serialize_entity(obj, coords=coords, observer=observer)
         entities.append(entry)
 
     return entities
 
 
-def serialize_contents(room, exclude=()) -> list:
+def serialize_contents(room, exclude=(), observer=None) -> list:
     """
     Purpose: Render everything visible in a room.
 
@@ -1067,7 +1160,7 @@ def serialize_contents(room, exclude=()) -> list:
         if obj.destination is not None:
             continue
 
-        entry = serialize_entity(obj, coords=coords)
+        entry = serialize_entity(obj, coords=coords, observer=observer)
         entities.append(entry)
 
     return entities

@@ -50,7 +50,7 @@ const Z_LAYOUT_ORDER := ["oasis", "oasis_outskirts", "azm_plains", "trade town s
 ## THE KEY IS A MAP NAME AND THE VALUE IS AN ASSET KEY, and the two are checked
 ## from opposite ends. `test_client_constants.py` asserts every key names a map
 ## some module declares and every value names a model
-## `assets/model_manifest.json` builds -- because both halves fail SILENTLY.
+## a model record in `assets/models/` builds -- because both halves fail SILENTLY.
 ## A misspelled map draws no terrain on a map that exists; a misspelled asset
 ## key fetches nothing and leaves the slab, and neither logs anything.
 ##
@@ -103,16 +103,21 @@ const ROOM_KIND_COLORS := {
 	# label, because the two sit a few tiles apart and the route through them is
 	# the decision the food chain is built around.
 	"Curing Chamber Facility": Color("88aacc"),
-	# Two clearings, not one, and they are told apart by what they yield:
-	# oasis grows rusty poles, oasis_outskirts grows metal ones. Coloured for
-	# the material rather than for the tile, so the map reads as a gradient
-	# from scrap to stock as the player moves out.
+	# Three clearings, not one, and they are told apart by what they yield:
+	# oasis grows rusty poles, oasis_outskirts grows metal ones, and azm_plains
+	# grows copper. Coloured for the material rather than for the tile, so the
+	# map reads as a gradient from scrap to stock to copper as the player moves
+	# out.
 	#
 	# This said "Pole clearing" until 08/25/2026 -- a key no map has ever
 	# declared, copied here from the browser pane before that pane was fixed.
 	# Both real clearings rendered the hash colour and nothing errored.
 	"Rusty pole clearing": Color("cc6633"),
 	"Metal pole clearing": Color("8899a6"),
+	# Brighter than the rusty pole on purpose. The two are the same hue family,
+	# so a copper as dark as cc6633 reads as rust to a player who crosses from
+	# one map to the next.
+	"Copper pole clearing": Color("e6944c"),
 	"Shopkeeper": Color("ddcc44"),
 	"Mutant Raider Tile": Color("8fbf00"),
 	"Big Mutant Tile": Color("bf3f00"),

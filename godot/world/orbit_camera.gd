@@ -1,5 +1,10 @@
 extends Node3D
-## Orbit rig that follows the player marker.
+## Orbit rig that follows the player's avatar.
+##
+## It followed the MARKER until 09/20/2026, and the difference is the whole
+## point of the split: the marker is the square the server has you on and it
+## snaps, while the avatar slides towards it. A camera tied to the marker would
+## jump a whole tile per tick however smoothly the figure walked under it.
 ##
 ## Pitch is stored as ELEVATION ABOVE THE HORIZON rather than as a polar angle,
 ## because every clamp is naturally expressed that way: floor it just above
@@ -24,7 +29,16 @@ const PITCH_START := 0.63
 const PITCH_MIN := -0.5
 const PITCH_MAX := 1.45
 const YAW_START := 0.40
-const FOCUS_HEIGHT := 0.30      # aim above the marker's base, not at it
+const FOCUS_HEIGHT := 0.30      # aim above the avatar's base, not at it
+
+## How hard the rig is pulled towards the focus, per second.
+##
+## It is a RATE, not a fraction of the gap per frame, and [method _process]
+## turns it into one with an exponential rather than by multiplying by the
+## frame time. Those are the same number only at a steady frame rate: the old
+## `min(speed * delta, 1)` form clamped to a hard snap below 8 frames per
+## second and tightened smoothly above it, so the camera lagged differently on
+## two machines watching the same walk.
 const FOLLOW_SPEED := 8.0
 
 @export var target: Node3D
@@ -58,7 +72,12 @@ func _process(delta: float) -> void:
 
 	var focus := target.global_position + Vector3(0.0, FOCUS_HEIGHT, 0.0)
 
-	global_position = global_position.lerp(focus, minf(FOLLOW_SPEED * delta, 1.0))
+	# 1 - e^(-k dt) is the fraction of the remaining gap an exponential decay
+	# closes in dt, and it is the only form that gives the same path whatever
+	# the frame rate. It also cannot overshoot, however long a frame took.
+	var weight := 1.0 - exp(-FOLLOW_SPEED * delta)
+
+	global_position = global_position.lerp(focus, weight)
 
 
 ## MIDDLE drag orbits, and that is a deliberate reassignment.

@@ -45,6 +45,7 @@ const KEY_SKILL_DETAIL := "skill_detail"
 const KEY_SFX_VOLUME := "sfx_volume"
 const KEY_SHOW_XP_DROPS := "show_xp_drops"
 const KEY_SHOW_SKILL_RATES := "show_skill_rates"
+const KEY_SMOOTH_MOVEMENT := "smooth_movement"
 
 const DEFAULT_FONT_SIZE := 14
 const MIN_FONT_SIZE := 9
@@ -183,6 +184,26 @@ const DEFAULT_SHOW_XP_DROPS := true
 ## skills it is three more lines over the world.
 const DEFAULT_SHOW_SKILL_RATES := false
 
+## Whether a figure SLIDES between tiles instead of appearing on each one.
+##
+## On by default. A step per tick drawn as a jump per tick is what the client
+## did until 09/20/2026, and it reads as teleporting rather than as walking.
+##
+## ## Why this is one setting and not two
+##
+## The animation draws a figure away from the square the server has it on, and
+## every command a player gives is resolved against that square. So the client
+## marks the true tile for as long as a figure is off it -- see [TrueTileMark].
+## The mark is not separately switchable, and that is deliberate: it exists to
+## repay what the animation costs, so a player who could keep the animation and
+## drop the mark would be choosing to be told less than the server says. With
+## the animation off there is nothing to repay, and no mark is drawn.
+##
+## It is a LOOK, which is why it lives here. The server sends one tile per
+## tick either way, this client asks for nothing extra, and a player who turns
+## it off sees exactly the same facts one frame sooner.
+const DEFAULT_SMOOTH_MOVEMENT := true
+
 ## Emitted after any change, so every consumer redraws from one place.
 signal changed
 
@@ -196,6 +217,7 @@ var skill_detail := DEFAULT_SKILL_DETAIL
 var sfx_volume := DEFAULT_SFX_VOLUME
 var show_xp_drops := DEFAULT_SHOW_XP_DROPS
 var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
+var smooth_movement := DEFAULT_SMOOTH_MOVEMENT
 
 var _path: String
 
@@ -238,6 +260,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_SHOW_XP_DROPS, DEFAULT_SHOW_XP_DROPS))
 	show_skill_rates = bool(config.get_value(
 		SECTION, KEY_SHOW_SKILL_RATES, DEFAULT_SHOW_SKILL_RATES))
+	smooth_movement = bool(config.get_value(
+		SECTION, KEY_SMOOTH_MOVEMENT, DEFAULT_SMOOTH_MOVEMENT))
 
 	changed.emit()
 
@@ -258,6 +282,7 @@ func save_to_disk() -> Error:
 	config.set_value(AUDIO_SECTION, KEY_SFX_VOLUME, sfx_volume)
 	config.set_value(SECTION, KEY_SHOW_XP_DROPS, show_xp_drops)
 	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
+	config.set_value(SECTION, KEY_SMOOTH_MOVEMENT, smooth_movement)
 
 	return config.save(_path)
 
@@ -386,6 +411,16 @@ func set_show_skill_rates(value: bool) -> void:
 	changed.emit()
 
 
+## Slide figures between tiles, or draw each one on its tile, and persist it.
+func set_smooth_movement(value: bool) -> void:
+	if value == smooth_movement:
+		return
+
+	smooth_movement = value
+	save_to_disk()
+	changed.emit()
+
+
 ## True when a clicked skill should open the detail view inside the pane.
 ##
 ## Two readers ask this rather than comparing against a mode string, so the
@@ -414,6 +449,7 @@ func reset() -> void:
 	sfx_volume = DEFAULT_SFX_VOLUME
 	show_xp_drops = DEFAULT_SHOW_XP_DROPS
 	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
+	smooth_movement = DEFAULT_SMOOTH_MOVEMENT
 	save_to_disk()
 	changed.emit()
 

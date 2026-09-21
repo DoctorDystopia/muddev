@@ -239,7 +239,7 @@ func _no_family_model_names_something_the_server_cannot_send() -> void:
 ##
 ## That the key names art the BUILD can produce is checked from the other side,
 ## in `systems/interface/statefeed/tests/test_client_constants.py`, which can
-## read `assets/model_manifest.json` and this cannot.
+## read the model records in `assets/models/` and this cannot.
 func _every_family_model_names_an_asset_key() -> void:
 	for family: String in FamilyShapes.modelled_families():
 		var asset_key := FamilyShapes.model_for(family)
@@ -271,7 +271,7 @@ func _a_family_with_no_model_says_so() -> void:
 ## The regression this tier arrived with.
 ##
 ## EntityPool redraws on `refreshed`, which names an ASSET KEY. An entity drawn
-## at tier 2 does not carry that key — a corpse's asset is the dead NPC's — so
+## at tier 2 does not carry that key — a corpse's asset is its own body's — so
 ## the pool comparing the two directly meant `corpse_skeleton` landing matched
 ## nothing and every body on screen stayed a generic box until something
 ## unrelated rebuilt the room. `redraws_for` is where that question moved.
@@ -286,10 +286,10 @@ func _art_redraws_the_entities_it_actually_draws() -> void:
 	_expect(not resolver.redraws_for("floating_eye", Const.FAMILY_NPC,
 			"player_character"),
 		"art for an unrelated key leaves an entity alone")
-	_expect(resolver.redraws_for("mutant_raider", Const.FAMILY_CORPSE,
+	_expect(resolver.redraws_for("mutant_raider_corpse", Const.FAMILY_CORPSE,
 			corpse_model),
 		"art for a family's model redraws an entity of that family")
-	_expect(not resolver.redraws_for("mutant_raider", Const.FAMILY_NPC,
+	_expect(not resolver.redraws_for("mutant_raider_corpse", Const.FAMILY_NPC,
 			corpse_model),
 		"a family's model leaves entities of other families alone")
 

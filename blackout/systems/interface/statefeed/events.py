@@ -1114,7 +1114,8 @@ def _delta_is_worth_sending(added, removed, current) -> bool:
 
 def _emit_full_contents(observer, rooms, force: bool) -> int:
     """Send the whole visible list and record what was sent."""
-    entities = serializers.serialize_area(rooms, exclude=(observer,))
+    entities = serializers.serialize_area(rooms, exclude=(observer,),
+                                          observer=observer)
     payload = RoomPlayersPayload(entities=entities)
     sent = emit(observer, payload, force=force)
 
@@ -1228,7 +1229,8 @@ def emit_room_contents(observer, force: bool = False) -> int:
 
     entities = serializers.serialize_area(rooms,
                                           exclude=(observer,),
-                                          only_ids=added)
+                                          only_ids=added,
+                                          observer=observer)
     payload = RoomPlayersDeltaPayload(added=entities,
                                       removed=sorted(removed))
     sent = emit(observer, payload, force=force)
@@ -1432,6 +1434,45 @@ def refresh_status(observer) -> bool:
     """
     marked = _mark_stale_if_heard(
         observer, CharStatusPayload.channel, emit_status, 0.0
+    )
+
+    return marked
+
+
+
+def _emit_room_contents_full(observer) -> int:
+    """Send the observer the WHOLE visible entity list, never a delta.
+
+    A module-level function rather than a lambda because buffer.mark_stale
+    keys on (observer, builder) to coalesce, and a fresh lambda per call is a
+    fresh key per call -- which is the coalescing turned off without anyone
+    noticing.
+
+    Forced, because the delta path compares entity IDS and a node going spent
+    changes no ID. The delta would be empty and the pane would keep offering
+    a verb that no longer works.
+    """
+    sent = emit_room_contents(observer, force=True)
+
+    return sent
+
+
+
+def refresh_room_contents(observer, delay: float = 0.0) -> bool:
+    """Mark the observer's view of what is around them out of date.
+
+    See refresh_summary for the marking pattern. This one exists because the
+    entity list stopped being the same for every observer: a gathering node
+    that one player has stripped still stands there for everyone else, and
+    affords nothing to the one who stripped it.
+
+    The DELAY is what makes the node come back. Nothing happens in the world
+    at the moment a spent timer expires -- no move, no hit, no command -- so
+    only a mark scheduled at the deadline can put the verb back on the pane.
+    That is the same arrangement a cure coming due uses on the dossier.
+    """
+    marked = _mark_stale_if_heard(
+        observer, RoomPlayersPayload.channel, _emit_room_contents_full, delay
     )
 
     return marked

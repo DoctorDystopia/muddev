@@ -134,8 +134,11 @@ func place(index: int, asset: String, family: String,
 		return
 
 	var node := resolver.resolve_entity(asset, family)
+	# A cell shows one item alone, so a model that PRESENTATION shrinks for
+	# the world still fills its cell like every other item.
+	var fill := ITEM_SCALE / ModelLoader.presentation_scale(node)
 
-	node.scale = Vector3.ONE * ITEM_SCALE
+	node.scale = Vector3.ONE * fill
 	node.position = cell_centre(index)
 	node.rotation = Vector3(ITEM_TILT_X, 0.0, 0.0)
 

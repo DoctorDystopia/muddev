@@ -25,7 +25,7 @@ const Menu := preload("res://scenes/world/choose_option.gd")
 ## A corpse as the server serialises one: two verbs, so `actions` is present.
 const CORPSE := {
 	"id": 40470.0, "name": "Mutant Raider corpse", "kind": "corpse",
-	"asset": "mutant_raider", "family": "corpse",
+	"asset": "mutant_raider_corpse", "family": "corpse",
 	"interact": "butcher Mutant Raider corpse",
 	"actions": [
 		{"command": "butcher Mutant Raider corpse", "label": "Butcher"},

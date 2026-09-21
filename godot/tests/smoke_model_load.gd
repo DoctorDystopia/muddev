@@ -51,6 +51,11 @@ const SQUARE_TOLERANCE := 0.02
 ## intent.
 const UNIT_TOLERANCE := 0.02
 
+## How much taller than deep a standing figure must measure. The flat bind-pose
+## bug measured 0.17. A standing figure with an arm held forward measures 1.50.
+## See [method _a_rigged_model_stands_up].
+const UPRIGHT_RATIO := 1.25
+
 var _failures := 0
 var _resolver: MeshResolver
 
@@ -121,6 +126,11 @@ func _on_refreshed(asset_key: String) -> void:
 
 	if MapPalette.TILE_MODELS.values().has(asset_key):
 		_a_terrain_tile_is_a_unit_square(asset_key)
+		_reported(asset_key)
+		return
+
+	if _outstanding.has(asset_key) and _scaled_keys().has(asset_key):
+		_a_presentation_scale_sizes_the_world_not_the_cell(asset_key)
 		_reported(asset_key)
 		return
 
@@ -241,6 +251,67 @@ func _on_refreshed(asset_key: String) -> void:
 		if ground != null:
 			ground.free()
 
+	# Every model that PRESENTATION resizes, from the table and not by name.
+	for sized_key: String in _scaled_keys():
+		if not _resolver.may_have_art(sized_key):
+			_expect(false, "%s is in the served manifest. Build it and reload "
+				% sized_key + "Evennia so collectstatic picks it up")
+			continue
+
+		_outstanding[sized_key] = true
+
+		var pending_sized := _resolver.resolve_entity(sized_key, "item")
+
+		pending_sized.free()
+
+
+## Every key in PRESENTATION that sets a scale.
+func _scaled_keys() -> Array[String]:
+	var keys: Array[String] = []
+
+	for key: String in ModelRegistry.PRESENTATION:
+		var entry: Dictionary = ModelRegistry.PRESENTATION[key]
+
+		if entry.has("scale"):
+			keys.append(key)
+
+	return keys
+
+
+## A presentation scale shrinks the model in the world, and a grid cell undoes
+## it.
+##
+## Two facts about one number. The world draws the model at its scale of the
+## unit box, so a clip is smaller than its gun. A grid cell divides the same
+## number back out, so the clip fills its cell like every other item. The
+## second fact rides on metadata that `duplicate()` must copy. Only a copy from
+## the real cache proves that.
+func _a_presentation_scale_sizes_the_world_not_the_cell(asset_key: String) -> void:
+	var model := _resolver.resolve_entity(asset_key, "item")
+	var wanted: float = ModelRegistry.PRESENTATION[asset_key]["scale"]
+	var bounds := _bounds_of(model)
+	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+	print("%s: longest %.3f, presentation scale %.3f" % [asset_key, longest, wanted])
+
+	_expect(absf(longest - wanted) < UNIT_TOLERANCE,
+		"%s draws at its presentation scale (longest %.3f, wanted %.3f)"
+		% [asset_key, longest, wanted])
+	_expect(is_equal_approx(ModelLoader.presentation_scale(model), wanted),
+		"and a cached copy still carries that scale for a grid cell")
+
+	model.scale = Vector3.ONE / ModelLoader.presentation_scale(model)
+
+	var cell_bounds := _bounds_of(model)
+	var cell_longest := maxf(cell_bounds.size.x,
+		maxf(cell_bounds.size.y, cell_bounds.size.z))
+
+	_expect(absf(cell_longest - 1.0) < UNIT_TOLERANCE,
+		"and a cell that divides it out fills the unit box again (%.3f)"
+		% cell_longest)
+
+	model.free()
+
 
 ## The character is measured standing up, whatever its bind pose claims.
 ##
@@ -263,10 +334,16 @@ func _on_refreshed(asset_key: String) -> void:
 ##
 ## So what is asserted is the property that outlives either asset: the merged
 ## box is never smaller than the meshes alone -- a merge cannot shrink a box, so
-## a violation means bounds_of stopped merging -- and the figure measures far
-## taller than it is DEEP. Depth, not width: the T-pose's 1.859 of outstretched
-## arms is fractionally wider than it is tall, so "taller than wide" is false
-## here for a model that is standing up perfectly straight.
+## a violation means bounds_of stopped merging -- and the figure measures
+## clearly taller than it is DEEP. Depth, not width: the T-pose's 1.859 of
+## outstretched arms is fractionally wider than it is tall, so "taller than
+## wide" is false here for a model that is standing up perfectly straight.
+##
+## "Clearly", not "far". The bar was 2.0 for the base character. The OSRS
+## placeholder that replaced it holds one arm forward at chest height, 0.89
+## units out, so it measures 1.0 tall and 0.667 deep: a ratio of 1.50 for a
+## figure that stands up straight (measured 09/18/2026). The bug reads 0.17.
+## [constant UPRIGHT_RATIO] sits between the two, and a pose does not move it.
 func _a_rigged_model_stands_up() -> void:
 	var rigged := _resolver.resolve_entity(RIGGED_ASSET, "character")
 
@@ -282,8 +359,8 @@ func _a_rigged_model_stands_up() -> void:
 		% [bounds.size.x, bounds.size.y, bounds.size.z,
 			mesh_only.size.x, mesh_only.size.y, mesh_only.size.z])
 
-	_expect(uprightness > 2.0,
-		"a person measures far taller than they are deep (ratio %.2f)"
+	_expect(uprightness > UPRIGHT_RATIO,
+		"a person measures clearly taller than they are deep (ratio %.2f)"
 		% uprightness)
 
 	# A merge cannot make a box smaller. If bounds_of ever reports LESS than the
@@ -349,8 +426,9 @@ func _a_body_is_lying_down() -> void:
 ## Sketchfab's converter wrote the authoring tool's base-colour alpha into this
 ## glTF, so the eye's body arrives at alpha 0 against alphaMode BLEND: an
 ## invisible shell around a floating eyeball. It loads cleanly and reports no
-## error, which is exactly why it needs a hand-written correction and a test --
-## the only symptom is a person saying it looks wrong.
+## error, which is exactly why it needs a correction and a test -- the only
+## symptom is a person saying it looks wrong. The model record's `[fix]` bakes
+## `opaque` into the served file; this proves the file Godot fetches is solid.
 func _an_export_lying_about_transparency_is_corrected() -> void:
 	var eye := _resolver.resolve_entity(TRANSPARENT_ASSET, "npc")
 

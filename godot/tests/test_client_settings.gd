@@ -24,6 +24,7 @@ func _ready() -> void:
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 	_the_sfx_volume_persists_clamps_and_resets()
 	_the_xp_tracker_toggles_persist_and_reset()
+	_the_movement_animation_persists_and_resets()
 
 	_clean()
 
@@ -314,6 +315,28 @@ func _the_xp_tracker_toggles_persist_and_reset() -> void:
 	_expect(reloaded.show_xp_drops == ClientSettings.DEFAULT_SHOW_XP_DROPS
 		and reloaded.show_skill_rates == ClientSettings.DEFAULT_SHOW_SKILL_RATES,
 		"and reset restores both")
+
+	_clean()
+
+
+## On by default, because a step drawn as a jump is what the client did before
+## the animation existed and it reads as teleporting. A player who wants that
+## back has to be able to keep it between runs.
+func _the_movement_animation_persists_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(s.smooth_movement, "figures slide between tiles by default")
+
+	s.set_smooth_movement(false)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(not reloaded.smooth_movement, "turning the animation off persists")
+
+	reloaded.reset()
+	_expect(reloaded.smooth_movement == ClientSettings.DEFAULT_SMOOTH_MOVEMENT,
+		"and reset restores it")
 
 	_clean()
 

@@ -159,6 +159,27 @@ const COLOR_LABEL_FALLBACK := Color("b9c6d2")
 ## alone again and hands back [constant Vector3.ZERO].
 signal observer_slot_changed(offset: Vector3)
 
+## Fired when the set of TRUE TILES needing a mark changes, as tile positions.
+##
+## While [StepAnimator] slides a figure between two squares, the figure is not
+## standing on the one the server has it on -- and that square is the only one
+## any command resolves against. So the pane draws a mark on it for exactly as
+## long as the figure is away, and this is how it is told which. See
+## [TrueTileMark].
+##
+## The pool does not draw the marks, for the reason it does not draw the
+## observer: a mark is ground and the ground is the pane's. It emits POSITIONS
+## the pane gave it through `_locate` in the first place, so nothing here
+## re-derives where a tile is.
+##
+## ONE ENTRY PER TILE, not per entity. Two raiders walking onto the same square
+## are two identical coplanar squares, which is z-fighting rather than
+## emphasis.
+##
+## Emitted only when the set CHANGES. The alternative is a MultiMesh rebuilt on
+## every frame of every walk, for a set that is empty nearly all the time.
+signal true_tiles_changed(origins: Array)
+
 ## Which entity the cursor is over. Zero for none, safe because Evennia object
 ## ids start at 1.
 var _hovered := 0
@@ -182,6 +203,35 @@ var _locate: Callable
 var _entities: Array[Dictionary] = []
 var _nodes: Dictionary = {}     # int id -> Node3D
 
+## One [StepAnimator] per entity id, and the reason it is HERE rather than on
+## the node is that the node does not survive.
+##
+## [method _rebuild] frees every node and builds them again, on an entity
+## arriving, on art landing, on a relayout. A walk has to outlive all three, so
+## what remembers where a figure is DRAWN is keyed by id and kept beside the
+## nodes rather than inside them. Pruned by the rebuild, so an entity that left
+## the room leaves nothing behind.
+var _animators: Dictionary = {}   # int id -> StepAnimator
+
+## int id -> the tile key that entity's true tile is, and tile key -> where
+## that tile is. Together they turn "who is moving" into "which squares to
+## mark" with no second lookup through `_locate`.
+var _tile_of: Dictionary = {}
+var _tile_origins: Dictionary = {}
+
+## The last set of marks sent on [signal true_tiles_changed]. Kept so a frame
+## in which nobody started or stopped moving emits nothing.
+var _marked: Array = []
+
+## Whether figures slide between tiles at all. The player's setting, pushed
+## down by [WorldView] so the observer and everyone else answer to one switch.
+var _animated := true
+
+## One tile, in world units. GIVEN by the pane, because the pane is what lays
+## tiles out -- a copy here would be free to disagree with the grid actually
+## drawn, which is the same reason `_locate` is a callable.
+var _step := 1.0
+
 ## Where meshes come from. Injected rather than built here: one resolver serves
 ## the whole client, so its model cache is shared and an asset fetched for the
 ## room is already to hand when the inventory asks for it.
@@ -190,9 +240,10 @@ var _resolver: MeshResolver
 
 ## Give the pool its resolver and its placement. Call before the first entity
 ## arrives.
-func bind(resolver: MeshResolver, locate: Callable) -> void:
+func bind(resolver: MeshResolver, locate: Callable, step: float) -> void:
 	_resolver = resolver
 	_locate = locate
+	_step = step
 
 	# Art that lands after an entity was drawn as its family shape redraws the
 	# ring. That is the "sharpens in" half of the ladder's contract, and without
@@ -209,6 +260,26 @@ func bind(resolver: MeshResolver, locate: Callable) -> void:
 ## island makes every entity standing on it drawable.
 func replace_positions() -> void:
 	_rebuild()
+
+
+## Slide figures between tiles, or draw each one on its tile.
+##
+## Pushed down by [WorldView] from the player's own setting, so the observer's
+## avatar and every NPC answer to one switch. Turning it OFF lands every figure
+## on its true tile at once and takes every mark off the screen -- a player who
+## switched the animation off is not asking to watch the last walk finish.
+func set_animated(value: bool) -> void:
+	_animated = value
+
+	for entity_id: int in _animators:
+		var animator: StepAnimator = _animators[entity_id]
+
+		animator.set_animated(value)
+
+		if _nodes.has(entity_id):
+			_nodes[entity_id].position = animator.drawn()
+
+	_publish_marks()
 
 
 ## Record which tile the observer is standing on. Takes effect on the next
@@ -505,6 +576,57 @@ static func _materials_of(root: Node3D) -> Array:
 
 # ─── Private helpers ─────────────────────────────────────────────────────────
 
+## Slide every figure one frame closer to the tile the server put it on.
+##
+## The only per-frame work the pool does, and it does none at all while the
+## animation is off: every figure is then already on its tile, and nothing
+## moves it but a rebuild.
+func _process(delta: float) -> void:
+	if not _animated:
+		return
+
+	for entity_id: int in _nodes:
+		var animator: StepAnimator = _animators.get(entity_id)
+
+		if animator == null:
+			continue
+
+		_nodes[entity_id].position = animator.advance(delta)
+
+	_publish_marks()
+
+
+## Tell the pane which true tiles to mark, when that set has changed.
+##
+## Grouped by TILE on the way out, so two figures crossing onto one square ask
+## for one mark. The comparison against the last list is what keeps this from
+## rebuilding a MultiMesh sixty times a second for a set that is empty whenever
+## nobody is walking.
+func _publish_marks() -> void:
+	var origins: Array = []
+	var seen: Dictionary = {}
+
+	for entity_id: int in _animators:
+		var animator: StepAnimator = _animators[entity_id]
+
+		if not animator.is_travelling():
+			continue
+
+		var key: String = _tile_of.get(entity_id, "")
+
+		if seen.has(key) or not _tile_origins.has(key):
+			continue
+
+		seen[key] = true
+		origins.append(_tile_origins[key])
+
+	if origins == _marked:
+		return
+
+	_marked = origins
+	true_tiles_changed.emit(origins)
+
+
 func _rebuild() -> void:
 	for child: Node in get_children():
 		remove_child(child)
@@ -543,6 +665,14 @@ func _rebuild() -> void:
 
 	var observer_offset := Vector3.ZERO
 
+	# Built fresh and swapped in at the end, which is what prunes an entity
+	# that left the room: whatever is not re-registered below is dropped with
+	# the old dictionary.
+	var animators: Dictionary = {}
+
+	_tile_of.clear()
+	_tile_origins.clear()
+
 	for key: String in by_tile:
 		var group: Dictionary = by_tile[key]
 		var here: Array = group["entities"]
@@ -563,13 +693,42 @@ func _rebuild() -> void:
 		var occupants := here.size() + (1 if shared else 0)
 		var first := 1 if shared else 0
 
+		_tile_origins[key] = group["origin"]
+
 		for index: int in here.size():
 			var entity: Dictionary = here[index]
+			var entity_id := _id_of(entity)
 			var node := _build(entity)
 
-			node.position = _slot_position(
+			var slot := _slot_position(
 				group["origin"], key, first + index, occupants)
-			node.position.y += _rest_offset(node)
+			slot.y += _rest_offset(node)
+
+			# Where the server has it, handed to whatever already knew where it
+			# was DRAWN. A first sighting places -- an entity announced this
+			# frame must appear on its tile, not swim in from the world origin
+			# -- and everything after that is a walk.
+			#
+			# A slot that moved because the RING grew is animated too, and that
+			# is intended: something stepping aside to make room for a newcomer
+			# is a move, and it is under one step, so it slides rather than
+			# snapping.
+			var animator: StepAnimator = _animators.get(entity_id)
+
+			if animator == null:
+				animator = StepAnimator.new(_step, _Const.TICK_SECONDS)
+				animator.set_animated(_animated)
+				animator.place(slot)
+			else:
+				animator.aim(slot)
+
+			animators[entity_id] = animator
+			_tile_of[entity_id] = key
+
+			# The DRAWN position, not the slot. A rebuild in the middle of a
+			# walk -- art landing, a neighbour arriving -- must not teleport
+			# everybody onto their destination.
+			node.position = animator.drawn()
 
 			# AFTER the rest offset, and that ordering is load-bearing: both
 			# read the node's bounds, and a label attached first would be
@@ -577,7 +736,7 @@ func _rebuild() -> void:
 			# the ground by the height of its own text.
 			_attach_label(node, entity)
 			add_child(node)
-			_nodes[_id_of(entity)] = node
+			_nodes[entity_id] = node
 
 		if shared:
 			# An OFFSET, so the origin is zero: the pane adds this inside the
@@ -585,7 +744,10 @@ func _rebuild() -> void:
 			# around.
 			observer_offset = _slot_position(Vector3.ZERO, key, 0, occupants)
 
+	_animators = animators
+
 	observer_slot_changed.emit(observer_offset)
+	_publish_marks()
 
 
 ## One entity's mesh, from the ladder.

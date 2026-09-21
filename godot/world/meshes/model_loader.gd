@@ -33,11 +33,13 @@ extends Node
 ## bounding box cannot infer — no measurement can tell you which end of a sword
 ## is the tip.
 ##
-## ## One fetch per asset, however many ask
+## ## One fetch per FILE, however many ask
 ##
 ## A prototype cache plus an in-flight set. Ten stacks of the same item cost one
 ## request rather than ten, and a second ask that arrives mid-flight waits on
-## the first rather than starting a second. Callers always get their own copy;
+## the first rather than starting a second. The wait is keyed by URL, not by
+## asset key, because several keys can name one file: a model record's
+## aliases all point at its one `.glb`. Callers always get their own copy;
 ## the cached prototype is never handed out, because callers reparent, scale and
 ## tint what they receive.
 
@@ -66,6 +68,10 @@ const UNIT := 1.0
 ## reciprocal of that is an inf that propagates into the transform.
 const MIN_EXTENT := 0.0001
 
+## The metadata key that holds [method ModelRegistry.scale_for] on a built
+## model. Read it through [method presentation_scale], never by name.
+const PRESENTATION_SCALE_META := &"presentation_scale"
+
 ## Where this build fetches art from, as an absolute origin — on the web that is
 ## the page's own, which is how the fetch stays same-origin; see
 ## [method ServerEndpoint.asset_origin].
@@ -90,6 +96,19 @@ var _in_flight: Dictionary = {}
 ## the room changes would re-request a file that is not coming, once per rebuild,
 ## forever.
 var _failed: Dictionary = {}
+
+## url -> the asset keys waiting on that one download.
+##
+## Several keys can name one file: the manifest points every alias of a model
+## record at its one `.glb`, and the four cured cuts are one model. Keyed by
+## URL, so four keys cost one request, not four.
+var _waiting: Dictionary = {}
+
+## url -> the bytes of a download that succeeded.
+##
+## So a key asked for AFTER its file arrived builds from these bytes and never
+## asks the network again. Small: the whole served tree is a few MiB.
+var _bodies: Dictionary = {}
 
 
 func _init(registry: ModelRegistry, origin: String) -> void:
@@ -269,12 +288,22 @@ func request(asset_key: String) -> void:
 		return
 
 	_in_flight[asset_key] = true
-	_start(asset_key, url)
+
+	if _bodies.has(url):
+		_finish_key.call_deferred(asset_key, _bodies[url])
+		return
+
+	if _waiting.has(url):
+		_waiting[url].append(asset_key)
+		return
+
+	_waiting[url] = [asset_key]
+	_start(url)
 
 
 # ─── Private ─────────────────────────────────────────────────────────────────
 
-func _start(asset_key: String, url: String) -> void:
+func _start(url: String) -> void:
 	var http := HTTPRequest.new()
 	http.timeout = TIMEOUT_SECONDS
 	add_child(http)
@@ -283,26 +312,40 @@ func _start(asset_key: String, url: String) -> void:
 		func(result: int, code: int, _headers: PackedStringArray,
 				body: PackedByteArray):
 			http.queue_free()
-			_finish(asset_key, result, code, body))
+			_finish(url, result, code, body))
 
 	var err := http.request(url)
 
 	if err != OK:
 		http.queue_free()
-		_fail(asset_key, "request refused: error %d" % err)
+		_fail_url(url, "request refused: error %d" % err)
 
 
-func _finish(asset_key: String, result: int, code: int,
+func _finish(url: String, result: int, code: int,
 		body: PackedByteArray) -> void:
-	_in_flight.erase(asset_key)
-
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
 		# The likeliest cause on the web is a cross-origin refusal, which the
 		# browser reports to the page and not to us -- so name it here rather
 		# than leaving a bare status code to be puzzled over at 2am.
-		_fail(asset_key, "http %d (result %d); if this is a web build, check "
+		_fail_url(url, "http %d (result %d); if this is a web build, check "
 			% [code, result] + "that the art is served from the page's origin")
 		return
+
+	var keys: Array = _waiting.get(url, [])
+
+	_waiting.erase(url)
+	_bodies[url] = body
+
+	for asset_key: String in keys:
+		_finish_key(asset_key, body)
+
+
+## Build one key's prototype from bytes that have arrived.
+##
+## Per KEY, not per file, because two keys that share a file can still differ
+## in [member ModelRegistry.PRESENTATION], and the prototype carries it.
+func _finish_key(asset_key: String, body: PackedByteArray) -> void:
+	_in_flight.erase(asset_key)
 
 	var model := _build(asset_key, body)
 
@@ -312,6 +355,16 @@ func _finish(asset_key: String, result: int, code: int,
 
 	_prototypes[asset_key] = model
 	loaded.emit(asset_key, cached(asset_key))
+
+
+## Fail every key that was waiting on one download.
+func _fail_url(url: String, why: String) -> void:
+	var keys: Array = _waiting.get(url, [])
+
+	_waiting.erase(url)
+
+	for asset_key: String in keys:
+		_fail(asset_key, why)
 
 
 ## Bytes to a scene, normalised into the unit box and oriented.
@@ -343,8 +396,11 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 	_normalise(scene)
 	_orient(asset_key, scene)
 
-	# AFTER _orient, which may rewrite these same materials to force them
-	# opaque -- and transparency is part of the shader key being held alive.
+	# Stamped on the WRAPPER, because that is what a caller holds. A grid cell
+	# divides it back out (see presentation_scale). `duplicate()` copies
+	# metadata, so every copy that cached() hands out carries it too.
+	wrapper.set_meta(PRESENTATION_SCALE_META, _registry.scale_for(asset_key))
+
 	_prepare_materials(scene)
 
 	return wrapper
@@ -397,12 +453,21 @@ func _normalise(scene: Node3D) -> void:
 	scene.position = -bounds.get_center() * factor
 
 
-## Apply every correction a bounding box cannot infer.
+## Apply every display choice a bounding box cannot infer.
 ##
-## Three of them, all hand-written in [ModelRegistry] and none derivable: which
-## way is up, where the visible mass actually sits, and whether the export is
-## lying about being transparent.
+## Three of them, all hand-written in [ModelRegistry]: how big it is beside
+## the unit box, which way is up, and where the visible mass actually sits. A
+## correction to a bad export (a model that points the wrong way, a material
+## that lies about transparency) is not here: the model pipeline bakes it into
+## the served file.
 func _orient(asset_key: String, scene: Node3D) -> void:
+	var size := _registry.scale_for(asset_key)
+
+	# The position scales too, because it is the centring of the SCALED model.
+	# Scale only the node and the model drifts off the origin.
+	scene.scale *= size
+	scene.position *= size
+
 	var rotation := _registry.rotation_for(asset_key)
 
 	if rotation != Vector3.ZERO:
@@ -412,38 +477,24 @@ func _orient(asset_key: String, scene: Node3D) -> void:
 	# means the same thing whatever size the source model happened to be.
 	scene.position += _registry.offset_for(asset_key)
 
-	if _registry.force_opaque(asset_key):
-		_force_opaque(scene)
 
-
-## Make every material in one model solid.
+## The size multiplier from [member ModelRegistry.PRESENTATION] that this node
+## was built with. 1.0 for anything else: a family shape, the generic block, a
+## model with no entry.
 ##
-## Written on the MESH's materials rather than as instance overrides, because
-## this runs once on the prototype and every copy should inherit it -- unlike a
-## hit flash, which is per copy and is why [method _take_own_materials] exists at
-## all. Both alpha and the transparency MODE are reset: leaving the mode on
-## ALPHA_DEPTH_PRE_PASS keeps the surface in the transparent queue, sorting
-## badly against itself, even at full opacity.
-static func _force_opaque(root: Node3D) -> void:
-	var stack: Array[Node] = [root]
+## For a GRID cell. A presentation scale sets a model's size beside other
+## models in the world: the clip is smaller than the gun. A cell shows one item
+## alone, so each item fills its cell the same way, and the cell divides this
+## back out. Read from the node and not from the registry by key, because the
+## node knows which tier it came from. A family shape that stands in for a
+## scaled model must not be enlarged.
+static func presentation_scale(node: Node3D) -> float:
+	var size := float(node.get_meta(PRESENTATION_SCALE_META, 1.0))
 
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		var instance := node as MeshInstance3D
+	if size < MIN_EXTENT:
+		return 1.0
 
-		if instance != null and instance.mesh != null:
-			for surface: int in instance.mesh.get_surface_count():
-				var material := instance.mesh.surface_get_material(
-					surface) as StandardMaterial3D
-
-				if material == null:
-					continue
-
-				material.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
-				material.albedo_color.a = 1.0
-
-		for child: Node in node.get_children():
-			stack.append(child)
+	return size
 
 
 ## The combined bounds of every mesh under a node, in the ROOT's space.
@@ -476,7 +527,7 @@ static func bounds_of(root: Node3D) -> AABB:
 	# Bone origins are a floor on the real extent, not the whole of it -- the top
 	# of a head reaches past the head bone. It is an approximation, and a far
 	# better one than being wrong by 6x. The exact answer needs the skinning
-	# baked into the mesh, which belongs in `assets/pack_model.py`: these models
+	# baked into the mesh, which belongs in the model pipeline (`assets/pipeline`): these models
 	# carry skinning attributes for ZERO animations, so the rig is dead weight
 	# that also breaks measurement.
 	var skeleton := _skeleton_bounds(root)

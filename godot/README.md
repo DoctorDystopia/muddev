@@ -36,7 +36,9 @@ over the world. The world pane draws these things:
 
 - The tile grids of each map, and the links between them
 - Room-kind colors, and real tile art on the maps that have any
-- A marker on the tile where you stand, and the NPCs and items on it
+- Your figure, which walks between tiles, and a mark on the tile the server
+  has you on while it does
+- The NPCs and items on each tile, which walk the same way
 - A white flash on anything that you hit, and your aura ring.
 
 The mesh ladder below draws everything on the tile. It uses a fetched model
@@ -57,7 +59,7 @@ where there is art, and the silhouette of the family where there is not.
 | **Skills tab** | The roster as a grid, banded by category, with a bar per skill |
 | **Click a skill** | Its sheet: XP, progress and everything it unlocks. Where that lands is an Options setting |
 | **Quests tab** | What you have taken, and how far through it you are |
-| **Options tab** | Text size, interface scale, which panes are drawn, where skill detail goes. Saved between runs |
+| **Options tab** | Text size, interface scale, which panes are drawn, where skill detail goes, whether figures slide between tiles. Saved between runs |
 | **Up / Down in the input** | Walks the command history; a half-typed draft is kept |
 | **Escape in the input** | Hands the keyboard to the map — see "Two modes" below |
 | **WASDQEZC / hjklyubn** | Walk, while the map has the keyboard |
@@ -254,7 +256,7 @@ draw every weapon as a box.
 > The base character that replaced the placeholder does not reproduce the bug,
 > because its bind pose is the pose. But **do not read the merge as dead code**:
 > nothing about a file shows which kind it is. **The proper fix is to bake the
-> skinning out in `assets/pack_model.py`.** These models carry skinning
+> skinning out in the model pipeline (`blackout/assets/pipeline`).** These models carry skinning
 > attributes for zero animations, so the rig is dead weight that also breaks
 > measurement.
 
@@ -404,6 +406,90 @@ because the later one is fresher. A re-sent entity can move, take damage, or
 gain an action between the two sends. `remove` drops every copy, not only the
 first. Together, these rules also make a resync idempotent, and idempotence is
 the property that resync exists for.
+
+## A figure walks between tiles, and its true tile stays marked
+
+The server moves a character in whole tiles, one tile for each tick. `goto`
+steps at `TICK_SECONDS`, through `BlackoutGotoCmd.auto_step_delay`. Before
+09/20/2026, the client drew each step as a jump. That reads as teleporting, not
+as walking.
+
+`StepAnimator` slides the figure instead. One animator belongs to each figure.
+The world pane holds the observer's, and `EntityPool` holds one for each NPC
+and item. Thus, the player and the raider that chases them move by one set of
+rules.
+
+**The animation is a look, so the player can switch it off.** The checkbox is
+in Options, under Movement. `ClientSettings.smooth_movement` keeps the choice
+between runs. The server sends the same messages either way, and the client
+asks for nothing more.
+
+**The tick comes from the server.** `clientexport.py` writes `TICK_SECONDS`
+into `blackout_constants.gd`. A walk timed to any other number arrives early
+and waits, or falls behind and keeps falling. Never type `0.6` into GDScript.
+
+### Two rules keep the slide honest
+
+**The drawn position is never more than one tick behind the true one.** The
+speed is not a constant. It is the distance that is left, divided by one tick,
+with a floor at walking pace. Thus, a figure that falls behind catches up
+inside the next tick. A client that can drift without a bound is a client that
+lies.
+
+**A jump longer than one step is not a walk.** A teleport, a resync, and an
+island that arrives late all SNAP. Draw a walk across a long jump, and the
+figure goes through every wall between the two points. `yaw_towards` refuses
+the same move for the same reason. The two thresholds have the same shape: one
+step, diagonals included. A diagonal measures the square root of two, so the
+threshold is above one.
+
+### The true tile is always marked
+
+While a figure is between two squares, it does not stand where the server has
+it. And the server's square is the only one a command resolves against. That
+gap is what the animation costs. The client pays it back at once.
+
+`TrueTileMark` draws a square outline on the server's tile. The outline stays
+for exactly as long as the figure is away from that tile. It goes out when the
+figure arrives, because the figure then marks the tile itself.
+
+The model is the OSRS game square, and the true tile indicator its players use:
+<https://oldschool.runescape.wiki/w/Game_square>.
+
+**The mark is not separately switchable, and that is deliberate.** It repays
+what the animation costs. A player who kept the animation and dropped the mark
+would choose to know less than the server says. With the animation off there is
+nothing to repay, and the client draws no mark.
+
+Your own square is teal, and everyone else's is amber. The one square a player
+must find in a fight is their own. A screen of identical outlines is what hides
+it.
+
+### Who draws what
+
+| Node | Holds |
+|---|---|
+| `Marker` | YOUR true tile. It snaps, because it IS the server's tile. The aura ring is placed from it |
+| `Avatar` | What your figure hangs off. It slides towards the marker, and the camera rig follows IT |
+| `Entities` | Every other figure, each with its own animator |
+
+The pane draws every other true tile as one MultiMesh. `EntityPool` names the
+tiles that need one, through `true_tiles_changed`. It sends that signal only
+when the set changes. It groups by TILE and not by entity, because two
+identical outlines on one square are z-fighting, not emphasis.
+
+**The pool keeps its animators beside the nodes, not inside them.** `_rebuild`
+frees every node and builds each one again: on an entity that arrives, on art
+that lands, and on a relayout. A walk must live through all three. Thus, the
+record of where a figure is drawn has the entity id for its key.
+
+**The camera follows the avatar, not the marker.** It also closes its gap with
+`1 - e^(-k dt)` rather than with `min(k dt, 1)`. The two agree only at a steady
+frame rate. The old form snapped below 8 frames each second and tightened above
+it. Thus, the camera lagged differently on two machines that watched one walk.
+
+**The minimap needs no change.** It draws from `WorldState`, which holds the
+server's tile and nothing else.
 
 ## An entity may carry text, and it is not a sign's field
 
@@ -881,7 +967,7 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All forty-three tests are headless and exit non-zero on failure. Forty need
+All forty-six tests are headless and exit non-zero on failure. Forty-three need
 nothing running. Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
@@ -931,6 +1017,18 @@ and every case is a pair of grid cells:
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
 ```
+
+`test_step_animator.tscn` needs nothing running either, and no scene and no
+clock. Each case gives `advance` the frame time it wants to measure:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_step_animator.tscn
+```
+
+Every bug it catches is SILENT. A figure that drifts a tile behind the server,
+a teleport drawn as a walk through a wall, and a walk that runs at a different
+speed on a different frame rate all look like an animation. Each one makes the
+client tell the player something the server did not say.
 
 `test_map_terrain.tscn` needs nothing running either. A table says which map
 gets which surface, and the test measures the space of the terrain against a

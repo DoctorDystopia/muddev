@@ -1,0 +1,164 @@
+[
+  {
+    "title": "3D Tileset",
+    "author": "wizp",
+    "url": "https://wizp.itch.io/3d-tileset",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "tile_azm_plains",
+      "tile_oasis",
+      "tile_oasis_outskirts"
+    ]
+  },
+  {
+    "title": "Low Poly Food Asset Pack",
+    "author": "Kyle Fuji",
+    "url": "https://www.patreon.com/kylefuji",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "moderator_egg",
+      "mutant_raider_cured_chuck",
+      "mutant_raider_cured_fatless_meat",
+      "mutant_raider_cured_filet",
+      "mutant_raider_cured_meat_sandwich",
+      "mutant_raider_cured_prime_meat",
+      "mutant_raider_prime_cured_meat_sandwich",
+      "mutant_raider_prime_steak",
+      "mutant_raider_steak"
+    ]
+  },
+  {
+    "title": "LOWPO: Goblin Assets",
+    "author": "Standout 7",
+    "url": "https://standout7.itch.io/goblin-lowpoly-assets",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "big_mutant",
+      "mutant_giant",
+      "mutant_raider"
+    ]
+  },
+  {
+    "title": "Meat on the bone",
+    "author": "Nick Hobar",
+    "url": "https://johanpeitz.itch.io/picocad",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "food_meat"
+    ]
+  },
+  {
+    "title": "Old Tower",
+    "author": "shoaib8",
+    "url": "https://sketchfab.com/3d-models/old-tower-b882aacdc89b4e58925600829fd6604d",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "confirmed": true,
+    "models": [
+      "copper_pole",
+      "metal_pole",
+      "rusty_pole"
+    ]
+  },
+  {
+    "title": "OSRS player model (test export)",
+    "author": "Jagex",
+    "url": "https://oldschool.runescape.com",
+    "license": "License not confirmed",
+    "license_url": "",
+    "confirmed": false,
+    "models": [
+      "player_character"
+    ]
+  },
+  {
+    "title": "PSX Low Poly Skeleton",
+    "author": "Puck (puszke)",
+    "url": "https://puszke.itch.io/psx-low-poly-skeleton",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "corpse_skeleton"
+    ]
+  },
+  {
+    "title": "Robot",
+    "author": "Modo (modosa-kun)",
+    "url": "https://modosa-kun.itch.io/robot2",
+    "license": "License not confirmed",
+    "license_url": "",
+    "confirmed": false,
+    "models": [
+      "shopkeeper"
+    ]
+  },
+  {
+    "title": "Robot_3D_Model",
+    "author": "PensamientoAzul",
+    "url": "https://pensamientoazul.itch.io/robot-3d-model",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "lone_android"
+    ]
+  },
+  {
+    "title": "Rusty sword",
+    "author": "Léonard_Doye / Leoskateman",
+    "url": "https://sketchfab.com/3d-models/rusty-sword-42a0da5803844526af8658851c94e225",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "confirmed": true,
+    "models": [
+      "rusty_scrap_shortsword"
+    ]
+  },
+  {
+    "title": "Sci-Fi PSX Style Heavy Machine Gun",
+    "author": "LAZY SPAR7AN GAMES (LazySpar7an / MikeE.Games / MedwardsArts)",
+    "url": "https://lazyspar7an.itch.io/sci-fi-low-poly-v1",
+    "license": "License not confirmed",
+    "license_url": "",
+    "confirmed": false,
+    "models": [
+      "heavy_machine_gun",
+      "heavy_machine_gun_clip",
+      "rusty_scrap_arrow",
+      "rusty_scrap_shortbow",
+      "scrap_arrow",
+      "scrap_shortbow"
+    ]
+  },
+  {
+    "title": "SM_Teleporter",
+    "author": "KainHunter1997",
+    "url": "https://sketchfab.com/3d-models/sm-teleporter-0a5548319d6e4b88878b0aa7d2322319",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "confirmed": true,
+    "models": [
+      "map_transition"
+    ]
+  },
+  {
+    "title": "sus eye 👁‍🗨 👁",
+    "author": "wollfang",
+    "url": "https://sketchfab.com/3d-models/sus-eye-a57447b72b774a5d99caba699604c81d",
+    "license": "CC BY 4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "confirmed": true,
+    "models": [
+      "floating_eye"
+    ]
+  }
+]

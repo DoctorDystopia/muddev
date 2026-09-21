@@ -6,23 +6,27 @@ extends RefCounted
 ## whole design:
 ##
 ## **WHICH models exist, and their paths** — fetched from the server, from
-## `models/manifest.json`, rendered by `assets/pack_model.py`. A build fact:
-## adding a row to `assets/model_manifest.json` and repacking is what makes a
-## model exist, and no edit in this file is involved.
+## `models/manifest.json`. The model pipeline (`blackout/assets/pipeline`)
+## writes it: one model record in `assets/models/<family>/<key>.toml` makes a
+## model exist, and no edit in this file is involved. Several asset keys can
+## name one file (a record's `aliases`), and [ModelLoader] fetches that file
+## one time.
 ##
-## **HOW each one is oriented** — [member PRESENTATION], below, hand-written.
+## **HOW each one is shown** — [member PRESENTATION], below, hand-written.
 ## Purely the client's own, and CLAUDE.md is explicit that the model registry
-## must never be generated: the sword's quarter-turn is a judgement about how a
-## blade should read in an inventory cell, not something the server knows.
+## must never be generated.
+##
+## A correction to a bad EXPORT is not here. Since 09/18/2026 the build bakes
+## it into the served file: the sword that pointed at the camera, the meat
+## that lay end-on, the eye with a transparent body, the tiles that said BLEND.
+## See the `[fix]` table of a model record. What stays here is a DISPLAY
+## choice about a model that is correct as a file.
 ##
 ## ## Why fetched and not bundled
 ##
-## The browser client hardcodes its list because it fetches a `.glb` only when
-## something needs drawing, so a player who never opens the inventory never
-## downloads the sword. A Godot export cannot copy that by bundling: art inside
-## the `.pck` ships **before the login prompt**, and that is 12 MiB today with
-## 10.9 of it a single character. Fetching at runtime is what keeps the `.pck`
-## small and keeps the rule that art never blocks content.
+## Art inside the `.pck` ships **before the login prompt**, and that was
+## 12 MiB with 10.9 of it a single character. Fetching at runtime is what keeps
+## the `.pck` small and keeps the rule that art never blocks content.
 ##
 ## Convention plus a 404 was the other option, and `blackout_models.js` rejected
 ## it for a reason that still applies: with sixteen items in ITEM_DB and one
@@ -32,7 +36,7 @@ extends RefCounted
 ## ## Degradation
 ##
 ## An asset key with no entry is not an error and never blocks anything — the
-## caller draws its family's procedural mesh, exactly as the browser pane does.
+## caller draws its family's procedural mesh.
 ## The same is true before the manifest has arrived at all: [method has_model]
 ## simply answers false, so the first snapshot renders generics and sharpens
 ## when the art lands.
@@ -43,95 +47,51 @@ const MODEL_ROOT := "/static/webclient/models/"
 ## The manifest file inside that tree.
 const MANIFEST_PATH := MODEL_ROOT + "manifest.json"
 
-## Per-model orientation and scale. PRESENTATION, hand-written, never generated.
+## The model credits inside that tree, which [CreditsView] shows. The model
+## pipeline writes it beside the manifest.
+const CREDITS_PATH := MODEL_ROOT + "credits.json"
+
+## Per-model display choices. PRESENTATION, hand-written, never generated.
 ##
-## Keyed by asset key, mirroring the options `blackout_models.js` passes to
-## `registerModel`. Anything absent is drawn as the file exports it.
-##
-## Both panes get put side by side on the same character, so a model that is
-## upright in one and face-down in the other reads as a bug — keep these in
-## step with the browser's table.
+## Keyed by asset key. Anything absent is drawn as the file is built.
 const PRESENTATION := {
-	# The export carries a Y-up conversion matrix that leaves the blade running
-	# along Z, pointing straight at the camera in an inventory cell, where a
-	# sword is a smudge two pixels wide. +PI/2 rather than -PI/2 puts the TIP up
-	# and the guard down, matching the procedural weapon the pane's labels and
-	# tilt are aimed at.
-	"rusty_scrap_shortsword": {"rotation": Vector3(PI / 2.0, 0.0, 0.0)},
-
-	# An export can be WRONG ABOUT ITSELF in a way no measurement catches.
-	# Sketchfab's converter wrote the authoring tool's base-colour alpha into
-	# the glTF, so the eye's body arrives with alpha 0 against alphaMode BLEND:
-	# a fully transparent material on a mesh plainly meant to be seen. Nothing
-	# downstream recovers from that -- it loads, reports no error, and draws an
-	# invisible body around a floating eyeball.
-	#
-	# Verified in Godot 08/26/2026, and it is the same two surfaces the browser
-	# found: one at albedo alpha 0.0 with transparency ALPHA_DEPTH_PRE_PASS.
-	# `blackout_models.js` corrects it with `opaque: true` and this is that same
-	# correction, which README rule 5 requires -- a model solid in one pane and
-	# see-through in the other reads as a bug.
-	"floating_eye": {
-		"opaque": true,
-		"offset": Vector3(0.0, 0.16, 0.0),
-	},
-
-	# The desert tileset's two materials both arrive with alphaMode BLEND, and
-	# its palette has no alpha below 255 anywhere in it -- Blender writes BLEND
-	# for any material with an RGBA image, whether or not the image uses the
-	# fourth channel. Harmless on a prop; not on the GROUND. A transparent
-	# surface goes into the sorted queue, and the ground is the one thing every
-	# entity, prop and marker in the pane is drawn on top of, so the sorting it
-	# would take part in is against everything.
-	#
-	# Verified 08/28/2026 by sampling the packed palette: the alpha channel is
-	# 255 across all 1024 squares. That is what makes this a correction rather
-	# than a change -- forcing it opaque removes nothing that was ever drawn.
-	"tile_oasis": {"opaque": true},
-	"tile_oasis_outskirts": {"opaque": true},
-
-	# THE ONLY MODEL WHOSE ORIENTATION IS A GAMEPLAY FACT rather than a
-	# correction to an export. The download is a skeleton STANDING UP, because
-	# that is what a character model is, and it is served as the stand-in for
-	# the corpse family (FamilyShapes.MODELS) — so a body that has not been
-	# laid down is a skeleton standing on the tile where something died, which
-	# reads as a live enemy rather than as loot.
+	# The eye's pupil sits low in its own bounding box, so centring the box
+	# leaves the eye looking down through the floor. A lift in normalised
+	# units, applied after the centring.
+	"floating_eye": {"offset": Vector3(0.0, 0.16, 0.0)},
+	
+	# THE ONLY MODEL WHOSE ORIENTATION IS A GAMEPLAY FACT. The download is a
+	# skeleton STANDING UP, because that is what a character model is, and it
+	# is served as the stand-in for the corpse family (FamilyShapes.MODELS) —
+	# so a body that has not been laid down is a skeleton standing on the tile
+	# where something died, which reads as a live enemy rather than as loot.
 	#
 	# -PI/2 rather than +PI/2 puts it on its BACK. The model faces +Z, so the
 	# negative turn takes the front to +Y and leaves the ribcage and skull
 	# facing the camera; the positive turn buries the face in the sand. Neither
-	# is wrong about the file and only a person looking at it can tell, which
-	# is what every entry in this table has in common.
+	# is wrong about the file and only a person looking at it can tell.
 	#
 	# No offset. EntityPool lifts a node by its own lowest point (_rest_offset),
 	# so the body sits on the ground once it is flat without a number here.
 	"corpse_skeleton": {"rotation": Vector3(-PI / 2.0, 0.0, 0.0)},
+	
+	# The loader stretches every model until its longest side is one unit.
+	# A multiplier on that unit, not a size in meters. Keyed by the file's
+	# own key, so every ammunition alias of the clip shrinks with it.
+	"heavy_machine_gun_clip": {"scale": 0.4},
 
-	# THE SWORD'S PROBLEM, on a different model. picoCAD builds along Z and the
-	# meat is seven units of bone-to-bone against two of thickness, so as
-	# exported it points straight at the camera: an inventory cell shows a
-	# brown octagon with a pale dot in the middle, which is the end-on view and
-	# describes nothing. A quarter turn about Y lays the bone left to right and
-	# gives back the silhouette the model was built for.
+	# THE ONLY PLACE A MUTANT TIER IS BIGGER THAN ANOTHER. One goblin stands
+	# in for all three tiers today (`assets/models/npcs/mutant_raider.toml`
+	# aliases both of these), and the loader normalises every model to one
+	# unit — so without these two numbers a Mutant Giant is exactly as tall as
+	# the raider it is named against.
 	#
-	# Y rather than X, so it lies down rather than standing on end. Both read
-	# in a cell; only one reads on the ground, and the world pane draws the
-	# same model on the tile a meal was dropped on.
-	"food_meat": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
-
-	# The same problem a third time, and the same quarter turn. Kyle Fuji's
-	# meat haunch is 0.26 long along Z against 0.11 across, bone first at the
-	# camera: rendered 09/12/2026 at ItemStage's tilt, spin 0 showed a brown
-	# oval with a white knob in the middle -- food_meat's end-on octagon again.
-	# Four asset keys, one model, so four rows; see CREDITS.md for why the
-	# served files are duplicated rather than aliased.
-	#
-	# The steak, egg and sandwich from the same pack need nothing: the steak is
-	# a flat slab that reads from either end, and the other two are upright.
-	"mutant_raider_cured_chuck": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
-	"mutant_raider_cured_fatless_meat": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
-	"mutant_raider_cured_filet": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
-	"mutant_raider_cured_prime_meat": {"rotation": Vector3(0.0, PI / 2.0, 0.0)},
+	# Size is a look, not a rule. Nothing in combat reads either number, and
+	# the stats that make a giant a giant are in `world/npc_defs/hostile.py`.
+	# Both entries drop out the day a tier gets art of its own, because a key
+	# with its own model record is drawn as that file builds it.
+	"mutant_giant": {"scale": 1.6},
+	"big_mutant": {"scale": 2.1},
 }
 
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.
@@ -200,14 +160,30 @@ func manifest_url(base: String) -> String:
 	return base.rstrip("/") + MANIFEST_PATH
 
 
+## The credits URL for one origin.
+func credits_url(base: String) -> String:
+	return base.rstrip("/") + CREDITS_PATH
+
+
 ## How this model should be rotated once loaded, in radians.
 ##
 ## Zero for anything with no entry, which is most of them — a model is drawn as
 ## exported unless somebody decided otherwise.
 func rotation_for(asset_key: String) -> Vector3:
-	var entry: Dictionary = PRESENTATION.get(asset_key, {})
+	var entry := _presentation(asset_key)
 
 	return entry.get("rotation", Vector3.ZERO)
+
+
+## A multiplier on the unit box, applied after the normalise.
+##
+## One for anything with no entry. The normalise makes every model one unit on
+## its longest side, which is right for most and wrong for a small thing that
+## shares a pane with a large one: a clip beside the gun it feeds.
+func scale_for(asset_key: String) -> float:
+	var entry := _presentation(asset_key)
+
+	return float(entry.get("scale", 1.0))
 
 
 ## An extra nudge applied AFTER centring, in normalised units.
@@ -216,21 +192,25 @@ func rotation_for(asset_key: String) -> Vector3:
 ## eye's pupil sits low in its own box, so centring the box leaves the eye
 ## looking down through the floor.
 func offset_for(asset_key: String) -> Vector3:
-	var entry: Dictionary = PRESENTATION.get(asset_key, {})
+	var entry := _presentation(asset_key)
 
 	return entry.get("offset", Vector3.ZERO)
 
 
-## Whether this model's materials should be forced solid.
+## The PRESENTATION entry for one key, or for the file that the key draws.
 ##
-## See the `floating_eye` entry: an export can declare itself transparent and be
-## wrong, and no measurement catches it because nothing about the file is
-## invalid. Only a person looking at it can tell, which is why this is a
-## hand-written correction and not something derived.
-func force_opaque(asset_key: String) -> bool:
-	var entry: Dictionary = PRESENTATION.get(asset_key, {})
+## An alias is a second key for the same file, and the pipeline writes the file
+## under its record's own key. The server sends the ITEM key, so without this
+## fallback every new ammunition alias of the clip would need its own entry and
+## would draw full size until someone added it. The key's own entry wins, so
+## two aliases of one file can still differ.
+func _presentation(asset_key: String) -> Dictionary:
+	if PRESENTATION.has(asset_key):
+		return PRESENTATION[asset_key]
 
-	return bool(entry.get("opaque", false))
+	var file_key := str(_paths.get(asset_key, "")).get_file().get_basename()
+
+	return PRESENTATION.get(file_key, {})
 
 
 ## Every asset key the server has art for. Sorted, so callers that iterate are

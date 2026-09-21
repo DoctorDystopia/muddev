@@ -194,20 +194,26 @@ class TestInteractionVerbs(EvenniaTest):
 
         self.assertNotIn("actions", body)
 
-    def test_a_corpse_reports_the_corpse_family_and_the_dead_npcs_asset(self):
-        """The two halves of a body's identity, and they disagree on purpose.
+    def test_a_corpse_names_itself_and_never_the_npc_that_left_it(self):
+        """A body's asset key is the BODY's, and the stamped NPC is not it.
 
-        `asset` is the DEAD NPC's key, so a creature that one day gains a
-        lying-down model of its own reuses it with no client edit. Nothing has
-        such a model today, which is exactly why `family` matters: it is the
-        only field every corpse in the game has in common, and the client
-        stands one skeleton in for the whole family on the strength of it
-        (`FamilyShapes.MODELS`).
+        The NPC key was the first branch of `Corpse.asset_key` until
+        09/21/2026, so that art for a creature could be reused "lying down".
+        Art for the mutant raider arrived that day and the reuse stood the
+        raider back up on the tile where it died, because a model is one file
+        in one pose and one key cannot name both poses.
 
-        Asserted here rather than trusted because the two are produced by
-        different routines -- `Corpse.asset_key` and `_mesh_family` -- and a
-        corpse reporting family "item" would fall back to a generic box with
-        nothing anywhere reporting why.
+        So the key names the body. Nothing answers to it in the served
+        manifest today, which is exactly why `family` matters: it is the only
+        field every corpse in the game has in common, and the client stands
+        one skeleton in for the whole family on the strength of it
+        (`FamilyShapes.MODELS`). Art for a body later is a model record under
+        this same key, with no edit here and none in the client.
+
+        Asserted here rather than trusted because the three values come from
+        three different routines -- `Corpse.asset_key`, `asset_kind` and
+        `_mesh_family` -- and a corpse reporting family "item" would fall back
+        to a generic box with nothing anywhere reporting why.
         """
         corpse = ITEM_DB["mutant_raider_corpse"].create(location=self.room1)
         corpse.db.corpse_npc_key = "mutant_raider"
@@ -216,7 +222,8 @@ class TestInteractionVerbs(EvenniaTest):
 
         self.assertEqual(body["kind"], const.ASSET_KIND_CORPSE)
         self.assertEqual(body["family"], const.ASSET_KIND_CORPSE)
-        self.assertEqual(body["asset"], "mutant_raider")
+        self.assertEqual(body["asset"], corpse.db.gatherable_key)
+        self.assertNotEqual(body["asset"], corpse.db.corpse_npc_key)
 
     def test_a_hostile_npc_is_attacked_by_dbref(self):
         # `attack` lives on the CHARACTER's cmdset, so unlike the stations

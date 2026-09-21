@@ -247,9 +247,12 @@ static var GENERIC: Array = [
 ##
 ## CLAUDE.md draws this line and it is drawn here: the server owns which
 ## families exist, the client owns what they look like. `corpse_skeleton` is an
-## art filename and the server must never learn it — `Corpse.asset_key`
-## deliberately names the dead NPC instead, so a mutant raider that one day
-## gains a lying-down model reuses it at tier 1 with no edit in this file.
+## art filename and the server must never learn it — `Corpse.asset_key` names
+## the BODY instead (`mutant_raider_corpse`), so a lying-down model for one
+## creature is a model record under that key and reaches tier 1 with no edit in
+## this file. It named the dead NPC until 09/21/2026, and art for the raider
+## then drew a live goblin standing on the tile where it died: a model is one
+## file in one pose, so one key cannot name both poses.
 ##
 ## The key is a family constant and the value an ASSET KEY, not a path: the
 ## registry already owns where a model is fetched from, so a path here would be

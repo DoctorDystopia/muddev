@@ -120,7 +120,25 @@ const COLOR_LINK := Color("587695ff")
 
 
 @onready var _islands: Node3D = $Islands
+
+## YOUR TRUE TILE: the square the server has you standing on.
+##
+## It was a placeholder box until 09/20/2026 and the avatar hung off it. It is
+## now the mark itself, drawn only while [member _animator] has the figure away
+## from it — see [TrueTileMark]. The node stays the anchor whatever it draws:
+## the aura ring is placed from it, and every route that moves the observer
+## moves this first.
 @onready var _marker: MeshInstance3D = $Marker
+
+## What the avatar actually hangs off, and the node the camera rig follows.
+##
+## SEPARATE from the marker, and that separation is the whole animation. The
+## marker snaps to the server's tile because it IS the server's tile; this
+## slides towards it, so the figure walks and the fact stays put. With the
+## animation off the two are in the same place on every frame, which is exactly
+## the client's behaviour before this node existed.
+@onready var _avatar_root: Node3D = $Avatar
+
 @onready var _entities: EntityPool = $Entities
 @onready var _aura: MeshInstance3D = $Aura
 @onready var _camera: Camera3D = $Camera/SpringArm3D/Camera3D
@@ -192,12 +210,87 @@ var _hover_cell := Vector2i.ZERO
 ## inside one tile emits nothing.
 var _hover_text := ""
 
+## Where YOU are drawn, as against where the server says you are.
+##
+## One per figure is the rule, and the observer's is held here while every
+## other figure's lives in [EntityPool] — so the player and the raider chasing
+## them move by one set of maths and neither can be smoother than the other.
+##
+## Paced by the SERVER's tick, which arrives in the generated constants.
+## `goto` steps one tile per tick, so a walk drawn at any other speed either
+## arrives early and waits or falls behind and keeps falling.
+var _animator := StepAnimator.new(STEP, Const.TICK_SECONDS)
+
+## Everyone else's true tile, as one MultiMesh of the same square.
+##
+## A MultiMesh rather than a node each: a fight in a busy room puts a mark
+## under several entities at once, and they are one square drawn in several
+## places. Built here rather than in the pool for the reason the pool draws no
+## observer — a mark is ground, the ground is this pane's, and the pool is
+## given a tile origin rather than the maths that produced it.
+var _entity_marks: MultiMeshInstance3D
+
+## What the player chose about how movement is drawn. Bound by the console,
+## which owns it. Null until then, and the animation runs until told otherwise.
+var _settings: ClientSettings
+
 
 func _ready() -> void:
 	_tile_material = _vertex_coloured()
 	_link_material = _vertex_coloured()
+	_build_true_tile_marks()
 
 	Evennia.channel_received.connect(_on_channel)
+
+
+## Give both true tile marks the one square they draw.
+##
+## The observer's is written onto the marker node, which already exists and is
+## already in the right place. Everyone else's is a MultiMesh with no instances
+## in it yet — [method _on_entity_marks] fills it the first time somebody
+## starts moving, and empties it again when they stop.
+##
+## Two materials from one builder, because the two differ in colour and must
+## not differ in anything else. Each gets its OWN material rather than sharing
+## one: a shared resource is a colour written by whichever pane drew last.
+func _build_true_tile_marks() -> void:
+	var square := TrueTileMark.build_mesh(TILE_SIZE)
+
+	_marker.mesh = square
+	_marker.material_override = TrueTileMark.build_material(
+		TrueTileMark.COLOR_OBSERVER)
+	_marker.visible = false
+
+	_entity_marks = _instance_of(_new_multimesh(square, 0, false))
+	_entity_marks.material_override = TrueTileMark.build_material(
+		TrueTileMark.COLOR_ENTITY)
+
+	add_child(_entity_marks)
+
+
+## Slide the avatar towards the tile the server put it on, and show or hide the
+## mark for that tile.
+##
+## The ONLY per-frame work this pane does. Everything else redraws on a feed
+## message, and this could not: an animation is a function of time, and the
+## server sends nothing between two steps.
+func _process(delta: float) -> void:
+	_animator.advance(delta)
+	_draw_avatar()
+
+
+## Put the avatar where the animator currently has it, and show the mark for
+## your true tile while the two are apart.
+##
+## Called from [method _process] and from both places that move the animator
+## WITHOUT waiting for a frame. That second group is the point of having a
+## routine at all: with the animation off, a step lands the figure on its new
+## tile immediately, and drawing that a frame later would put the avatar behind
+## its own marker -- the lag this file exists to remove. [EntityPool] writes
+## its nodes at the same points, for the same reason.
+func _draw_avatar() -> void:
+	_avatar_root.position = _animator.drawn()
+	_marker.visible = _animator.is_travelling()
 
 
 ## Give the pane its mesh source. Called by the console, which owns it.
@@ -207,8 +300,9 @@ func _ready() -> void:
 ## bind null.
 func bind_meshes(resolver: MeshResolver) -> void:
 	_meshes = resolver
-	_entities.bind(_meshes, _locate_coords)
+	_entities.bind(_meshes, _locate_coords, STEP)
 	_entities.observer_slot_changed.connect(_on_observer_slot)
+	_entities.true_tiles_changed.connect(_on_entity_marks)
 	_meshes.refreshed.connect(_on_art_arrived)
 
 	# In THIS pane's world, because a shader is compiled for the lighting it is
@@ -244,6 +338,31 @@ func _on_map_ready(_z: String) -> void:
 	_relayout()
 
 
+## Take the player's own preferences. Called by the console, which owns them.
+##
+## Only one is read here, and it decides whether a figure slides between tiles
+## or appears on each. Applied to the pool as well as to the avatar from this
+## one place, because a client that animated the player and not the raider
+## beside them would be worse than one that animated neither.
+func bind_settings(settings: ClientSettings) -> void:
+	_settings = settings
+	_settings.changed.connect(_apply_settings)
+	_apply_settings()
+
+
+func _apply_settings() -> void:
+	var animated: bool = _settings.smooth_movement
+
+	_animator.set_animated(animated)
+	_entities.set_animated(animated)
+
+	# On the frame the player ticked the box, not the one after it. The
+	# checkbox is in a pane beside the world, so the change is watched as it is
+	# made -- and a figure that took a frame to land would be a flicker the
+	# player caused and cannot explain.
+	_draw_avatar()
+
+
 ## Follow the observer's own state. Called by the console, which owns it.
 func bind_char(state: CharState) -> void:
 	_char = state
@@ -251,10 +370,12 @@ func bind_char(state: CharState) -> void:
 	_redraw_avatar()
 
 
-## Draw whoever you currently are on the marker tile.
+## Draw whoever you currently are, on the node that slides between tiles.
 ##
-## The marker's own box mesh is hidden the moment there is a figure to replace
-## it — it was never meant to be a character, only a stand-in for one.
+## Hung off [member _avatar_root] and not off the marker. The marker is where
+## the SERVER has you; this is where you are DRAWN, and telling the two apart
+## is what lets the walk be animated without the client ever claiming to be
+## somewhere the server does not have you.
 func _redraw_avatar() -> void:
 	if _meshes == null:
 		return
@@ -281,13 +402,7 @@ func _redraw_avatar() -> void:
 	# figure that snapped back to facing north the moment its model arrived
 	# would read as the model being wrong rather than as the yaw being lost.
 	_avatar.rotation.y = _avatar_yaw
-	_marker.add_child(_avatar)
-
-	# The BOX goes, not the node. `visible = false` would take the avatar with
-	# it -- visibility is inherited in Godot -- and the marker itself has to
-	# stay: it is what the camera rig follows by NodePath and what
-	# _place_marker moves.
-	_marker.mesh = null
+	_avatar_root.add_child(_avatar)
 
 
 ## Take the slot [EntityPool] left for the observer in their tile's ring.
@@ -307,6 +422,32 @@ func _on_observer_slot(offset: Vector3) -> void:
 
 	_avatar.position.x = offset.x
 	_avatar.position.z = offset.z
+
+
+## Mark the true tile of everybody the pool currently has between tiles.
+##
+## `origins` are tile positions this pane handed the pool in the first place,
+## through `_locate_coords`, so nothing here re-derives where a tile is. The
+## list arrives only when the SET changes -- when somebody starts or stops
+## moving -- rather than every frame, which is what makes a MultiMesh rebuild
+## affordable at all.
+##
+## One mark per TILE and not per entity. Two raiders walking onto one square
+## are two identical coplanar outlines, which is z-fighting rather than
+## emphasis; the pool groups them before it sends the list.
+func _on_entity_marks(origins: Array) -> void:
+	var multi := _entity_marks.multimesh
+
+	multi.instance_count = origins.size()
+
+	for index: int in origins.size():
+		# Already the tile's TOP face: `_locate_coords` lifts by half the slab,
+		# which is what every entity is placed from. The square's own clearance
+		# above that face is TrueTileMark.LIFT, baked into the mesh.
+		var origin: Vector3 = origins[index]
+
+		multi.set_instance_transform(
+			index, Transform3D(Basis.IDENTITY, origin))
 
 
 ## Redraw when art lands for something this pane is drawing.
@@ -1161,6 +1302,14 @@ func _place_marker() -> void:
 	# thing being drawn rather than to the anchor.
 	_marker.position = top
 	_aura.position = top
+
+	# The marker is the truth and has already moved. This asks the figure to
+	# walk there. A step slides; a teleport, a resync and an island arriving
+	# late all snap, because StepAnimator refuses to draw a path for a move
+	# longer than one step -- the same rule yaw_towards applies to facing.
+	_animator.aim(top)
+
+	_draw_avatar()
 
 
 ## The observer's own tile, in the shape an entity carries its coords.

@@ -27,6 +27,8 @@ func _ready() -> void:
 	_the_skill_detail_choice_offers_every_mode_and_stores_the_value()
 	_the_sfx_slider_writes_the_volume_and_follows_it()
 	_the_xp_tracker_checks_write_settings_and_reset_only_asks()
+	_the_movement_check_writes_the_setting_and_follows_it()
+	_the_credits_button_asks_for_the_box_and_sends_no_command()
 
 	_clean()
 
@@ -37,6 +39,24 @@ func _ready() -> void:
 
 	print("PASS: options_view")
 	get_tree().quit(0)
+
+
+func _the_credits_button_asks_for_the_box_and_sends_no_command() -> void:
+	# The credits box is the client's own. A button that sent a line would
+	# ask the server for a screen it does not have.
+	_fresh()
+
+	var asked := [0]
+	var sent: Array[String] = []
+	_view.credits_requested.connect(func(): asked[0] += 1)
+	_view.command_requested.connect(func(line): sent.append(line))
+
+	for button: Button in _buttons(_view, [] as Array[Button]):
+		if button.text == "Model credits":
+			button.pressed.emit()
+
+	_expect(asked[0] == 1, "the credits button asks for the box once")
+	_expect(sent.is_empty(), "and sends the server nothing")
 
 
 func _clean() -> void:
@@ -204,6 +224,30 @@ func _the_xp_tracker_checks_write_settings_and_reset_only_asks() -> void:
 
 	_expect(resets["n"] == 1, "Reset session asks once")
 	_expect(sent.is_empty(), "and sends the server nothing")
+
+
+## The player's, like every check above the Game heading: it writes
+## ClientSettings and the server never hears about it. And it FOLLOWS the
+## setting, because Reset to defaults writes the same field from another
+## control -- a check that only ever wrote would then show the wrong state.
+func _the_movement_check_writes_the_setting_and_follows_it() -> void:
+	_fresh()
+
+	var sent: Array[String] = []
+	_view.command_requested.connect(func(line): sent.append(line))
+
+	_expect(_view._smooth_movement_check.button_pressed,
+		"the movement check starts on, as the default is")
+
+	_view._smooth_movement_check.toggled.emit(false)
+
+	_expect(not _settings.smooth_movement, "unticking it stops the animation")
+	_expect(sent.is_empty(), "and asks the server for nothing")
+
+	_settings.reset()
+
+	_expect(_view._smooth_movement_check.button_pressed,
+		"and a reset elsewhere ticks it again")
 
 
 func _expect(passed: bool, what: String) -> void:

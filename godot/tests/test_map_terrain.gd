@@ -26,7 +26,6 @@ var _failures := 0
 func _ready() -> void:
 	_a_map_with_no_terrain_names_none()
 	_a_surfaced_map_names_its_art()
-	_terrain_is_never_transparent()
 	_a_map_is_surfaced_only_once_its_art_could_exist()
 	_the_two_palettes_differ_only_where_nobody_chose_a_colour()
 	_mesh_parts_answers_in_the_same_space_as_bounds()
@@ -72,21 +71,9 @@ func _a_surfaced_map_names_its_art() -> void:
 			"and answers the table rather than something else")
 
 
-## The ground is the one surface everything else is drawn on top of.
-##
-## A glTF material that declares alphaMode BLEND -- which Blender writes for any
-## material carrying an RGBA image, used or not -- puts its mesh in the sorted
-## transparent queue. On a prop that is a wasted pass; on the ground it is every
-## entity, prop and marker in the pane sorting against the floor beneath them.
-## So terrain carries the correction, and it has to carry it per asset key.
-func _terrain_is_never_transparent() -> void:
-	var registry := ModelRegistry.new()
-
-	for z: String in MapPalette.TILE_MODELS:
-		var asset_key: String = MapPalette.TILE_MODELS[z]
-
-		_expect(registry.force_opaque(asset_key),
-			"%s is forced opaque, so the ground does not sort" % asset_key)
+## The ground is never transparent, but that is no longer this file's test.
+## The model pipeline bakes it into every tile: `budgets.ALWAYS_OPAQUE_FAMILIES`
+## in `blackout/assets/pipeline`, which its check asserts on the served files.
 
 
 # ─── Which palette a map is drawn in ─────────────────────────────────────────

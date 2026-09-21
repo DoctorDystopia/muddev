@@ -36,6 +36,10 @@ signal command_requested(command: String)
 ## signal the console answers by resetting the tracker.
 signal xp_session_reset_requested
 
+## The player asked to see the model credits. Not a setting and not a
+## command: the credits box is the client's own, so the console opens it.
+signal credits_requested
+
 ## What each skill-detail mode is called on screen.
 ##
 ## Keyed by the stored value, so the list the player sees is built by walking
@@ -60,6 +64,7 @@ var _inventory_check: CheckBox
 var _skill_detail: OptionButton
 var _xp_drops_check: CheckBox
 var _skill_rates_check: CheckBox
+var _smooth_movement_check: CheckBox
 
 ## Set while pushing values INTO the widgets, so their value_changed does not
 ## write straight back and fight the update that is in progress.
@@ -141,6 +146,13 @@ func _init() -> void:
 
 	column.add_child(_skill_detail)
 
+	# How a step is drawn. One checkbox and not two: the true tile mark is what
+	# pays back the information the animation costs, so it is not separately
+	# switchable. See ClientSettings.DEFAULT_SMOOTH_MOVEMENT.
+	column.add_child(_heading("Movement"))
+	_smooth_movement_check = _check("Slide between tiles")
+	column.add_child(_smooth_movement_check)
+
 	# The XP drops over the world. Both are the player's; the reset is neither a
 	# setting nor a command, which is why it is a signal of its own.
 	column.add_child(_heading("XP tracker"))
@@ -181,6 +193,16 @@ func _init() -> void:
 	reset.pressed.connect(func(): _settings.reset())
 	column.add_child(reset)
 
+	# LAST in the pane, below every setting. It is not a setting: it opens the
+	# box that credits the art. CC-BY asks for a credit the player can see,
+	# and this button is where the player sees it.
+	column.add_child(_heading("Credits"))
+	var credits := Button.new()
+	credits.text = "Model credits"
+	credits.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	credits.pressed.connect(func(): credits_requested.emit())
+	column.add_child(credits)
+
 	_font_slider.value_changed.connect(_on_font_changed)
 	_scale_slider.value_changed.connect(_on_scale_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_changed)
@@ -189,6 +211,7 @@ func _init() -> void:
 	_skill_detail.item_selected.connect(_on_skill_detail_selected)
 	_xp_drops_check.toggled.connect(_on_xp_drops_toggled)
 	_skill_rates_check.toggled.connect(_on_skill_rates_toggled)
+	_smooth_movement_check.toggled.connect(_on_smooth_movement_toggled)
 
 
 func bind(settings: ClientSettings) -> void:
@@ -215,6 +238,7 @@ func _sync() -> void:
 	_xp_drops_check.button_pressed = _settings.show_xp_drops
 	_skill_rates_check.button_pressed = _settings.show_skill_rates
 	_skill_rates_check.disabled = not _settings.show_xp_drops
+	_smooth_movement_check.button_pressed = _settings.smooth_movement
 	_syncing = false
 
 
@@ -265,6 +289,13 @@ func _on_skill_rates_toggled(pressed: bool) -> void:
 		return
 
 	_settings.set_show_skill_rates(pressed)
+
+
+func _on_smooth_movement_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_smooth_movement(pressed)
 
 
 ## The chosen index is a position in ClientSettings.SKILL_DETAIL_MODES, because

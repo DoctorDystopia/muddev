@@ -18,12 +18,19 @@ var _resolver: MeshResolver
 ## what can be checked here.
 var _observer_offset := Vector3.ZERO
 
+## The last set of true tiles the pool asked to have marked. Empty whenever
+## nobody is between squares, which is nearly always.
+var _marked: Array = []
+
 ## Payloads in the shape `serialize_entity` produces, floats and all —
 ## `coords` included, because with STATEFEED_ENTITY_RADIUS at 10 the feed names
 ## entities across a 441-room neighbourhood and every one carries its own.
 const HERE := [7.0, 1.0, "oasis"]
 const NEXT_DOOR := [8.0, 1.0, "oasis"]
 const FAR_MAP := [3.0, 3.0, "somewhere_unplaced"]
+
+## A third placed tile, for the animated cases alone. See `_tile_positions`.
+const CLOSE_BY := [7.0, 2.0, "oasis"]
 
 const RAIDER := {"id": 20743.0, "name": "mutant raider", "kind": "npc",
 	"asset": "generic", "family": "npc", "interact": "attack mutant raider",
@@ -85,6 +92,11 @@ const UNPLACEABLE := {"id": 20747.0, "name": "elsewhere", "kind": "npc",
 var _tile_positions := {
 	str(HERE): Vector3(0.0, 0.0, 0.0),
 	str(NEXT_DOOR): Vector3(1.18, 0.0, 0.0),
+	# CLOSER than a step on purpose, and only the animated cases use it. A
+	# rebuild that moves a figure to another tile can also move it round its
+	# ring, and the two together have to stay under StepAnimator.SNAP_STEPS or
+	# the case would be asserting a snap while claiming to assert a walk.
+	str(CLOSE_BY): Vector3(0.0, 0.0, 0.6),
 }
 
 
@@ -98,9 +110,21 @@ func _ready() -> void:
 
 	_pool = EntityPool.new()
 	add_child(_pool)
-	_pool.bind(_resolver, _locate)
+	# The tile size the pane would give it. Every distance the ring asserts is
+	# in the same units, and the animator's snap threshold is a multiple of it.
+	_pool.bind(_resolver, _locate, 1.0)
 	_pool.observer_slot_changed.connect(
 		func(offset: Vector3) -> void: _observer_offset = offset)
+	_pool.true_tiles_changed.connect(
+		func(origins: Array) -> void: _marked = origins)
+
+	# OFF for every case below the animated pair at the end, and that is the
+	# only honest way to assert geometry here. With it on, a node's position is
+	# where the figure is DRAWN, which lags the slot by up to a tick -- so a
+	# ring test would be measuring the previous ring. The maths of the lag has
+	# its own file (test_step_animator), and what is checked here is that this
+	# pool hands that maths the right slots.
+	_pool.set_animated(false)
 
 	_the_pool_was_actually_wired()
 	_entities_stand_on_their_own_tiles()
@@ -132,6 +156,12 @@ func _ready() -> void:
 	_the_kind_decides_the_colour_and_an_unknown_one_still_reads()
 	_a_label_does_not_lift_its_entity_off_the_ground()
 	_a_labelled_entity_shares_a_tile_without_losing_its_words()
+
+	# LAST, because each turns the animation back on. See the bind above.
+	_a_moved_entity_is_drawn_where_it_was_not_where_it_is_going()
+	_a_travelling_entity_has_its_true_tile_marked()
+	_two_entities_bound_for_one_tile_ask_for_one_mark()
+	_turning_the_animation_off_lands_everybody()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -576,6 +606,86 @@ func _crowd(count: int) -> Array:
 			"interact": "", "coords": HERE})
 
 	return made
+
+
+# ─── The animation ───────────────────────────────────────────────────────────
+
+## The rebuild frees every node and builds it again, so what remembers where a
+## figure was drawn cannot live on the node. It lives beside the nodes, keyed
+## by id -- and this is the case that fails if it ever moves back.
+func _a_moved_entity_is_drawn_where_it_was_not_where_it_is_going() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([RAIDER])
+
+	var started := _node_for(20743).position
+
+	_pool.replace_all([_moved(RAIDER, NEXT_DOOR)])
+
+	_expect(_node_for(20743).position == started,
+		"a step leaves the figure where it stood, to walk from there")
+
+	_pool.set_animated(false)
+	_pool.replace_all([])
+
+
+## The information the animation costs. While the raider is between squares,
+## the square the server has it on is the one every command resolves against,
+## and the pane is told to mark it.
+func _a_travelling_entity_has_its_true_tile_marked() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([RAIDER])
+
+	_expect(_marked.is_empty(), "a figure standing still is marked nowhere")
+
+	_pool.replace_all([_moved(RAIDER, NEXT_DOOR)])
+
+	_expect(_marked.size() == 1, "a walking figure marks one square")
+	_expect(_marked.size() == 1
+		and _apart(_marked[0], _tile_positions[str(NEXT_DOOR)]) < 0.001,
+		"and it is the square the server moved it to, not the one it left")
+
+	_pool.set_animated(false)
+	_pool.replace_all([])
+
+
+## One mark per TILE and not per entity. Two identical coplanar squares are
+## z-fighting rather than emphasis.
+func _two_entities_bound_for_one_tile_ask_for_one_mark() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([_moved(RAIDER, CLOSE_BY), _moved(SWORD, CLOSE_BY)])
+	_pool.replace_all([RAIDER, SWORD])
+
+	_expect(_marked.size() == 1,
+		"two figures crossing onto one square ask for one mark")
+
+	_pool.set_animated(false)
+	_pool.replace_all([])
+
+
+## A player who switches the animation off gets every figure on its own square
+## at once, and every mark off the screen with them.
+func _turning_the_animation_off_lands_everybody() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([RAIDER])
+	_pool.replace_all([_moved(RAIDER, NEXT_DOOR)])
+	_pool.set_animated(false)
+
+	_expect(_from_tile(_node_for(20743), NEXT_DOOR) < 0.001,
+		"the figure is on its true tile the moment the setting changes")
+	_expect(_marked.is_empty(), "and nothing is marked any more")
+
+	_pool.replace_all([])
+
+
+## One entity payload, standing somewhere else. A copy rather than an edit:
+## the shared constants are `const` and a case that mutated one would decide
+## what the next case sees.
+func _moved(entity: Dictionary, coords: Array) -> Dictionary:
+	var copy := entity.duplicate()
+
+	copy["coords"] = coords
+
+	return copy
 
 
 ## Every drawn entity's id and where it stands, for comparing two rebuilds.

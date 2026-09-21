@@ -2,99 +2,275 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/25/2026
-Description: Guard the served 3D models against their family's budget.
+Description: Guard the served 3D models and the pipeline that builds them.
+
+             Until 09/18/2026 this file was test_model_budgets.py, and it
+             asserted the budgets only. The model pipeline
+             (assets/pipeline) now owns every fact about a model: its record,
+             its source and license, its budget, the served file, the manifest
+             and the credits. `check.run_check()` asserts that all of them
+             agree, and the first test here runs it. The other tests pin the
+             rules that the check depends on.
 
              WHAT THIS CATCHES. A temp art asset dropped straight into
-             web/static/webclient/models/ during development, or a repack run
-             with an --edge override that was meant to be temporary. Both look
-             fine in the pane and cost every player the difference on every
-             load. player_character.glb carried fifteen 1024-square textures
-             for 10.4 MiB that way -- more than the rest of the art combined,
-             for the model seen from furthest away -- and nothing failed.
-
-             It lives beside test_client_assets.py because it is the same kind
-             of check: a fact about files the client fetches, asserted from the
-             Python side because that is the side that can be tested.
+             web/static/webclient/models/, a model record edited without a
+             rebuild, an edited download, a license nobody confirmed, and a
+             model over its family budget. player_character.glb once carried
+             fifteen 1024-square textures for 10.4 MiB, and nothing failed.
 
              NO CENSUS. Per CLAUDE.md, this never asserts a list of models.
-             The manifest is the source of truth for which models exist and
-             asset_budgets.py for how large each may be; every case here is a
-             RELATIONSHIP between the two. Adding a model or a family needs no
-             edit in this file.
+             Every case is a RELATIONSHIP: between a record and its served
+             file, a key and the manifest, a source and the license gate.
+             Adding a model or a family needs no edit in this file.
+
+             NO NODE AND NO BLENDER. The check reads files only, so the suite
+             runs on a machine that cannot build a model.
 """
 
 import json
 import os
+import tempfile
 import unittest
 
-# assets/ is import-safe by design -- it touches no database and boots no
+# assets/ is import-safe by design -- it touches no database and starts no
 # Evennia. That is what separates it from blackout/scripts/, which CLAUDE.md
 # marks import-unsafe and which a test must never reach into.
-from assets import asset_budgets
-from assets import pack_model
+from assets.pipeline import (budgets, check, glb, licenses, outputs, paths,
+                             records, sources)
 
 
-class ModelBudgetTests(unittest.TestCase):
-    """The served models obey the budgets, and the budgets are coherent."""
+def _write_record(folder, family, asset_key, text):
+    """
+    Purpose: Write one model record into a temporary models tree.
 
-    def test_every_manifest_model_is_within_its_family_budget(self):
+    Entry:
+        folder is a temporary directory.
+
+    Exit/Returns:
+        Returns the path of the written record.
+    """
+    family_dir = os.path.join(folder, family)
+    os.makedirs(family_dir, exist_ok=True)
+    path = os.path.join(family_dir, asset_key + paths.MODEL_RECORD_SUFFIX)
+
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+    return path
+
+
+class PipelineCheckTests(unittest.TestCase):
+    """The records, the sources and the served tree agree."""
+
+    def test_the_pipeline_check_finds_no_problem(self):
         """
-        The whole point of the module: no served model is over budget.
-
-        Reported per model via subTest so one oversized asset names itself
-        rather than hiding every other one behind the first failure.
+        The whole point of the module. Each problem is its own subTest, so
+        one stale model names itself and does not hide the others.
         """
-        problems = pack_model.audit_served_models()
+        report = check.run_check()
 
-        for asset_key, family, problem in problems:
-            with self.subTest(asset_key=asset_key, family=family):
-                self.fail(
-                    "%s [%s] %s. Repack it with "
-                    "`python assets/pack_model.py --all`, or argue the budget "
-                    "up in assets/asset_budgets.py -- but do not drop a raw "
-                    "asset into the served tree." % (asset_key, family, problem))
+        for problem in report.problems:
+            with self.subTest(problem=problem):
+                self.fail(problem)
 
-    def test_the_manifest_is_readable_and_not_empty(self):
+    def test_there_is_at_least_one_record(self):
         """
-        A vacuity guard.
-
-        Every other case here passes trivially against an empty or unreadable
-        manifest, which is exactly how a guard stops guarding without anyone
-        noticing. test_client_constants.py carries the same guard for the same
-        reason.
+        A vacuity guard. Every check passes against an empty models tree,
+        which is how a guard stops guarding with nobody noticing.
         """
-        rows = pack_model.load_manifest()
+        self.assertTrue(records.load_all(),
+                        "no model records under assets/models/")
 
-        self.assertTrue(
-            rows,
-            "%s names no models, so every budget check below is vacuous"
-            % os.path.basename(pack_model.manifest_path()))
 
-    def test_every_manifest_source_directory_exists(self):
+class ModelRecordTests(unittest.TestCase):
+    """A model record says what it means, or it refuses to load."""
+
+    def test_the_file_name_is_the_key_and_the_directory_is_the_family(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(folder, "items", "a_key",
+                                 'source = "s"\nfile = "f.glb"\n')
+            record = records.load_record(path)
+
+        self.assertEqual(record.asset_key, "a_key")
+        self.assertEqual(record.family, "items")
+
+    def test_an_unknown_field_is_refused(self):
         """
-        A row naming a directory that is not there can never be repacked, and
-        the failure would otherwise only surface the next time somebody ran
-        --all and skimmed the output.
+        "rotation" for "rotate" must fail. Ignored, it builds a model with no
+        correction and no error.
         """
-        for source_dir, asset_key in pack_model.load_manifest():
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(
+                folder, "items", "k",
+                'source = "s"\nfile = "f.glb"\n[fix]\nrotation = [0, 90, 0]\n')
+
+            with self.assertRaises(records.RecordError) as caught:
+                records.load_record(path)
+
+        self.assertIn("rotation", str(caught.exception))
+
+    def test_a_record_needs_a_source_and_a_file(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(folder, "items", "k", 'source = "s"\n')
+
+            with self.assertRaises(records.RecordError):
+                records.load_record(path)
+
+    def test_a_bad_filter_or_rotation_is_refused(self):
+        bodies = ('[fix]\nfilter = "blurry"\n', '[fix]\nrotate = [90, 0]\n')
+
+        for body in bodies:
+            with self.subTest(body=body):
+                with tempfile.TemporaryDirectory() as folder:
+                    path = _write_record(
+                        folder, "items", "k",
+                        'source = "s"\nfile = "f.glb"\n' + body)
+
+                    with self.assertRaises(records.RecordError):
+                        records.load_record(path)
+
+    def test_aliases_follow_the_key(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(
+                folder, "items", "k",
+                'source = "s"\nfile = "f.glb"\naliases = ["a", "b"]\n')
+            record = records.load_record(path)
+
+        self.assertEqual(record.keys, ("k", "a", "b"))
+
+
+class ManifestTests(unittest.TestCase):
+    """The manifest a graphical client fetches to learn which keys have art."""
+
+    def test_every_key_and_alias_of_a_served_record_is_in_the_manifest(self):
+        manifest = outputs.render_manifest(records.load_all())
+
+        for record in records.load_all():
+            served = paths.served_path(record.family, record.asset_key)
+
+            if not os.path.isfile(served):
+                continue
+
+            for key in record.keys:
+                with self.subTest(key=key):
+                    self.assertEqual(
+                        manifest.get(key),
+                        paths.served_relative(record.family, record.asset_key),
+                        "an alias must name its model's one file, never a copy")
+
+    def test_it_carries_paths_only_and_no_presentation(self):
+        """
+        WHICH models exist is a build fact; HOW each is shown is not.
+        CLAUDE.md is explicit that the model registry -- rotations, offsets --
+        is the client's own and must never be generated. A correction to an
+        export is baked into the file instead, so no field is needed here.
+        """
+        for asset_key, entry in outputs.render_manifest(
+                records.load_all()).items():
             with self.subTest(asset_key=asset_key):
-                self.assertTrue(
-                    os.path.isdir(source_dir),
-                    "%s names %s, which does not exist"
-                    % (asset_key, source_dir))
+                self.assertIsInstance(entry, str)
+                self.assertTrue(entry.endswith(paths.SERVED_SUFFIX))
 
-    def test_every_manifest_source_names_a_family(self):
+    def test_every_served_tile_is_opaque(self):
         """
-        The family is the first path component under assets/, and it is what
-        chooses the budget. A source outside assets/ has no family, so
-        `_served_family` raises -- better here than mid-batch.
+        budgets.ALWAYS_OPAQUE_FAMILIES bakes the rule. This reads the served
+        files, so a tile dropped in by hand with BLEND fails here too.
         """
-        for source_dir, asset_key in pack_model.load_manifest():
+        for record in records.load_all():
+            if record.family not in budgets.ALWAYS_OPAQUE_FAMILIES:
+                continue
+
+            served = paths.served_path(record.family, record.asset_key)
+
+            with self.subTest(asset_key=record.asset_key):
+                summary = glb.summarize(served)
+                self.assertEqual(set(summary.alpha_modes), {"OPAQUE"})
+
+
+class CreditTests(unittest.TestCase):
+    """Every served model has a credit, and the credit tells the truth."""
+
+    def test_every_served_source_has_a_credit(self):
+        credits = outputs.render_credits(records.load_all())
+        credited = {key for entry in credits for key in entry["models"]}
+        manifest = outputs.render_manifest(records.load_all())
+
+        for asset_key in manifest:
             with self.subTest(asset_key=asset_key):
-                family = pack_model._served_family(source_dir)
+                self.assertIn(asset_key, credited)
 
-                self.assertTrue(family, "%s resolved to an empty family"
-                                % asset_key)
+    def test_a_credit_is_unconfirmed_exactly_when_its_source_has_an_exception(
+            self):
+        """
+        The Godot credits box marks an unconfirmed license. The mark must
+        come from the source record, never from a guess.
+        """
+        all_records = records.load_all()
+        by_title = {entry["title"]: entry
+                    for entry in outputs.render_credits(all_records)}
+
+        for source_id in {record.source_id for record in all_records}:
+            source = sources.load_source(source_id)
+
+            with self.subTest(source_id=source_id):
+                self.assertEqual(by_title[source.title]["confirmed"],
+                                 not source.exception)
+
+    def test_the_credits_json_is_valid_and_matches_a_fresh_render(self):
+        with open(paths.CREDITS_JSON_PATH, encoding="utf-8") as handle:
+            committed = json.load(handle)
+
+        self.assertEqual(committed,
+                         outputs.render_credits(records.load_all()))
+
+
+class LicenseGateTests(unittest.TestCase):
+    """The gate refuses what it must, and an exception is never silent."""
+
+    def _source(self, license_id, exception=""):
+        return sources.Source(
+            source_id="x", directory="", title="t", author="a", url="u",
+            site="s", license=license_id, retrieved="2026-09-18",
+            exception=exception)
+
+    def test_an_allowed_license_passes(self):
+        for license_id in licenses.ALLOWED_LICENSES:
+            with self.subTest(license_id=license_id):
+                source = self._source(license_id)
+                self.assertEqual(sources.gate_problem(source), "")
+
+    def test_a_restrictive_or_missing_license_is_refused(self):
+        for license_id in ("CC-BY-NC-4.0", "CC-BY-ND-4.0", "TODO", ""):
+            with self.subTest(license_id=license_id):
+                source = self._source(license_id)
+                self.assertTrue(sources.gate_problem(source))
+
+    def test_an_exception_waives_the_gate(self):
+        source = self._source("LicenseRef-Unconfirmed", exception="reason")
+
+        self.assertEqual(sources.gate_problem(source), "")
+
+    def test_every_exception_is_reported_by_the_check(self):
+        """
+        An exception must stay visible on every run, or it becomes a silent
+        pass -- the state the gate exists to end.
+        """
+        report = check.run_check()
+
+        for source_id in sources.list_source_ids():
+            source = sources.load_source(source_id)
+
+            if not source.exception:
+                continue
+
+            with self.subTest(source_id=source_id):
+                named = [line for line in report.warnings
+                         if line.startswith(source_id)]
+                self.assertTrue(named)
+
+
+class BudgetTableTests(unittest.TestCase):
+    """The budget table is coherent, whatever the numbers are."""
 
     def test_every_budget_is_positive_and_described(self):
         """
@@ -102,96 +278,61 @@ class ModelBudgetTests(unittest.TestCase):
         everything. `reason` is required because a number nobody justified is
         one the next person edits rather than argues with.
         """
-        listed = dict(asset_budgets.FAMILY_BUDGETS)
-        listed["<default>"] = asset_budgets.DEFAULT_BUDGET
+        listed = dict(budgets.FAMILY_BUDGETS)
+        listed["<default>"] = budgets.DEFAULT_BUDGET
 
         for family, budget in listed.items():
             with self.subTest(family=family):
                 self.assertGreater(budget.max_texture_edge, 0)
                 self.assertGreater(budget.max_bytes, 0)
+                self.assertGreater(budget.max_triangles, 0)
                 self.assertTrue(budget.reason.strip(),
                                 "%s has no stated reason" % family)
 
     def test_an_unlisted_family_falls_back_rather_than_raising(self):
         """
-        Adding assets/vehicles/ must be packable the day it is created, the
-        same way an unknown asset key already draws a generic mesh. The
-        fallback is the tightest tier, so not being listed costs a smaller
-        model rather than an unbounded one.
+        A new family must be buildable the day it is created, the same way an
+        unknown asset key already draws a generic mesh. The fallback is the
+        tightest texture tier, so not being listed costs a smaller model.
         """
-        fallback = asset_budgets.budget_for("a-family-nobody-has-added")
+        fallback = budgets.budget_for("a-family-nobody-has-added")
 
-        self.assertEqual(fallback, asset_budgets.DEFAULT_BUDGET)
+        self.assertEqual(fallback, budgets.DEFAULT_BUDGET)
 
-        for family, budget in asset_budgets.FAMILY_BUDGETS.items():
+        for family, budget in budgets.FAMILY_BUDGETS.items():
             with self.subTest(family=family):
                 self.assertGreaterEqual(
                     budget.max_texture_edge,
-                    asset_budgets.DEFAULT_BUDGET.max_texture_edge,
-                    "%s is tighter than the default, so the default is no "
-                    "longer the tightest tier the docstring claims" % family)
+                    budgets.DEFAULT_BUDGET.max_texture_edge)
+
+    def test_a_model_over_budget_names_every_broken_limit(self):
+        budget = budgets.budget_for("items")
+        summary = glb.GlbSummary(
+            size_bytes=budget.max_bytes + 1,
+            triangles=budget.max_triangles + 1,
+            extensions_used=(), texture_edges=(budget.max_texture_edge * 2,),
+            alpha_modes=(), generator="")
+
+        problems = budgets.budget_problems("items", summary)
+
+        self.assertEqual(len(problems), 3)
 
 
-class ClientModelManifestTests(unittest.TestCase):
-    """
-    The manifest a graphical client fetches to learn which assets have art.
+class GodotExtensionTests(unittest.TestCase):
+    """The list of extensions Godot reads leaves out the known traps."""
 
-    WHY IT EXISTS. blackout_models.js can hardcode its list because it fetches
-    a .glb only when something needs drawing. A Godot web export cannot: art
-    baked into the .pck ships before the login prompt, and that is 12 MiB
-    today with 10.9 of it one character (ENG-0006 R11). Fetching at runtime
-    keeps the .pck small, and fetching needs a list of what is fetchable.
-
-    Convention-plus-404 was the alternative and blackout_models.js rejected it
-    for a reason that still holds: with 16 items in ITEM_DB and one model
-    between them, fifteen 404s are the NORMAL case on every pane open.
-    """
-
-    def test_the_committed_manifest_matches_a_fresh_render(self):
+    def test_geometry_compression_is_not_in_the_list(self):
         """
-        The same guard the generated client constants carry: a stale committed
-        file fails the suite rather than surviving quietly.
+        Every other glTF tool supports these, and Godot's runtime loader does
+        not. A served file that needs one loads as nothing, with no error.
         """
-        path = pack_model.client_manifest_path()
+        traps = ("KHR_draco_mesh_compression", "EXT_meshopt_compression",
+                 "KHR_mesh_quantization")
 
-        self.assertTrue(
-            os.path.exists(path),
-            "%s has never been rendered; run "
-            "`python assets/pack_model.py --all`" % os.path.basename(path))
+        for name in traps:
+            with self.subTest(extension=name):
+                self.assertNotIn(name, glb.GODOT_RUNTIME_EXTENSIONS)
 
-        with open(path, "r", encoding="utf-8") as handle:
-            committed = json.load(handle)
 
-        self.assertEqual(
-            committed, pack_model.render_client_manifest(),
-            "the committed model manifest is stale; re-run "
-            "`python assets/pack_model.py --all`")
-
-    def test_every_manifest_entry_points_at_a_file_that_exists(self):
-        """
-        A manifest naming a file that was never packed sends every client to a
-        404 -- precisely what it exists to prevent.
-        """
-        root = os.path.dirname(pack_model.client_manifest_path())
-
-        for asset_key, relative in pack_model.render_client_manifest().items():
-            with self.subTest(asset_key=asset_key):
-                self.assertTrue(
-                    os.path.exists(os.path.join(root, relative)),
-                    "%s -> %s does not exist" % (asset_key, relative))
-
-    def test_it_carries_paths_only_and_no_presentation(self):
-        """
-        WHICH models exist is a build fact; HOW each is oriented is not.
-        blackout_models.js rotates the sword +PI/2 so its tip points up, and
-        CLAUDE.md is explicit that the model registry -- meshes, rotations,
-        scales -- is the client's own and must never be generated. Only the
-        path is here, and this is what keeps it that way.
-        """
-        for asset_key, entry in pack_model.render_client_manifest().items():
-            with self.subTest(asset_key=asset_key):
-                self.assertIsInstance(
-                    entry, str,
-                    "a manifest entry must be a bare path; presentation "
-                    "(rotation, scale) belongs to the client")
-                self.assertTrue(entry.endswith(".glb"))
+if __name__ == "__main__":
+    unittest.main()

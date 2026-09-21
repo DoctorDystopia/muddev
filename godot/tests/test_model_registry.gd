@@ -15,6 +15,7 @@ func _ready() -> void:
 	_a_suspicious_path_is_refused()
 	_a_malformed_manifest_is_survived()
 	_presentation_is_client_side_and_defaults_to_none()
+	_a_scale_reaches_every_alias_of_its_file()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -113,19 +114,46 @@ func _a_malformed_manifest_is_survived() -> void:
 
 
 func _presentation_is_client_side_and_defaults_to_none() -> void:
-	# The sword's quarter-turn is a judgement about how a blade reads in an
-	# inventory cell. It is deliberately NOT in the served manifest.
+	# The corpse skeleton lies on its back because it stands in for a body.
+	# That is a display choice, so it is deliberately NOT in the served
+	# manifest. A correction to an export (the sword's quarter-turn) is baked
+	# into the file by the model pipeline, so the sword has no entry at all.
 	var reg := ModelRegistry.new()
 
 	_expect(
-		reg.rotation_for("rusty_scrap_shortsword").is_equal_approx(
-			Vector3(PI / 2.0, 0.0, 0.0)),
-		"the sword is stood up"
+		reg.rotation_for("corpse_skeleton").is_equal_approx(
+			Vector3(-PI / 2.0, 0.0, 0.0)),
+		"the corpse is laid on its back"
+	)
+	_expect(
+		reg.rotation_for("rusty_scrap_shortsword") == Vector3.ZERO,
+		"the sword's correction lives in the file, not here"
 	)
 	_expect(
 		reg.rotation_for("player_character") == Vector3.ZERO,
 		"anything with no entry is drawn as exported"
 	)
+
+
+func _a_scale_reaches_every_alias_of_its_file() -> void:
+	# The server sends the ITEM key, and an ammunition item is an alias of the
+	# clip. An entry under the file's own key must reach every alias, or a new
+	# ammunition item draws as long as the gun.
+	var reg := ModelRegistry.new()
+	reg.ingest_manifest({
+		"heavy_machine_gun_clip": "items/heavy_machine_gun_clip.glb",
+		"scrap_arrow": "items/heavy_machine_gun_clip.glb",
+		"heavy_machine_gun": "items/heavy_machine_gun.glb",
+	})
+	var clip_scale := reg.scale_for("heavy_machine_gun_clip")
+
+	_expect(clip_scale < 1.0, "the clip is drawn smaller than the unit box")
+	_expect(reg.scale_for("scrap_arrow") == clip_scale,
+		"an alias of the clip shrinks with it")
+	_expect(reg.scale_for("heavy_machine_gun") == 1.0,
+		"a model with no entry keeps the unit box")
+	_expect(reg.scale_for("an_item_with_no_art") == 1.0,
+		"a key with no art keeps the unit box")
 
 
 func _expect(passed: bool, what: String) -> void:

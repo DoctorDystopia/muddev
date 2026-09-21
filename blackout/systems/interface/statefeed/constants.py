@@ -778,6 +778,21 @@ ENTITY_DBREF_TEMPLATE: str = "#{dbref}"
 # wants.
 ENTITY_APPROACH_KEY: str = "approach"
 
+# The payload key saying this entity is spent FOR THE OBSERVER READING IT.
+# Present and True only on a gathering node that this player has stripped;
+# ABSENT means the node is whole, which is every entity in the world except
+# one node for one player for a few seconds.
+#
+# This is the first field on the entity row whose value depends on who is
+# looking. A client draws it as a spent state -- a stump, a dimmed mesh --
+# and drops the verb buttons, because a spent node also reports an empty
+# `interact`. The two travel together and a client may read either one.
+#
+# It is NOT a second way to say "no verbs". An entity that affords nothing is
+# ordinary; a node that WOULD afford something and does not right now is the
+# thing a player needs told, and the empty verb list alone cannot say it.
+ENTITY_SPENT_KEY: str = "spent"
+
 # Room prototype key used when a room carries none. Matches the wildcard
 # behaviour of the ('*', '*') entry in a map's PROTOTYPES table.
 ROOM_KIND_DEFAULT: str = "default"

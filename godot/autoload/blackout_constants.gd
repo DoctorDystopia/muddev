@@ -91,6 +91,9 @@ const MSG_DIALOGUE := "dialogue"
 const MSG_CHANNEL := "channel"
 const MSG_SYSTEM := "system"
 
+# The server clock. One tile per tick is walking speed.
+const TICK_SECONDS := 0.6
+
 # Everything else.
 const SUBSCRIBE_ALL := "all"
 const ASSET_KEY_CHARACTER := "player_character"
@@ -99,6 +102,7 @@ const ROOM_KIND_DEFAULT := "default"
 const INVENTORY_SWAP_TEMPLATE := "swap {source} {target}"
 const TILE_KEY_TEMPLATE := "{x}:{y}"
 const ENTITY_APPROACH_TEMPLATE := "goto ({x},{y}) then {command}"
+const ENTITY_SPENT_KEY := "spent"
 const ACTION_AMOUNT_PLACEHOLDER := "{amount}"
 const ACTION_INPUT_KIND_QUANTITY := "quantity"
 const ACTION_INPUT_KIND_KEY := "kind"

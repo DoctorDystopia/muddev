@@ -50,6 +50,8 @@ Description: Render the facts a graphical client must know as source that
 
 import os as _os
 
+from systems.core.tick import constants as tick_const
+
 from . import constants as const
 
 
@@ -213,6 +215,11 @@ _SCALAR_EXPORTS: tuple = (
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
     ("ENTITY_APPROACH_TEMPLATE", const.ENTITY_APPROACH_TEMPLATE),
+    # The key a client reads to draw a node it has already stripped. Exported
+    # for the same reason every other payload key is: a client that retyped
+    # it would be free to disagree with the server about the spelling, and
+    # the symptom is a stump that never appears.
+    ("ENTITY_SPENT_KEY", const.ENTITY_SPENT_KEY),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the
@@ -262,6 +269,22 @@ _MESSAGE_TYPE_EXPORTS: tuple = (
     ("MSG_DIALOGUE", const.MESSAGE_TYPE_DIALOGUE),
     ("MSG_CHANNEL", const.MESSAGE_TYPE_CHANNEL),
     ("MSG_SYSTEM", const.MESSAGE_TYPE_SYSTEM),
+)
+
+# The clock, and it is the one export that does not come from constants.py.
+#
+# The tick's owner is systems/core/tick/constants.py, and it stays there: the
+# engine, the auto-walk, the auras and every item definition express cadence in
+# it, so a copy re-declared beside the channel names would be a second owner of
+# the game's heartbeat.
+#
+# IT IS EXPORTED BECAUSE A CLIENT THAT ANIMATES MUST MATCH IT. `goto` steps one
+# tile per tick (BlackoutGotoCmd.auto_step_delay), so a walk animation that
+# takes any other time either arrives early and waits, or falls behind and
+# keeps falling. Typing 0.6 into GDScript is the hazard CLAUDE.md names: a
+# literal that already had a constant, on a number the server is free to retune.
+_CLOCK_EXPORTS: tuple = (
+    ("TICK_SECONDS", tick_const.TICK_SECONDS),
 )
 
 _LANGUAGE_GD: str = "gd"
@@ -404,7 +427,7 @@ def _render_body(syntax: dict, indent: str) -> str:
     Module Globals:
         _CHANNEL_EXPORTS, _KIND_EXPORTS, _ITEM_FAMILY_EXPORTS,
         _LABEL_KIND_EXPORTS, _TILE_KIND_EXPORTS, _MESSAGE_TYPE_EXPORTS,
-        _SCALAR_EXPORTS read.
+        _CLOCK_EXPORTS, _SCALAR_EXPORTS read.
 
     Methodology:
         Walk the export tables in the order they are declared above,
@@ -439,6 +462,8 @@ def _render_body(syntax: dict, indent: str) -> str:
             _TILE_KIND_EXPORTS)
     section("Text routing -- what a line of game text is ABOUT. Which tab "
             "shows it is the client's own.", _MESSAGE_TYPE_EXPORTS)
+    section("The server clock. One tile per tick is walking speed.",
+            _CLOCK_EXPORTS)
     section("Everything else.", _SCALAR_EXPORTS)
 
     lines.append("%s%s Derived sets, so a client can iterate rather than"

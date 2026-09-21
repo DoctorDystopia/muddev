@@ -13,10 +13,10 @@ extends Node
 ##
 ## Tier 2 is the one that is not per-entity. It exists because an asset key
 ## names one specific thing and some families are better described whole: every
-## corpse in the game is a body, and its asset key is the key of whichever NPC
-## left it, so art aimed at the key would have to be drawn once per creature
-## before any corpse stopped being a box. [member FamilyShapes.MODELS] is that
-## table and the reasoning is written there.
+## corpse in the game is a body, and each one names its own key, so art aimed at
+## the key would have to be drawn once per creature before any corpse stopped
+## being a box. [member FamilyShapes.MODELS] is that table and the reasoning is
+## written there.
 ##
 ## This is the only file that knows the ORDER, and the only one panes talk to.
 ## [ModelLoader] knows how to fetch, [FamilyShapes] knows what a weapon looks
@@ -162,9 +162,9 @@ func may_have_art(asset_key: String) -> bool:
 ## For a caller handling [signal refreshed]: it holds entities, the signal names
 ## a key, and the two only match at tier 1. Comparing them directly was correct
 ## while the ladder had one model tier and stopped being correct the moment it
-## had two — a corpse's asset key is the NPC's, so `corpse_skeleton` landing
-## matched nothing and every body on screen stayed a grey box until something
-## unrelated redrew the room.
+## had two — a corpse's asset key is its own (`mutant_raider_corpse`) and
+## nothing serves it, so `corpse_skeleton` landing matched nothing and every
+## body on screen stayed a grey box until something unrelated redrew the room.
 ##
 ## Asked HERE because the ladder lives here. The alternative is every pool
 ## restating the tiers, which is the arrangement that made tier 2 invisible.

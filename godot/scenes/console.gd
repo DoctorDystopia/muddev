@@ -194,6 +194,9 @@ var _quests: QuestsView
 var _find: FindBar
 var _popup_view: PopupView
 
+## The model credits box, opened from the Options pane.
+var _credits: CreditsView
+
 ## What a left click in the world would act on, along the bottom of the world
 ## pane. The same [HoverBar] the bag and the pop-up use.
 var _world_hover: HoverBar
@@ -220,10 +223,18 @@ func _ready() -> void:
 	# in there because it is the one input that needs a browser; see
 	# asset_origin() on why the web case names the page's own host and not a
 	# relative path.
-	_meshes = MeshResolver.new(ModelRegistry.new(),
-		ServerEndpoint.asset_origin(OS.is_debug_build(), OS.has_feature("web"),
-			ServerEndpoint.page_origin()))
+	var asset_origin := ServerEndpoint.asset_origin(OS.is_debug_build(),
+		OS.has_feature("web"), ServerEndpoint.page_origin())
+	var registry := ModelRegistry.new()
+	_meshes = MeshResolver.new(registry, asset_origin)
 	add_child(_meshes)
+
+	# The credits come from the same origin as the models they credit. Over
+	# the whole console, not the world pane, so the box still opens with the
+	# 3D world turned off.
+	_credits = CreditsView.new()
+	_credits.bind(registry.credits_url(asset_origin))
+	add_child(_credits)
 
 	# Before anything can be printed: _note() below writes into it, and the
 	# very first thing this method does after binding is open a socket.
@@ -242,6 +253,12 @@ func _ready() -> void:
 	_world.bind_char(_char)
 	_world.bind_meshes(_meshes)
 	_world.bind_world(_world_state)
+
+	# The settings as well, and only one of them is read there: whether a
+	# figure slides between tiles. Given to the pane rather than applied here,
+	# because _apply_settings turns a preference into a PIXEL and this one is a
+	# rule about a 3D scene the console does not otherwise reach into.
+	_world.bind_settings(_settings)
 
 	# The resolver as well as the state: the minimap draws no meshes, but it
 	# does have to know whether this map's ground is drawn as art, and asking
@@ -366,6 +383,12 @@ func _ready() -> void:
 	# The XP session is the client's own reading, so starting it over asks the
 	# model directly -- there is nothing on the server to tell.
 	_options.xp_session_reset_requested.connect(_xp_tracker.reset)
+
+	# The credits box is the client's own, so it opens with no server round
+	# trip. Raised to the top, so it draws over every pane built after it.
+	_options.credits_requested.connect(func():
+		move_child(_credits, get_child_count() - 1)
+		_credits.open())
 
 	_help = HelpView.new()
 	_panel.add_panel(PanelView.TAB_HELP, _help)

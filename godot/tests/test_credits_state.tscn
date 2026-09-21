@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_credits_state.gd" id="1_credits"]
+
+[node name="TestCreditsState" type="Node"]
+script = ExtResource("1_credits")
