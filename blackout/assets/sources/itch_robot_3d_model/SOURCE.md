@@ -1,5 +1,11 @@
 # Lone Android ("Clark")
 
+> **Out of date since 09/18/2026.** The model pipeline builds this source now.
+> The commands below and the generated `scene.gltf` files that they name are
+> gone. The model record `assets/models/npcs/lone_android.toml` says how
+> this source is built, and `assets/README.md` is the procedure. The rest of
+> this note still describes the download.
+
 The export `lone_android` is packed from — the quest giver of "Oasis in the
 Wastes", drawn for `LoneAndroidNPC` in `typeclasses/npcs.py`.
 

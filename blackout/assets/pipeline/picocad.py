@@ -2,8 +2,14 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/11/2026
-Description: Turns a picoCAD save file into the source directory shape
-             pack_model.py already understands.
+Description: Turns a picoCAD save file into glTF, for the model pipeline.
+
+             Moved here from assets/picocad_to_gltf.py on 09/18/2026. The
+             build (build.py) calls convert() for a model record whose `file`
+             is a picoCAD save (.txt), and writes the result into
+             assets/.build/. Nothing in the source directory changes. The
+             history below names the packer and the front-steps that the
+             pipeline replaced.
 
              THE PROBLEM THIS FIXES. Every model served so far arrived as
              somebody else's download -- a glTF from Sketchfab, an FBX from
@@ -60,17 +66,12 @@ Description: Turns a picoCAD save file into the source directory shape
              a model full of holes, and a solid pixel where transparency was
              wanted is the failure a person can see and fix.
 
-             The save file is never written to, exactly as pack_model.py never
-             writes to a download. Re-running produces the same bytes.
+             The save file is never written to. Re-running produces the same
+             bytes.
 
              Pure file transformation. Importing this module touches no
              database and boots no Evennia -- but it sits outside the game
              package anyway, because it is a build tool and not game code.
-
-             Usage:
-                 ../evenv/Scripts/python.exe assets/picocad_to_gltf.py
-                     assets/items/food/mh_meat/mh_meat.txt
-                     assets/items/food/mh_meat
 """
 
 import json
@@ -78,7 +79,6 @@ import math
 import os
 import re
 import struct
-import sys
 from collections import namedtuple
 from io import BytesIO
 
@@ -95,7 +95,7 @@ _TEXTURE_URI = _TEXTURES_DIRNAME + "/" + _TEXTURE_FILENAME
 
 # The generator string written into what this produces. A file that does not
 # say where it came from is one nobody can regenerate.
-_GENERATOR = "blackout picocad_to_gltf.py"
+_GENERATOR = "blackout assets/pipeline/picocad.py"
 _GLTF_VERSION = "2.0"
 _MESH_NAME = "picocad"
 _MATERIAL_NAME = "picocad"
@@ -176,7 +176,6 @@ _STRING_QUOTE = "'"
 _KEY_PATTERN = re.compile(r"([A-Za-z_][A-Za-z_0-9]*)\s*=\s*")
 _NUMBER_PATTERN = re.compile(r"-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?")
 
-_MINIMUM_ARGUMENTS = 3
 
 # A Lua table has an array part and a named part and picoCAD uses both in the
 # same table -- a face is its corner indices AND its `c`, `uv` and flags.
@@ -909,9 +908,8 @@ def convert(picocad_path, dest_dir):
     Purpose: Convert one picoCAD save file into a model source directory.
 
     Entry:
-        picocad_path names the save file. dest_dir is the directory to write,
-        which has to be somewhere under assets/ for pack_model.py to name a
-        family for it.
+        picocad_path names the save file. dest_dir is the directory to write.
+        The build puts it under assets/.build/.
 
     Exit/Returns:
         Returns (dest_dir, report). report holds the model name, the object,
@@ -955,64 +953,3 @@ def convert(picocad_path, dest_dir):
     report["warnings"] = warnings
 
     return dest_dir, report
-
-
-# ─── Entry point ─────────────────────────────────────────────────────────────
-
-_USAGE = """picocad_to_gltf.py -- convert a picoCAD save file into a model source
-
-  picocad_to_gltf.py <model.txt> <destination>
-
-Writes <destination>/scene.gltf, scene.bin and textures/ -- an ordinary model
-source directory, which assets/pack_model.py then packs into the served .glb
-like any download. The destination has to be under assets/, because the first
-path component below it is what names the served family.
-
-  ../evenv/Scripts/python.exe assets/picocad_to_gltf.py
-      assets/items/food/mh_meat/mh_meat.txt assets/items/food/mh_meat
-"""
-
-
-def main(argv):
-    """
-    Purpose: Run the converter from the command line.
-
-    Entry:
-        argv - sys.argv. Wants the save file and the destination directory.
-
-    Exit/Returns:
-        Returns a process exit status. Prints what was written, and any
-        warning, on stdout.
-
-    Module Globals:
-        _USAGE, _MINIMUM_ARGUMENTS read.
-
-    Author: Nick Hobar
-    Creation date: 09/11/2026
-    """
-    if len(argv) < _MINIMUM_ARGUMENTS:
-        print(_USAGE)
-
-        return 1
-
-    try:
-        dest_dir, report = convert(argv[1], argv[2])
-    except (PicoCADError, OSError) as problem:
-        print("picocad_to_gltf: %s" % problem)
-
-        return 1
-
-    print("%s -> %s" % (argv[1], dest_dir))
-    print("  %(name)s: %(objects)d objects, %(faces)d faces, "
-          "%(triangles)d triangles, %(vertices)d vertices" % report)
-    print("  %(bytes)d bytes written; header alpha colour %(alpha_colour)d "
-          "is recorded, not applied" % report)
-
-    for warning in report["warnings"]:
-        print("  WARNING: %s" % warning)
-
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv))

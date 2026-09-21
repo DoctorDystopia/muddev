@@ -1,5 +1,11 @@
 # PSX Low Poly Skeleton
 
+> **Out of date since 09/18/2026.** The model pipeline builds this source now.
+> The commands below and the generated `scene.gltf` files that they name are
+> gone. The model record `assets/models/npcs/corpse_skeleton.toml` says how
+> this source is built, and `assets/README.md` is the procedure. The rest of
+> this note still describes the download.
+
 The download `corpse_skeleton` is packed from.
 
 - **Source:** https://puszke.itch.io/psx-low-poly-skeleton, by Puck (puszke)

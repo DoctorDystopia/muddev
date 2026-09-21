@@ -1,0 +1,17 @@
+title     = "SM_Teleporter"
+author    = "KainHunter1997"
+url       = "https://sketchfab.com/3d-models/sm-teleporter-0a5548319d6e4b88878b0aa7d2322319"
+site      = "sketchfab"
+license   = "CC-BY-4.0"
+retrieved = 2026-08-20
+
+[files]
+"license.txt" = "sha256:e5a9271562df652d830a4ea80657b6cbb2df51ba4acebf147792bacca30cb414"
+"scene.bin" = "sha256:f6346e3698ec3092561f47c94bceeb38eb261bfe52057cf45492657423126d52"
+"scene.gltf" = "sha256:2865cfd903d88f3ee5cab3076599bc0bacb6914915b54af4264a011fa747fc96"
+"textures/Beam_baseColor.png" = "sha256:a4ec4a56a7d0ecd288c8f82e6b1685a3b756afbe8932e5b22084a2e83450fdd9"
+"textures/Beam_emissive.png" = "sha256:d8d322bddb865d6d69431db0566218de5157ae4c060c7cc89d5ee181e3bd47b4"
+"textures/Teleporter_baseColor.png" = "sha256:5dc6f54f7e2627479fdbc5e1eaa5b3f36a9b3405cc8e18919a7697becf3b4413"
+"textures/Teleporter_emissive.png" = "sha256:304f80d420ff3fbd5a657f125104f8ae168fa135884a0ca8fb2c94ff5b99d36d"
+"textures/Teleporter_metallicRoughness.png" = "sha256:70ec0ff5b124aae2227e6f09f6edf98ab3c816de47e89481539a85c077881a82"
+"textures/Teleporter_normal.png" = "sha256:e8c46a0e0413c55e2dc761df78c1056e3b5a9866a6d9700abd9e769d395deac5"

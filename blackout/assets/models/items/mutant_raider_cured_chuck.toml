@@ -1,0 +1,13 @@
+source  = "godot_kyle_fuji_food"
+file    = "Models/meat_haunch.glb"
+aliases = ["mutant_raider_cured_fatless_meat",
+           "mutant_raider_cured_filet",
+           "mutant_raider_cured_prime_meat"]
+
+[texture]
+image = "Textures/T_protein_atlas_diffuse.png"
+
+[fix]
+# The haunch is 0.26 long along Z and 0.11 across, bone first at the camera.
+# The same quarter turn as food_meat.
+rotate = [0, 90, 0]

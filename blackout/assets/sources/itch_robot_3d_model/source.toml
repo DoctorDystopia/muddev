@@ -1,0 +1,12 @@
+title     = "Robot_3D_Model"
+author    = "PensamientoAzul"
+url       = "https://pensamientoazul.itch.io/robot-3d-model"
+site      = "itch.io"
+license   = "CC0-1.0"
+retrieved = 2026-09-13
+notes     = "The license is on the itch.io page. The download was an FBX. lone_android_clark.glb is Nick's Blender export of it, and the .blend is that Blender scene."
+
+[files]
+"SOURCE.md" = "sha256:e589abbfda20053af8787d60ba126eb7215ba61b4f719b040ab98620bb4680af"
+"lone_android_clark.blend" = "sha256:08d8cda5ea1484e5ed5b7555a9e6c83f7c73766587d27f841377dcb5d09735b4"
+"lone_android_clark.glb" = "sha256:b34a9b1b57b4dcf86176d8de52d84a124814d9289015af0e85f1e1fc2799e3ac"

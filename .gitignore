@@ -64,3 +64,8 @@ blackout/profiling_out/
 
 # Per-test timing CSVs from BLACKOUT_PROFILE_TESTS_OUTPUT. Same reasoning.
 *.timings.csv
+
+# The model pipeline (blackout/assets/pipeline). node_modules comes back with
+# `npm ci` in blackout/assets/. .build is scratch space for one build.
+blackout/assets/node_modules/
+blackout/assets/.build/

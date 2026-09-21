@@ -1,0 +1,11 @@
+title     = "Meat on the bone"
+author    = "Nick Hobar"
+url       = "https://johanpeitz.itch.io/picocad"
+site      = "blackout"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-09-11
+notes     = "Made for Blackout in picoCAD. mh_meat.txt is the picoCAD save file, and it IS the art."
+
+[files]
+"SOURCE.md" = "sha256:367c2bca958df02a86665306b97c6c345c86cbebe4274a1f8b6e231a971a6c9d"
+"mh_meat.txt" = "sha256:6ceb7497b1bcf747aba6b14e33ee996a0c9ad39bc7deb0c76f564141a1a4d4dd"

@@ -1,0 +1,5 @@
+source  = "itch_wizp_3d_tileset"
+file    = "Tileset.gltf"
+# Open sand with a few pebbles.
+node    = "center_b"
+aliases = ["tile_azm_plains"]

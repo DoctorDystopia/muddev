@@ -1,0 +1,7 @@
+source = "sketchfab_sus_eye"
+file   = "scene.gltf"
+
+[fix]
+# The export writes base-colour alpha 0 under BLEND on the body: a fully
+# transparent material on a mesh meant to be seen.
+opaque = true

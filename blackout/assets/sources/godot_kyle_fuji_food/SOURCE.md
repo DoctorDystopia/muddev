@@ -1,5 +1,11 @@
 # Low Poly Food Asset Pack — Kyle Fuji
 
+> **Out of date since 09/18/2026.** The model pipeline builds this source now.
+> The commands below and the generated `scene.gltf` files that they name are
+> gone. The model record `assets/models/items/moderator_egg.toml`, `assets/models/items/mutant_raider_steak.toml`, `assets/models/items/mutant_raider_cured_chuck.toml`, `assets/models/items/mutant_raider_cured_meat_sandwich.toml` says how
+> this source is built, and `assets/README.md` is the procedure. The rest of
+> this note still describes the download.
+
 - **Author:** Kyle Fuji (https://www.patreon.com/kylefuji)
 - **Licence:** CC0 1.0 — see `license.txt`, kept as it arrived
 - **Obtained:** 09/12/2026, through the Godot editor's Asset Library

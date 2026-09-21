@@ -1,0 +1,18 @@
+title     = "Sci-Fi PSX Style Heavy Machine Gun"
+author    = "LAZY SPAR7AN GAMES (LazySpar7an / MikeE.Games / MedwardsArts)"
+url       = "https://lazyspar7an.itch.io/sci-fi-low-poly-v1"
+site      = "itch.io"
+license   = "LicenseRef-Unconfirmed"
+exception = "The itch.io page gives no SPDX license. Its text says the model is free for commercial use and needs no credit (checked 09/18/2026). That is a grant in prose, not a named license. The page also marks the pack AI Assisted."
+retrieved = 2026-09-18
+notes     = "Unpacked from -Machine Gun-.7z (the fetch unpacks only .zip). The pack holds the gun and its clip, each as FBX and as OBJ with a 1-image palette texture. The model record reads the gun OBJ."
+
+[files]
+"-Machine Gun-/SCIFI-Heavy Machine Gun Clip/SCIFI-Heavy Machine Gun Clip.fbx" = "sha256:17b7185c795f68d5d4043cd58db5103c9c5c8d93d3e5d00fc79b975e5dbbdb56"
+"-Machine Gun-/SCIFI-Heavy Machine Gun Clip/SCIFI-Heavy Machine Gun Clip.mtl" = "sha256:ae27f4adfca58bb382962da89df395c87f60487a8a3f4a85b948fbbfcd526c22"
+"-Machine Gun-/SCIFI-Heavy Machine Gun Clip/SCIFI-Heavy Machine Gun Clip.obj" = "sha256:81925efa4a47a1cc377b683102415fdc2252c833030efdf7f5f4d19bb31b5f1c"
+"-Machine Gun-/SCIFI-Heavy Machine Gun Clip/texture.png" = "sha256:f32d9b35bff7ab1ff43f2bfed629901530ae73538feea52bd88af32d8131a25f"
+"-Machine Gun-/SCIFI-Heavy Machine Gun/SCIFI-Heavy Machine Gun.fbx" = "sha256:f5d85e838f0eb3e748b6ddae64e15e975700e0d0af4786186825222d1a68a2b4"
+"-Machine Gun-/SCIFI-Heavy Machine Gun/SCIFI-Heavy Machine Gun.mtl" = "sha256:ae27f4adfca58bb382962da89df395c87f60487a8a3f4a85b948fbbfcd526c22"
+"-Machine Gun-/SCIFI-Heavy Machine Gun/SCIFI-Heavy Machine Gun.obj" = "sha256:bb08ad8d610912516d3385499d17666da6bece3dddbc52cb6289b2f439e3fdec"
+"-Machine Gun-/SCIFI-Heavy Machine Gun/texture.png" = "sha256:f32d9b35bff7ab1ff43f2bfed629901530ae73538feea52bd88af32d8131a25f"

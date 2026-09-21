@@ -1,0 +1,12 @@
+title     = "OSRS player model (test export)"
+author    = "Jagex"
+url       = "https://oldschool.runescape.com"
+site      = "osrs-creatorskit"
+license   = "LicenseRef-Unconfirmed"
+exception = "A CreatorsKit export out of the Old School RuneScape client, so the art is almost certainly Jagex's. No grant exists. Allowed as a placeholder by Nick on 09/18/2026. Replace it before a public release."
+retrieved = 2026-09-13
+notes     = "OSRS_player_model_test.gltf is the CreatorsKit export. OSRS_player_model_test_blender.glb is the same model after a Blender round trip, and the model record reads that one."
+
+[files]
+"OSRS_player_model_test.gltf" = "sha256:fa923a0849a2d3fddbf32104223f8b4dc9c3f8f908ee92ed5f05d828a5b14220"
+"OSRS_player_model_test_blender.glb" = "sha256:4c8831830689c1afb25df6e82c5301fd5a329d9de0ca9364623829b50264b4a4"

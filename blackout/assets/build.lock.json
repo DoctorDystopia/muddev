@@ -1,0 +1,74 @@
+{
+  "corpse_skeleton": {
+    "inputs": "sha256:8b7e09558b27fa154f9897d6f16b4ae531d70cbdb476437f11be251e79669fe1",
+    "output": "sha256:86214cd7050cc841d1f2aaca7b49c11622158afd39490435553ea62f0e0c40cd"
+  },
+  "floating_eye": {
+    "inputs": "sha256:8cb87dbb83c7ef46182b4c6a8cd0b1efa3d8a8f78e85e1bd389e5f781e649bb7",
+    "output": "sha256:2f2ecfb05343596863e221de094d95d12a7defd72d50f16f0eb8bcf1a2eee1b9"
+  },
+  "food_meat": {
+    "inputs": "sha256:e579bd8bab039fa5f121bab1765c3c755b225a76c1e2b888cfe820f9039ee81b",
+    "output": "sha256:3592f8124407270d237f142df16356f77a4624f1f649cbbe8b5cb2bf14060939"
+  },
+  "heavy_machine_gun": {
+    "inputs": "sha256:3d3060933ad5274f7dbfce38b761bfa097b8c9870e5746e97e29c69d870ce115",
+    "output": "sha256:5b3cacb637cba9968d32bb2e55d9562d05e46d75d8c2c8e8b126e0bc8915182f"
+  },
+  "heavy_machine_gun_clip": {
+    "inputs": "sha256:bd5265b5bb26721c10161e8a7b58c59c8f3e3890b7238de034d557753b009008",
+    "output": "sha256:2d38301c4ce6298749bcdd8cd8086f2ea14615b1a2661491784b9340e73f2d36"
+  },
+  "lone_android": {
+    "inputs": "sha256:d3a24da36a26f3a928da65ebf9f503503bf47fb068432afd6066c11eda5a8730",
+    "output": "sha256:49d9c9bf0dd238523af5e6a294efd86f331da702bb56ecc0433db733149ad381"
+  },
+  "map_transition": {
+    "inputs": "sha256:f9e1dcfb72ea05b70ee8c71237ef46c7ff73d17a2316bf832f3e6aa1a3a1754c",
+    "output": "sha256:a0cd165e91fa09e6d19078d377dfa5993bb8622c0b59508fdb47f811d296ceb4"
+  },
+  "moderator_egg": {
+    "inputs": "sha256:96cebd84bf9d0532484573889c87198af85ef74556c327c77baac0f84359be80",
+    "output": "sha256:396f290b5504b7d907956a697e82d8791e483b6cb9636ccb520414d83e0e8afe"
+  },
+  "mutant_raider": {
+    "inputs": "sha256:1f0710985947380c5b5a2306791450f6800fcacfe62ad7a83d7ef74cb17bf780",
+    "output": "sha256:ad628f3f0dbc8b1703b01a9fbe27bd2bb00161f4440ce61a209071123de0de16"
+  },
+  "mutant_raider_cured_chuck": {
+    "inputs": "sha256:1c5a6e8e0e58463fda61dd9bd7f1ebea149296353c67c792a34719614587d230",
+    "output": "sha256:59e6039e86c62b8e97f839526188da16587b7a48cd043983fc63d5def44e31d6"
+  },
+  "mutant_raider_cured_meat_sandwich": {
+    "inputs": "sha256:96520c4f9088716c3bdd7a6998c1b32264e397a1434a2a30294d453364fca3f1",
+    "output": "sha256:2ee6e914eaf03ac4868dc41d145e9d7a78c8952eb599c9a0ed1eb4b7fd3f53a5"
+  },
+  "mutant_raider_steak": {
+    "inputs": "sha256:571597bd00fccfea0974c9757fa865fe694a2dae157134496e2f84c39c08a5ee",
+    "output": "sha256:81edf2911627edaec006fa94b2ed5d271e70199e681fdc00e5618cdf7532c95c"
+  },
+  "player_character": {
+    "inputs": "sha256:2f21a48269cb9f49f9a599c5de212906f147103b33d893fb70adc1e0d55835fe",
+    "output": "sha256:f7e854b2cc8b627aab92f074490023b03d6010b572a2f0ae503de6b44bb4cac4"
+  },
+  "rusty_pole": {
+    "inputs": "sha256:0c0d3f1a44f9ad7c041060c7ecfe7761416dd9aa840f313d8df321f15db4b391",
+    "output": "sha256:d8eeef90b0dc4c6d1fab67e522ff11329d1716377d27acbd220d927c0a214976"
+  },
+  "rusty_scrap_shortsword": {
+    "inputs": "sha256:c6ee49872fd8638de55a9213ed28cc0a50b636430d343a5055d25d83fcc33ea4",
+    "output": "sha256:3c122580c0b3d6646e56c68ea47f10ed87677abc0634e13cd0ad7a99aa16ec72"
+  },
+  "shopkeeper": {
+    "inputs": "sha256:6865dd8ba78ca852ca0dc8ff23eba19298cfb27a1058c7c2500d9f62ed8ad20c",
+    "output": "sha256:dec62850c432e35f68384a296b365700e0298df9aebab2aef42586f2768ade89"
+  },
+  "tile_oasis": {
+    "inputs": "sha256:f364cbe2f8c0ab5c2095cbaea7cc9dfe892e06b66dd70db9d9928534aa72efbb",
+    "output": "sha256:c6c11b097a832f979b17351dd3e1560b2b6797b9392eb65fc329199f37f33470"
+  },
+  "tile_oasis_outskirts": {
+    "inputs": "sha256:3ee4a556032152df3329aa050b4d90c615aab097945e9fb48092cbb9dbdf8d3c",
+    "output": "sha256:44f0601b34c0b5e330145fbf02dfa7b498ddd8fa68c62949584896f2a247eef5"
+  }
+}

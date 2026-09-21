@@ -1,0 +1,10 @@
+source = "itch_psx_low_poly_skeleton"
+file   = "skeleton.fbx"
+
+[texture]
+# The FBX has UVs and names no image. base.png is the 128-square palette atlas.
+image     = "base.png"
+roughness = 1.0
+
+[fix]
+filter = "nearest"

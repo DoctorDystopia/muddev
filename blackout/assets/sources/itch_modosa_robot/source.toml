@@ -1,0 +1,12 @@
+title     = "Robot"
+author    = "Modo (modosa-kun)"
+url       = "https://modosa-kun.itch.io/robot2"
+site      = "itch.io"
+license   = "LicenseRef-Unconfirmed"
+exception = "The itch.io page states no license (checked 09/18/2026). Name-your-own-price is a price, not a grant. Ask the author, or replace the model, before a public release."
+retrieved = 2026-09-13
+notes     = "little_robot_shopkeep.glb is Nick's Blender export of the downloaded .blend."
+
+[files]
+"SOURCE.md" = "sha256:031df5cce226bfbeb1558a3c498b9145b54f4ebcfc292c2baf5fd33986be8717"
+"little_robot_shopkeep.glb" = "sha256:62670623f389b65964a36f091bb4beedbdb721a98756b1adaab213c4c2d52a55"

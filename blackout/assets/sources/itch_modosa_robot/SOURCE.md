@@ -1,5 +1,11 @@
 # Little robot shopkeep
 
+> **Out of date since 09/18/2026.** The model pipeline builds this source now.
+> The commands below and the generated `scene.gltf` files that they name are
+> gone. The model record `assets/models/npcs/shopkeeper.toml` says how
+> this source is built, and `assets/README.md` is the procedure. The rest of
+> this note still describes the download.
+
 The export `shopkeeper` is packed from — the robot behind the Oasis stall.
 
 - **Source:** "Robot", https://modosa-kun.itch.io/robot2, by Modo

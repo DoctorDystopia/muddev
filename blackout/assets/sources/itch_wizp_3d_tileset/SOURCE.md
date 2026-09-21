@@ -1,5 +1,11 @@
 # Tileset_desert
 
+> **Out of date since 09/18/2026.** The model pipeline builds this source now.
+> The commands below and the generated `scene.gltf` files that they name are
+> gone. The model record `assets/models/tiles/tile_oasis.toml`, `assets/models/tiles/tile_oasis_outskirts.toml` says how
+> this source is built, and `assets/README.md` is the procedure. The rest of
+> this note still describes the download.
+
 The download this directory's per-tile sources were split out of.
 
 - **Source:** https://wizp.itch.io/3d-tileset, by wizp

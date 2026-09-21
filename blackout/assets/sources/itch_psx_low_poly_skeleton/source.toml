@@ -1,0 +1,15 @@
+title     = "PSX Low Poly Skeleton"
+author    = "Puck (puszke)"
+url       = "https://puszke.itch.io/psx-low-poly-skeleton"
+site      = "itch.io"
+license   = "CC0-1.0"
+retrieved = 2026-09-11
+notes     = "The license is on the itch.io page. The download has no license file. See SOURCE.md for why the model record reads the FBX and not the .blend."
+
+[files]
+"GameBoyColor/base.png" = "sha256:f8011619971746736c01622e9b75b5378d714bd5130589985021b95df1e28528"
+"SOURCE.md" = "sha256:eb73aebf0c8fe2069a36a6e34ba43bbbc06599e8b3756fd4dd27d03f6b265d3c"
+"Variant2/base.png" = "sha256:9ca8d0fea19f20e8f262acb17591d584b7fd5977d06f30a736763d7a6850f38b"
+"base.png" = "sha256:d6dd5bb5c7cdcc0c54c77e3f04e2533848902fce97738867d9adb8811ce61336"
+"skeleton.blend" = "sha256:31624eb8cd67dc364d3c7a0d7d2db36ad90d6de8b854d5be45108941f01bbdf1"
+"skeleton.fbx" = "sha256:4639d1c63fd65c0403f9d82a1c1f5ebfda0994c11b6aad5d841764a63fdc67dd"

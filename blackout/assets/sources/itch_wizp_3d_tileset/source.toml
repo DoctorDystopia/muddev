@@ -1,0 +1,12 @@
+title     = "3D Tileset"
+author    = "wizp"
+url       = "https://wizp.itch.io/3d-tileset"
+site      = "itch.io"
+license   = "CC0-1.0"
+retrieved = 2026-08-28
+notes     = "The itch.io page lists CC0 1.0 (checked 09/18/2026) and adds: the file can be used for any purpose, but it cannot be resold. The download has no license file."
+
+[files]
+"ColorPalette.png" = "sha256:36e533819afa2dfb6bc96b927d43d9735e6ed83331af81ccda3c638fa049a37c"
+"SOURCE.md" = "sha256:4d2fc4222b4bb0e4780df8d46646548d36987ba27b155da0c580d85508d133e8"
+"Tileset.gltf" = "sha256:30518391cbf0416f68f7825fa5bd280c6e09760c51b2497c8836c5bf5f28d0df"

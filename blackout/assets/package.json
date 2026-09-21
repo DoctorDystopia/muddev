@@ -1,0 +1,16 @@
+{
+  "name": "blackout-model-pipeline",
+  "private": true,
+  "description": "The Node half of the model build. Python (assets/pipeline) runs these; nothing here runs on its own.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.0",
+    "@gltf-transform/extensions": "4.5.0",
+    "@gltf-transform/functions": "4.5.0",
+    "gltf-validator": "2.0.0-dev.3.10",
+    "sharp": "0.35.4"
+  }
+}

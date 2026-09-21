@@ -1,0 +1,7 @@
+source = "blackout_mh_meat"
+file   = "mh_meat.txt"
+
+[fix]
+# picoCAD builds along Z, so the bone points at the camera. A quarter turn
+# about Y lays it left to right. Y and not X, so it lies down on the ground.
+rotate = [0, 90, 0]

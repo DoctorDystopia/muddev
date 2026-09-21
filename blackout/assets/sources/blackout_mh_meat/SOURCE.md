@@ -1,5 +1,11 @@
 # Meat on the bone
 
+> **Out of date since 09/18/2026.** The model pipeline builds this source now.
+> The commands below and the generated `scene.gltf` files that they name are
+> gone. The model record `assets/models/items/food_meat.toml` says how
+> this source is built, and `assets/README.md` is the procedure. The rest of
+> this note still describes the download.
+
 The picoCAD project `food_meat` is packed from.
 
 - **Source:** built for Blackout in [picoCAD](https://johanpeitz.itch.io/picocad)

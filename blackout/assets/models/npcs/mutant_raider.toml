@@ -1,0 +1,7 @@
+source  = "itch_standout7_goblin"
+file    = "GoblinPack_Free/GLB/Characters/Basic_Goblin.glb"
+# One goblin stands in for every mutant tier today. The three keys are the
+# three npc_key values in world/npc_defs/hostile.py, which is what the
+# statefeed sends as the asset key for a hostile NPC. Give a tier its own art
+# by writing a record under that tier's key: the alias here then drops out.
+aliases = ["mutant_giant", "big_mutant"]

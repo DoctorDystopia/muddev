@@ -1,0 +1,4 @@
+source = "itch_wizp_3d_tileset"
+file   = "Tileset.gltf"
+# Sand, rock plates, and one small water pool.
+node   = "center_h"

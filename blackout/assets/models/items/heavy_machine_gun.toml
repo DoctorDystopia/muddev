@@ -1,0 +1,9 @@
+source  = "machine_gun"
+file    = "-Machine Gun-/SCIFI-Heavy Machine Gun/SCIFI-Heavy Machine Gun.obj"
+# Every projectile weapon in world/item_defs/weapons.py draws this gun until
+# each one has its own model.
+aliases = ["rusty_scrap_shortbow", "scrap_shortbow"]
+
+[fix]
+# texture.png is a Blockbench palette. A linear filter blurs its cells.
+filter = "nearest"

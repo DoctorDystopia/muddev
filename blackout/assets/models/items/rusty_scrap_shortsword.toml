@@ -1,0 +1,7 @@
+source = "sketchfab_rusty_sword"
+file   = "scene.gltf"
+
+[fix]
+# The export leaves the blade along Z, pointing at the camera in an inventory
+# cell. +90 about X puts the tip up and the guard down.
+rotate = [90, 0, 0]

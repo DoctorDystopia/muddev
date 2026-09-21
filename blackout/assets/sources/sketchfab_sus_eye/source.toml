@@ -1,0 +1,14 @@
+title     = "sus eye 👁‍🗨 👁"
+author    = "wollfang"
+url       = "https://sketchfab.com/3d-models/sus-eye-a57447b72b774a5d99caba699604c81d"
+site      = "sketchfab"
+license   = "CC-BY-4.0"
+retrieved = 2026-08-20
+notes     = "The materials arrive as KHR_materials_pbrSpecularGlossiness with base-colour alpha 0 under BLEND. The model record forces them opaque. Carries a 12-bone skin and five animations that nothing plays."
+
+[files]
+"license.txt" = "sha256:25edc48e39904b6742f77f6d3e987c7774d7461c9abda1d6033e6abde24c206c"
+"scene.bin" = "sha256:fa9385b51a6ca851092615ef04127f1520e98326af36fb74676cd6482d4b0269"
+"scene.gltf" = "sha256:3cbda76de6a1e60a704ead03425771d6e27cdbc79ffca269698148455ba8148b"
+"textures/cuerpo_diffuse.png" = "sha256:fc39ff52fb19a6f8d0574a43838707a504b5972a5a508141066e01863ba1d088"
+"textures/material_diffuse.png" = "sha256:88b461eab0b3f617810a7aee9cc811b1c40c620aa2b5b7da6ace47e6f32c24f9"

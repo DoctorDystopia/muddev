@@ -1,0 +1,14 @@
+title     = "Rusty sword"
+author    = "Léonard_Doye / Leoskateman"
+url       = "https://sketchfab.com/3d-models/rusty-sword-42a0da5803844526af8658851c94e225"
+site      = "sketchfab"
+license   = "CC-BY-4.0"
+retrieved = 2026-08-17
+notes     = "The Sketchfab glTF download. license.txt is the one that came with it."
+
+[files]
+"license.txt" = "sha256:b45454af080903965f7dadedadf376289014866fbc19b07a79e0345d3d286072"
+"scene.bin" = "sha256:f68e9fd9791ff6736b965c239c053f93ebda8da67fb909d4b528d2ee200ed91e"
+"scene.gltf" = "sha256:cfc64e08aed31e70dfa1e8530016847a068af529c0d5a4b4908ecb451b086eff"
+"textures/Material.002_baseColor.png" = "sha256:deab926a193b004a0405ad5386a83c7425b5a0a0f6753435489a85f9a24d1b42"
+"textures/Material.002_normal.png" = "sha256:c8077836a54e29cc23f4941162a7c166fc7f84ab46caa5b3d299a3cd039ffa03"

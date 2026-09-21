@@ -3,8 +3,12 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/25/2026
 Description: How large a model of each family is allowed to be. The one owner
-             of that fact, for the packer that enforces it and the test that
-             checks the served tree still obeys it.
+             of that fact, for the build that enforces it and the check that
+             asks whether the served tree still obeys it.
+
+             Moved here from assets/asset_budgets.py on 09/18/2026, with the
+             rest of the model pipeline. The history below still names
+             `pack_model.py`, the packer that the pipeline replaced.
 
              THE PROBLEM THIS FIXES. `pack_model.py` took the texture ceiling
              as an optional third CLI argument defaulting to a single module
@@ -29,7 +33,11 @@ Description: How large a model of each family is allowed to be. The one owner
              compliant. Each family therefore carries a byte budget too, and
              the two catch different mistakes.
 
-             WHY A DEFAULT FOR UNKNOWN FAMILIES. Adding `assets/vehicles/`
+             TRIANGLES, since 09/18/2026. Bytes hide the mesh behind the
+             textures. A family budget now caps triangles too, because each
+             triangle costs every frame, not only the one download.
+
+             WHY A DEFAULT FOR UNKNOWN FAMILIES. Adding `assets/models/vehicles/`
              should work without editing this file, the same way an unknown
              asset key already draws a generic mesh rather than failing --
              content must never wait on a registry edit. An unlisted family
@@ -57,14 +65,16 @@ class ModelBudget:
     What one family of model may spend.
 
     max_texture_edge is the longest edge in pixels any texture keeps; the
-    packer resamples anything larger. max_bytes is the ceiling on the finished
+    build resamples anything larger. max_bytes is the ceiling on the finished
     .glb, which catches the mesh-heavy models a pixel ceiling cannot see.
+    max_triangles is the ceiling on the mesh itself.
     `reason` is the render size the numbers were chosen for, so the next person
     to change one has to disagree with something specific.
     """
 
     max_texture_edge: int
     max_bytes: int
+    max_triangles: int
     reason: str
 
 
@@ -73,12 +83,13 @@ class ModelBudget:
 DEFAULT_BUDGET: ModelBudget = ModelBudget(
     max_texture_edge=256,
     max_bytes=768 * _BYTES_PER_KIB,
+    max_triangles=5_000,
     reason="unlisted family; starts at the tightest tier until argued up",
 )
 
 
-# family -> budget. The family is the first path component under assets/, which
-# `pack_model._served_family` already treats as the one owner of the division.
+# family -> budget. The family is the directory of the model record:
+# assets/models/<family>/<asset_key>.toml.
 #
 # THE TIERS ARE CHOSEN FROM HOW LARGE THE THING ACTUALLY DRAWS, not from what
 # the download happened to ship. Every number below is at or under what the
@@ -112,14 +123,20 @@ FAMILY_BUDGETS: dict = {
     "characters": ModelBudget(
         max_texture_edge=512,
         max_bytes=3 * _BYTES_PER_MIB,
+        max_triangles=20_000,
         reason="diorama figure on a tile; regression guard pending attribute pruning",
     ),
 
     # Several can share a room, so this multiplies. Mesh budget is the loose
     # one here because floating_eye is legitimately 10k vertices.
+    #
+    # The triangle cap is a regression guard for shopkeeper.glb, 37,732
+    # triangles on 09/18/2026. That is far more than a figure on a tile can
+    # show. Lower the cap when the robot is replaced or decimated.
     "npcs": ModelBudget(
         max_texture_edge=512,
         max_bytes=2 * _BYTES_PER_MIB,
+        max_triangles=40_000,
         reason="several per room; 512 as shipped",
     ),
 
@@ -129,6 +146,7 @@ FAMILY_BUDGETS: dict = {
     "items": ModelBudget(
         max_texture_edge=512,
         max_bytes=_BYTES_PER_MIB,
+        max_triangles=5_000,
         reason="inventory cell is ~70px; 512 is deliberate headroom",
     ),
 
@@ -136,6 +154,7 @@ FAMILY_BUDGETS: dict = {
     "world_objects": ModelBudget(
         max_texture_edge=256,
         max_bytes=768 * _BYTES_PER_KIB,
+        max_triangles=10_000,
         reason="tile prop; never inspected close up",
     ),
 
@@ -160,6 +179,7 @@ FAMILY_BUDGETS: dict = {
     "tiles": ModelBudget(
         max_texture_edge=512,
         max_bytes=128 * _BYTES_PER_KIB,
+        max_triangles=500,
         reason="palette-mapped ground; the ceiling protects swatch margins, "
                "not detail",
     ),
@@ -168,19 +188,67 @@ FAMILY_BUDGETS: dict = {
     "gathering_nodes": ModelBudget(
         max_texture_edge=256,
         max_bytes=768 * _BYTES_PER_KIB,
+        max_triangles=10_000,
         reason="tile prop; same role as world_objects",
     ),
 }
 
 
+# Families whose materials are always opaque, whatever the record says.
+#
+# The ground is the one surface that every entity, prop and marker is drawn
+# on. A transparent material puts its mesh in the sorted queue, and on the
+# ground that sorts every other thing against the floor. Blender writes BLEND
+# for any material with an RGBA image, used or not, so a tile download
+# arrives transparent by accident. This set bakes the fix into every tile.
+ALWAYS_OPAQUE_FAMILIES: frozenset = frozenset(("tiles",))
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
+
+def budget_problems(family: str, summary) -> list:
+    """
+    Purpose: Name every limit of its family budget that one model breaks.
+
+    Entry:
+        summary is a glb.GlbSummary of the built or served file.
+
+    Exit/Returns:
+        Returns one line for each broken limit. Returns an empty list when
+        the model fits.
+
+    Module Globals:
+        _BYTES_PER_KIB read.
+
+    Author: Nick Hobar
+    Creation date: 09/18/2026
+    """
+    budget = budget_for(family)
+    problems = []
+    widest = max(summary.texture_edges, default=0)
+
+    if summary.size_bytes > budget.max_bytes:
+        problems.append("%d KiB is over the %d KiB budget"
+                        % (summary.size_bytes // _BYTES_PER_KIB,
+                           budget.max_bytes // _BYTES_PER_KIB))
+
+    if summary.triangles > budget.max_triangles:
+        problems.append("%d triangles is over the %d budget"
+                        % (summary.triangles, budget.max_triangles))
+
+    if widest > budget.max_texture_edge:
+        problems.append("a %d px texture is over the %d px budget"
+                        % (widest, budget.max_texture_edge))
+
+    return problems
+
 
 def budget_for(family: str) -> ModelBudget:
     """
     Purpose: Report the budget one model family must fit inside.
 
     Entry:
-        family - the served subdirectory name, as `_served_family` reports it
+        family - the directory of the model record, for example "items"
         (e.g. "items"). An unknown or empty name is not an error.
 
     Exit/Returns:
@@ -197,8 +265,8 @@ def budget_for(family: str) -> ModelBudget:
         rather than an unbounded one.
 
     Notes/References:
-        Asserted against the served tree by
-        systems/interface/statefeed/tests/test_model_budgets.py.
+        Asserted against the served tree by assets/pipeline/check.py, which
+        systems/interface/statefeed/tests/test_model_pipeline.py runs.
 
     Author: Nick Hobar
     Creation date: 08/25/2026
@@ -220,7 +288,7 @@ def describe_budget(family: str) -> str:
         None written.
 
     Methodology:
-        Kept here rather than in the packer so the units are spelled once.
+        Kept here and not in the build, so the units are spelled once.
 
     Notes/References:
         None
@@ -232,9 +300,10 @@ def describe_budget(family: str) -> str:
     listed = family in FAMILY_BUDGETS
     label = family if listed else "%s (unlisted -> default)" % family
 
-    return "%s: textures <= %dpx, file <= %d KiB -- %s" % (
+    return "%s: textures <= %dpx, file <= %d KiB, <= %d triangles -- %s" % (
         label,
         budget.max_texture_edge,
         budget.max_bytes // _BYTES_PER_KIB,
+        budget.max_triangles,
         budget.reason,
     )

@@ -1,0 +1,15 @@
+title     = "Old Tower"
+author    = "shoaib8"
+url       = "https://sketchfab.com/3d-models/old-tower-b882aacdc89b4e58925600829fd6604d"
+site      = "sketchfab"
+license   = "CC-BY-4.0"
+retrieved = 2026-08-20
+notes     = "Draws every pole gathering node until each metal gets its own art."
+
+[files]
+"license.txt" = "sha256:f2fb99c28faf34220c9b97f2d8a8e72f0ab4b9cf698c00db16d8188450689305"
+"scene.bin" = "sha256:95d0d5a30d27b9907669f103da8ef32f3e69f1c14072229f87ae0bccfb458f57"
+"scene.gltf" = "sha256:8a66ab09e411d6e029993c37ab11b6d7c44ec9b061913155bbd3642e5039c07a"
+"textures/lambert1_baseColor.png" = "sha256:3dce2375926e05d37db0b3de259a3978ca5ed839ab9662a70403d53ec5e49124"
+"textures/lambert1_metallicRoughness.png" = "sha256:db740e1f40631dd44cd3cc4d7425a23f197c6d6452083a69e59340a704112d7c"
+"textures/lambert1_normal.png" = "sha256:b9b0badacda8f5edefbf73b5a56c92dfbaf0382dbc19c7b2ad8e5c164828db05"

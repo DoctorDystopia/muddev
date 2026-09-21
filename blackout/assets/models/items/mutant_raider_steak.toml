@@ -1,0 +1,6 @@
+source  = "godot_kyle_fuji_food"
+file    = "Models/steak.glb"
+aliases = ["mutant_raider_prime_steak"]
+
+[texture]
+image = "Textures/T_protein_atlas_diffuse.png"

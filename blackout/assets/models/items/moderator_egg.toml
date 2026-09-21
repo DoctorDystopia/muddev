@@ -1,0 +1,5 @@
+source = "godot_kyle_fuji_food"
+file   = "Models/egg.glb"
+
+[texture]
+image = "Textures/T_protein_atlas_diffuse.png"

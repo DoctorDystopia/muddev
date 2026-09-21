@@ -1,0 +1,6 @@
+source  = "godot_kyle_fuji_food"
+file    = "Models/burger.glb"
+aliases = ["mutant_raider_prime_cured_meat_sandwich"]
+
+[texture]
+image = "Textures/T_junk_atlas_diffuse.png"
