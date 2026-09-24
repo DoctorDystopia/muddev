@@ -17,6 +17,8 @@ from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed
 from systems.interface.statefeed import neighbourhood
 from systems.interface.statefeed import subscriptions
+from systems.interface.ui import move_text
+from systems.interface.ui.colors import RESET_COLOR, ROOM_NAME_COLOR
 from .objects import ObjectParent
 from .spawners import (
     ATTRIBUTE_SPAWNER_REGISTRY,
@@ -55,6 +57,19 @@ class GridTile(ObjectParent, XYZRoom):
     The baseline 1x1 coordinate tile for the physical world of Blackout.
     """
     map_visual_range = 6  # None = full map; default is 2 tiles in each direction
+
+    # The template of DefaultObject, with the name line moved into {header}.
+    # In the Evennia template, the colour codes sit around {name}. Thus, a
+    # hidden name leaves a line of bare colour codes. get_display_header gives
+    # the whole line or nothing. See systems/interface/ui/move_text.py.
+    appearance_template = """
+{header}
+{desc}
+{exits}
+{characters}
+{things}
+{footer}
+    """
 
     def at_object_creation(self):
         """
@@ -267,6 +282,98 @@ class GridTile(ObjectParent, XYZRoom):
                 return True
 
         return False
+
+    def get_display_header(self, looker, **kwargs):
+        """
+        Purpose: Give the room name line, or nothing when the looker hid it.
+
+        Entry:
+            looker - the character looking.
+            kwargs - the look kwargs. The look on movement adds the hidden
+                     parts under move_text.HIDDEN_PARTS_KWARG.
+
+        Exit/Returns:
+            Returns the coloured name line, or "".
+
+        Module Globals:
+            ROOM_NAME_COLOR, RESET_COLOR read.
+
+        Methodology:
+            The name line of DefaultObject, moved here from the template. See
+            appearance_template on this class.
+
+        Notes/References:
+            systems/interface/ui/move_text.py owns the parts.
+
+        Author: Nick Hobar
+        Creation date: 09/22/2026
+        """
+        if self._hides(move_text.PART_NAME, kwargs):
+            return ""
+
+        name = self.get_display_name(looker, **kwargs)
+        extra = self.get_extra_display_name_info(looker, **kwargs)
+
+        return f"{ROOM_NAME_COLOR}{name}{extra}{RESET_COLOR}"
+
+    def get_display_desc(self, looker, **kwargs):
+        """Give the description, or nothing when the looker hid it."""
+        if self._hides(move_text.PART_DESC, kwargs):
+            return ""
+
+        return super().get_display_desc(looker, **kwargs)
+
+    def get_display_exits(self, looker, **kwargs):
+        """Give the Exits line, or nothing when the looker hid it."""
+        if self._hides(move_text.PART_EXITS, kwargs):
+            return ""
+
+        return super().get_display_exits(looker, **kwargs)
+
+    def get_display_characters(self, looker, **kwargs):
+        """Give the Characters line, or nothing when the looker hid it."""
+        if self._hides(move_text.PART_CHARACTERS, kwargs):
+            return ""
+
+        return super().get_display_characters(looker, **kwargs)
+
+    def get_display_things(self, looker, **kwargs):
+        """Give the You see line, or nothing when the looker hid it."""
+        if self._hides(move_text.PART_THINGS, kwargs):
+            return ""
+
+        return super().get_display_things(looker, **kwargs)
+
+    @staticmethod
+    def _hides(part: str, kwargs: dict) -> bool:
+        """
+        Purpose: Tell whether this look must leave out one part of the room.
+
+        Entry:
+            part   - a key from move_text.PART_KEYS.
+            kwargs - the look kwargs.
+
+        Exit/Returns:
+            True when the part must not print.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Reads the kwarg, never the Attribute. Only the look on movement
+            puts the kwarg in, so a typed `look` shows every part. The
+            Attribute is read one time for each move, in
+            Character.at_post_move, not one time for each part.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 09/22/2026
+        """
+        hidden = kwargs.get(move_text.HIDDEN_PARTS_KWARG, ())
+
+        return part in hidden
 
     def _send_tinted_map(self, looker, radius: int, **kwargs) -> None:
         """Build the highlighted map and msg it, or fall back to the plain one.

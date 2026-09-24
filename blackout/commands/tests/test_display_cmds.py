@@ -16,6 +16,7 @@ from evennia.utils.test_resources import EvenniaCommandTest
 
 from commands import display_cmds
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.ui import move_text
 
 
 class AutomapTests(EvenniaCommandTest):
@@ -95,3 +96,75 @@ class AutomapTests(EvenniaCommandTest):
 
         self.assertIn("automap %s" % display_cmds.ARG_ON, text)
         self.assertIn("automap %s" % display_cmds.ARG_OFF, text)
+
+
+class MovetextTests(EvenniaCommandTest):
+    """Reporting and setting which parts of the room print on a move."""
+
+    def _run(self, argument=""):
+        """Run the command and return everything the caller was told."""
+        return self.call(display_cmds.CmdMovetext(), argument)
+
+    def _hidden(self):
+        return move_text.hidden_parts(self.char1)
+
+    def test_off_hides_the_part_the_look_reads(self):
+        """The command writes through move_text, the one owner, so the look
+        on the next step reads the same fact."""
+        self._run("%s %s" % (move_text.PART_EXITS, display_cmds.ARG_OFF))
+
+        self.assertEqual(self._hidden(), {move_text.PART_EXITS})
+
+    def test_on_shows_it_again(self):
+        self._run("%s %s" % (move_text.PART_EXITS, display_cmds.ARG_OFF))
+        self._run("%s %s" % (move_text.PART_EXITS, display_cmds.ARG_ON))
+
+        self.assertEqual(self._hidden(), frozenset())
+
+    def test_reset_shows_every_part(self):
+        for part in move_text.MOVE_TEXT_PARTS:
+            with self.subTest(part=part.key):
+                self._run("%s %s" % (part.key, display_cmds.ARG_OFF))
+
+        self._run(display_cmds.MOVETEXT_ARG_RESET)
+
+        self.assertEqual(self._hidden(), frozenset())
+
+    def test_the_report_names_every_part(self):
+        """The rows come from the table, so a new part is listed with no
+        edit to the command."""
+        response = self._run()
+
+        for part in move_text.MOVE_TEXT_PARTS:
+            with self.subTest(part=part.key):
+                self.assertIn(part.key, response)
+
+    def test_the_report_follows_the_choice(self):
+        self._run("%s %s" % (move_text.PART_DESC, display_cmds.ARG_OFF))
+        response = self._run()
+        desc_row = [line for line in response.splitlines()
+                    if line.strip().startswith(move_text.PART_DESC)]
+
+        self.assertEqual(len(desc_row), 1)
+        self.assertIn(display_cmds.ARG_OFF, desc_row[0])
+
+    def test_nonsense_is_answered_with_the_usage(self):
+        """And changes nothing: an unknown part or state writes no row."""
+        for argument in ("sideways off", "exits maybe", "exits", "a b c"):
+            with self.subTest(argument=argument):
+                response = self._run(argument)
+
+                self.assertIn("Usage", response)
+                self.assertEqual(self._hidden(), frozenset())
+
+    def test_it_is_reachable_by_an_ordinary_player(self):
+        self.assertEqual(display_cmds.CmdMovetext.locks, "cmd:all()")
+
+    def test_the_help_names_every_part(self):
+        """The help is static text, so this is what keeps it in step with
+        the table."""
+        text = display_cmds.CmdMovetext.__doc__
+
+        for part in move_text.MOVE_TEXT_PARTS:
+            with self.subTest(part=part.key):
+                self.assertIn(part.key, text)

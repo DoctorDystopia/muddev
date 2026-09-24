@@ -47,6 +47,8 @@ the name.
 | webclient | the retired browser client in `archive/webclient-js/`, and nothing else | web client, JS client |
 | pane | one region of the Godot client UI | window, view |
 | pop-up | a box that the server opens over the world pane, for example the bank (`char_popup`) | window, dialog, interface, modal |
+| dock | a box that hangs from a bottom corner of the world pane: the game log or the control panel (`PanelDock`) | window, sidebar, drawer |
+| grip | the strip on an edge or a corner of a box that a drag resizes (`ResizeGrips`) | handle, resizer, border |
 
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
 server. A pane is a region of the client screen. A Godot node class such as

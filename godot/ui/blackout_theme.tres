@@ -18,6 +18,22 @@ corner_radius_top_right = 3
 corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_40rub"]
+bg_color = Color(0.49411765, 0, 0.003921569, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_line_edit"]
+content_margin_left = 4.0
+content_margin_top = 4.0
+content_margin_right = 4.0
+content_margin_bottom = 4.0
+bg_color = Color(0.49411765, 0, 0.003921569, 1)
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 0.6)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
 [sub_resource type="StyleBoxFlat" id="StyleBox_popup_box"]
 content_margin_left = 2.0
 content_margin_top = 2.0
@@ -59,6 +75,13 @@ FormColumn/constants/separation = 6
 FormGrid/base_type = &"GridContainer"
 FormGrid/constants/h_separation = 12
 FormGrid/constants/v_separation = 6
+FormMargin/base_type = &"MarginContainer"
+FormMargin/constants/margin_bottom = 12
+FormMargin/constants/margin_left = 14
+FormMargin/constants/margin_right = 14
+FormMargin/constants/margin_top = 12
+HSlider/styles/slider = SubResource("StyleBoxFlat_40rub")
+LineEdit/styles/normal = SubResource("StyleBox_line_edit")
 PaneMargin/base_type = &"MarginContainer"
 PaneMargin/constants/margin_bottom = 12
 PaneMargin/constants/margin_left = 12
@@ -88,3 +111,4 @@ SkillGrid/constants/v_separation = 6
 SkillLevel/base_type = &"Label"
 SkillLevel/colors/font_color = Color(1, 1, 1, 1)
 SkillLevel/font_sizes/font_size = 15
+TextEdit/colors/background_color = Color(0.49019608, 0, 0.003921569, 1)

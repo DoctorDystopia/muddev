@@ -52,6 +52,21 @@ const SKILL_DETAIL_LABELS := {
 	ClientSettings.SKILL_DETAIL_LOG: "In the game log",
 }
 
+## The parts of the room text that `movetext` can turn off, in the order that
+## the room prints them. Each key belongs to the SERVER: MOVE_TEXT_PARTS in
+## blackout/systems/interface/ui/move_text.py. Each label belongs to the client.
+##
+## `test_move_text_client.py` reads this table and fails on a key that names
+## no part. A part with no row here is fine: the player can still type
+## `movetext <part> off`.
+const MOVE_TEXT_LABELS := {
+	"name": "Room name",
+	"desc": "Description",
+	"exits": "Exits",
+	"characters": "Characters",
+	"things": "Things you see",
+}
+
 var _settings: ClientSettings
 var _font_slider: HSlider
 var _font_value: Label
@@ -120,13 +135,17 @@ func _init() -> void:
 	# changes. One switch for both meant a player on a slow machine had to give
 	# up their inventory to stop the diorama.
 	#
+	# The bag box covers BOTH halves of the bag, which are two tabs since
+	# 09/21/2026. A switch that hid the carried grid and left the paper doll in
+	# the strip would be a switch that half worked.
+	#
 	# The HUD's 3D button writes the same setting. Two controls, one owner --
 	# both go through ClientSettings and both follow its `changed`, which is
 	# what stops them disagreeing.
 	column.add_child(_heading("Panes"))
 	_world_check = _check("3D world")
 	column.add_child(_world_check)
-	_inventory_check = _check("Inventory")
+	_inventory_check = _check("Inventory and equipment")
 	column.add_child(_inventory_check)
 
 	# Where a clicked skill's answer lands. A CHOICE rather than two checkboxes
@@ -179,6 +198,8 @@ func _init() -> void:
 	automap.add_child(_command_button("On", "automap on"))
 	automap.add_child(_command_button("Off", "automap off"))
 	automap.add_child(_command_button("?", "automap"))
+
+	_add_move_text_rows(column)
 
 	# The server only offers a TOGGLE for this one -- no on, no off, no query --
 	# so the pane offers exactly that and nothing it would have to fake. The
@@ -310,6 +331,26 @@ func _on_skill_detail_selected(index: int) -> void:
 		return
 
 	_settings.set_skill_detail(ClientSettings.SKILL_DETAIL_MODES[index])
+
+
+## One On / Off row for each part of the room text that a step prints.
+##
+## Buttons, like `automap`, and for the same reason: the server holds the
+## choice, and its reply in the log tells the player the state. `?` lists
+## every part. `All on` puts the default back.
+func _add_move_text_rows(column: VBoxContainer) -> void:
+	var header := HBoxContainer.new()
+	column.add_child(header)
+	header.add_child(_label("Room text when you move"))
+	header.add_child(_command_button("?", "movetext"))
+	header.add_child(_command_button("All on", "movetext reset"))
+
+	for part: String in MOVE_TEXT_LABELS:
+		var row := HBoxContainer.new()
+		column.add_child(row)
+		row.add_child(_label(str(MOVE_TEXT_LABELS[part])))
+		row.add_child(_command_button("On", "movetext %s on" % part))
+		row.add_child(_command_button("Off", "movetext %s off" % part))
 
 
 func _check(text: String) -> CheckBox:

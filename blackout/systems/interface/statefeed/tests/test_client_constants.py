@@ -100,6 +100,13 @@ _FAMILY_MODEL_SOURCES: tuple = (
     os.path.join(_REPO_ROOT, "godot", "world", "meshes", "family_shapes.gd"),
 )
 
+# Where each equipment frame sits on the paper doll. The Godot pane's only: the
+# browser client had no equipment screen, and a table one client does not have
+# is not drift.
+_DOLL_LAYOUT_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "doll_layout.gd"),
+)
+
 # The table assignment, in either language. JS writes
 # `const ROOM_KIND_COLORS = {`, GDScript writes `const ROOM_KIND_COLORS := {`;
 # one optional colon covers both.
@@ -128,6 +135,17 @@ _TABLE_VALUE_RE = re.compile(r':\s*"([^"]+)"')
 
 _SKILL_CATEGORY_TABLE_RE = re.compile(
     r"SKILL_CATEGORY_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
+
+# The doll's rows. Anchored on the CLOSING bracket at the start of a line,
+# because every row inside the table is itself a bracketed list: a lazy
+# `\[(.*?)\]` stops at the end of the first row and reads one row as the whole
+# doll.
+_DOLL_ROWS_RE = re.compile(r"ROWS[^=]*=\s*\[(.*?)^\]", re.DOTALL | re.MULTILINE)
+
+# The one frame the doll draws across its whole width, declared beside the
+# rows rather than inside them. Checked with them, because it names a wield
+# location the same way and fails the same way.
+_DOLL_WIDE_SLOT_RE = re.compile(r'WIDE_SLOT\s*:?=\s*"([^"]+)"')
 
 # `"map name": "asset_key"` -- both halves of a terrain row at once, because
 # the two are checked against DIFFERENT sources and a row read as two loose
@@ -498,6 +516,90 @@ def _server_map_names():
     return names
 
 
+def _extract_doll_slots(source):
+    """
+    Purpose: Pull every wield location a client's paper doll places.
+
+    Entry:
+        source - client source text, comments already stripped.
+
+    Exit/Returns:
+        A list of the slot names in the doll table, in reading order, or None
+        when the file declares no table.
+
+    Module Globals:
+        _DOLL_ROWS_RE, _QUOTED_RE read.
+
+    Methodology:
+        The rows hold nothing but quoted slot names and a GAP constant
+        reference, so every quoted string in the table body is a slot.
+
+    Notes/References:
+        The wide slot is declared beside the table rather than inside it.
+        _extract_wide_slot reads that one, because it is a NAME FOR one of
+        these squares and not a square of its own.
+    """
+    match = _DOLL_ROWS_RE.search(source)
+
+    if not match:
+        return None
+
+    return _QUOTED_RE.findall(match.group(1))
+
+
+def _extract_wide_slot(source):
+    """
+    Purpose: Pull the slot a client's doll draws across its whole width.
+
+    Entry:
+        source - client source text, comments already stripped.
+
+    Exit/Returns:
+        The slot name, or None when the file declares no such constant.
+
+    Module Globals:
+        _DOLL_WIDE_SLOT_RE read.
+
+    Methodology:
+        A single quoted value on its own constant.
+
+    Notes/References:
+        None
+    """
+    match = _DOLL_WIDE_SLOT_RE.search(source)
+
+    if not match:
+        return None
+
+    return match.group(1)
+
+
+def _server_equipment_slots():
+    """
+    Purpose: Every wield location the server can send a frame for.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        A set of slot value strings.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read off WieldLocation, which is the one owner of which slots exist.
+        `_serialize_slot_frames` walks SLOT_DISPLAY_ORDER over that same enum,
+        so this is the set the client can ever be asked to draw.
+
+    Notes/References:
+        None
+    """
+    from items.equipment.constants import WieldLocation
+
+    return set(str(slot.value) for slot in WieldLocation)
+
+
 def _server_skill_categories():
     """
     Purpose: Every category a registered skill actually declares.
@@ -805,6 +907,112 @@ class ClientFamilyModelTests(unittest.TestCase):
                     "models/ has no record for. The family keeps its "
                     "procedural shape and nothing reports it."
                     % (client, asset_key))
+
+
+class ClientDollLayoutTests(unittest.TestCase):
+    """Every square on a client's paper doll must be a slot that exists."""
+
+    def test_no_client_places_a_slot_that_does_not_exist(self):
+        """
+        A square named for no wield location is worse than a dead colour. The
+        server never sends a frame for it, so the doll draws a hole the player
+        can never fill, and the slot it was meant to be is either missing or
+        sitting in the leftover strip.
+
+        The reverse is deliberately NOT checked, which is the asymmetry this
+        whole module is built on. A slot no doll places falls into that
+        leftover strip, so a wield location added to the enum reaches the pane
+        with no client edit at all.
+        """
+        known = _server_equipment_slots()
+
+        for path in _DOLL_LAYOUT_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            slots = _extract_doll_slots(source)
+
+            if slots is None:
+                continue
+
+            for slot in sorted(set(slots) | {_extract_wide_slot(source)} - {None}):
+                with self.subTest(client=os.path.basename(path), slot=slot):
+                    self.assertIn(
+                        slot, known,
+                        "'%s' has a square on %s but no WieldLocation carries "
+                        "that value. The doll draws a frame the server can "
+                        "never fill." % (slot, os.path.basename(path)))
+
+    def test_no_client_places_one_slot_twice(self):
+        """
+        One slot in two squares is one frame drawn in two places, and only the
+        occupied one would ever show the item. The client's own
+        `DollLayout.placed_slots` is what the pane reads to decide what the
+        leftover strip holds, so a repeat also hides the strip's real job.
+        """
+        for path in _DOLL_LAYOUT_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            slots = _extract_doll_slots(source)
+
+            if slots is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertEqual(
+                    len(slots), len(set(slots)),
+                    "%s places a slot in more than one square: %s"
+                    % (path, sorted(slots)))
+
+    def test_a_client_that_is_here_declares_the_table(self):
+        """
+        The vacuity guard for the two checks above, in the shape the terrain
+        and skill-category tests use: both SKIP a file whose table they cannot
+        match, so renaming ROWS would turn them green while checking nothing.
+        """
+        for path in _DOLL_LAYOUT_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertIsNotNone(
+                    _extract_doll_slots(source),
+                    "%s exists but declares no ROWS table. Either it was "
+                    "renamed or the doll moved out of it; the drift check on "
+                    "it is now inert." % path)
+
+
+    def test_the_wide_slot_is_one_of_the_squares_the_table_places(self):
+        """
+        The wide slot NAMES one of the doll's own squares -- the row the client
+        draws only while that slot is worn. A name matching no row is a row
+        that is drawn always and a constant that decides nothing, which is the
+        two-hand frame back as a permanent dead square.
+        """
+        for path in _DOLL_LAYOUT_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            slots = _extract_doll_slots(source)
+            wide = _extract_wide_slot(source)
+
+            if slots is None or wide is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertIn(
+                    wide, slots,
+                    "%s draws '%s' across the doll but no row holds it."
+                    % (path, wide))
 
 
 class ClientTableDiscoveryTests(unittest.TestCase):

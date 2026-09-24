@@ -9,8 +9,9 @@ extends RefCounted
 ##
 ## ## Only what is genuinely the player's
 ##
-## Font size, UI scale, which panes are shown, where the dividers sit, where a
-## clicked skill's detail is shown, and how loud sound effects play — and
+## Font size, UI scale, which panes are shown, how big the player made a box
+## and where they put it, where a clicked skill's detail
+## is shown, and how loud sound effects play — and
 ## deliberately nothing else. Everything the client draws from the feed belongs to the
 ## server, and a setting that duplicated one would be a second owner of it. The
 ## line is the same one the whole client is built on: the server says what is
@@ -39,13 +40,15 @@ const KEY_FONT_SIZE := "font_size"
 const KEY_UI_SCALE := "ui_scale"
 const KEY_SHOW_WORLD := "show_world"
 const KEY_SHOW_INVENTORY := "show_inventory"
-const KEY_TEXT_SPLIT := "text_split"
-const KEY_WORLD_SPLIT := "world_split"
+const KEY_PANEL_SIZE := "panel_size"
+const KEY_CONSOLE_SIZE := "console_size"
 const KEY_SKILL_DETAIL := "skill_detail"
 const KEY_SFX_VOLUME := "sfx_volume"
 const KEY_SHOW_XP_DROPS := "show_xp_drops"
 const KEY_SHOW_SKILL_RATES := "show_skill_rates"
 const KEY_SMOOTH_MOVEMENT := "smooth_movement"
+const KEY_AMOUNT_SIZE := "amount_size"
+const KEY_POPUP_RECT := "popup_rect"
 
 const DEFAULT_FONT_SIZE := 14
 const MIN_FONT_SIZE := 9
@@ -57,6 +60,14 @@ const MAX_FONT_SIZE := 28
 const DEFAULT_UI_SCALE := 1.0
 const MIN_UI_SCALE := 0.75
 const MAX_UI_SCALE := 2.0
+
+## The screen density at a scale of 1, in dots per inch. The scale before the
+## player picks one is the DPI of the screen over this. See
+## [method ui_scale_for_dpi].
+const REFERENCE_DPI := 96.0
+
+## The step of a scale from the screen, so a first run gives 125% and not 127%.
+const SCREEN_SCALE_STEP := 0.25
 
 ## Whether the 3D world and inventory panes are drawn at all.
 ##
@@ -81,29 +92,6 @@ const DEFAULT_SHOW_WORLD := true
 ## since the world pane redraws every tile every frame and the bag redraws when
 ## the bag changes -- had no setting at all. Two facts, two bools.
 const DEFAULT_SHOW_INVENTORY := true
-
-## Where the two dividers sit, as Godot's own `split_offset`.
-##
-## Persisted because the alternative is what shipped -- both offsets authored in
-## console.tscn as a literal 300, so every drag was forgotten on the next run.
-## The notes for DESIGN-0004 ask for layout experimentation and "perhaps
-## multiple configurations depending on player preferences"; a divider that
-## remembers where it was put is the floor under that.
-##
-## **An offset is not a position, and it can be negative.** Since 4.x a
-## SplitContainer measures it from where the divider would sit with no offset,
-## and that is decided by which child EXPANDS. The text column does not and the
-## right column does, so the horizontal divider rests at the text column's
-## minimum width and a positive offset widens it. In the right column the WORLD
-## expands and the panel does not, so that divider rests at the bottom with the
-## panel at its minimum -- and only a NEGATIVE offset gives the panel any height.
-##
-## The world default was 300 until 09/12/2026, and the clamp below had a floor
-## of 120: both are "panel shrunk to its tab strip". Every drag was saved as
-## 120, then re-applied the next time any setting changed, so moving a slider
-## in Options collapsed the pane the slider was in.
-const DEFAULT_TEXT_SPLIT := 300
-const DEFAULT_WORLD_SPLIT := -300
 
 ## Where a clicked skill's detail is shown: in the pane, in the game log, or
 ## both.
@@ -144,16 +132,6 @@ const SKILL_DETAIL_MODES: Array[String] = [
 	SKILL_DETAIL_BOTH, SKILL_DETAIL_PANE, SKILL_DETAIL_LOG]
 
 const DEFAULT_SKILL_DETAIL := SKILL_DETAIL_BOTH
-
-## Bounds on a divider, symmetric because an offset runs both ways from rest.
-##
-## These only keep a hand-edited number sane. Keeping a pane from reaching zero
-## pixels is the ENGINE's job, and it does it: a SplitContainer lays out an
-## out-of-range offset clamped to its children's minimum sizes, so the divider
-## is always on screen to drag back. A floor here that tried to do the same
-## thing without knowing which child expands is what caused the bug above.
-const MIN_SPLIT := -4000
-const MAX_SPLIT := 4000
 
 ## How loud every sound effect plays, LINEAR from silent (0.0) to as mixed (1.0).
 ##
@@ -204,20 +182,107 @@ const DEFAULT_SHOW_SKILL_RATES := false
 ## it off sees exactly the same facts one frame sooner.
 const DEFAULT_SMOOTH_MOVEMENT := true
 
+## How big the player made the amount box, in pixels, or zero on either axis
+## before they sized one.
+##
+## ## Why zero is the default and not a number
+##
+## The box asks one question with one spin box, and [AcceptDialog] wraps its
+## controls: with no remembered size it opens at exactly the size of its own
+## contents. A shipped default would be a number somebody picked, and every
+## title makes the box a different width. Zero says "let it wrap", which is
+## the first-run look the client already had.
+##
+## ## Why ONE size for every amount box
+##
+## Deposit X, Withdraw X, Sell X and the pop-up's X button all draw the same
+## box with a different title. A size for each verb is a setting the player
+## has to find four times to get one look, and none of the four boxes differs
+## in what it holds.
+##
+## The size is read when the box CLOSES, one write for one box. A size read
+## from the resize gesture would be a file write for each frame of the drag,
+## which is the trap the dividers already document.
+const DEFAULT_AMOUNT_SIZE := Vector2i.ZERO
+
+## Where the player put the pop-up box, in the world pane's pixels, or an empty
+## rect before the first drag.
+##
+## The rect survived a close and a reopen, and it died with the client. A player
+## who moved the bank off their minimap set it again on every run.
+##
+## ## Pixels, not a part of the pane
+##
+## [method PopupView._place_box] already clamps a rect into the pane it has, and
+## a rect saved by a wider window comes back too large for a narrow one. That
+## clamp is therefore the ONE owner of "the box stays on screen", and it needs
+## no help: it runs on every open, on every drag, and whenever the pane is
+## resized. A rect stored as a fraction would be a second rule about the same
+## thing, and the two would disagree the first time the minimum box size won.
+##
+## So the bounds below are not that rule. They only keep a hand-edited number
+## sane.
+const DEFAULT_POPUP_RECT := Rect2()
+
+## The largest pixel figure a saved box may carry, on any axis.
+##
+## Not a limit on a box the player can make -- the pane is that -- but a fence
+## around a number read from a file. A width of 1e9 is a layout pass that
+## allocates a rect no monitor can hold.
+const MAX_BOX_PIXELS := 4000
+
+## How big the player left the control panel dock, or zero before the first
+## drag.
+##
+## A SIZE and not a rect, because the dock owns the corner it hangs from. See
+## [PanelDock]: the box is pinned to the bottom-right of the world pane, so the
+## left edge and the top edge are the two the player drags and the position
+## follows from the size. A stored position would be a second owner of the one
+## fact the dock already decides.
+##
+## Zero means "never dragged", so a fresh client gets
+## [constant PanelDock.DEFAULT_SIZE] and a returning one gets what it left.
+## [method PanelDock._place_box] clamps whatever comes back into the pane it
+## has, which is the same single owner of "the box stays on screen" that
+## [constant DEFAULT_POPUP_RECT] documents.
+const DEFAULT_PANEL_SIZE := Vector2i.ZERO
+
+## How big the player left the game log dock, or zero before the first drag.
+##
+## The same rules as [constant DEFAULT_PANEL_SIZE]. The log hangs from the
+## bottom-left corner of the world pane, so the player drags its right edge and
+## its top edge.
+##
+## Until 09/22/2026 the log was the left half of an `HSplitContainer`, and
+## `text_split` kept the divider offset. A split can change the width only. The
+## log always took the full height, so the player could not give that height
+## back to the world.
+const DEFAULT_CONSOLE_SIZE := Vector2i.ZERO
+
+## Each dock size, by its key. A key is also the name of its property, so
+## [method set_dock_size] and [PanelDock] reach every dock through one path.
+const DOCK_SIZE_KEYS: Array[String] = [KEY_PANEL_SIZE, KEY_CONSOLE_SIZE]
+
 ## Emitted after any change, so every consumer redraws from one place.
 signal changed
 
 var font_size := DEFAULT_FONT_SIZE
 var ui_scale := DEFAULT_UI_SCALE
+
+## The scale before the player picks one, and the scale that Reset gives. See
+## [method set_shipped_ui_scale].
+var shipped_ui_scale := DEFAULT_UI_SCALE
 var show_world := DEFAULT_SHOW_WORLD
 var show_inventory := DEFAULT_SHOW_INVENTORY
-var text_split := DEFAULT_TEXT_SPLIT
-var world_split := DEFAULT_WORLD_SPLIT
 var skill_detail := DEFAULT_SKILL_DETAIL
 var sfx_volume := DEFAULT_SFX_VOLUME
 var show_xp_drops := DEFAULT_SHOW_XP_DROPS
 var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
 var smooth_movement := DEFAULT_SMOOTH_MOVEMENT
+var amount_size := DEFAULT_AMOUNT_SIZE
+var popup_rect := DEFAULT_POPUP_RECT
+var panel_size := DEFAULT_PANEL_SIZE
+var console_size := DEFAULT_CONSOLE_SIZE
 
 var _path: String
 
@@ -243,15 +308,11 @@ func load_from_disk() -> void:
 	font_size = _clamp_font(int(config.get_value(
 		SECTION, KEY_FONT_SIZE, DEFAULT_FONT_SIZE)))
 	ui_scale = _clamp_scale(float(config.get_value(
-		SECTION, KEY_UI_SCALE, DEFAULT_UI_SCALE)))
+		SECTION, KEY_UI_SCALE, shipped_ui_scale)))
 	show_world = bool(config.get_value(
 		SECTION, KEY_SHOW_WORLD, DEFAULT_SHOW_WORLD))
 	show_inventory = bool(config.get_value(
 		SECTION, KEY_SHOW_INVENTORY, DEFAULT_SHOW_INVENTORY))
-	text_split = _clamp_split(int(config.get_value(
-		SECTION, KEY_TEXT_SPLIT, DEFAULT_TEXT_SPLIT)))
-	world_split = _clamp_split(int(config.get_value(
-		SECTION, KEY_WORLD_SPLIT, DEFAULT_WORLD_SPLIT)))
 	skill_detail = _clamp_skill_detail(str(config.get_value(
 		SECTION, KEY_SKILL_DETAIL, DEFAULT_SKILL_DETAIL)))
 	sfx_volume = _clamp_volume(float(config.get_value(
@@ -262,6 +323,14 @@ func load_from_disk() -> void:
 		SECTION, KEY_SHOW_SKILL_RATES, DEFAULT_SHOW_SKILL_RATES))
 	smooth_movement = bool(config.get_value(
 		SECTION, KEY_SMOOTH_MOVEMENT, DEFAULT_SMOOTH_MOVEMENT))
+	amount_size = _clamp_box_size(config.get_value(
+		SECTION, KEY_AMOUNT_SIZE, DEFAULT_AMOUNT_SIZE))
+	popup_rect = _clamp_box_rect(config.get_value(
+		SECTION, KEY_POPUP_RECT, DEFAULT_POPUP_RECT))
+	panel_size = _clamp_box_size(config.get_value(
+		SECTION, KEY_PANEL_SIZE, DEFAULT_PANEL_SIZE))
+	console_size = _clamp_box_size(config.get_value(
+		SECTION, KEY_CONSOLE_SIZE, DEFAULT_CONSOLE_SIZE))
 
 	changed.emit()
 
@@ -276,13 +345,15 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_UI_SCALE, ui_scale)
 	config.set_value(SECTION, KEY_SHOW_WORLD, show_world)
 	config.set_value(SECTION, KEY_SHOW_INVENTORY, show_inventory)
-	config.set_value(SECTION, KEY_TEXT_SPLIT, text_split)
-	config.set_value(SECTION, KEY_WORLD_SPLIT, world_split)
 	config.set_value(SECTION, KEY_SKILL_DETAIL, skill_detail)
 	config.set_value(AUDIO_SECTION, KEY_SFX_VOLUME, sfx_volume)
 	config.set_value(SECTION, KEY_SHOW_XP_DROPS, show_xp_drops)
 	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
 	config.set_value(SECTION, KEY_SMOOTH_MOVEMENT, smooth_movement)
+	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
+	config.set_value(SECTION, KEY_POPUP_RECT, popup_rect)
+	config.set_value(SECTION, KEY_PANEL_SIZE, panel_size)
+	config.set_value(SECTION, KEY_CONSOLE_SIZE, console_size)
 
 	return config.save(_path)
 
@@ -297,6 +368,28 @@ func set_font_size(value: int) -> void:
 	font_size = clamped
 	save_to_disk()
 	changed.emit()
+
+
+## The scale for a screen of `dpi` dots per inch, in steps of
+## [constant SCREEN_SCALE_STEP] and clamped.
+##
+## A 4K screen at 150% in Windows reports 144 DPI, and a browser reports 96
+## times its device pixel ratio. At a scale of 1, such a screen shows the text
+## at half or two thirds of its size on a 1080p screen.
+static func ui_scale_for_dpi(dpi: int) -> float:
+	var scale := snappedf(dpi / REFERENCE_DPI, SCREEN_SCALE_STEP)
+
+	return clampf(scale, MIN_UI_SCALE, MAX_UI_SCALE)
+
+
+## Set the scale for a player who has not picked one. Call it before
+## [method load_from_disk]: a file with a scale in it wins.
+##
+## It writes nothing. The screen gives this value on every run, and the file
+## keeps only what the player saw.
+func set_shipped_ui_scale(value: float) -> void:
+	shipped_ui_scale = _clamp_scale(value)
+	ui_scale = shipped_ui_scale
 
 
 ## Set the interface scale, clamped, and persist it.
@@ -334,26 +427,34 @@ func set_show_inventory(value: bool) -> void:
 	changed.emit()
 
 
-## Move the divider between the text column and the 3D half.
-func set_text_split(value: int) -> void:
-	var clamped := _clamp_split(value)
+## The size the player left one dock at, or zero before the first drag.
+##
+## `key` is one of [constant DOCK_SIZE_KEYS]. An unknown key gives zero, which
+## the dock reads as "use the shipped size".
+func dock_size(key: String) -> Vector2i:
+	if not DOCK_SIZE_KEYS.has(key):
+		push_warning("ClientSettings: no dock size named %s" % key)
+		return Vector2i.ZERO
 
-	if clamped == text_split:
+	return get(key)
+
+
+## Remember how big the player made one dock, and persist it.
+##
+## The caller passes the size that the box ENDED at, after
+## [method PanelDock._place_box] clamped it into the pane. The number that the
+## player can see is the number to keep.
+func set_dock_size(key: String, value: Vector2i) -> void:
+	if not DOCK_SIZE_KEYS.has(key):
+		push_warning("ClientSettings: no dock size named %s" % key)
 		return
 
-	text_split = clamped
-	save_to_disk()
-	changed.emit()
+	var clamped := _clamp_box_size(value)
 
-
-## Move the divider between the world pane and the inventory.
-func set_world_split(value: int) -> void:
-	var clamped := _clamp_split(value)
-
-	if clamped == world_split:
+	if clamped == get(key):
 		return
 
-	world_split = clamped
+	set(key, clamped)
 	save_to_disk()
 	changed.emit()
 
@@ -421,6 +522,38 @@ func set_smooth_movement(value: bool) -> void:
 	changed.emit()
 
 
+## Remember how big the player made the amount box, and persist it.
+##
+## Called when the box closes, so a resize drag writes the file one time. A
+## zero on either axis clears the memory and gives the next box its wrapped
+## size, which is what [method reset] uses.
+func set_amount_size(value: Vector2i) -> void:
+	var clamped := _clamp_box_size(value)
+
+	if clamped == amount_size:
+		return
+
+	amount_size = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Remember where the player put the pop-up box, and persist it.
+##
+## The caller passes the rect the box ENDED at, after
+## [method PopupView._place_box] clamped it. The number that the player can
+## see is the number to keep.
+func set_popup_rect(value: Rect2) -> void:
+	var clamped := _clamp_box_rect(value)
+
+	if clamped == popup_rect:
+		return
+
+	popup_rect = clamped
+	save_to_disk()
+	changed.emit()
+
+
 ## True when a clicked skill should open the detail view inside the pane.
 ##
 ## Two readers ask this rather than comparing against a mode string, so the
@@ -440,16 +573,18 @@ func skill_detail_in_log() -> bool:
 ## numbers: this is the escape hatch from a setting that made the UI unusable.
 func reset() -> void:
 	font_size = DEFAULT_FONT_SIZE
-	ui_scale = DEFAULT_UI_SCALE
+	ui_scale = shipped_ui_scale
 	show_world = DEFAULT_SHOW_WORLD
 	show_inventory = DEFAULT_SHOW_INVENTORY
-	text_split = DEFAULT_TEXT_SPLIT
-	world_split = DEFAULT_WORLD_SPLIT
 	skill_detail = DEFAULT_SKILL_DETAIL
 	sfx_volume = DEFAULT_SFX_VOLUME
 	show_xp_drops = DEFAULT_SHOW_XP_DROPS
 	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
 	smooth_movement = DEFAULT_SMOOTH_MOVEMENT
+	amount_size = DEFAULT_AMOUNT_SIZE
+	popup_rect = DEFAULT_POPUP_RECT
+	panel_size = DEFAULT_PANEL_SIZE
+	console_size = DEFAULT_CONSOLE_SIZE
 	save_to_disk()
 	changed.emit()
 
@@ -469,9 +604,38 @@ func _clamp_scale(value: float) -> float:
 	return clampf(value, MIN_UI_SCALE, MAX_UI_SCALE)
 
 
-func _clamp_split(value: int) -> int:
-	return clampi(value, MIN_SPLIT, MAX_SPLIT)
-
-
 func _clamp_volume(value: float) -> float:
 	return clampf(value, MIN_SFX_VOLUME, MAX_SFX_VOLUME)
+
+
+## A saved box size, or zero when the file holds something else.
+##
+## Typed, because [ConfigFile] gives back whatever Variant it stored and a
+## hand-edited line can say anything. A wrong TYPE is the same case as a wrong
+## number: the player gets the wrapped box and can size it again.
+func _clamp_box_size(value: Variant) -> Vector2i:
+	if typeof(value) != TYPE_VECTOR2I:
+		return DEFAULT_AMOUNT_SIZE
+
+	var size: Vector2i = value
+
+	return Vector2i(
+		clampi(size.x, 0, MAX_BOX_PIXELS), clampi(size.y, 0, MAX_BOX_PIXELS))
+
+
+## A saved box rect, or an empty one when the file holds something else.
+##
+## A negative position is legal and saved as it is. The pop-up clamps a rect
+## into its pane on every open, so a box saved half off a wide window comes
+## back inside a narrow one rather than being refused here.
+func _clamp_box_rect(value: Variant) -> Rect2:
+	if typeof(value) != TYPE_RECT2:
+		return DEFAULT_POPUP_RECT
+
+	var rect: Rect2 = value
+
+	return Rect2(
+		clampf(rect.position.x, -MAX_BOX_PIXELS, MAX_BOX_PIXELS),
+		clampf(rect.position.y, -MAX_BOX_PIXELS, MAX_BOX_PIXELS),
+		clampf(rect.size.x, 0.0, MAX_BOX_PIXELS),
+		clampf(rect.size.y, 0.0, MAX_BOX_PIXELS))

@@ -173,13 +173,28 @@ var _avatar: Node3D
 ## you and a crowded tile reads as several people rather than one.
 var _avatar_offset := Vector3.ZERO
 
-## Which way the avatar is currently turned, in radians about Y.
+## How fast the avatar turns to face a new direction, in radians per second.
+##
+## It turned INSTANTLY until 09/21/2026, and an instant quarter turn at the
+## start of every step is a snap however smoothly the figure then slides. A
+## reversal takes about a quarter of a second at this rate, which is under half
+## a tick -- so the figure is facing the right way for most of the step it is
+## taking, and the turn still reads as a turn.
+const TURN_SPEED := 12.0
+
+## Which way the avatar is turning TO, and which way it is drawn, in radians
+## about Y.
+##
+## Two values for the same reason the position has two: the server's step names
+## a direction at once, and the figure takes a moment to turn to it. They are
+## equal whenever the avatar is not mid-turn, which is nearly always.
 ##
 ## Held here rather than read back off the node, because [method _redraw_avatar]
 ## frees and rebuilds that node every time `char_avatar` names a different asset
 ## or art lands for the one it already named — and a player who walked north
 ## before their model arrived should still be facing north after it does.
 var _avatar_yaw := 0.0
+var _avatar_yaw_drawn := 0.0
 
 ## The tile the avatar was last placed on, and which island it was on.
 ##
@@ -276,6 +291,8 @@ func _build_true_tile_marks() -> void:
 ## server sends nothing between two steps.
 func _process(delta: float) -> void:
 	_animator.advance(delta)
+	_avatar_yaw_drawn = rotate_toward(
+		_avatar_yaw_drawn, _avatar_yaw, TURN_SPEED * delta)
 	_draw_avatar()
 
 
@@ -291,6 +308,11 @@ func _process(delta: float) -> void:
 func _draw_avatar() -> void:
 	_avatar_root.position = _animator.drawn()
 	_marker.visible = _animator.is_travelling()
+
+	# Null until char_avatar has been answered, and on tier 1 until the .glb
+	# has landed. _redraw_avatar applies the drawn yaw when the figure arrives.
+	if _avatar != null:
+		_avatar.rotation.y = _avatar_yaw_drawn
 
 
 ## Give the pane its mesh source. Called by the console, which owns it.
@@ -401,7 +423,10 @@ func _redraw_avatar() -> void:
 	# or its art finally lands, and both are things that happen mid-walk. A
 	# figure that snapped back to facing north the moment its model arrived
 	# would read as the model being wrong rather than as the yaw being lost.
-	_avatar.rotation.y = _avatar_yaw
+	#
+	# The DRAWN yaw, not the one being turned to: a model that lands in the
+	# middle of a turn should carry on turning, not finish it instantly.
+	_avatar.rotation.y = _avatar_yaw_drawn
 	_avatar_root.add_child(_avatar)
 
 
@@ -1366,10 +1391,10 @@ func _turn_avatar() -> void:
 	_facing_cell = _state.current_cell
 	_facing_z = _state.current_z
 
-	# Null until char_avatar has been answered and, on tier 1, until the .glb
-	# has landed. _redraw_avatar applies the yaw when the figure does arrive.
-	if _avatar != null:
-		_avatar.rotation.y = _avatar_yaw
+	# Nothing is written to the node here. This names the direction, and
+	# [method _process] turns the figure towards it over TURN_SPEED -- an
+	# instant quarter turn at the head of every step was a snap that no amount
+	# of smoothing on the POSITION could hide.
 
 
 # ─── Aura ────────────────────────────────────────────────────────────────────

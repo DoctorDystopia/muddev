@@ -30,7 +30,7 @@ from systems.interface.ui import colors
 # The first entry MUST be the starting level. A player at level 0 with no
 # cleared threshold would have zero slots and could never cure anything, which
 # is a deadlock rather than a curve.
-CURING_SLOT_LEVELS: tuple = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+CURING_SLOT_LEVELS: tuple = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
 
 # Attribute on the CHARACTER holding the in-progress cures.
 #

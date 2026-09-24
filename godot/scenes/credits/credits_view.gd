@@ -24,7 +24,11 @@ const TIMEOUT_SECONDS := 20.0
 
 const TITLE_TEXT := "Credits"
 const CLOSE_TEXT := "Close"
-const INTRO_TEXT := "The 3D models in Blackout, who made them, and their licenses."
+const INTRO_TEXT := "The art in Blackout, who made it, and its licenses."
+
+## The heading over the art that ships inside the client. See
+## [method _client_art].
+const CLIENT_ART_TEXT := "Interface icons"
 const LOADING_TEXT := "Loading the credits..."
 const FAILED_TEXT := "The credits could not be loaded. Try again later."
 const EMPTY_TEXT := "No model credits yet."
@@ -74,9 +78,14 @@ func _init() -> void:
 	scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	column.add_child(scroller)
 
+	var sections := VBoxContainer.new()
+	sections.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroller.add_child(sections)
+
 	_list = VBoxContainer.new()
 	_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroller.add_child(_list)
+	sections.add_child(_list)
+	sections.add_child(_client_art())
 
 	_message = Label.new()
 	_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -232,6 +241,25 @@ func _entry_row(entry: Dictionary) -> Control:
 		block.add_child(warning)
 
 	return block
+
+
+## The art that ships inside the client, under its own heading.
+##
+## The server list names the 3D models only. The tab icons are files in the
+## client, so the client names their authors. This section does not wait for
+## the fetch, and a failed fetch does not hide it.
+func _client_art() -> Control:
+	var section := VBoxContainer.new()
+
+	var heading := Label.new()
+	heading.text = CLIENT_ART_TEXT
+	heading.theme_type_variation = &"PanelHeading"
+	section.add_child(heading)
+
+	for entry: Dictionary in PanelView.icon_credits():
+		section.add_child(_entry_row(entry))
+
+	return section
 
 
 ## A link when there is a URL, and plain text when there is not.

@@ -2,8 +2,9 @@ class_name PanelView
 extends TabContainer
 ## The control panel: everything about YOU, one tab at a time.
 ##
-## Inventory, the character sheet, settings and client help, in the column
-## beside the 3D world. It replaced three floating [Window]s on 08/28/2026.
+## Inventory, worn gear, the character sheet, settings and client help, in a box
+## over the 3D world. It replaced three floating [Window]s on 08/28/2026, and
+## the column it sat in became [PanelDock] on 09/21/2026.
 ##
 ## ## Why the windows went
 ##
@@ -27,14 +28,35 @@ extends TabContainer
 ## agree until somebody inserts a tab -- at which point the HUD's Character
 ## button opens Options and nothing errors. The title is the thing that is
 ## already displayed, so a mismatch is visible rather than silent.
+##
+## The title is also the NAME of the body node. The strip does not always show
+## the title (see below), so [method _index_of] reads the node name.
+##
+## ## Every tab has an icon, and the label shows when it fits
+##
+## Eight text titles need about 640 pixels, and the shipped box is 560. The
+## strip then showed scroll arrows, and a player could not see every tab. Now
+## [method _refresh_labels] picks the first mode that fits the strip:
+##
+## 1. Every tab shows its icon and its label.
+## 2. Every tab shows its icon, and the current tab also shows its label.
+## 3. Every tab shows its icon only.
+##
+## A tooltip names each tab in every mode. The icons come from game-icons.net
+## under CC BY 3.0. [method icon_credits] gives their authors to the Credits
+## box.
 
 ## The tabs this client has. **Adding one is a constant here and one
 ## `add_panel` call in the console.**
 ##
 ## The Inventory body is authored in `console.tscn` because its position in the
-## layout is; the other three are built in code because their contents are.
-## Both routes land in the same strip, and the order is the order they arrive.
+## layout is; the others are built in code because their contents are. Both
+## routes land in the same strip, and the order is the order they arrive.
 const TAB_INVENTORY := "Inventory"
+## The paper doll, modelled on OSRS's Worn Equipment tab. Beside Inventory
+## because the two are halves of one bag; see [EquipmentView] on what a tab
+## strip costs a drag between them, and what replaced it.
+const TAB_EQUIPMENT := "Equipment"
 ## Your weapon and its styles, modelled on OSRS's Combat Options. Beside the
 ## inventory because a style is picked for the weapon worn there; see
 ## [CombatOptionsView].
@@ -50,9 +72,73 @@ const TAB_HELP := "Help"
 ## Returned by [method _index_of] when no tab carries that title.
 const NOT_FOUND := -1
 
+## How wide an icon draws in the strip, in pixels. The SVG files import at
+## twice this size, so they stay sharp at a UI scale of 2.
+const ICON_SIZE := 20
+
+## The label modes, in the order [method _refresh_labels] tries them.
+const LABELS_ALL := "all"
+const LABELS_CURRENT := "current"
+const LABELS_NONE := "none"
+const LABEL_MODES: Array[String] = [LABELS_ALL, LABELS_CURRENT, LABELS_NONE]
+
+## The license of every icon in [constant TAB_ICONS].
+const ICON_LICENSE := "CC BY 3.0"
+const ICON_LICENSE_URL := "https://creativecommons.org/licenses/by/3.0/"
+const ICON_PAGE := "https://game-icons.net/1x1/%s/%s.html"
+
+## The icon of each tab: the file, and the game-icons.net author and name that
+## it came from. A tab with no row shows its label in every mode.
+const TAB_ICONS := {
+	TAB_INVENTORY: ["res://ui/icons/inventory.svg", "delapouite", "backpack"],
+	TAB_EQUIPMENT: ["res://ui/icons/equipment.svg", "lorc", "breastplate"],
+	TAB_COMBAT: ["res://ui/icons/combat.svg", "lorc", "crossed-swords"],
+	TAB_CHARACTER: ["res://ui/icons/character.svg", "lorc", "cowled"],
+	TAB_SKILLS: ["res://ui/icons/skills.svg", "delapouite", "upgrade"],
+	TAB_QUESTS: ["res://ui/icons/quests.svg", "lorc", "scroll-unfurled"],
+	TAB_OPTIONS: ["res://ui/icons/options.svg", "lorc", "cog"],
+	TAB_HELP: ["res://ui/icons/help.svg", "lorc", "uncertainty"],
+}
+
+## The label mode in use. See [method _refresh_labels].
+var label_mode := LABELS_ALL
+
 
 func _init() -> void:
 	_refuse_focus()
+	add_theme_constant_override("icon_max_width", ICON_SIZE)
+	tab_changed.connect(func(_index: int): _refresh_labels())
+	resized.connect(_refresh_labels)
+
+
+func _ready() -> void:
+	# The Inventory body comes from `console.tscn`, before any call to
+	# add_panel. Its icon and tooltip go on here.
+	for index: int in get_tab_count():
+		_dress_tab(index)
+
+	_refresh_labels()
+
+
+## One row for the Credits box for each icon, in the shape [CreditsState]
+## reads.
+static func icon_credits() -> Array[Dictionary]:
+	var credits: Array[Dictionary] = []
+
+	for title: String in TAB_ICONS:
+		var row: Array = TAB_ICONS[title]
+		var author: String = row[1]
+
+		credits.append({
+			"title": "%s tab icon (%s)" % [title, row[2]],
+			"author": author.capitalize(),
+			"license": ICON_LICENSE,
+			"license_url": ICON_LICENSE_URL,
+			"url": ICON_PAGE % [author, row[2]],
+			"confirmed": true,
+		})
+
+	return credits
 
 
 ## Keep the keyboard where it was when a tab is clicked.
@@ -85,7 +171,8 @@ func add_panel(title: String, body: Control) -> void:
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(body)
-	set_tab_title(get_tab_count() - 1, title)
+	_dress_tab(get_tab_count() - 1)
+	_refresh_labels()
 
 
 ## Bring one tab to the front. A title nothing carries is ignored.
@@ -115,11 +202,96 @@ func set_panel_hidden(title: String, hidden: bool) -> void:
 		return
 
 	set_tab_hidden(index, hidden)
+	_refresh_labels()
+
+
+## Give one tab its icon and its tooltip. The label is [method _refresh_labels]'s.
+func _dress_tab(index: int) -> void:
+	var title := _title_at(index)
+	var row: Array = TAB_ICONS.get(title, [])
+
+	if not row.is_empty():
+		set_tab_icon(index, load(row[0]))
+
+	get_tab_bar().set_tab_tooltip(index, title)
+
+
+## Show every label that fits, and the icon for the rest.
+##
+## Runs on each resize, each tab change, and each tab added or hidden. The
+## first mode in [constant LABEL_MODES] whose strip fits the width wins. The
+## last mode always applies, so a narrow box shows icons and never arrows.
+func _refresh_labels() -> void:
+	var chosen := LABELS_NONE
+
+	for mode: String in LABEL_MODES:
+		if _strip_width(mode) <= size.x:
+			chosen = mode
+			break
+
+	label_mode = chosen
+
+	for index: int in get_tab_count():
+		var shown := _label_shown(index, chosen)
+		set_tab_title(index, _title_at(index) if shown else "")
+
+
+## How wide the strip is in one mode, in pixels, from the theme's own parts.
+func _strip_width(mode: String) -> float:
+	var style := get_theme_stylebox("tab_selected")
+	var font := get_theme_font("font")
+	var font_size := get_theme_font_size("font_size")
+	var gap := get_theme_constant("icon_separation")
+	var total := 0.0
+
+	for index: int in get_tab_count():
+		if is_tab_hidden(index):
+			continue
+
+		var has_icon := TAB_ICONS.has(_title_at(index))
+		var width := style.get_minimum_size().x
+
+		if has_icon:
+			width += ICON_SIZE
+
+		if _label_shown(index, mode):
+			width += font.get_string_size(
+				_title_at(index), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+
+			if has_icon:
+				width += gap
+
+		total += width
+
+	return total
+
+
+## Whether one tab shows its label in one mode. A tab with no icon always
+## does, because a blank tab names nothing.
+func _label_shown(index: int, mode: String) -> bool:
+	if not TAB_ICONS.has(_title_at(index)):
+		return true
+
+	if mode == LABELS_ALL:
+		return true
+
+	return mode == LABELS_CURRENT and index == current_tab
+
+
+## The title of one tab, which is the name of its body node.
+func _title_at(index: int) -> String:
+	var body := get_tab_control(index)
+
+	if body == null:
+		return ""
+
+	return String(body.name)
 
 
 func _index_of(title: String) -> int:
-	for index: int in get_tab_count():
-		if get_tab_title(index) == title:
-			return index
+	var body := get_node_or_null(NodePath(title))
 
-	return NOT_FOUND
+	if body == null or not (body is Control):
+		return NOT_FOUND
+
+	return get_tab_idx_from_control(body)

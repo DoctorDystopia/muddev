@@ -121,7 +121,7 @@ static var SHAPES: Dictionary = {
 		{"shape": SHAPE_TORUS, "inner": 0.195, "outer": 0.285,
 			"color": MeshPalette.GOLD, "finish": MeshPalette.FINISH_METAL},
 		{"shape": SHAPE_FACETED, "radius": 0.1, "segments": 4,
-			"offset": Vector3(0.0, 0.1, 0.0),
+			"offset": Vector3(0.3, 0.0, 0.0),
 			"color": MeshPalette.GEM, "finish": MeshPalette.FINISH_GEM},
 	],
 

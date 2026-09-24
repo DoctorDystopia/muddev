@@ -30,9 +30,10 @@ ENG-0006 §4.
 > fine there. The reasons must live here.
 
 **Status: the client consumes every statefeed channel in
-`SUBSCRIBABLE_CHANNELS`.** The layout has a tabbed game log on the left, the 3D
-world and a tabbed control pane on the right, and vitals bars and a minimap
-over the world. The world pane draws these things:
+`SUBSCRIBABLE_CHANNELS`.** The layout has a tabbed game log on the left and the
+3D world on the right. The tabbed control panel hangs in a box over the bottom
+right corner of the world, and vitals bars and a minimap sit over the world
+too. The world pane draws these things:
 
 - The tile grids of each map, and the links between them
 - Room-kind colors, and real tile art on the maps that have any
@@ -50,8 +51,11 @@ where there is art, and the silhouette of the family where there is not.
 | **Left-click a tile** | Walks there. Closes any open menu first — the server's menus stand aside for a walk, an exit or a click on a thing |
 | **Left-click an entity** | Sends the entity's `interact` command, verbatim — `attack mutant raider`, `bank`, `craft`, `talk`, `cut`. On another tile, walks there first: `goto (4,7) then cut rusty pole` |
 | **Left-click a player** | Nothing — an empty `interact`, which the server decides and this pane does not |
-| **Drag an inventory cell** | Swap, equip or unequip — whichever the server named |
+| **Drag an inventory cell** | Swaps two carried squares. The one command this client composes, because a drag knows two endpoints |
+| **Left-click an inventory cell** | The server's first action on that row: `Equip` on a wearable, `Deposit` or `Sell` while a pop-up is open |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
+| **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
+| **Drag a grip** | Resizes the box that the grip is on. A dock hangs from its corner, so only its top edge and its side edge move. A pop-up has a grip on each edge and each corner, and the docks never cover them. Remembered |
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
 | **Combat tab** | Your weapon, combat level, attack speed, and a button per style — OSRS's Combat Options |
 | **Click a style** | Sends the row's `combatoptions <style>`. The highlight moves when the server republishes, not on the click |
@@ -59,14 +63,14 @@ where there is art, and the silhouette of the family where there is not.
 | **Skills tab** | The roster as a grid, banded by category, with a bar per skill |
 | **Click a skill** | Its sheet: XP, progress and everything it unlocks. Where that lands is an Options setting |
 | **Quests tab** | What you have taken, and how far through it you are |
-| **Options tab** | Text size, interface scale, which panes are drawn, where skill detail goes, whether figures slide between tiles. Saved between runs |
+| **Options tab** | Text size, interface scale, which panes are drawn, where skill detail goes, whether figures slide between tiles. Saved between runs. The Game half asks the server: the text map, and which parts of the room a step prints |
 | **Up / Down in the input** | Walks the command history; a half-typed draft is kept |
 | **Escape in the input** | Hands the keyboard to the map — see "Two modes" below |
 | **WASDQEZC / hjklyubn** | Walk, while the map has the keyboard |
 | **Enter, in move mode** | Hands the keyboard back to the input |
 | **Click a chat tab** | Filters the log to what that tab claims. A dot means lines landed there while you were elsewhere |
 | **3D button** | Hides the 3D world. Persists. The inventory has its own toggle in Options — one switch for both meant giving up the bag to stop the diorama |
-| **Drag a divider** | Resizes, and it is remembered. Both offsets were a literal 300 in the scene until 08/28/2026 |
+| **Drag the divider** | Resizes the log against the world, and it is remembered. Both offsets were a literal 300 in the scene until 08/28/2026 |
 | **Ctrl+F** | Find in the log. Enter steps, Escape closes |
 | **Help tab** | Client help — gestures and keys, not the game's `help` |
 | **Middle-drag** | Orbit the camera. It was right-drag until 09/10/2026, when the right button became Choose Option |
@@ -95,6 +99,10 @@ So the mode is explicit. **Escape** leaves the input, and the map takes the
 keyboard. **Enter** gives it back. The placeholder of the input says which mode
 is current. That last part is not decoration. A text field that silently
 refuses letters looks the same as a client that hung.
+
+The hint follows login and focus, in `_refresh_input_hint`. Before login it is
+the `connect` line. After login it names Escape while the player types, and it
+names the movement keys while the map has the keyboard.
 
 ## Where meshes come from
 
@@ -425,23 +433,73 @@ between runs. The server sends the same messages either way, and the client
 asks for nothing more.
 
 **The tick comes from the server.** `clientexport.py` writes `TICK_SECONDS`
-into `blackout_constants.gd`. A walk timed to any other number arrives early
-and waits, or falls behind and keeps falling. Never type `0.6` into GDScript.
+into `blackout_constants.gd`. The client paces the walk from it. Never type
+`0.6` into GDScript.
 
-### Two rules keep the slide honest
+### Three rules keep the slide honest
 
-**The drawn position is never more than one tick behind the true one.** The
-speed is not a constant. It is the distance that is left, divided by one tick,
-with a floor at walking pace. Thus, a figure that falls behind catches up
-inside the next tick. A client that can drift without a bound is a client that
-lies.
+**A crossing takes longer than a tick.** `StepAnimator.WALK_TICKS` is 1.2, so
+one tile takes 0.72 s at a 0.6 s tick. That looks wrong and it is the fix for
+the jitter.
 
-**A jump longer than one step is not a walk.** A teleport, a resync, and an
-island that arrives late all SNAP. Draw a walk across a long jump, and the
-figure goes through every wall between the two points. `yaw_towards` refuses
-the same move for the same reason. The two thresholds have the same shape: one
-step, diagonals included. A diagonal measures the square root of two, so the
-threshold is above one.
+Cross a tile in exactly one tick and the figure arrives before the next step
+can be announced. A message cannot arrive before the event that caused it. The
+figure then stands still until that message lands, on every step, for whatever
+the network and the tick grid add. A player reads the stop and start as
+snapping. Crossing a little slower leaves the figure still moving when the
+next step lands.
+
+The cost is a trail. The figure runs about a fifth of a tile behind just
+before each step, and a little over one tile just after it. The trail IS the
+buffer that absorbs the irregular arrivals, and the true tile mark is what
+repays it.
+
+**A crossing takes the same TIME, whatever distance it covers.** The speed is
+set when the step lands, and it is held until the next one. This is what
+bounds the trail. A speed recomputed each frame from the distance that is left
+is an exponential: it halves the gap forever and never closes it, so a figure
+that fell behind stays behind.
+
+**A move longer than `SNAP_STEPS` is not a walk.** `SNAP_STEPS` is three. A
+teleport, a resync, and an island that arrives late all SNAP.
+
+Three and not one, because `CHANNEL_ROOM_INFO` is in `COALESCABLE_CHANNELS`.
+Two steps that land in one tick reach the client as ONE message that names a
+tile two squares away. That is a real walk the player took, announced late.
+The threshold was 1.5 until 09/21/2026, and it drew that walk as a teleport
+several times each minute. Manual movement makes the case common rather than
+rare: `auto_step_delay` paces the auto-walk, and nothing paces a held key.
+
+The honest cost is that a teleport of three tiles or fewer is drawn as a slide
+of under a second, through whatever stands between the two tiles. A
+map-crossing jump still snaps.
+
+**The move is measured from the last TARGET, never from the drawn position.**
+The figure trails during a walk, so a drawn-to-new measurement reads an
+ordinary step as more than two tiles. Then every step snaps and the animation
+does nothing at all.
+
+### The figure turns, and it does not spin
+
+`_turn_avatar` names the direction. `WorldView._process` turns the figure to
+it at `TURN_SPEED`, and a reversal takes about a quarter of a second.
+
+The turn was instant until 09/21/2026. An instant quarter turn at the head of
+every step is a snap, and no amount of smoothing on the POSITION hides it.
+
+### A step re-aims the ring, it does not rebuild it
+
+`EntityPool.replace_positions` runs on every step the observer takes. It used
+to free and build every mesh and every label in the room. That is a frame
+several milliseconds longer, one time for each step, and the eye reads it as
+the whole scene stuttering.
+
+`_reaim` does the same work with one lookup and one aim for each entity. It
+refuses, and leaves the rebuild to do the job, when the set of drawable
+entities changed as well. An island that arrives is that case.
+
+`test_entity_pool` asserts node IDENTITY across a step, because a rebuild
+frees the node and puts a new one in its place.
 
 ### The true tile is always marked
 
@@ -661,11 +719,12 @@ Each cell shows its own rectangle of the result through an `AtlasTexture`. The
 result is one target, one camera, and one pass, and the slow spin costs the
 same for one item on screen or forty.
 
-The view addresses cells by INDEX. It allocates them (carried first, then
-worn), and where an index sits in the 3D grid is the business of
-`item_stage.gd` alone. If two cells claimed one rectangle, they would quietly
-draw one object in two slots. For that reason, a test asserts that every cell
-owns a different region.
+The view addresses cells by INDEX. It allocates them, and where an index sits
+in the 3D grid is the business of `item_stage.gd` alone. If two cells claimed
+one rectangle, they would quietly draw one object in two slots. For that
+reason, a test asserts that every cell owns a different region. **The bag and
+the doll are two panes with a stage each**, so neither pane has to know how
+many cells the other made.
 
 The stage updates `WHEN_VISIBLE`, so text-only mode really does stop paying for
 it.
@@ -677,6 +736,123 @@ it.
 > the game's sky black. The two bugs happened on the first run. Nothing else
 > about the viewport hints at it, so `test_inventory_view` asserts that the two
 > worlds differ and does not trust a comment.
+
+## Two docks hang over the world, and the player sizes both
+
+Until 09/21/2026 the panel was the bottom half of a `VSplitContainer`, under
+the world pane. Until 09/22/2026 the game log was the left half of an
+`HSplitContainer`. Each pixel that a split gave to a pane was a pixel that the
+world did not get. A split also changes one axis only, so the log always took
+the full height.
+
+`PanelDock` is one script for both boxes. Each box hangs from a bottom corner
+of the world, and the player drags the side edge and the top edge:
+
+| Dock | Corner | Holds | Size in `ClientSettings` |
+|---|---|---|---|
+| `%ConsoleDock` | bottom-left | The login form, the game log, the input | `console_size` |
+| `%PanelDock` | bottom-right | The control panel tabs | `panel_size` |
+
+The node exports the corner, the setting key, the shipped size and the
+shipped share.
+Thus, a third dock is one node in `console.tscn` and one entry in
+`ClientSettings.DOCK_SIZE_KEYS`.
+
+**The corner is the whole geometry.** The player owns the SIZE. The dock owns
+where that size hangs from. For that reason, a dock setting keeps a size and
+not a rect: a stored position would be a second owner of a fact that the dock
+already decides.
+
+The docks use the bottom corners only. The minimap and the XP drops use the
+top-right of the world pane, and the vitals use the top-left. The world's hover
+bar runs along the bottom, in the gap between the two docks.
+
+**The shipped size follows the pane.** Before the first drag, a dock takes
+`default_size` or `default_share` of the room, whichever is smaller. A fixed
+size that suits a 1920 x 1080 window covered the minimap in a 1280 x 720
+window. `smoke_console` checks the shipped layout at five window sizes, from
+1280 x 720 to 2560 x 1440.
+
+**The two docks never overlap.** The log dock draws over the panel dock, so a
+log dragged over the panel covered the side grip of the panel.
+`keep_clear_of` stops each box one margin short of the other. The docks do not
+raise their grips as the pop-up does, because a raised grip also draws over
+the loading veil.
+
+**The first-run UI scale comes from the screen.** The console gives
+`ClientSettings` the scale for the screen DPI: 144 DPI gives 1.5. A browser
+gives 96 times its device pixel ratio. A scale in the file wins, and Reset
+goes back to the scale of the screen.
+
+**The log dock is a sibling of the world pane, not a child.** The loading veil
+must be the last child of the world pane, and it covers that pane only. The
+log thus stays readable while the world loads, as the old text column did.
+
+**With the 3D world off, the log fills the space beside the panel.**
+`fill_beside` gives the log the full height and the width that the panel
+leaves, and it hides the log's grips. The saved size does not change, and the
+log returns to it when the world comes back.
+
+**The world pane is never hidden, and the panel dock is the reason.**
+`show_world` turns off the 3D view and the two HUD pieces over it, not the
+pane itself. The panel holds Options, so a hidden pane would be a setting that
+hides the screen that you change it on.
+
+**The panel dock draws over the pop-up and under the right-click menu.** That order
+is the pop-up's own rule and not a layout detail: a pop-up draws no copy of the
+bag, because the inventory pane IS the bag. A bank that covered the bag would
+put every Deposit action on it out of reach.
+
+**It is not a `Window`.** `PanelView` says why the three floating windows went
+in 08/2026: a web export is one canvas, so a Window is an embedded subwindow
+that cannot leave the game area. The dock is an ordinary `Control` over the
+world pane, which is what the minimap, the vitals, the veil and the right-click
+menu already are.
+
+**The box never gets smaller than what is in it.** A `TabContainer` reports the
+widest minimum of any tab, and the carried grid is four cells across. Thus, the
+floor is usually the content and not `MIN_SIZE`. This is the rule that
+`PopupView` follows, and `_place_box` is the one owner of it: it runs on every
+drag AND on every resize of the window, so a size saved by a wide window comes
+back into a narrow one.
+
+## The paper doll is the client's picture of the server's slots
+
+The doll was a flat row of twelve squares under the carried grid until
+09/21/2026. It is `EquipmentView` now, in a tab of its own, in the shape of
+OSRS's Worn Equipment tab.
+
+**`DollLayout` owns that shape, and the server must never learn it.** The
+server says which wield locations exist and in what order to READ them
+(`SLOT_DISPLAY_ORDER`, which arrives as the `equip_slots` frame list). It does
+not say that the head goes above the chest.
+
+The asymmetry is the same one that `ROOM_KIND_COLORS` documents:
+
+- **A square that names no wield location is a bug.** The server never sends a
+  frame for it, so the doll draws a hole that the player can never fill.
+  `test_client_constants.py` fails on it.
+- **A wield location that the table forgets is fine.** It lands in a strip
+  under the doll. Thus, a slot added to the enum reaches the pane with no
+  client edit.
+
+**Twelve frames go into eleven OSRS squares.** OSRS has one weapon square and
+one shield square. Blackout has three hand slots, because `two_hands` is a slot
+of its own. So the two-hander gets a row of its own across the width, and the
+pane draws that row only while the slot is occupied. The pane asks whether the
+slot holds anything, never what kind of thing it holds. An empty two-hand frame
+is a square that cannot be filled while a one-hander is worn, and a permanent
+dead square in the middle of a doll reads as a bug.
+
+> **A tab strip costs one gesture.** The bag and the doll were one pane, so a
+> drag from a carried square to a worn frame was an `equip`, and the reverse
+> was an `unequip`. Neither endpoint can see the other now. **The left click
+> replaced both**, and it costs nothing: the server puts `Equip` first on a
+> carried wearable and `Unequip` first on a worn row, so one click does what
+> the drag did. `EquipmentView` connects no `dropped` signal, and
+> `inventory_view.gd` keeps only the swap. A branch put back in either file
+> would compose a verb for a gesture that no player can make, which is how a
+> verb table gets into a client.
 
 ## A pop-up is item grids, and every slot carries its commands
 
@@ -717,9 +893,20 @@ curing chamber is the first station. A second timed station needs only a
 `timer_report` on its server-side handler.
 
 **The player moves and sizes the box.** A drag on the title bar moves it. A
-drag on the grip in the bottom-right corner sizes it. The grid fits its
-columns to the new width. The box stays inside the pane, also when the pane
-changes size. The rect lives for the session, not on disk.
+drag on any edge or any corner sizes it, and the edges that the grip does not
+name stay where they are. The grid fits its columns to the new width. The box
+stays inside the pane, also when the pane changes size.
+
+**The grips of the pop-up draw over the docks.** The control panel draws over
+the pop-up on purpose, and until 09/22/2026 it covered the only grip of the
+pop-up, in the bottom-right corner. Each grip is now a `top_level` Control.
+Godot draws a top-level item after all other items, and the GUI picks it
+first. `ResizeGrips` makes the grips for the pop-up and for both docks.
+
+**The first box opens between the docks.** The console gives the pop-up the
+gap between the log dock and the control panel. When the gap is at least
+`MIN_GAP_WIDTH` wide, the first box opens centred in it. It is never larger
+than `DEFAULT_MAX_SIZE`. In a narrower gap, it opens centred in the pane.
 
 The server orders the actions of a row, and
 it puts the active quantity mode first. Thus, "Withdraw 5" is what a left click
@@ -730,6 +917,12 @@ means after the player picks 5, and the client never learns what 5 is.
 terminal. The X entries are prompted actions, the shape that the inventory's
 Deposit X already uses. `ServerAction` reads that shape and `AmountPrompt`
 asks for the amount, so the two panes share one rule and one box.
+
+The box is built per prompt and freed on close, so the size the player drags it
+to lives in `ClientSettings.amount_size`. It is read when the box CLOSES, one
+write for one box. One size serves every verb, because Deposit X, Withdraw X,
+Sell X and the pop-up's X button all draw the same box with a different title.
+Zero means "wrap the contents", which is the first-run look.
 
 **It is a Control over the pane, not a `Window`.** On the web, a `Window` is a
 subwindow that cannot move beside the game, the lesson that `SummaryView`
@@ -744,6 +937,28 @@ server also closes it when the player walks away from the terminal.
 **A rebuild keeps the scroll.** Every snapshot rebuilds every slot, as the
 inventory does. A withdraw sends a snapshot, so each grid keeps its scroll
 position through a rebuild of the same pop-up.
+
+**The box keeps the rect the player dragged, between runs.** A drag on the
+title bar moves the box and a drag on a grip sizes it.
+`ClientSettings.popup_rect` keeps both. Until 09/21/2026 the rect lived in the
+view and died with the client, so a player who moved the bank off their
+minimap moved it again on every run.
+
+Three rules hold that together:
+
+- **`PopupView._place_box` stays the one owner of "the box is on screen".** It
+  clamps a rect into the pane on every open, every drag and every resize of
+  the pane. Thus the saved rect is plain pixels, and a box saved by a wide
+  window comes back inside a narrow one.
+- **The rect is read the first time the box is placed, not at bind time.** The
+  console binds every pane BEFORE it loads the file.
+- **The write is debounced by 0.4 s, and the view writes the CLAMPED rect.**
+  `gui_input` fires for each frame of a drag, and each setter writes the file.
+  This is the rule the two dividers already follow.
+
+Reset in Options forgets the rect. The box moves home on the next run, not at
+the click: `bind_settings` does not follow `changed`, because a rect pushed
+back in on every change loses a drag made inside the write delay.
 
 **The quantity mode is server state.** The 1 / 5 / 10 / X / All buttons send
 `popup quantity <n|all>`. The button lights only when the next snapshot says
@@ -941,7 +1156,7 @@ the name `...exe` itself, so the binary path repeats:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --path godot
 ```
 
-Log in through the form at the top of the text column, or type the same thing
+Log in through the form at the top of the game log, or type the same thing
 into the input field. The two send the identical line:
 
 ```
@@ -979,7 +1194,7 @@ test leaves:
 | | Catches |
 |---|---|
 | `smoke_console` | A `%UniqueName` that no longer resolves, a node whose type changed, a theme that came unattached. Every other test builds its subject in code, so a scene edit is invisible to all of them |
-| `test_theme` | A `theme_type_variation` a script names and `ui/blackout_theme.tres` does not declare. The control silently falls back to the default style, which reads as a styling mistake rather than a typo |
+| `test_theme` | A `theme_type_variation` a script names and `ui/blackout_theme.tres` does not declare. The control silently falls back to the default style, which reads as a styling mistake rather than a typo. Also an item that its class does not read, such as `LineEdit/colors/background_color` |
 
 > **After you add a `class_name`, run `--headless --path godot --import` one
 > time before you run anything headless.** Global class names live in
@@ -1329,6 +1544,21 @@ is the answer. The command lives on the character
 (`commands/crafting_cmds.py`), not on the workbench, so the button works on any
 tile.
 
+**`movetext` chooses what a step prints.** A step prints the room name, the
+description, the exits, the Characters line and the You see line. The player
+can turn off each part: `movetext exits off`. `movetext` lists the parts, and
+`movetext reset` turns all of them on again. The default shows every part.
+
+The choice applies to a step only. A typed `look` always shows the whole room.
+`Character._look_on_arrival` gives the hidden parts to the look as a kwarg,
+and `GridTile` leaves out each part that the kwarg names.
+`systems/interface/ui/move_text.py` owns the parts.
+
+The Options tab has an On and an Off button for each part, and `?` and
+`All on` buttons. `MOVE_TEXT_LABELS` in `options_view.gd` holds a server key
+and a client label for each row. `test_move_text_client.py` fails on a key that
+names no part.
+
 ## The log is tabbed, and the server never names a tab
 
 Every line of game text can carry a routing tag in its outputfunc kwargs.
@@ -1378,7 +1608,8 @@ keeps its XP counter. It draws only after the player earns something. It shows
 these parts:
 
 - A strip that reads `session 12,345 xp   3,420 xp/hr`
-- A segmented bar for the skill just trained (`strike 42 → 43 · 1,120 to go`)
+- A continuous bar for the skill just trained (`strike 42 → 43 · 1,120 to go`).
+  It glides to each new value, like the HP bar.
 - A `level up // strike 43` line that fades
 - XP per hour for each skill, when Options asks for it.
 
@@ -1510,12 +1741,17 @@ To add a sound:
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/map_palette.gd` | Room-kind colors, island order, and which map is surfaced with which terrain. Read by BOTH map panes; guarded from Python by path. |
 | `scenes/minimap/minimap_view.gd` | The map drawn small over the world pane. Clickable, and from the feed rather than the ASCII print. |
-| `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. |
+| `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. Each tab has an icon, and the labels show when they fit. |
+| `scenes/panel/panel_dock.gd` | A box over the world: the control panel, and the game log. Owns one corner and one size. |
+| `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the pop-up and the docks. The pop-up raises its grips over every other box. |
+| `ui/icons/` | The tab icons, from game-icons.net (CC BY 3.0). `PanelView.TAB_ICONS` names the author of each, and the Credits box shows them. |
+| `world/doll_layout.gd` | Where each equipment frame sits on the paper doll. A picture, not a rule; guarded from Python by path. |
+| `scenes/equipment/equipment_view.gd` | The paper doll. Draws the frames the server sent, in the shape the table says. |
 | `scenes/vitals/vitals_bars.gd` | Your resources as bars. One control, two homes. |
 | `world/chat_tabs.gd` | Which tab a line belongs in, and which tabs have unread lines. Holds no text. |
 | `scenes/chat/chat_view.gd` | The tab strip and one RichTextLabel per tab. Appends; never re-renders. |
-| `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown and where the dividers sit, via ConfigFile under `user://`. |
-| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Assigned once on the console root and inherited. |
+| `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, and how big the player made a box or a dock, via ConfigFile under `user://`. |
+| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
 | `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
 | `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |

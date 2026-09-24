@@ -6,16 +6,22 @@ Description: InventoryHandler — the 32-slot grid backing a character's
              carried items, including stack merging.
 """
 
+
+
 from items import stacking
 from items.equipment.constants import MAX_INVENTORY_SLOTS
+
+
 
 SLOTS_TOTAL = MAX_INVENTORY_SLOTS
 GRID_COLS = 4
 GRID_ROWS = SLOTS_TOTAL // GRID_COLS
 
 
+
 class InventoryError(Exception):
     pass
+
 
 
 class InventoryHandler:

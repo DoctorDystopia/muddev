@@ -104,15 +104,23 @@ func _a_game_setting_is_only_ever_asked_for() -> void:
 	_fresh()
 
 	var sent: Array[String] = []
+	var pressed := [0]
 	_view.command_requested.connect(func(line): sent.append(line))
 
 	for button: Button in _buttons(_view, [] as Array[Button]):
 		if button.text == "Off":
+			pressed[0] += 1
 			button.pressed.emit()
 
-	_expect(sent.size() == 1, "pressing Off sent exactly one line")
-	_expect(sent.size() == 1 and sent[0] == "automap off",
-		"and it was the whole command, composed nowhere")
+	_expect(pressed[0] > 0 and sent.size() == pressed[0],
+		"each Off press sent exactly one line")
+	_expect(sent.has("automap off"),
+		"and the automap one was the whole command, composed nowhere")
+
+	# One Off for each part of the room text, and each names its part.
+	for part: String in OptionsView.MOVE_TEXT_LABELS:
+		_expect(sent.has("movetext %s off" % part),
+			"Off for %s sends the whole movetext line" % part)
 
 
 func _every_command_button_sends_a_whole_line() -> void:
@@ -137,6 +145,8 @@ func _every_command_button_sends_a_whole_line() -> void:
 	_expect(sent.has("automap on"), "and the one that turns the map back on")
 	_expect(sent.has("toggle craft confirm"),
 		"and the crafting confirmation toggle")
+	_expect(sent.has("movetext"), "and the room text report")
+	_expect(sent.has("movetext reset"), "and the room text reset")
 
 
 func _the_skill_detail_choice_offers_every_mode_and_stores_the_value() -> void:

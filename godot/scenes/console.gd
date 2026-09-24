@@ -1,5 +1,6 @@
 extends Control
-## The client shell: the text game on the left, the 3D world on the right.
+## The client shell: the 3D world, with the game log docked over its
+## bottom-left corner and the control panel over its bottom-right.
 ##
 ## Owns the connection and the subscription handshake, and nothing else. The
 ## world pane reads the feed straight off Evennia's signals -- routing every
@@ -18,8 +19,19 @@ extends Control
 ## server has told it anything.
 const Const := preload("res://autoload/blackout_constants.gd")
 
-## Shown in the input while the map has the keyboard. See [method _set_typing].
-const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
+## The three hints in the input. See [method _refresh_input_hint].
+##
+## Before login, the line that logs in. The form above the log sends the same
+## line, and this tells a player who prefers to type it.
+const LOGIN_HINT := "connect <name> <password>"
+
+## While the input has the keyboard. It names the way OUT, because Escape is
+## the only key that gives the keyboard to the map, and nothing else shows it.
+const TYPE_MODE_HINT := "Type a command — Esc to walk with the keyboard"
+
+## While the map has the keyboard. It names both layouts, with their
+## diagonals, and the way back. See [MovementKeys].
+const MOVE_MODE_HINT := "Movement: Click on tile / WASD + QEZC / HJKL + YUBN — Enter to type a command"
 
 ## The game log. Tabbed, and the tabs are the client's own -- see
 ## [ChatTabs] on why the server names what a line IS and never where it
@@ -29,29 +41,38 @@ const MOVE_MODE_HINT := "WASD / hjkl to move — Enter to type"
 @onready var _inventory: InventoryView = %Inventory
 @onready var _login: LoginView = %Login
 
-## The two dividers, so a dragged one can be remembered. See
-## [method _on_split_dragged].
-@onready var _split: HSplitContainer = %Split
+## The box the game log, the login form and the input hang in, over the
+## bottom-left corner of the world pane. A [PanelDock], like the control panel.
+##
+## A sibling of the world pane and not a child of it. The loading veil covers
+## the world pane only, so the log stays readable while the world loads. That
+## is how the old text column behaved.
+@onready var _console_dock: PanelDock = %ConsoleDock
 
 ## Where the vitals bars sit, and there are two because one of them can be
 ## hidden. See [method _place_vitals].
 @onready var _world_vitals: MarginContainer = %WorldVitals
 @onready var _text_vitals: MarginContainer = %TextVitals
 
-## The whole right column: the 3D world above, the control panel below.
+## The box the control panel hangs in, over the world pane.
 ##
-## ALWAYS VISIBLE, and that is a decision rather than an oversight. It used to
-## hide when both panes in it were off -- but the panel now holds Options, and a
-## setting that can hide the screen you change it on is a trap. A player who
-## wants text only drags the divider instead, and the divider is remembered.
-@onready var _right: VSplitContainer = %Right
+## ALWAYS VISIBLE, and that is a decision rather than an oversight. The panel
+## holds Options, and a setting that can hide the screen you change it on is a
+## trap. A player who wants the world back drags the dock small instead, and
+## the size is remembered. See [PanelDock].
+@onready var _dock: PanelDock = %PanelDock
 
-## The control panel. Inventory, character sheet, options, help.
+## The control panel. Inventory, worn gear, character sheet, options, help.
 @onready var _panel: PanelView = %Panel
 
-## The world pane and everything drawn over it, hidden as one. The 3D world
-## and the inventory used to share one setting, which meant a player who wanted
-## the bag without the diorama could have neither.
+## The world pane: the 3D view, the HUD over it, and the control panel's dock.
+##
+## NEVER HIDDEN, and `show_world` hides what is IN it instead --
+## see [method _apply_settings]. It kept its whole column with an invisible
+## world before 09/21/2026, because the panel was a second child of that
+## column. The panel is inside this pane now, so hiding the pane would take
+## Options with it AND give the log the whole window, with the dock over the
+## input line.
 @onready var _world_pane: Control = %WorldPane
 
 ## The 3D pane. Given the models it draws; it reads the entity, combat and
@@ -171,20 +192,10 @@ var _reconnect := ReconnectPolicy.new()
 ## the working one.
 var _retry_timer: Timer
 
-## Debounce for a dragged divider.
-##
-## `dragged` fires every frame of the gesture, and every ClientSettings setter
-## writes the file -- so persisting the raw signal would be sixty ConfigFile
-## saves a second, which on the web means sixty IndexedDB writes. The offset is
-## held here and committed once, shortly after the player lets go. Wanting the
-## write DEBOUNCED is not a reason to give ClientSettings a dirty flag: every
-## other setter persists, and the gesture is what is chatty.
-var _split_timer: Timer
-const SPLIT_SAVE_DELAY := 0.4
-
 ## Panel bodies, built here because their CONTENTS depend on nothing in the
 ## scene -- the sheet's rows come from `char_summary`, the options' bounds from
 ## [ClientSettings] -- and handed to [PanelView], which owns where they sit.
+var _equipment: EquipmentView
 var _sheet: SummaryView
 var _combat_tab: CombatOptionsView
 var _skill_grid: SkillsView
@@ -216,6 +227,11 @@ func _ready() -> void:
 	Evennia.text_received.connect(_on_text)
 	Evennia.channel_received.connect(_on_channel)
 	_input.text_submitted.connect(_on_submitted)
+
+	# The hint follows focus from ANY source, not only from _set_typing. The
+	# bag and the find bar take focus too, and the map then has the keyboard.
+	_input.focus_entered.connect(_refresh_input_hint)
+	_input.focus_exited.connect(_refresh_input_hint)
 	_input.grab_focus()
 	# ServerEndpoint decides where art is fetched from, the same way it decides
 	# where the socket dials -- keyed off the build rather than a constant
@@ -245,6 +261,10 @@ func _ready() -> void:
 	_vitals.bind(_char)
 
 	_inventory.bind(_items, _meshes)
+
+	# One fact is read there, and its cells read it: how big the player left
+	# the amount box. See [AmountPrompt].
+	_inventory.bind_settings(_settings)
 
 	# The world pane draws YOU, so it needs the model that knows which asset you
 	# are. Bound rather than left to read char_avatar itself: CharState already
@@ -288,8 +308,17 @@ func _ready() -> void:
 	# this screen uses.
 	_popup_view = PopupView.new()
 	_popup_view.bind(_popup, _meshes)
+
+	# The box the player moved and sized, and the amount box its slots open.
+	# The pane WRITES this one, so it reads the rect here and never again --
+	# see [method PopupView.bind_settings].
+	_popup_view.bind_settings(_settings)
 	_world_pane.add_child(_popup_view)
-	_world_pane.move_child(_popup_view, _choose.get_index())
+	# UNDER the dock, not under the right-click menu, and that is the pop-up's
+	# own rule rather than a layout detail: "a pop-up draws no copy of the bag,
+	# the inventory pane IS the bag". A bank that covered the bag would make
+	# every Deposit action on it unreachable.
+	_world_pane.move_child(_popup_view, _dock.get_index())
 	_popup_view.command_requested.connect(Evennia.command)
 	_popup_view.keyboard_released.connect(func(): _set_typing(true))
 
@@ -329,6 +358,11 @@ func _ready() -> void:
 	_login.bind(_char)
 	_login.command_requested.connect(Evennia.command)
 
+	# Login and logout move the hint as well. The login form hides on the
+	# same fact, so the hint and the form cannot disagree.
+	_char.changed.connect(_refresh_input_hint)
+	_refresh_input_hint()
+
 	# Built, bound, then handed over. The panel adds them to the tree, so
 	# nothing here is parented twice.
 	#
@@ -339,6 +373,20 @@ func _ready() -> void:
 	_combat_tab.bind(_combat_options)
 	_panel.add_panel(PanelView.TAB_COMBAT, _combat_tab)
 	_combat_tab.command_requested.connect(Evennia.command)
+
+	# Beside Inventory, because the two halves of one bag belong side by side in
+	# the strip even though only one is drawn at a time. It shares the console's
+	# resolver and the console's settings with the carried grid, so a `.glb` is
+	# fetched once for both panes and an amount box is the size the player left
+	# it in either.
+	_equipment = EquipmentView.new()
+	_equipment.bind(_items, _meshes)
+	_equipment.bind_settings(_settings)
+	_panel.add_panel(PanelView.TAB_EQUIPMENT, _equipment)
+
+	# Same rule as every other pane: the command was named by the server and is
+	# one a telnet player could type.
+	_equipment.command_requested.connect(Evennia.command)
 
 	_sheet = SummaryView.new()
 	_sheet.bind(_summary)
@@ -399,13 +447,17 @@ func _ready() -> void:
 	_retry_timer.timeout.connect(_redial)
 	add_child(_retry_timer)
 
-	_split_timer = Timer.new()
-	_split_timer.one_shot = true
-	_split_timer.timeout.connect(_save_splits)
-	add_child(_split_timer)
+	# The size the player dragged each dock to. Bound AFTER the settings exist
+	# and before the file lands, which is the arrangement the dock's own
+	# `_player_size` is written for.
+	_dock.bind_settings(_settings)
+	_console_dock.bind_settings(_settings)
 
-	_split.dragged.connect(_on_split_dragged)
-	_right.dragged.connect(_on_split_dragged)
+	# The log dock draws over the panel dock, so a log dragged over the panel
+	# covers the side grip of the panel. Each box stops one margin short of the
+	# other. See [method PanelDock.keep_clear_of].
+	_dock.keep_clear_of(_console_dock)
+	_console_dock.keep_clear_of(_dock)
 
 	# The find bar replaces the placeholder node the scene reserves for it, so
 	# the layout slot is authored and the widget is built in code like the
@@ -425,6 +477,10 @@ func _ready() -> void:
 	# Applied AFTER load, so a saved preference is in effect before the first
 	# frame the player sees rather than snapping a moment later.
 	_settings.changed.connect(_apply_settings)
+	# The scale of a first run comes from the screen, so a high-density screen
+	# does not open at half size. A saved scale wins.
+	_settings.set_shipped_ui_scale(
+		ClientSettings.ui_scale_for_dpi(DisplayServer.screen_get_dpi()))
 	_settings.load_from_disk()
 	_apply_settings()
 
@@ -454,6 +510,26 @@ func _build_world_hover() -> void:
 
 	_world.hover_text_changed.connect(_world_hover.show_text)
 	_world_view.mouse_exited.connect(_world.clear_hover)
+
+	# The two docks cover the bottom corners. The bar and the pop-up follow
+	# the gap between them. `item_rect_changed` and not `resized`: a window
+	# resize moves the box of the panel, and its size can stay the same.
+	_console_dock.get_node("Box").item_rect_changed.connect(_fit_dock_gap)
+	_dock.get_node("Box").item_rect_changed.connect(_fit_dock_gap)
+
+
+## Fit two things to the gap between the two docks: the [HoverBar] of the
+## world, and the first rect of the pop-up.
+##
+## The text of the bar starts at the left edge of the bar. With the bar under
+## the log dock, the player cannot see the start of the text.
+func _fit_dock_gap() -> void:
+	var left := _console_dock.box_rect().end.x
+	var right := _dock.box_rect().position.x
+
+	_world_hover.offset_left = left + WORLD_HOVER_MARGIN
+	_world_hover.offset_right = right - WORLD_HOVER_MARGIN - _world_pane.size.x
+	_popup_view.set_dock_gap(left, right)
 
 
 func _on_opened() -> void:
@@ -664,15 +740,36 @@ func _unhandled_key_input(event: InputEvent) -> void:
 ##
 ## The placeholder is not decoration either. A text field that has silently
 ## stopped accepting letters looks exactly like a client that has hung, and this
-## mode is entered with a key players press for unrelated reasons.
+## mode is entered with a key players press for unrelated reasons. The focus
+## signals keep it current. See [method _refresh_input_hint].
 func _set_typing(typing: bool) -> void:
 	if typing:
-		_input.placeholder_text = ""
 		_input.grab_focus()
 		return
 
-	_input.placeholder_text = MOVE_MODE_HINT
 	_input.release_focus()
+
+
+## Put the hint in the input that fits the session and the mode.
+##
+## The hint follows two facts, and this owns neither of them.
+## [member CharState.has_vitals] tells whether a body exists. Focus tells who
+## has the keyboard. Until
+## 09/22/2026 only [method _set_typing] wrote it. The login hint from the scene
+## thus stayed after login, until the player pressed Enter and then Escape.
+##
+## Before login the hint is the login line whatever the focus. The movement
+## keys do nothing on the connection screen.
+func _refresh_input_hint() -> void:
+	if not _char.has_vitals:
+		_input.placeholder_text = LOGIN_HINT
+		return
+
+	if _input.has_focus():
+		_input.placeholder_text = TYPE_MODE_HINT
+		return
+
+	_input.placeholder_text = MOVE_MODE_HINT
 
 
 ## Turn preferences into pixels. The ONLY place that does.
@@ -696,28 +793,43 @@ func _apply_settings() -> void:
 	SoundCues.apply_volume(_settings.sfx_volume)
 
 	# A hidden Control is not drawn and its SubViewport stops rendering, which is
-	# the point of the world setting on a machine that is struggling. Nothing
-	# unsubscribes -- the models keep ingesting, so turning the pane back on
-	# shows the current world rather than an empty one waiting for a snapshot.
+	# the point of the world setting on a machine that is struggling.
 	#
 	# The INVENTORY setting is now about clutter rather than cost: a
 	# TabContainer draws only its current tab, so the item stage already stops
 	# rendering whenever the player is looking at another tab. What the setting
 	# buys is a strip without a tab you never use.
-	_world_pane.visible = _settings.show_world
-	_panel.set_panel_hidden(
-		PanelView.TAB_INVENTORY, not _settings.show_inventory)
+	# What `show_world` turns off is the DIORAMA: the 3D view that redraws every
+	# tile every frame, and the two HUD pieces that only make sense over it. The
+	# pane itself stays, because the control panel hangs in it -- see
+	# [member _world_pane].
+	#
+	# Nothing unsubscribes. The models keep ingesting, so turning the view back
+	# on shows the current world rather than an empty one waiting for a
+	# snapshot.
+	_world_view.visible = _settings.show_world
+	_minimap.visible = _settings.show_world
+
+	# BOTH halves of the bag. They were one pane until 09/21/2026, and a setting
+	# that hid the carried grid while leaving the doll in the strip would be a
+	# setting that half worked.
+	var bag_hidden := not _settings.show_inventory
+	_panel.set_panel_hidden(PanelView.TAB_INVENTORY, bag_hidden)
+	_panel.set_panel_hidden(PanelView.TAB_EQUIPMENT, bag_hidden)
 	_place_vitals()
 
 	# Hidden, not unbound: the tracker keeps counting underneath, so turning the
-	# HUD back on shows the session so far.
-	_xp_hud.visible = _settings.show_xp_drops
+	# HUD back on shows the session so far. Off with the 3D view as well as on
+	# its own setting, because XP drops are drawn over the world and there is no
+	# world to draw them over.
+	_xp_hud.visible = _settings.show_xp_drops and _settings.show_world
 	_xp_hud.set_skill_rates_shown(_settings.show_skill_rates)
 
-	# Assigning an offset does not emit `dragged`, so this cannot loop back into
-	# the debounce below.
-	_split.split_offset = _settings.text_split
-	_right.split_offset = _settings.world_split
+	# With no world behind it, the log takes the full height and the width that
+	# the control panel leaves. The docks are NOT pushed their sizes here. A
+	# dock WRITES that setting, and a pane pushed the setting it writes is how a
+	# slider in Options came to collapse the pane it sat in.
+	_console_dock.fill_beside(null if _settings.show_world else _dock)
 
 
 ## Put the vitals bars wherever the player can still see them.
@@ -745,29 +857,6 @@ func _place_vitals() -> void:
 		_vitals.get_parent().remove_child(_vitals)
 
 	target.add_child(_vitals)
-
-
-## A divider was dragged. Remember it, shortly.
-##
-## Both dividers share one handler and one timer, and the offset is READ back
-## off the containers when the timer fires rather than carried in the signal:
-## the player may drag one, then the other, inside the same window, and a
-## handler that trusted its argument would save whichever fired last twice.
-func _on_split_dragged(_offset: int) -> void:
-	_split_timer.start(SPLIT_SAVE_DELAY)
-
-
-## Both offsets are read BEFORE either is written. Each setter that changes
-## something fires `changed`, and [method _apply_settings] pushes the stored
-## offsets back into both containers -- so writing the text split first used to
-## overwrite a freshly dragged world divider with its old value before this
-## line got to read it.
-func _save_splits() -> void:
-	var text_offset := _split.split_offset
-	var world_offset := _right.split_offset
-
-	_settings.set_text_split(text_offset)
-	_settings.set_world_split(world_offset)
 
 
 func _on_channel(channel: String, _payload: Dictionary) -> void:

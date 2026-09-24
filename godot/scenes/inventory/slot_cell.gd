@@ -45,15 +45,6 @@ signal action_chosen(command: String)
 signal hovered
 signal unhovered
 
-## The client's Theme, preloaded for ONE use: the drag preview.
-##
-## Every other Control in this file inherits the theme down the tree from the
-## console's root. `set_drag_preview` does not -- Godot parents the preview into
-## the viewport's own drag layer, which is not under our root, so a variation
-## named there would resolve to nothing. Assigning the theme explicitly is what
-## keeps the caption's size in the theme rather than back in a literal here.
-const _THEME := preload("res://ui/blackout_theme.tres")
-
 const COLOR_EMPTY := Color(1, 1, 1, 0.25)
 const COLOR_FILLED := Color(1, 1, 1, 0.9)
 
@@ -65,7 +56,7 @@ const ART_HEIGHT := 36
 
 ## The cell's size, in pixels: a touch wider than tall, so a two-line name
 ## fits beside no count line. The count sits in the corner, over the art.
-const CELL_SIZE := Vector2(104, 0)
+const CELL_SIZE := Vector2(94, 0)
 
 var kind := KIND_CARRIED
 var key: Variant = 0
@@ -84,6 +75,11 @@ var _skip_left_release := false
 ## A TextureRect and not a viewport of its own -- see [ItemStage] on why forty
 ## render targets for forty thumbnails is the build to avoid.
 var _art: TextureRect
+
+## What the player set, or null. Read for one fact only: how big they left the
+## amount box. Given by the view, because a cell is made and freed per snapshot
+## and has no route to the console.
+var _settings: ClientSettings
 
 
 ## Built in _init, not _ready.
@@ -155,6 +151,15 @@ func bind(state: InventoryState, cell_kind: String, cell_key: Variant,
 	kind = cell_kind
 	key = cell_key
 	_redraw(label)
+
+
+## Give this cell the player's settings, for the amount box it may open.
+##
+## Separate from [method bind] and never required: the view calls it on every
+## cell it makes, and a test that never opens a box does not have to supply a
+## profile to write to.
+func bind_settings(settings: ClientSettings) -> void:
+	_settings = settings
 
 
 func _redraw(label: String) -> void:
@@ -263,10 +268,12 @@ func _get_drag_data(_at: Vector2) -> Variant:
 ##
 ## The full name on one line. The preview is not in a grid, so it has no width
 ## to fit.
+##
+## Godot puts the preview in the drag layer of the viewport, not under the
+## console root. The project setting `gui/theme/custom` gives it the theme.
 func _preview() -> Control:
 	var preview := Label.new()
 	preview.text = str(_row.get("name", ""))
-	preview.theme = _THEME
 	preview.theme_type_variation = &"CellTitle"
 
 	return preview
@@ -405,4 +412,4 @@ func _perform(action: Dictionary) -> void:
 ## Ask for the one value the server left blank, then send. The box is
 ## [AmountPrompt], shared with the pop-up.
 func _ask_amount(action: Dictionary, prompt: Dictionary) -> void:
-	AmountPrompt.ask(self, action, prompt, action_chosen.emit)
+	AmountPrompt.ask(self, action, prompt, action_chosen.emit, _settings)

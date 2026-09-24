@@ -120,6 +120,7 @@ const ROOM_KIND_COLORS := {
 	"Copper pole clearing": Color("e6944c"),
 	"Shopkeeper": Color("ddcc44"),
 	"Mutant Raider Tile": Color("8fbf00"),
+	"Mutant Giant": Color("516e00ff"),
 	"Big Mutant Tile": Color("bf3f00"),
 	# Not a prototype key like the rest: the server synthesises this one for a
 	# node that spawns no room. It is the way OFF the map, so it is coloured

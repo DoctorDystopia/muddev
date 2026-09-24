@@ -1,73 +1,85 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://b5m6anslna38l"]
 
-[ext_resource type="Script" path="res://scenes/login/login_view.gd" id="1_login"]
+[ext_resource type="Theme" uid="uid://blvlnaat101gs" path="res://ui/blackout_theme.tres" id="1_03nbj"]
+[ext_resource type="Script" uid="uid://dg0kbop6ej33v" path="res://scenes/login/login_view.gd" id="1_login"]
 
-[node name="Login" type="PanelContainer"]
+[node name="Login" type="PanelContainer" unique_id=683547944]
 custom_minimum_size = Vector2(340, 0)
+theme = ExtResource("1_03nbj")
 script = ExtResource("1_login")
 
-[node name="Margin" type="MarginContainer" parent="."]
+[node name="Margin" type="MarginContainer" parent="." unique_id=1971556152]
 layout_mode = 2
-theme_override_constants/margin_left = 14
-theme_override_constants/margin_right = 14
-theme_override_constants/margin_top = 12
-theme_override_constants/margin_bottom = 12
+theme = ExtResource("1_03nbj")
+theme_type_variation = &"FormMargin"
 
-[node name="Column" type="VBoxContainer" parent="Margin"]
+[node name="Column" type="VBoxContainer" parent="Margin" unique_id=52585526]
 layout_mode = 2
-theme_override_constants/separation = 6
+theme = ExtResource("1_03nbj")
+theme_type_variation = &"FormColumn"
 
-[node name="Title" type="Label" parent="Margin/Column"]
+[node name="Title" type="Label" parent="Margin/Column" unique_id=405069492]
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 text = "Jack in"
+horizontal_alignment = 1
+uppercase = true
 
-[node name="NameLabel" type="Label" parent="Margin/Column"]
+[node name="NameLabel" type="Label" parent="Margin/Column" unique_id=1647648105]
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 text = "Name"
 
-[node name="NameField" type="LineEdit" parent="Margin/Column"]
+[node name="NameField" type="LineEdit" parent="Margin/Column" unique_id=31973123]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 caret_blink = true
 
-[node name="PasswordLabel" type="Label" parent="Margin/Column"]
+[node name="PasswordLabel" type="Label" parent="Margin/Column" unique_id=413535431]
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 text = "Password"
 
-[node name="PasswordRow" type="HBoxContainer" parent="Margin/Column"]
+[node name="PasswordRow" type="HBoxContainer" parent="Margin/Column" unique_id=1899982276]
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 
-; secret = true is the reason this form exists at all rather than reusing the
-; game input: a shared command line can never mask what is typed into it.
-[node name="PasswordField" type="LineEdit" parent="Margin/Column/PasswordRow"]
+[node name="PasswordField" type="LineEdit" parent="Margin/Column/PasswordRow" unique_id=1000090828]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-secret = true
+theme = ExtResource("1_03nbj")
 caret_blink = true
+secret = true
 
-[node name="PasteButton" type="Button" parent="Margin/Column/PasswordRow"]
+[node name="PasteButton" type="Button" parent="Margin/Column/PasswordRow" unique_id=1701022616]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Paste"
 tooltip_text = "Read the clipboard. A click is the user gesture browsers require."
+theme = ExtResource("1_03nbj")
+text = "Paste"
 
-[node name="Buttons" type="HBoxContainer" parent="Margin/Column"]
+[node name="Buttons" type="HBoxContainer" parent="Margin/Column" unique_id=1878371496]
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 
-[node name="ConnectButton" type="Button" parent="Margin/Column/Buttons"]
+[node name="ConnectButton" type="Button" parent="Margin/Column/Buttons" unique_id=613592179]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("1_03nbj")
 text = "Connect"
 
-[node name="CreateButton" type="Button" parent="Margin/Column/Buttons"]
+[node name="CreateButton" type="Button" parent="Margin/Column/Buttons" unique_id=130639089]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
+theme = ExtResource("1_03nbj")
 text = "Create account"
 
-[node name="Message" type="Label" parent="Margin/Column"]
+[node name="Message" type="Label" parent="Margin/Column" unique_id=742399852]
 unique_name_in_owner = true
 layout_mode = 2
+theme = ExtResource("1_03nbj")
 autowrap_mode = 2

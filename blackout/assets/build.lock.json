@@ -48,8 +48,8 @@
     "output": "sha256:81edf2911627edaec006fa94b2ed5d271e70199e681fdc00e5618cdf7532c95c"
   },
   "player_character": {
-    "inputs": "sha256:2f21a48269cb9f49f9a599c5de212906f147103b33d893fb70adc1e0d55835fe",
-    "output": "sha256:f7e854b2cc8b627aab92f074490023b03d6010b572a2f0ae503de6b44bb4cac4"
+    "inputs": "sha256:b0f344a80183faa7d8df4fb2a3661f6b74abb03fbf1fe9f3dc5a6d410b0e8a00",
+    "output": "sha256:c32f4250ae42b323004cc1b639659396dc6cf6f13c2ea32c6331098fb93b182c"
   },
   "rusty_pole": {
     "inputs": "sha256:0c0d3f1a44f9ad7c041060c7ecfe7761416dd9aa840f313d8df321f15db4b391",

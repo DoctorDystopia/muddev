@@ -25,6 +25,10 @@ const THEME_PATH := "res://ui/blackout_theme.tres"
 ## and `.tscn`.
 const SEARCH_ROOTS := ["res://scenes", "res://world"]
 
+## Labels for [enum Theme.DataType], in the order of the enum.
+const _DATA_TYPE_NAMES := ["color", "constant", "font", "font size", "icon",
+	"stylebox"]
+
 var _failures := 0
 
 
@@ -40,6 +44,7 @@ func _ready() -> void:
 
 	_every_variation_has_a_real_base(theme, declared)
 	_every_named_variation_is_declared(declared)
+	_every_item_exists_on_its_class(theme, declared)
 	_every_font_is_bundled(theme)
 
 	if _failures > 0:
@@ -118,6 +123,46 @@ func _every_named_variation_is_declared(declared: Dictionary) -> void:
 	for variation: String in declared:
 		if not named.has(variation):
 			print("  note %s is declared and unused" % variation)
+
+
+## Every item that the theme sets must be one that its class reads.
+##
+## Godot accepts any item name and never reads a name that the class does not
+## declare. `LineEdit/colors/background_color` sat in the theme on 09/22/2026
+## and changed nothing: a LineEdit draws its background from the `normal`
+## StyleBox. TextEdit has that color, so the name looks plausible.
+##
+## Godot's default theme lists the items of each class, so it is the reference.
+## A variation checks against its base class. The walk goes up the parent
+## classes, because a subclass reads the items of its parent too.
+func _every_item_exists_on_its_class(theme: Theme, declared: Dictionary) -> void:
+	var reference := ThemeDB.get_default_theme()
+
+	for type_name: String in theme.get_type_list():
+		var cls: String = declared.get(type_name, type_name)
+
+		if not ClassDB.class_exists(cls):
+			continue
+
+		for data_type: int in Theme.DATA_TYPE_MAX:
+			for item: String in theme.get_theme_item_list(data_type, type_name):
+				_expect(_class_reads(reference, data_type, item, cls),
+					"%s reads the %s item \"%s\" (set on %s)"
+						% [cls, _DATA_TYPE_NAMES[data_type], item, type_name])
+
+
+## True when `cls` or one of its parent classes declares the item.
+func _class_reads(reference: Theme, data_type: int, item: String,
+		cls: String) -> bool:
+	var current := cls
+
+	while not current.is_empty():
+		if reference.has_theme_item(data_type, item, current):
+			return true
+
+		current = ClassDB.get_parent_class(current)
+
+	return false
 
 
 ## Every font the theme sets must ship inside the export.

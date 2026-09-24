@@ -28,6 +28,9 @@ const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
 const STACK_QUANTITY := 12
 const CHOSEN_AMOUNT := 4
 
+## Disposable, rather than the real profile: one case here writes a size.
+const SETTINGS_PATH := "user://test_slot_cell.cfg"
+
 var _failures := 0
 var _state: InventoryState
 var _sent: Array[String] = []
@@ -46,6 +49,7 @@ func _ready() -> void:
 	_confirming_substitutes_the_amount()
 	_the_placeholder_is_never_left_in_a_sent_command()
 	_a_prompt_the_client_cannot_read_sends_nothing()
+	_the_box_remembers_the_size_the_player_gave_it()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -145,7 +149,10 @@ func _a_drag_does_not_send_the_first_action() -> void:
 	var cell := _cell()
 
 	cell._gui_input(_left_click(true))
-	var drag_data := cell._get_drag_data(Vector2.ZERO)
+	# Typed Variant, not inferred: `_get_drag_data` returns Variant, and an
+	# inferred declaration off one is a warning this project treats as an
+	# error -- so the whole file failed to parse and the scene hung.
+	var drag_data: Variant = cell._get_drag_data(Vector2.ZERO)
 	cell._gui_input(_left_click(false))
 
 	_expect(drag_data != null, "a populated cell starts a drag")
@@ -234,6 +241,54 @@ func _a_prompt_the_client_cannot_read_sends_nothing() -> void:
 			"an unknown prompt kind is not a prompt")
 	_expect(_state.action_command(action, 3).is_empty(),
 			"and composes no command")
+
+
+## A box is built per prompt and freed on close, so a size the player dragged
+## has nowhere to live but [ClientSettings]. Every box was the wrapped one
+## before 09/21/2026, however many times the player widened the last.
+##
+## The size is read when the box CLOSES. A size read from the resize gesture
+## would be a file write for each frame of the drag.
+##
+## The size it OPENS at is asserted as a decision, through
+## [method AmountPrompt.wanted_size], and the method says why: a headless
+## display is 64 pixels square, so it refuses to spawn a real box at all.
+func _the_box_remembers_the_size_the_player_gave_it() -> void:
+	_clean_settings()
+	var settings := ClientSettings.new(SETTINGS_PATH)
+
+	_expect(AmountPrompt.wanted_size(settings) == Vector2i.ZERO,
+		"the first box wraps its contents")
+	_expect(AmountPrompt.wanted_size(null) == Vector2i.ZERO,
+		"and so does one opened with no settings at all")
+
+	# Opened with nothing remembered, so this box asks for its wrapped size
+	# and the headless display can actually spawn it.
+	var cell := _cell()
+	cell.bind_settings(settings)
+	cell._on_menu_id(1)
+
+	var dialog := _dialog_under(cell)
+	_expect(dialog != null, "a prompted action still opens a box")
+
+	dialog.size = Vector2i(510, 300)
+	var ended := dialog.size
+	dialog.close_requested.emit()
+
+	var reloaded := ClientSettings.new(SETTINGS_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.amount_size == ended,
+		"closing writes down what the player left")
+	_expect(AmountPrompt.wanted_size(reloaded) == ended,
+		"and the next box opens at it")
+
+	cell.free()
+	_clean_settings()
+
+
+func _clean_settings() -> void:
+	if FileAccess.file_exists(SETTINGS_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
 
 
 func _expect(passed: bool, what: String) -> void:

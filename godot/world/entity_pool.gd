@@ -19,10 +19,12 @@ extends Node3D
 ## An entity whose tile cannot be placed yet — its map has not arrived — is
 ## drawn nowhere rather than somewhere wrong.
 ##
-## Entities are rebuilt wholesale on every change rather than pooled. There are
-## rarely more than a handful in a room, the ring position of each depends on
-## how many there are, and the browser pane does the same -- pooling would be
-## machinery bought with nothing.
+## A change builds only the nodes it changed. It rebuilt every node until
+## 09/22/2026, on the belief that a room holds a handful of entities. At radius
+## 10 the pool holds the whole map, and each step of another player is a remove
+## and an add. Thus, each step rebuilt every mesh and label in view two times,
+## about 43 ms at 250 entities on desktop. Two players who walk together made
+## the scene lag. See [method _sync].
 ##
 ## ## What an entity looks like is not decided here
 ##
@@ -155,8 +157,8 @@ const COLOR_LABEL_FALLBACK := Color("b9c6d2")
 ## the observer here would drag both off the tile. What crosses is an offset the
 ## pane applies WITHIN the marker, leaving the anchor where it was.
 ##
-## Emitted on every rebuild, including the one that finds the observer standing
-## alone again and hands back [constant Vector3.ZERO].
+## Emitted on every sync. A sync that finds the observer alone again sends
+## [constant Vector3.ZERO].
 signal observer_slot_changed(offset: Vector3)
 
 ## Fired when the set of TRUE TILES needing a mark changes, as tile positions.
@@ -203,14 +205,13 @@ var _locate: Callable
 var _entities: Array[Dictionary] = []
 var _nodes: Dictionary = {}     # int id -> Node3D
 
-## One [StepAnimator] per entity id, and the reason it is HERE rather than on
-## the node is that the node does not survive.
+## One [StepAnimator] for each entity id. It lives HERE and not on the node,
+## because the node does not always survive.
 ##
-## [method _rebuild] frees every node and builds them again, on an entity
-## arriving, on art landing, on a relayout. A walk has to outlive all three, so
-## what remembers where a figure is DRAWN is keyed by id and kept beside the
-## nodes rather than inside them. Pruned by the rebuild, so an entity that left
-## the room leaves nothing behind.
+## [method _sync] builds a node again when its look changes or its art lands.
+## A walk must outlive both. Thus, the record of where the pool DRAWS a figure
+## sits beside the nodes, with the id as its key. The sync prunes it, so an
+## entity that left the room leaves nothing behind.
 var _animators: Dictionary = {}   # int id -> StepAnimator
 
 ## int id -> the tile key that entity's true tile is, and tile key -> where
@@ -218,6 +219,18 @@ var _animators: Dictionary = {}   # int id -> StepAnimator
 ## mark" with no second lookup through `_locate`.
 var _tile_of: Dictionary = {}
 var _tile_origins: Dictionary = {}
+
+## int id -> how far that node is lifted so its bottom rests on the tile.
+##
+## [method _node_for_entity] measures it one time, when it builds the node. The
+## lift belongs to the MODEL, not to the tile where the model stands. A
+## measurement walks the whole subtree of the node, and [method _sync] places
+## every entity on every change.
+var _lift: Dictionary = {}
+
+## int id -> the fields the node of that entity was built from. See
+## [method _look_of]. A row that arrives with the same look keeps its node.
+var _looks: Dictionary = {}
 
 ## The last set of marks sent on [signal true_tiles_changed]. Kept so a frame
 ## in which nobody started or stopped moving emits nothing.
@@ -258,8 +271,11 @@ func bind(resolver: MeshResolver, locate: Callable, step: float) -> void:
 ## from those, so there is no single tile for the pool to be moved to. What DOES
 ## change is which coords are placeable — a relayout that finally draws an
 ## island makes every entity standing on it drawable.
+##
+## The observer's every step calls this. Only WHERE things stand changes, so
+## [method _sync] builds nothing unless an island arrived or went away.
 func replace_positions() -> void:
-	_rebuild()
+	_sync()
 
 
 ## Slide figures between tiles, or draw each one on its tile.
@@ -286,9 +302,10 @@ func set_animated(value: bool) -> void:
 ## placement, which is why the world pane calls it immediately before
 ## [method replace_positions] rather than instead of it.
 ##
-## A pure setter on purpose. Every other route into this file rebuilds because
-## something it draws changed; this one changes something it does NOT draw, and
-## rebuilding here would mean two full rebuilds on every step the observer takes.
+## A pure setter on purpose. Every other route into this file syncs, because
+## something that it draws changed. This one changes something that it does NOT
+## draw. A sync here would place every entity two times on each step of the
+## observer.
 ##
 ## `coords` arrives in the same shape an entity carries them, so both sides of
 ## the comparison are spelled by [method _tile_key] and cannot drift.
@@ -349,7 +366,7 @@ func replace_all(entities: Array) -> void:
 	for entity: Dictionary in entities:
 		_upsert(_entities, entity)
 
-	_rebuild()
+	_sync()
 
 
 func add(entity: Dictionary) -> void:
@@ -357,7 +374,7 @@ func add(entity: Dictionary) -> void:
 		return
 
 	_upsert(_entities, entity)
-	_rebuild()
+	_sync()
 
 
 ## Drop every entry holding this id, not merely the first.
@@ -377,18 +394,16 @@ func remove(entity_id: int) -> void:
 		return
 
 	_entities = kept
-	_rebuild()
+	_sync()
 
 
 ## Apply one batched change to the visible list: `removed` ids drop out,
-## `added` entities come in, and the scene is rebuilt ONCE at the end.
+## `added` entities come in, and the pool syncs ONE time at the end.
 ##
-## This is the whole reason `room_players_delta` is a batch rather than a run of
-## `room_add_player` messages. Both [method add] and [method remove] rebuild the
-## entire pool, so a border-sized change applied one entity at a time is one
-## full rebuild per entity — on the web export, on the browser's main thread,
-## while the player is mid-step. The server sends the change the observer's own
-## movement caused; single-entity add/remove still carry everything else.
+## `room_players_delta` is a batch for this reason. Each [method add] and each
+## [method remove] syncs, and a sync places every entity in view. The server
+## sends the change that the observer's own movement caused as one batch.
+## Single-entity add and remove still carry everything else.
 ##
 ## Removals are applied before additions. The two sets are disjoint by
 ## construction on the server — an id cannot both arrive and depart in one diff
@@ -424,7 +439,7 @@ func apply_delta(added: Array, removed: Array) -> void:
 		if entity is Dictionary and not entity.is_empty():
 			_upsert(_entities, entity)
 
-	_rebuild()
+	_sync()
 
 
 ## The entity nearest a point on screen, or 0 for nothing within reach.
@@ -580,7 +595,7 @@ static func _materials_of(root: Node3D) -> Array:
 ##
 ## The only per-frame work the pool does, and it does none at all while the
 ## animation is off: every figure is then already on its tile, and nothing
-## moves it but a rebuild.
+## moves it but a sync.
 func _process(delta: float) -> void:
 	if not _animated:
 		return
@@ -627,23 +642,22 @@ func _publish_marks() -> void:
 	true_tiles_changed.emit(origins)
 
 
-func _rebuild() -> void:
-	for child: Node in get_children():
-		remove_child(child)
-		child.queue_free()
-
-	_nodes.clear()
-
-	# The lit node has just been freed, so the id is stale. Left set, the next
-	# hover() on the same id would return early and the new node would never
-	# light up -- an entity that stops responding to the cursor after any change
-	# to the room, which is most of the time.
-	_hovered = 0
-
-	# Grouped by TILE first. The ring separates things standing in the same
-	# place; entities in different rooms are in different places and must not
-	# share one. Grouping also makes each ring's size depend on how many are
-	# actually on that tile, rather than on how many the feed happened to send.
+## Every drawn entity, grouped by the tile it stands on.
+##
+## The ring separates things standing in the same place. Entities in different
+## rooms are in different places and must not share one. Grouping also makes
+## each ring's size depend on how many are actually on that tile, rather than
+## on how many the feed happened to send.
+##
+## Each group is sorted by id rather than left in arrival order. The slot INDEX
+## is what keeps a thing in the same place between frames, and arrival order
+## does not: removing the first of three entities used to shuffle the other two
+## around the ring for no reason the player could see. Ids are stable and
+## total, so the same occupants always produce the same ring.
+##
+## Read by [method _sync] and by [method _prune]. Thus, the set of entities
+## that get a node and the set that get a slot cannot differ.
+func _group_by_tile() -> Dictionary:
 	var by_tile: Dictionary = {}
 
 	for entity: Dictionary in _entities:
@@ -663,11 +677,55 @@ func _rebuild() -> void:
 
 		by_tile[key]["entities"].append(entity)
 
+	for key: String in by_tile:
+		by_tile[key]["entities"].sort_custom(_by_id)
+
+	return by_tile
+
+
+## How one tile's ring is laid out: who takes which slot, and how many there
+## are in total.
+##
+## The observer is drawn by the world pane, not here, but they OCCUPY their
+## tile -- so they take slot 0 and everything standing with them rings around
+## from slot 1. Slot 0 and not their id's place in the sort, because this file
+## is never told what their id is and does not need to be: one reserved slot is
+## as stable as a sorted one.
+func _ring_of(key: String, count: int) -> Dictionary:
+	var shared := key == _observer_tile
+
+	return {
+		"shared": shared,
+		"first": 1 if shared else 0,
+		"occupants": count + (1 if shared else 0),
+	}
+
+
+## Make the drawn scene match `_entities`, and build only what changed.
+##
+## Every change to the pool comes here: an entity added or removed, a delta, a
+## whole list, a step of the observer. The routine does three things:
+##
+## 1. It frees the node of each entity that left, or whose look changed.
+## 2. It builds a node for each entity that has none.
+## 3. It aims every entity at its ring slot.
+##
+## Step 3 touches every entity, because one arrival can resize a ring. It is
+## one lookup and one aim per entity. Steps 1 and 2 touch only the changed
+## entities, and they hold the whole cost: a mesh, its own materials, a label,
+## and two walks of the subtree for its bounds.
+##
+## Nothing about a step of another player changes a look. Thus, that step
+## builds one node at most, where it built every node in view two times.
+func _sync() -> void:
+	var by_tile := _group_by_tile()
+
+	_prune(by_tile)
+
 	var observer_offset := Vector3.ZERO
 
-	# Built fresh and swapped in at the end, which is what prunes an entity
-	# that left the room: whatever is not re-registered below is dropped with
-	# the old dictionary.
+	# Made new and swapped in at the end. This prunes the animator of an
+	# entity that left the room.
 	var animators: Dictionary = {}
 
 	_tile_of.clear()
@@ -676,78 +734,145 @@ func _rebuild() -> void:
 	for key: String in by_tile:
 		var group: Dictionary = by_tile[key]
 		var here: Array = group["entities"]
-
-		# Sorted by id rather than left in arrival order. The slot INDEX is what
-		# keeps a thing in the same place between frames, and arrival order does
-		# not: removing the first of three entities used to shuffle the other
-		# two around the ring for no reason the player could see. Ids are stable
-		# and total, so the same occupants always produce the same ring.
-		here.sort_custom(_by_id)
-
-		# The observer is drawn by the world pane, not here, but they OCCUPY
-		# their tile -- so they take slot 0 and everything standing with them
-		# rings around from slot 1. Slot 0 and not their id's place in the sort,
-		# because this file is never told what their id is and does not need to
-		# be: one reserved slot is as stable as a sorted one.
-		var shared := key == _observer_tile
-		var occupants := here.size() + (1 if shared else 0)
-		var first := 1 if shared else 0
+		var ring := _ring_of(key, here.size())
 
 		_tile_origins[key] = group["origin"]
 
 		for index: int in here.size():
 			var entity: Dictionary = here[index]
 			var entity_id := _id_of(entity)
-			var node := _build(entity)
-
+			var node := _node_for_entity(entity)
 			var slot := _slot_position(
-				group["origin"], key, first + index, occupants)
-			slot.y += _rest_offset(node)
+				group["origin"], key, ring["first"] + index, ring["occupants"])
 
-			# Where the server has it, handed to whatever already knew where it
-			# was DRAWN. A first sighting places -- an entity announced this
-			# frame must appear on its tile, not swim in from the world origin
-			# -- and everything after that is a walk.
-			#
-			# A slot that moved because the RING grew is animated too, and that
-			# is intended: something stepping aside to make room for a newcomer
-			# is a move, and it is under one step, so it slides rather than
-			# snapping.
-			var animator: StepAnimator = _animators.get(entity_id)
-
-			if animator == null:
-				animator = StepAnimator.new(_step, _Const.TICK_SECONDS)
-				animator.set_animated(_animated)
-				animator.place(slot)
-			else:
-				animator.aim(slot)
-
-			animators[entity_id] = animator
+			slot.y += _lift.get(entity_id, 0.0)
+			animators[entity_id] = _aim(entity_id, slot)
 			_tile_of[entity_id] = key
 
-			# The DRAWN position, not the slot. A rebuild in the middle of a
-			# walk -- art landing, a neighbour arriving -- must not teleport
-			# everybody onto their destination.
-			node.position = animator.drawn()
+			# The DRAWN position, not the slot. A sync in the middle of a walk
+			# must not move everybody to their destination in one frame.
+			node.position = animators[entity_id].drawn()
 
-			# AFTER the rest offset, and that ordering is load-bearing: both
-			# read the node's bounds, and a label attached first would be
-			# measured as part of the mesh -- lifting every labelled entity off
-			# the ground by the height of its own text.
-			_attach_label(node, entity)
-			add_child(node)
-			_nodes[entity_id] = node
-
-		if shared:
-			# An OFFSET, so the origin is zero: the pane adds this inside the
-			# marker, which is already standing on the tile this ring is drawn
-			# around.
-			observer_offset = _slot_position(Vector3.ZERO, key, 0, occupants)
+		if ring["shared"]:
+			# An OFFSET, so the origin is zero. The pane adds it inside the
+			# marker, and the marker already stands on this tile.
+			observer_offset = _slot_position(
+				Vector3.ZERO, key, 0, ring["occupants"])
 
 	_animators = animators
 
 	observer_slot_changed.emit(observer_offset)
 	_publish_marks()
+
+
+## Free every node and build them all again.
+##
+## [method _sync] does this for only the changed nodes. This form is for a
+## test that forces a state the public API does not permit.
+func _rebuild() -> void:
+	for entity_id: int in _nodes.keys():
+		_drop_node(entity_id)
+
+	_sync()
+
+
+## Free each node whose entity left, went off the map, or changed its look.
+##
+## `by_tile` holds only the entities that have a place. An entity whose island
+## went away thus loses its node here, and it gets a node again when the
+## island comes back.
+func _prune(by_tile: Dictionary) -> void:
+	var wanted: Dictionary = {}
+
+	for key: String in by_tile:
+		for entity: Dictionary in by_tile[key]["entities"]:
+			wanted[_id_of(entity)] = entity
+
+	for entity_id: int in _nodes.keys():
+		var entity: Dictionary = wanted.get(entity_id, {})
+
+		if entity.is_empty() or _looks.get(entity_id) != _look_of(entity):
+			_drop_node(entity_id)
+
+
+## Free one node and forget what was measured on it.
+##
+## A hover on the freed node is forgotten too. Left set, the next hover() on
+## the same id returns early, and the new node never lights up.
+func _drop_node(entity_id: int) -> void:
+	var node: Node3D = _nodes.get(entity_id)
+
+	if node != null:
+		remove_child(node)
+		node.queue_free()
+
+	_nodes.erase(entity_id)
+	_looks.erase(entity_id)
+	_lift.erase(entity_id)
+
+	if _hovered == entity_id:
+		_hovered = 0
+
+
+## The node of this entity. Built, measured and labelled when it has none.
+##
+## Two entries with one id share one node. [method _upsert] keeps that from
+## happening, and this makes sure that it cannot draw a second copy.
+func _node_for_entity(entity: Dictionary) -> Node3D:
+	var entity_id := _id_of(entity)
+	var existing: Node3D = _nodes.get(entity_id)
+
+	if existing != null:
+		return existing
+
+	var node := _build(entity)
+
+	# The lift is measured BEFORE the label is attached. Both read the bounds
+	# of the node. A label attached first counts as part of the mesh, and it
+	# lifts the entity off the ground by the height of its own text.
+	_lift[entity_id] = _rest_offset(node)
+	_attach_label(node, entity)
+	add_child(node)
+
+	_nodes[entity_id] = node
+	_looks[entity_id] = _look_of(entity)
+
+	return node
+
+
+## Give the animator of this entity its new slot, and make one if it has none.
+##
+## A first sighting places. An entity announced in this frame must appear on
+## its tile, not slide in from the world origin. After that, each new slot is
+## a walk. A slot that moved because the RING grew slides too: something that
+## steps aside for a newcomer moves less than one step.
+func _aim(entity_id: int, slot: Vector3) -> StepAnimator:
+	var animator: StepAnimator = _animators.get(entity_id)
+
+	if animator == null:
+		animator = StepAnimator.new(_step, _Const.TICK_SECONDS)
+		animator.set_animated(_animated)
+		animator.place(slot)
+
+		return animator
+
+	animator.aim(slot)
+
+	return animator
+
+
+## The fields that decide what the node of an entity looks like.
+##
+## [method _build] reads `asset` and `family`. [method _attach_label] reads
+## `label` and `label_kind`. A new field that either one reads goes here too,
+## or a changed row keeps its old node.
+static func _look_of(entity: Dictionary) -> Array:
+	return [
+		str(entity.get("asset", "")),
+		str(entity.get("family", "")),
+		str(entity.get("label", "")),
+		str(entity.get("label_kind", "")),
+	]
 
 
 ## One entity's mesh, from the ladder.
@@ -906,22 +1031,26 @@ func _ring_radius(total: int) -> float:
 
 ## Redraw when art lands for something currently on screen.
 ##
-## Rebuilds the whole ring rather than swapping one node, for the same reason
-## every other change here does: there are rarely more than a handful, and the
-## alternative is a second code path that places a single entity and can drift
-## from the one that places them all.
+## Frees the node of each entity that the art redraws, and then syncs. The sync
+## builds those nodes again, and it places them the same way as every other
+## node.
 ##
 ## Whether a row cares about the key is [method MeshResolver.redraws_for]'s to
 ## answer, not this file's: an entity is drawn by its asset key OR by its
 ## family's model, and only the resolver knows that ladder.
 func _on_art_arrived(asset_key: String) -> void:
+	var redrawn := false
+
 	for entity: Dictionary in _entities:
 		var asset := str(entity.get("asset", ""))
 		var family := str(entity.get("family", ""))
 
 		if _resolver.redraws_for(asset, family, asset_key):
-			_rebuild()
-			return
+			_drop_node(_id_of(entity))
+			redrawn = true
+
+	if redrawn:
+		_sync()
 
 
 ## The key one tile is grouped under.

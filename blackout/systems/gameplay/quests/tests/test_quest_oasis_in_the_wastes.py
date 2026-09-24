@@ -17,6 +17,7 @@ from systems.interface.menus.npc_dialogues import npc_oasis_lone_android as guid
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.progression.skills.logic import calculate_xp_needed
+from systems.gameplay.progression.tests import gathering_support
 from systems.gameplay.quests.content import quest_oasis_in_the_wastes
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
 from typeclasses.spawners import SPAWNER_REGISTRY
@@ -211,9 +212,15 @@ class BareHandedCuttingTests(EvenniaTest):
 
 
     def _cut(self, target):
+        """Take one swing that lands and leaves the node standing.
+
+        A harvest is a channel: `execute` only opens it, and the swing happens
+        on the tick. The tests ask about the swing, so they drive it directly
+        with a scripted draw instead of waiting on the tick engine.
+        """
         from systems.gameplay.progression.skills.skill_defs.gathering.cutting import Cutting
 
-        Cutting().execute(self.char1, target)
+        return gathering_support.swing_once(self.char1, Cutting(), target)
 
 
     def _held_keys(self):
@@ -253,12 +260,17 @@ class BareHandedCuttingTests(EvenniaTest):
 
     def test_a_metal_pole_still_demands_an_axe(self):
         # The exemption is per node. Only the lowest tier carries it.
+        from systems.gameplay.progression.skills.skill_defs.gathering.cutting import Cutting
+
         metal = create_object(_METAL_POLE, key="metal pole",
                               location=self.room1)
         before = self.char1.hp
 
-        self._cut(metal)
+        # The refusal is in `execute`, before any channel opens. A swing
+        # driven directly would skip the check this test is about.
+        Cutting().execute(self.char1, metal)
 
+        self.assertFalse(gathering_support.channel_is_open(self.char1))
         self.assertNotIn("metal chunk", self._held_keys())
         self.assertEqual(self.char1.hp, before)
 

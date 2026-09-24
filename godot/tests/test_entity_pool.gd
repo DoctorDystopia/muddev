@@ -157,6 +157,10 @@ func _ready() -> void:
 	_a_label_does_not_lift_its_entity_off_the_ground()
 	_a_labelled_entity_shares_a_tile_without_losing_its_words()
 
+	_a_step_moves_the_ring_without_rebuilding_it()
+	_another_entity_moving_keeps_every_other_node()
+	_a_changed_look_builds_the_node_again()
+
 	# LAST, because each turns the animation back on. See the bind above.
 	_a_moved_entity_is_drawn_where_it_was_not_where_it_is_going()
 	_a_travelling_entity_has_its_true_tile_marked()
@@ -328,13 +332,14 @@ func _a_re_announcement_carries_the_fresher_values() -> void:
 ## still clickable, sending commands about an object that no longer existed.
 func _removing_a_doubled_entity_takes_all_of_it() -> void:
 	# Forced past the public API, which no longer permits it: the uniqueness
-	# invariant is held on every WRITE, and _rebuild draws one node per entry
-	# rather than re-checking. This is the state a client that shipped without
-	# the invariant would be in, and remove() has to be able to get out of it.
+	# invariant is held on every WRITE. This is the state a client that shipped
+	# without the invariant would be in, and remove() has to be able to get out
+	# of it. The pool keys its nodes by id, so two entries share one node.
 	_pool.replace_all([RAIDER])
 	_pool._entities.append(RAIDER)
 	_pool._rebuild()
-	_expect(_pool.get_child_count() == 2, "two entries draw two nodes")
+	_expect(_pool._entities.size() == 2, "the pool holds two entries")
+	_expect(_pool.get_child_count() == 1, "which draw one node, not two")
 
 	_pool.remove(20743)
 
@@ -486,18 +491,75 @@ func _hover_never_changes_which_shader_draws_it() -> void:
 			"and hovering on and off never switched emission off")
 
 
-## A stale hovered id would make the new node never light up -- and the ring is
-## rebuilt on every change to the room, which is most of the time.
+## A stale hovered id would make the new node never light up. A node that is
+## kept keeps its glow, because the cursor is still on it.
 func _hover_does_not_survive_a_rebuild() -> void:
 	_pool.replace_all([RAIDER])
 	_pool.hover(20743)
 	_pool.replace_all([RAIDER])
+
+	_expect(_is_lit(_node_for(20743)), "a kept node keeps its glow")
+
+	var changed := RAIDER.duplicate()
+	changed["asset"] = "rusty_scrap_shortsword"
+	_pool.replace_all([changed])
 
 	_expect(not _is_lit(_node_for(20743)), "the rebuilt entity starts unlit")
 
 	_pool.hover(20743)
 
 	_expect(_is_lit(_node_for(20743)), "and can be lit again afterwards")
+	_pool.replace_all([])
+
+
+## The lag of 09/22/2026. Each step of another player is a remove and an add,
+## and each one rebuilt every node in view. At radius 10 that is the whole map,
+## two times for each step of each player who walks.
+##
+## Node IDENTITY proves that nothing was built again, as in
+## [method _a_step_moves_the_ring_without_rebuilding_it].
+func _another_entity_moving_keeps_every_other_node() -> void:
+	_pool.replace_all([RAIDER, SWORD, NEIGHBOUR])
+
+	var sword := _node_for(20744)
+	var neighbour := _node_for(20746)
+	var raider := _node_for(20743)
+
+	_pool.remove(20743)
+	_pool.add(_moved(RAIDER, NEXT_DOOR))
+
+	_expect(_node_for(20744) == sword, "a step by another keeps the sword")
+	_expect(_node_for(20746) == neighbour, "and the entity next door")
+
+	_pool.apply_delta([_moved(RAIDER, HERE)], [])
+
+	_expect(_node_for(20743) != raider,
+		"the one that left and came back got a new node")
+	_expect(_node_for(20744) == sword, "and a delta keeps the rest")
+	_expect(_pool.get_child_count() == 3, "with one node for each entity")
+
+	_pool.replace_all([])
+
+
+## A row that comes back with a different look must not keep its old node. The
+## label is the case to test, because nothing but the text shows the change.
+func _a_changed_look_builds_the_node_again() -> void:
+	_pool.replace_all([SIGN])
+
+	var before := _node_for(20748)
+	var repainted := SIGN.duplicate()
+	repainted["label"] = "TRADE TOWN (CLOSED)"
+	_pool.add(repainted)
+
+	var after := _node_for(20748)
+
+	_expect(after != before, "a new label builds a new node")
+	var label := _label_of(after)
+
+	_expect(label != null and label.text == "TRADE TOWN (CLOSED)",
+		"and the new node shows the new words")
+
+	_pool.replace_all([])
 
 
 ## The bug the observer's slot replaced. `emit_room_contents` leaves the observer
@@ -609,6 +671,39 @@ func _crowd(count: int) -> Array:
 
 
 # ─── The animation ───────────────────────────────────────────────────────────
+
+## `replace_positions` runs on every step the OBSERVER takes. It used to free
+## and rebuild every mesh and every label in the room, which is a frame several
+## milliseconds longer once per step -- and the eye reads that as the whole
+## scene stuttering rather than as one pane working.
+##
+## Node IDENTITY is what proves nothing was rebuilt. A rebuild frees the node
+## and puts a new one in its place, so the same instance coming back means the
+## cheap path ran.
+func _a_step_moves_the_ring_without_rebuilding_it() -> void:
+	_pool.replace_all([RAIDER, SWORD])
+
+	var before := _node_for(20743)
+
+	_pool.replace_positions()
+
+	_expect(_node_for(20743) == before,
+		"a step re-aims the ring rather than building it again")
+
+	# The observer stepping ONTO their tile changes the ring without changing
+	# who is in it, and the offset still has to reach the pane -- it is what
+	# stops a lone item being drawn inside the player.
+	_observer_offset = Vector3.ZERO
+	_pool.stand(_here())
+	_pool.replace_positions()
+
+	_expect(_node_for(20743) == before,
+		"and so does the observer arriving on the tile")
+	_expect(_observer_offset.length() >= EntityPool.ENTITY_RADIUS - 0.001,
+		"which still moves the observer out of the middle")
+
+	_pool.stand([])
+	_pool.replace_all([])
 
 ## The rebuild frees every node and builds it again, so what remembers where a
 ## figure was drawn cannot live on the node. It lives beside the nodes, keyed

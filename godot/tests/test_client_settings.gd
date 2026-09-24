@@ -19,12 +19,15 @@ func _ready() -> void:
 	_reset_restores_the_shipped_defaults()
 	_changed_fires_for_a_real_change_only()
 	_the_two_panes_toggle_independently()
-	_a_dragged_divider_is_remembered_and_clamped()
-	await _the_default_world_split_leaves_the_panel_room()
+	_the_panel_dock_size_is_remembered_and_fenced()
+	_each_dock_keeps_its_own_size()
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 	_the_sfx_volume_persists_clamps_and_resets()
 	_the_xp_tracker_toggles_persist_and_reset()
 	_the_movement_animation_persists_and_resets()
+	_a_box_the_player_sized_is_remembered()
+	_a_box_size_from_a_bad_file_falls_back()
+	_the_screen_gives_the_first_scale()
 
 	_clean()
 
@@ -81,10 +84,6 @@ func _values_are_clamped_on_the_way_in() -> void:
 	_expect(is_equal_approx(s.ui_scale, ClientSettings.MAX_UI_SCALE),
 		"a runaway scale is clamped")
 
-	s.set_text_split(-99999)
-	_expect(s.text_split == ClientSettings.MIN_SPLIT,
-		"a runaway divider offset is clamped up")
-
 
 func _a_corrupt_file_falls_back_rather_than_failing() -> void:
 	# Clamping on READ, not only on write, is what makes an unusable client
@@ -116,13 +115,13 @@ func _reset_restores_the_shipped_defaults() -> void:
 		"and the reset was written, not just held in memory")
 
 	s.set_show_inventory(false)
-	s.set_text_split(500)
+	s.set_dock_size(ClientSettings.KEY_CONSOLE_SIZE, Vector2i(500, 300))
 	s.set_skill_detail(ClientSettings.SKILL_DETAIL_LOG)
 	s.reset()
 	_expect(s.show_inventory == ClientSettings.DEFAULT_SHOW_INVENTORY,
 		"reset restores the pane toggles")
-	_expect(s.text_split == ClientSettings.DEFAULT_TEXT_SPLIT,
-		"and the dividers")
+	_expect(s.console_size == ClientSettings.DEFAULT_CONSOLE_SIZE,
+		"and the dock sizes")
 	_expect(s.skill_detail == ClientSettings.DEFAULT_SKILL_DETAIL,
 		"and where skill detail is shown")
 
@@ -159,66 +158,56 @@ func _the_two_panes_toggle_independently() -> void:
 		"and both survive a reload")
 
 
-## A divider that forgets where it was put is the state this replaced: both
-## offsets were authored in console.tscn as a literal 300.
-func _a_dragged_divider_is_remembered_and_clamped() -> void:
+## The control panel was the bottom half of a VSplitContainer until 09/21/2026,
+## so its height was the `world_split` offset this case replaces. It hangs in
+## [PanelDock] now, and the player sizes it in both axes.
+func _the_panel_dock_size_is_remembered_and_fenced() -> void:
 	_clean()
 	var s := ClientSettings.new(TEST_PATH)
-	s.set_text_split(420)
-	s.set_world_split(-180)
+
+	_expect(s.panel_size == Vector2i.ZERO,
+		"no remembered dock until the player drags one")
+
+	s.set_dock_size(ClientSettings.KEY_PANEL_SIZE, Vector2i(640, 480))
 
 	var reloaded := ClientSettings.new(TEST_PATH)
 	reloaded.load_from_disk()
-	_expect(reloaded.text_split == 420, "the text divider persists")
+	_expect(reloaded.panel_size == Vector2i(640, 480), "the dock size persists")
 
-	# NEGATIVE, and that is the case that matters: it is the only kind of offset
-	# that gives the panel under the world any height. A floor of 120 saved
-	# every drag of that divider as "collapsed" until 09/12/2026.
-	_expect(reloaded.world_split == -180,
-		"and so does the world one, negative as the engine reports it")
+	# Fenced rather than made usable. Keeping the box on screen and no smaller
+	# than its content is PanelDock._place_box's job, and it does that on every
+	# layout pass. A second rule here would be a second owner of it.
+	reloaded.set_dock_size(ClientSettings.KEY_PANEL_SIZE, Vector2i(99999, 99999))
+	_expect(reloaded.panel_size
+		== Vector2i(ClientSettings.MAX_BOX_PIXELS, ClientSettings.MAX_BOX_PIXELS),
+		"and a runaway size is fenced")
 
-	# Clamped on READ, not only on write -- a hand-edited number stays sane.
-	var handle := FileAccess.open(TEST_PATH, FileAccess.WRITE)
-	handle.store_string("[display]\ntext_split=99999\nworld_split=-99999\n")
-	handle.close()
-
-	var repaired := ClientSettings.new(TEST_PATH)
-	repaired.load_from_disk()
-	_expect(repaired.text_split == ClientSettings.MAX_SPLIT,
-		"an out-of-range saved offset is clamped down on load")
-	_expect(repaired.world_split == ClientSettings.MIN_SPLIT,
-		"and a runaway negative one is clamped up")
+	reloaded.reset()
+	_expect(reloaded.panel_size == ClientSettings.DEFAULT_PANEL_SIZE,
+		"reset forgets the dock")
 
 
-## The default is checked against the ENGINE, not against a number, because the
-## number was plausible and wrong: 300 laid out the panel under the world at its
-## minimum height, the tab strip alone. Built the shape `console.tscn` gives the
-## right column -- world expands, panel does not -- so a Godot upgrade that
-## changes what an offset means fails here rather than in a player's Options.
-func _the_default_world_split_leaves_the_panel_room() -> void:
-	const COLUMN_HEIGHT := 1000.0
-	const PANEL_MINIMUM := 40.0
+## Two docks share one setter, so a write to one key must not reach the other.
+## An unknown key writes nothing, and it reads as "never dragged".
+func _each_dock_keeps_its_own_size() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	s.set_dock_size(ClientSettings.KEY_CONSOLE_SIZE, Vector2i(420, 260))
 
-	var column := VSplitContainer.new()
-	column.size = Vector2(400.0, COLUMN_HEIGHT)
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.dock_size(ClientSettings.KEY_CONSOLE_SIZE)
+		== Vector2i(420, 260), "the log dock size persists")
+	_expect(reloaded.dock_size(ClientSettings.KEY_PANEL_SIZE) == Vector2i.ZERO,
+		"and the panel dock keeps its own size")
 
-	var world := Control.new()
-	world.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(world)
-
-	var panel := Control.new()
-	panel.custom_minimum_size = Vector2(0.0, PANEL_MINIMUM)
-	column.add_child(panel)
-
-	add_child(column)
-	column.split_offset = ClientSettings.DEFAULT_WORLD_SPLIT
-	await get_tree().process_frame
-	await get_tree().process_frame
-
-	_expect(panel.size.y > PANEL_MINIMUM,
-		"the default world split gives the panel more than its tab strip")
-
-	column.queue_free()
+	var count := {"n": 0}
+	reloaded.changed.connect(func(): count["n"] += 1)
+	reloaded.set_dock_size("font_size", Vector2i(10, 10))
+	_expect(count["n"] == 0 and reloaded.font_size == ClientSettings.DEFAULT_FONT_SIZE,
+		"a key that names no dock writes nothing")
+	_expect(reloaded.dock_size("font_size") == Vector2i.ZERO,
+		"and reads as never dragged")
 
 
 func _an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid() -> void:
@@ -337,6 +326,105 @@ func _the_movement_animation_persists_and_resets() -> void:
 	reloaded.reset()
 	_expect(reloaded.smooth_movement == ClientSettings.DEFAULT_SMOOTH_MOVEMENT,
 		"and reset restores it")
+
+	_clean()
+
+
+## The amount box and the pop-up box are built fresh every time they open, so
+## the size the player dragged them to has nowhere to live but this file. Both
+## were forgotten on every close before 09/21/2026.
+func _a_box_the_player_sized_is_remembered() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(s.amount_size == Vector2i.ZERO,
+		"no remembered amount box until the player sizes one")
+	_expect(not s.popup_rect.has_area(),
+		"and no remembered pop-up box until a drag")
+
+	s.set_amount_size(Vector2i(420, 260))
+	s.set_popup_rect(Rect2(40, 60, 700, 500))
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.amount_size == Vector2i(420, 260),
+		"the amount box size persists")
+	_expect(reloaded.popup_rect == Rect2(40, 60, 700, 500),
+		"and so does the whole pop-up rect, position included")
+
+	# A box dragged off the top-left of the pane. Kept as it is: the pop-up
+	# clamps a rect into the pane it has on every open, and a second rule here
+	# would be a second owner of that.
+	reloaded.set_popup_rect(Rect2(-50, -20, 300, 200))
+	_expect(reloaded.popup_rect.position == Vector2(-50, -20),
+		"a negative position is a real rect, not clamped away")
+
+	reloaded.set_amount_size(Vector2i(99999, 99999))
+	_expect(reloaded.amount_size
+		== Vector2i(ClientSettings.MAX_BOX_PIXELS, ClientSettings.MAX_BOX_PIXELS),
+		"a runaway size is fenced")
+
+	reloaded.reset()
+	_expect(reloaded.amount_size == ClientSettings.DEFAULT_AMOUNT_SIZE
+		and reloaded.popup_rect == ClientSettings.DEFAULT_POPUP_RECT,
+		"and reset forgets both boxes")
+
+	_clean()
+
+
+## Clamped on READ, like every other value here, and by TYPE as well as by
+## range: [ConfigFile] gives back whatever Variant it stored, and these two are
+## the first values in the file that are not a number, a bool or a string.
+func _a_box_size_from_a_bad_file_falls_back() -> void:
+	_clean()
+	var config := ConfigFile.new()
+	config.set_value(ClientSettings.SECTION,
+		ClientSettings.KEY_AMOUNT_SIZE, "420x260")
+	config.set_value(ClientSettings.SECTION,
+		ClientSettings.KEY_POPUP_RECT, 7)
+	config.save(TEST_PATH)
+
+	var s := ClientSettings.new(TEST_PATH)
+	s.load_from_disk()
+
+	_expect(s.amount_size == ClientSettings.DEFAULT_AMOUNT_SIZE,
+		"a size of the wrong type gives the wrapped box back")
+	_expect(s.popup_rect == ClientSettings.DEFAULT_POPUP_RECT,
+		"and a rect of the wrong type gives the centred box back")
+
+	_clean()
+
+
+## A dense screen opens at a scale that suits it, not at half size. A scale in
+## the file wins, and Reset goes back to the scale of the screen.
+func _the_screen_gives_the_first_scale() -> void:
+	var reference := int(ClientSettings.REFERENCE_DPI)
+
+	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(reference), 1.0),
+		"a screen at the reference density gives a scale of 1")
+	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(reference * 3 / 2), 1.5),
+		"a screen at one and a half times it gives 1.5")
+	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(reference * 4),
+		ClientSettings.MAX_UI_SCALE), "a very dense screen stops at the largest scale")
+	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(10),
+		ClientSettings.MIN_UI_SCALE), "a thin screen stops at the smallest scale")
+
+	_clean()
+	var first := ClientSettings.new(TEST_PATH)
+	first.set_shipped_ui_scale(1.5)
+	first.load_from_disk()
+	_expect(is_equal_approx(first.ui_scale, 1.5),
+		"with no file, the screen gives the scale")
+
+	first.set_ui_scale(1.25)
+	var second := ClientSettings.new(TEST_PATH)
+	second.set_shipped_ui_scale(1.5)
+	second.load_from_disk()
+	_expect(is_equal_approx(second.ui_scale, 1.25), "a scale in the file wins")
+
+	second.reset()
+	_expect(is_equal_approx(second.ui_scale, 1.5),
+		"and Reset goes back to the scale of the screen")
 
 	_clean()
 

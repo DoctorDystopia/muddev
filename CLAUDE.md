@@ -392,6 +392,34 @@ tells how the rules apply to docstrings.
 node "$HOME/.claude/skills/asd-ste100/hooks/run-python.cjs" "$HOME/.claude/skills/asd-ste100/scripts/ste-lint.py" --fail-over 2.5 FILE
 ```
 
+- **To fix a file, add `--verbose`.** It gives the line of each hit and the
+  words that fired it. It also gives one line for each rule on how to fix it.
+  Read that output. Never read the linter source to learn what a category
+  matches. Never guess a category from its name. `--help` lists every flag.
+- **Lint a `.py` or a `.gd` file the same way.** It gives the docstrings and
+  the comments, with no code. Each line number names the real line. The score
+  of a source file is Layer 1 only. Layer 2 shapes a reply to a person, and a
+  docstring is not one.
+
+```bash
+node "$HOME/.claude/skills/asd-ste100/hooks/run-python.cjs" "$HOME/.claude/skills/asd-ste100/scripts/ste-lint.py" --verbose FILE
+```
+
+**Five hooks enforce this. None of them needs a request.**
+
+- A card enters context on each turn, and again every 12 tool calls.
+- A pre-send gate reads a commit message and a `gh` pull request body before
+  the command runs. Over the ceiling it denies the call. The command sends
+  nothing, so you correct the text and run it again.
+- A write of a `.md`, `.txt` or `.rst` file gets its score in the same turn.
+- A docstring or a comment that you write in a `.py` or a `.gd` file gets its
+  score too. The hook reads the lines of that edit, never the file around
+  them. An old docstring beside your change stays quiet.
+- The reply gate warns. The subagent gate blocks, because a subagent report
+  is not on the screen yet.
+
+`~/.claude/skills/asd-ste100/README.md` explains each one.
+
 ## The Godot client
 
 The Godot project at `godot/` is the **sole canonical Blackout client**, on

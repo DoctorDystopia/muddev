@@ -36,9 +36,7 @@ func _ready() -> void:
 	_view.bind(_state, _resolver)
 
 	_a_carried_to_carried_drag_swaps()
-	_a_drag_to_equipment_uses_the_servers_equip_command()
-	_a_drag_off_equipment_uses_the_servers_unequip_command()
-	_a_gesture_the_server_named_nothing_for_sends_nothing()
+	_a_gesture_this_pane_cannot_make_sends_nothing()
 	_drop_legality_is_the_servers_answer()
 	_emitted_commands_reach_the_signal()
 	_only_occupied_cells_get_a_picture()
@@ -91,17 +89,16 @@ func _every_cell_owns_a_different_rectangle() -> void:
 	var seen: Array = []
 	var checked := 0
 
-	for container: Node in [_view._grid, _view._doll]:
-		for cell: InventorySlotCell in container.get_children():
-			var texture := cell.art_texture()
+	for cell: InventorySlotCell in _view._grid.get_children():
+		var texture := cell.art_texture()
 
-			if texture == null:
-				continue
+		if texture == null:
+			continue
 
-			checked += 1
-			_expect(not seen.has(texture.region),
-				"cell %s has a rectangle of its own" % str(cell.key))
-			seen.append(texture.region)
+		checked += 1
+		_expect(not seen.has(texture.region),
+			"cell %s has a rectangle of its own" % str(cell.key))
+		seen.append(texture.region)
 
 	_expect(checked > 1, "more than one cell was drawn, so this compares something")
 
@@ -247,36 +244,22 @@ func _a_carried_to_carried_drag_swaps() -> void:
 		"a drag onto itself sends nothing")
 
 
-func _a_drag_to_equipment_uses_the_servers_equip_command() -> void:
-	# NOT composed. Looked up in the row's own actions, so this client cannot
-	# spell `equip` even if it wanted to.
-	var command: String = _view._command_for(
-		SlotCell.KIND_CARRIED, 0, SlotCell.KIND_EQUIPPED, "weapon_hand")
-
-	_expect(command == "equip 1", "the server's own equip command is used verbatim")
-
-
-func _a_drag_off_equipment_uses_the_servers_unequip_command() -> void:
-	var command: String = _view._command_for(
-		SlotCell.KIND_EQUIPPED, "armor_body", SlotCell.KIND_CARRIED, 8)
-
-	_expect(command == "unequip armor_body", "the server's own unequip command")
-
-
-func _a_gesture_the_server_named_nothing_for_sends_nothing() -> void:
-	# The ring has an equip_slot but the server offered no equip action for it.
-	# Composing "equip 7" here would be the client inventing a verb the server
-	# deliberately withheld.
-	var command: String = _view._command_for(
-		SlotCell.KIND_CARRIED, 6, SlotCell.KIND_EQUIPPED, "ring")
-
-	_expect(command.is_empty(),
-		"an item the server named no equip action for sends nothing")
+## A worn frame is not in this pane any more, so a drag cannot reach one.
+##
+## Asserted rather than left to the layout, because the pane still HOLDS the
+## handler: a branch put back here would compose `equip` for a gesture no
+## player can make, which is how a verb table gets into a client. The left
+## click is the route now; see [EquipmentView].
+func _a_gesture_this_pane_cannot_make_sends_nothing() -> void:
+	_expect(
+		_view._command_for(SlotCell.KIND_CARRIED, 0,
+			SlotCell.KIND_EQUIPPED, "weapon_hand").is_empty(),
+		"a drag onto a worn frame sends nothing")
 
 	_expect(
 		_view._command_for(SlotCell.KIND_EQUIPPED, "armor_body",
-			SlotCell.KIND_EQUIPPED, "weapon_hand").is_empty(),
-		"equipment to equipment is not a gesture and sends nothing")
+			SlotCell.KIND_CARRIED, 8).is_empty(),
+		"and so does a drag off one")
 
 
 func _drop_legality_is_the_servers_answer() -> void:

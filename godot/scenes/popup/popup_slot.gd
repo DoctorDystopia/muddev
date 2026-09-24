@@ -52,6 +52,10 @@ var _detail: Label
 var _count: StackCountLabel
 var _menu: PopupMenu
 
+## What the player set, or null. Read for one fact only: how big they left the
+## amount box. Given by the view, because a slot is made and freed per snapshot.
+var _settings: ClientSettings
+
 
 ## Built in _init, not _ready, for the reason [InventorySlotCell] gives: the
 ## view builds and binds a whole grid before any of it enters the tree.
@@ -87,6 +91,14 @@ func _init() -> void:
 	_menu = PopupMenu.new()
 	_menu.id_pressed.connect(_on_menu_id)
 	add_child(_menu)
+
+
+## Give this slot the player's settings, for the amount box it may open.
+##
+## Separate from [method bind] and never required, for the reason
+## [method InventorySlotCell.bind_settings] gives.
+func bind_settings(settings: ClientSettings) -> void:
+	_settings = settings
 
 
 ## Show one row, or an empty frame for `{}`.
@@ -197,7 +209,7 @@ func _perform(action: Dictionary) -> void:
 	var prompt := ServerAction.prompt(action)
 
 	if not prompt.is_empty():
-		AmountPrompt.ask(self, action, prompt, command_requested.emit)
+		AmountPrompt.ask(self, action, prompt, command_requested.emit, _settings)
 		return
 
 	var command := ServerAction.command(action)

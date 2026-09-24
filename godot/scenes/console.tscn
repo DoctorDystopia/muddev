@@ -11,6 +11,7 @@
 [ext_resource type="Script" uid="uid://o68yvcbc0tmk" path="res://scenes/loading/loading_veil.gd" id="11_veil"]
 [ext_resource type="Script" uid="uid://8vadnsx4gkim" path="res://scenes/world/choose_option.gd" id="12_choose"]
 [ext_resource type="Script" uid="uid://ckr8i6h1t1y83" path="res://scenes/xp/xp_hud_view.gd" id="13_xphud"]
+[ext_resource type="Script" uid="uid://cjy7t5wqtpy1m" path="res://scenes/panel/panel_dock.gd" id="14_dock"]
 
 [node name="Console" type="Control" unique_id=1927313264]
 layout_mode = 3
@@ -22,7 +23,7 @@ grow_vertical = 2
 theme = ExtResource("6_theme")
 script = ExtResource("1_console")
 
-[node name="Split" type="HSplitContainer" parent="." unique_id=555808243]
+[node name="WorldPane" type="Control" parent="." unique_id=434837261]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -30,49 +31,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-split_offsets = PackedInt32Array(300)
-split_offset = 300
 
-[node name="Game" type="VBoxContainer" parent="Split" unique_id=2100193474]
-layout_mode = 2
-
-[node name="Login" parent="Split/Game" unique_id=1481754742 instance=ExtResource("5_login")]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="TextVitals" type="MarginContainer" parent="Split/Game" unique_id=1285690127]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="Chat" type="TabContainer" parent="Split/Game" unique_id=2037561856]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-script = ExtResource("7_chat")
-
-[node name="FindBar" type="PanelContainer" parent="Split/Game" unique_id=688487204]
-unique_name_in_owner = true
-layout_mode = 2
-
-[node name="Input" type="LineEdit" parent="Split/Game" unique_id=552444822]
-unique_name_in_owner = true
-layout_mode = 2
-placeholder_text = "connect <name> <password>"
-caret_blink = true
-
-[node name="Right" type="VSplitContainer" parent="Split" unique_id=29564432]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-split_offsets = PackedInt32Array(300)
-split_offset = 300
-
-[node name="WorldPane" type="Control" parent="Split/Right" unique_id=434837261]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_vertical = 3
-
-[node name="WorldView" type="SubViewportContainer" parent="Split/Right/WorldPane" unique_id=434837260]
+[node name="WorldView" type="SubViewportContainer" parent="WorldPane" unique_id=434837260]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -82,15 +42,15 @@ grow_horizontal = 2
 grow_vertical = 2
 stretch = true
 
-[node name="SubViewport" type="SubViewport" parent="Split/Right/WorldPane/WorldView" unique_id=387407251]
+[node name="SubViewport" type="SubViewport" parent="WorldPane/WorldView" unique_id=387407251]
 handle_input_locally = false
-size = Vector2i(928, 677)
+size = Vector2i(1280, 720)
 render_target_update_mode = 4
 
-[node name="World" parent="Split/Right/WorldPane/WorldView/SubViewport" unique_id=1811063871 instance=ExtResource("2_world")]
+[node name="World" parent="WorldPane/WorldView/SubViewport" unique_id=1811063871 instance=ExtResource("2_world")]
 unique_name_in_owner = true
 
-[node name="Minimap" type="Control" parent="Split/Right/WorldPane" unique_id=434837263]
+[node name="Minimap" type="Control" parent="WorldPane" unique_id=434837263]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 1
@@ -103,7 +63,7 @@ offset_bottom = 166.0
 grow_horizontal = 0
 script = ExtResource("10_minimap")
 
-[node name="WorldVitals" type="MarginContainer" parent="Split/Right/WorldPane" unique_id=434837262]
+[node name="WorldVitals" type="MarginContainer" parent="WorldPane" unique_id=434837262]
 unique_name_in_owner = true
 layout_mode = 1
 offset_left = 8.0
@@ -112,7 +72,7 @@ offset_right = 248.0
 offset_bottom = 72.0
 mouse_filter = 2
 
-[node name="XpHud" type="Control" parent="Split/Right/WorldPane" unique_id=434837266]
+[node name="XpHud" type="Control" parent="WorldPane" unique_id=434837266]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 1
@@ -126,7 +86,38 @@ grow_horizontal = 0
 mouse_filter = 2
 script = ExtResource("13_xphud")
 
-[node name="ChooseOption" type="Control" parent="Split/Right/WorldPane" unique_id=434837265]
+[node name="PanelDock" type="Control" parent="WorldPane" unique_id=1156632077]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("14_dock")
+
+[node name="Box" type="PanelContainer" parent="WorldPane/PanelDock" unique_id=1156632078]
+layout_mode = 0
+theme_type_variation = &"PopupBox"
+
+[node name="Margin" type="MarginContainer" parent="WorldPane/PanelDock/Box" unique_id=1156632079]
+layout_mode = 2
+theme_type_variation = &"PaneMargin"
+
+[node name="Panel" type="TabContainer" parent="WorldPane/PanelDock/Box/Margin" unique_id=1156632076]
+unique_name_in_owner = true
+layout_mode = 2
+current_tab = 0
+script = ExtResource("8_panel")
+
+[node name="Inventory" type="VBoxContainer" parent="WorldPane/PanelDock/Box/Margin/Panel" unique_id=1156632075]
+unique_name_in_owner = true
+layout_mode = 2
+script = ExtResource("4_inv")
+metadata/_tab_index = 0
+
+[node name="ChooseOption" type="Control" parent="WorldPane" unique_id=434837265]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -136,7 +127,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("12_choose")
 
-[node name="LoadingVeil" type="PanelContainer" parent="Split/Right/WorldPane" unique_id=434837264]
+[node name="LoadingVeil" type="PanelContainer" parent="WorldPane" unique_id=434837264]
 unique_name_in_owner = true
 layout_mode = 1
 anchors_preset = 15
@@ -146,14 +137,52 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("11_veil")
 
-[node name="Panel" type="TabContainer" parent="Split/Right" unique_id=1156632076]
+[node name="ConsoleDock" type="Control" parent="." unique_id=1156632090]
 unique_name_in_owner = true
-layout_mode = 2
-current_tab = 0
-script = ExtResource("8_panel")
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("14_dock")
+corner = "bottom_left"
+size_key = "console_size"
+default_size = Vector2(520, 420)
+default_share = Vector2(0.3, 0.5)
 
-[node name="Inventory" type="VBoxContainer" parent="Split/Right/Panel" unique_id=1156632075]
+[node name="Box" type="PanelContainer" parent="ConsoleDock" unique_id=1156632091]
+layout_mode = 0
+theme_type_variation = &"PopupBox"
+
+[node name="Margin" type="MarginContainer" parent="ConsoleDock/Box" unique_id=1156632092]
+layout_mode = 2
+theme_type_variation = &"PaneMargin"
+
+[node name="Game" type="VBoxContainer" parent="ConsoleDock/Box/Margin" unique_id=2100193474]
+layout_mode = 2
+
+[node name="Login" parent="ConsoleDock/Box/Margin/Game" unique_id=1481754742 instance=ExtResource("5_login")]
 unique_name_in_owner = true
 layout_mode = 2
-script = ExtResource("4_inv")
-metadata/_tab_index = 0
+
+[node name="TextVitals" type="MarginContainer" parent="ConsoleDock/Box/Margin/Game" unique_id=1285690127]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Chat" type="TabContainer" parent="ConsoleDock/Box/Margin/Game" unique_id=2037561856]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("7_chat")
+
+[node name="FindBar" type="PanelContainer" parent="ConsoleDock/Box/Margin/Game" unique_id=688487204]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Input" type="LineEdit" parent="ConsoleDock/Box/Margin/Game" unique_id=552444822]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "connect <name> <password>"
+caret_blink = true

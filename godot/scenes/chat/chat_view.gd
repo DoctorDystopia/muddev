@@ -40,9 +40,9 @@ signal active_log_changed(pane: RichTextLabel)
 ## of the same conversation, and a shared cap would let a fight in Combat evict
 ## the room description in Log.
 ##
-## `remove_paragraph(0)` is the only way to bound a RichTextLabel -- there is no
-## max-lines property -- and it is cheap because it removes a parsed item rather
-## than reparsing what is left.
+## `remove_paragraph(0, true)` is the only way to bound a RichTextLabel -- there
+## is no max-lines property. The second argument is load-bearing; see
+## [method ChatView._trim].
 const MAX_LINES := 2000
 
 ## Drawn on a tab that has lines the player has not looked at.
@@ -186,9 +186,26 @@ func _build_log() -> RichTextLabel:
 ## A WHILE and not an if: a single append can add several paragraphs when the
 ## server sends a block of text, so trimming one per call would let a log drift
 ## permanently over the cap.
+##
+## ## `no_invalidate` is the whole fix for the stuttering log
+##
+## `remove_paragraph(paragraph)` defaults to `no_invalidate = false`, and that
+## sets the label's first invalid line back to 0. Every paragraph the log holds
+## is then shaped again. Above, `threaded` moves that work to a thread, so the
+## label reports the height it has shaped SO FAR -- and the scrollbar collapses
+## and grows back on every line the server sends.
+##
+## Measured in Godot 4.7.1 with 2000 paragraphs: the scroll range fell from
+## 46000 to 3933 on every frame that appended a line. With `true` it stayed at
+## 46000 and never moved. The player sees this as a log that jumps and stutters
+## on each command, and only after enough lines to reach [constant MAX_LINES].
+##
+## `true` is correct here because the removal is at the TOP, off screen. The
+## paragraphs that stay keep their shaped text, and only their vertical offsets
+## move up.
 func _trim(pane: RichTextLabel) -> void:
 	while pane.get_paragraph_count() > MAX_LINES:
-		pane.remove_paragraph(0)
+		pane.remove_paragraph(0, true)
 
 
 func _on_tab_changed(index: int) -> void:

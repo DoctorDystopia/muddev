@@ -92,6 +92,8 @@ const PRESENTATION := {
 	# with its own model record is drawn as that file builds it.
 	"mutant_giant": {"scale": 1.6},
 	"big_mutant": {"scale": 2.1},
+
+	"lone_android": {"scale": 2},
 }
 
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.

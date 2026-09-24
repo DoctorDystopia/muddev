@@ -30,12 +30,14 @@ from systems.interface.statefeed import events as feed
 from systems.interface.statefeed import resync
 from world.respawn import get_respawn_room
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.ui import move_text
 
 # The routing tags this module sends, bound once rather than repeated at
 # every call site. The SERVER says what a line IS; the client decides which
 # tab shows it. See MESSAGE_TYPES in systems/interface/statefeed/constants.py.
 _MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 _MSG_INVENTORY = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
+_MSG_LOOK = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_LOOK}
 
 
 
@@ -643,6 +645,10 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             one place a menu says goodbye, and the shopkeeper's farewell
             belongs to the closing of the conversation however it ends.
 
+            super() is not called. DefaultCharacter.at_post_move does one
+            thing, the look, and _look_on_arrival sends that look in its
+            place. CombatEntity and ObjectParent define no at_post_move.
+
         Notes/References:
             ndb._evmenu is EvMenu's own handle on the open menu; a menu that
             is not a BlackoutEvMenu carries no room_bound and is left alone.
@@ -650,7 +656,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Author: Nick Hobar
         Creation date: 09/02/2026
         """
-        super().at_post_move(source_location, move_type=move_type, **kwargs)
+        self._look_on_arrival()
 
         # A gathering channel is room-bound for the same reason a shop menu
         # is: the node is a thing you STAND at. Stopped here rather than left
@@ -683,6 +689,51 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             menu.close_menu()
         except Exception:
             logger.log_trace()
+
+
+    def _look_on_arrival(self) -> None:
+        """
+        Purpose: Show the room this character just entered, without the parts
+                 that the player turned off with `movetext`.
+
+        Entry:
+            Called from at_post_move, after the move is complete.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            _MSG_LOOK read.
+
+        Methodology:
+            The look of DefaultCharacter.at_post_move, with one addition: the
+            hidden parts go to at_look as a kwarg, and GridTile leaves out
+            each of them. A typed `look` sends no such kwarg. Thus, the setting
+            changes what a step prints, and `look` still shows the full room.
+
+            When the player hides every part, the look is empty, and nothing
+            is sent. An empty message puts a blank line in the log.
+
+        Notes/References:
+            systems/interface/ui/move_text.py owns the parts and the
+            Attribute.
+
+        Author: Nick Hobar
+        Creation date: 09/22/2026
+        """
+        location = self.location
+
+        if location is None or not location.access(self, "view"):
+            return
+
+        hidden = move_text.hidden_parts(self)
+        look_kwargs = {move_text.HIDDEN_PARTS_KWARG: hidden}
+        appearance = self.at_look(location, **look_kwargs)
+
+        if not appearance:
+            return
+
+        self.msg(text=(appearance, _MSG_LOOK))
 
 
     def _publish_inventory(self, ignore=None) -> None:

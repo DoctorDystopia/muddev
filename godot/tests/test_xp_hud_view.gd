@@ -21,6 +21,7 @@ func _ready() -> void:
 	_an_award_is_one_drop_row_naming_every_skill()
 	_drops_on_one_tick_are_queued_rather_than_stacked()
 	_the_bar_fills_from_the_level_fraction()
+	_the_bar_glides_through_a_level_rise()
 	_per_skill_rates_are_a_row_per_skill_when_asked_for()
 	_a_level_rise_is_announced_by_name()
 	_no_part_of_the_hud_takes_a_click()
@@ -152,13 +153,24 @@ func _the_bar_fills_from_the_level_fraction() -> void:
 	var view: XpHudView = parts[0]
 	var tracker: XpTrackerState = parts[1]
 
-	_expect(view.filled_segments() == 0, "an empty bar before any award")
+	_expect(is_zero_approx(view.bar_fraction()), "an empty bar before any award")
 
 	tracker.ingest(_Const.CH_XP_DROP, _payload())
-	_expect(view.filled_segments() == XpHudView.SEGMENTS / 2,
-		"60 of 120 fills half the segments")
+	_expect(is_equal_approx(view.bar_fraction(), 0.5), "60 of 120 fills half the bar")
+	_expect(view._bar_shown < view.bar_fraction(),
+		"and the bar glides there rather than jumping")
 
 	view.queue_free()
+
+
+func _the_bar_glides_through_a_level_rise() -> void:
+	# The bar is continuous like the HP bar, so a jump would read as a glitch.
+	_expect(XpHudView.glide_legs(0.3, 0.6, true, false) == [[0.3, 0.6]],
+		"the same level glides once from where the bar stands")
+	_expect(XpHudView.glide_legs(0.9, 0.1, true, true) == [[0.9, 1.0], [0.0, 0.1]],
+		"a level rise fills to the end, then from empty")
+	_expect(XpHudView.glide_legs(0.9, 0.4, false, false) == [[0.0, 0.4]],
+		"a new skill fills from empty, never from the old skill's value")
 
 
 func _per_skill_rates_are_a_row_per_skill_when_asked_for() -> void:

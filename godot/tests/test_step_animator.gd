@@ -31,18 +31,28 @@ const ONE_EAST := Vector3(1.0, 0.0, 0.0)
 ## A diagonal step: one tile, and the longest move that is still one step.
 const ONE_NORTHEAST := Vector3(1.0, 0.0, -1.0)
 
+## Two steps in one message. `room_info` coalesces inside a tick, so this is
+## what an ordinary pair of steps looks like when the server sends them
+## together — a walk announced late, not a teleport.
+const TWO_EAST := Vector3(2.0, 0.0, 0.0)
+
 ## Across the map. Nothing walks this, whatever the server calls it.
 const ACROSS_THE_MAP := Vector3(40.0, 0.0, -12.0)
+
+## How long the animator takes to cross one tile: a tick plus its buffer.
+const CROSSING := TICK * StepAnimator.WALK_TICKS
 
 var _failures := 0
 
 
 func _ready() -> void:
 	_a_first_sighting_is_not_a_walk()
-	_a_step_takes_exactly_one_tick()
+	_a_step_takes_longer_than_a_tick()
+	_a_walk_never_stands_still()
+	_a_coalesced_pair_of_steps_is_walked()
 	_a_diagonal_is_still_one_step()
 	_the_walk_is_the_same_at_any_frame_rate()
-	_the_lag_is_never_more_than_one_tick()
+	_the_trail_is_never_more_than_one_crossing()
 	_a_jump_further_than_a_step_snaps()
 	_a_new_target_mid_step_carries_on_from_here()
 	_the_true_tile_is_marked_for_exactly_as_long_as_the_walk()
@@ -74,24 +84,93 @@ func _a_first_sighting_is_not_a_walk() -> void:
 		"and nothing is marked, because nothing is moving")
 
 
-## The whole contract with the server: `goto` steps one tile per tick, so a
-## walk that takes any other time drifts. Longer and the figure falls behind
-## forever; shorter and it stands waiting on each tile, which is the jump this
-## replaced with extra steps in it.
-func _a_step_takes_exactly_one_tick() -> void:
+## The buffer, stated as a number. A crossing must take longer than a tick, or
+## the figure arrives before the next step can possibly be announced. The upper
+## bound matters as much: a crossing of two ticks would leave the figure two
+## tiles behind the square every command resolves against.
+func _a_step_takes_longer_than_a_tick() -> void:
+	_expect(StepAnimator.WALK_TICKS > 1.0,
+		"a tile takes longer to cross than the tick that moved it")
+	_expect(StepAnimator.WALK_TICKS < 2.0,
+		"and not so much longer that the figure falls a second tile behind")
+
 	var animator := _animator()
 
 	animator.place(ORIGIN)
 	animator.aim(ONE_NORTH)
 
-	var travelled := _run(animator, TICK * 0.5, FAST_FRAME)
+	var travelled := _run(animator, TICK, FAST_FRAME)
 
-	_expect(travelled.distance_to(ONE_NORTH) > 0.1,
-		"half a tick in, the figure is still short of the tile")
+	_expect(travelled.distance_to(ONE_NORTH) > 0.01,
+		"one tick in, the figure has not yet arrived")
 
-	travelled = _run(animator, TICK * 0.5 + FAST_FRAME, FAST_FRAME)
+	travelled = _run(animator, CROSSING - TICK + FAST_FRAME, FAST_FRAME)
 
-	_expect(travelled == ONE_NORTH, "and one tick in, it has arrived")
+	_expect(travelled == ONE_NORTH, "and one crossing in, it has")
+
+
+## THE JITTER CASE, and the reason the buffer exists at all.
+##
+## The server steps once a tick. The message announcing a step cannot arrive
+## before the step happens, so it always arrives a little late. A figure that
+## finishes its crossing in one tick therefore stands still for that lateness,
+## every step, and a player reads the stop-start as snapping.
+##
+## This walks twenty steps at a realistic arrival spacing. It asserts two
+## things at once, because they are the two halves of one bargain: the figure
+## moves on every single frame, and it never falls further than two tiles
+## behind while doing so.
+##
+## Twenty steps rather than two, because a trail that grew by a little on each
+## step would look correct over two.
+func _a_walk_never_stands_still() -> void:
+	var animator := _animator()
+	var late := TICK + 0.04
+
+	animator.place(ORIGIN)
+
+	var at := ORIGIN
+	var stalls := 0
+	var furthest := 0.0
+
+	for step: int in 20:
+		animator.aim(Vector3(float(step + 1), 0.0, 0.0))
+
+		var left := late
+
+		while left > 0.0:
+			var was := at
+			at = animator.advance(minf(FAST_FRAME, left))
+			left -= FAST_FRAME
+			furthest = maxf(furthest, at.distance_to(animator.target()))
+
+			if was.distance_to(at) < 0.0001:
+				stalls += 1
+
+	_expect(stalls == 0,
+		"a figure walking a path moves on every frame (%d still frames)"
+		% stalls)
+	_expect(furthest < STEP * 2.0,
+		"and never trails the server by two tiles (%.3f worst)" % furthest)
+
+
+## `room_info` is coalescable, so two steps inside one tick reach the client as
+## one message naming a tile two squares off. That is a walk, announced late,
+## and it used to snap -- which drew the teleport this whole file exists to
+## remove, several times a minute.
+func _a_coalesced_pair_of_steps_is_walked() -> void:
+	var animator := _animator()
+
+	animator.place(ORIGIN)
+	animator.aim(TWO_EAST)
+
+	_expect(animator.drawn() == ORIGIN, "two steps in one message do not snap")
+	_expect(animator.is_travelling(), "they are walked, and marked as a walk")
+
+	var landed := _run(animator, CROSSING + FAST_FRAME, FAST_FRAME)
+
+	_expect(landed == TWO_EAST,
+		"and both are covered inside one crossing, not two")
 
 
 ## A diagonal is ONE step and measures sqrt(2), which is why the snap threshold
@@ -131,8 +210,8 @@ func _the_walk_is_the_same_at_any_frame_rate() -> void:
 
 ## The rule that keeps the animation honest. Whatever a figure is behind by --
 ## a frame the game dropped, a window the player dragged, a step that arrived
-## while the last one was still running -- one tick of play spends all of it.
-func _the_lag_is_never_more_than_one_tick() -> void:
+## while the last one was still running -- one crossing spends all of it.
+func _the_trail_is_never_more_than_one_crossing() -> void:
 	var animator := _animator()
 
 	animator.place(ORIGIN)
@@ -143,10 +222,10 @@ func _the_lag_is_never_more_than_one_tick() -> void:
 	animator.advance(FAST_FRAME)
 	animator.aim(ONE_EAST + ONE_EAST)
 
-	var landed := _run(animator, TICK + FAST_FRAME, FAST_FRAME)
+	var landed := _run(animator, CROSSING + FAST_FRAME, FAST_FRAME)
 
 	_expect(landed == ONE_EAST + ONE_EAST,
-		"a step taken while behind still lands within the tick")
+		"a step taken while behind still lands within one crossing")
 
 
 ## A teleport is not a walk. Drawing one as a walk is a figure crossing every
@@ -198,7 +277,7 @@ func _the_true_tile_is_marked_for_exactly_as_long_as_the_walk() -> void:
 	_expect(animator.is_travelling(),
 		"the square it is bound for is marked as soon as it is named")
 
-	_run(animator, TICK + FAST_FRAME, FAST_FRAME)
+	_run(animator, CROSSING + FAST_FRAME, FAST_FRAME)
 
 	_expect(not animator.is_travelling(),
 		"and the mark goes out when the figure arrives")

@@ -12,10 +12,14 @@ rendered one character per row).
 Empty slots (``[empty]``) are never truncated.
 """
 
+
+
 from evennia.utils import evtable
 from evennia.utils.ansi import ANSIString
 
 from .handler import SLOTS_TOTAL, GRID_COLS, GRID_ROWS
+
+
 
 EMPTY_CELL_TEXT = "[empty]"
 
@@ -34,6 +38,7 @@ _CELL_CONTENT_WIDTH = (INVENTORY_MAX_WIDTH - (GRID_COLS * _CELL_OVERHEAD)) // GR
 # Ellipsis appended when an item name is truncated. A single character keeps
 # the truncation marker within the reserved content width.
 _TRUNCATION_MARKER = "\u2026"
+
 
 
 def _truncate_line(line, width):
@@ -98,6 +103,7 @@ def _truncate_line(line, width):
     return str(ansi_line[: width - 1]) + _TRUNCATION_MARKER
 
 
+
 def _truncate_cell(cell_text, width):
     """Truncate each line of a multi-line cell to ``width``.
 
@@ -110,6 +116,7 @@ def _truncate_cell(cell_text, width):
     """
     lines = cell_text.split("\n")
     return "\n".join(_truncate_line(line, width) for line in lines)
+
 
 
 def format_slot_cell(slot_idx, item):
@@ -144,6 +151,7 @@ def format_slot_cell(slot_idx, item):
     return line1
 
 
+
 def build_grid(handler):
     """Build the raw 4x8 grid of (slot_idx, item) tuples.
 
@@ -163,6 +171,7 @@ def build_grid(handler):
             row_cells.append((slot_idx, item))
         rows.append(row_cells)
     return rows
+
 
 
 def render_grid(handler, maxwidth=INVENTORY_MAX_WIDTH):
@@ -214,4 +223,5 @@ def render_grid(handler, maxwidth=INVENTORY_MAX_WIDTH):
 
     used = handler.count_used()
     title = f"Carrying {used}/{SLOTS_TOTAL} slots"
+    
     return title, str(table)

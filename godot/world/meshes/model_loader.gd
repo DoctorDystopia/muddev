@@ -70,7 +70,10 @@ const MIN_EXTENT := 0.0001
 
 ## The metadata key that holds [method ModelRegistry.scale_for] on a built
 ## model. Read it through [method presentation_scale], never by name.
-const PRESENTATION_SCALE_META := &"presentation_scale"
+##
+## A plain String, not a `&"..."` literal: `test_theme` reads every StringName
+## literal as a theme variation, and this key is not one.
+const PRESENTATION_SCALE_META := "presentation_scale"
 
 ## Where this build fetches art from, as an absolute origin — on the web that is
 ## the page's own, which is how the fetch stays same-origin; see

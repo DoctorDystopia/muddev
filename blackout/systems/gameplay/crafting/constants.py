@@ -44,7 +44,7 @@ CRAFT_CATEGORIES = (
 # Seconds a single craft takes by default. A recipe overrides via its own
 # craft_seconds class attribute (see BlackoutRecipe); this is the fallback,
 # not a tunable every recipe must set.
-DEFAULT_CRAFT_SECONDS = 2.0
+DEFAULT_CRAFT_SECONDS = 1.8
 
 # Hard ceiling on a single "craft all" batch, independent of materials on
 # hand. Recipes with no consumable_tags have nothing to run out of, so

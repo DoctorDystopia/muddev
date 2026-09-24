@@ -28,10 +28,28 @@ extends Control
 ## ## The player moves it and sizes it
 ##
 ## The box floats in the pane. A drag on the title bar moves it, and a drag on
-## the grip in its bottom-right corner sizes it. The grid reflows its columns
-## to the new width. The rect survives a close and a reopen, and it stays
-## inside the pane when the pane itself changes size. This is presentation
-## only, so the server never hears of it.
+## any edge or corner sizes it. The grid reflows its columns to the new width.
+## The rect survives a close and a reopen, and it stays inside the pane when
+## the pane itself changes size. This is presentation only, so the server
+## never hears of it.
+##
+## [ResizeGrips] raises the grips: it draws them over every other box. The
+## control panel draws over the pop-up on purpose. Until 09/22/2026 it covered
+## the only grip of the pop-up. A dock can still cover an edge of the box, but
+## not the grip on that edge.
+##
+## It also survives the CLIENT, in [ClientSettings], because a rect that lives
+## only in this node is one a player who moved the bank off their minimap set
+## again on every run. The write is debounced for the reason
+## [constant PanelDock.SIZE_SAVE_DELAY] gives: `gui_input` fires for each frame of the
+## gesture, and each setter writes the file.
+##
+## ## It opens between the docks
+##
+## The console gives the gap between the log dock and the control panel
+## through [method set_dock_gap]. When the gap is wide enough, the first rect
+## opens centred in it. In a narrow window the box opens centred in the pane,
+## over the docks.
 ##
 ## ## One grid, and a side panel
 ##
@@ -52,17 +70,23 @@ signal keyboard_released
 ## How far the box stays inside the pane, in pixels.
 const EDGE_MARGIN := 16.0
 
-## The first size of the box, as a part of the pane. The player's own size
-## replaces it after the first drag.
+## The first size of the box, as a part of the pane, and never more than
+## [constant DEFAULT_MAX_SIZE]. The player's own size replaces it after the
+## first drag.
 const DEFAULT_FRACTION := Vector2(0.8, 0.85)
+
+## The largest first box, in pixels. A bank at 80% of a 2560 x 1440 window is
+## a grid of twenty columns. Most of that grid is empty.
+const DEFAULT_MAX_SIZE := Vector2(900, 700)
+
+## The narrowest gap between the docks that the first box opens in, in
+## pixels. Four slots across. A narrower gap gives a box that fits two slots
+## across, so the box opens centred in the pane instead.
+const MIN_GAP_WIDTH := 360.0
 
 ## The smallest box a drag can make, in pixels. The box's own minimum size wins
 ## when it is larger.
 const MIN_BOX_SIZE := Vector2(260, 180)
-
-## The resize grip in the box's bottom-right corner, in pixels.
-const GRIP_SIZE := 14.0
-const GRIP_COLOR := Color(1, 1, 1, 0.35)
 
 ## The gap between two slots of a grid, for the column count. Godot's
 ## GridContainer default.
@@ -73,10 +97,9 @@ const SLOT_GAP := 4.0
 const WIDE_RATIO := 3.0
 const NARROW_RATIO := 2.0
 
-## What a drag does: move the box, or size it.
+## Whether a drag on the title bar moves the box.
 const DRAG_NONE := ""
 const DRAG_MOVE := "move"
-const DRAG_SIZE := "size"
 
 ## The dim over the world behind the box.
 const BACKDROP_COLOR := Color(0, 0, 0, 0.35)
@@ -89,7 +112,7 @@ var _state: PopupState
 var _meshes: MeshResolver
 
 var _box: PanelContainer
-var _grip: Control
+var _grips: ResizeGrips
 var _title: Label
 var _status: Label
 var _grids: HBoxContainer
@@ -97,6 +120,26 @@ var _timers: TimerPanel
 
 ## The player's box, in pane pixels, or an empty rect before the first drag.
 var _box_rect := Rect2()
+
+## The box's rect when a grip drag started. A drag reports its offset from
+## there.
+var _drag_start := Rect2()
+
+## The gap between the two docks, in pane pixels. The left end is the right
+## edge of the log dock, and the right end is the left edge of the control
+## panel. Both are zero before the console gives them. See
+## [method set_dock_gap].
+var _gap_left := 0.0
+var _gap_right := 0.0
+
+## What the player set. The rect comes out of it on the first placement, goes
+## back into it after a drag, and each slot gets it for its amount box.
+var _settings: ClientSettings
+
+## Debounce for the write. One shot, restarted by each frame of a drag, so the
+## file is written once shortly after the player lets go.
+var _rect_timer: Timer
+const RECT_SAVE_DELAY := 0.4
 
 ## One of the DRAG_* values.
 var _drag := DRAG_NONE
@@ -167,13 +210,20 @@ func _init() -> void:
 	_footer = HBoxContainer.new()
 	column.add_child(_footer)
 
-	_grip = _build_grip()
-	add_child(_grip)
+	# Raised, so no dock covers them. See the class notes.
+	_grips = ResizeGrips.new(self, _box, ResizeGrips.ALL_EDGES, true)
+	_grips.drag_started.connect(func() -> void: _drag_start = box_rect())
+	_grips.dragged.connect(_on_grip_dragged)
 
 	# A child of this control, so it stops rendering whenever the box is
 	# hidden. See [ItemStage] on one render target for every slot.
 	_stage = ItemStage.new()
 	add_child(_stage)
+
+	_rect_timer = Timer.new()
+	_rect_timer.one_shot = true
+	_rect_timer.timeout.connect(_save_box_rect)
+	add_child(_rect_timer)
 
 
 ## Bind to a model and a mesh source, and follow them.
@@ -186,6 +236,33 @@ func bind(state: PopupState, resolver: MeshResolver) -> void:
 		_meshes.refreshed.connect(func(_key: String): _rebuild())
 
 	_rebuild()
+
+
+## Give the pane the player's settings. The box takes its rect from them the
+## first time it is placed -- see [method _player_rect].
+##
+## `changed` is deliberately NOT followed. Every other setting the console
+## applies is one the pane draws from, and this one the pane WRITES: a rect
+## pushed back in on every `changed` is how a slider in Options came to
+## collapse the pane it sat in. So **Reset in Options moves the box home on the
+## next run, not at the click.** The alternative is a compare on every change,
+## which loses a drag made inside the write delay.
+func bind_settings(settings: ClientSettings) -> void:
+	_settings = settings
+	_place_box()
+
+
+## Give the box the gap between the two docks, in pane pixels. The first rect
+## opens in it. See [method _default_rect].
+func set_dock_gap(left: float, right: float) -> void:
+	_gap_left = left
+	_gap_right = right
+	_place_box()
+
+
+## The grips of the box. For tests.
+func grips() -> ResizeGrips:
+	return _grips
 
 
 ## The slot controls of one grid, in slot order. For tests.
@@ -268,15 +345,20 @@ func box_rect() -> Rect2:
 
 ## Size the box as a drag on the grip would. Public so a test can size it with
 ## no mouse.
+##
+## The drag itself calls this, so the gesture and the test take one path and
+## the write cannot be reached by only one of them.
 func resize_box(new_size: Vector2) -> void:
 	_box_rect = Rect2(_box.position, new_size)
 	_place_box()
+	_remember_box()
 
 
 ## Move the box as a drag on the title bar would. For tests.
 func move_box(new_position: Vector2) -> void:
 	_box_rect = Rect2(new_position, _box.size)
 	_place_box()
+	_remember_box()
 
 
 # ─── Input ───────────────────────────────────────────────────────────────────
@@ -466,9 +548,14 @@ func _grid_column(grid_index: int, entry: Dictionary, first_index: int) -> Contr
 	heading.text = str(entry["title"])
 	column.add_child(heading)
 
+	# SHOW_NEVER and not DISABLED. A disabled axis adds the width of the grid
+	# to the minimum of the scroll. A wide box gives the grid more columns, and
+	# the minimum then held the box wide: a drag could not make it narrow
+	# again. [method _reflow] fits the columns to the width, so the bar that
+	# SHOW_NEVER hides has nothing to scroll.
 	var scroller := ScrollContainer.new()
 	scroller.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroller.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	column.add_child(scroller)
 	_scrollers.append(scroller)
 
@@ -509,6 +596,7 @@ func _reflow(scroller: ScrollContainer, grid: GridContainer) -> void:
 func _slot(grid_index: int, slot: int, stage_index: int) -> PopupSlot:
 	var cell := PopupSlot.new()
 	var row := _state.row_at(grid_index, slot)
+	cell.bind_settings(_settings)
 	cell.bind(row)
 	cell.command_requested.connect(command_requested.emit)
 	cell.hovered.connect(_on_slot_hovered.bind(cell, grid_index, slot))
@@ -689,87 +777,120 @@ func _restore_scroll(kept: Array) -> void:
 
 # ─── Moving and sizing the box ───────────────────────────────────────────────
 
+
 ## Put the box at the player's rect, or at the default, kept inside the pane.
+## The grips follow the box by themselves.
 func _place_box() -> void:
 	var pane := size
 
-	# The grip is null while _init still builds the box.
-	if _grip == null or pane.x <= 0.0 or pane.y <= 0.0:
+	# The grips are null while _init still builds the box.
+	if _grips == null or pane.x <= 0.0 or pane.y <= 0.0:
 		return
 
-	var rect := _box_rect if _box_rect.has_area() else _default_rect(pane)
+	var rect := _player_rect()
 	var inset := Vector2.ONE * EDGE_MARGIN
 	var room := (pane - inset * 2.0).max(Vector2.ONE)
-	var smallest := MIN_BOX_SIZE.max(_box.get_combined_minimum_size()).min(room)
+	var smallest := _smallest(room)
+
+	if not rect.has_area():
+		rect = _default_rect(pane, _gap_left, _gap_right)
 
 	rect.size = rect.size.clamp(smallest, room)
 	rect.position = rect.position.clamp(inset, pane - rect.size - inset)
 
 	_box.position = rect.position
 	_box.size = rect.size
-	_grip.position = rect.end - Vector2.ONE * GRIP_SIZE
 
 
-static func _default_rect(pane: Vector2) -> Rect2:
-	var box_size := pane * DEFAULT_FRACTION
-
-	return Rect2((pane - box_size) / 2.0, box_size)
-
-
-func _build_grip() -> Control:
-	var grip := Control.new()
-	grip.size = Vector2.ONE * GRIP_SIZE
-	grip.mouse_filter = Control.MOUSE_FILTER_STOP
-	grip.mouse_default_cursor_shape = Control.CURSOR_FDIAGSIZE
-	grip.gui_input.connect(_on_grip_input)
-	grip.draw.connect(_draw_grip.bind(grip))
-
-	return grip
+## The floor on the box: the box's own minimum or [constant MIN_BOX_SIZE], and
+## never more than the room.
+func _smallest(room: Vector2) -> Vector2:
+	return MIN_BOX_SIZE.max(_box.get_combined_minimum_size()).min(room)
 
 
-## A small triangle in the corner, the usual sign of a resize handle.
-func _draw_grip(grip: Control) -> void:
-	var corner := Vector2.ONE * GRIP_SIZE
-	var points := PackedVector2Array(
-		[Vector2(corner.x, 0), corner, Vector2(0, corner.y)])
-	grip.draw_colored_polygon(points, GRIP_COLOR)
+## The player's rect, taken from the settings the first time there is one.
+##
+## Read LAZILY rather than at bind time, because the console binds every pane
+## BEFORE it loads the file: a rect read in [method bind_settings] would always
+## be the shipped empty one. An empty rect means "no drag yet", so the read
+## repeats until there is something to read, and the first placement after the
+## file lands gets it.
+func _player_rect() -> Rect2:
+	if _box_rect.has_area():
+		return _box_rect
+
+	if _settings != null:
+		_box_rect = _settings.popup_rect
+
+	return _box_rect
 
 
+## The first rect. It is a part of the pane, and no larger than
+## [constant DEFAULT_MAX_SIZE]. It is centred in the gap between the docks.
+##
+## A gap narrower than [constant MIN_GAP_WIDTH] leaves the box centred in the
+## pane. The box then opens over the docks, and its raised grips stay in reach.
+static func _default_rect(pane: Vector2, gap_left: float, gap_right: float) -> Rect2:
+	var box_size := (pane * DEFAULT_FRACTION).min(DEFAULT_MAX_SIZE)
+	var gap_width := gap_right - gap_left - EDGE_MARGIN * 2.0
+	var centre := pane / 2.0
+
+	if gap_width >= MIN_GAP_WIDTH:
+		box_size.x = minf(box_size.x, gap_width)
+		centre.x = (gap_left + gap_right) / 2.0
+
+	return Rect2(centre - box_size / 2.0, box_size)
+
+
+## Move one or two edges of the box to where the drag of a grip puts them.
+## The edges that the grip does not name stay where they are.
+func _on_grip_dragged(edges: int, offset: Vector2) -> void:
+	var inset := Vector2.ONE * EDGE_MARGIN
+	var room := Rect2(inset, (size - inset * 2.0).max(Vector2.ONE))
+
+	_box_rect = ResizeGrips.dragged_rect(_drag_start, edges, offset,
+		_smallest(room.size), room)
+	_place_box()
+	_remember_box()
+
+
+## A left press on the title bar starts a move, motion moves the box, and the
+## release ends it. The title bar gets the motion until the release, so the
+## drag follows the mouse off it.
 func _on_header_input(event: InputEvent) -> void:
-	_follow_drag(event, DRAG_MOVE)
-
-
-func _on_grip_input(event: InputEvent) -> void:
-	_follow_drag(event, DRAG_SIZE)
-
-
-## A left press starts the drag, motion moves it, and the release ends it.
-## The control that took the press gets the motion until the release, so the
-## drag follows the mouse off the title bar.
-func _follow_drag(event: InputEvent, kind: String) -> void:
 	if event is InputEventMouseButton:
 		var click := event as InputEventMouseButton
 
 		if click.button_index == MOUSE_BUTTON_LEFT:
-			_drag = kind if click.pressed else DRAG_NONE
+			_drag = DRAG_MOVE if click.pressed else DRAG_NONE
 			accept_event()
 
 		return
 
-	if not (event is InputEventMouseMotion) or _drag != kind:
+	if not (event is InputEventMouseMotion) or _drag != DRAG_MOVE:
 		return
 
 	var motion := (event as InputEventMouseMotion).relative
-	var rect := Rect2(_box.position, _box.size)
-
-	if kind == DRAG_MOVE:
-		rect.position += motion
-	else:
-		rect.size += motion
-
-	_box_rect = rect
-	_place_box()
+	move_box(_box.position + motion)
 	accept_event()
+
+## Write the rect the box ENDED at, shortly.
+##
+## The clamped rect off `_box`, not `_box_rect`: a drag past the edge leaves
+## the raw rect outside the pane, and the number worth keeping is the one the
+## player can see. This is the rule [method PanelDock._save_size] follows.
+func _remember_box() -> void:
+	if _settings == null:
+		return
+
+	_rect_timer.start(RECT_SAVE_DELAY)
+
+
+func _save_box_rect() -> void:
+	if _settings == null:
+		return
+
+	_settings.set_popup_rect(Rect2(_box.position, _box.size))
 
 
 # ─── The hover bar ───────────────────────────────────────────────────────────

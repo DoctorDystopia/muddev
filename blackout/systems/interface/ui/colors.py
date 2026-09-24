@@ -23,6 +23,7 @@ ERROR_COLOR = "|r"          # refused action / missing requirement
 DIM_COLOR = "|x"            # de-emphasised text, misses, flavour
 SKILL_COLOR = "|c"          # skill names
 SPEECH_COLOR = "|c"         # NPC dialogue lines
+ROOM_NAME_COLOR = "|c"      # the room name at the top of a look, as Evennia draws it
 DANGER_COLOR = "|R"         # death and other terminal outcomes
 
 # Combat messaging aliases. Combat reads better in terms of who is acting than

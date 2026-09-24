@@ -32,6 +32,7 @@ window/size/viewport_height=720
 [gui]
 
 timers/tooltip_delay_sec=0.2
+theme/custom="res://ui/blackout_theme.tres"
 
 [rendering]
 

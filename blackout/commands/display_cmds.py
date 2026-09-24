@@ -19,6 +19,13 @@ from evennia import CmdSet
 from commands.constants import HELP_CATEGORY_GENERAL
 from systems.interface.popups import constants as popup_const
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.ui import move_text
+from systems.interface.ui.colors import (
+    DIM_COLOR,
+    RESET_COLOR,
+    SUCCESS_COLOR,
+    TITLE_COLOR,
+)
 
 # Every line this module sends a player is the server speaking as itself, so
 # the routing tag is bound once here rather than repeated at every call site.
@@ -55,6 +62,45 @@ MSG_STATE_OFF: str = (
 MSG_DEFAULT_SUFFIX: str = " (the default for the client you are using)"
 
 MSG_USAGE: str = "Usage: |wautomap|n, |wautomap on|n, or |wautomap off|n."
+
+# `movetext`. The part keys and their labels come from
+# systems/interface/ui/move_text.py, never from a list here.
+MOVETEXT_KEY: str = "movetext"
+MOVETEXT_ARG_RESET: str = "reset"
+
+MOVETEXT_MSG_HEADER: str = f"{TITLE_COLOR}Room text when you move:{RESET_COLOR}"
+
+# The colour goes OUTSIDE each padded field. Markup inside it counts toward
+# the width, and the columns then do not line up.
+MOVETEXT_MSG_ROW: str = (
+    f"  {TITLE_COLOR}{{key:<12}}{RESET_COLOR}"
+    f"{{colour}}{{state:<5}}{RESET_COLOR}{{label}}"
+)
+MOVETEXT_MSG_FOOTER: str = (
+    f"Change one with {TITLE_COLOR}movetext <part> on{RESET_COLOR} or "
+    f"{TITLE_COLOR}movetext <part> off{RESET_COLOR}. "
+    f"{TITLE_COLOR}look{RESET_COLOR} always shows the whole room."
+)
+MOVETEXT_MSG_SET: str = (
+    f"{TITLE_COLOR}Movetext:{RESET_COLOR} {{label}} is now "
+    f"{{colour}}{{state}}{RESET_COLOR} when you move."
+)
+MOVETEXT_MSG_RESET: str = (
+    f"{TITLE_COLOR}Movetext reset.{RESET_COLOR} "
+    "Every part of the room prints when you move."
+)
+MOVETEXT_MSG_USAGE: str = (
+    f"Usage: {TITLE_COLOR}movetext{RESET_COLOR}, "
+    f"{TITLE_COLOR}movetext <part> on{RESET_COLOR}, "
+    f"{TITLE_COLOR}movetext <part> off{RESET_COLOR}, or "
+    f"{TITLE_COLOR}movetext reset{RESET_COLOR}. Parts: {{parts}}."
+)
+
+# How each state reads, and in what colour. Keyed by "is the part shown".
+_MOVETEXT_STATES: dict = {
+    True: (ARG_ON, SUCCESS_COLOR),
+    False: (ARG_OFF, DIM_COLOR),
+}
 
 
 class CmdAutomap(Command):
@@ -177,6 +223,158 @@ class CmdAutomap(Command):
         self.caller.msg((message, _MSG_SYSTEM))
 
 
+class CmdMovetext(Command):
+    """
+    choose what the log prints when you move
+
+    Usage:
+      movetext
+      movetext <part> on
+      movetext <part> off
+      movetext reset
+
+    Each step prints the room you walk into: its name, its description, the
+    exits, who is here, and what you can see. Turn off the parts you do not
+    want, and walking gets quieter.
+
+    Parts:
+      name        the room name
+      desc        the room description
+      exits       the Exits line
+      characters  the Characters line
+      things      the You see line
+
+    With no argument, lists every part and whether it is on. `reset` turns
+    every part back on.
+
+    This changes what a STEP prints and nothing else. Typing `look` always
+    shows the whole room. The area map has its own switch: see `automap`.
+
+    Your choice is remembered on your character.
+    """
+
+    key = MOVETEXT_KEY
+    locks = "cmd:all()"
+    help_category = HELP_CATEGORY_GENERAL
+
+    def func(self):
+        """
+        Purpose: Report or set which parts of the room text print on a move.
+
+        Entry:
+            self.args carries nothing, "reset", or "<part> on|off".
+
+        Exit/Returns:
+            Returns nothing. Messages the caller in every branch.
+
+        Module Globals:
+            MOVETEXT_* and ARG_* read.
+
+        Methodology:
+            A thin parser over systems/interface/ui/move_text.py, which owns
+            the parts and the Attribute. The part keys come from that table,
+            so a new part needs no edit here.
+
+        Notes/References:
+            The one reader is Character._look_on_arrival.
+
+        Author: Nick Hobar
+        Creation date: 09/22/2026
+        """
+        words = self.args.strip().lower().split()
+
+        if not words:
+            self._report()
+            return
+
+        if words == [MOVETEXT_ARG_RESET]:
+            move_text.reset(self.caller)
+            self.caller.msg((MOVETEXT_MSG_RESET, _MSG_SYSTEM))
+            return
+
+        self._set(words)
+
+    def _set(self, words: list) -> None:
+        """
+        Purpose: Turn one part on or off, or give the usage for a bad line.
+
+        Entry:
+            words - the lowered words of the argument, at least one.
+
+        Exit/Returns:
+            Returns nothing. Messages the caller.
+
+        Module Globals:
+            _MOVETEXT_STATES, MOVETEXT_MSG_SET, MOVETEXT_MSG_USAGE read.
+
+        Methodology:
+            Exactly two words: a part key, then on or off. Anything else gets
+            the usage, with the part keys read from the table.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 09/22/2026
+        """
+        parts = {part.key: part for part in move_text.MOVE_TEXT_PARTS}
+        is_pair = len(words) == 2
+        part = parts.get(words[0]) if is_pair else None
+        choice = words[1] if is_pair else None
+
+        if part is None or choice not in (ARG_ON, ARG_OFF):
+            names = ", ".join(parts)
+            usage = MOVETEXT_MSG_USAGE.format(parts=names)
+            self.caller.msg((usage, _MSG_SYSTEM))
+            return
+
+        shown = choice == ARG_ON
+        move_text.set_part_shown(self.caller, part.key, shown)
+
+        state, colour = _MOVETEXT_STATES[shown]
+        message = MOVETEXT_MSG_SET.format(
+            label=part.label, state=state, colour=colour)
+        self.caller.msg((message, _MSG_SYSTEM))
+
+    def _report(self) -> None:
+        """
+        Purpose: List every part, in the order the room prints them, and
+                 whether each one prints on a move.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            _MOVETEXT_STATES and MOVETEXT_MSG_* read.
+
+        Methodology:
+            Reads through move_text.hidden_parts, the same call the look on
+            movement makes. Thus, the report cannot disagree with the next
+            step.
+
+        Notes/References:
+            None
+
+        Author: Nick Hobar
+        Creation date: 09/22/2026
+        """
+        hidden = move_text.hidden_parts(self.caller)
+        lines = [MOVETEXT_MSG_HEADER]
+
+        for part in move_text.MOVE_TEXT_PARTS:
+            state, colour = _MOVETEXT_STATES[part.key not in hidden]
+            row = MOVETEXT_MSG_ROW.format(
+                key=part.key, state=state, colour=colour, label=part.label)
+            lines.append(row)
+
+        lines.append(MOVETEXT_MSG_FOOTER)
+        report = "\n".join(lines)
+        self.caller.msg((report, _MSG_SYSTEM))
+
+
 class CmdPopup(Command):
     """
     close a pop-up, or set its quantity
@@ -255,4 +453,5 @@ class DisplayCmdSet(CmdSet):
 
     def at_cmdset_creation(self):
         self.add(CmdAutomap())
+        self.add(CmdMovetext())
         self.add(CmdPopup())
