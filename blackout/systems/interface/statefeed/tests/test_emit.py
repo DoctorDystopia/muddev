@@ -293,7 +293,7 @@ class TestRateCapping(unittest.TestCase):
             const.CHANNEL_ROOM_PLAYER_REMOVE,
             const.CHANNEL_COMBAT,
             const.CHANNEL_AURA,
-            const.CHANNEL_MAP,
+            const.CHANNEL_TILE_CHUNK,
         }
         capped = set(const.CHANNEL_MIN_INTERVAL_SECONDS)
 

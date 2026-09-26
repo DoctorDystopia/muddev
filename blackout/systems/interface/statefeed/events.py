@@ -43,6 +43,7 @@ from .payloads import (
     RoomPlayerRemovePayload,
     RoomPlayersDeltaPayload,
     RoomPlayersPayload,
+    TileChunkPayload,
     XpDropPayload,
 )
 
@@ -990,15 +991,88 @@ def emit_room_info(observer, force: bool = False) -> int:
 
     payload = RoomInfoPayload(
         num=room.id,
-        name=str(room.key),
-        room_kind=serializers.room_kind(room),
+        name=str(room.get_display_name(observer)),
         coords=serializers.room_coords(room),
         exits=serializers.serialize_exits(room),
         tile_actions=serializers.tile_actions(room),
         cancel_action=serializers.cancel_action(),
     )
+    sent = emit(observer, payload, force=force)
 
-    return emit(observer, payload, force=force)
+    # The chunk block follows the room: a new room can be a new chunk.
+    sent += emit_tile_chunks(observer, force=force)
+
+    return sent
+
+
+def emit_tile_chunks(observer, force: bool = False) -> int:
+    """
+    Purpose: Send each chunk of the block around the observer that this
+             observer has not received since its last resync.
+
+    Entry:
+        observer - a character, on the tile world or not.
+        force    - True on a resync. It forgets what was sent, so the new
+                   session gets the whole block.
+
+    Exit/Returns:
+        The number of messages that reached a session.
+
+    Module Globals:
+        const.TILE_CHUNKS_SENT_ATTR read.
+
+    Methodology:
+        1. Nothing for an observer off the tile world.
+        2. List the loaded chunks of the block (TileWorld.block_keys).
+        3. Forget each sent chunk outside the block. The client frees it.
+        4. Send each one that is not in the sent set, and record it. A send
+           that reached no session is not recorded, so the next move tries
+           again.
+
+    Notes/References:
+        DESIGN-0011 Phase 5, step 2. The client frees a chunk outside its
+        block by itself, with the same radius (CHUNK_STREAM_RADIUS), so no
+        message removes one.
+
+    Author: Nick Hobar
+    Creation date: 09/25/2026
+    """
+    from world import tile_travel
+
+    tile = tile_travel.tile_of(observer)
+    holder = getattr(observer, "ndb", None)
+
+    if tile is None or holder is None:
+        return 0
+
+    from systems.core.tilegrid.world import get_world
+
+    world = get_world()
+    sent_keys = getattr(holder, const.TILE_CHUNKS_SENT_ATTR, None)
+
+    if force or sent_keys is None:
+        sent_keys = set()
+        setattr(holder, const.TILE_CHUNKS_SENT_ATTR, sent_keys)
+
+    block = world.block_keys(*tile)
+
+    # The client frees each chunk outside the same block. Forget it here too,
+    # so a walk back into it sends it again.
+    sent_keys.intersection_update(block)
+    sent = 0
+
+    for key in block:
+        if key in sent_keys:
+            continue
+
+        payload = TileChunkPayload(chunk_file=world.chunk_dict(key))
+        reached = emit(observer, payload, force=True)
+
+        if reached:
+            sent_keys.add(key)
+            sent += reached
+
+    return sent
 
 
 
@@ -1325,12 +1399,12 @@ def emit_aura(owner, event: str, aura_key: str, radius: int,
         Sent to the aura's owner only. This is the one channel that names tiles
         the observer is not standing on, and that is legitimate solely because
         the text channel already shows the owner the same footprint, as the
-        tinted map overlay in typeclasses/rooms.py. Broadcasting it to the room
+        aura tint of the tile map (world/tile_map.py). Broadcasting it to the room
         would leak a player's aura radius to everyone nearby, which the text
         game does not do.
 
     Notes/References:
-        systems/gameplay/combat/auras/map_overlay.py owns the equivalent text rendering.
+        world/tile_map.py owns the equivalent text rendering.
 
     Author: Nick Hobar
     Creation date: 08/07/2026

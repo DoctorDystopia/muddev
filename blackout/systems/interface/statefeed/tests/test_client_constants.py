@@ -4,9 +4,9 @@ Author: Nick Hobar
 Creation date: 08/23/2026
 Description: Drift guards for the facts the Godot client retypes.
 
-             A client cannot import Python, so a handful of facts the server
-             owns -- which room kinds exist, which maps exist -- are spelled out
-             again in the client's own language. Nothing checks the copies, and
+             A client cannot import Python. Thus, the client code spells out
+             some server facts again: which areas, floor types, and skill
+             categories exist. Nothing checks the copies, and
              they have already drifted: `ROOM_KIND_COLORS` named a room kind
              ("Pole clearing") that no map has ever declared, so both the metal
              and the rusty pole clearings silently rendered a hash colour rather
@@ -20,11 +20,9 @@ Description: Drift guards for the facts the Godot client retypes.
                - A client key naming NOTHING is a bug. It is dead weight that
                  looks like configuration, and the thing it was meant to
                  configure is silently getting the fallback.
-               - A server fact with NO client entry is FINE. Both tables are
-                 explicitly documented as having a fallback -- room kinds hash
-                 to a stable hue, maps not named in the layout order fall in
-                 after the named ones -- so a new room or map needs no client
-                 edit. Asserting a census here would fail the moment content is
+               - A server fact with NO client entry is FINE. Each table has a
+                 documented fallback row, so a new area or floor type needs no
+                 client edit. Asserting a census here would fail the moment content is
                  added as intended, which CLAUDE.md names as the way a test
                  trains people to edit it rather than read it.
 
@@ -44,6 +42,9 @@ import os
 import re
 import unittest
 
+from world import areas as _area_table
+from world import floor_types as _floor_table
+
 from .. import clientexport as _clientexport
 from .. import constants as const
 
@@ -59,19 +60,6 @@ _GAME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
 # game dir rather than inside it.
 _REPO_ROOT = os.path.dirname(_GAME_DIR)
 
-# Where each client spells out the two tables. A path that does not exist is
-# skipped; see the module docstring.
-_ROOM_KIND_TABLE_SOURCES: tuple = (
-    # Both tables moved out of world_view.gd on 08/28/2026, when the minimap
-    # became a second pane drawing the same map. This path moved WITH them, in
-    # the same change, because a source this scanner cannot find is one it
-    # silently stops checking -- which is the whole reason for the vacuity
-    # guard further down.
-    os.path.join(_REPO_ROOT, "godot", "world", "map_palette.gd"),
-)
-
-_MAP_ORDER_SOURCES: tuple = _ROOM_KIND_TABLE_SOURCES
-
 # Which skill category is drawn in which colour. The Godot pane's only: the
 # browser client has no skills screen, and a table one client does not have is
 # not drift.
@@ -79,11 +67,17 @@ _SKILL_CATEGORY_SOURCES: tuple = (
     os.path.join(_REPO_ROOT, "godot", "world", "skill_palette.gd"),
 )
 
-# Which map is surfaced with which terrain model. The Godot pane's only, for
-# now: the browser pane still draws every tile as a plain coloured slab, and a
-# table one client does not have is not drift.
-_TERRAIN_TABLE_SOURCES: tuple = (
-    os.path.join(_REPO_ROOT, "godot", "world", "map_palette.gd"),
+# The fog and the light of each area (DESIGN-0011 section 6.7). Each key
+# names a row of world/areas.py, the table that the `areas` layer of a chunk
+# file names.
+_AREA_LOOK_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "area_look.gd"),
+)
+
+# The colour of each floor type (DESIGN-0011 section 6.8). Each key names a row
+# of world/floor_types.py.
+_FLOOR_PALETTE_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "terrain", "floor_palette.gd"),
 )
 
 # Which whole FAMILY stands in a packed model's place -- tier 2 of the mesh
@@ -107,18 +101,6 @@ _DOLL_LAYOUT_SOURCES: tuple = (
     os.path.join(_REPO_ROOT, "godot", "world", "doll_layout.gd"),
 )
 
-# The table assignment, in either language. JS writes
-# `const ROOM_KIND_COLORS = {`, GDScript writes `const ROOM_KIND_COLORS := {`;
-# one optional colon covers both.
-_ROOM_KIND_TABLE_RE = re.compile(
-    r"ROOM_KIND_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
-
-_MAP_ORDER_RE = re.compile(
-    r"Z_LAYOUT_ORDER\s*:?=\s*\[(.*?)\]", re.DOTALL)
-
-_TERRAIN_TABLE_RE = re.compile(
-    r"TILE_MODELS\s*:?=\s*\{(.*?)\}", re.DOTALL)
-
 # Anchored on `var MODELS` rather than on the bare name, and carrying an
 # optional `: Dictionary` annotation: this one is a `static var` because its
 # siblings in the same file are (a GDScript `const` may not hold a computed
@@ -132,6 +114,20 @@ _FAMILY_MODEL_TABLE_RE = re.compile(
 # regex above cannot read this table and a value-only match is not laziness but
 # the shape of the source.
 _TABLE_VALUE_RE = re.compile(r':\s*"([^"]+)"')
+
+# The area table. Each row is itself a dictionary, so the match ends at a
+# closing brace at the start of a line, for the reason `_DOLL_ROWS_RE` gives.
+_AREA_LOOK_TABLE_RE = re.compile(
+    r"const\s+LOOKS\s*:?=\s*\{(.*?)^\}", re.DOTALL | re.MULTILINE)
+
+# A row key: one tab of indent, a quoted name, and the opening brace of its row.
+# A field inside a row sits at two tabs, so this never reads a field name.
+_AREA_LOOK_KEY_RE = re.compile(r'^\t"([^"]+)"\s*:\s*\{', re.MULTILINE)
+
+# The floor palette. A row is one tab of indent, a quoted name, and a Color.
+_FLOOR_PALETTE_TABLE_RE = re.compile(
+    r"const\s+COLORS\s*:?=\s*\{(.*?)^\}", re.DOTALL | re.MULTILINE)
+_FLOOR_PALETTE_KEY_RE = re.compile(r'^\t"([^"]+)"\s*:\s*Color\(', re.MULTILINE)
 
 _SKILL_CATEGORY_TABLE_RE = re.compile(
     r"SKILL_CATEGORY_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
@@ -147,11 +143,6 @@ _DOLL_ROWS_RE = re.compile(r"ROWS[^=]*=\s*\[(.*?)^\]", re.DOTALL | re.MULTILINE)
 # location the same way and fails the same way.
 _DOLL_WIDE_SLOT_RE = re.compile(r'WIDE_SLOT\s*:?=\s*"([^"]+)"')
 
-# `"map name": "asset_key"` -- both halves of a terrain row at once, because
-# the two are checked against DIFFERENT sources and a row read as two loose
-# lists could not say which map named the bad key.
-_TABLE_PAIR_RE = re.compile(r'"([^"]+)"\s*:\s*"([^"]+)"')
-
 # A double-quoted string that is a table KEY -- followed by a colon. This is
 # what keeps `Color("cc6633")` on the GDScript value side out of the key set.
 _TABLE_KEY_RE = re.compile(r'"([^"]+)"\s*:')
@@ -163,31 +154,9 @@ _QUOTED_RE = re.compile(r'"([^"]+)"')
 # named inside a comment is not mistaken for a live entry.
 _COMMENT_RE = re.compile(r"(//|#).*$", re.MULTILINE)
 
-# Where a map module declares the room key for a coordinate.
-_PROTOTYPE_KEY = "key"
-
 # Where each generated client module is written. Read from the renderer rather
 # than restated, which is the same rule this whole module exists to enforce.
 _GENERATED_OUTPUTS: dict = _clientexport.output_paths()
-
-# Map modules that exist but are NOT in scripts/map_manifest.json. Live maps are
-# read from the manifest itself (see _map_module_names); only a map declared
-# ahead of activation needs a line here. Deliberately NOT a directory scan of
-# world/maps: manifest.py is not a map, and a scan cannot tell the difference.
-#
-# This used to name every map, live ones included, and went stale the day
-# azm_plains joined the manifest: Godot placed and surfaced a map this module
-# could not see, and two drift checks reported a real map as a typo.
-_INACTIVE_MAP_MODULE_NAMES: tuple = (
-    "world.maps.neo_cairo",
-)
-
-# The only package a map module may be imported from. The manifest is a data
-# file, and a row naming anything outside this package -- blackout/scripts/
-# above all, which CLAUDE.md marks import-unsafe -- is refused rather than
-# imported.
-_MAP_PACKAGE_PREFIX = "world.maps."
-
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
@@ -223,92 +192,35 @@ def _read_source(path):
     return _COMMENT_RE.sub("", text)
 
 
-def _extract_room_kind_keys(source):
+def _extract_area_look_keys(source):
     """
-    Purpose: Pull the authored room-kind names out of a client's colour table.
+    Purpose: Read the area names out of the fog and light table.
 
     Entry:
         source - client source text, comments already stripped.
 
     Exit/Returns:
-        A list of the table's keys, or None when the file declares no table.
+        A list of area names, or None when the file declares no table.
 
     Module Globals:
-        _ROOM_KIND_TABLE_RE, _TABLE_KEY_RE read.
+        _AREA_LOOK_TABLE_RE, _AREA_LOOK_KEY_RE read.
 
     Methodology:
-        Match the table body, then take only quoted strings followed by a
-        colon. The colon is what separates a key from a value, which matters
-        for GDScript, where the value is `Color("cc6633")` and the hex is
-        itself a quoted string.
+        1. Find the table body.
+        2. Read each key at one tab of indent.
 
     Notes/References:
-        None
+        DESIGN-0011 section 6.7.
+
+    Author: Nick Hobar
+    Creation date: 09/24/2026
     """
-    match = _ROOM_KIND_TABLE_RE.search(source)
+    match = _AREA_LOOK_TABLE_RE.search(source)
 
     if not match:
         return None
 
-    return _TABLE_KEY_RE.findall(match.group(1))
-
-
-def _extract_map_order(source):
-    """
-    Purpose: Pull the authored map names out of a client's layout order.
-
-    Entry:
-        source - client source text, comments already stripped.
-
-    Exit/Returns:
-        A list of the map names, or None when the file declares no order.
-
-    Module Globals:
-        _MAP_ORDER_RE, _QUOTED_RE read.
-
-    Methodology:
-        The list holds nothing but strings in both languages, so every quoted
-        run inside it is an entry.
-
-    Notes/References:
-        None
-    """
-    match = _MAP_ORDER_RE.search(source)
-
-    if not match:
-        return None
-
-    return _QUOTED_RE.findall(match.group(1))
-
-
-def _extract_terrain_rows(source):
-    """
-    Purpose: Pull the map -> terrain-asset rows out of a client's table.
-
-    Entry:
-        source - client source text, comments already stripped.
-
-    Exit/Returns:
-        A list of (map_name, asset_key) pairs, or None when the file declares
-        no table.
-
-    Module Globals:
-        _TERRAIN_TABLE_RE, _TABLE_PAIR_RE read.
-
-    Methodology:
-        Both halves are read together. They are checked against different
-        sources -- the map modules and the model manifest -- so a failure has
-        to be able to name the row it came from rather than the half.
-
-    Notes/References:
-        None
-    """
-    match = _TERRAIN_TABLE_RE.search(source)
-
-    if not match:
-        return None
-
-    return _TABLE_PAIR_RE.findall(match.group(1))
+    return _AREA_LOOK_KEY_RE.findall(match.group(1))
 
 
 def _extract_family_model_assets(source):
@@ -369,151 +281,6 @@ def _packed_asset_keys():
     from assets.pipeline import records
 
     return {key for record in records.load_all() for key in record.keys}
-
-
-def _map_module_names():
-    """
-    Purpose: Every map module the server declares, active or not.
-
-    Entry:
-        None.
-
-    Exit/Returns:
-        A list of dotted module paths, manifest order first, no duplicates.
-
-    Module Globals:
-        _INACTIVE_MAP_MODULE_NAMES, _MAP_PACKAGE_PREFIX read.
-
-    Methodology:
-        The manifest's modules, then the inactive ones named above. Reading the
-        manifest is what lets a map added the documented way -- one manifest
-        row -- reach these checks with no edit here. Each path is checked
-        against _MAP_PACKAGE_PREFIX before it is returned.
-
-    Notes/References:
-        world/maps/manifest.py is the manifest's one reader and is pure data
-        access; it touches no database.
-    """
-    from world.maps.manifest import load_entries, modules_of
-
-    names = []
-
-    for name in modules_of(load_entries()) + list(_INACTIVE_MAP_MODULE_NAMES):
-        if not name.startswith(_MAP_PACKAGE_PREFIX):
-            raise ValueError(
-                "Map module %r is outside %s; refusing to import it."
-                % (name, _MAP_PACKAGE_PREFIX))
-
-        if name not in names:
-            names.append(name)
-
-    return names
-
-
-def _map_modules():
-    """
-    Purpose: Import every map module the server declares.
-
-    Entry:
-        None.
-
-    Exit/Returns:
-        A list of imported module objects.
-
-    Module Globals:
-        None.
-
-    Methodology:
-        A plain importlib call per name. The map modules are pure data: they
-        build dicts and reference typeclasses by dotted string, so importing
-        one touches no database.
-
-    Notes/References:
-        Import-safety is why these are named individually rather than globbed.
-        See _map_module_names.
-    """
-    from importlib import import_module
-
-    return [import_module(name) for name in _map_module_names()]
-
-
-def _server_room_kinds():
-    """
-    Purpose: Every room kind the server could ever report.
-
-    Entry:
-        None.
-
-    Exit/Returns:
-        A set of room-kind strings.
-
-    Module Globals:
-        _PROTOTYPE_KEY, const read.
-
-    Methodology:
-        Read the `key` of every entry in every map module's PROTOTYPES table,
-        including the ('*', '*') wildcard, which is the kind for every
-        coordinate a map does not override. Add the one kind no map declares:
-        ROOM_KIND_TRANSITION, which serializers.room_kind synthesises for a
-        node that spawns no room.
-
-        Modules OUTSIDE the manifest are included on purpose. The manifest
-        decides which maps are live, but a client may name a map it is being
-        built for ahead of activation -- Z_LAYOUT_ORDER names
-        "trade town sector 1" today, whose module exists and is not yet in the
-        manifest. Checking against the manifest would make that forward
-        reference an error, which is exactly backwards: the point of the check
-        is to catch a name that matches NOTHING.
-
-    Notes/References:
-        serializers.room_kind is the routine whose output this mirrors.
-    """
-    kinds = {const.ROOM_KIND_TRANSITION}
-
-    for module in _map_modules():
-        prototypes = getattr(module, "PROTOTYPES", {})
-
-        for prototype in prototypes.values():
-            key = prototype.get(_PROTOTYPE_KEY, "")
-
-            if key:
-                kinds.add(key)
-
-    return kinds
-
-
-def _server_map_names():
-    """
-    Purpose: Every zcoord a map module declares.
-
-    Entry:
-        None.
-
-    Exit/Returns:
-        A set of map-name strings.
-
-    Module Globals:
-        None
-
-    Methodology:
-        Read `zcoord` off every XYMAP_DATA a module exposes through
-        XYMAP_DATA_LIST, which is the list the xyzgrid parser itself reads and
-        therefore the shape that supports several maps in one module.
-
-    Notes/References:
-        Same manifest reasoning as _server_room_kinds: a declared-but-inactive
-        map still counts as a real name.
-    """
-    names = set()
-
-    for module in _map_modules():
-        for data in getattr(module, "XYMAP_DATA_LIST", []):
-            zcoord = data.get("zcoord", "")
-
-            if zcoord:
-                names.add(zcoord)
-
-    return names
 
 
 def _extract_doll_slots(source):
@@ -693,151 +460,96 @@ class ClientSkillCategoryTests(unittest.TestCase):
 
 
 
-class ClientRoomKindTests(unittest.TestCase):
-    """Every room kind a client colours by name must be a kind that exists."""
-
-    def test_no_client_names_a_room_kind_that_does_not_exist(self):
-        """
-        A key matching no map prototype is dead configuration: the room it was
-        meant to colour is silently getting the hash fallback instead.
-        """
-        known = _server_room_kinds()
-
-        for path in _ROOM_KIND_TABLE_SOURCES:
-            source = _read_source(path)
-
-            if source is None:
-                continue
-
-            keys = _extract_room_kind_keys(source)
-
-            if keys is None:
-                continue
-
-            for key in keys:
-                with self.subTest(client=os.path.basename(path), kind=key):
-                    self.assertIn(
-                        key, known,
-                        "'%s' is coloured by %s but no map declares it. "
-                        "Rooms it was meant to colour are falling through to "
-                        "the hashed hue." % (key, os.path.basename(path)))
-
-
-class ClientMapOrderTests(unittest.TestCase):
-    """Every map a client places by name must be a map that exists."""
-
-    def test_no_client_names_a_map_that_does_not_exist(self):
-        """
-        A layout-order entry matching no module is a typo that costs nothing
-        visible -- the named map simply never matches, and every real map falls
-        into arrival order behind it.
-
-        A map that exists but is not in the manifest is NOT an error here; see
-        _server_map_names.
-        """
-        known = _server_map_names()
-
-        for path in _MAP_ORDER_SOURCES:
-            source = _read_source(path)
-
-            if source is None:
-                continue
-
-            names = _extract_map_order(source)
-
-            if names is None:
-                continue
-
-            for name in names:
-                with self.subTest(client=os.path.basename(path), map=name):
-                    self.assertIn(
-                        name, known,
-                        "'%s' is placed by %s but no map module declares that "
-                        "zcoord." % (name, os.path.basename(path)))
-
-
-class ClientTerrainTileTests(unittest.TestCase):
-    """Every map surfaced with terrain art must name a real map and real art."""
-
-    def _rows(self):
-        """Every terrain row every client present declares, with its file."""
-        rows = []
-
-        for path in _TERRAIN_TABLE_SOURCES:
-            source = _read_source(path)
-
-            if source is None:
-                continue
-
-            found = _extract_terrain_rows(source)
-
-            if found is None:
-                continue
-
-            for name, asset_key in found:
-                rows.append((os.path.basename(path), name, asset_key))
-
-        return rows
+class ClientAreaLookTests(unittest.TestCase):
+    """Every area that the fog and light table names must be a real area."""
 
     def test_a_client_that_is_here_declares_the_table(self):
         """
-        The vacuity guard for the two checks below, in the shape this table
-        needs it: both skip a client whose table they cannot match, so renaming
-        TILE_MODELS would turn them green while checking nothing.
-
-        A client file that is not here at all is still skipped -- the Godot
-        client lives on a branch, per the module docstring.
+        The vacuity guard. The check below skips a file whose table it cannot
+        match. Thus, a renamed LOOKS table or a changed row shape would turn it
+        green while it checks nothing.
         """
-        for path in _TERRAIN_TABLE_SOURCES:
+        for path in _AREA_LOOK_SOURCES:
             source = _read_source(path)
 
             if source is None:
                 continue
 
+            keys = _extract_area_look_keys(source)
+
             with self.subTest(client=os.path.basename(path)):
-                self.assertIsNotNone(
-                    _extract_terrain_rows(source),
-                    "%s exists but declares no TILE_MODELS table. Either it "
-                    "was renamed or the terrain layer was removed; the drift "
-                    "checks on it are now inert." % path)
+                self.assertTrue(
+                    keys,
+                    "%s exists but no LOOKS row was found. Either the table "
+                    "was renamed or a row key is not at one tab of indent. "
+                    "The drift check on it is now inert." % path)
 
-    def test_no_client_surfaces_a_map_that_does_not_exist(self):
+    def test_no_client_names_an_area_that_does_not_exist(self):
         """
-        A key matching no map module is dead configuration of the worst kind
-        here: the map it meant to surface keeps the plain slab, which is
-        exactly what an unnamed map looks like, so nothing about the result
-        says the name was wrong.
+        A key that names no area is dead configuration. The area that it
+        meant to colour gets the fallback fog, and nothing says why.
+
+        An area with no row is fine. It gets the fallback, so new content
+        needs no client edit.
         """
-        known = _server_map_names()
+        known = _area_table.AREAS
 
-        for client, name, _asset_key in self._rows():
-            with self.subTest(client=client, map=name):
-                self.assertIn(
-                    name, known,
-                    "'%s' is surfaced by %s but no map module declares that "
-                    "zcoord, so nothing is drawn and nothing says so."
-                    % (name, client))
+        for path in _AREA_LOOK_SOURCES:
+            source = _read_source(path)
 
-    def test_every_terrain_asset_is_one_the_build_can_produce(self):
+            if source is None:
+                continue
+
+            for name in _extract_area_look_keys(source) or ():
+                with self.subTest(client=os.path.basename(path), area=name):
+                    self.assertIn(
+                        name, known,
+                        "'%s' has a fog and light row in %s, but "
+                        "world/areas.py has no such area."
+                        % (name, os.path.basename(path)))
+
+
+class ClientFloorPaletteTests(unittest.TestCase):
+    """Every floor type that the floor palette names must be a real one."""
+
+    def _palette_keys(self):
+        """Return (client file name, keys) for each palette file here."""
+        found = []
+
+        for path in _FLOOR_PALETTE_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            match = _FLOOR_PALETTE_TABLE_RE.search(source)
+            keys = []
+
+            if match:
+                keys = _FLOOR_PALETTE_KEY_RE.findall(match.group(1))
+
+            found.append((os.path.basename(path), keys))
+
+        return found
+
+    def test_a_client_that_is_here_declares_the_table(self):
         """
-        The other half, and it fails the same way round: an asset key with no
-        manifest row is never fetched, never 404s, and leaves the slab.
-
-        This is the direction the asymmetry in the module docstring does NOT
-        cover, and deliberately. A room kind with no colour entry is fine
-        because the fallback is a colour; a map naming art that cannot exist
-        has no fallback worth having -- it is simply a line that does nothing.
+        The vacuity guard. A renamed COLORS table or a changed row shape
+        would turn the check below green while it checks nothing.
         """
-        known = _packed_asset_keys()
+        for client, keys in self._palette_keys():
+            with self.subTest(client=client):
+                self.assertTrue(keys, "%s declares no COLORS row" % client)
 
-        for client, name, asset_key in self._rows():
-            with self.subTest(client=client, asset_key=asset_key):
-                self.assertIn(
-                    asset_key, known,
-                    "%s surfaces '%s' with '%s', which assets/"
-                    "models/ has no record for. The map keeps its "
-                    "plain slab and nothing reports it."
-                    % (client, name, asset_key))
+    def test_no_client_names_a_floor_type_that_does_not_exist(self):
+        """
+        A key that names no floor type is dead configuration. A floor type
+        with no key is fine: it gets a stable hashed colour.
+        """
+        for client, keys in self._palette_keys():
+            for name in keys:
+                with self.subTest(client=client, floor=name):
+                    self.assertIn(name, _floor_table.FLOOR_TYPES)
 
 
 class ClientFamilyModelTests(unittest.TestCase):
@@ -1027,20 +739,22 @@ class ClientTableDiscoveryTests(unittest.TestCase):
         """
         found = []
 
-        for path in _ROOM_KIND_TABLE_SOURCES:
+        # The area look table since DESIGN-0011 Phase 4b. The room kind table
+        # went with the xyzgrid maps.
+        for path in _AREA_LOOK_SOURCES:
             source = _read_source(path)
 
             if source is None:
                 continue
 
-            if _extract_room_kind_keys(source):
+            if _extract_area_look_keys(source):
                 found.append(path)
 
         self.assertTrue(
             found,
-            "No client declared a ROOM_KIND_COLORS table. Either the clients "
-            "moved or the table was renamed; every drift check in this module "
-            "is now inert.")
+            "No client declared a LOOKS table. Either the clients moved or "
+            "the table was renamed. Every drift check in this module is now "
+            "inert.")
 
 
 class GeneratedConstantsTests(unittest.TestCase):

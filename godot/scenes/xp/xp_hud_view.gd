@@ -553,16 +553,16 @@ func _next_text(row: Dictionary) -> String:
 	if row.is_empty():
 		return ""
 
-	var name := str(row.get("name", "")).to_lower()
+	var skill_name := str(row.get("name", "")).to_lower()
 	var level := int(row.get("level", 0))
 	var needed := int(row.get("needed_xp", 0))
 
 	if needed <= 0:
-		return CAPPED_TEXT % [name, level]
+		return CAPPED_TEXT % [skill_name, level]
 
 	var remaining := needed - int(row.get("current_xp", 0))
 
-	return NEXT_TEXT % [name, level, level + 1, thousands(maxi(remaining, 0))]
+	return NEXT_TEXT % [skill_name, level, level + 1, thousands(maxi(remaining, 0))]
 
 
 static func _rate_text(rate: int) -> String:

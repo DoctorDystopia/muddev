@@ -7,7 +7,7 @@ Description: Guard the one thing that decides whether a large statefeed payload
 
 Why this is a test and not a comment
 ------------------------------------
-`blackout_map` is chunked at MAP_NODES_PER_CHUNK because Godot's WebSocketPeer
+The retired xyzgrid map channel was chunked because Godot's WebSocketPeer
 defaults to a 65535-byte inbound buffer, and on Godot < 4.4 an oversized
 message was TRUNCATED SILENTLY. That reasoning is written down beside the
 constant -- and it protected the map while `room_players` quietly grew past it
@@ -31,7 +31,7 @@ What "fails" means here
 A failure is NOT necessarily a bug in the payload. It is a decision that has
 come due, and there are three real answers: raise
 CLIENT_INBOUND_BUFFER_BYTES (cheap -- it is one buffer in one client process),
-lower STATEFEED_ENTITY_RADIUS, or chunk room_players the way the map is
+lower STATEFEED_ENTITY_RADIUS, or chunk room_players the way the old map was
 chunked. The assertion messages say so, because a test that only says "43000 >
 40000" invites the fourth answer, which is editing the threshold until it
 passes.
@@ -42,9 +42,12 @@ import unittest
 
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.core.tilegrid import chunkfile
+from systems.core.tilegrid import constants as tile_const
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import serializers
 from systems.interface.statefeed.payloads import RoomPlayersPayload
+from world.object_kinds import OBJECT_KINDS
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -81,7 +84,7 @@ _LONG_ASSET = "npc_mutant_raider_sergeant_eastern_variant_b"
 # 1200-entity room measures 845336 bytes at four, so CLIENT_INBOUND_BUFFER_BYTES
 # went from 1 MiB to 2 MiB rather than the UI losing the only way a graphical
 # client has to ask for a particular cut. The other two levers on the table --
-# lower STATEFEED_ENTITY_RADIUS, or chunk room_players the way blackout_map is
+# lower STATEFEED_ENTITY_RADIUS, or chunk room_players the way the old map was
 # chunked -- are both still there and both still cost more than a buffer does.
 #
 # Keep this at what a real corpse actually affords. Set higher it stops being
@@ -90,6 +93,21 @@ _WORST_CASE_ACTIONS = 4
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
+
+def _worst_chunk_dict() -> dict:
+    """The wire form of a chunk file with the widest value in every cell."""
+    size = tile_const.CHUNK_SIZE
+    tile_count = size * size
+    kind = next(iter(OBJECT_KINDS))
+    chunk_file = chunkfile.ChunkFile(
+        cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
+        heights=[tile_const.HEIGHT_MIN] * tile_const.CORNERS_PER_SIDE ** 2,
+        floors=[0] * tile_count, flags=[tile_const.FLAGS_ALL] * tile_count,
+        areas=[0] * tile_count,
+        objects=[chunkfile.ChunkObject(kind, x, 0) for x in range(size)])
+
+    return chunkfile.to_dict(chunk_file)
+
 
 def _wire_bytes(payload) -> int:
     """Return the size of the JSON frame this payload becomes on the socket.
@@ -166,19 +184,23 @@ class PayloadCeilingTests(unittest.TestCase):
             f"{_HEADROOM_FRACTION:.2f}). This is a decision coming due, not a "
             "number to edit: raise CLIENT_INBOUND_BUFFER_BYTES (it is one "
             "buffer in one client process), lower STATEFEED_ENTITY_RADIUS, or "
-            "chunk room_players the way blackout_map is chunked. See "
+            "chunk room_players. See "
             "docs/2026-09-03-PERF-0002-crowd-scaling.md.")
 
-    def test_the_map_chunk_ceiling_still_holds_too(self):
+    def test_the_worst_tile_chunk_fits_the_buffer_too(self):
         """
-        MAP_NODES_PER_CHUNK exists for the same reason and predates this file.
-        Asserting it here keeps the two payload ceilings in one place, so a
-        reader raising one is shown the other.
+        One `blackout_chunk` message holds a whole chunk file. It replaced the
+        xyzgrid map channel in DESIGN-0011, and it is the other large payload.
+        The worst case: every height at its widest value, every flag bit on,
+        and one object on each tile of the first row.
         """
-        self.assertGreater(const.MAP_NODES_PER_CHUNK, 0)
+        body = json.dumps(_worst_chunk_dict())
+        budget = int(const.CLIENT_INBOUND_BUFFER_BYTES * _HEADROOM_FRACTION)
+
         self.assertLess(
-            const.MAP_NODES_PER_CHUNK, 2000,
-            "A chunk this large defeats the chunking. See the constant.")
+            len(body.encode("utf-8")), budget,
+            "A chunk file no longer fits the client buffer with headroom. "
+            "Raise CLIENT_INBOUND_BUFFER_BYTES, or split the chunk message.")
 
 
 class RealPayloadSizeTests(EvenniaTest):

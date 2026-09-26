@@ -42,6 +42,8 @@ import math
 
 from evennia.utils import logger
 
+from world import tile_travel
+
 from . import constants as const
 from .auras.targeting import within_metric
 
@@ -186,10 +188,19 @@ def room_distance(origin, destination):
     if here[2] != there[2]:
         return None
 
+    return _planar_distance(here, there)
+
+
+def _planar_distance(here, there) -> int:
+    """
+    The straight-line tiles between two (x, y, ...) points, rounded. The one
+    measure that room_distance and the tile world chase both use.
+    """
     dx = there[0] - here[0]
     dy = there[1] - here[1]
+    distance = int(round(math.sqrt((dx * dx) + (dy * dy))))
 
-    return int(round(math.sqrt((dx * dx) + (dy * dy))))
+    return distance
 
 
 def tile_distance(attacker, target):
@@ -512,6 +523,28 @@ def step_toward(mover, target) -> bool:
     return step_toward_room(mover, getattr(target, "location", None))
 
 
+def _step_on_tile_world(mover, destination_room) -> bool:
+    """
+    The tile world branch of step_toward_room. A tile room has no exits, so
+    the eight neighbour tiles take their place. The rule stays the same:
+    greedy, strictly closer, by the same measure. Never raises.
+    """
+    there = _room_coordinates(destination_room)
+    here = _room_coordinates(mover.location)
+
+    if there is _OFF_GRID or here is _OFF_GRID or here[2] != there[2]:
+        return False
+
+    try:
+        moved = tile_travel.step_toward(
+            mover, (int(there[0]), int(there[1])), _planar_distance)
+    except Exception:
+        logger.log_trace()
+        return False
+
+    return moved
+
+
 def step_toward_room(mover, destination_room) -> bool:
     """
     Purpose: Move `mover` one tile along whichever exit brings it closest to
@@ -557,6 +590,9 @@ def step_toward_room(mover, destination_room) -> bool:
 
     if room is None or destination_room is None:
         return False
+
+    if tile_travel.on_tile_world(mover):
+        return _step_on_tile_world(mover, destination_room)
 
     best_exit = None
     best_distance = room_distance(room, destination_room)

@@ -201,3 +201,47 @@ class NeighbourhoodFailureTests(unittest.TestCase):
         neighbourhood.visible_rooms(_Unsaved(), 1)
 
         self.assertEqual(neighbourhood.stats()["size"], 0)
+
+
+class TileWorldNeighbourhoodTests(EvenniaTest):
+    """A tile room reads the tile grid index, never the cache (09/25/2026)."""
+
+    def setUp(self):
+        super().setUp()
+        from systems.core.tilegrid import chunkfile
+        from systems.core.tilegrid import constants as tile_const
+        from systems.core.tilegrid.world import TileWorld, set_world
+
+        size = tile_const.CHUNK_SIZE
+        chunk_file = chunkfile.ChunkFile(
+            cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
+            heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
+            floors=[0] * size * size, flags=[0] * size * size,
+            areas=[0] * size * size)
+        self.world = TileWorld([chunk_file])
+        self.world.rooms.load()
+        set_world(self.world)
+        neighbourhood.reset()
+
+    def tearDown(self):
+        from systems.core.tilegrid.world import set_world
+
+        set_world(None)
+        neighbourhood.reset()
+        super().tearDown()
+
+    def test_a_moved_pool_room_sees_its_new_neighbours(self):
+        rooms = self.world.rooms
+        first = rooms.ensure_room(5, 5)
+        old_neighbour = rooms.ensure_room(6, 5)
+        neighbourhood.visible_rooms(first, 2)
+
+        rooms.release(first)
+        moved = rooms.ensure_room(40, 40)
+        new_neighbour = rooms.ensure_room(41, 40)
+        found = neighbourhood.visible_rooms(moved, 2)
+
+        self.assertIs(moved, first)
+        self.assertIn(new_neighbour, found)
+        self.assertNotIn(old_neighbour, found)
+        self.assertEqual(neighbourhood.stats()["size"], 0)

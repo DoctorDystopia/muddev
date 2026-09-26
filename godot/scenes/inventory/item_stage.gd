@@ -154,6 +154,7 @@ func texture_for(index: int) -> AtlasTexture:
 	var atlas := AtlasTexture.new()
 
 	atlas.atlas = get_texture()
+	@warning_ignore("integer_division")
 	atlas.region = Rect2(
 		float(index % COLUMNS) * CELL_PIXELS,
 		float(index / COLUMNS) * CELL_PIXELS,
@@ -169,6 +170,7 @@ func texture_for(index: int) -> AtlasTexture:
 ## the top and is invisible until the bag has two rows in it.
 func cell_centre(index: int) -> Vector3:
 	var column := index % COLUMNS
+	@warning_ignore("integer_division")
 	var row := index / COLUMNS
 	var rows := _row_count()
 

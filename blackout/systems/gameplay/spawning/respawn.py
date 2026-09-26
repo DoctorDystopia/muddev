@@ -212,6 +212,21 @@ class BlackoutRespawnManager(DefaultScript):
             self._write_queue(keep)
         return dropped
 
+    def cancel_room(self, room) -> int:
+        """Drop every pending entry for `room`. Returns the count dropped.
+
+        The tile sync (systems/gameplay/spawning/tile_sync.py) calls this when
+        it demolishes a tile. A tile room survives the sync, so an entry for
+        it stays valid, and the old NPC would come back on a tile that no
+        longer places it.
+        """
+        queue = self._read_queue()
+        keep = [entry for entry in queue if entry.get("room") != room]
+        dropped = len(queue) - len(keep)
+        if dropped:
+            self._write_queue(keep)
+        return dropped
+
     # ── the sweep ────────────────────────────────────────────────────────
 
     def at_repeat(self, **kwargs) -> None:

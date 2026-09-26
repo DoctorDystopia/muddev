@@ -881,7 +881,7 @@ def spawn_lone_android(room):
         while the shopkeep's persisted copy did not.
 
     Notes/References:
-        Maps are rebuilt with scripts/clean_and_reload_all_maps.ps1.
+        The tile sync (scripts/sync_tile_objects.py) runs the spawner.
 
     Author: Nick Hobar
     Creation date: 08/25/2026

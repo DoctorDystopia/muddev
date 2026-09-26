@@ -29,6 +29,10 @@ Evennia="*res://autoload/evennia.gd"
 window/size/viewport_width=1280
 window/size/viewport_height=720
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/blackout_terrain/plugin.cfg")
+
 [gui]
 
 timers/tooltip_delay_sec=0.2

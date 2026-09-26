@@ -402,6 +402,7 @@ func _the_screen_gives_the_first_scale() -> void:
 
 	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(reference), 1.0),
 		"a screen at the reference density gives a scale of 1")
+	@warning_ignore("integer_division")
 	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(reference * 3 / 2), 1.5),
 		"a screen at one and a half times it gives 1.5")
 	_expect(is_equal_approx(ClientSettings.ui_scale_for_dpi(reference * 4),

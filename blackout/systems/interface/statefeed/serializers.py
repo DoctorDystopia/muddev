@@ -47,10 +47,9 @@ def _prototype_key(entity) -> str:
     Entry:
         entity - any object. Need not have been spawned from a prototype.
 
-        Items only. Do NOT call this for rooms: the xyzgrid sets no explicit
+        Items only. Do NOT call this for rooms: a room has no explicit
         prototype_key, so Evennia auto-generates a per-room hash
-        ("prototype-8ede16d") which names nothing. room_kind() reads the room
-        key instead, and documents why.
+        ("prototype-8ede16d") which names nothing.
 
     Exit/Returns:
         The prototype key string, or "" when the object carries no prototype
@@ -276,165 +275,6 @@ def _mesh_family(entity, kind: str) -> str:
 
     return family
 
-
-def _parsed_map(room):
-    """
-    Purpose: Hand back the parsed XYMap the observer is standing on.
-
-    Entry:
-        room - the observer's room. Need not be an XYZRoom, and need not be a
-        room at all: a stand-in with no `xymap` is answered with None.
-
-    Exit/Returns:
-        Returns the XYMap, or None when there is no grid and no map.
-
-    Module Globals:
-        None.
-
-    Methodology:
-        `XYZRoom.xymap` is a cached property that reaches the grid through the
-        contrib's get_xyzgrid(), so this costs one attribute read per move
-        after the first. It is wrapped rather than tested for, because the
-        property RAISES on a server whose grid has not been built -- a bare
-        getattr with a default would not catch that.
-
-    Notes/References:
-        Only tile_actions needs this, and only for the one thing an exit
-        cannot answer on its own: where on THIS map a doorway to another map
-        is drawn. Everything else here is read off the world objects.
-
-    Author: Nick Hobar
-    Creation date: 08/28/2026
-    """
-    try:
-        xymap = getattr(room, "xymap", None)
-    except Exception:
-        return None
-
-    return xymap
-
-
-def _transition_tile(room, here: list, there: list) -> list:
-    """
-    Purpose: Name the tile on the OBSERVER's map that an exit leading to
-        another map is drawn as.
-
-    Entry:
-        room  - the observer's room.
-        here  - the observer's [x, y, z].
-        there - the destination room's [x, y, z], on a different map.
-
-    Exit/Returns:
-        Returns [x, y] on the observer's own map, or None when this map has no
-        transition node for that destination.
-
-    Module Globals:
-        None.
-
-    Methodology:
-        A map transition is a NODE on the observer's map (the `T` glyph) that
-        spawns no room: the contrib's TransitionMapNode.get_spawn_xyz returns
-        the TARGET's coordinates, so the exit Evennia builds points straight at
-        a room on the other map. Reading that destination the way an ordinary
-        exit is read therefore files the affordance under a tile key belonging
-        to a different map -- and on the oasis that key names a real, unrelated
-        tile, so the teleporter itself stayed unclickable while a tile across
-        the map quietly offered to walk through it.
-
-        The node is found by matching `target_map_xyz` against the destination
-        rather than by a grid delta, so a transition reached by a longer link
-        glyph resolves as exactly as an adjacent one, and a room carrying two
-        transitions files each under its own tile.
-
-    Notes/References:
-        Duck-typed on `target_map_xyz` for the same reason
-        mapexport._is_transition_node is: that attribute is what MAKES a node a
-        transition, and testing it costs no map-layer import here.
-
-    Author: Nick Hobar
-    Creation date: 08/28/2026
-    """
-    xymap = _parsed_map(room)
-
-    if xymap is None:
-        return None
-
-    try:
-        node = xymap.get_node_from_coord((here[0], here[1]))
-    except Exception:
-        return None
-
-    if node is None:
-        return None
-
-    links = getattr(node, "links", None) or {}
-    target = tuple(there)
-
-    for end_node in links.values():
-        candidate = getattr(end_node, "target_map_xyz", None)
-
-        if not candidate:
-            continue
-
-        if tuple(candidate) != target:
-            continue
-
-        return [end_node.X, end_node.Y]
-
-    return None
-
-
-def _exit_tile(room, here: list, exit_obj) -> list:
-    """
-    Purpose: Say which tile on the observer's map one exit leads to.
-
-    Entry:
-        room     - the observer's room.
-        here     - the observer's [x, y, z].
-        exit_obj - one exit out of that room.
-
-    Exit/Returns:
-        Returns [x, y] on the observer's own map, or None for an exit no tile
-        can stand for.
-
-    Module Globals:
-        None.
-
-    Methodology:
-        Ordinarily the destination's own coordinates ARE the answer, and
-        nothing else needs saying. The exception is an exit onto another map:
-        its destination is a room over there, whose (x, y) means nothing here,
-        so the tile is the transition node this map draws in its place.
-
-        Split out of tile_actions rather than nested inside its loop so the
-        cross-map case is one branch a reader can see whole, and so the loop
-        stays a loop over exits instead of over coordinate arithmetic.
-
-    Notes/References:
-        A broken exit (no destination) and an off-grid destination are both
-        answered with None. The tile they would have named simply falls
-        through to the map node's own `goto`, which is a walk the pathfinder
-        will decline out loud if no route exists.
-
-    Author: Nick Hobar
-    Creation date: 08/28/2026
-    """
-    destination = exit_obj.destination
-
-    if destination is None:
-        return None
-
-    there = room_coords(destination)
-
-    if not there:
-        return None
-
-    if there[-1] == here[-1]:
-        return [there[0], there[1]]
-
-    tile = _transition_tile(room, here, there)
-
-    return tile
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
@@ -1166,56 +1006,6 @@ def serialize_contents(room, exclude=(), observer=None) -> list:
     return entities
 
 
-def room_kind(room) -> str:
-    """
-    Purpose: Name the room's type for a client's prefab / tint lookup.
-
-    Entry:
-        room - a room object, or None.
-
-    Exit/Returns:
-        Returns the room's kind ("Oasis", "Bank", "Pole clearing", ...), or
-        ROOM_KIND_DEFAULT when the room has no key at all.
-
-    Module Globals:
-        const.ROOM_KIND_DEFAULT read.
-
-    Methodology:
-        Reads the room's KEY, and deliberately not its prototype tag.
-
-        Every map's PROTOTYPES table sets "key" per coordinate (or via the
-        ('*', '*') wildcard), and the xyzgrid builder applies that key to the
-        spawned room. mapexport reads that same "key" out of the same table.
-        So key is exactly the value that makes room_info agree with
-        blackout_map, which is the whole point of the field: a client looks a
-        tile up in the map it was sent.
-
-        The prototype tag is NOT usable here even though it is the right
-        source for items. The xyzgrid does not set an explicit prototype_key
-        for rooms, so Evennia auto-generates one -- rooms come back tagged
-        "prototype-8ede16d" and every tile gets a different hash. Using it made
-        room_info report a hash while blackout_map reported "Oasis" for the
-        same tile, and nothing could be matched up.
-
-    Notes/References:
-        This is the field a modular kit-room renderer will key its prefab
-        table off. Named for what it means, not for the box-tinting that is
-        currently all it drives.
-
-    Author: Nick Hobar
-    Creation date: 08/07/2026
-    """
-    if room is None:
-        return const.ROOM_KIND_DEFAULT
-
-    room_key = getattr(room, "key", "")
-
-    if room_key:
-        return str(room_key)
-
-    return const.ROOM_KIND_DEFAULT
-
-
 def serialize_exits(room) -> dict:
     """
     Purpose: Render a room's exits as {direction: destination_id}.
@@ -1363,39 +1153,6 @@ def tile_action(command: str, kind: str) -> dict:
     return {"command": command, "kind": kind}
 
 
-def goto_action(x: int, y: int) -> dict:
-    """
-    Purpose: The pathfinder walk to one tile.
-
-    Entry:
-        x, y - grid coordinates on the observer's own map.
-
-    Exit/Returns:
-        Returns a tile action whose command is `goto (X,Y)`.
-
-    Module Globals:
-        const.TILE_COMMAND_GOTO_TEMPLATE read.
-
-    Methodology:
-        The command is spelled out in full here so no client has to know the
-        coordinate syntax. It is a property of the NODE rather than of the
-        observer -- the walk to (6,3) is `goto (6,3)` from anywhere on the map
-        -- which is why mapexport stamps it on the map node once per session
-        rather than emit_room_info resending it per move.
-
-    Notes/References:
-        Everything about the walk then belongs to the server: Dijkstra over the
-        contrib's baked path matrix, `interrupt_path` nodes that stop it, and a
-        re-path when the player walks off-route by hand.
-
-    Author: Nick Hobar
-    Creation date: 08/23/2026
-    """
-    command = const.TILE_COMMAND_GOTO_TEMPLATE.format(x=x, y=y)
-
-    return tile_action(command, const.TILE_ACTION_KIND_WALK)
-
-
 def cancel_action() -> dict:
     """
     Purpose: The command that aborts a walk in progress.
@@ -1432,8 +1189,8 @@ def tile_actions(room) -> dict:
         room - the observer's current room, or None.
 
     Exit/Returns:
-        Returns {tile_key: {"command", "kind"}} covering the room the observer
-        is in and every tile one real exit away. Empty for a room with no
+        Returns {tile_key: {"command", "kind"}} covering the tile of the
+        observer and each legal step from it. Empty for a room with no
         coordinates.
 
     Module Globals:
@@ -1441,36 +1198,16 @@ def tile_actions(room) -> dict:
 
     Methodology:
         NEAR tiles only, and that split is the whole reason this stays small.
-        A tile further off affords the same `goto (X,Y)` no matter where the
-        observer stands, so mapexport stamps that on the map node once per
-        session; only the immediate exits change as the player moves, and there
-        are at most eight of them. Sending every reachable tile from here would
-        make room_info ~3KB on EVERY room change, on a channel that fires once
-        per move, to say something that had not changed.
+        A far tile affords the same `goto (X,Y)` from any tile. Thus, the
+        client builds that command from TILE_WALK_TEMPLATE, and only the
+        near steps change as the player moves. There are at most eight.
 
-        Directions come from the room's real spawned EXITS, not from a
-        grid-delta table. The exit already knows both its own name ("north",
-        which is what a telnet player types) and its destination, and the
-        destination knows its coordinates -- so the mapping is read off the
-        world rather than derived from one. That is what makes a one-way exit,
-        a diagonal link, or a map whose geometry does not match its directions
-        come out right without a special case.
-
-        An exit whose destination has no coordinates is skipped rather than
-        guessed at; that is a room off the grid, which no tile can represent.
-        An exit whose destination is on ANOTHER map is not skipped and is not
-        read literally either -- see _transition_tile.
+        The step rule decides the steps (`_add_tile_world_steps`). A tile
+        room has no exit objects.
 
     Notes/References:
-        A neighbour with no exit simply has no entry here and picks up the map
-        node's own `goto` instead. There are no wall markers: this used to
-        answer every cardinal neighbour with an empty command on the theory
-        that an unlinked neighbour is a barrier the player can see, and that
-        theory is false on any map drawn with diagonal links. On the oasis it
-        made (6,3) -- a tile linked to four diagonal neighbours and reachable
-        in two steps -- permanently unclickable from (6,2) directly below it.
-        A cell the map has no node for is not drawn by either client, so there
-        was never a click to refuse there either.
+        The xyzgrid version read the exits of the room, and it named the
+        transition node of another map. Both went in DESIGN-0011 Phase 4b.
 
     Author: Nick Hobar
     Creation date: 08/23/2026
@@ -1485,20 +1222,48 @@ def tile_actions(room) -> dict:
             const.TILE_COMMAND_LOOK, const.TILE_ACTION_KIND_LOOK),
     }
 
-    for exit_obj in room.exits:
-        tile = _exit_tile(room, here, exit_obj)
-
-        if not tile:
-            continue
-
-        key = tile_key(tile[0], tile[1])
-
-        # The observer's own tile is already claimed by `look`, and an exit
-        # looping back to its own room must not overwrite it.
-        if key in actions:
-            continue
-
-        actions[key] = tile_action(
-            str(exit_obj.key), const.TILE_ACTION_KIND_STEP)
+    _add_tile_world_steps(here, actions)
 
     return actions
+
+
+def _add_tile_world_steps(here, actions: dict) -> None:
+    """
+    Purpose: Add a step action for each legal step from a tile of the tile
+             world.
+
+    Entry:
+        here    - the [x, y, z] of the room.
+        actions - the tile action map. Written in place.
+
+    Exit/Returns:
+        None.
+
+    Module Globals:
+        const.TILE_ACTION_KIND_STEP read.
+
+    Methodology:
+        The step rule decides, through `tile_travel.open_directions`. The
+        command is the direction word, the same line a telnet player types.
+        A far tile has no entry: the client sends TILE_WALK_TEMPLATE there.
+
+    Notes/References:
+        DESIGN-0011 Phase 5, step 3.
+
+    Author: Nick Hobar
+    Creation date: 09/25/2026
+    """
+    from systems.core.tilegrid import constants as tile_const
+
+    if here[2] != tile_const.WORLD_Z:
+        return
+
+    from systems.core.tilegrid.world import get_world
+    from world import tile_travel
+
+    tile = (here[0], here[1])
+
+    for name in tile_travel.open_directions(get_world(), tile):
+        dx, dy = tile_const.DIRECTION_OFFSETS[name]
+        key = tile_key(tile[0] + dx, tile[1] + dy)
+        actions[key] = tile_action(name, const.TILE_ACTION_KIND_STEP)

@@ -10,14 +10,12 @@ Description: Builder commands for putting words into the world.
              of them -- annotating a broken tile or labelling a landmark while
              you are looking at it should cost less than opening a file.
 
-             What they create lives in the DATABASE, not in the map, and that
-             is deliberate rather than a gap. `scripts/map_sync.py` rebuilds a
-             map from `world/maps/*.py` and destroys the rooms it no longer
-             recognises, taking their contents with them -- so a sign typed
-             here lasts exactly as long as the tile it stands on. An
-             annotation about work in progress SHOULD be that fragile.
-             Permanent signage belongs in the map module, where it is
-             regenerated with everything else.
+             What they create lives in the DATABASE, not in a chunk file, and
+             that is deliberate rather than a gap. A tile sync that changes a
+             tile demolishes its contents, so a sign typed here lasts exactly
+             as long as its tile stays the same. An annotation about work in
+             progress SHOULD be that fragile. Permanent signage is a signpost
+             object kind in a chunk file (world/object_kinds.py).
 
              Deletion is not here. Evennia's own `destroy` already removes an
              object by name and is the one writer of that path; a second verb

@@ -24,13 +24,10 @@ Description: Operator script. Destroys the objects that map rebuilds exiled to
              debris. `TEARDOWN_EXEMPT_TAG` is the escape hatch for a prop that
              must genuinely sit there.
 
-             Stranded grid rooms -- those tagged with a z-coordinate belonging
-             to no map at all -- are NOT this script's business. map_sync.py
-             reaps those, and since it now diffs the database rather than the
-             grid's own registry it can finally see them. Run a rebuild.
+             Stranded xyzgrid rooms are NOT the business of this script. The
+             cutover (`move_to_tile_world.py`) deletes every xyzgrid room.
 
-             DESTRUCTIVE, and unlike map_sync.py it undoes nothing that a
-             rebuild puts back. It therefore REPORTS BY DEFAULT and deletes
+             DESTRUCTIVE, and it undoes nothing that a tile sync puts back. It therefore REPORTS BY DEFAULT and deletes
              only when passed --apply, in the shape the moderator egg's one
              irreversible entry uses: count what will be destroyed, show it,
              then act. Run deliberately, never import.
@@ -46,7 +43,7 @@ import os
 import sys
 
 # The game dir (blackout/), one level up from this file in scripts/. See the
-# same note in map_sync.py: running `python scripts/reap_orphans.py` puts THIS
+# note in the archived map_sync.py: running `python scripts/reap_orphans.py` puts THIS
 # file's directory on sys.path[0], not the caller's cwd.
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

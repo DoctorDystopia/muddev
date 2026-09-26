@@ -2,7 +2,7 @@ class_name DollLayout
 extends RefCounted
 ## Where each equipment frame sits on the paper doll.
 ##
-## A CLIENT fact, in the same way [MapPalette]'s colours are. The server says
+## A CLIENT fact, in the same way [FloorPalette]'s colours are. The server says
 ## which wield locations exist and in what order to READ them
 ## (`SLOT_DISPLAY_ORDER`, which reaches us as the `equip_slots` frame list). It
 ## does not say that the head goes above the chest. That is a picture, and a

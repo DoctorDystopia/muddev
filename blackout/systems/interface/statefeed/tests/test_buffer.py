@@ -169,7 +169,7 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             const.CHANNEL_ROOM_PLAYER_ADD,
             const.CHANNEL_ROOM_PLAYER_REMOVE,
             const.CHANNEL_COMBAT,
-            const.CHANNEL_MAP,
+            const.CHANNEL_TILE_CHUNK,
         ):
             self.assertNotIn(channel, const.COALESCABLE_CHANNELS, msg=channel)
 

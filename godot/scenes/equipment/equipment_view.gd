@@ -178,7 +178,7 @@ func _rebuild() -> void:
 	_clear(_overflow)
 
 	var placed := _build_doll(frames)
-	var spare := _build_overflow(frames)
+	var spare := _build_overflow()
 	var drawn: Array = placed + spare
 
 	# Indices are allocated here and the layout is the stage's, the same rule
@@ -285,7 +285,7 @@ func _square(slot: String, frames: Dictionary, made: Array) -> Control:
 
 
 ## Every frame [DollLayout] does not place, in the server's own order.
-func _build_overflow(frames: Dictionary) -> Array:
+func _build_overflow() -> Array:
 	var made: Array = []
 
 	for frame: Dictionary in _state.equip_frames:

@@ -27,10 +27,10 @@ const CH_CHAR_QUESTS := "char_quests"
 const CH_CHAR_SKILLS := "char_skills"
 const CH_CHAR_COMBAT := "char_combat"
 const CH_CHAR_POPUP := "char_popup"
-const CH_MAP := "blackout_map"
 const CH_COMBAT := "blackout_combat"
 const CH_AURA := "blackout_aura"
 const CH_XP_DROP := "blackout_xp"
+const CH_TILE_CHUNK := "blackout_chunk"
 const CH_SUBSCRIBED := "blackout_subscribed"
 
 # Asset kinds -- the client's mesh `family` vocabulary.
@@ -94,14 +94,80 @@ const MSG_SYSTEM := "system"
 # The server clock. One tile per tick is walking speed.
 const TICK_SECONDS := 0.6
 
+# The tile grid and its chunk file. DESIGN-0011 section 6.2.
+const CHUNK_FORMAT_VERSION := 1
+const CHUNK_SIZE := 64
+const CHUNK_CORNERS_PER_SIDE := 65
+const CHUNK_PLANE_MAX := 3
+const CHUNK_HEIGHT_MIN := -32768
+const CHUNK_HEIGHT_MAX := 32767
+const CHUNK_ROTATION_COUNT := 4
+const CHUNK_NAME_PATTERN := "^[a-z0-9_]+$"
+const CHUNK_FILE_TEMPLATE := "chunk_{cx}_{cy}_p{plane}.json"
+const CHUNK_DIRECTORY := "world/chunks"
+const CHUNK_STREAM_RADIUS := 1
+const TILE_WORLD_Z := "tile_world"
+const TILE_FLAG_BLOCKED := 1
+const TILE_FLAG_WATER := 2
+const TILE_FLAG_WALL_NORTH := 4
+const TILE_FLAG_WALL_EAST := 8
+const TILE_FLAG_WALL_SOUTH := 16
+const TILE_FLAG_WALL_WEST := 32
+const TILE_FLAGS_UNWALKABLE := 3
+const TILE_FLAGS_ALL := 63
+const OBJECT_CATEGORY_FACILITY := "facility"
+const OBJECT_CATEGORY_GATHERING := "gathering"
+const OBJECT_CATEGORY_LANDMARK := "landmark"
+const OBJECT_CATEGORY_NPC := "npc"
+const OBJECT_CATEGORY_SIGN := "sign"
+const OBJECT_CATEGORY_TRANSITION := "transition"
+const TILE_DEFAULT_FLOOR := "sand"
+const TILE_DEFAULT_AREA := "oasis"
+
+# What the terrain editor paints and places. The order is
+# the order of each table under world/.
+const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed"]
+const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains"]
+const OBJECT_CATEGORIES := ["facility", "gathering", "landmark", "npc", "sign", "transition"]
+const OBJECT_KINDS := {
+	"bank": "facility",
+	"foundry_furnace": "facility",
+	"metalsmith_anvil": "facility",
+	"rendering_cooker": "facility",
+	"curing_chamber": "facility",
+	"gunsmith_bench": "facility",
+	"gastronomy_worktable": "facility",
+	"rusty_pole": "gathering",
+	"metal_pole": "gathering",
+	"copper_pole": "gathering",
+	"lone_android": "npc",
+	"shopkeeper_oasis": "npc",
+	"mutant_raider": "npc",
+	"big_mutant": "npc",
+	"floating_eye": "npc",
+	"mutant_crab": "npc",
+	"mutant_giant": "npc",
+	"signpost_bank": "sign",
+	"signpost_foundry_furnace": "sign",
+	"signpost_metalsmith_anvil": "sign",
+	"signpost_gunsmith_bench": "sign",
+	"signpost_rendering_cooker": "sign",
+	"signpost_curing_chamber": "sign",
+	"signpost_gastronomy_worktable": "sign",
+	"respawn_point": "landmark",
+	"transition_oasis_to_outskirts": "transition",
+	"transition_outskirts_to_oasis": "transition",
+	"transition_outskirts_to_azm_plains": "transition",
+	"transition_azm_plains_to_outskirts": "transition",
+}
+
 # Everything else.
 const SUBSCRIBE_ALL := "all"
 const ASSET_KEY_CHARACTER := "player_character"
-const ROOM_KIND_TRANSITION := "map_transition"
-const ROOM_KIND_DEFAULT := "default"
 const INVENTORY_SWAP_TEMPLATE := "swap {source} {target}"
 const TILE_KEY_TEMPLATE := "{x}:{y}"
 const ENTITY_APPROACH_TEMPLATE := "goto ({x},{y}) then {command}"
+const TILE_WALK_TEMPLATE := "goto ({x},{y})"
 const ENTITY_SPENT_KEY := "spent"
 const ACTION_AMOUNT_PLACEHOLDER := "{amount}"
 const ACTION_INPUT_KIND_QUANTITY := "quantity"
@@ -113,6 +179,6 @@ const CLIENT_INBOUND_BUFFER_BYTES := 2097152
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_combat", "blackout_map", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

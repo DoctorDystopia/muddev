@@ -16,7 +16,6 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 
 # from blackout.commands.sittables import CmdSetSit2
 from evennia import default_cmds
-from evennia.contrib.grid.xyzgrid.commands import XYZGridCmdSet
 
 from commands.build_cmds import BuildCmdSet
 from commands.cleanup_cmds import CleanupCmdSet
@@ -64,9 +63,6 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         # so the verb could not survive its own first use.
         self.add(GatheringCmdSet())
         self.add(DropCmdSet())
-        self.add(XYZGridCmdSet())
-        # After XYZGridCmdSet, so BlackoutGotoCmd overloads the contrib's
-        # CmdGoto rather than being overloaded by it.
         self.add(MovementCmdSet())
         self.add(CleanupCmdSet())
         self.add(BuildCmdSet())

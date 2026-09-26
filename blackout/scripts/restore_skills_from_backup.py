@@ -50,7 +50,7 @@ import tempfile
 from datetime import datetime
 
 # The game dir (blackout/), one level up from scripts/. Same note as
-# map_sync.py and backup_db.py: running this file puts THIS directory on
+# backup_db.py: running this file puts THIS directory on
 # sys.path[0], not the caller's cwd.
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

@@ -131,13 +131,13 @@ func _init() -> void:
 
 
 ## Draw one skill.
-func bind(row: Dictionary) -> void:
-	_row = row
+func bind(row_data: Dictionary) -> void:
+	_row = row_data
 
-	_swatch.color = _Palette.color_for(str(row.get("category", "")))
-	_name.text = str(row.get("name", ""))
-	_level.text = str(int(row.get("level", 0)))
-	_bar.value = SkillsState.level_fraction(row)
+	_swatch.color = _Palette.color_for(str(row_data.get("category", "")))
+	_name.text = str(row_data.get("name", ""))
+	_level.text = str(int(row_data.get("level", 0)))
+	_bar.value = SkillsState.level_fraction(row_data)
 	tooltip_text = _tooltip()
 
 

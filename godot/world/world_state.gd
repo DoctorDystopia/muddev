@@ -1,21 +1,23 @@
 class_name WorldState
 extends RefCounted
-## The client's model of the world, assembled from the state feed.
+## The model of the world in the client, built from the state feed.
 ##
-## Exists to keep two things out of the renderer.
+## It keeps two things out of the renderer.
 ##
-## **Chunk reassembly.** A map arrives as `chunk_count` messages; only chunk 0
-## carries the links (see mapexport.build_map_chunks). Nothing can be drawn
-## until the last one lands.
+## **The ground.** Since DESIGN-0011 Phase 5 (09/25/2026), the world is the
+## tile world. The server sends each chunk of the block around the player on
+## `blackout_chunk`, one time for each session. This class keeps the chunks in
+## one [ChunkSet]. The 3D pane and the minimap both draw from that set, so the
+## client parses one payload one time. The island levels of the xyzgrid maps
+## are gone. Nick chose "tile world only". Thus, a player on an xyzgrid map
+## sees no ground in Godot until Phase 4b moves every player.
 ##
-## **The float boundary.** Godot's `JSON.parse_string` returns TYPE_FLOAT for
-## every number in a payload -- `{"x": 3.0, "num": 19863.0}`, always. A
-## dictionary keyed on that will not match a key written as `3`, and the
-## failure is silent. Every value this class hands out is already an int, and
-## the conversion happens once, here, at the point of use rather than as a
-## blanket walk: every numeric field in the feed happens to be integral today,
-## so a recursive coercion would look correct and would quietly corrupt the
-## first genuinely fractional field anyone adds.
+## **The float boundary.** `JSON.parse_string` in Godot returns TYPE_FLOAT for
+## every number in a payload, for example `{"x": 3.0}`. A dictionary key of
+## 3.0 does not match a key of 3, and nothing reports the miss. Thus, every
+## value that this class gives out is an int. This class converts each value
+## one time, where it reads it. A walk that converts every number would also
+## change the first real fraction that the feed sends.
 
 
 ## Server-owned names, generated from blackout/systems/interface/statefeed/constants.py.
@@ -23,80 +25,63 @@ extends RefCounted
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 
-## One Z-level's grid.
-class Level:
-	extends RefCounted
+## Emitted when a chunk arrives, or when a move frees chunks outside the
+## block. The 3D pane builds its ground again, and the minimap draws again.
+## Neither pane reads the feed itself.
+signal chunks_changed
 
-	var cells: Array[Vector2i] = []
-	var kinds: Array[String] = []
-	var links: Array = []          # [[Vector2i, Vector2i], ...]
-
-	## cell -> {command, kind}: the pathfinder `goto` to that node, stamped
-	## once per session because the walk to (6,3) is the same from anywhere on
-	## the map. A node the server gave no action affords nothing.
-	var actions: Dictionary = {}
-
-	var seen := 0
-	var expected := 1
-
-	func is_complete() -> bool:
-		return seen >= expected
-
-
-## Emitted when one level has received every chunk and can be drawn.
-##
-## The 3D pane relays out the islands; the minimap redraws. Neither reaches for
-## the other, and neither ingests the feed itself -- see [method ingest].
-signal map_ready(z: String)
-
-## Emitted when the observer's own position, exits or tile actions change.
+## Emitted when the position, the exits, or the tile actions of the observer
+## change.
 signal room_changed
 
 
-## z name -> Level. Z is a map NAME, not an elevation.
-var levels: Dictionary = {}
+## Every chunk of the block around the observer. [method _free_far_chunks]
+## keeps it to the block.
+var chunks := ChunkSet.new()
 
+## The reason for the last chunk file that the reader refused. For a test and
+## for a log line.
+var last_chunk_error := ""
+
+## The z of the room of the observer. It is [constant _Const.TILE_WORLD_Z] on
+## the tile world, and a map name on an xyzgrid map.
 var current_z := ""
 var current_cell := Vector2i.ZERO
 
-## Direction name -> destination room number, straight from `room_info.exits`.
+## Direction name -> destination room number, from `room_info.exits`.
 var current_exits: Dictionary = {}
 
-## "x:y" -> {command, kind}, covering the observer's own tile and everything
-## one REAL exit away. Straight from `room_info.tile_actions`.
-##
-## The server names the whole command; nothing here substitutes into it. It
-## also covers only the near tiles, because the walk to a distant node does not
-## change when the observer moves and is stamped on the map node instead.
+## "x:y" -> {command, kind}, from `room_info.tile_actions`. It covers the tile
+## of the observer and each tile that one legal step reaches. The server names
+## the whole command. A far tile is not in it: see [method tile_action].
 var current_tile_actions: Dictionary = {}
 
-## What to send to stop a walk already running. NOT part of tile_actions,
-## because whether a walk IS running is the client's own tracking -- the client
-## is what started it.
+## What to send to stop a walk. It is not in the tile actions, because the
+## client tracks its own walk.
 var current_cancel_action: Dictionary = {}
 
 
-## Fold one feed message into this model.
+## Put one feed message into this model.
 ##
-## Returns true when the payload was one of ours, so the console can route
-## without restating the channel names in a second match -- the same contract
-## [CharState], [InventoryState] and [SummaryState] answer.
+## Returns true when the payload was for this model. The console then routes
+## with no second list of channel names. [CharState], [InventoryState] and
+## [SummaryState] keep the same contract.
 ##
 ## **The CONSOLE calls this, not a pane.** The 3D world and the minimap draw
-## the same map, and a pane that ingested for itself would mean two chunk
-## reassemblies of one payload and, on a resync, two of them briefly
-## disagreeing about which tiles exist.
+## the same ground. If each pane read the feed, the client would parse each
+## chunk two times.
 func ingest(channel: String, payload: Dictionary) -> bool:
 	match channel:
-		_Const.CH_MAP:
-			var completed := ingest_map_chunk(payload)
-
-			if not completed.is_empty():
-				map_ready.emit(completed)
+		_Const.CH_TILE_CHUNK:
+			if ingest_chunk(payload):
+				chunks_changed.emit()
 
 		_Const.CH_ROOM_INFO:
 			ingest_room_info(payload)
 			room_changed.emit()
+
+			if _free_far_chunks():
+				chunks_changed.emit()
 
 		_:
 			return false
@@ -104,47 +89,26 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 	return true
 
 
-## Fold one `blackout_map` chunk into the model.
+## Put one `blackout_chunk` message into the model.
 ##
-## Returns the z name when that level is now complete and ready to draw, or an
-## empty string when more chunks are still due.
-func ingest_map_chunk(payload: Dictionary) -> String:
-	var z := str(payload.get("z", ""))
-	var index := int(payload.get("chunk_index", 0))
+## Returns true when the chunk is good and is now in [member chunks]. The
+## model drops a chunk that the reader refuses, and it keeps the reason in
+## [member last_chunk_error]. The server reads the same file with the Python
+## reader. Thus, a refusal here is a parity bug.
+func ingest_chunk(payload: Dictionary) -> bool:
+	var chunk := ChunkFile.from_dict(payload.get("chunk_file"))
 
-	# Chunk 0 restarts the level. A resync re-sends the whole map, and
-	# appending to the previous copy would double every tile.
-	if index == 0 or not levels.has(z):
-		levels[z] = Level.new()
+	if not chunk.error.is_empty():
+		last_chunk_error = chunk.error
+		push_warning("blackout_chunk refused: %s" % chunk.error)
+		return false
 
-	var level: Level = levels[z]
-	level.expected = int(payload.get("chunk_count", 1))
-	level.seen += 1
+	chunks.add(chunk)
 
-	for entry: Dictionary in payload.get("nodes", []):
-		var cell := Vector2i(int(entry.get("x", 0)), int(entry.get("y", 0)))
-		level.cells.append(cell)
-		level.kinds.append(str(entry.get("room_kind", "")))
-
-		var action: Dictionary = entry.get("action", {})
-
-		if not action.is_empty():
-			level.actions[cell] = action
-
-	for entry: Dictionary in payload.get("links", []):
-		var from := _cell(entry.get("from"))
-		var to := _cell(entry.get("to"))
-
-		if from != to:
-			level.links.append([from, to])
-
-	if level.is_complete():
-		return z
-
-	return ""
+	return true
 
 
-## Record where the observer is standing.
+## Record where the observer stands.
 func ingest_room_info(payload: Dictionary) -> void:
 	var coords: Array = payload.get("coords", [])
 
@@ -158,34 +122,54 @@ func ingest_room_info(payload: Dictionary) -> void:
 	current_cancel_action = payload.get("cancel_action", {})
 
 
-## What clicking a cell means, as {command, kind}. Empty means "do nothing".
+## True when the observer stands on the tile world.
+func on_tile_world() -> bool:
+	return current_z == _Const.TILE_WORLD_Z
+
+
+## True when the chunk under the observer is here, so the observer has ground
+## to stand on. [SessionReadiness] waits for this.
+func has_ground() -> bool:
+	return on_tile_world() and chunks.has_tile(current_cell)
+
+
+## The height of the drawn ground at the centre of a tile, in world units.
+## Null when its chunk is not loaded. A guess of zero would stand a figure
+## inside a hill.
+func ground_y(tile: Vector2i) -> Variant:
+	var height := chunks.height_at(Vector2(tile))
+
+	if is_nan(height):
+		return null
+
+	return height * ChunkMeshBuilder.HEIGHT_STEP
+
+
+## The area of a tile, or "" when its chunk is not loaded.
+func area_at(tile: Vector2i) -> String:
+	return chunks.get_area(tile)
+
+
+## What a click on a cell means, as {command, kind}. Empty means "do nothing".
 ##
-## THE SERVER DECIDES. This replaced a grid-delta -> direction-name table that
-## the browser pane deleted for cause on 08/23/2026: that table could not
-## express a one-way exit, a diagonal link, or a map whose geometry and
-## direction names disagree, and it got the diagonal case wrong once in the
-## direction of "the tiles nearest the player were the only ones that could not
-## be clicked". Directions now come from the room's REAL spawned exits.
+## THE SERVER DECIDES. The browser pane had a table from a grid delta to a
+## direction name, and it deleted that table on 08/23/2026. The table could not
+## show a one-way exit or a diagonal link.
 ##
-## Two lookups and one distinction:
+## Three answers, in this order:
 ##
-##   near tile, EMPTY command -> {} . The server says no.
-##   near tile, ABSENT        -> fall through to the node's own `goto`.
+## 1. A near tile that the server listed gives its action. An empty command
+##    gives {}.
+## 2. A far walkable tile of the tile world gives the walk to it. The server
+##    spells the command one time, in [constant _Const.TILE_WALK_TEMPLATE],
+##    and this fills in the tile. A chunk has 4,096 tiles, so no feed can list
+##    each one. [method WorldView.approach_command] fills an entity template
+##    in the same way.
+## 3. Anything else gives {}: a blocked tile, water, or a chunk not loaded.
 ##
-## Nothing on the server sends an empty command today. It used to, for every
-## cardinal neighbour reached by no exit, on the theory that an unlinked
-## neighbour is a wall the player can see -- and that theory made the foundry
-## tile at oasis (6,3), joined to four DIAGONAL neighbours and two steps from
-## (6,2) below it, permanently unclickable. The branch stays because the field
-## is a wire contract, not because anything fills it.
-##
-## A node the map gave no `action` affords nothing either, and a map TRANSITION
-## is that case: it spawns no room for `goto` to resolve, so it is reached by
-## stepping onto it from beside it -- a near action, not a fall-through.
-##
-## `cell` is resolved in the CURRENT island's coordinate space by
-## WorldView._cell_under, so a click on another island lands on a cell this map
-## has no node for and correctly affords nothing. `goto` does not cross maps.
+## The chunk flags say which tile is walkable. They are server facts: the
+## server reads the same chunk file. `goto` still refuses a walk that it cannot
+## find, in words, in the text pane.
 func tile_action(cell: Vector2i) -> Dictionary:
 	var key := _Const.TILE_KEY_TEMPLATE \
 		.replace("{x}", str(cell.x)) \
@@ -199,16 +183,45 @@ func tile_action(cell: Vector2i) -> Dictionary:
 
 		return near
 
-	if not levels.has(current_z):
+	if not on_tile_world() or not chunks.has_tile(cell):
 		return {}
 
-	var level: Level = levels[current_z]
+	if chunks.get_flags(cell) & _Const.TILE_FLAGS_UNWALKABLE:
+		return {}
 
-	return level.actions.get(cell, {})
+	var command := _Const.TILE_WALK_TEMPLATE \
+		.replace("{x}", str(cell.x)) \
+		.replace("{y}", str(cell.y))
+
+	return {"command": command, "kind": _Const.KIND_WALK}
 
 
-func _cell(raw: Variant) -> Vector2i:
-	if typeof(raw) != TYPE_ARRAY or raw.size() != 2:
-		return Vector2i.ZERO
+## The chunk coordinates of the block around a tile. The server streams the
+## same block (`TileWorld.block_keys`) with the same radius.
+static func block_of(tile: Vector2i) -> Array[Vector2i]:
+	var centre := ChunkSet.chunk_of_tile(tile)
+	var radius: int = _Const.CHUNK_STREAM_RADIUS
+	var block: Array[Vector2i] = []
 
-	return Vector2i(int(raw[0]), int(raw[1]))
+	for dx: int in range(-radius, radius + 1):
+		for dy: int in range(-radius, radius + 1):
+			block.append(centre + Vector2i(dx, dy))
+
+	return block
+
+
+## Free each chunk outside the block around the observer. Returns true if one
+## went. The server forgets the same chunks, so a walk back sends them again.
+func _free_far_chunks() -> bool:
+	if not on_tile_world():
+		return false
+
+	var block := block_of(current_cell)
+	var freed := false
+
+	for coord: Vector2i in chunks.chunk_coords():
+		if not block.has(coord):
+			chunks.remove(coord)
+			freed = true
+
+	return freed

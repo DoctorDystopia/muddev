@@ -160,12 +160,18 @@ func _ready() -> void:
 	_a_step_moves_the_ring_without_rebuilding_it()
 	_another_entity_moving_keeps_every_other_node()
 	_a_changed_look_builds_the_node_again()
+	_a_first_sighting_rises_out_of_the_fog()
+	_a_changed_look_does_not_rise_again()
+	_a_figure_still_in_view_does_not_rise_again()
 
 	# LAST, because each turns the animation back on. See the bind above.
 	_a_moved_entity_is_drawn_where_it_was_not_where_it_is_going()
 	_a_travelling_entity_has_its_true_tile_marked()
 	_two_entities_bound_for_one_tile_ask_for_one_mark()
 	_turning_the_animation_off_lands_everybody()
+
+	# Waits for a flash to run out, so it goes after every case that does not.
+	await _a_flash_during_the_tint_ends_at_the_own_colour()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -558,6 +564,120 @@ func _a_changed_look_builds_the_node_again() -> void:
 
 	_expect(label != null and label.text == "TRADE TOWN (CLOSED)",
 		"and the new node shows the new words")
+
+	_pool.replace_all([])
+
+
+## Colour for the tint-in cases. Far from every palette colour, so a match is
+## the tint and never a coincidence.
+const FADE_TEST_COLOR := Color(0.1, 0.9, 0.2)
+
+## Seconds of margin past a flash, so its tween has certainly run out.
+const FLASH_SETTLE_SECONDS := 0.2
+
+
+## DESIGN-0011 section 6.6. A figure that arrives at the edge of the radius
+## starts at the fog colour, on every material.
+func _a_first_sighting_rises_out_of_the_fog() -> void:
+	_pool.replace_all([])
+	_pool.set_fade_color(FADE_TEST_COLOR)
+	_pool.replace_all([RAIDER])
+
+	var materials := _materials_of(_node_for(20743))
+	var tinted := 0
+
+	for material: StandardMaterial3D in materials:
+		var rgb := Color(material.albedo_color, 1.0)
+
+		if rgb.is_equal_approx(FADE_TEST_COLOR):
+			tinted += 1
+
+	_expect(_pool.is_fading(20743), "a first sighting starts a tint-in")
+	_expect(materials.size() > 0 and tinted == materials.size(),
+		"every material starts at the fog colour (%d of %d)"
+		% [tinted, materials.size()])
+
+	_pool.replace_all([])
+
+
+## A new label or new art builds a new node, but the figure did not just
+## arrive. It must not flicker back into the fog.
+func _a_changed_look_does_not_rise_again() -> void:
+	_pool.replace_all([])
+	_pool.replace_all([SIGN])
+
+	var repainted := SIGN.duplicate()
+
+	repainted["label"] = "TRADE TOWN (CLOSED)"
+	_pool.add(repainted)
+
+	_expect(not _pool.is_fading(20748),
+		"a rebuild for a new look does not tint the figure again")
+
+	_pool.replace_all([])
+
+
+## A resync or a step names the same figure again. It is not a new arrival.
+##
+## The fade colour changes between the two lists. A restarted tint-in would
+## put the raider at the second colour.
+func _a_figure_still_in_view_does_not_rise_again() -> void:
+	_pool.replace_all([])
+	_pool.set_fade_color(Color.BLACK)
+	_pool.replace_all([RAIDER])
+	_pool.set_fade_color(FADE_TEST_COLOR)
+	_pool.replace_all([RAIDER, SWORD])
+
+	var restarted := 0
+
+	for material: StandardMaterial3D in _materials_of(_node_for(20743)):
+		var rgb := Color(material.albedo_color, 1.0)
+
+		if rgb.is_equal_approx(FADE_TEST_COLOR):
+			restarted += 1
+
+	_expect(restarted == 0, "a figure named again is not a first sighting")
+	_expect(_pool.is_fading(20744), "but the one beside it is")
+
+	_pool.replace_all([])
+
+
+## The flash reads the albedo as its base. In the middle of a tint-in, that
+## base is part fog, and the figure stays tinted after the flash.
+func _a_flash_during_the_tint_ends_at_the_own_colour() -> void:
+	var reference := _resolver.resolve_entity(
+		str(RAIDER["asset"]), str(RAIDER["family"]))
+	var own_colours: Array = []
+
+	for material: StandardMaterial3D in _materials_of(reference):
+		own_colours.append(material.albedo_color)
+
+	reference.free()
+
+	_pool.replace_all([])
+	_pool.set_fade_color(FADE_TEST_COLOR)
+	_pool.replace_all([RAIDER])
+	_pool.flash(20743)
+
+	_expect(not _pool.is_fading(20743), "a flash ends the tint-in")
+
+	var wait := EntityPool.HIT_FLASH_SECONDS + FLASH_SETTLE_SECONDS
+
+	await get_tree().create_timer(wait).timeout
+
+	var materials := _materials_of(_node_for(20743))
+	var matched := 0
+
+	for index: int in mini(materials.size(), own_colours.size()):
+		var colour: Color = materials[index].albedo_color
+
+		if colour.is_equal_approx(own_colours[index]):
+			matched += 1
+
+	_expect(materials.size() == own_colours.size()
+		and matched == materials.size(),
+		"after the flash, each material is at its own colour (%d of %d)"
+		% [matched, materials.size()])
 
 	_pool.replace_all([])
 

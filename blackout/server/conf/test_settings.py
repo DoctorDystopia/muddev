@@ -32,6 +32,8 @@ Author & Date:
     Blackout, 2026-08-23
 """
 
+import os
+
 from server.conf.settings import *
 
 # See Methodology. This is the single largest cost in the suite.
@@ -55,3 +57,10 @@ PASSWORD_HASHERS = [
 # asking every developer to remember a second --settings file. See
 # profiling/testrunner.py for what it records.
 TEST_RUNNER = "server.conf.testrunner.BlackoutTestSuiteRunner"
+
+# The tile world loads from this directory. It does not exist, so the
+# implicit world of a test is empty. A test that needs tiles installs its own
+# world with `set_world`, and removes it after. The implicit world is a module
+# global. A real one would keep the rooms of a rolled-back test, and give them
+# to the next test. See systems/core/tilegrid/world.py, _chunk_directory.
+TILE_WORLD_DIR = os.path.join(GAME_DIR, "server", "conf", "no_tile_world")

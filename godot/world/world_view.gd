@@ -1,24 +1,18 @@
 class_name WorldView
 extends Node3D
-## The 3D world pane: tile grids, the links between them, and where you stand.
+## The 3D world pane: the ground of the tile world, and who stands on it.
 ##
-## Layout and colour rules were ported from the browser pane's `blackout3d.js`
-## rather than re-derived, back when that client was still live. It's retired
-## now (archive/webclient-js/js/plugins/blackout3d.js), but the values it
-## helped pin down still hold. Two of them are load-bearing and not obvious:
+## **The tile world only.** DESIGN-0011 Phase 5 (09/25/2026) replaced the
+## xyzgrid islands with the chunks of the tile world. [TerrainView] draws one
+## mesh for each chunk that [WorldState] holds. Nick chose to drop the island
+## renderer at once. Thus, a player on an xyzgrid map sees no ground here until
+## Phase 4b moves every player.
 ##
-## **Z is a map NAME, not an elevation.** Maps are disconnected islands laid out
-## along world X. Their relative placement cannot be computed from the data, so
-## it is authored in [constant MapPalette.Z_LAYOUT_ORDER]; a map not listed
-## still appears, after the named ones.
-##
-## **Room kinds not in the colour table are hashed to a stable hue.** A new room
-## type is visually distinct with no edit anywhere, and is the same colour every
-## session and for every player.
-##
-## Both tables live in [MapPalette] since 08/28/2026, because the minimap draws
-## the same map and a second copy of either is the failure this repo has already
-## paid for once.
+## **One coordinate rule.** Tile (x, y) has its centre at (x, h, -y), where h
+## is the height of the drawn ground there ([method WorldState.ground_y]). Grid
+## Y grows to the north, and north is -Z. [ChunkMeshBuilder] and
+## [TerrainPicking] use the same rule, so a figure stands on the drawn ground
+## and a click lands on the tile under the cursor.
 
 ## Every name the SERVER owns, generated from
 ## blackout/systems/interface/statefeed/constants.py by systems/interface/statefeed/clientexport.py.
@@ -69,57 +63,17 @@ const PICK_REACH_PIXELS := 24.0
 ## everything standing beside it does.
 const AVATAR_SCALE := EntityPool.ENTITY_SCALE
 
-## How much of a tile a prop drawn ON that tile covers.
-##
-## Bigger than an entity on purpose: a prop is part of the ground rather than
-## something standing on it, and the transition pad reads as a pad only when it
-## reaches the tile's edges.
-const TILE_PROP_SCALE := 0.9
+## The colour of the mark on the tile under the cursor. A client fact: the
+## server says what a click does, and this only shows where it lands.
+const COLOR_HOVER := Color(1.0, 1.0, 1.0)
 
-## How much brighter a hovered tile is drawn. A multiplier on its own room-kind
-## colour, so every kind lifts by the same amount and none needs its own entry.
-const HOVER_LIFT := 1.5
-
-## How much of a tile the terrain surface covers.
-##
-## LESS THAN ONE ON PURPOSE, and this is the whole reason the terrain is a layer
-## on the slab rather than a replacement for it. At 1.0 the art would cover the
-## tile top exactly, and the two things the top was carrying would go with it:
-## the room kind's colour, which is how a bank tile is told from a clearing at a
-## glance, and the hover lift, which is written through the slab's instance
-## colour and would then only show on the sides -- edge-on, from the angle this
-## camera actually sits at. Leaving a rim shows both, and reads as a border
-## rather than as a mistake.
-const TERRAIN_SCALE := 0.95
-
-## How far ABOVE the slab's face the terrain is laid.
-##
-## Not a fudge factor. A terrain tile may legitimately have no thickness at all
-## -- `tile_oasis_outskirts` is a single plane and measures 0.000 -- and a plane
-## resting exactly ON the face it covers is coplanar with it, which is
-## z-fighting rather than a picture: the two surfaces flicker against each other
-## per pixel and per camera angle. Everything else in the pane rests on the face
-## by measurement and needs nothing, because everything else has volume.
-##
-## Small enough that nothing reads as floating at this camera distance, and
-## large enough to settle the depth test at it.
-const TERRAIN_LIFT := 0.004
-
-const TILE_SIZE := 1.0
-const TILE_GAP := 0.0
-const TILE_HEIGHT := 0.16
-const STEP := TILE_SIZE + TILE_GAP
-const Z_LEVEL_GAP := 4.0
-const LINK_WIDTH := 0.01
-const LINK_HEIGHT := 0.02
-
-## Colours and island order live in [MapPalette] -- the minimap draws the same
-## map and a second copy of either table is the failure this repo has already
-## paid for once. `COLOR_LINK` stays because nothing but a 3D pane draws links.
-const COLOR_LINK := Color("587695ff")
+## One tile, in world units. The same as [constant ChunkMeshBuilder.TILE_SIZE].
+const TILE_SIZE := ChunkMeshBuilder.TILE_SIZE
+const STEP := TILE_SIZE
 
 
-@onready var _islands: Node3D = $Islands
+## The ground. See [TerrainView].
+@onready var _terrain: TerrainView = $Terrain
 
 ## YOUR TRUE TILE: the square the server has you standing on.
 ##
@@ -143,13 +97,14 @@ const COLOR_LINK := Color("587695ff")
 @onready var _aura: MeshInstance3D = $Aura
 @onready var _camera: Camera3D = $Camera/SpringArm3D/Camera3D
 
+## The fog and the light of the area that the player stands in. This pane
+## tells it the area on each placement. See [AreaEnvironment].
+@onready var _area_environment: AreaEnvironment = $Environment
+
 ## The world model. GIVEN by the console since 08/28/2026, not built here:
 ## the minimap draws the same map, and one payload must not be reassembled
 ## twice. See [method bind_world].
 var _state := WorldState.new()
-var _offsets: Dictionary = {}      # z -> world X offset of that island
-var _tile_material: StandardMaterial3D
-var _link_material: StandardMaterial3D
 
 ## Where every mesh in the pane comes from. OWNED BY THE CONSOLE and bound in,
 ## not built here: the inventory draws meshes too now, and two resolvers would
@@ -213,13 +168,9 @@ var _facing_z := ""
 ## `talk:tester: 0/True` at players.
 var _char: CharState
 
-## z -> the MultiMesh drawing that island's tiles, kept so one instance's colour
-## can be written for hover. Cleared and refilled by _relayout.
-var _tile_meshes: Dictionary = {}
-
-## Which tile is currently lit, and on which island. Empty z means none.
-var _hover_z := ""
-var _hover_cell := Vector2i.ZERO
+## The square on the tile under the cursor. It shows only on a tile that a
+## click acts on.
+var _hover_mark: MeshInstance3D
 
 ## The last text sent on [signal hover_text_changed]. Kept so a mouse move
 ## inside one tile emits nothing.
@@ -251,11 +202,18 @@ var _settings: ClientSettings
 
 
 func _ready() -> void:
-	_tile_material = _vertex_coloured()
-	_link_material = _vertex_coloured()
 	_build_true_tile_marks()
+	_build_hover_mark()
+
+	# A new figure rises out of the fog of the area, so the pool must know the
+	# fog colour. See [method EntityPool.set_fade_color].
+	_area_environment.look_changed.connect(_on_area_look)
 
 	Evennia.channel_received.connect(_on_channel)
+
+
+func _on_area_look(look: Dictionary) -> void:
+	_entities.set_fade_color(look["fog_color"])
 
 
 ## Give both true tile marks the one square they draw.
@@ -281,6 +239,18 @@ func _build_true_tile_marks() -> void:
 		TrueTileMark.COLOR_ENTITY)
 
 	add_child(_entity_marks)
+
+
+## Build the square that marks the tile under the cursor. The same mesh as the
+## true tile marks, in its own colour, so the three read as one family.
+func _build_hover_mark() -> void:
+	_hover_mark = MeshInstance3D.new()
+	_hover_mark.name = "HoverMark"
+	_hover_mark.mesh = TrueTileMark.build_mesh(TILE_SIZE)
+	_hover_mark.material_override = TrueTileMark.build_material(COLOR_HOVER)
+	_hover_mark.visible = false
+
+	add_child(_hover_mark)
 
 
 ## Slide the avatar towards the tile the server put it on, and show or hide the
@@ -347,17 +317,16 @@ func bind_meshes(resolver: MeshResolver) -> void:
 ## before its parent's, so the console has not built anything yet.
 func bind_world(state: WorldState) -> void:
 	_state = state
-	_state.map_ready.connect(_on_map_ready)
 	_state.room_changed.connect(_place_marker)
 
+	# A chunk that lands after the room gives the ground its height. The marker
+	# and every figure then stand again, on the drawn ground.
+	_state.chunks_changed.connect(_place_marker)
+
 	# Whatever has already landed. The console binds after the socket is open,
-	# so a map that arrived during the handshake is not lost.
-	_relayout()
+	# so a chunk that arrived during the handshake is not lost.
+	_terrain.bind(_state)
 	_place_marker()
-
-
-func _on_map_ready(_z: String) -> void:
-	_relayout()
 
 
 ## Take the player's own preferences. Called by the console, which owns them.
@@ -475,55 +444,19 @@ func _on_entity_marks(origins: Array) -> void:
 			index, Transform3D(Basis.IDENTITY, origin))
 
 
-## Redraw when art lands for something this pane is drawing.
-##
-## Two callers in one, because both are "the fallback is on screen and the real
-## thing has just arrived". The relayout terminates rather than looping: the
-## rebuild asks resolve_scenery again, which now answers from the cache and
-## starts no second fetch.
+## Draw the avatar again when its art lands. The ground uses no model art, so
+## nothing else here waits for a model.
 func _on_art_arrived(asset_key: String) -> void:
 	if _char != null and _char.asset == asset_key:
 		_redraw_avatar()
 
-	if _any_tile_is_kind(asset_key) or _any_level_is_surfaced(asset_key):
-		_relayout()
-
-
-## Whether any island holds a tile of this room kind.
-##
-## Asked before relaying out, so art arriving for something not on screen -- an
-## item fetched for the room, a model the inventory wanted -- does not rebuild
-## every island for nothing.
-func _any_tile_is_kind(kind: String) -> bool:
-	for z: String in _state.levels:
-		var level: WorldState.Level = _state.levels[z]
-
-		if level.kinds.has(kind):
-			return true
-
-	return false
-
-
-## Whether any island on screen is surfaced with this terrain.
-##
-## The second half of the same question [method _any_tile_is_kind] asks, and it
-## has to be asked separately because terrain is keyed by MAP and a prop by ROOM
-## KIND -- a key that is neither is art for something else entirely, and
-## rebuilding every island for it is what this pair is here to avoid.
-func _any_level_is_surfaced(asset_key: String) -> bool:
-	for z: String in _state.levels:
-		if MapPalette.tile_model(z) == asset_key:
-			return true
-
-	return false
-
 
 func _on_channel(channel: String, payload: Dictionary) -> void:
-	# CH_MAP and CH_ROOM_INFO are deliberately absent: the console ingests them
-	# into the shared WorldState and this pane redraws on its signals. Reading
-	# them here as well would be the second reassembly bind_world exists to
-	# prevent -- and it would run BEFORE the console's, because a child
-	# connects to Evennia in its own _ready and a child's _ready runs first.
+	# CH_TILE_CHUNK and CH_ROOM_INFO are not here on purpose. The console puts
+	# them into the shared WorldState, and this pane draws on its signals. A
+	# second read here would parse each chunk two times. It would also run
+	# BEFORE the console, because a child connects to Evennia in its own
+	# _ready, and the _ready of a child runs first.
 	match channel:
 		Const.CH_ROOM_PLAYERS:
 			_entities.replace_all(payload.get("entities", []))
@@ -581,25 +514,33 @@ func _unhandled_input(event: InputEvent) -> void:
 ## this pane already decides where a tile is, and a second copy in the pool
 ## would be free to disagree with the tiles actually drawn.
 ##
-## Null and not a fallback position. `STATEFEED_ENTITY_RADIUS` is 10, so the
-## feed names entities across a 441-room neighbourhood, and any island that has
-## not arrived yet has no honest place to put them. Guessing put the whole
-## neighbourhood on the observer's own tile, which is the bug this replaced.
+## Null and not a fallback position. A figure off the tile world, or on a
+## chunk that has not landed, has no honest place. A guess once put the whole
+## neighbourhood on the tile of the observer.
+##
+## The position is ON the drawn ground: its height comes from
+## [method WorldState.ground_y], the same triangles that [ChunkMeshBuilder]
+## draws.
 func _locate_coords(coords: Array) -> Variant:
-	if coords.size() < 3:
+	if coords.size() < 3 or str(coords[2]) != Const.TILE_WORLD_Z:
 		return null
 
-	var z := str(coords[2])
-
-	if not _offsets.has(z):
-		return null
-
-	# Every number in a parsed payload is a float; converted here, at the point
-	# of use, like every other coordinate in this client.
+	# Every number in a parsed payload is a float. This converts it where it
+	# reads it, like every other coordinate in this client.
 	var cell := Vector2i(int(coords[0]), int(coords[1]))
-	var base := _tile_position(cell, _offsets[z])
 
-	return base + Vector3(0.0, TILE_HEIGHT * 0.5, 0.0)
+	return _ground_point(cell)
+
+
+## The point on the drawn ground at the centre of a tile, or null when its
+## chunk is not loaded.
+func _ground_point(cell: Vector2i) -> Variant:
+	var height: Variant = _state.ground_y(cell)
+
+	if height == null:
+		return null
+
+	return Vector3(cell.x * STEP, float(height), -cell.y * STEP)
 
 
 # ─── Hover ───────────────────────────────────────────────────────────────────
@@ -692,51 +633,24 @@ func _set_hover_text(text: String) -> void:
 	hover_text_changed.emit(text)
 
 
-## Brighten one tile, and put the last one back.
+## Mark the tile under the cursor, if a click there acts.
 ##
-## Written through the MultiMesh's instance colour rather than by tinting a
-## material: the tiles of one island are ONE mesh drawn many times, so there is
-## no per-tile material to write to. That is also why the previous tile has to be
-## restored by hand from the room kind -- nothing else remembers what it was.
+## The mark lies on the drawn ground, like the true tile marks. A tile that
+## affords nothing gets no mark, so the mark means "a click does something".
 func _hover_tile(cell: Vector2i) -> void:
-	if cell == _hover_cell and _state.current_z == _hover_z:
+	var action := _state.tile_action(cell)
+	var point: Variant = _ground_point(cell)
+
+	if action.is_empty() or point == null:
+		_clear_tile_hover()
 		return
 
-	_clear_tile_hover()
-
-	var multi: MultiMesh = _tile_meshes.get(_state.current_z)
-
-	if multi == null:
-		return
-
-	var level: WorldState.Level = _state.levels.get(_state.current_z)
-	var index := -1 if level == null else level.cells.find(cell)
-
-	if index < 0:
-		return
-
-	multi.set_instance_color(index,
-		_tile_colour(_state.current_z, level.kinds[index]) * HOVER_LIFT)
-	_hover_cell = cell
-	_hover_z = _state.current_z
+	_hover_mark.position = point
+	_hover_mark.visible = true
 
 
 func _clear_tile_hover() -> void:
-	if _hover_z.is_empty():
-		return
-
-	var multi: MultiMesh = _tile_meshes.get(_hover_z)
-	var level: WorldState.Level = _state.levels.get(_hover_z)
-
-	if multi != null and level != null:
-		var index := level.cells.find(_hover_cell)
-
-		if index >= 0:
-			multi.set_instance_color(index,
-				_tile_colour(_hover_z, level.kinds[index]))
-
-	_hover_z = ""
-	_hover_cell = Vector2i.ZERO
+	_hover_mark.visible = false
 
 
 ## Turn one click into one command a telnet player could have typed.
@@ -1012,319 +926,54 @@ func _walk_towards(cell: Vector2i) -> void:
 
 ## Which tile a screen point lands on.
 ##
-## Intersects the ray with the plane the tile tops lie in rather than
-## raycasting against physics, because these tiles are MultiMesh instances and
-## have no bodies to hit. Falls back to the observer's own cell on a miss --
-## the delta is then zero, which produces no direction and therefore no move.
+## A ray march on the drawn ground ([TerrainPicking]), not a flat plane: a
+## plane misses the tile under the cursor on a hill (DESIGN-0011 section 6.6).
+## The march reads the height grid, so the ground needs no collision shape. A
+## miss gives the tile of the observer, and a click there looks.
 func _cell_under(screen_point: Vector2) -> Vector2i:
 	var origin := _camera.project_ray_origin(screen_point)
 	var direction := _camera.project_ray_normal(screen_point)
-	var hit: Variant = Plane(Vector3.UP, TILE_HEIGHT * 0.5).intersects_ray(origin, direction)
+	var hit: Variant = TerrainPicking.ray_hit(_state.chunks, origin, direction)
 
 	if hit == null:
 		return _state.current_cell
 
-	var offset: float = _offsets.get(_state.current_z, 0.0)
-	var point: Vector3 = hit
-
-	return Vector2i(roundi((point.x - offset) / STEP), roundi(-point.z / STEP))
-
-
-# ─── Layout ──────────────────────────────────────────────────────────────────
-
-## Redraw every island, packing them left to right.
-##
-## Every island is rebuilt rather than only the one that just completed,
-## because an island's offset depends on the widths of the ones before it and a
-## map can arrive in any order. This runs once per completed map -- on login and
-## on resync -- so rebuilding three MultiMeshes is not worth avoiding.
-func _relayout() -> void:
-	for child: Node in _islands.get_children():
-		# Detached before freeing: queue_free leaves the node in the tree until
-		# the end of the frame, and the replacement island carries the same
-		# name, which Godot would silently rename to avoid the collision.
-		_islands.remove_child(child)
-		child.queue_free()
-
-	# The MultiMeshes just freed are the ones hover writes through, so the
-	# bookkeeping goes with them. A stale entry here would be a write to a
-	# freed resource on the next mouse move.
-	_tile_meshes.clear()
-	_hover_z = ""
-	_offsets.clear()
-
-	var cursor := 0.0
-
-	for z: String in _ordered_levels():
-		var level: WorldState.Level = _state.levels[z]
-
-		_offsets[z] = cursor
-		_draw_level(z, level, cursor)
-		cursor += _level_width(level) * STEP + Z_LEVEL_GAP
-
-	_place_marker()
-
-
-func _ordered_levels() -> Array:
-	var named: Array = []
-	var rest: Array = []
-
-	for z: String in _state.levels:
-		if MapPalette.Z_LAYOUT_ORDER.has(z):
-			named.append(z)
-		else:
-			rest.append(z)
-
-	named.sort_custom(
-		func(a: String, b: String) -> bool:
-			return MapPalette.Z_LAYOUT_ORDER.find(a) < MapPalette.Z_LAYOUT_ORDER.find(b)
-	)
-
-	return named + rest
-
-
-func _level_width(level: WorldState.Level) -> float:
-	var widest := 0
-
-	for cell: Vector2i in level.cells:
-		widest = maxi(widest, cell.x)
-
-	return float(widest + 1)
-
-
-# ─── Drawing ─────────────────────────────────────────────────────────────────
-
-func _draw_level(z: String, level: WorldState.Level, offset: float) -> void:
-	var island := Node3D.new()
-
-	island.name = z
-	_islands.add_child(island)
-
-	var tiles := _build_tiles(z, level, offset)
-
-	island.add_child(tiles)
-	_tile_meshes[z] = tiles.multimesh
-
-	var terrain := _build_terrain(z, level, offset)
-
-	if terrain != null:
-		island.add_child(terrain)
-
-	if not level.links.is_empty():
-		island.add_child(_build_links(level, offset))
-
-	island.add_child(_build_props(level, offset))
-
-
-## Surface every tile of one island with that map's terrain art.
-##
-## Returns null for a map [MapPalette] names no terrain for, and for one whose
-## art has not landed yet -- both keep the plain coloured slab, and the second
-## sharpens into terrain when [signal MeshResolver.refreshed] brings the model
-## in. Same ladder the props use and the same reason: the ground has to be
-## walkable before it is drawn.
-##
-## ONE MultiMesh PER MESH IN THE MODEL, not one node per tile. A map is around
-## ninety cells and the terrain is the same mesh on every one of them, so this
-## is the one place in the pane where instancing is not an optimisation but the
-## difference between a scene of ninety nodes and a scene of one.
-func _build_terrain(z: String, level: WorldState.Level, offset: float) -> Node3D:
-	var asset_key := MapPalette.tile_model(z)
-
-	if asset_key.is_empty():
-		return null
-
-	var model := _meshes.resolve_scenery(asset_key)
-
-	if model == null:
-		return null
-
-	var terrain := Node3D.new()
-	var bottom := ModelLoader.bounds_of(model).position.y * TERRAIN_SCALE
-	var lift := (TILE_HEIGHT * 0.5) + TERRAIN_LIFT - bottom
-
-	terrain.name = "Terrain"
-
-	for part: Array in ModelLoader.mesh_parts(model):
-		terrain.add_child(_terrain_layer(level, offset, lift, part))
-
-	# The copy handed back by resolve_scenery is nobody's once its meshes have
-	# been read out of it, and it was never added to the tree -- so nothing else
-	# will ever free it. The same call MeshResolver makes on the copy its own
-	# signal carries.
-	model.queue_free()
-
-	return terrain
-
-
-## One mesh of the terrain model, stamped on every cell of the island.
-##
-## The instance transform is the placement TIMES the part's own transform, in
-## that order: the part transform is where this mesh sits inside its model, and
-## it has to be applied first or a model whose meshes are offset from each other
-## would collapse them all onto the tile centre.
-func _terrain_layer(level: WorldState.Level, offset: float, lift: float,
-		part: Array) -> MultiMeshInstance3D:
-	var mesh: Mesh = part[0]
-	var inside: Transform3D = part[1]
-	var multi := _new_multimesh(mesh, level.cells.size(), false)
-	var basis := Basis.IDENTITY.scaled(Vector3.ONE * TERRAIN_SCALE)
-
-	for index: int in level.cells.size():
-		var origin := _tile_position(level.cells[index], offset)
-		var placement := Transform3D(basis, origin + Vector3(0.0, lift, 0.0))
-
-		multi.set_instance_transform(index, placement * inside)
-
-	return _instance_of(multi)
-
-
-## Stand a model on every tile whose room kind has one.
-##
-## Deliberately NOT the entity path. An entity always gets a mesh, because
-## something nobody has modelled still has to be visible and clickable. A prop
-## is scenery: a tile whose kind has no art stays a plain coloured slab, which
-## is what every tile in the game was before this. [MeshResolver.resolve_scenery]
-## is that policy, in its name.
-##
-## The KEY IS THE ROOM KIND. `mapexport` names a transition node
-## "map_transition", the served manifest lists a `.glb` under that name, and
-## nothing in between has to be edited to give another room kind a prop.
-func _build_props(level: WorldState.Level, offset: float) -> Node3D:
-	var props := Node3D.new()
-
-	props.name = "Props"
-
-	for index: int in level.cells.size():
-		var prop := _meshes.resolve_scenery(level.kinds[index])
-
-		if prop == null:
-			continue
-
-		var base := _tile_position(level.cells[index], offset)
-
-		prop.scale = Vector3.ONE * TILE_PROP_SCALE
-		props.add_child(prop)
-
-		# Rest it ON the tile rather than through it. A normalised model fills
-		# the unit box on its LONGEST axis only -- the transition pad is far
-		# flatter than it is wide -- so half the prop's height is not half its
-		# scale, and the scaled copy has to be measured.
-		var bounds := ModelLoader.bounds_of(prop)
-		var top := base.y + (TILE_HEIGHT * 0.5)
-
-		prop.position = Vector3(base.x, top - (bounds.position.y * TILE_PROP_SCALE),
-			base.z)
-
-	return props
-
-
-func _build_tiles(z: String, level: WorldState.Level,
-		offset: float) -> MultiMeshInstance3D:
-	var box := BoxMesh.new()
-
-	box.size = Vector3(TILE_SIZE, TILE_HEIGHT, TILE_SIZE)
-	box.material = _tile_material
-
-	var multi := _new_multimesh(box, level.cells.size())
-
-	for index: int in level.cells.size():
-		var origin := _tile_position(level.cells[index], offset)
-
-		multi.set_instance_transform(index, Transform3D(Basis.IDENTITY, origin))
-		multi.set_instance_color(index, _tile_colour(z, level.kinds[index]))
-
-	return _instance_of(multi)
-
-
-## What one tile's slab is coloured, on the island it is part of.
-##
-## TWO PALETTES, and which one applies is a property of the ISLAND rather than
-## of the tile: a bare map colour-codes every kind, a surfaced one colours only
-## the kinds somebody chose a colour for and leaves the rest neutral under the
-## art. Both the choice and the tables are [MapPalette]'s -- the minimap draws
-## the same map and asks the same pair of questions.
-func _tile_colour(z: String, kind: String) -> Color:
-	return MapPalette.tile_colour(kind, MapPalette.is_surfaced(z, _meshes))
-
-
-func _build_links(level: WorldState.Level, offset: float) -> MultiMeshInstance3D:
-	var box := BoxMesh.new()
-
-	box.size = Vector3.ONE
-	box.material = _link_material
-
-	var multi := _new_multimesh(box, level.links.size())
-
-	for index: int in level.links.size():
-		var pair: Array = level.links[index]
-		var from := _tile_position(pair[0], offset)
-		var to := _tile_position(pair[1], offset)
-
-		multi.set_instance_transform(index, link_transform(from, to))
-		multi.set_instance_color(index, COLOR_LINK)
-
-	return _instance_of(multi)
-
-
-## Place a unit box so it spans from one tile centre to another.
-##
-## Static and public because this is the only real geometry in the file and it
-## fails SILENTLY when it is wrong -- the first version used Basis.scaled and
-## drew every east-west link as a long bar running north-south. Nothing errors;
-## you just get a wrong picture. tests/test_world_state.tscn covers it.
-static func link_transform(from: Vector3, to: Vector3) -> Transform3D:
-	var span := to - from
-
-	# scaled_local, NOT scaled. Basis.scaled multiplies the basis ROWS, which
-	# applies the scale along the PARENT axes -- so `span.length()` would
-	# stretch global Z no matter which way the link actually runs. scaled_local
-	# multiplies the columns, which is the link's own frame.
-	#
-	# -Z of a looking_at basis points along the span, so scaling local Z by the
-	# full length makes the box reach exactly from one centre to the other when
-	# placed at the midpoint.
-	var basis := Basis.looking_at(span, Vector3.UP).scaled_local(
-		Vector3(LINK_WIDTH, LINK_HEIGHT, span.length())
-	)
-	var origin := from.lerp(to, 0.5) + Vector3(0.0, TILE_HEIGHT * 0.5, 0.0)
-
-	return Transform3D(basis, origin)
+	return ChunkSet.tile_at(TerrainPicking.tile_point(hit))
 
 
 func _place_marker() -> void:
-	# BEFORE the early return. Entities are placed from their own coords now, so
-	# the ones standing on islands that HAVE arrived are drawable even while the
-	# observer's own map is still in flight -- and tying their placement to the
-	# marker's would hold all of them back for one missing island.
+	# The area comes first, before the pool builds a node. A figure that
+	# arrives with this room then tints in from the fog of the new area. The
+	# area is the one of the tile under the player, from its chunk. A tile whose
+	# chunk has not landed keeps the area that it had.
+	var area := _state.area_at(_state.current_cell)
+
+	if not area.is_empty():
+		_area_environment.set_area(area)
+
+	# BEFORE the early return. Each figure stands from its own coords. Thus, a
+	# figure on a chunk that is here shows before the chunk under the observer
+	# arrives.
 	#
-	# stand() only RECORDS which tile is the observer's; the rebuild that acts
-	# on it is the line below. Two calls and not one, because the pool has to be
-	# free to rebuild for reasons that have nothing to do with the observer --
-	# an entity arriving, art landing -- and every one of those has to size the
-	# ring the same way.
+	# stand() only RECORDS the tile of the observer. The next line acts on it.
+	# The pool also rebuilds when an entity arrives or art lands. Each rebuild
+	# must size the ring the same way.
 	_entities.stand(_observer_coords())
 	_entities.replace_positions()
 
-	# BEFORE the early return as well, and for the same reason: which way the
-	# last step went is known from the coords alone, so a room that arrived
-	# ahead of its map still records the step. Holding it back would mean the
-	# island landing later replayed that step as a jump from nowhere.
+	# BEFORE the early return as well. The coords alone say which way the last
+	# step went, so a room that arrives before its chunk still records the step.
 	_turn_avatar()
 
-	if not _offsets.has(_state.current_z):
-		# The room arrived before its map did. The marker stays where it was
-		# until _relayout calls back here with the island in place.
+	var top: Variant = _ground_point(_state.current_cell)
+
+	if top == null:
+		# The room arrived before its chunk. The marker stays where it was
+		# until chunks_changed calls back here with the ground in place.
 		return
 
-	var base := _tile_position(_state.current_cell, _offsets[_state.current_z])
-	var top := base + Vector3(0.0, TILE_HEIGHT * 0.5, 0.0)
-
-	# Sits ON the tile's top face. It used to be lifted by half the box's height,
-	# which stopped being meaningful when the box was replaced by a figure --
-	# and would have crashed reading `.size.y` off a mesh that is now null. The
-	# avatar rests itself on the face instead, so the offset belongs to the
-	# thing being drawn rather than to the anchor.
+	# ON the drawn ground. The avatar rests itself on this point, so the
+	# offset belongs to the figure, not to the anchor.
 	_marker.position = top
 	_aura.position = top
 
@@ -1357,7 +1006,7 @@ func _observer_coords() -> Array:
 ## procedural figure alike.
 ##
 ## The Z term is NEGATED because grid Y grows northward while world Z grows
-## southward: the same flip [method _tile_position] makes, and the reason a step
+## southward: the same flip [method _ground_point] makes, and the reason a step
 ## north answers PI rather than 0. Getting this wrong is silent — the figure
 ## simply walks backwards — so `test_world_view` pins all eight compass steps.
 ##
@@ -1451,20 +1100,8 @@ func _pulse_aura() -> void:
 
 # ─── Private helpers ─────────────────────────────────────────────────────────
 
-func _tile_position(cell: Vector2i, offset: float) -> Vector3:
-	# Grid Y grows northward; Godot's -Z is away from a default camera, so the
-	# island reads the same way round as the text map does.
-	return Vector3(offset + cell.x * STEP, 0.0, -cell.y * STEP)
-
-
-## A MultiMesh of one mesh, `count` times.
-##
-## `use_colors` is false for the terrain and true for everything else. It is not
-## a micro-optimisation: a MultiMesh with colours allocates a colour per
-## instance, and the terrain's material draws its own texture rather than a
-## vertex colour, so those bytes would sit there being ignored. It is also the
-## honest answer to "can this layer be tinted" -- it cannot, and the slab
-## underneath is what hover writes to.
+## A MultiMesh of one mesh, `count` times. `use_colors` gives each instance
+## its own colour.
 func _new_multimesh(mesh: Mesh, count: int, use_colors := true) -> MultiMesh:
 	var multi := MultiMesh.new()
 
@@ -1482,13 +1119,3 @@ func _instance_of(multi: MultiMesh) -> MultiMeshInstance3D:
 	node.multimesh = multi
 
 	return node
-
-
-func _vertex_coloured() -> StandardMaterial3D:
-	var material := StandardMaterial3D.new()
-
-	# Without this the per-instance colours set above are simply ignored and
-	# every tile renders white.
-	material.vertex_color_use_as_albedo = true
-
-	return material

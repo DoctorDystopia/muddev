@@ -159,6 +159,7 @@ func _draw_row(row: Dictionary, now: int) -> void:
 ## "4m 05s" or "38s".
 static func _clock(seconds: float) -> String:
 	var whole := ceili(seconds)
+	@warning_ignore("integer_division")
 	var minutes := whole / 60
 	var rest := whole % 60
 

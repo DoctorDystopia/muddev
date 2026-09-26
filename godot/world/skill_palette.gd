@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## ## Why this is a client file and not a generated one
 ##
-## It is the same split [MapPalette] sits on, and the same one
+## It is the same split [FloorPalette] sits on, and the same one
 ## `clientexport.py` states at length: **Python owns what is TRUE about the
 ## game; JavaScript and GDScript own what it looks like.** Which categories
 ## exist is the server's — a skill class declares its own — and it arrives on

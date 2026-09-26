@@ -23,8 +23,8 @@ the name.
 | emitter | a function that sends a snapshot, for example `emit_vitals` | sender, publisher |
 | tick | one step of the global clock | heartbeat |
 | phase | one stage inside a tick, for example FEED | stage |
-| tile | one room on an XYZ grid map (`GridTile`) | cell, square |
-| map rebuild | a run of `scripts/clean_and_reload_all_maps.ps1` | grid rebuild, respawn |
+| tile | one square of the tile grid. It has a tile room only while something stands there | cell, square |
+| map rebuild | a run of the retired `clean_and_reload_all_maps.ps1` on the xyzgrid maps (`archive/xyzgrid-maps/`). The tile sync took its place | grid rebuild, respawn |
 | shopkeep | an NPC that sells items (`ShopkeepNPC`) | shopkeeper, vendor, merchant |
 | ware | one item kind that a shop sells, one row of `get_buy_items` | good, product |
 | stock level | how many units of a ware a shop has now (`stock.level`) | inventory, supply |
@@ -119,3 +119,37 @@ model file is never a recipe.
 | exception | a reason in a source record that waives the license gate | override, waiver |
 | served tree | `web/static/webclient/models/`, the files the client fetches | model tree, static models |
 | credits box | the box in the Godot client that the Options pane opens | credits pop-up, credits window |
+
+## Terrain
+
+DESIGN-0011 named these on 09/23/2026. "Tile" keeps its meaning from the
+Server section, with one change: on the tile grid, a tile does not always have
+a room.
+
+| Use | For | Not |
+|---|---|---|
+| tile grid | the world-wide grid of heights, floor types, and walk flags | heightmap, world grid, terrain grid |
+| chunk | a 64 x 64 part of the tile grid, stored in one chunk file | map square, region, sector |
+| chunk file | the file that holds one chunk. The editor writes it, and the server reads it | map file, chunk data |
+| height step | the integer unit of a corner height | height unit, elevation level |
+| floor type | the named ground on a tile, for example `sand` | ground type, underlay, terrain |
+| walk flag | a bit that limits movement on a tile or across an edge | collision flag, blocker |
+| area | a named part of the world. The client picks fog and light by area | zone, biome, region |
+| plane | one level in a stack, for example a second floor | floor, level, layer, storey |
+| tile room | a `TileRoom`: the Evennia room at a tile of the tile grid, which exists only while something stands there | sparse room, grid room |
+| pool | the empty tile rooms that wait for the next step (`TileRooms`) | cache, free list |
+| parity test | the pair of tests, one in Python and one in GDScript, that hold the two chunk file readers to the same answers | cross-check, sync test |
+| semantic dump | the text that says what a chunk file means, one fact on each line. The parity test compares its digest | canonical dump, meaning file |
+| object kind | the key of a placed object in a chunk file, a row of `world/object_kinds.py`. One kind for each variant, for example each signpost | object type, prefab, object ID |
+| terrain editor | the Godot editor plugin in `godot/addons/blackout_terrain/` that writes the chunk files | map editor, world editor, terrain tool |
+| block | the 3 x 3 chunks that the terrain editor loads around its centre chunk | chunk window, loaded area, scene |
+| brush | one tool of the terrain editor that changes the corners or tiles in a circle | tool (for a brush), stamp |
+| stroke | every dab of a brush from a press to its release. One stroke is one undo entry | drag, paint pass |
+| tile world | the chunk files of `world/chunks/`, loaded as one tile grid and one room index (`TileWorld`). Its rooms have the Z `tile_world` | new world, tile map, grid world |
+| transition | an object kind that moves a walker to its target tile when the walker steps onto its tile | portal, warp, map link |
+| pin | the mark on a tile that keeps its tile room out of the pool, for example under a chunk object | lock, anchor, sticky room |
+| tile sync | the operator step that makes the objects on the tile world match the chunk files (`scripts/sync_tile_objects.py`) | map rebuild, respawn, reconcile |
+| tile map | the ASCII map of the tile world that a telnet player sees (`world/tile_map.py`) | minimap, xymap |
+| landmark | an object kind that names its tile and stands nothing up | marker, waypoint, POI |
+| respawn point | the landmark `respawn_point`. A dead player, a new character, and a character with no tile come back on its tile | spawn point, start room, home tile |
+| cutover | the operator step that moves every character to the tile world and deletes the xyzgrid maps (`scripts/move_to_tile_world.py`) | migration, map move, switchover |

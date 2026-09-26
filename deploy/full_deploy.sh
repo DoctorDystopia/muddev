@@ -11,10 +11,11 @@
 # for the reasoning in it.
 #
 # Usage:
-#   deploy/full_deploy.sh [--maps] [--reboot] [--skip-godot] [--dry-run]
+#   deploy/full_deploy.sh [--tiles] [--reboot] [--skip-godot] [--dry-run]
 #
-#   --maps          rebuild the grid from scripts/map_manifest.json instead of
-#                    a plain reload (the map script reloads Evennia itself)
+#   --tiles         stop Evennia, run the tile sync (world/chunks/ -> the
+#                    objects of the tile world), and start Evennia again.
+#                    Use it when a chunk file changed
 #   --reboot        evennia reboot instead of reload -- use when a
 #                    PORTAL_SERVICES_PLUGIN_MODULES entry changed; this
 #                    restarts the Portal too and briefly drops connections
@@ -32,22 +33,22 @@ PYTHON="$REPO_ROOT/evenv/Scripts/python.exe"
 EVENNIA="$REPO_ROOT/evenv/Scripts/evennia.exe"
 GODOT_BIN="${GODOT_BIN:-/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe}"
 
-DO_MAPS=0
+DO_TILES=0
 DO_GODOT=1
 DO_REBOOT=0
 DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --maps)       DO_MAPS=1 ;;
+        --tiles)      DO_TILES=1 ;;
         --skip-godot) DO_GODOT=0 ;;
         --reboot)     DO_REBOOT=1 ;;
         --dry-run)    DRY_RUN=1 ;;
         -h|--help)
-            sed -n '2,23p' "$0" | sed 's/^#//'
+            sed -n '2,24p' "$0" | sed 's/^#//'
             exit 0 ;;
         *) echo "Unknown argument: $1" >&2
-           echo "Usage: full_deploy.sh [--maps] [--reboot] [--skip-godot] [--dry-run]" >&2
+           echo "Usage: full_deploy.sh [--tiles] [--reboot] [--skip-godot] [--dry-run]" >&2
            exit 2 ;;
     esac
     shift
@@ -75,13 +76,17 @@ else
     git -C "$REPO_ROOT" diff --stat -- godot/autoload/blackout_constants.gd
 fi
 
-# --- 2. Server: map rebuild or plain reload ----------------------------------
-if [ "$DO_MAPS" -eq 1 ]; then
-    step "2/4 Map rebuild (stops/reloads Evennia itself)"
+# --- 2. Server: tile sync or plain reload ------------------------------------
+# The tile sync needs the server down: the server keeps the tile room index in
+# memory. A dry run prints the plan of the sync, which is read-only.
+if [ "$DO_TILES" -eq 1 ]; then
+    step "2/4 Tile sync (stops and starts Evennia)"
     if [ "$DRY_RUN" -eq 1 ]; then
-        run bash "$REPO_ROOT/blackout/scripts/clean_and_reload_all_maps.sh" --dry-run
+        ( cd "$REPO_ROOT/blackout" && "$PYTHON" scripts/sync_tile_objects.py )
     else
-        run bash "$REPO_ROOT/blackout/scripts/clean_and_reload_all_maps.sh"
+        ( cd "$REPO_ROOT/blackout" && run "$EVENNIA" stop )
+        ( cd "$REPO_ROOT/blackout" && run "$PYTHON" scripts/sync_tile_objects.py --apply )
+        ( cd "$REPO_ROOT/blackout" && run "$EVENNIA" start )
     fi
 else
     step "2/4 Reload game server"

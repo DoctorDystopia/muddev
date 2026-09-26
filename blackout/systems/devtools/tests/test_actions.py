@@ -25,7 +25,10 @@ from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from typeclasses.signs import Graffiti, Sign
 from world.item_database import ITEM_DB
-from world.maps.manifest import load_entries, zcoords_of
+from systems.core.tilegrid import chunkfile
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.world import TileWorld, set_world
+from world.areas import AREAS
 
 
 # The stackable and non-stackable items the spawn tests use. Resolved from the
@@ -298,43 +301,74 @@ class ProgressionTests(EvenniaTest):
 class TeleportDestinationTests(unittest.TestCase):
     """The destination list, which needs no database."""
 
-    def test_the_destinations_are_exactly_the_manifest_maps(self):
-        entries = load_entries()
-        expected = zcoords_of(entries)
-        offered = dev_actions.map_zcoords()
+    def test_the_destinations_are_exactly_the_areas(self):
+        offered = dev_actions.area_keys()
 
-        self.assertEqual(sorted(offered), sorted(expected))
+        self.assertEqual(sorted(offered), sorted(AREAS))
 
-    def test_the_game_ships_at_least_one_destination(self):
-        # Deliberately not a census: adding a map must never fail a test.
-        offered = dev_actions.map_zcoords()
 
-        self.assertGreater(len(offered), 0)
+def _one_area_world(area: str, blocked_row: int = 0):
+    """
+    One chunk of `area`, with its south row blocked, so the first open tile
+    is (0, 1).
+    """
+    size = tile_const.CHUNK_SIZE
+    tile_count = size * size
+    flags = [0] * tile_count
 
+    for x in range(size):
+        flags[blocked_row * size + x] = tile_const.FLAG_BLOCKED
+
+    chunk_file = chunkfile.ChunkFile(
+        cx=0, cy=0, plane=0, floor_names=["sand"], area_names=[area],
+        heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
+        floors=[0] * tile_count, flags=flags, areas=[0] * tile_count,
+        objects=[])
+    world = TileWorld([chunk_file])
+    world.rooms.load()
+
+    return world
 
 
 class TeleportTests(EvenniaTest):
-    """Teleport refusals. The successful path needs a built grid, which the
-    test database does not have -- map_sync runs against the live DB only."""
+    """Teleport to an area, on a one-chunk tile world."""
 
-    def test_a_map_the_manifest_does_not_name_is_refused(self):
-        succeeded, message = dev_actions.teleport_to_map(
-            self.char2, self.char1, "no_such_map"
+    def setUp(self):
+        super().setUp()
+        self.area = sorted(AREAS)[0]
+        set_world(_one_area_world(self.area))
+
+    def tearDown(self):
+        set_world(None)
+        super().tearDown()
+
+    def test_an_area_the_table_does_not_name_is_refused(self):
+        succeeded, message = dev_actions.teleport_to_area(
+            self.char2, self.char1, "no_such_area"
         )
 
         self.assertFalse(succeeded)
-        self.assertIn("no_such_map", message)
+        self.assertIn("no_such_area", message)
 
-    def test_a_named_map_with_no_rooms_built_reports_that_and_does_not_move(self):
-        entries = load_entries()
-        zcoords = zcoords_of(entries)
+    def test_an_area_with_no_open_tile_reports_that_and_does_not_move(self):
+        other = next(key for key in sorted(AREAS) if key != self.area)
         start_location = self.char1.location
-        succeeded, _message = dev_actions.teleport_to_map(
-            self.char2, self.char1, zcoords[0]
+
+        succeeded, _message = dev_actions.teleport_to_area(
+            self.char2, self.char1, other
         )
 
         self.assertFalse(succeeded)
         self.assertIs(self.char1.location, start_location)
+
+    def test_a_teleport_lands_on_the_first_open_tile_of_the_area(self):
+        succeeded, _message = dev_actions.teleport_to_area(
+            self.char2, self.char1, self.area
+        )
+
+        x, y, _z = self.char1.location.xyz
+        self.assertTrue(succeeded)
+        self.assertEqual((int(x), int(y)), (0, 1))
 
 
 

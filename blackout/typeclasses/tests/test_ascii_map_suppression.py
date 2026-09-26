@@ -22,7 +22,7 @@ import inspect
 import unittest
 
 from systems.interface.statefeed import constants as feed_const
-from typeclasses.rooms import GridTile
+from typeclasses.rooms import GridTile, TileRoom
 
 
 class _Session:
@@ -212,21 +212,19 @@ class AppearanceWiringTests(unittest.TestCase):
         self.assertEqual(given, {"map_visual_range": 3})
 
     def test_the_suppression_lives_in_one_place(self):
-        """`_send_tinted_map` must NOT re-check.
+        """`_send_tile_map` must NOT re-check.
 
-        It did, and the redundancy hid the real bug: with two owners it looked
-        as though the decision was being made, so nobody asked which paths
-        reached it.
+        The xyzgrid map sender did, and the second check hid the real bug.
+        With two owners, the decision seemed to happen, so nobody asked which
+        paths reached it.
         """
-        source = inspect.getsource(GridTile._send_tinted_map)
+        source = inspect.getsource(TileRoom._send_tile_map)
 
         self.assertNotIn("_wants_ascii_map", source)
 
     def test_every_appearance_path_goes_through_the_seam(self):
-        """A second `super().return_appearance` added without it would restore
-        exactly the bug this file was written for."""
-        source = inspect.getsource(GridTile.return_appearance)
+        """The tile map goes out only after the seam decides. A send without
+        it would restore exactly the bug this file was written for."""
+        source = inspect.getsource(TileRoom.return_appearance)
 
         self.assertIn("_appearance_kwargs", source)
-        self.assertNotIn("super().return_appearance(looker, map_display=",
-                         source)

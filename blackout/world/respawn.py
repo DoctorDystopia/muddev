@@ -3,80 +3,117 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/23/2026
 Description: The one owner of the fact "where does a dead player come back".
-             Exposes RESPAWN_XYZ and get_respawn_room(); imported by
-             typeclasses/characters.py (Character.respawn) and by nothing else.
+             Exposes RESPAWN_KIND, respawn_tile() and get_respawn_room().
              Nowhere may hard-code a respawn coordinate.
 
 Blackout sets neither START_LOCATION nor DEFAULT_HOME in settings.py, so before
 this module there was no respawn-room fact anywhere in the codebase and
 CombatEntity.respawn could only refill HP where the body fell.
 
-The anchor is a COORDINATE, not a map module name. world/maps/oasis.py was
-called world/maps/test_oasis.py until recently, and scripts/map_manifest.json is
-what binds a module to its zcoord -- so a module rename moves the manifest row,
-not the zcoord. Naming (0, 0, "oasis") survives that rename; naming
-"world.maps.test_oasis" would not have.
+THE RESPAWN POINT IS AN OBJECT IN A CHUNK FILE. The object kind
+`respawn_point` (world/object_kinds.py) marks the tile. An author moves it in
+the terrain editor, and no code changes. Until 09/25/2026 this module held the
+constant (0, 0, "oasis"), the "Oasis Entrance" room of the xyzgrid map. The
+object now stands on the same tile, and its kind carries the same room name.
+Nick chose the object over a constant tile, 09/25/2026.
 
-(0, 0) on the oasis map is "Oasis Entrance" -- a named landmark with no NPC
-prototype on the tile, and far enough from the Mutant Raider tile at (2, 3) that
-a player cannot respawn inside the fight that just killed them. That last
-property is the load-bearing one: see docs/2026-08-23-DESIGN-0003, §5, "Player
-death loop".
+The tile of a chunk object is pinned (`TileRooms.pin`). Thus, the pool never
+moves the room of the respawn point to another tile, and a character's
+`home` can hold that room.
 
-Deliberately NOT an Evennia Attribute or a settings value. A constant in world/
-is greppable, is version-controlled next to the map that defines the tile, and
-cannot drift per-database the way a stamped Attribute can.
+Three callers read it: Character.respawn (a death), Account.create_character
+(a new character), and Character.at_pre_puppet (a login with no tile). The
+tile must be far from a fight, so that a player cannot respawn inside the
+fight that just killed them. See docs/2026-08-23-DESIGN-0003, section 5,
+"Player death loop".
 """
 
-from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
 
-
-# (x, y, zcoord). The zcoord is the map name assigned in
-# scripts/map_manifest.json, NOT the module path that defines the map.
-RESPAWN_XYZ = (0, 0, "oasis")
+from systems.core.tilegrid.world import get_world
 
 
-def get_respawn_room():
+# ─── Public constant definitions ─────────────────────────────────────────────
+
+# The object kind that marks the respawn point in a chunk file.
+RESPAWN_KIND: str = "respawn_point"
+
+
+# ─── Public routines ─────────────────────────────────────────────────────────
+
+def respawn_tile(world):
     """
-    Purpose: Resolve RESPAWN_XYZ to a live room object.
+    Purpose: Find the tile of the respawn point in a tile world.
 
     Entry:
-        None. Reads the module-global RESPAWN_XYZ.
+        world - a TileWorld.
 
     Exit/Returns:
-        The room at RESPAWN_XYZ, or None if it could not be resolved.
+        The world tile (x, y) of the first `RESPAWN_KIND` object, in tile
+        order. None if no chunk file places one.
 
     Module Globals:
-        RESPAWN_XYZ read.
+        RESPAWN_KIND read.
 
     Methodology:
-        get_xyz raises rather than returning None -- DoesNotExist when the grid
-        has not been built (a fresh database, or a test that never ran
-        map_sync), MultipleObjectsReturned if a rebuild left duplicate rows at
-        one coordinate. Both are caught here and reported as None.
-
-        Returning None rather than raising is the entire point of this
-        function. Its only caller is Character.respawn, which runs inside
-        at_death; an exception escaping there would abort the death sequence
-        mid-way, leaving a player at 0 HP with combat already torn down. A
-        missing respawn room must degrade to "you wake where you fell", never
-        to a traceback.
+        `placed_objects` sorts by tile, so two respawn points give the same
+        answer on every call. world/tests/test_respawn_point.py asserts that
+        the world chunks place exactly one.
 
     Notes/References:
-        get_xyz matches subclasses of XYZRoom, so the GridTile rows the map
-        builder actually creates are found. See the installed contrib at
-        evennia/contrib/grid/xyzgrid/xyzroom.py.
+        None.
+
+    Author: Nick Hobar
+    Creation date: 09/25/2026
+    """
+    for kind, x, y, _rotation in world.placed_objects():
+        if kind == RESPAWN_KIND:
+            return (x, y)
+
+    return None
+
+
+def get_respawn_room(world=None):
+    """
+    Purpose: Resolve the respawn point to a live room object.
+
+    Entry:
+        world - a TileWorld. None means the tile world of this process.
+
+    Exit/Returns:
+        The tile room at the respawn point, or None if it could not be
+        resolved.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        `ensure_room` gives the live room of the tile, or makes one. The pin
+        of the chunk object keeps that room on the tile.
+
+        Returning None rather than raising is the entire point of this
+        function. Character.respawn runs inside at_death. An exception there
+        would abort the death sequence mid-way, and leave a player at 0 HP
+        with combat already torn down. A missing respawn point must degrade
+        to "you wake where you fell", never to a traceback.
+
+    Notes/References:
+        DESIGN-0011, Phase 4b.
 
     Author: Nick Hobar
     Creation date: 08/23/2026
     """
     try:
-        room = XYZRoom.objects.get_xyz(xyz=RESPAWN_XYZ)
+        loaded = world or get_world()
+        tile = respawn_tile(loaded)
+
+        if tile is None:
+            logger.log_err(f"get_respawn_room: no chunk file places {RESPAWN_KIND}")
+            return None
+
+        room = loaded.rooms.ensure_room(tile[0], tile[1])
     except Exception as exc:
-        logger.log_err(
-            f"get_respawn_room: no room at {RESPAWN_XYZ}: {exc!r}"
-        )
+        logger.log_err(f"get_respawn_room: no room at the respawn point: {exc!r}")
         return None
 
     return room

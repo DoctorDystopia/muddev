@@ -36,10 +36,10 @@ CURING_SLOT_LEVELS: tuple = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
 #
 # On the character and not on the chamber, and that is load bearing rather
 # than convenient. A chamber is a map facility: systems/gameplay/spawning/
-# teardown.py destroys every facility with its room on a map rebuild, and it
+# teardown.py destroys every facility with its room, and it
 # does so DEPTH-FIRST, so a chamber's contents are destroyed before the
 # chamber is. Meat left curing in a chamber would therefore be destroyed by
-# `clean_and_reload_all_maps.ps1` -- an operator action, not an accident.
+# a tile sync that changes its tile -- an operator action, not an accident.
 #
 # The bank reached the same conclusion for the same reason: the terminal on
 # the map is UI, and the vault hangs off the character

@@ -20,23 +20,10 @@ Description: The full-state snapshot — what "everything, from scratch" means.
 
 from evennia.utils import logger
 
-from . import events, mapexport
-from .emit import emit
+from . import events
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
-
-def _send_map(observer) -> int:
-    """Push every Z-level's grid to the observer, chunk by chunk."""
-    chunks = mapexport.build_all_map_chunks()
-    sent = 0
-
-    for chunk in chunks:
-        reached = emit(observer, chunk, force=True)
-        sent += reached
-
-    return sent
-
 
 def _send_room(observer) -> int:
     """Push the observer's current room and its contents.
@@ -93,9 +80,8 @@ def send_full_state(observer) -> int:
         None.
 
     Methodology:
-        Map first, then room, then self. That order is not cosmetic -- a client
-        that receives room_info before it has the grid has nowhere to put the
-        highlight, and would either buffer or draw a floating tile.
+        Room first, then self. `emit_room_info` sends the room info and then
+        the tile chunks of the block around it.
 
         The dossier, the skill roster, the quest log and the inventory go last,
         and are the only sends here that can decline to happen: all four
@@ -120,8 +106,7 @@ def send_full_state(observer) -> int:
         return 0
 
     try:
-        sent = _send_map(observer)
-        sent += _send_room(observer)
+        sent = _send_room(observer)
         sent += _send_self(observer)
         sent += events.emit_skills(observer, force=True)
         sent += events.emit_combat_options(observer, force=True)

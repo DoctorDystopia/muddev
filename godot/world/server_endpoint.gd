@@ -118,12 +118,12 @@ static func resolve(override: String, is_debug: bool) -> String:
 ## must also serve the model tree at the same path this client asks for, which
 ## is [constant ModelRegistry.MODEL_ROOT]. See `deploy/webexport/README.md`.
 static func asset_origin(is_debug: bool, is_web: bool,
-		page_origin: String = "") -> String:
+		page_origin_url: String = "") -> String:
 	if is_debug:
 		return ASSET_DEV_ORIGIN
 
 	if is_web:
-		return page_origin.rstrip("/")
+		return page_origin_url.rstrip("/")
 
 	return ASSET_DESKTOP_ORIGIN
 

@@ -1047,39 +1047,26 @@ A **sign** is worldbuilding that a player is meant to believe. A **marker** is
 a note *about* the game. The world view draws it in a color that no signage
 uses, so nobody mistakes one for the other.
 
-The two live in the **database**, not in the map, so a map rebuild deletes them
-with the tiles that they stand on. That is the right lifetime for an
+The two live in the **database**, not in a chunk file. A tile sync that
+changes their tile demolishes them. That is the right lifetime for an
 annotation.
 
-### Permanent signage belongs in the map
+### Permanent signage belongs in a chunk file
 
-A signpost needs no new MAPSTR symbol and no tile of its own. There are two
-ways to place one, and each is a single row beside the skill-node overrides:
+Each signpost is its own object kind, with its words in the row:
 
 ```python
-# world/maps/oasis.py
-(1, 0): _signpost("OASIS\nBANK: EAST\nFORGE: NORTH"),   # a tile that is only a sign
-(6, 3): _signed(_furnace, "FOUNDRY\nNO NAKED FLAMES"),  # a sign ON the furnace tile
+# world/object_kinds.py
+ObjectKind("signpost_bank", _SIGN, label="Bank"),
 ```
 
-Use `_signed` to label a facility. The tile keeps its own key, desc, minimap
-color, and facility, and the sign stands beside it in the ring of the tile.
-Thus, a sign no longer costs a neighboring tile.
+Place the kind in the terrain editor, on its own tile or on the tile of a
+facility. A tile holds any number of objects, so a sign costs no neighbour
+tile. Then run the tile sync (see "World Building Workflow").
 
-**Signs dispatch from a room attribute, not from the room key.** That makes
-sharing possible. `SPAWNER_REGISTRY` uses the room key, and a tile has exactly
-one key. Thus, a tile with the key `Foundry Furnace Facility` can never also
-have the key `Signpost`. `ATTRIBUTE_SPAWNER_REGISTRY` runs every spawner whose
-attribute the tile declares. Thus, a tile can carry any number of decorations
-on top of the one thing that it *is*.
-
-The map module stays the **owner** of the words. The spawner sets them again
-on every rebuild, so a typo fix is an edit plus a rebuild, not a destroyed
-tile. `_signed` **copies** the prototype that it gets. Every facility prototype
-is one dict, shared by every coordinate that names it. If `_signed` changed
-that dict, it would sign all of those tiles.
-
-The change takes effect on the next run of `clean_and_reload_all_maps.sh`.
+`world/object_kinds.py` stays the **owner** of the words. The sign spawner
+sets them again on each sync, so a typo fix is an edit plus a sync, not a
+destroyed tile.
 
 ### Player graffiti (`write`)
 
@@ -1139,7 +1126,7 @@ What the menu offers:
 | Toggle god mode | The target ignores all incoming damage. It persists on the CHARACTER, not the egg. If you drop the egg, god mode stays on. |
 | Restore | Refresh max HP from Fortitude, heal to full, drop out of combat. |
 | Empty inventory | Destroys everything carried **and equipped**. A confirmation that counts what it will destroy and names the owner comes first. Staff items are skipped. |
-| Teleport to a map | Any map in `scripts/map_manifest.json`, landing on its `(0,0)` entrance tile. |
+| Teleport to an area | Any area in `world/areas.py`. It lands on the respawn point if that is in the area, else on the first open tile of the area. |
 | Teleport to a player | Sends the target to whichever character you name. |
 | Bring target to me | The same call with the arguments swapped. |
 | Grant XP / Set a skill level | Any key in `SKILL_REGISTRY`. Levels accept the full 0-127 range. |
@@ -1182,133 +1169,75 @@ grep MODTOOL server/logs/server.log
 
 ---
 
-## Map Building Workflow
+## World Building Workflow
 
-Use this procedure whenever you expand a grid, shrink a grid, change tile
-coordinates, or change the layout of an ASCII map.
+The world is the chunk files in `world/chunks/`, one file for each 64 x 64
+chunk. The terrain editor in Godot writes them, and the server reads them.
+`godot/README.md`, "The terrain editor writes chunk files, not scenes", tells
+how to use the editor. DESIGN-0011 is the design.
 
-### Standard 5-step procedure
+The xyzgrid maps, `map_sync.py`, and the map manifest are gone since
+09/25/2026. They are in `archive/xyzgrid-maps/`.
 
-**1. Edit the Map File**
-Make structural changes in `world/maps/<map_name>.py`.
+### Put a thing in the world (about 10 minutes)
 
-- Define every new symbol in the `legend` dict, mapped to a `MapNode`.
-- Obey Evennia's XYZGrid spacing rules (no spaces between rooms and links,
-  padding around the `+` borders).
-
-**2. Delete the Old Z-Level**
-
-```bash
-> evennia xyzgrid delete "oasis"
-evennia xyzgrid delete "trade town sector 1"
-```
-
-**3. Add the Updated Map**
+1. For a new kind of thing, add one row to `world/object_kinds.py`: a
+   facility, a gathering node, an NPC, a sign, a transition, or a landmark.
+2. Run `python scripts/export_client_constants.py`, so the editor lists the
+   new kind.
+3. In the terrain editor, place the object with the Object brush. Save.
+4. Stop the server. From `blackout/`, read the plan of the tile sync:
 
 ```bash
-> evennia xyzgrid add world.maps.test_oasis
-> evennia xyzgrid add world.maps.test_neo_cairo
+../evenv/Scripts/python.exe scripts/sync_tile_objects.py
 ```
 
-**4. Spawn the New Grid**
+5. Apply it, and start the server:
 
 ```bash
-> evennia xyzgrid spawn
+../evenv/Scripts/python.exe scripts/sync_tile_objects.py --apply
 ```
 
-**5. Reload the Server**
+The server keeps the tile room index in memory. Thus, stop the server before
+`--apply`, or run `evennia reload` after it.
+
+### What the tile sync does to a tile
+
+| Verb | When | What `--apply` does |
+|---|---|---|
+| new | The chunk file places kinds on a tile with no record | Stands up each kind |
+| refresh | The kinds equal the record | Stands up each kind again. A kind that stands does nothing |
+| changed | The kinds differ from the record | Demolishes the contents, then stands up each kind |
+| removed | A record, but the chunk file places nothing | Demolishes the contents and frees the tile |
+
+A demolition spares player characters. A transition and a landmark stand
+nothing up, so the sync ignores them.
+
+### Move as staff
 
 ```bash
-> evennia reload
+> tiletp 12,4          # jump to a tile (Builder)
+> goto (12,4)          # walk to a tile
+> goto bank            # walk to a named thing near you
+> goto (12,4) then look
 ```
 
-### Utility commands
+### The respawn point
+
+The object kind `respawn_point` marks the tile where a dead player, a new
+character, and a character with no tile come back. To move it, move the
+object in the terrain editor, and run the tile sync. `world/respawn.py` reads
+it. The world chunks must place exactly one.
+
+### A database that still holds the xyzgrid maps
+
+The cutover moves each character to its tile and deletes the map rooms. It
+reports by default. Back up `server/evennia.db3` first.
 
 ```bash
-> evennia xyzgrid list
-> evennia xyzgrid show oasis
-> evennia xyzgrid show "trade town sector 1"
+../evenv/Scripts/python.exe scripts/move_to_tile_world.py
+../evenv/Scripts/python.exe scripts/move_to_tile_world.py --apply
 ```
-
-### Automated rebuild (PowerShell)
-
-```powershell
-.\scripts\clean_and_reload_all_maps.ps1
-```
-
-The script stops Evennia, runs `map_sync.py`, spawns, and reloads.
-
-**`scripts/map_manifest.json` is the only file you edit to add or remove a
-map.** Each row carries a map module and the z-coordinate that module
-declares:
-
-```json
-{
-  "maps": [
-    { "module": "world.maps.test_oasis", "zcoord": "oasis" }
-  ]
-}
-```
-
-- **Add a row** → the rebuild loads the module, registers its map, and spawns
-  its tiles.
-- **Delete a row** → on the next rebuild, `map_sync.py` removes that map from
-  the grid and deletes its tiles and exits. Anyone on a deleted tile goes home
-  and is not deleted.
-
-`map_sync.py` validates before it deletes anything. Every listed module must
-import, yield exactly one map, and declare the z-coordinate that its row
-claims. The script also reads the grid back after it registers the maps. Thus,
-a map that fails to load stops the rebuild and does not quietly vanish from it.
-
-Preview a rebuild with no changes (this is safe while the server runs):
-
-```powershell
-.\scripts\clean_and_reload_all_maps.ps1 -DryRun
-```
-
-```bash
-./scripts/clean_and_reload_all_maps.sh --dry-run
-```
-
-### Rebuild one map, or one tile
-
-A bare rebuild covers every map in the manifest, and the largest map decides
-how long it takes. Two flags narrow it. Both repeat, and both work with
-`-DryRun`.
-
-```powershell
-.\scripts\clean_and_reload_all_maps.ps1 -Map oasis
-.\scripts\clean_and_reload_all_maps.ps1 -Tile "oasis:12,4","oasis:12,5"
-.\scripts\clean_and_reload_all_maps.ps1 -Map oasis -Tile "azm_plains:3,3"
-```
-
-```bash
-./scripts/clean_and_reload_all_maps.sh --map oasis
-./scripts/clean_and_reload_all_maps.sh --tile oasis:12,4 --tile oasis:12,5
-```
-
-| Flag | Rebuilds |
-|---|---|
-| none | Every map in the manifest |
-| `--map ZCOORD` | That map end to end |
-| `--tile ZCOORD:X,Y` | That one tile, its exits, and the exits back into it |
-
-The coordinates are the X,Y that `evennia xyzgrid show <map>` prints, not
-character positions in the map string. A coordinate that carries no room stops
-the run before it deletes anything.
-
-Three rules apply to a scoped run:
-
-- **It never removes a map.** Removal is about a map the manifest lists
-  nowhere, so only a bare rebuild prunes. Delete a manifest row, then run a
-  bare rebuild.
-- **It never deletes a room that fell off the map string.** A tile rebuild is
-  told one coordinate, and a stale room sits at a coordinate you did not name.
-  Run `--map` or a bare rebuild after you shrink a map.
-- **A map named by both flags is rebuilt whole.** The whole map is the
-  superset. The run prints the scope it resolved to, on the line that starts
-  `This run rebuilds`.
 
 ---
 
@@ -1337,44 +1266,13 @@ Example: `\|300P\|n` renders **P** in dark red (R=3,G=0,B=0) then resets.
 
 ---
 
-## Troubleshooting: The Nuclear Option
-
-A typo in a map file (for example, a symbol not in your legend) can cause
-`spawn` to crash with a `RuntimeError`. Then, the standard `delete` command can
-miss the ghost tiles that stay behind.
-
-**1.** Fix the typo or the legend mismatch in the map file.
-
-**2.** Sweep the database manually with `evennia shell`:
-
-```python
-from typeclasses.rooms import GridTile
-from evennia.contrib.grid.xyzgrid.xyzroom import XYZExit
-
-GridTile.objects.all().delete()
-XYZExit.objects.all().delete()
-```
-
-Type `quit()` to exit the shell.
-
-**3.** Resume the standard build:
-
-```bash
-evennia xyzgrid add world.maps.test_oasis
-evennia xyzgrid spawn
-evennia reload
-```
-
----
-
 ## Scripts & Automation
 
 | Script | Purpose | How to run |
 |---|---|---|
 | `scripts/reload_characters.py` | Re-runs `at_object_creation()` on all Character objects | `py -3 scripts/reload_characters.py` (from `blackout/`) |
-| `scripts/map_sync.py` | Reconciles the grid with `map_manifest.json`: removes unlisted maps, purges and re-registers listed ones. `--map` and `--tile` narrow the run | `../evenv/Scripts/python.exe scripts/map_sync.py [--dry-run] [--map ZCOORD] [--tile ZCOORD:X,Y]` (from `blackout/`) |
-| `scripts/clean_and_reload_all_maps.ps1` | Automated map rebuild (stop → sync → spawn → reload), over the whole manifest or one scope | `.\scripts\clean_and_reload_all_maps.ps1 [-DryRun] [-Map oasis] [-Tile "oasis:12,4"]` |
-| `scripts/clean_and_reload_all_maps.sh` | Same rebuild from Git Bash | `./scripts/clean_and_reload_all_maps.sh [--dry-run] [--map oasis] [--tile oasis:12,4]` |
+| `scripts/sync_tile_objects.py` | Makes the objects on the tile world match the chunk files. Reports by default | `../evenv/Scripts/python.exe scripts/sync_tile_objects.py [--apply]` (from `blackout/`, server stopped) |
+| `scripts/move_to_tile_world.py` | The cutover: moves each character off the xyzgrid maps, then deletes the map rooms. Reports by default | `../evenv/Scripts/python.exe scripts/move_to_tile_world.py [--apply]` (from `blackout/`, server stopped) |
 | `scripts/backup_db.py` | Snapshots the live sqlite3 database into `server/backups/` (gzip, timestamped), pruning old backups beyond `--keep` | `../evenv/Scripts/python.exe scripts/backup_db.py [--keep N] [--dest DIR]` (from `blackout/`) |
 | `scripts/backup_db.ps1` / `.sh` | Argument-light wrappers around `backup_db.py`, meant for Task Scheduler / cron | `.\scripts\backup_db.ps1 [-Keep N] [-Dest DIR]` |
 
@@ -1409,7 +1307,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**2879 tests, ~23 minutes** (measured 09/21/2026). Run it before a merge, or
+**2941 tests, ~24 minutes** (measured 09/25/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

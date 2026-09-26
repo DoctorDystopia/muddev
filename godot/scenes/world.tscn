@@ -3,6 +3,8 @@
 [ext_resource type="Script" uid="uid://chd2u1l80buka" path="res://world/world_view.gd" id="1_world"]
 [ext_resource type="Script" uid="uid://b4i56mvkkmj4k" path="res://world/orbit_camera.gd" id="2_camera"]
 [ext_resource type="Script" uid="uid://buaeo37g0vebp" path="res://world/entity_pool.gd" id="3_entities"]
+[ext_resource type="Script" path="res://world/area_environment.gd" id="4_area"]
+[ext_resource type="Script" path="res://world/terrain/terrain_view.gd" id="5_terrain"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1
@@ -19,14 +21,20 @@ albedo_color = Color(1, 0.549, 0.259, 0.55)
 [node name="World" type="Node3D" unique_id=370103930]
 script = ExtResource("1_world")
 
-[node name="Environment" type="WorldEnvironment" parent="." unique_id=1036248709]
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=1036248709 node_paths=PackedStringArray("sun", "arm")]
 environment = SubResource("Environment_world")
+script = ExtResource("4_area")
+sun = NodePath("../Sun")
+arm = NodePath("../Camera/SpringArm3D")
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=1052969386]
 transform = Transform3D(1, 0, 0, 0, 0.49998897, 0.8660064, 0, -0.8660064, 0.49998897, 0, 0, 0)
 light_angular_distance = 0.5
+shadow_enabled = true
+directional_shadow_mode = 1
 
-[node name="Islands" type="Node3D" parent="." unique_id=1891166581]
+[node name="Terrain" type="Node3D" parent="." unique_id=1891166581]
+script = ExtResource("5_terrain")
 
 [node name="Entities" type="Node3D" parent="." unique_id=598919016]
 script = ExtResource("3_entities")
