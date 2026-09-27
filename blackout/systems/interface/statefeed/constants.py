@@ -1009,6 +1009,11 @@ TILE_ACTION_KIND_CANCEL: str = "cancel"  # aborts the walk in progress
 # The command a client sends to look at where it already is.
 TILE_COMMAND_LOOK: str = "look"
 
+# The command a client sends on its own tile when a ladder or stairs stand
+# there (DESIGN-0011 Phase 7). It takes the place of `look`. The way is the
+# first climb direction of the tile, a word of CLIMB_PLANE_STEPS.
+TILE_COMMAND_CLIMB_TEMPLATE: str = "climb {way}"
+
 # Bare `goto` aborts a walk in progress; `goto (X,Y)` starts one. Both are the
 # contrib's pathfinder reached exactly as a telnet player reaches it -- see
 # commands/movement_cmds.py, which lifts the contrib's Builder lock on the

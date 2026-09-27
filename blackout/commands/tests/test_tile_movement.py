@@ -259,3 +259,13 @@ class OffTileWorldTests(EvenniaTest):
         said = " ".join(str(call.args[0]) for call in
                         self.char1.msg.call_args_list if call.args)
         self.assertIn("cannot go that way", said.lower())
+
+    def test_goto_off_the_tile_world_says_no_way(self):
+        # A character in Limbo has no tile. The search used to get None as
+        # its start and raise.
+        self.char1.msg = mock.Mock()
+        self.char1.execute_cmd("goto (4,7)")
+
+        said = " ".join(str(call.args[0]) for call in
+                        self.char1.msg.call_args_list if call.args)
+        self.assertIn("cannot find a way", said.lower())

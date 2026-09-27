@@ -65,6 +65,7 @@ _CATEGORY_GLYPHS: dict = {
     tile_const.OBJECT_CATEGORY_NPC: "!",
     tile_const.OBJECT_CATEGORY_SIGN: "?",
     tile_const.OBJECT_CATEGORY_TRANSITION: "T",
+    tile_const.OBJECT_CATEGORY_CLIMB: "H",
 }
 
 # The default radius of the window, in tiles.

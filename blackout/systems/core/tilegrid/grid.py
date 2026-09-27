@@ -169,11 +169,20 @@ class TileGrid:
                 heights[north], heights[north + 1])
 
     def tile_height(self, x: int, y: int) -> int:
-        """Return the gameplay height of a tile: its lowest corner."""
-        corners = self.corner_heights(x, y)
-        lowest = min(corners)
+        """
+        Return the gameplay height of a tile: its lowest corner. The path
+        search calls this for each neighbour of each tile it expands, so it
+        reads the four corners itself and does not call `corner_heights`.
+        Raises KeyError for a tile off the loaded grid, as that does.
+        """
+        size = const.CHUNK_SIZE
+        side = const.CORNERS_PER_SIDE
+        heights = self._chunks[(x // size, y // size)].heights
+        south = (y % size) * side + (x % size)
+        north = south + side
 
-        return lowest
+        return min(heights[south], heights[south + 1],
+                   heights[north], heights[north + 1])
 
     def floor_at(self, x: int, y: int) -> int:
         """Return the floor type index of one loaded tile."""

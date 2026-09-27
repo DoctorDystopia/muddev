@@ -15,6 +15,7 @@ Description: How a walker travels on the tile world: one step, a transition,
 
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid import movement
+from systems.core.tilegrid.planes import plane_of_z
 from systems.core.tilegrid.world import get_world
 from world import tile_text
 from world.object_kinds import OBJECT_KINDS
@@ -23,6 +24,18 @@ from world.object_kinds import OBJECT_KINDS
 # ─── Private constant definitions ────────────────────────────────────────────
 
 _TRANSITION = tile_const.OBJECT_CATEGORY_TRANSITION
+_CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
+
+
+# ─── Public constant definitions ─────────────────────────────────────────────
+
+# The results of `climb`. The command picks the words for each one.
+CLIMB_OK: str = "climbed"
+CLIMB_NOTHING: str = "nothing_to_climb"
+CLIMB_WHICH_WAY: str = "which_way"
+CLIMB_NOT_THAT_WAY: str = "not_that_way"
+CLIMB_BLOCKED: str = "landing_blocked"
+CLIMB_MOVE_REFUSED: str = "move_refused"
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -34,18 +47,37 @@ def _chebyshev(start: tuple, goal: tuple) -> int:
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
-def on_tile_world(obj) -> bool:
+def plane_of(obj):
     """
-    Return True if `obj` stands in a room of the tile world. Reads the Z tag
-    only, so a server with no tile world loads nothing.
+    Return the plane that `obj` stands on, or None off the tile world. Reads
+    the Z tag only, so a server with no tile world loads nothing.
     """
     location = getattr(obj, "location", None)
     coordinates = getattr(location, "xyz", None)
 
     if not coordinates:
-        return False
+        return None
 
-    return coordinates[2] == tile_const.WORLD_Z
+    return plane_of_z(coordinates[2])
+
+
+def on_tile_world(obj) -> bool:
+    """Return True if `obj` stands in a room of the tile world, any plane."""
+    return plane_of(obj) is not None
+
+
+def plane_view(obj):
+    """
+    Return the TilePlane that `obj` stands on, or None off the tile world.
+    A routine that acts for a walker reads the grid and the rooms of this
+    plane, never those of the world, which are plane 0.
+    """
+    plane = plane_of(obj)
+
+    if plane is None:
+        return None
+
+    return get_world().plane(plane)
 
 
 def tile_of(obj):
@@ -79,27 +111,32 @@ def step(mover, direction: str) -> str:
         direction - a key of DIRECTION_OFFSETS.
 
     Exit/Returns:
-        A STEP_* result of the tile grid constants.
+        A STEP_* result of the tile grid constants. STEP_OFF_GRID off the
+        tile world.
 
     Module Globals:
         None.
 
     Methodology:
-        `movement.step` with the world grid, the world rooms, and a
-        transition lookup on this world.
+        `movement.step` with the grid and the rooms of the plane of the
+        mover, and a transition lookup on that plane. A transition lands on
+        its target tile of the same plane.
 
     Notes/References:
-        The walk limit is the default, `WALK_LIMIT` (handoff debt 4).
+        The walk limit is the default, `WALK_LIMIT` (the vault rule).
 
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
-    world = get_world()
+    view = plane_view(mover)
+
+    if view is None:
+        return tile_const.STEP_OFF_GRID
 
     def _target(x, y):
-        return transition_target(world, x, y)
+        return transition_target(view, x, y)
 
-    return movement.step(world.grid, world.rooms, mover, direction,
+    return movement.step(view.grid, view.rooms, mover, direction,
                          transition=_target)
 
 
@@ -132,10 +169,10 @@ def step_toward(mover, goal: tuple, distance) -> bool:
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
-    world = get_world()
+    view = plane_view(mover)
     here = tile_of(mover)
 
-    if here is None:
+    if view is None or here is None:
         return False
 
     best = None
@@ -143,8 +180,8 @@ def step_toward(mover, goal: tuple, distance) -> bool:
 
     for name, (dx, dy) in tile_const.DIRECTION_OFFSETS.items():
         tile = (here[0] + dx, here[1] + dy)
-        jump = transition_target(world, tile[0], tile[1])
-        legal = world.grid.check_step(here, tile)
+        jump = transition_target(view, tile[0], tile[1])
+        legal = view.grid.check_step(here, tile)
 
         if jump is not None or legal != tile_const.STEP_OK:
             continue
@@ -158,9 +195,119 @@ def step_toward(mover, goal: tuple, distance) -> bool:
     if best is None:
         return False
 
-    result = movement.step(world.grid, world.rooms, mover, best)
+    result = movement.step(view.grid, view.rooms, mover, best)
 
     return result == tile_const.STEP_OK
+
+
+def climb_directions(view, tile: tuple) -> list:
+    """
+    Return the climb directions of the climb objects on a tile of a plane,
+    in the order of CLIMB_PLANE_STEPS, with no repeat. [] for no climb.
+    """
+    found = set()
+
+    for key in view.kinds_at(tile[0], tile[1]):
+        kind = OBJECT_KINDS.get(key)
+
+        if kind is not None and kind.category == _CLIMB:
+            found.update(kind.climbs)
+
+    return [way for way in tile_const.CLIMB_PLANE_STEPS if way in found]
+
+
+def _climb_way(ways: list, direction: str):
+    """
+    Return (direction, None) for a climb that may go, or (None, result) for
+    a refusal. An empty direction picks the only way, if there is one.
+    """
+    if not ways:
+        return (None, CLIMB_NOTHING)
+
+    if not direction:
+        if len(ways) > 1:
+            return (None, CLIMB_WHICH_WAY)
+
+        return (ways[0], None)
+
+    if direction not in ways:
+        return (None, CLIMB_NOT_THAT_WAY)
+
+    return (direction, None)
+
+
+def _landing(tile: tuple, plane: int):
+    """Return the TilePlane where a climb to `plane` lands, or None."""
+    if not tile_const.GROUND_PLANE <= plane <= tile_const.PLANE_MAX:
+        return None
+
+    landing = get_world().plane(plane)
+
+    if not landing.has_tile(*tile):
+        return None
+
+    if landing.grid.flags_at(*tile) & tile_const.FLAGS_UNWALKABLE:
+        return None
+
+    return landing
+
+
+def climb(mover, direction: str = "") -> tuple:
+    """
+    Purpose: Move a walker up or down one plane, by the climb object on its
+             tile.
+
+    Entry:
+        mover     - an object on the tile world.
+        direction - CLIMB_UP, CLIMB_DOWN, or "" for the only way there is.
+
+    Exit/Returns:
+        (result, direction): a CLIMB_* result of this module, and the
+        direction that the climb took, or "" when it did not go.
+
+    Module Globals:
+        const.CLIMB_PLANE_STEPS read.
+
+    Methodology:
+        1. Read the climb directions of the tile.
+        2. Pick the direction, or refuse.
+        3. The landing is the same tile, one plane up or down. It must be a
+           loaded tile that a walker may stand on.
+        4. Place the mover there, and give back the room behind.
+
+    Notes/References:
+        The vault rule of Phase 7: stand on the tile, land on the same tile
+        (Nick, 09/26/2026). `commands/tile_movement.py:CmdClimb` calls this.
+        `movement.place` gives back only a room of the landing plane, so
+        this gives back the room of the old plane itself.
+
+    Author: Nick Hobar
+    Creation date: 09/26/2026
+    """
+    view = plane_view(mover)
+    tile = tile_of(mover)
+
+    if view is None or tile is None:
+        return (CLIMB_NOTHING, "")
+
+    way, refusal = _climb_way(climb_directions(view, tile), direction)
+
+    if refusal:
+        return (refusal, "")
+
+    landing = _landing(tile, view.plane + tile_const.CLIMB_PLANE_STEPS[way])
+
+    if landing is None:
+        return (CLIMB_BLOCKED, "")
+
+    source = mover.location
+
+    if not movement.place(landing.rooms, mover, tile[0], tile[1]):
+        return (CLIMB_MOVE_REFUSED, "")
+
+    view.rooms.release(source)
+
+    return (CLIMB_OK, way)
 
 
 def open_directions(world, tile: tuple) -> list:

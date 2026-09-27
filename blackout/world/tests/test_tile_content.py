@@ -89,9 +89,10 @@ class ObjectKindTests(unittest.TestCase):
                 self.assertEqual(bool(kind.label), is_sign)
 
     def test_every_kind_that_stands_something_up_has_a_spawner(self):
-        # A sign, a landmark, and a transition stand up nothing of their own.
-        # Every other kind must name its spawner.
-        spawnless = (tile_const.OBJECT_CATEGORY_LANDMARK,
+        # A sign, a landmark, a transition, and a climb stand up nothing of
+        # their own. Every other kind must name its spawner.
+        spawnless = (tile_const.OBJECT_CATEGORY_CLIMB,
+                     tile_const.OBJECT_CATEGORY_LANDMARK,
                      tile_const.OBJECT_CATEGORY_SIGN,
                      tile_const.OBJECT_CATEGORY_TRANSITION)
 
@@ -112,6 +113,19 @@ class ObjectKindTests(unittest.TestCase):
                     self.assertEqual(len(kind.target), 2)
                     self.assertTrue(all(isinstance(value, int)
                                         for value in kind.target))
+
+    def test_a_climb_has_directions_and_nothing_else_does(self):
+        # Phase 7. A climb lists its ways, each a word of CLIMB_PLANE_STEPS,
+        # with no repeat.
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            is_climb = kind.category == tile_const.OBJECT_CATEGORY_CLIMB
+
+            with self.subTest(kind=key):
+                self.assertEqual(bool(kind.climbs), is_climb)
+                self.assertEqual(len(set(kind.climbs)), len(kind.climbs))
+
+                for way in kind.climbs:
+                    self.assertIn(way, tile_const.CLIMB_PLANE_STEPS)
 
     def test_a_kind_with_a_room_name_has_a_room_desc(self):
         for key, kind in object_kinds.OBJECT_KINDS.items():

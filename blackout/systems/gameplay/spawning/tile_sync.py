@@ -39,6 +39,7 @@ Thus, run the script while the server is down, or reload the server after.
 
 from dataclasses import dataclass
 
+from systems.core.tilegrid import constants as tile_const
 from systems.gameplay.spawning import teardown
 from world.object_kinds import OBJECT_KINDS
 
@@ -58,12 +59,16 @@ VERB_REMOVED: str = "removed"
 
 @dataclass(frozen=True)
 class TileAction:
-    """One tile of a plan: its verb, its kinds now, and its kinds before."""
+    """
+    One tile of a plan: its verb, its kinds now, its kinds before, and the
+    plane of the tile (DESIGN-0011 Phase 7).
+    """
 
     tile: tuple
     verb: str
     kinds: tuple
     previous: tuple
+    plane: int = tile_const.GROUND_PLANE
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -151,14 +156,14 @@ def plan(world) -> list:
         world - a TileWorld, with its room index loaded.
 
     Exit/Returns:
-        A list of TileAction, sorted by tile.
+        A list of TileAction, sorted by plane, then by tile.
 
     Module Globals:
         TILE_KINDS_ATTR read.
 
     Methodology:
-        Compare the standing kinds of each tile with the record on its room.
-        The four verbs are in the module docstring.
+        Compare the standing kinds of each tile with the record on its room,
+        one plane at a time. The four verbs are in the module docstring.
 
     Notes/References:
         One attribute read for each live room.
@@ -166,12 +171,22 @@ def plan(world) -> list:
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
-    records = _records(world)
     actions = []
-    placed = {(x, y) for _kind, x, y, _rotation in world.placed_objects()}
+
+    for view in world.planes():
+        actions.extend(_plan_plane(view))
+
+    return actions
+
+
+def _plan_plane(view) -> list:
+    """The TileActions of one TilePlane, sorted by tile. See `plan`."""
+    records = _records(view)
+    actions = []
+    placed = {(x, y) for _kind, x, y, _rotation in view.placed_objects()}
 
     for tile in sorted(placed | set(records)):
-        kinds = _standing_kinds(world, *tile)
+        kinds = _standing_kinds(view, *tile)
         previous = records.get(tile, (None, ()))[1]
 
         if not kinds and tile not in records:
@@ -186,7 +201,7 @@ def plan(world) -> list:
         else:
             verb = VERB_CHANGED
 
-        actions.append(TileAction(tile, verb, kinds, previous))
+        actions.append(TileAction(tile, verb, kinds, previous, view.plane))
 
     return actions
 
@@ -218,16 +233,17 @@ def apply(world, actions: list) -> int:
 
     for action in actions:
         x, y = action.tile
+        rooms = world.plane(action.plane).rooms
 
         if action.verb == VERB_REMOVED:
-            room = world.rooms.room_at(x, y)
+            room = rooms.room_at(x, y)
             destroyed += _demolish(room)
             room.attributes.remove(TILE_KINDS_ATTR)
-            world.rooms.unpin([action.tile])
-            world.rooms.release(room)
+            rooms.unpin([action.tile])
+            rooms.release(room)
             continue
 
-        room = world.rooms.ensure_room(x, y)
+        room = rooms.ensure_room(x, y)
 
         if action.verb == VERB_CHANGED:
             destroyed += _demolish(room)

@@ -20,6 +20,7 @@ from systems.interface.statefeed import neighbourhood
 from systems.interface.statefeed import subscriptions
 from systems.interface.ui import move_text
 from systems.interface.ui.colors import RESET_COLOR, ROOM_NAME_COLOR
+from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid.world import get_world
 from world import tile_map, tile_text, tile_travel
 from .objects import ObjectParent
@@ -667,7 +668,8 @@ class TileRoom(GridTile):
     DESIGN-0011 section 6.1, option B. `systems/core/tilegrid/rooms.py` makes
     it, moves it to a new tile from its pool, and frees it. The coordinate
     tags are the same as on an xyzgrid tile, so `room.xyz` and every reader of
-    it work unchanged. The Z is `WORLD_Z`, not a map name.
+    it work unchanged. The Z names the plane (`tilegrid/planes.py`): `WORLD_Z`
+    on the ground, `<WORLD_Z>_p<plane>` above it. It is not a map name.
 
     The room stores no name and no description. `get_display_name` and
     `get_display_desc` read them from the chunk file facts of the tile,
@@ -677,28 +679,31 @@ class TileRoom(GridTile):
 
     invalidates_neighbourhood = False
 
-    def _tile(self):
+    def _plane(self):
         """
-        Return the (x, y) tile of this room. A room off the tile world gives
-        None. A pooled room is an example.
+        Return the TilePlane of this room, or None for a room off the tile
+        world. A pooled room is an example.
         """
-        coordinates = self.xyz
+        return get_world().plane_for_z(self.xyz[2])
 
-        if coordinates[2] != get_world().world_z:
+    def _tile(self):
+        """Return the (x, y) tile of this room, or None off the tile world."""
+        if self._plane() is None:
             return None
+
+        coordinates = self.xyz
 
         return (int(coordinates[0]), int(coordinates[1]))
 
     def _tile_facts(self):
         """Return (kinds, area key) of the tile of this room, or ((), None)."""
+        view = self._plane()
         tile = self._tile()
 
-        if tile is None:
+        if view is None or tile is None:
             return ((), None)
 
-        world = get_world()
-
-        return (world.kinds_at(*tile), world.area_at(*tile))
+        return (view.kinds_at(*tile), view.area_at(*tile))
 
     def get_display_name(self, looker=None, **kwargs):
         """Give the name of the object on the tile, or of its area."""
@@ -729,7 +734,7 @@ class TileRoom(GridTile):
         if self._hides(move_text.PART_EXITS, kwargs) or tile is None:
             return ""
 
-        names = tile_travel.open_directions(get_world(), tile)
+        names = tile_travel.open_directions(self._plane(), tile)
         text = iter_to_str(names, endsep=", and")
 
         return f"|wExits:|n {text}" if text else ""
@@ -761,7 +766,8 @@ class TileRoom(GridTile):
 
         try:
             aura_radius = self._active_aura_radius(looker)
-            drawn = tile_map.render(get_world(), tile, aura_radius=aura_radius,
+            drawn = tile_map.render(self._plane(), tile,
+                                    aura_radius=aura_radius,
                                     aura_metric=within_metric)
         except Exception:
             logger.log_trace()
@@ -769,5 +775,10 @@ class TileRoom(GridTile):
 
         separator = self.map_separator_char * CLIENT_DEFAULT_WIDTH
         framed = f"{separator}|n\n{drawn}\n{separator}"
+        plane = self._plane().plane
+
+        # The ground needs no caption. A floor above it does (Phase 7).
+        if plane != tile_const.GROUND_PLANE:
+            framed = f"|wPlane {plane}|n\n{framed}"
 
         looker.msg(text=(framed, _MSG_MAP), options=None)

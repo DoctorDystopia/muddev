@@ -467,8 +467,9 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
     def _remember_tile(self) -> None:
         """
-        Store the tile of a character on the tile world, before the logout
-        moves it to no location. See at_pre_puppet.
+        Store the tile and the plane of a character on the tile world, as
+        [x, y, plane], before the logout moves it to no location. See
+        at_pre_puppet.
         """
         tile = tile_travel.tile_of(self)
 
@@ -476,7 +477,8 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             self.attributes.remove(PRELOGOUT_TILE_ATTR)
             return
 
-        self.attributes.add(PRELOGOUT_TILE_ATTR, list(tile))
+        plane = tile_travel.plane_of(self)
+        self.attributes.add(PRELOGOUT_TILE_ATTR, [tile[0], tile[1], plane])
 
     def at_pre_puppet(self, account, session=None, **kwargs):
         """
@@ -512,12 +514,14 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         stored = self.attributes.get(PRELOGOUT_TILE_ATTR, default=None)
 
         if self.location is None and stored:
-            world = get_world()
+            # A tile stored before planes (Phase 7) has no plane: plane 0.
             x, y = int(stored[0]), int(stored[1])
-            flags = world.grid.flags_at(x, y)
+            plane = int(stored[2]) if len(stored) > 2 else tile_const.GROUND_PLANE
+            view = get_world().plane(plane)
+            flags = view.grid.flags_at(x, y)
 
             if not flags & tile_const.FLAGS_UNWALKABLE:
-                self.db.prelogout_location = world.rooms.ensure_room(x, y)
+                self.db.prelogout_location = view.rooms.ensure_room(x, y)
 
         # Evennia tries the room of the logout, then the home. The cutover
         # deleted the xyzgrid rooms, so both can be gone.

@@ -41,6 +41,12 @@ Description: The object kinds of the tile grid, one row for each kind.
              point is one: world/respawn.py finds its tile by the kind key.
              Like every chunk object, it pins its tile.
 
+             A CLIMB kind is a ladder or stairs (Phase 7). A walker who
+             stands on its tile types `climb up` or `climb down`, and lands
+             on the same tile one plane up or down. A few kinds serve every
+             placement, because the landing needs no target in the row (Nick,
+             09/26/2026). Like a landmark, it stands nothing up.
+
              This module imports no game code. `clientexport.py` reads it,
              and a typeclass import there loads Evennia into the exporter.
 
@@ -60,7 +66,9 @@ class ObjectKind:
     `spawner` is a key of `SPAWNER_REGISTRY`, or "" when nothing stands up.
     The `label` holds the words of a signpost. The `name` and the `desc` are
     the room texts of a tile that holds this kind. The `target` is the world
-    tile (x, y) of a transition, or () for every other kind.
+    tile (x, y) of a transition, or () for every other kind. The `climbs` are
+    the directions of a climb kind (CLIMB_UP, CLIMB_DOWN), or () for every
+    other kind.
     """
 
     key: str
@@ -70,6 +78,7 @@ class ObjectKind:
     name: str = ""
     desc: str = ""
     target: tuple = ()
+    climbs: tuple = ()
 
 
 _FACILITY = tile_const.OBJECT_CATEGORY_FACILITY
@@ -78,6 +87,11 @@ _LANDMARK = tile_const.OBJECT_CATEGORY_LANDMARK
 _NPC = tile_const.OBJECT_CATEGORY_NPC
 _SIGN = tile_const.OBJECT_CATEGORY_SIGN
 _TRANSITION = tile_const.OBJECT_CATEGORY_TRANSITION
+_CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
+
+_UP = (tile_const.CLIMB_UP,)
+_DOWN = (tile_const.CLIMB_DOWN,)
+_BOTH = (tile_const.CLIMB_UP, tile_const.CLIMB_DOWN)
 
 
 def _named(key: str, category: str, spawner: str, desc: str) -> ObjectKind:
@@ -156,6 +170,19 @@ _KIND_ROWS: tuple = (
     ObjectKind("transition_oasis_to_outskirts", _TRANSITION,
                target=(72, 10)),
     ObjectKind("transition_outskirts_to_oasis", _TRANSITION, target=(1, 2)),
+
+    # Ladders and stairs (Phase 7). Generic: every placement shares a kind,
+    # because a climb lands on the same tile one plane up or down.
+    ObjectKind("ladder_up", _CLIMB, name="Ladder",
+               desc="A ladder leads up.", climbs=_UP),
+    ObjectKind("ladder_down", _CLIMB, name="Ladder",
+               desc="A ladder leads down.", climbs=_DOWN),
+    ObjectKind("ladder_both", _CLIMB, name="Ladder",
+               desc="A ladder leads up and down.", climbs=_BOTH),
+    ObjectKind("stairs_up", _CLIMB, name="Staircase",
+               desc="A staircase leads up.", climbs=_UP),
+    ObjectKind("stairs_down", _CLIMB, name="Staircase",
+               desc="A staircase leads down.", climbs=_DOWN),
     ObjectKind("transition_outskirts_to_azm_plains", _TRANSITION,
                target=(129, 2)),
     ObjectKind("transition_azm_plains_to_outskirts", _TRANSITION,

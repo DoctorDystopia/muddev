@@ -122,12 +122,62 @@ TILE_DIRECTION_COMMANDS: tuple = tuple(
     _direction_command(name) for name in tile_const.DIRECTION_OFFSETS)
 
 
+# ─── Climbing ────────────────────────────────────────────────────────────────
+
+_MSG_CLIMBED = "You climb {way}."
+_CLIMB_MESSAGES: dict = {
+    tile_travel.CLIMB_NOTHING: "There is nothing to climb here.",
+    tile_travel.CLIMB_WHICH_WAY: "Climb up or climb down?",
+    tile_travel.CLIMB_NOT_THAT_WAY: "It does not go that way.",
+    tile_travel.CLIMB_BLOCKED: "The way is blocked.",
+}
+
+
+class CmdClimb(Command):
+    """
+    Climb a ladder or a staircase on your tile.
+
+    Usage:
+        climb up
+        climb down
+        climb          - when it goes one way only
+
+    You land on the same spot, one floor up or down.
+    """
+
+    key = "climb"
+    locks = "cmd:all()"
+    help_category = "Movement"
+
+    def func(self):
+        """Stop any walk, climb, and say how it went."""
+        caller = self.caller
+        direction = self.args.strip().lower()
+        _stop(caller)
+        result, way = tile_travel.climb(caller, direction)
+
+        if result == tile_travel.CLIMB_OK:
+            caller.msg(_MSG_CLIMBED.format(way=way))
+            return
+
+        message = _CLIMB_MESSAGES.get(result, "")
+
+        if message:
+            caller.msg(message)
+
+
 # ─── The staff teleport ──────────────────────────────────────────────────────
 
-_MSG_TELEPORT_USAGE = "Usage: tiletp <x>,<y>. The tile world holds chunks {chunks}."
-_MSG_NOT_LOADED = "No chunk holds tile ({x}, {y})."
-_MSG_NOT_WALKABLE = "Tile ({x}, {y}) is blocked or water."
+_MSG_TELEPORT_USAGE = ("Usage: tiletp <x>,<y>[,<plane>]. Plane 0 holds chunks "
+                       "{chunks}.")
+_MSG_NO_PLANE = "There is no plane {plane}. The planes are 0 to {top}."
+_MSG_NOT_LOADED = "No chunk holds tile ({x}, {y}) on plane {plane}."
+_MSG_NOT_WALKABLE = "Tile ({x}, {y}) on plane {plane} is blocked or water."
 _MSG_TELEPORT_FAILED = "The move to tile ({x}, {y}) failed."
+
+# `tiletp x,y` or `tiletp x,y,plane`, with or without the brackets.
+_TELEPORT_RE = re.compile(
+    r"^\(?\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*(\d+)\s*)?\)?$")
 
 
 class CmdTileTeleport(Command):
@@ -136,9 +186,10 @@ class CmdTileTeleport(Command):
 
     Usage:
         tiletp <x>,<y>
+        tiletp <x>,<y>,<plane>
 
-    Staff jump to any open tile with this command. `tiletp` with no tile
-    lists the chunks.
+    Staff jump to any open tile with this command. The plane is 0, the
+    ground, when you give none. `tiletp` with no tile lists the chunks.
     """
 
     key = "tiletp"
@@ -146,10 +197,10 @@ class CmdTileTeleport(Command):
     help_category = "Building"
 
     def func(self):
-        """Check the tile, then place the caller on it."""
+        """Check the plane and the tile, then place the caller on it."""
         caller = self.caller
         world = get_world()
-        match = _COORDINATE_RE.match(self.args.strip())
+        match = _TELEPORT_RE.match(self.args.strip())
 
         if not match:
             chunks = ", ".join(str(key) for key in world.chunk_keys())
@@ -157,22 +208,36 @@ class CmdTileTeleport(Command):
             return
 
         x, y = int(match.group(1)), int(match.group(2))
+        plane = int(match.group(3) or tile_const.GROUND_PLANE)
 
-        if not world.has_tile(x, y):
-            caller.msg(_MSG_NOT_LOADED.format(x=x, y=y))
+        if plane > tile_const.PLANE_MAX:
+            caller.msg(_MSG_NO_PLANE.format(plane=plane,
+                                            top=tile_const.PLANE_MAX))
             return
 
-        flags = world.grid.flags_at(x, y)
+        view = world.plane(plane)
+        refusal = _landing_refusal(view, x, y)
 
-        if flags & tile_const.FLAGS_UNWALKABLE:
-            caller.msg(_MSG_NOT_WALKABLE.format(x=x, y=y))
+        if refusal:
+            caller.msg(refusal)
             return
 
         _stop(caller)
-        placed = movement.place(world.rooms, caller, x, y)
+        placed = movement.place(view.rooms, caller, x, y)
 
         if not placed:
             caller.msg(_MSG_TELEPORT_FAILED.format(x=x, y=y))
+
+
+def _landing_refusal(view, x: int, y: int) -> str:
+    """Return why a walker cannot land on a tile of a plane, or ""."""
+    if not view.has_tile(x, y):
+        return _MSG_NOT_LOADED.format(x=x, y=y, plane=view.plane)
+
+    if view.grid.flags_at(x, y) & tile_const.FLAGS_UNWALKABLE:
+        return _MSG_NOT_WALKABLE.format(x=x, y=y, plane=view.plane)
+
+    return ""
 
 
 # ─── The walk ────────────────────────────────────────────────────────────────
@@ -309,15 +374,22 @@ def run_goto(caller, text: str, follow_up: str = "", session=None) -> None:
         caller.msg(_MSG_STOPPED if stopped else _MSG_WHERE)
         return
 
-    world = get_world()
+    view = tile_travel.plane_view(caller)
     here = tile_travel.tile_of(caller)
-    goal, place = _resolve(world, text, here)
+
+    if view is None or here is None:
+        caller.msg(_MSG_NO_PATH)
+        return
+
+    # The walk stays on the plane of the caller. A name on another plane is
+    # not found, and a climb is its own command.
+    goal, place = _resolve(view, text, here)
 
     if goal is None:
         caller.msg(_MSG_UNKNOWN.format(text=text.strip()))
         return
 
-    path = find_path(world.grid, here, goal)
+    path = find_path(view.grid, here, goal)
 
     if path is None:
         caller.msg(_MSG_NO_PATH)

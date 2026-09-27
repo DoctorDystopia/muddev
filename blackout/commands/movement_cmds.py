@@ -2,8 +2,8 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/14/2026
-Description: The movement command set: `goto`, the direction commands, and
-             `tiletp`. All three move on the tile world. The rules live in
+Description: The movement command set: `goto`, the direction commands,
+             `climb`, and `tiletp`. All four move on the tile world. The rules live in
              commands/tile_movement.py.
 
              `goto` was an override of the `goto` of the xyzgrid contrib until
@@ -116,4 +116,5 @@ class MovementCmdSet(CmdSet):
         for command_class in tile_movement.TILE_DIRECTION_COMMANDS:
             self.add(command_class())
 
+        self.add(tile_movement.CmdClimb())
         self.add(tile_movement.CmdTileTeleport())

@@ -249,15 +249,55 @@ static func _add_tile(chunk: ChunkFile, positions: PackedVector3Array, lx: int,
 	var world_y := chunk.cy * _Const.CHUNK_SIZE + ly
 	var first_shade := hash_unit(world_x, world_y, _SALT_SHADE) * 2.0 - 1.0
 	var second_shade := hash_unit(world_y, world_x, _SALT_SHADE) * 2.0 - 1.0
-	var first_color := FloorPalette.shade(base, first_shade)
-	var second_color := FloorPalette.shade(base, second_shade)
+	var heights := chunk.corner_heights(lx, ly)
+	var sw_ne := splits_sw_ne(heights)
+	var triangles := triangle_corners(sw_ne)
+	var first_base := _face_color(base, heights, triangles[0])
+	var second_base := _face_color(base, heights, triangles[1])
+	var first_color := FloorPalette.shade(first_base, first_shade)
+	var second_color := FloorPalette.shade(second_base, second_shade)
 
-	if splits_sw_ne(chunk.corner_heights(lx, ly)):
+	if sw_ne:
 		_add_triangle(sw, se, ne, first_color, out)
 		_add_triangle(sw, ne, nw, second_color, out)
 	else:
 		_add_triangle(sw, se, nw, first_color, out)
 		_add_triangle(se, ne, nw, second_color, out)
+
+
+## The corner indices of the two triangles of a tile, as indices into
+## (southwest, southeast, northwest, northeast). The same two triangles as
+## [method _add_tile] and [method _triangle_height].
+static func triangle_corners(sw_ne: bool) -> Array[PackedInt32Array]:
+	if sw_ne:
+		return [PackedInt32Array([0, 1, 3]), PackedInt32Array([0, 3, 2])]
+
+	return [PackedInt32Array([0, 1, 2]), PackedInt32Array([1, 3, 2])]
+
+
+## True when a triangle with these corner heights is a cliff face: its
+## corners differ by more than the walk limit. The server refuses a step
+## steeper than that limit (DESIGN-0011 Phase 6).
+static func is_cliff_face(heights: PackedInt32Array,
+		corners: PackedInt32Array) -> bool:
+	var low := heights[corners[0]]
+	var high := low
+
+	for index: int in corners:
+		low = mini(low, heights[index])
+		high = maxi(high, heights[index])
+
+	return high - low > _Const.TILE_WALK_LIMIT
+
+
+## The base colour of one triangle: the rock of a cliff face, or else the
+## colour of the floor type.
+static func _face_color(base: Color, heights: PackedInt32Array,
+		corners: PackedInt32Array) -> Color:
+	if is_cliff_face(heights, corners):
+		return FloorPalette.CLIFF_COLOR
+
+	return base
 
 
 ## Add one triangle, wound so that its front faces up. Godot draws a

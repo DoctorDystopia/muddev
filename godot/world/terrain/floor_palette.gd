@@ -29,6 +29,12 @@ const COLORS := {
 	"water_bed": Color("4f6a6e"),
 }
 
+## The colour of a cliff face: a triangle steeper than the walk limit, on any
+## floor type. [ChunkMeshBuilder] picks it. A look, for Nick to tune
+## (DESIGN-0011 Phase 6, 09/26/2026). The rule is the server's
+## [code]TILE_WALK_LIMIT[/code].
+const CLIFF_COLOR := Color("5e5249")
+
 ## The saturation and the value of a hashed fallback colour.
 const FALLBACK_SATURATION := 0.35
 const FALLBACK_VALUE := 0.55

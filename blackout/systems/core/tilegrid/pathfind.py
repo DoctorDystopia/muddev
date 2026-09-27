@@ -28,10 +28,14 @@ a goal with no path, because the player sees the same result: no walk.
 Why the loop reads the flags itself
 -----------------------------------
 The spike search called `TileGrid.check_step` 820,000 times for one walled-off
-goal. Most of those steps touch no wall and no unwalkable tile. With no walk
-limit, such a step is always legal. Thus, the loop reads the flags of each
-tile that a step touches. It calls `check_step` only when a tile has a wall
-bit or an unwalkable bit.
+goal. Most of those steps touch no wall and no unwalkable tile. Such a step
+is legal if its slope is in the walk limit. Thus, the loop reads the flags of
+each tile that a step touches, and it compares the two tile heights itself.
+It calls `check_step` only when a tile has a wall bit or an unwalkable bit.
+
+The slope test is the same test as `TileGrid._check_slope`: the tile height
+of the end against the tile height of the start. A diagonal step tests no
+side tile for slope, in both places.
 
 `check_step` stays the one owner of the rule. The fast path accepts only the
 steps that `check_step` accepts. `tests/test_pathfind.py` compares the search
@@ -124,7 +128,8 @@ def find_path(grid, start: tuple, goal: tuple,
         return []
 
     flags_at = grid.flags_at
-    full_check = walk_limit is not None
+    tile_height = grid.tile_height
+    has_limit = walk_limit is not None
     first_estimate = _chebyshev(start, goal)
     frontier = [(first_estimate, first_estimate, 0, start)]
     cost_so_far = {start: 0}
@@ -142,6 +147,7 @@ def find_path(grid, start: tuple, goal: tuple,
         next_cost = cost_so_far[node] + _STEP_COST
         x, y = node
         node_flags = flags_at(x, y)
+        node_height = tile_height(x, y) if has_limit else 0
 
         for dx, dy in _NEIGHBOUR_OFFSETS:
             neighbour = (x + dx, y + dy)
@@ -155,14 +161,18 @@ def find_path(grid, start: tuple, goal: tuple,
             if neighbour_flags & _UNWALKABLE:
                 continue
 
+            # After the unwalkable test: a tile off the grid reads as
+            # blocked, and it has no height to read.
+            if has_limit and abs(tile_height(x + dx, y + dy)
+                                 - node_height) > walk_limit:
+                continue
+
             touched = node_flags | neighbour_flags
 
             if dx and dy:
                 touched |= flags_at(x + dx, y) | flags_at(x, y + dy)
 
-            needs_rule = full_check or touched & _SLOW_PATH_FLAGS
-
-            if needs_rule and grid.check_step(
+            if touched & _SLOW_PATH_FLAGS and grid.check_step(
                     node, neighbour, walk_limit) != const.STEP_OK:
                 continue
 

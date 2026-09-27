@@ -9,6 +9,7 @@ import unittest
 
 from systems.core.tilegrid import constants as const
 from systems.core.tilegrid.grid import Chunk, TileGrid
+from systems.core.tilegrid.pathfind import find_path
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -208,3 +209,47 @@ class StepRuleTests(unittest.TestCase):
                          const.STEP_TOO_STEEP)
         self.assertEqual(grid.check_step(_MIDDLE, target, walk_limit=limit + 1),
                          const.STEP_OK)
+
+
+class DefaultWalkLimitTests(unittest.TestCase):
+    """
+    The rule of the vault (Movement_and_Traversal.md, "Height and the walk
+    limit") is the default of every caller. Read from WALK_LIMIT, so a retune
+    moves these tests with it.
+    """
+
+    def _raise_tile(self, chunk, tile, height):
+        for dx in (0, 1):
+            for dy in (0, 1):
+                _set_corner(chunk, tile[0] + dx, tile[1] + dy, height)
+
+    def test_the_default_step_climbs_the_walk_limit(self):
+        grid, chunk = _one_chunk_grid()
+        target = _neighbour("east")
+        self._raise_tile(chunk, target, const.WALK_LIMIT)
+
+        self.assertEqual(grid.check_step(_MIDDLE, target), const.STEP_OK)
+
+    def test_the_default_step_refuses_a_cliff(self):
+        grid, chunk = _one_chunk_grid()
+        target = _neighbour("east")
+        self._raise_tile(chunk, target, const.WALK_LIMIT + 1)
+
+        self.assertEqual(grid.check_step(_MIDDLE, target),
+                         const.STEP_TOO_STEEP)
+
+    def test_the_default_search_goes_around_a_cliff(self):
+        # A raised column east of the start, three tiles tall. The walk
+        # must pass its north or south end.
+        grid, chunk = _one_chunk_grid()
+        column_x = _MIDDLE[0] + 1
+
+        for y in range(_MIDDLE[1] - 1, _MIDDLE[1] + 2):
+            self._raise_tile(chunk, (column_x, y), const.WALK_LIMIT + 1)
+
+        goal = (_MIDDLE[0] + 2, _MIDDLE[1])
+        path = find_path(grid, _MIDDLE, goal)
+
+        self.assertIsNotNone(path)
+        self.assertGreater(len(path), 2)
+        self.assertNotIn((column_x, _MIDDLE[1]), path)

@@ -34,6 +34,8 @@ func _ready() -> void:
 	_the_mesh_is_the_same_on_every_build()
 	_the_diagonal_keeps_one_raised_corner_in_one_triangle()
 	_the_palette_gives_a_stable_colour_to_an_unknown_floor()
+	_a_face_steeper_than_the_walk_limit_is_a_cliff()
+	_one_raised_corner_makes_one_cliff_face_in_each_tile()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -213,3 +215,49 @@ func _the_palette_gives_a_stable_colour_to_an_unknown_floor() -> void:
 	for floor_name: String in FloorPalette.COLORS:
 		_expect(_Const.TILE_FLOOR_TYPES.has(floor_name),
 			"the palette key %s is a floor type" % floor_name)
+
+
+## The server refuses a step steeper than TILE_WALK_LIMIT. The client draws
+## the same slope as a cliff face. Read from the constant, so a retune moves
+## this test with it.
+func _a_face_steeper_than_the_walk_limit_is_a_cliff() -> void:
+	var limit: int = _Const.TILE_WALK_LIMIT
+	var triangle := PackedInt32Array([0, 1, 3])
+	var at_limit := PackedInt32Array([0, 0, 0, limit])
+	var above := PackedInt32Array([0, 0, 0, limit + 1])
+
+	_expect(not ChunkMeshBuilder.is_cliff_face(at_limit, triangle),
+		"a face that rises by the walk limit is ground")
+	_expect(ChunkMeshBuilder.is_cliff_face(above, triangle),
+		"a face that rises by more than the walk limit is a cliff")
+
+
+## A corner raised above the walk limit sits in one triangle of each of its
+## four tiles, by the diagonal rule. Those four faces, and no others, take
+## the cliff colour.
+func _one_raised_corner_makes_one_cliff_face_in_each_tile() -> void:
+	var chunk := ChunkFile.blank(0, 0)
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var corner := Vector2i(5, 5)
+
+	chunk.heights[corner.y * side + corner.x] = _Const.TILE_WALK_LIMIT + 1
+
+	var arrays := ChunkMeshBuilder.build_arrays(chunk)
+	var colors: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	var cliffs := 0
+
+	for first: int in range(0, colors.size(), 3):
+		if _near_cliff_color(colors[first]):
+			cliffs += 1
+
+	_expect(cliffs == 4, "one raised corner makes 4 cliff faces, found %d" % cliffs)
+
+
+## True when `color` is the cliff colour with a facet shade on it.
+func _near_cliff_color(color: Color) -> bool:
+	var cliff := FloorPalette.CLIFF_COLOR
+	var tolerance := FloorPalette.FACET_SHADE + _EPSILON
+
+	return absf(color.r - cliff.r) <= tolerance \
+		and absf(color.g - cliff.g) <= tolerance \
+		and absf(color.b - cliff.b) <= tolerance

@@ -107,6 +107,7 @@ const CHUNK_FILE_TEMPLATE := "chunk_{cx}_{cy}_p{plane}.json"
 const CHUNK_DIRECTORY := "world/chunks"
 const CHUNK_STREAM_RADIUS := 1
 const TILE_WORLD_Z := "tile_world"
+const TILE_WALK_LIMIT := 16
 const TILE_FLAG_BLOCKED := 1
 const TILE_FLAG_WATER := 2
 const TILE_FLAG_WALL_NORTH := 4
@@ -121,6 +122,7 @@ const OBJECT_CATEGORY_LANDMARK := "landmark"
 const OBJECT_CATEGORY_NPC := "npc"
 const OBJECT_CATEGORY_SIGN := "sign"
 const OBJECT_CATEGORY_TRANSITION := "transition"
+const OBJECT_CATEGORY_CLIMB := "climb"
 const TILE_DEFAULT_FLOOR := "sand"
 const TILE_DEFAULT_AREA := "oasis"
 
@@ -128,7 +130,7 @@ const TILE_DEFAULT_AREA := "oasis"
 # the order of each table under world/.
 const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed"]
 const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains"]
-const OBJECT_CATEGORIES := ["facility", "gathering", "landmark", "npc", "sign", "transition"]
+const OBJECT_CATEGORIES := ["climb", "facility", "gathering", "landmark", "npc", "sign", "transition"]
 const OBJECT_KINDS := {
 	"bank": "facility",
 	"foundry_furnace": "facility",
@@ -157,6 +159,11 @@ const OBJECT_KINDS := {
 	"respawn_point": "landmark",
 	"transition_oasis_to_outskirts": "transition",
 	"transition_outskirts_to_oasis": "transition",
+	"ladder_up": "climb",
+	"ladder_down": "climb",
+	"ladder_both": "climb",
+	"stairs_up": "climb",
+	"stairs_down": "climb",
 	"transition_outskirts_to_azm_plains": "transition",
 	"transition_azm_plains_to_outskirts": "transition",
 }

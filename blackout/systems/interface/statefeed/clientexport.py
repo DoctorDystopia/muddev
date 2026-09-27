@@ -312,6 +312,8 @@ _TILE_GRID_EXPORTS: tuple = (
     ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
     ("CHUNK_STREAM_RADIUS", tile_const.STREAM_RADIUS_CHUNKS),
     ("TILE_WORLD_Z", tile_const.WORLD_Z),
+    # The client draws a triangle steeper than this as a cliff face.
+    ("TILE_WALK_LIMIT", tile_const.WALK_LIMIT),
     ("TILE_FLAG_BLOCKED", tile_const.FLAG_BLOCKED),
     ("TILE_FLAG_WATER", tile_const.FLAG_WATER),
     ("TILE_FLAG_WALL_NORTH", tile_const.FLAG_WALL_NORTH),
@@ -326,6 +328,7 @@ _TILE_GRID_EXPORTS: tuple = (
     ("OBJECT_CATEGORY_NPC", tile_const.OBJECT_CATEGORY_NPC),
     ("OBJECT_CATEGORY_SIGN", tile_const.OBJECT_CATEGORY_SIGN),
     ("OBJECT_CATEGORY_TRANSITION", tile_const.OBJECT_CATEGORY_TRANSITION),
+    ("OBJECT_CATEGORY_CLIMB", tile_const.OBJECT_CATEGORY_CLIMB),
     ("TILE_DEFAULT_FLOOR", floor_table.DEFAULT_FLOOR_TYPE),
     ("TILE_DEFAULT_AREA", area_table.DEFAULT_AREA),
 )

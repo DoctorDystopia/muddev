@@ -1223,8 +1223,35 @@ def tile_actions(room) -> dict:
     }
 
     _add_tile_world_steps(here, actions)
+    _add_tile_world_climb(here, actions)
 
     return actions
+
+
+def _add_tile_world_climb(here, actions: dict) -> None:
+    """
+    Replace the `look` of the tile of the observer with a climb, when a
+    ladder or stairs stand there. The kind is a step: a climb moves the
+    player and ends a tracked walk. A tile with two ways (a ladder_both)
+    offers the first. `climb` alone asks which way.
+    """
+    from systems.core.tilegrid.planes import plane_of_z
+
+    if plane_of_z(here[2]) is None:
+        return
+
+    from systems.core.tilegrid.world import get_world
+    from world import tile_travel
+
+    view = get_world().plane_for_z(here[2])
+    ways = tile_travel.climb_directions(view, (here[0], here[1]))
+
+    if not ways:
+        return
+
+    command = const.TILE_COMMAND_CLIMB_TEMPLATE.format(way=ways[0])
+    actions[tile_key(here[0], here[1])] = tile_action(
+        command, const.TILE_ACTION_KIND_STEP)
 
 
 def _add_tile_world_steps(here, actions: dict) -> None:
@@ -1254,16 +1281,18 @@ def _add_tile_world_steps(here, actions: dict) -> None:
     Creation date: 09/25/2026
     """
     from systems.core.tilegrid import constants as tile_const
+    from systems.core.tilegrid.planes import plane_of_z
 
-    if here[2] != tile_const.WORLD_Z:
+    if plane_of_z(here[2]) is None:
         return
 
     from systems.core.tilegrid.world import get_world
     from world import tile_travel
 
     tile = (here[0], here[1])
+    view = get_world().plane_for_z(here[2])
 
-    for name in tile_travel.open_directions(get_world(), tile):
+    for name in tile_travel.open_directions(view, tile):
         dx, dy = tile_const.DIRECTION_OFFSETS[name]
         key = tile_key(tile[0] + dx, tile[1] + dy)
         actions[key] = tile_action(name, const.TILE_ACTION_KIND_STEP)

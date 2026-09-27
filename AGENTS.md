@@ -168,8 +168,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (2941 tests, ~24 min,
-measured 09/25/2026):
+**Before a merge or a major change**, run the full suite (3003 tests, ~23 min,
+measured 09/26/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -841,8 +841,9 @@ Four rules:
 ## The tile grid (DESIGN-0011)
 
 The tile world is the only world since Phase 4b (09/25/2026). The xyzgrid
-maps are in `archive/xyzgrid-maps/`. Phases 6 and 7 (height rules, planes)
-are open. The design is
+maps are in `archive/xyzgrid-maps/`. Phase 6 (the walk limit and line of
+sight) is done since 09/26/2026. Phase 7 (planes) is open: step 7a, the
+server, is done. Steps 7b (the client) and 7c (the editor) are not. The design is
 [docs/2026-09-23-DESIGN-0011-terrain-verticality-fog.md](docs/2026-09-23-DESIGN-0011-terrain-verticality-fog.md).
 The state of each phase and the next steps are in
 [docs/2026-09-24-HANDOFF-0001-tile-grid.md](docs/2026-09-24-HANDOFF-0001-tile-grid.md).
@@ -866,8 +867,11 @@ Read the handoff before you continue this work.
 | The tile sync of chunk objects | `systems/gameplay/spawning/tile_sync.py`, `scripts/sync_tile_objects.py` |
 | The respawn point (the `respawn_point` object kind) | `world/respawn.py` |
 | The cutover from the xyzgrid maps | `world/tile_cutover.py`, `scripts/move_to_tile_world.py` |
+| Line of sight, and reach with sight (`can_strike`) | `systems/core/tilegrid/sight.py`, `systems/gameplay/combat/reach.py` |
+| The sweep of empty tile rooms | `systems/core/tilegrid/sweep.py` |
+| The room Z of each plane, `TilePlane`, and `climb` | `systems/core/tilegrid/planes.py`, `world.py`, `world/tile_travel.py` |
 
-Six rules:
+Seven rules:
 
 - **A tile room stores no fact about its tile.** The pool moves a room to
   another tile. Thus, a name, a sign label, or a reference to "the room where
@@ -890,6 +894,11 @@ Six rules:
   that does not exist, so the implicit world of a test is empty. A real
   world would keep the rooms of a rolled-back test. A test that needs tiles
   calls `set_world(world)` in `setUp` and `set_world(None)` in `tearDown`.
+- **The height rules come from the vault.** The walk limit is in
+  `03_Systems/Movement_and_Traversal.md`, and line of sight is in
+  `03_Systems/Combat_System.md`. Godot reads `TILE_WALK_LIMIT` to draw a
+  cliff face. The path search tests the slope inline. Its test must stay the
+  same as `TileGrid._check_slope`, and `test_pathfind.py` compares the two.
 
 ## The website
 

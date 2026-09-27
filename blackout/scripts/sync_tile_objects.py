@@ -53,7 +53,8 @@ def _bootstrap_evennia():
 def _print_plan(actions) -> None:
     """Print one line for each tile of the plan."""
     for action in actions:
-        line = f"  {action.verb:8} {action.tile}: {', '.join(action.kinds)}"
+        where = f"{action.tile} p{action.plane}"
+        line = f"  {action.verb:8} {where}: {', '.join(action.kinds)}"
 
         if action.previous and action.previous != action.kinds:
             line += f" (was {', '.join(action.previous)})"

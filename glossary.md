@@ -153,3 +153,8 @@ a room.
 | landmark | an object kind that names its tile and stands nothing up | marker, waypoint, POI |
 | respawn point | the landmark `respawn_point`. A dead player, a new character, and a character with no tile come back on its tile | spawn point, start room, home tile |
 | cutover | the operator step that moves every character to the tile world and deletes the xyzgrid maps (`scripts/move_to_tile_world.py`) | migration, map move, switchover |
+| walk limit | the largest change of tile height, in height steps, that one step may climb or drop (`WALK_LIMIT`) | slope limit, max climb, step height |
+| cliff | an edge between two tiles whose heights differ by more than the walk limit. No step crosses it | ledge, drop, steep edge |
+| cliff face | a triangle of the ground mesh that is steeper than the walk limit. The client draws it in the cliff colour | rock face, slope face |
+| line of sight (short: sight) | a clear line for a shot between two tiles: no wall and no Blocked tile stops it (`tilegrid/sight.py`) | LOS, visibility, line of fire |
+| sweep | the pass that gives each empty tile room with no pin back to the pool (`tilegrid/sweep.py`) | reaper, cleanup, garbage collection |

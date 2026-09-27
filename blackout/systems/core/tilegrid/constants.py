@@ -63,6 +63,13 @@ CHUNK_FORMAT_VERSION: int = 1
 # The highest plane. Plane 0 is the ground. OSRS has four planes, 0 to 3.
 PLANE_MAX: int = 3
 
+# The ground plane. Its rooms have the Z WORLD_Z, as before planes.
+GROUND_PLANE: int = 0
+
+# The room Z of a plane above the ground (Phase 7). `planes.plane_z` fills
+# it. The pool of a plane adds POOL_Z_SUFFIX, which no plane Z matches.
+PLANE_Z_TEMPLATE: str = "{world}_p{plane}"
+
 # The range of a corner height, in height steps: a signed 16-bit int.
 HEIGHT_MIN: int = -32768
 HEIGHT_MAX: int = 32767
@@ -98,8 +105,10 @@ OBJECT_CATEGORY_LANDMARK: str = "landmark"
 OBJECT_CATEGORY_NPC: str = "npc"
 OBJECT_CATEGORY_SIGN: str = "sign"
 OBJECT_CATEGORY_TRANSITION: str = "transition"
+OBJECT_CATEGORY_CLIMB: str = "climb"
 
 OBJECT_CATEGORIES: tuple = (
+    OBJECT_CATEGORY_CLIMB,
     OBJECT_CATEGORY_FACILITY,
     OBJECT_CATEGORY_GATHERING,
     OBJECT_CATEGORY_LANDMARK,
@@ -107,6 +116,19 @@ OBJECT_CATEGORIES: tuple = (
     OBJECT_CATEGORY_SIGN,
     OBJECT_CATEGORY_TRANSITION,
 )
+
+# ─── Climbing (Phase 7) ──────────────────────────────────────────────────────
+# A climb object (a ladder, stairs) moves a walker who stands on its tile to
+# the same tile one plane up or down (Nick, 09/26/2026). Each climb kind lists
+# its directions. The words are the words that a player types after `climb`.
+CLIMB_UP: str = "up"
+CLIMB_DOWN: str = "down"
+
+# The plane change of each direction.
+CLIMB_PLANE_STEPS: dict = {
+    CLIMB_UP: 1,
+    CLIMB_DOWN: -1,
+}
 
 # ─── Directions ──────────────────────────────────────────────────────────────
 # Y grows to the north, as on the xyzgrid maps. A name is the word a player
@@ -169,9 +191,21 @@ STEP_MOVE_REFUSED: str = "move_refused"
 
 # ─── Height rule ─────────────────────────────────────────────────────────────
 # The largest height change, in height steps, that one step may climb or drop.
-# None means no limit. DESIGN-0011 section 6.5: the walk limit is a gameplay
-# rule, and it goes into the Obsidian vault before it gets a value here.
-WALK_LIMIT = None
+# A bigger change is a cliff. None means no limit. The rule is in the Obsidian
+# vault, 03_Systems/Movement_and_Traversal.md, "Height and the walk limit"
+# (Nick, 09/26/2026). 16 steps is one tile of rise over one tile of run.
+WALK_LIMIT = 16
+
+# ─── Line of sight ───────────────────────────────────────────────────────────
+# The tile flags that stop a shot on a tile that the line enters. Water does
+# not stop a shot, and neither does height. A wall stops a shot on its own
+# edge. The rule is in the Obsidian vault, 03_Systems/Combat_System.md, "Line
+# of sight" (Nick, 09/26/2026).
+FLAGS_BLOCK_SIGHT: int = FLAG_BLOCKED
+
+# The fraction bits of the fixed-point line of the sight walk. OSRS uses 16.
+# Integers, not floats, so the Python and a later GDScript walk agree.
+SIGHT_FIXED_POINT_BITS: int = 16
 
 # ─── Path search ─────────────────────────────────────────────────────────────
 # The most tiles that one search may expand before it gives up. A search that
@@ -195,6 +229,12 @@ POOL_Z_SUFFIX: str = "_pool"
 # The most empty rooms that the pool keeps. A room released past this count is
 # deleted. The spike measures a pool of this size against no pool at all.
 POOL_CAPACITY: int = 64
+
+# The ticks between two sweeps of the live rooms. A step and `place` give an
+# empty room back at once. A teleport, a logout, and a delete do not, so the
+# sweep collects those rooms. 100 ticks is 60 seconds. An empty room costs
+# one row and one index entry until then, so the sweep need not be fast.
+SWEEP_EVERY_TICKS: int = 100
 
 # The key of every tile room. A pooled room moves from tile to tile, so a key
 # with the coordinates in it would need a write on each move. Phase 4 decides

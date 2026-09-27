@@ -285,6 +285,45 @@ class TileRooms:
 
         return True
 
+    def sweep(self) -> int:
+        """
+        Purpose: Give back every live room that holds nothing now.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            The number of rooms that left the index.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. Drop a deleted room from the index. A staff `destroy` deletes
+               a room, and the index does not see it.
+            2. `release` each other room. It keeps a room that holds a thing
+               or that a pin holds.
+
+        Notes/References:
+            Handoff debt 13. Only `movement.step` and `movement.place` call
+            `release` at the move. A teleport, a logout, and a delete leave an
+            empty room behind. `systems/core/tilegrid/sweep.py` calls this on
+            the tick. No query for a room with cached contents.
+
+        Author: Nick Hobar
+        Creation date: 09/26/2026
+        """
+        released = 0
+
+        for tile, room in self.live_rooms():
+            if room.pk is None:
+                self._unindex(tile)
+                released += 1
+            elif self.release(room):
+                released += 1
+
+        return released
+
     def load(self) -> None:
         """
         Purpose: Rebuild the index and the pool from the database.
