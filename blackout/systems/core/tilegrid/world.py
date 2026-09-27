@@ -55,7 +55,7 @@ _WORLD = None
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
-def _chunk_directory() -> str:
+def chunk_directory() -> str:
     """
     Return the path of the world chunk directory. `settings.TILE_WORLD_DIR`
     overrides it. The test settings point it at a directory that does not
@@ -233,6 +233,24 @@ class TileWorld:
         for tile_plane in self.planes():
             tile_plane.rooms.load()
 
+    def block_chunks(self, x: int, y: int, first_plane: int = const.GROUND_PLANE,
+                     radius: int = const.STREAM_RADIUS_CHUNKS) -> list:
+        """
+        Return (cx, cy, plane) of each loaded chunk of every plane in the
+        block around the chunk of tile (x, y). The chunks of `first_plane`
+        come first, because the ground under a walker is on its own plane.
+        The statefeed streams this list (Phase 7b).
+        """
+        found = []
+
+        for tile_plane in self.planes():
+            for cx, cy in tile_plane.block_keys(x, y, radius):
+                found.append((cx, cy, tile_plane.plane))
+
+        found.sort(key=lambda key: (key[2] != first_plane, key[2], key[0], key[1]))
+
+        return found
+
     def sweep_rooms(self) -> int:
         """Sweep the rooms of every plane. Return how many rooms went back."""
         released = 0
@@ -324,7 +342,7 @@ def load_world(directory: str = None, world_z: str = const.WORLD_Z):
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
-    path = directory or _chunk_directory()
+    path = directory or chunk_directory()
     chunk_files = chunkfile.load_directory(path)
     world = TileWorld(chunk_files, world_z)
     world.load_rooms()

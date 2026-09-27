@@ -80,6 +80,7 @@ var _skill_detail: OptionButton
 var _xp_drops_check: CheckBox
 var _skill_rates_check: CheckBox
 var _smooth_movement_check: CheckBox
+var _hide_roofs_check: CheckBox
 
 ## Set while pushing values INTO the widgets, so their value_changed does not
 ## write straight back and fight the update that is in progress.
@@ -172,6 +173,10 @@ func _init() -> void:
 	_smooth_movement_check = _check("Slide between tiles")
 	column.add_child(_smooth_movement_check)
 
+	# The floors above the player. See ClientSettings.DEFAULT_HIDE_ROOFS.
+	_hide_roofs_check = _check("Hide roofs")
+	column.add_child(_hide_roofs_check)
+
 	# The XP drops over the world. Both are the player's; the reset is neither a
 	# setting nor a command, which is why it is a signal of its own.
 	column.add_child(_heading("XP tracker"))
@@ -233,6 +238,7 @@ func _init() -> void:
 	_xp_drops_check.toggled.connect(_on_xp_drops_toggled)
 	_skill_rates_check.toggled.connect(_on_skill_rates_toggled)
 	_smooth_movement_check.toggled.connect(_on_smooth_movement_toggled)
+	_hide_roofs_check.toggled.connect(_on_hide_roofs_toggled)
 
 
 func bind(settings: ClientSettings) -> void:
@@ -260,6 +266,7 @@ func _sync() -> void:
 	_skill_rates_check.button_pressed = _settings.show_skill_rates
 	_skill_rates_check.disabled = not _settings.show_xp_drops
 	_smooth_movement_check.button_pressed = _settings.smooth_movement
+	_hide_roofs_check.button_pressed = _settings.hide_roofs
 	_syncing = false
 
 
@@ -317,6 +324,13 @@ func _on_smooth_movement_toggled(pressed: bool) -> void:
 		return
 
 	_settings.set_smooth_movement(pressed)
+
+
+func _on_hide_roofs_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_hide_roofs(pressed)
 
 
 ## The chosen index is a position in ClientSettings.SKILL_DETAIL_MODES, because

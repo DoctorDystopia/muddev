@@ -28,6 +28,7 @@ from typeclasses import spawners
 from world import areas
 from world import floor_types
 from world import object_kinds
+from world import tile_checks
 
 # The game directory, two levels above this file.
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -159,20 +160,11 @@ class WorldChunkTests(unittest.TestCase):
                                       name=name):
                         self.assertIn(name, table)
 
-    def test_every_placed_transition_lands_on_an_open_tile(self):
-        """A walker that steps onto a transition must have a place to land.
-        The converter test checked this until DESIGN-0011 Phase 4b."""
-        found = chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY)
-        grid = chunkfile.build_grid(found)
-        placed = {thing.kind for chunk in found for thing in chunk.objects}
+    def test_the_world_passes_every_content_check(self):
+        """Each transition and each climb lands on an open tile. Each void
+        tile is Blocked. The world has one respawn point. The rules live in
+        `world/tile_checks.py`. The editor runs the same rules."""
+        found = tile_checks.check_world(
+            chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY))
 
-        for key in sorted(placed):
-            kind = object_kinds.OBJECT_KINDS.get(key)
-
-            if kind is None or not kind.target:
-                continue
-
-            with self.subTest(kind=key):
-                self.assertTrue(grid.has_tile(*kind.target))
-                flags = grid.flags_at(*kind.target)
-                self.assertFalse(flags & tile_const.FLAGS_UNWALKABLE)
+        self.assertEqual([finding.message for finding in found], [])

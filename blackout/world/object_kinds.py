@@ -89,6 +89,12 @@ _SIGN = tile_const.OBJECT_CATEGORY_SIGN
 _TRANSITION = tile_const.OBJECT_CATEGORY_TRANSITION
 _CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
 
+# The object kind that marks the respawn point in a chunk file. world/respawn.py
+# finds its tile by this key, and the terrain editor check counts it. Here,
+# not in respawn.py, because the client export reads this module and
+# respawn.py imports Evennia.
+RESPAWN_KIND: str = "respawn_point"
+
 _UP = (tile_const.CLIMB_UP,)
 _DOWN = (tile_const.CLIMB_DOWN,)
 _BOTH = (tile_const.CLIMB_UP, tile_const.CLIMB_DOWN)
@@ -161,7 +167,7 @@ _KIND_ROWS: tuple = (
 
     # The respawn point. world/respawn.py finds it by this key. The words are
     # those of the xyzgrid room at (0, 0) of the oasis map.
-    ObjectKind("respawn_point", _LANDMARK, name="Oasis Entrance",
+    ObjectKind(RESPAWN_KIND, _LANDMARK, name="Oasis Entrance",
                desc="The main entryway of the Oasis. The desert sprawls to "
                     "the north and east."),
 

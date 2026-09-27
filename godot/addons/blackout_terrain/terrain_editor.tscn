@@ -1,6 +1,6 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene format=3 uid="uid://cy1040trud4xu"]
 
-[ext_resource type="Script" path="res://addons/blackout_terrain/terrain_world.gd" id="1_world"]
+[ext_resource type="Script" uid="uid://ofhlufyuc7bb" path="res://addons/blackout_terrain/terrain_world.gd" id="1_world"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_terrain"]
 sky_top_color = Color(0.72, 0.62, 0.5, 1)
@@ -18,14 +18,14 @@ ambient_light_source = 3
 ambient_light_color = Color(0.48, 0.42, 0.35, 1)
 ambient_light_energy = 0.6
 
-[node name="TerrainEditor" type="Node3D"]
+[node name="TerrainEditor" type="Node3D" unique_id=1422189799]
 
-[node name="TerrainWorld" type="Node3D" parent="."]
+[node name="TerrainWorld" type="Node3D" parent="." unique_id=1780708759]
 script = ExtResource("1_world")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1560652548]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 20, 0)
 light_color = Color(1, 0.89, 0.69, 1)
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1698775386]
 environment = SubResource("Environment_terrain")

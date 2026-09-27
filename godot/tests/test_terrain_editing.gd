@@ -38,6 +38,7 @@ func _ready() -> void:
 	_undo_removes_a_placed_object()
 	_compact_names_drops_unused_names()
 	_a_ray_from_above_hits_the_tile_under_it()
+	_a_void_paint_blocks_and_a_floor_on_void_opens()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -310,3 +311,16 @@ func _a_ray_from_above_hits_the_tile_under_it() -> void:
 	_expect(angled != null and ChunkSet.tile_at(TerrainPicking.tile_point(angled))
 		== tile, "a slanted ray hits the hill top, not the ground behind it")
 	_expect(missed == null, "a ray up hits nothing")
+
+
+func _a_void_paint_blocks_and_a_floor_on_void_opens() -> void:
+	var void_floor: String = _Const.TILE_VOID_FLOOR
+	var water: int = _Const.TILE_FLAG_WATER
+	var blocked: int = _Const.TILE_FLAG_BLOCKED
+
+	_expect(TerrainBrushes.flags_after_floor("sand", void_floor, water) == water | blocked,
+		"a void paint sets Blocked and keeps the other flags")
+	_expect(TerrainBrushes.flags_after_floor(void_floor, "concrete", blocked) == 0,
+		"a real floor on void clears Blocked")
+	_expect(TerrainBrushes.flags_after_floor("sand", "dirt", blocked) == blocked,
+		"a paint between two real floors keeps the flags")

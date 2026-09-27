@@ -47,6 +47,7 @@ const KEY_SFX_VOLUME := "sfx_volume"
 const KEY_SHOW_XP_DROPS := "show_xp_drops"
 const KEY_SHOW_SKILL_RATES := "show_skill_rates"
 const KEY_SMOOTH_MOVEMENT := "smooth_movement"
+const KEY_HIDE_ROOFS := "hide_roofs"
 const KEY_AMOUNT_SIZE := "amount_size"
 const KEY_POPUP_RECT := "popup_rect"
 
@@ -182,6 +183,14 @@ const DEFAULT_SHOW_SKILL_RATES := false
 ## it off sees exactly the same facts one frame sooner.
 const DEFAULT_SMOOTH_MOVEMENT := true
 
+## Hide every plane above the plane of the player (DESIGN-0011 Phase 7b), as
+## the OSRS "Hide roofs" setting does. On by default (Nick, 09/26/2026): with
+## it off, the floor above hides a player who stands indoors.
+##
+## A LOOK, like [constant DEFAULT_SMOOTH_MOVEMENT]. The server sends every
+## plane either way.
+const DEFAULT_HIDE_ROOFS := true
+
 ## How big the player made the amount box, in pixels, or zero on either axis
 ## before they sized one.
 ##
@@ -279,6 +288,7 @@ var sfx_volume := DEFAULT_SFX_VOLUME
 var show_xp_drops := DEFAULT_SHOW_XP_DROPS
 var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
 var smooth_movement := DEFAULT_SMOOTH_MOVEMENT
+var hide_roofs := DEFAULT_HIDE_ROOFS
 var amount_size := DEFAULT_AMOUNT_SIZE
 var popup_rect := DEFAULT_POPUP_RECT
 var panel_size := DEFAULT_PANEL_SIZE
@@ -323,6 +333,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_SHOW_SKILL_RATES, DEFAULT_SHOW_SKILL_RATES))
 	smooth_movement = bool(config.get_value(
 		SECTION, KEY_SMOOTH_MOVEMENT, DEFAULT_SMOOTH_MOVEMENT))
+	hide_roofs = bool(config.get_value(
+		SECTION, KEY_HIDE_ROOFS, DEFAULT_HIDE_ROOFS))
 	amount_size = _clamp_box_size(config.get_value(
 		SECTION, KEY_AMOUNT_SIZE, DEFAULT_AMOUNT_SIZE))
 	popup_rect = _clamp_box_rect(config.get_value(
@@ -350,6 +362,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_SHOW_XP_DROPS, show_xp_drops)
 	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
 	config.set_value(SECTION, KEY_SMOOTH_MOVEMENT, smooth_movement)
+	config.set_value(SECTION, KEY_HIDE_ROOFS, hide_roofs)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
 	config.set_value(SECTION, KEY_POPUP_RECT, popup_rect)
 	config.set_value(SECTION, KEY_PANEL_SIZE, panel_size)
@@ -522,6 +535,16 @@ func set_smooth_movement(value: bool) -> void:
 	changed.emit()
 
 
+## Hide the planes above the player, or show them, and persist it.
+func set_hide_roofs(value: bool) -> void:
+	if value == hide_roofs:
+		return
+
+	hide_roofs = value
+	save_to_disk()
+	changed.emit()
+
+
 ## Remember how big the player made the amount box, and persist it.
 ##
 ## Called when the box closes, so a resize drag writes the file one time. A
@@ -581,6 +604,7 @@ func reset() -> void:
 	show_xp_drops = DEFAULT_SHOW_XP_DROPS
 	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
 	smooth_movement = DEFAULT_SMOOTH_MOVEMENT
+	hide_roofs = DEFAULT_HIDE_ROOFS
 	amount_size = DEFAULT_AMOUNT_SIZE
 	popup_rect = DEFAULT_POPUP_RECT
 	panel_size = DEFAULT_PANEL_SIZE

@@ -17,6 +17,13 @@ Description: The floor types of the tile grid, one row for each type.
              are walk flags. Thus, a `water_bed` tile with no water flag is
              dry ground.
 
+             THE VOID. `void` is "no floor here", for a tile of plane 1 and
+             up that has nothing to stand on (Nick, 09/26/2026). The mesh
+             builder draws no triangle on it, so the plane below shows
+             through. It sets no walk rule either: the author sets Blocked
+             with it, and `world/tile_checks.py` refuses a void tile with no
+             Blocked flag. The editor sets both at once.
+
              DESIGN-0011 sections 6.2 and 6.3. A starter list: Nick renames,
              adds, or removes rows.
 """
@@ -43,6 +50,7 @@ _FLOOR_ROWS: tuple = (
     FloorType("concrete", "A slab floor, a yard, or a plaza."),
     FloorType("grass", "Scrub or grass, near water."),
     FloorType("water_bed", "The ground under shallow water. Add the water flag."),
+    FloorType("void", "No floor: a gap in plane 1 and up. Always Blocked."),
 )
 
 # key -> FloorType, in the order of _FLOOR_ROWS.
@@ -50,3 +58,6 @@ FLOOR_TYPES: dict = {row.key: row for row in _FLOOR_ROWS}
 
 # The floor type of a new chunk.
 DEFAULT_FLOOR_TYPE: str = _FLOOR_ROWS[0].key
+
+# The floor type of a tile with no floor. See THE VOID above.
+VOID_FLOOR_TYPE: str = "void"

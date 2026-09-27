@@ -87,6 +87,12 @@ CHUNK_NAME_PATTERN: str = "^[a-z0-9_]+$"
 CHUNK_FILE_TEMPLATE: str = "chunk_{cx}_{cy}_p{plane}.json"
 CHUNK_DIRECTORY: str = "world/chunks"
 
+# The tile sync stamp, from the game directory: a digest of each chunk file at
+# the last `sync_tile_objects.py --apply` (`syncstamp.py`). It describes the
+# dev database, so it lives beside it, and git ignores it. The terrain editor
+# reads it to name the chunk files that changed since.
+SYNC_STAMP_FILE: str = "server/tile_sync_state.json"
+
 # The chunks around the chunk of a player that the server sends and the client
 # keeps, on each side. 1 gives a 3 x 3 block, as DESIGN-0011 section 6.6 says.
 # The client frees a chunk outside the block.

@@ -31,12 +31,7 @@ fight that just killed them. See docs/2026-08-23-DESIGN-0003, section 5,
 from evennia.utils import logger
 
 from systems.core.tilegrid.world import get_world
-
-
-# ─── Public constant definitions ─────────────────────────────────────────────
-
-# The object kind that marks the respawn point in a chunk file.
-RESPAWN_KIND: str = "respawn_point"
+from world.object_kinds import RESPAWN_KIND
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────

@@ -55,6 +55,7 @@ from systems.core.tilegrid import constants as tile_const
 from world import areas as area_table
 from world import floor_types as floor_table
 from world import object_kinds as kind_table
+from world import tile_checks
 
 from . import constants as const
 
@@ -310,6 +311,7 @@ _TILE_GRID_EXPORTS: tuple = (
     ("CHUNK_NAME_PATTERN", tile_const.CHUNK_NAME_PATTERN),
     ("CHUNK_FILE_TEMPLATE", tile_const.CHUNK_FILE_TEMPLATE),
     ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
+    ("TILE_SYNC_STAMP_FILE", tile_const.SYNC_STAMP_FILE),
     ("CHUNK_STREAM_RADIUS", tile_const.STREAM_RADIUS_CHUNKS),
     ("TILE_WORLD_Z", tile_const.WORLD_Z),
     # The client draws a triangle steeper than this as a cliff face.
@@ -331,6 +333,21 @@ _TILE_GRID_EXPORTS: tuple = (
     ("OBJECT_CATEGORY_CLIMB", tile_const.OBJECT_CATEGORY_CLIMB),
     ("TILE_DEFAULT_FLOOR", floor_table.DEFAULT_FLOOR_TYPE),
     ("TILE_DEFAULT_AREA", area_table.DEFAULT_AREA),
+    # Planes (Phase 7). The client reads the plane of the player from the
+    # room Z, and draws no triangle on a void tile.
+    ("TILE_GROUND_PLANE", tile_const.GROUND_PLANE),
+    ("TILE_PLANE_Z_TEMPLATE", tile_const.PLANE_Z_TEMPLATE),
+    ("TILE_VOID_FLOOR", floor_table.VOID_FLOOR_TYPE),
+    ("TILE_RESPAWN_KIND", kind_table.RESPAWN_KIND),
+    ("CLIMB_UP", tile_const.CLIMB_UP),
+    ("CLIMB_DOWN", tile_const.CLIMB_DOWN),
+    # The rules of world/tile_checks.py. The editor runs the same rules.
+    ("TILE_CHECK_UNKNOWN_KIND", tile_checks.RULE_UNKNOWN_KIND),
+    ("TILE_CHECK_OBJECT_UNWALKABLE", tile_checks.RULE_OBJECT_UNWALKABLE),
+    ("TILE_CHECK_TRANSITION_LANDING", tile_checks.RULE_TRANSITION_LANDING),
+    ("TILE_CHECK_CLIMB_LANDING", tile_checks.RULE_CLIMB_LANDING),
+    ("TILE_CHECK_VOID_OPEN", tile_checks.RULE_VOID_OPEN),
+    ("TILE_CHECK_RESPAWN_COUNT", tile_checks.RULE_RESPAWN_COUNT),
 )
 
 # The names that the Godot editor paints and places (DESIGN-0011 section 6.3).
@@ -341,11 +358,22 @@ _TILE_GRID_LIST_EXPORTS: tuple = (
     ("TILE_FLOOR_TYPES", tuple(floor_table.FLOOR_TYPES)),
     ("TILE_AREAS", tuple(area_table.AREAS)),
     ("OBJECT_CATEGORIES", tile_const.OBJECT_CATEGORIES),
+    ("TILE_CHECK_RULES", tile_checks.RULES),
 )
 
+# The target of each transition and the ways of each climb let the editor
+# draw each link and run the checks of world/tile_checks.py. A kind with no
+# target or no climb has no row.
 _TILE_GRID_MAP_EXPORTS: tuple = (
     ("OBJECT_KINDS", tuple((key, kind.category)
                            for key, kind in kind_table.OBJECT_KINDS.items())),
+    ("OBJECT_KIND_TARGETS", tuple((key, kind.target)
+                                  for key, kind in kind_table.OBJECT_KINDS.items()
+                                  if kind.target)),
+    ("OBJECT_KIND_CLIMBS", tuple((key, kind.climbs)
+                                 for key, kind in kind_table.OBJECT_KINDS.items()
+                                 if kind.climbs)),
+    ("CLIMB_PLANE_STEPS", tuple(tile_const.CLIMB_PLANE_STEPS.items())),
 )
 
 _LANGUAGE_GD: str = "gd"
@@ -446,10 +474,12 @@ def _render_list(values, syntax: dict) -> str:
 
 def _render_map(pairs, syntax: dict, indent: str) -> str:
     """
-    Purpose: Render a sequence of (key, value) scalar pairs as a map literal.
+    Purpose: Render a sequence of (key, value) pairs as a map literal.
 
     Entry:
-        pairs  - an iterable of (scalar, scalar) tuples, in the order to write.
+        pairs  - an iterable of (scalar, value) tuples, in the order to write.
+                 A value is a scalar, or a tuple of scalars, which renders as
+                 a list.
         syntax - one of the _*_SYNTAX tables.
         indent - the leading whitespace of the declaration.
 
@@ -474,7 +504,12 @@ def _render_map(pairs, syntax: dict, indent: str) -> str:
     lines = [syntax["map_open"]]
 
     for key, value in pairs:
-        pair = syntax["pair"] % (_quote(key), _quote(value))
+        if isinstance(value, tuple):
+            rendered = _render_list(value, syntax)
+        else:
+            rendered = _quote(value)
+
+        pair = syntax["pair"] % (_quote(key), rendered)
 
         lines.append("%s\t%s," % (indent, pair))
 

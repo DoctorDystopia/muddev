@@ -346,6 +346,7 @@ func _apply_settings() -> void:
 
 	_animator.set_animated(animated)
 	_entities.set_animated(animated)
+	_terrain.set_hide_roofs(_settings.hide_roofs)
 
 	# On the frame the player ticked the box, not the one after it. The
 	# checkbox is in a pane beside the world, so the change is watched as it is
@@ -522,20 +523,27 @@ func _unhandled_input(event: InputEvent) -> void:
 ## [method WorldState.ground_y], the same triangles that [ChunkMeshBuilder]
 ## draws.
 func _locate_coords(coords: Array) -> Variant:
-	if coords.size() < 3 or str(coords[2]) != Const.TILE_WORLD_Z:
+	if coords.size() < 3:
+		return null
+
+	# The Z names the plane (Phase 7b). A figure stands on the ground of its
+	# own plane.
+	var plane := WorldState.plane_of_z(str(coords[2]))
+
+	if plane < 0:
 		return null
 
 	# Every number in a parsed payload is a float. This converts it where it
 	# reads it, like every other coordinate in this client.
 	var cell := Vector2i(int(coords[0]), int(coords[1]))
 
-	return _ground_point(cell)
+	return _ground_point(cell, plane)
 
 
 ## The point on the drawn ground at the centre of a tile, or null when its
-## chunk is not loaded.
-func _ground_point(cell: Vector2i) -> Variant:
-	var height: Variant = _state.ground_y(cell)
+## chunk is not loaded. A `plane` of -1 means the plane of the observer.
+func _ground_point(cell: Vector2i, plane: int = -1) -> Variant:
+	var height: Variant = _state.ground_y(cell, plane)
 
 	if height == null:
 		return null

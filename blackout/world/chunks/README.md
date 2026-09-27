@@ -40,6 +40,17 @@ Every name in a chunk file is a row of a table under `world/`:
   offset.
 - **Seams:** two neighbour chunks hold the same corner heights on the edge
   that they share. A test fails on a mismatch.
+- **Planes:** a file of plane 1 and up holds absolute heights. A tile with
+  no floor there has the floor type `void` and the Blocked flag. The editor
+  starts a new plane-1 chunk from the chunk below it.
+- **Content checks:** `world/tile_checks.py` checks what the files mean
+  together: each transition and each climb lands on an open tile, each object
+  stands on a walkable tile, each void tile is Blocked, and the world has one
+  respawn point. `world/tests/test_tile_content.py` runs it over this
+  directory, and the editor runs the same rules as "Check world".
+- **After an edit:** stop the server, run `scripts/sync_tile_objects.py
+  --apply`, and start the server. The server loads these files one time, at
+  start.
 - **No hand edits of a big grid.** Use the editor, or a script that writes
   through `chunkfile.write_file`. A hand edit that breaks the layout still
   reads, but the next editor save rewrites every line of it.

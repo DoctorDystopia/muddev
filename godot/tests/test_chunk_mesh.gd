@@ -36,6 +36,8 @@ func _ready() -> void:
 	_the_palette_gives_a_stable_colour_to_an_unknown_floor()
 	_a_face_steeper_than_the_walk_limit_is_a_cliff()
 	_one_raised_corner_makes_one_cliff_face_in_each_tile()
+	_a_void_tile_has_no_triangle()
+	_a_chunk_of_void_builds_an_empty_mesh()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -254,6 +256,32 @@ func _one_raised_corner_makes_one_cliff_face_in_each_tile() -> void:
 
 
 ## True when `color` is the cliff colour with a facet shade on it.
+func _a_void_tile_has_no_triangle() -> void:
+	# Phase 7b. A void tile is a gap in a plane: the plane below shows.
+	var chunk := ChunkFile.blank(0, 0, 1)
+	var full: PackedVector3Array = ChunkMeshBuilder.build_arrays(chunk)[Mesh.ARRAY_VERTEX]
+
+	chunk.floor_names.append(_Const.TILE_VOID_FLOOR)
+	chunk.floors[0] = 1
+	chunk.floors[5] = 1
+
+	var gapped: PackedVector3Array = ChunkMeshBuilder.build_arrays(chunk)[Mesh.ARRAY_VERTEX]
+
+	# Two triangles of three vertices for each tile.
+	_expect(full.size() - gapped.size() == 2 * 2 * 3,
+		"two void tiles drop four triangles")
+
+
+func _a_chunk_of_void_builds_an_empty_mesh() -> void:
+	var chunk := ChunkFile.blank(0, 0, 1)
+
+	chunk.floor_names = PackedStringArray([_Const.TILE_VOID_FLOOR])
+
+	var mesh := ChunkMeshBuilder.build(chunk)
+
+	_expect(mesh.get_surface_count() == 0, "an all-void chunk has no surface")
+
+
 func _near_cliff_color(color: Color) -> bool:
 	var cliff := FloorPalette.CLIFF_COLOR
 	var tolerance := FloorPalette.FACET_SHADE + _EPSILON

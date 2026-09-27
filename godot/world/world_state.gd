@@ -7,10 +7,16 @@ extends RefCounted
 ## **The ground.** Since DESIGN-0011 Phase 5 (09/25/2026), the world is the
 ## tile world. The server sends each chunk of the block around the player on
 ## `blackout_chunk`, one time for each session. This class keeps the chunks in
-## one [ChunkSet]. The 3D pane and the minimap both draw from that set, so the
-## client parses one payload one time. The island levels of the xyzgrid maps
+## one [ChunkSet] for each plane. The 3D pane and the minimap both draw from
+## these sets, so the client parses one payload one time. The island levels of the xyzgrid maps
 ## are gone. Nick chose "tile world only". Thus, a player on an xyzgrid map
 ## sees no ground in Godot until Phase 4b moves every player.
+##
+## **Planes.** Since DESIGN-0011 Phase 7b (09/26/2026), the server streams the
+## block of every plane. The Z of the room of the observer gives its plane.
+## `tile_world` is plane 0, and `tile_world_p<p>` is plane p. [member chunks]
+## is the set of the plane of the observer. The ground, the pick, the minimap,
+## and [method tile_action] read that set. [TerrainView] draws every plane.
 ##
 ## **The float boundary.** `JSON.parse_string` in Godot returns TYPE_FLOAT for
 ## every number in a payload, for example `{"x": 3.0}`. A dictionary key of
@@ -35,16 +41,26 @@ signal chunks_changed
 signal room_changed
 
 
-## Every chunk of the block around the observer. [method _free_far_chunks]
-## keeps it to the block.
-var chunks := ChunkSet.new()
+## The chunks of the block around the observer, on the plane of the
+## observer. [method _free_far_chunks] keeps each plane to the block. Off the
+## tile world, it is the set of plane 0.
+var chunks: ChunkSet:
+	get:
+		return plane_chunks(maxi(current_plane, _Const.TILE_GROUND_PLANE))
+
+## The plane of the observer, from the Z of its room. -1 off the tile world.
+var current_plane := -1
+
+## Plane (int) -> the [ChunkSet] of that plane. A plane with no chunk here has
+## no key.
+var _planes := {}
 
 ## The reason for the last chunk file that the reader refused. For a test and
 ## for a log line.
 var last_chunk_error := ""
 
-## The z of the room of the observer. It is [constant _Const.TILE_WORLD_Z] on
-## the tile world, and a map name on an xyzgrid map.
+## The z of the room of the observer: [constant _Const.TILE_WORLD_Z] on
+## plane 0 of the tile world, and `tile_world_p<p>` on plane p.
 var current_z := ""
 var current_cell := Vector2i.ZERO
 
@@ -103,9 +119,50 @@ func ingest_chunk(payload: Dictionary) -> bool:
 		push_warning("blackout_chunk refused: %s" % chunk.error)
 		return false
 
-	chunks.add(chunk)
+	plane_chunks(chunk.plane).add(chunk)
 
 	return true
+
+
+## The chunk set of one plane. An empty set for a plane with no chunk yet. The
+## set joins the model, so a chunk that lands later goes into it.
+func plane_chunks(plane: int) -> ChunkSet:
+	if not _planes.has(plane):
+		_planes[plane] = ChunkSet.new()
+
+	return _planes[plane]
+
+
+## Every plane that holds a chunk, lowest first.
+func planes_held() -> Array[int]:
+	var held: Array[int] = []
+
+	for plane: int in _planes:
+		if not _planes[plane].chunk_coords().is_empty():
+			held.append(plane)
+
+	held.sort()
+
+	return held
+
+
+## The plane of a room Z, or -1 when the Z is not a plane of the tile world.
+## The twin of `planes.plane_of_z` in Python, from the same generated names.
+static func plane_of_z(z: String) -> int:
+	for plane: int in range(_Const.TILE_GROUND_PLANE, _Const.CHUNK_PLANE_MAX + 1):
+		if z == plane_z(plane):
+			return plane
+
+	return -1
+
+
+## The room Z of a plane: the world name for plane 0, else the template.
+static func plane_z(plane: int) -> String:
+	if plane == _Const.TILE_GROUND_PLANE:
+		return _Const.TILE_WORLD_Z
+
+	return _Const.TILE_PLANE_Z_TEMPLATE.format(
+		{"world": _Const.TILE_WORLD_Z, "plane": plane})
 
 
 ## Record where the observer stands.
@@ -117,14 +174,15 @@ func ingest_room_info(payload: Dictionary) -> void:
 
 	current_cell = Vector2i(int(coords[0]), int(coords[1]))
 	current_z = str(coords[2])
+	current_plane = plane_of_z(current_z)
 	current_exits = payload.get("exits", {})
 	current_tile_actions = payload.get("tile_actions", {})
 	current_cancel_action = payload.get("cancel_action", {})
 
 
-## True when the observer stands on the tile world.
+## True when the observer stands on the tile world, on any plane.
 func on_tile_world() -> bool:
-	return current_z == _Const.TILE_WORLD_Z
+	return current_plane >= _Const.TILE_GROUND_PLANE
 
 
 ## True when the chunk under the observer is here, so the observer has ground
@@ -135,9 +193,10 @@ func has_ground() -> bool:
 
 ## The height of the drawn ground at the centre of a tile, in world units.
 ## Null when its chunk is not loaded. A guess of zero would stand a figure
-## inside a hill.
-func ground_y(tile: Vector2i) -> Variant:
-	var height := chunks.height_at(Vector2(tile))
+## inside a hill. A `plane` of -1 means the plane of the observer.
+func ground_y(tile: Vector2i, plane: int = -1) -> Variant:
+	var chosen: ChunkSet = chunks if plane < 0 else plane_chunks(plane)
+	var height := chosen.height_at(Vector2(tile))
 
 	if is_nan(height):
 		return null
@@ -219,9 +278,10 @@ func _free_far_chunks() -> bool:
 	var block := block_of(current_cell)
 	var freed := false
 
-	for coord: Vector2i in chunks.chunk_coords():
-		if not block.has(coord):
-			chunks.remove(coord)
-			freed = true
+	for plane_set: ChunkSet in _planes.values():
+		for coord: Vector2i in plane_set.chunk_coords():
+			if not block.has(coord):
+				plane_set.remove(coord)
+				freed = true
 
 	return freed

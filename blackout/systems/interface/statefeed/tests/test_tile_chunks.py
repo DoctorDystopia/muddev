@@ -30,11 +30,11 @@ _HOME_TILE = (5, 5)
 _EAST_TILE = (_SIZE + 5, 5)
 
 
-def _chunk_file(cx: int, cy: int):
+def _chunk_file(cx: int, cy: int, plane: int = 0):
     tile_count = _SIZE * _SIZE
 
     return chunkfile.ChunkFile(
-        cx=cx, cy=cy, plane=0, floor_names=["sand"], area_names=["oasis"],
+        cx=cx, cy=cy, plane=plane, floor_names=["sand"], area_names=["oasis"],
         heights=[cx] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=[0] * tile_count,
         areas=[0] * tile_count)
@@ -61,7 +61,8 @@ class TileChunkChannelTests(EvenniaTest):
 
     def _record(self, obj, payload, force=False):
         if payload.channel == const.CHANNEL_TILE_CHUNK:
-            self.sent.append(tuple(payload.chunk_file["chunk"]))
+            wire = payload.chunk_file
+            self.sent.append(tuple(wire["chunk"]) + (wire["plane"],))
 
         return self.reach
 
@@ -78,7 +79,7 @@ class TileChunkChannelTests(EvenniaTest):
         self._place(_HOME_TILE)
         events.emit_tile_chunks(self.char1, force=True)
 
-        self.assertEqual(sorted(self.sent), [(0, 0), (1, 0)])
+        self.assertEqual(sorted(self.sent), [(0, 0, 0), (1, 0, 0)])
 
     def test_a_chunk_goes_one_time_until_a_resync(self):
         self._place(_HOME_TILE)
@@ -89,7 +90,7 @@ class TileChunkChannelTests(EvenniaTest):
         self.assertEqual(self.sent, [])
 
         events.emit_tile_chunks(self.char1, force=True)
-        self.assertEqual(sorted(self.sent), [(0, 0), (1, 0)])
+        self.assertEqual(sorted(self.sent), [(0, 0, 0), (1, 0, 0)])
 
     def test_a_move_into_a_new_chunk_sends_only_the_new_ones(self):
         self._place(_HOME_TILE)
@@ -97,7 +98,7 @@ class TileChunkChannelTests(EvenniaTest):
         self._place(_EAST_TILE)
         events.emit_tile_chunks(self.char1)
 
-        self.assertEqual(self.sent, [(2, 0)])
+        self.assertEqual(self.sent, [(2, 0, 0)])
 
     def test_a_chunk_left_behind_is_sent_again_on_return(self):
         far_tile = (3 * _SIZE + 5, 5)
@@ -108,7 +109,7 @@ class TileChunkChannelTests(EvenniaTest):
         self._place(_HOME_TILE)
         events.emit_tile_chunks(self.char1)
 
-        self.assertEqual(sorted(self.sent), [(0, 0), (1, 0)])
+        self.assertEqual(sorted(self.sent), [(0, 0, 0), (1, 0, 0)])
 
     def test_a_send_that_reached_no_session_is_tried_again(self):
         self._place(_HOME_TILE)
@@ -118,13 +119,13 @@ class TileChunkChannelTests(EvenniaTest):
         self.sent.clear()
         events.emit_tile_chunks(self.char1)
 
-        self.assertEqual(sorted(self.sent), [(0, 0), (1, 0)])
+        self.assertEqual(sorted(self.sent), [(0, 0, 0), (1, 0, 0)])
 
     def test_the_room_info_of_a_move_carries_the_block(self):
         self._place(_HOME_TILE)
         events.emit_room_info(self.char1, force=True)
 
-        self.assertEqual(sorted(self.sent), [(0, 0), (1, 0)])
+        self.assertEqual(sorted(self.sent), [(0, 0, 0), (1, 0, 0)])
 
     def test_each_legal_step_is_a_near_tile_action(self):
         from systems.interface.statefeed import serializers
@@ -145,6 +146,33 @@ class TileChunkChannelTests(EvenniaTest):
 
         own = serializers.tile_key(*_HOME_TILE)
         self.assertEqual(actions[own]["kind"], const.TILE_ACTION_KIND_LOOK)
+
+    def test_every_plane_of_the_block_is_sent_own_plane_first(self):
+        # Phase 7b. A plane-1 chunk over (0, 0) and one over (3, 0), which
+        # is outside the block.
+        upper = [_chunk_file(0, 0, 1), _chunk_file(3, 0, 1)]
+        self.world = TileWorld(list(self.files.values()) + upper)
+        self.world.load_rooms()
+        set_world(self.world)
+        movement.place(self.world.plane(1).rooms, self.char1, *_HOME_TILE,
+                       quiet=True)
+        self.sent.clear()
+        events.emit_tile_chunks(self.char1, force=True)
+
+        self.assertEqual(self.sent, [(0, 0, 1), (0, 0, 0), (1, 0, 0)])
+
+    def test_a_climb_sends_no_chunk_again(self):
+        self.world = TileWorld(list(self.files.values()) + [_chunk_file(0, 0, 1)])
+        self.world.load_rooms()
+        set_world(self.world)
+        self._place(_HOME_TILE)
+        events.emit_tile_chunks(self.char1, force=True)
+        movement.place(self.world.plane(1).rooms, self.char1, *_HOME_TILE,
+                       quiet=True)
+        self.sent.clear()
+        events.emit_tile_chunks(self.char1)
+
+        self.assertEqual(self.sent, [])
 
     def test_the_wire_form_reads_back_as_the_same_chunk_file(self):
         for key, chunk_file in self.files.items():

@@ -62,5 +62,5 @@ TEST_RUNNER = "server.conf.testrunner.BlackoutTestSuiteRunner"
 # implicit world of a test is empty. A test that needs tiles installs its own
 # world with `set_world`, and removes it after. The implicit world is a module
 # global. A real one would keep the rooms of a rolled-back test, and give them
-# to the next test. See systems/core/tilegrid/world.py, _chunk_directory.
+# to the next test. See systems/core/tilegrid/world.py, chunk_directory.
 TILE_WORLD_DIR = os.path.join(GAME_DIR, "server", "conf", "no_tile_world")

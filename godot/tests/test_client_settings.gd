@@ -25,6 +25,7 @@ func _ready() -> void:
 	_the_sfx_volume_persists_clamps_and_resets()
 	_the_xp_tracker_toggles_persist_and_reset()
 	_the_movement_animation_persists_and_resets()
+	_hide_roofs_persists_and_resets()
 	_a_box_the_player_sized_is_remembered()
 	_a_box_size_from_a_bad_file_falls_back()
 	_the_screen_gives_the_first_scale()
@@ -325,6 +326,26 @@ func _the_movement_animation_persists_and_resets() -> void:
 
 	reloaded.reset()
 	_expect(reloaded.smooth_movement == ClientSettings.DEFAULT_SMOOTH_MOVEMENT,
+		"and reset restores it")
+
+	_clean()
+
+
+## On by default (Nick, 09/26/2026), as the OSRS setting of the same name.
+func _hide_roofs_persists_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(s.hide_roofs, "roofs hide by default")
+
+	s.set_hide_roofs(false)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(not reloaded.hide_roofs, "showing the roofs persists")
+
+	reloaded.reset()
+	_expect(reloaded.hide_roofs == ClientSettings.DEFAULT_HIDE_ROOFS,
 		"and reset restores it")
 
 	_clean()

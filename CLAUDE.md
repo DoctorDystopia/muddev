@@ -182,7 +182,7 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3003 tests, ~23 min,
+**Before a merge or a major change**, run the full suite (3020 tests, ~26 min,
 measured 09/26/2026):
 
 ```bash
@@ -856,8 +856,9 @@ Four rules:
 
 The tile world is the only world since Phase 4b (09/25/2026). The xyzgrid
 maps are in `archive/xyzgrid-maps/`. Phase 6 (the walk limit and line of
-sight) is done since 09/26/2026. Phase 7 (planes) is open: step 7a, the
-server, is done. Steps 7b (the client) and 7c (the editor) are not. The design is
+sight) is done since 09/26/2026. Phase 7 (planes) is done in code since
+09/26/2026: the server (7a), the client (7b), and the editor (7c). Bridges
+are a later step. The design is
 [docs/2026-09-23-DESIGN-0011-terrain-verticality-fog.md](docs/2026-09-23-DESIGN-0011-terrain-verticality-fog.md).
 The state of each phase and the next steps are in
 [docs/2026-09-24-HANDOFF-0001-tile-grid.md](docs/2026-09-24-HANDOFF-0001-tile-grid.md).
@@ -884,8 +885,12 @@ Read the handoff before you continue this work.
 | Line of sight, and reach with sight (`can_strike`) | `systems/core/tilegrid/sight.py`, `systems/gameplay/combat/reach.py` |
 | The sweep of empty tile rooms | `systems/core/tilegrid/sweep.py` |
 | The room Z of each plane, `TilePlane`, and `climb` | `systems/core/tilegrid/planes.py`, `world.py`, `world/tile_travel.py` |
+| Planes in the client, and "Hide roofs" | `godot/world/world_state.gd`, `godot/world/terrain/terrain_view.gd` |
+| The water surface | `godot/world/terrain/water_mesh_builder.gd` |
+| The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
+| The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/terrain_sync_state.gd` |
 
-Seven rules:
+Eight rules:
 
 - **A tile room stores no fact about its tile.** The pool moves a room to
   another tile. Thus, a name, a sign label, or a reference to "the room where
@@ -898,6 +903,10 @@ Seven rules:
 - **Both chunk file readers change together.** The parity test is
   `test_chunkfile.py` plus `godot/tests/test_chunk_file.gd`. A Python guard
   fails if their lists of refused files differ.
+- **Both content checks change together.** `world/tile_checks.py` and
+  `terrain_checks.gd` check one fixture world against one `expected.json`.
+  A new rule is a function in each, an exported rule name, and a case in
+  `world/tests/check_fixture_builder.py`.
 - **Never retag a room through `tags.remove` and `tags.add` on a step.** Each
   call re-reads all tags of the room. `TileRooms._retag` writes the join rows.
 - **The tile grid constants live in `systems/core/tilegrid/constants.py`.**

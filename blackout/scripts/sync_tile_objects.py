@@ -14,6 +14,11 @@ Description: Operator script. Makes the objects on the tile grid match the
              The server keeps the tile room index in memory. Stop the server
              first, or run `evennia reload` after --apply.
 
+             --apply also writes the tile sync stamp
+             (`systems/core/tilegrid/syncstamp.py`): a digest of each chunk
+             file. The Godot terrain editor reads it and names each chunk
+             file that changed since.
+
              Run from blackout/:
                  ../evenv/Scripts/python.exe scripts/sync_tile_objects.py
                  ../evenv/Scripts/python.exe scripts/sync_tile_objects.py --apply
@@ -80,8 +85,19 @@ def main(argv):
         return
 
     destroyed = tile_sync.apply(world, actions)
+    _write_stamp()
     print(f"Applied. Teardown destroyed {destroyed} objects. "
           "Reload the server now.")
+
+
+def _write_stamp() -> None:
+    """Record the chunk files that this sync applied, for the editor."""
+    from systems.core.tilegrid import syncstamp
+    from systems.core.tilegrid.world import chunk_directory
+
+    path = syncstamp.stamp_path(_GAME_DIR)
+    syncstamp.write_stamp(chunk_directory(), path)
+    print(f"Wrote the tile sync stamp: {path}")
 
 
 if __name__ == "__main__":

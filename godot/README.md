@@ -310,9 +310,10 @@ tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
 
 | Part | Where | What it does |
 |---|---|---|
-| The chunk channel | server `events.emit_tile_chunks` | Sends each chunk of the 3 x 3 block around the player, one time for each session. A resync sends the block again |
-| The model | `world/world_state.gd` | Keeps the chunks in one `ChunkSet`, and frees a chunk outside the block. The server forgets the same chunks |
-| The ground | `world/terrain/terrain_view.gd` | One mesh for each chunk, from `ChunkMeshBuilder`, the class of the editor |
+| The chunk channel | server `events.emit_tile_chunks` | Sends each chunk of the 3 x 3 block around the player, on every plane, one time for each session. The plane of the player goes first. A resync sends the block again |
+| The model | `world/world_state.gd` | Keeps one `ChunkSet` for each plane, and frees a chunk outside the block. The server forgets the same chunks. `chunks` is the set of the plane of the player |
+| The ground | `world/terrain/terrain_view.gd` | One mesh for each chunk of each plane, from `ChunkMeshBuilder`, the class of the editor. It builds one chunk each frame, the chunk under the player first |
+| The water | `world/terrain/water_mesh_builder.gd` | A flat surface on each water tile, at the height of its highest corner. The editor draws it with the same class |
 | The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
 | The pick | `WorldView._cell_under` | `TerrainPicking.ray_hit` on the height grid. No collision shape |
 | The area look | `WorldView._place_marker` | The area of the tile under the player, from its chunk, goes to `AreaEnvironment` |
@@ -337,6 +338,24 @@ Four rules:
 
 A hover mark shows on the tile under the cursor when a click there acts. It
 is the true tile square in `WorldView.COLOR_HOVER`.
+
+### Planes (DESIGN-0011 Phase 7b)
+
+The Z of the room of the player gives its plane: `tile_world` is plane 0, and
+`tile_world_p<p>` is plane p. `WorldState.plane_of_z` is the twin of the
+Python `planes.plane_of_z`, from the same generated names.
+
+- **Each plane draws at its own heights.** A plane-1 chunk stores absolute
+  corner heights, so no offset applies.
+- **A void tile has no floor.** `ChunkMeshBuilder` draws no triangle on a
+  tile of the floor type `void`, so the plane below shows through. The
+  minimap draws it clear.
+- **Hide roofs.** Options has a "Hide roofs" box, on by default
+  (`ClientSettings.hide_roofs`). On, it hides every plane above the plane of
+  the player.
+- **The reads of the player read the plane of the player.** The ground
+  height, the pick, the minimap, and `tile_action` read `WorldState.chunks`.
+  An entity stands on the ground of the plane in its own Z.
 
 ## The entity pool holds one entry per id
 
@@ -1091,10 +1110,32 @@ To use it:
 
 1. Open `res://addons/blackout_terrain/terrain_editor.tscn`.
 2. Select the `TerrainWorld` node. The Terrain panel opens on the right.
-3. Set the centre chunk and click **Load block**.
-4. Pick a brush, then drag with the left button. Shift reverses the brush.
-5. Press Ctrl+S. The plugin writes each changed chunk to
+3. On the **World** tab, set the centre chunk and the plane. Click
+   **Load block**.
+4. On the **Paint** tab, pick a brush. Drag with the left button. Shift
+   reverses the brush.
+5. Click **Check world** on the **World** tab. Fix each finding.
+6. Press Ctrl+S. The plugin writes each changed chunk to
    `blackout/world/chunks/`.
+7. Stop the server, run `scripts/sync_tile_objects.py --apply` from
+   `blackout/`, and start the server. The World tab names each chunk file
+   that changed since the last sync.
+
+The panel has three tabs:
+
+| Tab | Holds |
+|---|---|
+| Paint | The tool, the brush size and strength, the floor, the area, the object kind and rotation, the flags, and the noise |
+| Objects | The selected object with **Turn**, **Delete**, **Set kind to the Object choice**, and **Follow link**. A list of every object in the block. A click on a row selects it |
+| World | The centre chunk and the plane, load and save, the marks to show, **Check world** and its findings, and the state of the tile sync |
+
+The **Select** tool picks an object on a click. A second click on the same
+tile picks the next object there. A drag moves the selected object to another
+tile. A tall magenta beacon marks the selection, or the tile of a finding.
+
+**Follow link** loads the block where the selected object leads: the target
+of a transition, or the same tile one plane up or down for a climb. A click
+on a finding loads its block and plane in the same way.
 
 The rules that the editor keeps:
 
@@ -1118,6 +1159,29 @@ The rules that the editor keeps:
   integer heights, because the server cannot run Godot's noise. The seed, the
   frequency, and the amplitude persist in `terrain_editor.cfg`, beside the
   plugin, so every author gets the same noise.
+- **A new chunk above the ground starts from the chunk below.** Its heights
+  are those below plus 32 height steps (two tiles). Every tile is `void` and
+  Blocked, and the areas are those below. A floor paint on a void tile clears
+  Blocked, and a `void` paint sets it. The planes below show dim.
+- **A move of the block clears the undo history.** An edit keys on world
+  tiles, with no plane. The move saves the old block first. Thus, an undo
+  after the move would write into the wrong plane or a chunk that is not
+  loaded. `TerrainWorld.replay_edit` also refuses an edit of another block.
+- **Check world runs the rules of the server.** `terrain_checks.gd` is the
+  twin of `blackout/world/tile_checks.py`. Each transition and each climb
+  lands on an open tile. Each object stands on a walkable tile. Each void
+  tile is Blocked. The world has one respawn point. The check reads the files
+  on disk, with the unsaved block in place. The two twins check one fixture
+  world against one `expected.json`.
+- **The links show where an object leads.** A transition draws an arc to its
+  target, or a stub toward a target outside the block. A climb draws a post
+  up or down. The targets and the ways come from
+  `blackout/world/object_kinds.py`, through the generated constants. A new
+  sign or transition is still one row there (Nick, 09/26/2026).
+- **The tile sync stamp.** `sync_tile_objects.py --apply` writes
+  `blackout/server/tile_sync_state.json`, a digest of each chunk file. The
+  World tab compares the files with it. Git ignores the stamp, because it
+  describes the dev database.
 
 The brushes follow the workflow of Low Poly Terrain Builder (MIT). None of its
 code is here: its Delaunay mesh cannot give a floor colour to one tile or put a
@@ -1177,8 +1241,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All fifty-three tests are headless and exit non-zero on failure. Fifty need
-nothing running. Three of the four `smoke_*` scenes need an Evennia, and
+All fifty-four tests are headless and exit non-zero on failure. Fifty-one
+need nothing running. Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.

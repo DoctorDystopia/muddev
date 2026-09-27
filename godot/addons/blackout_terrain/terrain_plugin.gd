@@ -1,18 +1,28 @@
 @tool
 extends EditorPlugin
 ## The Blackout terrain editor: routes the mouse in the 3D viewport to the
-## brushes, and each stroke to the editor history.
+## brushes, each stroke to the editor history, and each dock button to the
+## [TerrainWorld].
 ##
 ## DESIGN-0011 section 6.3. Select a [TerrainWorld] node, for example in
 ## `res://addons/blackout_terrain/terrain_editor.tscn`, to start. The panel
-## is [TerrainDock]. The rules live in [TerrainBrushes], [TerrainEdit], and
-## [ChunkSet], and `tests/test_terrain_editing.tscn` tests them with no
-## editor. This script only decides which rule a click calls.
+## is [TerrainDock]. The rules live in [TerrainBrushes], [TerrainEdit],
+## [TerrainChecks], and [ChunkSet], and the `tests/test_terrain_*.tscn`
+## scenes test them with no editor. This script only decides which rule a
+## click calls.
 ##
 ## ## One stroke, one undo entry
 ##
 ## A press starts a [TerrainEdit]. Each dab adds to it. The release puts it in
 ## the history as one entry, so Ctrl+Z undoes the whole stroke.
+##
+## ## A move of the block clears the undo history
+##
+## An edit keys on world tiles, with no plane. A move to another block or
+## plane saves the old block, so an undo there would change a file that is no
+## longer loaded, or write into the wrong plane. Thus, each load of a block
+## clears the history of the edited scene. [method TerrainWorld.replay_edit]
+## also refuses an edit of another block.
 ##
 ## ## Saving
 ##
@@ -25,6 +35,11 @@ const DAB_INTERVAL := 0.12
 
 ## Tiles the mouse must move before a drag makes a new dab.
 const DAB_SPACING := 0.35
+
+const _Const := preload("res://autoload/blackout_constants.gd")
+
+## The ring of the Select tool, in tiles.
+const SELECT_RING := 0.5
 
 var _dock: TerrainDock
 var _world: TerrainWorld
@@ -39,6 +54,9 @@ var _flatten_target := 0
 var _ramp_start: Variant = null
 var _ramp_start_height := 0
 
+## The Select tool drags the selected object from this tile, or null.
+var _drag_from: Variant = null
+
 
 func _enter_tree() -> void:
 	_dock = TerrainDock.new()
@@ -46,6 +64,10 @@ func _enter_tree() -> void:
 	_dock.save_requested.connect(_on_save_requested)
 	_dock.noise_fill_requested.connect(_on_noise_fill_requested)
 	_dock.overlays_changed.connect(_on_overlays_changed)
+	_dock.selection_action.connect(_on_selection_action)
+	_dock.object_chosen.connect(_on_object_chosen)
+	_dock.check_requested.connect(_on_check_requested)
+	_dock.finding_chosen.connect(_on_finding_chosen)
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 	set_process(true)
 
@@ -60,14 +82,21 @@ func _handles(object: Object) -> bool:
 
 
 func _edit(object: Object) -> void:
+	if _world != null and _world.block_loaded.is_connected(_on_block_loaded):
+		_world.block_loaded.disconnect(_on_block_loaded)
+
 	_world = object as TerrainWorld
 
-	if _world != null:
-		_dock.set_centre(_world.centre_chunk)
-		_report_block()
+	if _world == null:
+		return
+
+	_world.block_loaded.connect(_on_block_loaded)
+	_on_overlays_changed()
+	_refresh_dock()
+	_report_block()
 
 
-# ─── Saving ─────────────────────────────────────────────────────────────────
+# ─── Saving and loading ─────────────────────────────────────────────────────
 
 func _save_external_data() -> void:
 	if _world != null and _world.has_unsaved_changes():
@@ -89,26 +118,38 @@ func _on_save_requested() -> void:
 
 	_dock.set_status("Saved %d chunk file(s): %s" % [saved.size(),
 		", ".join(saved)])
+	_refresh_sync_state()
 
 
-func _on_load_requested(centre: Vector2i) -> void:
+func _on_load_requested(centre: Vector2i, plane: int) -> void:
 	if _world == null:
 		return
 
-	_world.centre_chunk = centre
+	_world.move_block(centre, plane)
+
+
+## Every load of a block: a move, a plane change, a jump, or a link.
+func _on_block_loaded() -> void:
+	var history := get_undo_redo()
+
+	history.clear_history(history.get_object_history_id(_world))
+	_refresh_dock()
 	_report_block()
 
 
-func _on_overlays_changed(show_flags: bool, show_areas: bool) -> void:
+func _on_overlays_changed() -> void:
 	if _world == null:
 		return
 
-	_world.show_flags = show_flags
-	_world.show_areas = show_areas
+	_world.show_flags = _dock.show_flags()
+	_world.show_areas = _dock.show_areas()
+	_world.show_links = _dock.show_links()
+	_world.show_lower_planes = _dock.show_lower_planes()
 
 
 func _report_block() -> void:
-	var lines := PackedStringArray(["Block around chunk %s." % _world.centre_chunk])
+	var lines := PackedStringArray(["Block around chunk %s, plane %d."
+		% [_world.centre_chunk, _world.plane]])
 
 	lines.append_array(_world.load_errors)
 
@@ -116,6 +157,23 @@ func _report_block() -> void:
 		lines.append("Seam: " + mismatch)
 
 	_dock.set_status("\n".join(lines))
+
+
+## The block, the objects, the selection, and the sync state in the dock.
+func _refresh_dock() -> void:
+	_dock.set_block(_world.centre_chunk, _world.plane)
+	_dock.set_objects(_world.objects_in_block())
+	_dock.set_selection(_world.selected, _world.selected_link_end())
+	_refresh_sync_state()
+
+
+func _refresh_sync_state() -> void:
+	if not _world.chunk_directory.is_empty():
+		_dock.set_sync_state("A scratch directory: no tile sync applies.")
+		return
+
+	_dock.set_sync_state(TerrainSyncState.describe(_world.directory(),
+		TerrainSyncState.stamp_path()))
 
 
 # ─── The mouse ──────────────────────────────────────────────────────────────
@@ -148,6 +206,12 @@ func _pick(camera: Camera3D, screen: Vector2) -> Variant:
 func _on_motion(camera: Camera3D, event: InputEventMouseMotion) -> int:
 	var point: Variant = _pick(camera, event.position)
 
+	if _dock.current_tool() == TerrainDock.Tool.SELECT:
+		var ring: Variant = null if point == null else Vector2(ChunkSet.tile_at(point))
+
+		_world.show_ring(ring, SELECT_RING)
+		return AFTER_GUI_INPUT_STOP if _drag_from != null else AFTER_GUI_INPUT_PASS
+
 	_world.show_ring(point, _dock.radius())
 
 	if not _stroking or point == null:
@@ -160,14 +224,10 @@ func _on_motion(camera: Camera3D, event: InputEventMouseMotion) -> int:
 
 
 func _on_left_button(camera: Camera3D, event: InputEventMouseButton) -> int:
-	if not event.pressed:
-		if _stroking:
-			_end_stroke()
-			return AFTER_GUI_INPUT_STOP
-
-		return AFTER_GUI_INPUT_PASS
-
 	var point: Variant = _pick(camera, event.position)
+
+	if not event.pressed:
+		return _on_release(point)
 
 	if point == null:
 		return AFTER_GUI_INPUT_PASS
@@ -179,10 +239,24 @@ func _on_left_button(camera: Camera3D, event: InputEventMouseButton) -> int:
 			_ramp_click(point)
 		TerrainDock.Tool.OBJECT:
 			_object_click(point)
+		TerrainDock.Tool.SELECT:
+			_select_press(ChunkSet.tile_at(point))
 		_:
 			_start_stroke(point)
 
 	return AFTER_GUI_INPUT_STOP
+
+
+func _on_release(point: Variant) -> int:
+	if _drag_from != null:
+		_end_drag(point)
+		return AFTER_GUI_INPUT_STOP
+
+	if _stroking:
+		_end_stroke()
+		return AFTER_GUI_INPUT_STOP
+
+	return AFTER_GUI_INPUT_PASS
 
 
 func _process(delta: float) -> void:
@@ -200,7 +274,7 @@ func _process(delta: float) -> void:
 func _start_stroke(point: Vector2) -> void:
 	var corner := Vector2i(roundi(point.x + 0.5), roundi(point.y + 0.5))
 
-	_stroke = TerrainEdit.new()
+	_stroke = TerrainEdit.for_world(_world)
 	_stroking = true
 	_flatten_target = _world.chunks.get_corner(corner)
 	_dab(point)
@@ -223,8 +297,11 @@ func _commit(edit: TerrainEdit, label: String) -> void:
 	history.create_action("Terrain: " + label, UndoRedo.MERGE_DISABLE, _world)
 	history.add_do_method(_world, "replay_edit", edit, true)
 	history.add_undo_method(_world, "replay_edit", edit, false)
+	history.add_do_method(self, "_refresh_dock")
+	history.add_undo_method(self, "_refresh_dock")
 	history.commit_action(false)
 	_dock.set_status("%s: %d change(s)." % [label, edit.size()])
+	_refresh_dock()
 
 
 func _dab(point: Vector2) -> void:
@@ -289,11 +366,23 @@ func _paint(tool_index: int, point: Vector2) -> void:
 
 		match tool_index:
 			TerrainDock.Tool.FLOOR:
-				_stroke.apply_floor(chunks, tile, _dock.floor_name())
+				_paint_floor(tile, _dock.floor_name())
 			TerrainDock.Tool.AREA:
 				_stroke.apply_area(chunks, tile, _dock.area_name())
 			TerrainDock.Tool.FLAGS:
 				_stroke.apply_flags(chunks, tile, _flagged(chunks.get_flags(tile)))
+
+
+## A floor paint, and the Blocked flag that a void tile needs (Phase 7c).
+func _paint_floor(tile: Vector2i, floor_name: String) -> void:
+	var chunks := _world.chunks
+	var flags := TerrainBrushes.flags_after_floor(chunks.get_floor(tile),
+		floor_name, chunks.get_flags(tile))
+
+	_stroke.apply_floor(chunks, tile, floor_name)
+
+	if flags != chunks.get_flags(tile):
+		_stroke.apply_flags(chunks, tile, flags)
 
 
 func _flagged(flags: int) -> int:
@@ -313,7 +402,7 @@ func _ramp_click(point: Vector2) -> void:
 			% [corner, _ramp_start_height])
 		return
 
-	var edit := TerrainEdit.new()
+	var edit := TerrainEdit.for_world(_world)
 	var end := TerrainBrushes.corner_point(corner)
 	var changes := TerrainBrushes.ramp(_world.chunks, _ramp_start, end,
 		_dock.radius() * 2.0, _ramp_start_height, _world.chunks.get_corner(corner))
@@ -329,7 +418,7 @@ func _ramp_click(point: Vector2) -> void:
 func _object_click(point: Vector2) -> void:
 	var chunks := _world.chunks
 	var tile := ChunkSet.tile_at(point)
-	var edit := TerrainEdit.new()
+	var edit := TerrainEdit.for_world(_world)
 
 	if not chunks.has_tile(tile):
 		return
@@ -345,6 +434,7 @@ func _object_click(point: Vector2) -> void:
 		edit.remove_object(chunks, tile, last["kind"], last["rotation"])
 	else:
 		edit.add_object(chunks, tile, _dock.kind(), _dock.object_rotation())
+		_world.select(tile, _dock.kind(), _dock.object_rotation())
 
 	_world.queue_rebuild(edit.chunk_coords())
 	_commit(edit, "Object")
@@ -354,10 +444,148 @@ func _on_noise_fill_requested() -> void:
 	if _world == null:
 		return
 
-	var edit := TerrainEdit.new()
+	var edit := TerrainEdit.for_world(_world)
 	var changes := TerrainBrushes.noise_fill(_world.chunks, _world.centre_chunk,
 		_dock.make_noise(), _dock.noise_amplitude())
 
 	edit.apply_heights(_world.chunks, changes)
 	_world.queue_rebuild(edit.chunk_coords())
 	_commit(edit, "Noise fill")
+
+
+# ─── The Select tool ────────────────────────────────────────────────────────
+
+## Select an object on `tile`. A press on the tile of the selection picks
+## the next object there, so a stack of objects can each be reached. The
+## press also starts a drag of the selection.
+func _select_press(tile: Vector2i) -> void:
+	var here := _world.chunks.objects_at(tile)
+
+	if here.is_empty():
+		_world.clear_selection()
+		_refresh_dock()
+		return
+
+	var index := 0
+
+	if not _world.selected.is_empty() and _world.selected["tile"] == tile:
+		index = (_index_on_tile(here) + 1) % here.size()
+
+	_world.select(tile, here[index]["kind"], here[index]["rotation"])
+	_drag_from = tile
+	_refresh_dock()
+
+
+func _index_on_tile(here: Array[Dictionary]) -> int:
+	for index: int in here.size():
+		if here[index]["kind"] == _world.selected["kind"] \
+				and here[index]["rotation"] == _world.selected["rotation"]:
+			return index
+
+	return -1
+
+
+## Drop the dragged object on the tile under the mouse.
+func _end_drag(point: Variant) -> void:
+	var from: Vector2i = _drag_from
+
+	_drag_from = null
+
+	if point == null or _world.selected.is_empty():
+		return
+
+	var to := ChunkSet.tile_at(point)
+
+	if to == from or not _world.chunks.has_tile(to):
+		return
+
+	_replace_selected(to, _world.selected["kind"], _world.selected["rotation"],
+		"Move object")
+
+
+## Replace the selected object with one at `tile` of `kind` and `rotation`,
+## as one undo entry, and select the new one.
+func _replace_selected(tile: Vector2i, kind: String, rotation: int,
+		label: String) -> void:
+	var chunks := _world.chunks
+	var edit := TerrainEdit.for_world(_world)
+	var old: Dictionary = _world.selected
+
+	edit.remove_object(chunks, old["tile"], old["kind"], old["rotation"])
+	edit.add_object(chunks, tile, kind, rotation)
+	_world.select(tile, kind, rotation)
+	_world.queue_rebuild(edit.chunk_coords())
+	_commit(edit, label)
+
+
+func _on_selection_action(action: String) -> void:
+	if _world == null or _world.selected.is_empty():
+		return
+
+	var chosen: Dictionary = _world.selected
+	var turned: int = (chosen["rotation"] + 1) % _Const.CHUNK_ROTATION_COUNT
+
+	match action:
+		TerrainDock.ACTION_TURN:
+			_replace_selected(chosen["tile"], chosen["kind"], turned, "Turn object")
+		TerrainDock.ACTION_SET_KIND:
+			_replace_selected(chosen["tile"], _dock.kind(), chosen["rotation"],
+				"Set object kind")
+		TerrainDock.ACTION_DELETE:
+			_delete_selected()
+		TerrainDock.ACTION_FOLLOW:
+			_follow_link()
+
+
+func _delete_selected() -> void:
+	var chosen: Dictionary = _world.selected
+	var edit := TerrainEdit.for_world(_world)
+
+	edit.remove_object(_world.chunks, chosen["tile"], chosen["kind"], chosen["rotation"])
+	_world.clear_selection()
+	_world.queue_rebuild(edit.chunk_coords())
+	_commit(edit, "Delete object")
+
+
+func _follow_link() -> void:
+	var end := _world.selected_link_end()
+
+	if end.is_empty():
+		return
+
+	_world.jump_to(end["tile"], end["plane"])
+	_refresh_dock()
+	_dock.set_status("Followed the link to %s, plane %d." % [end["tile"], end["plane"]])
+
+
+func _on_object_chosen(thing: Dictionary) -> void:
+	if _world == null:
+		return
+
+	_world.select(thing["tile"], thing["kind"], thing["rotation"])
+	_dock.select_tool(TerrainDock.Tool.SELECT)
+	_dock.set_selection(_world.selected, _world.selected_link_end())
+
+
+# ─── Check world ────────────────────────────────────────────────────────────
+
+func _on_check_requested() -> void:
+	if _world == null:
+		return
+
+	var errors := PackedStringArray()
+	var files := _world.world_chunk_files(errors)
+	var found := TerrainChecks.check_world(files)
+
+	_dock.set_findings(found, errors)
+	_dock.set_status("Check world: %d chunk file(s), %d finding(s)."
+		% [files.size(), found.size() + errors.size()])
+
+
+func _on_finding_chosen(finding: Dictionary) -> void:
+	if _world == null:
+		return
+
+	_world.jump_to(Vector2i(finding["x"], finding["y"]), finding["plane"])
+	_refresh_dock()
+	_dock.set_status(TerrainChecks.describe(finding))

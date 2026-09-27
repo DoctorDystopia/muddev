@@ -1,7 +1,7 @@
 class_name TerrainOverlay
 extends RefCounted
 ## The editor-only marks drawn over the terrain: walk flags, walls, areas,
-## chunk borders, object markers, and the brush ring.
+## chunk borders, object markers, links, and the brush ring.
 ##
 ## None of this is what a player sees. The ground itself comes from
 ## [ChunkMeshBuilder], the same as in the client. These marks only show the
@@ -37,7 +37,17 @@ const CATEGORY_COLORS := {
 	_Const.OBJECT_CATEGORY_NPC: Color("ff5f56"),
 	_Const.OBJECT_CATEGORY_SIGN: Color("f0c674"),
 	_Const.OBJECT_CATEGORY_TRANSITION: Color("4fc1e9"),
+	_Const.OBJECT_CATEGORY_CLIMB: Color("e9954f"),
 }
+
+## The height of a link over the ground, and the highest point of an arc.
+const LINK_LIFT := 0.6
+const LINK_ARC_MAX := 4.0
+const LINK_ARC_SEGMENTS := 16
+
+## The length of the stub of a transition whose target is not loaded, in
+## tiles.
+const LINK_STUB := 2.5
 
 const COLOR_UNKNOWN_KIND := Color(1.0, 0.0, 1.0)
 
@@ -214,6 +224,124 @@ static func ring_mesh(chunks: ChunkSet, centre: Vector2, radius: float) -> Array
 		tool.add_vertex(ground_point(chunks, b, LIFT * 3.0))
 
 	return tool.commit()
+
+
+# ─── Links ──────────────────────────────────────────────────────────────────
+
+## True when an object of this kind leads somewhere: a transition or a climb.
+static func has_link(kind: String) -> bool:
+	return _Const.OBJECT_KIND_TARGETS.has(kind) or _Const.OBJECT_KIND_CLIMBS.has(kind)
+
+
+## The lines of every link of `linked` (`{tile, kind, rotation}` each). A
+## transition draws an arc to its target when the target is loaded, and a
+## stub toward it when not. A climb draws a post up or down, as far as the
+## next plane starts ([constant TerrainWorld.NEW_PLANE_RISE]).
+static func link_mesh(chunks: ChunkSet, linked: Array[Dictionary],
+		_plane: int) -> ArrayMesh:
+	var tool := SurfaceTool.new()
+
+	tool.begin(Mesh.PRIMITIVE_LINES)
+
+	for thing: Dictionary in linked:
+		var color := kind_color(thing["kind"])
+
+		for segment: Array in _link_segments(chunks, thing):
+			tool.set_color(color)
+			tool.add_vertex(segment[0])
+			tool.set_color(color)
+			tool.add_vertex(segment[1])
+
+	return tool.commit()
+
+
+## The labels of one link: where it leads, in words.
+static func link_labels(chunks: ChunkSet, thing: Dictionary,
+		plane: int) -> Array[Label3D]:
+	var labels: Array[Label3D] = []
+	var kind: String = thing["kind"]
+	var start := _link_start(chunks, thing["tile"])
+	var target: Array = _Const.OBJECT_KIND_TARGETS.get(kind, [])
+
+	if not target.is_empty():
+		labels.append(_label("-> (%d, %d)" % [target[0], target[1]],
+			start + Vector3.UP * 0.4, kind_color(kind)))
+
+	for way: String in _Const.OBJECT_KIND_CLIMBS.get(kind, []):
+		var step: int = _Const.CLIMB_PLANE_STEPS[way]
+		var top := start + Vector3.UP * _climb_height() * step
+
+		labels.append(_label("%s -> plane %d" % [way, plane + step], top,
+			kind_color(kind)))
+
+	return labels
+
+
+static func _link_segments(chunks: ChunkSet, thing: Dictionary) -> Array:
+	var kind: String = thing["kind"]
+	var tile: Vector2i = thing["tile"]
+	var start := _link_start(chunks, tile)
+	var segments := []
+	var target: Array = _Const.OBJECT_KIND_TARGETS.get(kind, [])
+
+	if not target.is_empty():
+		segments.append_array(_transition_segments(chunks, tile,
+			Vector2i(target[0], target[1])))
+
+	for way: String in _Const.OBJECT_KIND_CLIMBS.get(kind, []):
+		var step: int = _Const.CLIMB_PLANE_STEPS[way]
+
+		segments.append([start, start + Vector3.UP * _climb_height() * step])
+
+	return segments
+
+
+static func _transition_segments(chunks: ChunkSet, tile: Vector2i,
+		target: Vector2i) -> Array:
+	var start := _link_start(chunks, tile)
+
+	if not chunks.has_tile(target):
+		var toward := Vector2(target - tile).normalized() * LINK_STUB
+		var stub := ground_point(chunks, Vector2(tile) + toward, LINK_LIFT)
+
+		return [[start, stub]]
+
+	var end := _link_start(chunks, target)
+	var rise := minf(LINK_ARC_MAX, start.distance_to(end) * 0.25)
+	var segments := []
+
+	for index: int in LINK_ARC_SEGMENTS:
+		var a := _arc_point(start, end, rise, float(index) / LINK_ARC_SEGMENTS)
+		var b := _arc_point(start, end, rise, float(index + 1) / LINK_ARC_SEGMENTS)
+
+		segments.append([a, b])
+
+	return segments
+
+
+static func _arc_point(start: Vector3, end: Vector3, rise: float,
+		along: float) -> Vector3:
+	return start.lerp(end, along) + Vector3.UP * rise * 4.0 * along * (1.0 - along)
+
+
+static func _link_start(chunks: ChunkSet, tile: Vector2i) -> Vector3:
+	return ground_point(chunks, Vector2(tile), LINK_LIFT)
+
+
+static func _climb_height() -> float:
+	return TerrainWorld.NEW_PLANE_RISE * ChunkMeshBuilder.HEIGHT_STEP
+
+
+static func _label(text: String, at: Vector3, color: Color) -> Label3D:
+	var label := Label3D.new()
+
+	label.text = text
+	label.position = at
+	label.modulate = color
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.pixel_size = 0.004
+
+	return label
 
 
 ## The colour of the marker of an object kind.

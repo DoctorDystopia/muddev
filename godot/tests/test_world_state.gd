@@ -26,6 +26,10 @@ func _ready() -> void:
 	_the_server_decides_what_a_near_tile_affords()
 	_a_far_tile_walks_by_the_server_template()
 	_the_hash_matches_the_browser()
+	_the_plane_comes_from_the_room_z()
+	_each_plane_keeps_its_own_chunks()
+	_a_figure_stands_on_the_ground_of_its_plane()
+	_a_move_frees_far_chunks_on_every_plane()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -193,6 +197,70 @@ func _the_hash_matches_the_browser() -> void:
 # ─── Private helpers ─────────────────────────────────────────────────────────
 
 ## A chunk file as the feed sends it: the JSON of its text, parsed by Godot.
+func _the_plane_comes_from_the_room_z() -> void:
+	# Phase 7b. The twin of `planes.plane_of_z` in Python.
+	_expect(WorldState.plane_of_z(_Const.TILE_WORLD_Z) == 0, "the world Z is plane 0")
+	_expect(WorldState.plane_of_z(_Const.TILE_WORLD_Z + "_p2") == 2,
+		"the template gives plane 2")
+	_expect(WorldState.plane_of_z(_Const.TILE_WORLD_Z + "_pool") == -1,
+		"a pool Z is no plane")
+	_expect(WorldState.plane_of_z(WorldState.plane_z(_Const.CHUNK_PLANE_MAX + 1)) == -1,
+		"a plane past the top is no plane")
+
+	var state := WorldState.new()
+
+	state.ingest_room_info({"coords": [1.0, 1.0, WorldState.plane_z(1)]})
+
+	_expect(state.current_plane == 1, "the room Z sets the plane")
+	_expect(state.on_tile_world(), "plane 1 is on the tile world")
+
+
+func _each_plane_keeps_its_own_chunks() -> void:
+	var state := WorldState.new()
+	var upper := ChunkFile.blank(0, 0, 1)
+
+	upper.floors.fill(0)
+	upper.floor_names = PackedStringArray([_Const.TILE_VOID_FLOOR])
+	state.ingest_chunk(_payload(ChunkFile.blank(0, 0)))
+	state.ingest_chunk(_payload(upper))
+	state.ingest_room_info({"coords": [_HOME.x, _HOME.y, _Const.TILE_WORLD_Z]})
+
+	_expect(str(state.planes_held()) == "[0, 1]", "both planes are held")
+	_expect(state.chunks.get_floor(_HOME) == _Const.TILE_DEFAULT_FLOOR,
+		"on plane 0 the reads see plane 0")
+
+	state.ingest_room_info({"coords": [_HOME.x, _HOME.y, WorldState.plane_z(1)]})
+
+	_expect(state.chunks.get_floor(_HOME) == _Const.TILE_VOID_FLOOR,
+		"after a climb the reads see plane 1")
+
+
+func _a_figure_stands_on_the_ground_of_its_plane() -> void:
+	var state := WorldState.new()
+	var upper := ChunkFile.blank(0, 0, 1)
+
+	upper.heights.fill(32)
+	state.ingest_chunk(_payload(ChunkFile.blank(0, 0)))
+	state.ingest_chunk(_payload(upper))
+	state.ingest_room_info({"coords": [_HOME.x, _HOME.y, _Const.TILE_WORLD_Z]})
+
+	_expect(is_equal_approx(float(state.ground_y(_HOME)), 0.0),
+		"the plane of the observer by default")
+	_expect(is_equal_approx(float(state.ground_y(_HOME, 1)),
+		32.0 * ChunkMeshBuilder.HEIGHT_STEP), "plane 1 at its own heights")
+
+
+func _a_move_frees_far_chunks_on_every_plane() -> void:
+	var state := WorldState.new()
+	var far := Vector2i(_Const.CHUNK_STREAM_RADIUS + 2, 0)
+
+	state.ingest_chunk(_payload(ChunkFile.blank(far.x, far.y, 1)))
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [_HOME.x, _HOME.y, _Const.TILE_WORLD_Z]})
+
+	_expect(not state.plane_chunks(1).has_chunk(far),
+		"a plane-1 chunk past the block goes too")
+
+
 func _payload(chunk: ChunkFile) -> Dictionary:
 	return {"chunk_file": JSON.parse_string(chunk.to_text())}
 

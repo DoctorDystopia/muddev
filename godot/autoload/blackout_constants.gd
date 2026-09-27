@@ -105,6 +105,7 @@ const CHUNK_ROTATION_COUNT := 4
 const CHUNK_NAME_PATTERN := "^[a-z0-9_]+$"
 const CHUNK_FILE_TEMPLATE := "chunk_{cx}_{cy}_p{plane}.json"
 const CHUNK_DIRECTORY := "world/chunks"
+const TILE_SYNC_STAMP_FILE := "server/tile_sync_state.json"
 const CHUNK_STREAM_RADIUS := 1
 const TILE_WORLD_Z := "tile_world"
 const TILE_WALK_LIMIT := 16
@@ -125,12 +126,25 @@ const OBJECT_CATEGORY_TRANSITION := "transition"
 const OBJECT_CATEGORY_CLIMB := "climb"
 const TILE_DEFAULT_FLOOR := "sand"
 const TILE_DEFAULT_AREA := "oasis"
+const TILE_GROUND_PLANE := 0
+const TILE_PLANE_Z_TEMPLATE := "{world}_p{plane}"
+const TILE_VOID_FLOOR := "void"
+const TILE_RESPAWN_KIND := "respawn_point"
+const CLIMB_UP := "up"
+const CLIMB_DOWN := "down"
+const TILE_CHECK_UNKNOWN_KIND := "unknown_kind"
+const TILE_CHECK_OBJECT_UNWALKABLE := "object_unwalkable"
+const TILE_CHECK_TRANSITION_LANDING := "transition_landing"
+const TILE_CHECK_CLIMB_LANDING := "climb_landing"
+const TILE_CHECK_VOID_OPEN := "void_open"
+const TILE_CHECK_RESPAWN_COUNT := "respawn_count"
 
 # What the terrain editor paints and places. The order is
 # the order of each table under world/.
-const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed"]
+const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "void"]
 const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains"]
 const OBJECT_CATEGORIES := ["climb", "facility", "gathering", "landmark", "npc", "sign", "transition"]
+const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count"]
 const OBJECT_KINDS := {
 	"bank": "facility",
 	"foundry_furnace": "facility",
@@ -166,6 +180,23 @@ const OBJECT_KINDS := {
 	"stairs_down": "climb",
 	"transition_outskirts_to_azm_plains": "transition",
 	"transition_azm_plains_to_outskirts": "transition",
+}
+const OBJECT_KIND_TARGETS := {
+	"transition_oasis_to_outskirts": [72, 10],
+	"transition_outskirts_to_oasis": [1, 2],
+	"transition_outskirts_to_azm_plains": [129, 2],
+	"transition_azm_plains_to_outskirts": [73, 8],
+}
+const OBJECT_KIND_CLIMBS := {
+	"ladder_up": ["up"],
+	"ladder_down": ["down"],
+	"ladder_both": ["up", "down"],
+	"stairs_up": ["up"],
+	"stairs_down": ["down"],
+}
+const CLIMB_PLANE_STEPS := {
+	"up": 1,
+	"down": -1,
 }
 
 # Everything else.

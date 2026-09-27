@@ -13,6 +13,11 @@ extends Node
 ##    closed.
 ## 4. Undo through [method TerrainWorld.replay_edit] restores the heights.
 ## 5. A move of the block saves the changes first.
+## 6. A new plane-1 chunk starts from the chunk below, and plane 0 shows as
+##    a ghost under it (Phase 7c).
+## 7. An undo entry of another plane or block changes nothing.
+## 8. "Check world" sees the block over the files on disk.
+## 9. A jump loads the block of a tile, and a selection knows its link.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -40,6 +45,11 @@ func _ready() -> void:
 	_a_save_writes_legal_files_and_skips_the_broken_one(world)
 	_undo_restores_the_heights(world)
 	_a_move_saves_first(world)
+	_a_new_upper_chunk_starts_from_the_chunk_below(world)
+	_an_edit_of_another_plane_is_refused(world)
+	_the_world_files_put_the_block_over_the_disk(world)
+	_a_jump_loads_the_block_of_the_tile(world)
+	_a_selection_knows_its_link_and_an_undo_clears_it(world)
 	_remove_scratch()
 
 	if _failures > 0:
@@ -133,6 +143,99 @@ func _a_move_saves_first(world: TerrainWorld) -> void:
 
 	_expect(west.heights[corner_index] == 0, "the undone height was saved on the move")
 	_expect(world.chunks.has_chunk(Vector2i(5, 5)), "the new block is loaded")
+
+
+func _a_new_upper_chunk_starts_from_the_chunk_below(world: TerrainWorld) -> void:
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var tiles: int = _Const.CHUNK_SIZE * _Const.CHUNK_SIZE
+
+	world.move_block(Vector2i(1, 0), 1)
+
+	var upper := world.chunks.get_chunk(Vector2i(1, 0))
+
+	_expect(world.plane == 1 and upper.plane == 1, "the block is on plane 1")
+	_expect(upper.heights[5 * side + 5] == 7 + TerrainWorld.NEW_PLANE_RISE,
+		"a new plane-1 chunk has the heights below plus the rise")
+	_expect(upper.floor_names == PackedStringArray([_Const.TILE_VOID_FLOOR]),
+		"every tile of it is void")
+	_expect(upper.flags.count(_Const.TILE_FLAG_BLOCKED) == tiles,
+		"and Blocked")
+	_expect(not world.has_unsaved_changes(), "it is not saved before an edit")
+	_expect(world.ghost_count() == 2,
+		"the two plane-0 files that read show below, %d" % world.ghost_count())
+
+
+func _an_edit_of_another_plane_is_refused(world: TerrainWorld) -> void:
+	# The edit of the save case was made on plane 0, block (0, 0).
+	var corner := Vector2i(_Const.CHUNK_SIZE, 10)
+	var before := world.chunks.get_corner(corner)
+
+	_expect(not world.replay_edit(_edit_for_undo, true),
+		"an edit of plane 0 does not replay on plane 1")
+	_expect(world.chunks.get_corner(corner) == before, "and changes nothing")
+
+
+func _the_world_files_put_the_block_over_the_disk(world: TerrainWorld) -> void:
+	var tile := Vector2i(_Const.CHUNK_SIZE + 3, 3)
+	var edit := TerrainEdit.for_world(world)
+
+	edit.apply_floor(world.chunks, tile, "concrete")
+	edit.apply_flags(world.chunks, tile, 0)
+
+	var errors := PackedStringArray()
+	var files := world.world_chunk_files(errors)
+	var upper: Array[ChunkFile] = []
+
+	for chunk: ChunkFile in files:
+		if chunk.plane == 1:
+			upper.append(chunk)
+
+	_expect(errors.size() == 1, "the broken file is named")
+	_expect(upper.size() == 1 and upper[0] == world.chunks.get_chunk(Vector2i(1, 0)),
+		"only the edited plane-1 chunk joins, as it is in memory")
+
+
+func _a_jump_loads_the_block_of_the_tile(world: TerrainWorld) -> void:
+	var far := Vector2i(5, 5) * _Const.CHUNK_SIZE + Vector2i(3, 3)
+
+	world.jump_to(far, 0)
+
+	_expect(world.centre_chunk == Vector2i(5, 5) and world.plane == 0,
+		"a jump loads the block and the plane of the tile")
+	_expect(FileAccess.file_exists(_path_on(Vector2i(1, 0), 1)),
+		"the edited plane-1 chunk was saved on the jump")
+
+
+func _a_selection_knows_its_link_and_an_undo_clears_it(world: TerrainWorld) -> void:
+	var base := Vector2i(5, 5) * _Const.CHUNK_SIZE
+	var gate := base + Vector2i(1, 1)
+	var ladder := base + Vector2i(2, 2)
+	var edit := TerrainEdit.for_world(world)
+	var gate_kind: String = _Const.OBJECT_KIND_TARGETS.keys()[0]
+	var target: Array = _Const.OBJECT_KIND_TARGETS[gate_kind]
+
+	edit.add_object(world.chunks, gate, gate_kind, 0)
+	edit.add_object(world.chunks, ladder, "ladder_up", 0)
+	world.select(gate, gate_kind, 0)
+
+	_expect(world.selected_link_end() == {"tile": Vector2i(target[0], target[1]),
+		"plane": 0}, "a transition leads to its target")
+
+	world.select(ladder, "ladder_up", 0)
+
+	_expect(world.selected_link_end() == {"tile": ladder, "plane": 1},
+		"a ladder up leads to the same tile of plane 1")
+
+	world.replay_edit(edit, false)
+
+	_expect(world.selected.is_empty(), "an undo that removes the object clears it")
+
+
+func _path_on(chunk_coord: Vector2i, plane: int) -> String:
+	var file_name := _Const.CHUNK_FILE_TEMPLATE.format(
+		{"cx": chunk_coord.x, "cy": chunk_coord.y, "plane": plane})
+
+	return _scratch.path_join(file_name)
 
 
 func _remove_scratch() -> void:

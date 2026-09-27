@@ -480,6 +480,11 @@ def write_file(path: str, chunk_file: ChunkFile) -> None:
         handle.write(text)
 
 
+def is_chunk_file_name(name: str) -> bool:
+    """Return True if `name` has the form `chunk_<cx>_<cy>_p<plane>.json`."""
+    return _FILE_NAME_RE.match(name) is not None
+
+
 def load_directory(directory: str) -> list:
     """
     Purpose: Read every chunk file in a directory.

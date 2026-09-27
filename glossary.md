@@ -158,3 +158,12 @@ a room.
 | cliff face | a triangle of the ground mesh that is steeper than the walk limit. The client draws it in the cliff colour | rock face, slope face |
 | line of sight (short: sight) | a clear line for a shot between two tiles: no wall and no Blocked tile stops it (`tilegrid/sight.py`) | LOS, visibility, line of fire |
 | sweep | the pass that gives each empty tile room with no pin back to the pool (`tilegrid/sweep.py`) | reaper, cleanup, garbage collection |
+| climb | an object kind (a ladder or stairs) that moves a walker on its tile one plane up or down. Also the command that does it | ladder link, stair portal, teleport |
+| void | the floor type `void`: a tile with no floor, on plane 1 and up. It is always Blocked, and the client draws no ground on it | hole, gap, empty tile |
+| hide roofs | the client setting that hides every plane above the plane of the player | roof toggle, x-ray |
+| content check | one rule of `world/tile_checks.py` over the chunk files of a world, for example "a transition lands on an open tile". The terrain editor runs the same rules as "Check world" | validation, world lint, world test |
+| finding | one content check that fails, at one tile | error, issue, violation |
+| tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
+| link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |
+| ghost | the dim copy of the planes below the edited plane, in the terrain editor | shadow, underlay, onion skin |
+| beacon | the tall mark in the terrain editor over the selected object or the tile of a finding | marker, highlight |

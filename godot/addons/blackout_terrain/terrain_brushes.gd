@@ -212,3 +212,18 @@ static func _toward(height: int, target: int, strength: int) -> int:
 	var step := clampi(target - height, -strength, strength)
 
 	return height + step
+
+
+## The flags of a tile after a floor paint (DESIGN-0011 Phase 7c). A void tile
+## is a gap, so a void paint sets Blocked. A real floor on a void tile makes
+## ground to stand on, so it clears Blocked. Every other paint keeps the flags.
+## `world/tile_checks.py` refuses a void tile with no Blocked flag.
+static func flags_after_floor(old_floor: String, new_floor: String,
+		flags: int) -> int:
+	if new_floor == _Const.TILE_VOID_FLOOR:
+		return flags | _Const.TILE_FLAG_BLOCKED
+
+	if old_floor == _Const.TILE_VOID_FLOOR:
+		return flags & ~_Const.TILE_FLAG_BLOCKED
+
+	return flags

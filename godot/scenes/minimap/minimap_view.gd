@@ -116,12 +116,18 @@ func _draw_tile(tile: Vector2i, cell_px: float, origin: Vector2) -> void:
 
 
 ## The colour of one tile on the minimap. Transparent when its chunk is not
-## loaded. Static and public, so a test can check the rule with no scene.
+## loaded, and on a void tile, which has no floor (Phase 7b). Static and
+## public, so a test can check the rule with no scene.
 static func tile_colour(chunks: ChunkSet, tile: Vector2i) -> Color:
 	if not chunks.has_tile(tile):
 		return Color(0, 0, 0, 0)
 
-	var colour := FloorPalette.color_of(chunks.get_floor(tile))
+	var floor_name := chunks.get_floor(tile)
+
+	if floor_name == _Const.TILE_VOID_FLOOR:
+		return Color(0, 0, 0, 0)
+
+	var colour := FloorPalette.color_of(floor_name)
 
 	if chunks.get_flags(tile) & _Const.TILE_FLAGS_UNWALKABLE:
 		colour = colour.darkened(UNWALKABLE_DARKEN)

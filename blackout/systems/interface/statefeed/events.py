@@ -1023,7 +1023,8 @@ def emit_tile_chunks(observer, force: bool = False) -> int:
 
     Methodology:
         1. Nothing for an observer off the tile world.
-        2. List the loaded chunks of the block (TileWorld.block_keys).
+        2. List the loaded chunks of the block, on every plane
+           (TileWorld.block_chunks). The plane of the observer comes first.
         3. Forget each sent chunk outside the block. The client frees it.
         4. Send each one that is not in the sent set, and record it. A send
            that reached no session is not recorded, so the next move tries
@@ -1032,7 +1033,9 @@ def emit_tile_chunks(observer, force: bool = False) -> int:
     Notes/References:
         DESIGN-0011 Phase 5, step 2. The client frees a chunk outside its
         block by itself, with the same radius (CHUNK_STREAM_RADIUS), so no
-        message removes one.
+        message removes one. Phase 7b: every plane streams, so the client
+        can draw the floor above and the ground below. A key of the sent set
+        is (cx, cy, plane). A climb changes no key, so it sends nothing.
 
     Author: Nick Hobar
     Creation date: 09/25/2026
@@ -1054,7 +1057,8 @@ def emit_tile_chunks(observer, force: bool = False) -> int:
         sent_keys = set()
         setattr(holder, const.TILE_CHUNKS_SENT_ATTR, sent_keys)
 
-    block = world.block_keys(*tile)
+    own_plane = tile_travel.plane_of(observer)
+    block = world.block_chunks(*tile, first_plane=own_plane)
 
     # The client frees each chunk outside the same block. Forget it here too,
     # so a walk back into it sends it again.
@@ -1065,7 +1069,9 @@ def emit_tile_chunks(observer, force: bool = False) -> int:
         if key in sent_keys:
             continue
 
-        payload = TileChunkPayload(chunk_file=world.chunk_dict(key))
+        cx, cy, plane = key
+        chunk = world.plane(plane).chunk_dict((cx, cy))
+        payload = TileChunkPayload(chunk_file=chunk)
         reached = emit(observer, payload, force=True)
 
         if reached:

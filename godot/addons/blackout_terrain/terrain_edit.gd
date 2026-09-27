@@ -11,6 +11,11 @@ extends RefCounted
 ##
 ## A floor and an area are stored as NAMES, not indexes. An index belongs to
 ## one chunk's name list, and [method ChunkSet.set_floor] may add a name.
+##
+## An edit keys on WORLD tiles, with no plane. Thus it records the plane and
+## the block that it was made on, and [method TerrainWorld.replay_edit]
+## refuses it on another. Without that, an undo after a change of plane
+## wrote the old stroke into the new plane (found 09/26/2026).
 
 const LAYER_HEIGHTS := "heights"
 const LAYER_FLAGS := "flags"
@@ -23,6 +28,20 @@ var _layers := {}
 
 ## Each object change, in order: `[added (bool), tile, kind, rotation]`.
 var _objects: Array = []
+
+## The plane and the centre chunk of the block that this edit was made on.
+var plane := 0
+var centre := Vector2i.ZERO
+
+
+## A new edit of the block that `world` shows now.
+static func for_world(world: TerrainWorld) -> TerrainEdit:
+	var edit := TerrainEdit.new()
+
+	edit.plane = world.plane
+	edit.centre = world.centre_chunk
+
+	return edit
 
 
 func is_empty() -> bool:

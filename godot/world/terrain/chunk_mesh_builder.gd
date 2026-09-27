@@ -15,6 +15,8 @@ extends RefCounted
 ## 4. No jitter on a walkable tile. A corner moves only when all four tiles
 ##    around it are unwalkable, and a corner on the chunk edge never moves.
 ##    The edge rule keeps the seam between two chunks closed.
+## 5. A void tile ([constant _Const.TILE_VOID_FLOOR], Phase 7b) gets no
+##    triangle. It is a gap in a plane above the ground.
 ##
 ## ## The ground surface
 ##
@@ -198,6 +200,11 @@ static func corner_positions(chunk: ChunkFile) -> PackedVector3Array:
 static func build(chunk: ChunkFile) -> ArrayMesh:
 	var arrays := build_arrays(chunk)
 	var mesh := ArrayMesh.new()
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+
+	# A chunk of void only has no triangle. Godot refuses an empty surface.
+	if vertices.is_empty():
+		return mesh
 
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 
@@ -210,11 +217,18 @@ static func build_arrays(chunk: ChunkFile) -> Array:
 	var size: int = _Const.CHUNK_SIZE
 	var positions := corner_positions(chunk)
 	var floor_colors := _floor_colors(chunk)
+	var void_index := chunk.floor_names.find(_Const.TILE_VOID_FLOOR)
 	var out := _Surface.new()
 
 	for ly: int in size:
 		for lx: int in size:
-			var base: Color = floor_colors[chunk.floors[ly * size + lx]]
+			var floor_index := chunk.floors[ly * size + lx]
+
+			# A void tile has no floor, so the plane below shows through.
+			if floor_index == void_index:
+				continue
+
+			var base: Color = floor_colors[floor_index]
 
 			_add_tile(chunk, positions, lx, ly, base, out)
 

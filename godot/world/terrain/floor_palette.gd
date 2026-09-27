@@ -35,6 +35,13 @@ const COLORS := {
 ## [code]TILE_WALK_LIMIT[/code].
 const CLIFF_COLOR := Color("5e5249")
 
+## The colour of the water surface on a tile with the water flag, on any floor
+## type. [WaterMeshBuilder] picks it. Opaque, not see-through: an alpha
+## material costs a shader compile on the web, and the low-poly look draws
+## water as a flat colour (DESIGN-0011 debt 8, 09/26/2026). A look, for Nick
+## to tune.
+const WATER_COLOR := Color("3d6f86")
+
 ## The saturation and the value of a hashed fallback colour.
 const FALLBACK_SATURATION := 0.35
 const FALLBACK_VALUE := 0.55
