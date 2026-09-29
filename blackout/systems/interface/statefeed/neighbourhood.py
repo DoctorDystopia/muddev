@@ -85,6 +85,43 @@ _misses: int = 0
 _invalidations: int = 0
 
 
+# ─── Private helper routines ─────────────────────────────────────────────────
+
+def _tile_world_rooms(room, radius: int):
+    """
+    Purpose: Answer the neighbourhood of a tile room from the tile grid index.
+
+    Entry:
+        room   - any room.
+        radius - the radius in tiles.
+
+    Exit/Returns:
+        A list of live tile rooms, or None when `room` is not on the tile
+        world. Then the caller uses the cache.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A tile room never uses the cache. The cache keys on the room id, and
+        the pool moves a room to another tile, so a cached answer can belong
+        to the old tile. `TileRooms.rooms_near` needs no query (DESIGN-0011
+        section 6.1.1), so a cache gives nothing here. The metric is the one
+        of `targeting.within_metric`, as for an xyzgrid map.
+
+    Notes/References:
+        CLAUDE.md, "A tile room stores no fact about its tile".
+        `targeting.tile_world_rooms` owns the read, so the aura and the
+        neighbourhood cannot disagree.
+
+    Author: Nick Hobar
+    Creation date: 09/25/2026
+    """
+    from systems.gameplay.combat.auras.targeting import tile_world_rooms
+
+    return tile_world_rooms(room, radius)
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def visible_rooms(room, radius: int) -> list:
@@ -131,6 +168,11 @@ def visible_rooms(room, radius: int) -> list:
 
     if room is None:
         return []
+
+    tile_rooms = _tile_world_rooms(room, radius)
+
+    if tile_rooms is not None:
+        return tile_rooms
 
     from systems.gameplay.combat.auras.targeting import rooms_within_radius
 

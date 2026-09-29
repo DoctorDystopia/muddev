@@ -27,12 +27,17 @@ system, and the neighbourhood memo is the only reason a per-tick radius query
 is affordable at all: it is a cache over a bounding-box tag join, keyed by
 (room, radius) and invalidated when a tile is built or demolished.
 
+Line of sight
+-------------
+Since DESIGN-0011 Phase 6 (09/26/2026), a ranged attack needs sight too. A
+wall or a Blocked tile on the line stops the shot (the vault,
+Combat_System.md, "Line of sight"). Sight is a second question, beside the
+distance: `can_strike` asks both. `systems/core/tilegrid/sight.py` walks the
+line. in_reach alone still decides who is in a fight, so a wall between two
+fighters does not end the fight.
+
 What it deliberately does NOT do
 --------------------------------
-No line of sight. A wall does not block an arrow yet, and adding that means
-walking the exits between two tiles, which is a different question from
-"how far apart are they".
-
 No cross-Z shots. A different Z is out of reach at any distance, and so is a
 different map: two maps can both have a tile at (4, 6), and a shot that
 crossed between them would be a shot through a wall of the worst kind.
@@ -41,6 +46,10 @@ crossed between them would be a shot through a wall of the worst kind.
 import math
 
 from evennia.utils import logger
+
+from systems.core.tilegrid.pathfind import find_path
+from systems.core.tilegrid.sight import has_line_of_sight
+from world import tile_travel
 
 from . import constants as const
 from .auras.targeting import within_metric
@@ -186,10 +195,19 @@ def room_distance(origin, destination):
     if here[2] != there[2]:
         return None
 
+    return _planar_distance(here, there)
+
+
+def _planar_distance(here, there) -> int:
+    """
+    The straight-line tiles between two (x, y, ...) points, rounded. The one
+    measure that room_distance and the tile world chase both use.
+    """
     dx = there[0] - here[0]
     dy = there[1] - here[1]
+    distance = int(round(math.sqrt((dx * dx) + (dy * dy))))
 
-    return int(round(math.sqrt((dx * dx) + (dy * dy))))
+    return distance
 
 
 def tile_distance(attacker, target):
@@ -286,6 +304,84 @@ def in_reach(attacker, target, radius: int) -> bool:
         return False
 
     return within_metric(there[0] - here[0], there[1] - here[1], radius)
+
+
+def has_sight(attacker, target) -> bool:
+    """
+    Purpose: Report whether a shot from `attacker` can pass to `target`.
+
+    Entry:
+        attacker, target - any two objects.
+
+    Exit/Returns:
+        True unless both stand on the tile world and a wall or a Blocked
+        tile stops the line between them. Off the tile world there is no
+        geometry to stop a shot, and in_reach already falls back to the
+        same room there.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        tilegrid.sight.has_line_of_sight between the two tiles. The rule is
+        in the Obsidian vault, Combat_System.md, "Line of sight".
+
+    Notes/References:
+        Sight knows no distance. can_strike asks both questions.
+
+    Author: Nick Hobar
+    Creation date: 09/26/2026
+    """
+    here = tile_travel.tile_of(attacker)
+    there = tile_travel.tile_of(target)
+
+    if here is None or there is None:
+        return True
+
+    view = tile_travel.plane_view(attacker)
+
+    # No shot crosses planes. in_reach refuses the different Z already.
+    if tile_travel.plane_of(target) != view.plane:
+        return False
+
+    return has_line_of_sight(view.grid, here, there)
+
+
+def can_strike(attacker, target, radius: int) -> bool:
+    """
+    Purpose: Report whether `attacker` may attack `target` from where it
+             stands: in reach, and in sight for a ranged weapon.
+
+    Entry:
+        attacker - the acting combatant.
+        target   - the candidate.
+        radius   - the reach of the attacker in tiles, from reach_tiles.
+
+    Exit/Returns:
+        True if in_reach is True and, above melee reach, has_sight is True.
+
+    Module Globals:
+        const.MELEE_REACH_TILES read.
+
+    Methodology:
+        A melee weapon reaches only its own tile, so sight never stops it
+        (the vault rule). The sight walk thus runs only for a ranged weapon.
+
+    Notes/References:
+        The attack command, the stall check, and the queue check ask this.
+        The engagement check (get_sides) asks in_reach alone: a wall
+        between two fighters does not end their fight.
+
+    Author: Nick Hobar
+    Creation date: 09/26/2026
+    """
+    if not in_reach(attacker, target, radius):
+        return False
+
+    if radius <= const.MELEE_REACH_TILES:
+        return True
+
+    return has_sight(attacker, target)
 
 
 def rooms_in_reach(attacker, radius: int) -> list:
@@ -394,64 +490,105 @@ def combatants_in_reach(attacker, radius: int) -> list:
     return found
 
 
+def _strikes_from(grid, tile: tuple, goal: tuple, radius: int) -> bool:
+    """
+    Return True if a weapon of this reach may strike `goal` from `tile`:
+    in reach, and in sight above melee reach. can_strike, for two tiles.
+    """
+    if not within_metric(goal[0] - tile[0], goal[1] - tile[1], radius):
+        return False
+
+    if radius <= const.MELEE_REACH_TILES:
+        return True
+
+    return has_line_of_sight(grid, tile, goal)
+
+
+def _first_tile_to_strike_from(grid, path: list, goal: tuple,
+                               radius: int) -> tuple:
+    """
+    Return the first tile of `path` from which the weapon may strike `goal`.
+    The path ends at the goal, and a tile strikes itself at any radius.
+    """
+    for tile in path:
+        if _strikes_from(grid, tile, goal, radius):
+            return tile
+
+    return goal
+
+
 def nearest_tile_in_reach(attacker, target, radius: int):
     """
-    Purpose: Return the tile closest to `attacker` from which it could reach
-             `target`, or None when there is none.
+    Purpose: Return the tile where `attacker` stops to strike `target`, or
+             None when no walk can help.
 
     Entry:
         attacker - the combatant that wants to close.
         target   - the thing it wants to act on.
-        radius   - the attacker's reach in tiles, from reach_tiles.
+        radius   - the reach of the attacker in tiles, from reach_tiles.
 
     Exit/Returns:
-        Returns a room, or None when the two share no geometry: a different
-        map, a different Z, or either one off the grid. None means "no walk
-        would help", which is a refusal and not a dead end.
+        Returns an (x, y) tile of the tile world. Returns None when either
+        one stands off the tile world. None means "no walk can help", which
+        is a refusal and not a dead end.
 
     Module Globals:
         None.
 
     Methodology:
-        Asked of the TARGET, not of the attacker. rooms_in_reach(target,
-        radius) is every tile from which the target is `radius` tiles away or
-        less, which is exactly the set of places this weapon could shoot it
-        from. The metric is symmetric, so the ring is the same one in_reach
-        will test on arrival -- the walk cannot end one tile short of its own
-        rule.
+        1. An attacker that can strike now stays on its own tile.
+        2. Search a shortest walk to the tile of the TARGET with A*. `goto`
+           makes the same search.
+        3. Return the first tile of that walk from which the weapon can
+           strike: in reach, and in sight for a ranged weapon. can_strike
+           asks the same two questions on arrival. Thus, the walk cannot
+           end one tile short of its own rule.
 
-        A radius of zero returns the target's own tile, because that is the
-        only member of the ring. Every melee weapon therefore walks exactly
-        where it walked before this routine existed.
+        A radius of zero returns the tile of the target, because no other
+        tile is in reach. Every melee weapon thus walks onto its target.
+
+        The walk goes around a wall, because the path does. A bow walks
+        until the wall no longer stands between the two (the vault rule,
+        Combat_System.md, "Line of sight").
+
+        When no path exists, the answer is the tile of the target. Then
+        `goto` tells the player that it finds no way there.
 
     Notes/References:
-        Ties are broken by iteration order, which is the neighbourhood's.
-        Two tiles equally near are equally good: both are a step on the way,
-        and choosing between them is a pathfinding question that `goto`
-        already owns.
+        Handoff debt 16. The version before DESIGN-0011 Phase 4b picked the
+        nearest LIVE ROOM of the ring. On the tile world most tiles have no
+        room, so the archer walked onto the tile of the target.
+
+        Another tile of the ring can be one step nearer than the tile that
+        this returns, when the walk goes diagonally. The walk still ends
+        where the weapon can strike.
 
     Author: Nick Hobar
     Creation date: 09/17/2026
     """
-    here = getattr(attacker, "location", None)
+    here = tile_travel.tile_of(attacker)
+    there = tile_travel.tile_of(target)
 
-    if here is None:
+    if here is None or there is None:
         return None
 
-    best = None
-    best_distance = None
+    view = tile_travel.plane_view(attacker)
 
-    for room in rooms_in_reach(target, radius):
-        distance = room_distance(here, room)
+    # A target on another plane is a climb away, not a walk.
+    if tile_travel.plane_of(target) != view.plane:
+        return None
 
-        if distance is None:
-            continue
+    grid = view.grid
 
-        if best_distance is None or distance < best_distance:
-            best = room
-            best_distance = distance
+    if _strikes_from(grid, here, there, radius):
+        return here
 
-    return best
+    path = find_path(grid, here, there)
+
+    if path is None:
+        return there
+
+    return _first_tile_to_strike_from(grid, path, there, radius)
 
 
 def search_candidates(attacker, radius: int):
@@ -512,6 +649,28 @@ def step_toward(mover, target) -> bool:
     return step_toward_room(mover, getattr(target, "location", None))
 
 
+def _step_on_tile_world(mover, destination_room) -> bool:
+    """
+    The tile world branch of step_toward_room. A tile room has no exits, so
+    the eight neighbour tiles take their place. The rule stays the same:
+    greedy, strictly closer, by the same measure. Never raises.
+    """
+    there = _room_coordinates(destination_room)
+    here = _room_coordinates(mover.location)
+
+    if there is _OFF_GRID or here is _OFF_GRID or here[2] != there[2]:
+        return False
+
+    try:
+        moved = tile_travel.step_toward(
+            mover, (int(there[0]), int(there[1])), _planar_distance)
+    except Exception:
+        logger.log_trace()
+        return False
+
+    return moved
+
+
 def step_toward_room(mover, destination_room) -> bool:
     """
     Purpose: Move `mover` one tile along whichever exit brings it closest to
@@ -557,6 +716,9 @@ def step_toward_room(mover, destination_room) -> bool:
 
     if room is None or destination_room is None:
         return False
+
+    if tile_travel.on_tile_world(mover):
+        return _step_on_tile_world(mover, destination_room)
 
     best_exit = None
     best_distance = room_distance(room, destination_room)

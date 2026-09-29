@@ -81,7 +81,7 @@ class _Payload:
             --layer statefeed):
 
                                           asdict        shallow walk
-                MapChunkPayload   3.343 ms / 35,229    0.001 ms / 17
+                MapChunkPayload   3.343 ms / 35,229    0.001 ms / 17  (retired)
                   (1,600 nodes + 1,600 links)
                 CharItemsPayload  0.097 ms /  1,170    0.001 ms / 17
                   (60 rows)
@@ -117,26 +117,22 @@ class _Payload:
 class RoomInfoPayload(_Payload):
     """The observer's current room. GMCP Room.Info.
 
-    `room_kind` is the room prototype's key ("Bank", "Foundry Furnace
-    Facility"). Phase 2 uses it to tint a box; it is also the lookup key a
-    modular kit-room renderer will use to pick a prefab later, which is why it
-    is named for what it means rather than for what it currently does.
+    The `room_kind` field went with the xyzgrid maps in DESIGN-0011 Phase 4b.
+    A tile room has the key `tile`, so the field named nothing.
     """
 
     channel = const.CHANNEL_ROOM_INFO
 
     num: int = 0
     name: str = ""
-    room_kind: str = const.ROOM_KIND_DEFAULT
-    coords: list = field(default_factory=list)   # [x, y, z] -- z is a map NAME
+    coords: list = field(default_factory=list)   # [x, y, z] -- z is the world
     exits: dict = field(default_factory=dict)    # {direction: destination_num}
 
     # What the tiles NEAR the observer afford: {"x:y": {command, kind}}.
     #
-    # Near only -- the observer's own tile and everything one real exit away,
-    # at most nine entries. A tile further off affords the same `goto (X,Y)`
-    # wherever the observer stands, so that is stamped on the MAP NODE once per
-    # session (see mapexport) rather than resent here on every move.
+    # Near only: the tile of the observer and each legal step from it, at
+    # most nine entries. A far tile affords the same `goto (X,Y)` from any
+    # tile. Thus, the client builds that command from TILE_WALK_TEMPLATE.
     #
     # `exits` above is kept and is not redundant with this. It is the GMCP
     # Room.Info field as IRE and Aardwolf define it, keyed by direction and
@@ -188,6 +184,71 @@ class RoomPlayersDeltaPayload(_Payload):
 
     added: list = field(default_factory=list)    # [entity, ...]
     removed: list = field(default_factory=list)  # [entity_id, ...]
+
+
+@dataclass
+class TileChunkPayload(_Payload):
+    """One chunk file of the tile world. Blackout-specific.
+
+    `chunk_file` is the JSON value of the canonical file text, so the client
+    reads it with the same `ChunkFile.from_dict` that reads a file on disk.
+    The heights, flags, and objects are server facts. The client draws them.
+    """
+
+    channel = const.CHANNEL_TILE_CHUNK
+
+    chunk_file: dict = field(default_factory=dict)
+
+
+@dataclass
+class WalkPayload(_Payload):
+    """The current walk of the observer. Blackout-specific.
+
+    `goal` is [x, y], or [] when no walk runs. `path` is the tiles still to
+    step on, as [x, y] pairs, in order. `z` is the room Z of the walk, so the
+    client draws the destination marker only on the plane of the walk.
+    `running` is the run toggle of the observer, with or without a walk.
+    """
+
+    channel = const.CHANNEL_WALK
+
+    goal: list = field(default_factory=list)
+    path: list = field(default_factory=list)
+    z: str = ""
+    running: bool = False
+
+
+@dataclass
+class WorldMapPayload(_Payload):
+    """The index of the world map. Blackout-specific.
+
+    `planes` is each plane that holds a chunk, lowest first. `chunks` is
+    [cx, cy, plane] for each chunk. `labels` is {text, x, y, plane} for each
+    area. The summaries of the chunks follow on CHANNEL_WORLD_MAP_CHUNK.
+    """
+
+    channel = const.CHANNEL_WORLD_MAP
+
+    planes: list = field(default_factory=list)
+    chunks: list = field(default_factory=list)
+    labels: list = field(default_factory=list)
+
+
+@dataclass
+class WorldMapChunkPayload(_Payload):
+    """The world map summary of one chunk. Blackout-specific.
+
+    `tiles` has one character for each tile, row by row from local y = 0,
+    in WORLD_MAP_ALPHABET. `objects` is {kind, x, y} in world tiles.
+    systems/interface/statefeed/worldmap.py owns the encoding.
+    """
+
+    channel = const.CHANNEL_WORLD_MAP_CHUNK
+
+    chunk: list = field(default_factory=list)   # [cx, cy]
+    plane: int = 0
+    tiles: str = ""
+    objects: list = field(default_factory=list)
 
 
 @dataclass
@@ -441,7 +502,7 @@ class CharItemsPayload(_Payload):
     and the mutation points are few and disciplined: an entity enters a room or
     leaves it. The inventory is the other way round on both counts. The full
     list is 32 slots plus 11 equipment slots -- a couple of kilobytes, well
-    inside the 65535-byte inbound buffer that forces MapChunkPayload to chunk --
+    inside the 65535-byte inbound buffer that Godot defaults to --
     while the mutation points are many and undisciplined. InventoryHandler
     .add_item merges stacks with a bare `existing.quantity += additional` and
     fires no hook at all; crafting consumes materials directly; banking moves
@@ -500,28 +561,6 @@ class CharQuestsPayload(_Payload):
 
     active: list = field(default_factory=list)     # [{key, title, step, ...}]
     completed: list = field(default_factory=list)  # [{key, title}, ...]
-
-
-@dataclass
-class MapChunkPayload(_Payload):
-    """One slice of a Z-level's grid. Blackout.Map.
-
-    Chunked because Godot's WebSocketPeer defaults to a 65535-byte inbound
-    buffer and historically truncated oversized JSON silently. A client
-    reassembles by collecting `chunk_count` chunks for a given `z`.
-
-    Nodes carry world coordinates, not xygrid coordinates. The xygrid puts a
-    world node at (2X, 2Y) with link glyphs on the odd cells; that transform is
-    the map layer's business and must not leak to a client.
-    """
-
-    channel = const.CHANNEL_MAP
-
-    z: str = ""
-    chunk_index: int = 0
-    chunk_count: int = 1
-    nodes: list = field(default_factory=list)   # [{x, y, room_kind}, ...]
-    links: list = field(default_factory=list)   # [{from: [x,y], to: [x,y]}, ...]
 
 
 @dataclass

@@ -65,33 +65,33 @@ func _payload() -> Dictionary:
 func _it_only_wants_its_own_channel() -> void:
 	# The console offers every payload to every model in turn, so a model that
 	# claimed one that was not its own would swallow it.
-	var log := QuestState.new()
+	var quest_log := QuestState.new()
 
-	_expect(log.ingest(Const.CH_CHAR_QUESTS, _payload()), "it takes char_quests")
-	_expect(not log.ingest(Const.CH_CHAR_VITALS, {"hp": 1.0}),
+	_expect(quest_log.ingest(Const.CH_CHAR_QUESTS, _payload()), "it takes char_quests")
+	_expect(not quest_log.ingest(Const.CH_CHAR_VITALS, {"hp": 1.0}),
 		"and declines a channel that is not its own")
 
 
 func _no_data_is_not_the_same_as_no_quests() -> void:
 	# A player who has just logged in has been told nothing; one who has taken
 	# nothing has been told that. The pane says different things for each.
-	var log := QuestState.new()
+	var quest_log := QuestState.new()
 
-	_expect(not log.has_data, "a fresh log has heard nothing")
+	_expect(not quest_log.has_data, "a fresh log has heard nothing")
 
-	log.ingest(Const.CH_CHAR_QUESTS, {"active": [], "completed": []})
+	quest_log.ingest(Const.CH_CHAR_QUESTS, {"active": [], "completed": []})
 
-	_expect(log.has_data, "an empty answer is still an answer")
-	_expect(log.active.is_empty(), "and it holds no quests")
+	_expect(quest_log.has_data, "an empty answer is still an answer")
+	_expect(quest_log.active.is_empty(), "and it holds no quests")
 
 
 func _the_float_boundary_is_crossed_once() -> void:
 	# JSON.parse_string returns 3.0, always. "%d/%d" on a float is not what it
 	# looks like, and a dictionary keyed on one silently misses.
-	var log := QuestState.new()
-	log.ingest(Const.CH_CHAR_QUESTS, _payload())
+	var quest_log := QuestState.new()
+	quest_log.ingest(Const.CH_CHAR_QUESTS, _payload())
 
-	var objective: Dictionary = log.active[0]["objectives"][1]
+	var objective: Dictionary = quest_log.active[0]["objectives"][1]
 
 	_expect(typeof(objective["current"]) == TYPE_INT, "current is an int")
 	_expect(typeof(objective["required"]) == TYPE_INT, "required is an int")
@@ -100,10 +100,10 @@ func _the_float_boundary_is_crossed_once() -> void:
 
 
 func _a_one_shot_objective_is_told_apart_from_a_counted_one() -> void:
-	var log := QuestState.new()
-	log.ingest(Const.CH_CHAR_QUESTS, _payload())
+	var quest_log := QuestState.new()
+	quest_log.ingest(Const.CH_CHAR_QUESTS, _payload())
 
-	var objectives: Array = log.active[0]["objectives"]
+	var objectives: Array = quest_log.active[0]["objectives"]
 
 	_expect(not objectives[0]["counted"], "a one-shot objective is not counted")
 	_expect(objectives[0]["required"] == 1,
@@ -114,30 +114,30 @@ func _a_one_shot_objective_is_told_apart_from_a_counted_one() -> void:
 func _a_malformed_payload_does_not_take_the_client_with_it() -> void:
 	# Nothing on the wire is guaranteed. A quest log that crashed the client
 	# would be worse than one that drew nothing.
-	var log := QuestState.new()
+	var quest_log := QuestState.new()
 
-	log.ingest(Const.CH_CHAR_QUESTS, {"active": "not a list"})
-	_expect(log.active.is_empty(), "a non-list of quests is read as none")
+	quest_log.ingest(Const.CH_CHAR_QUESTS, {"active": "not a list"})
+	_expect(quest_log.active.is_empty(), "a non-list of quests is read as none")
 
-	log.ingest(Const.CH_CHAR_QUESTS, {
+	quest_log.ingest(Const.CH_CHAR_QUESTS, {
 		"active": [{"key": "q", "objectives": [7, "nonsense"]}],
 	})
-	_expect(log.active.size() == 1, "the quest survives")
-	_expect(log.active[0]["objectives"].is_empty(),
+	_expect(quest_log.active.size() == 1, "the quest survives")
+	_expect(quest_log.active[0]["objectives"].is_empty(),
 		"and its unreadable objectives are dropped rather than drawn")
 
-	log.ingest(Const.CH_CHAR_QUESTS, {
+	quest_log.ingest(Const.CH_CHAR_QUESTS, {
 		"active": [{"key": "q", "objectives": [{"required": 0.0}]}],
 	})
-	_expect(log.active[0]["objectives"][0]["required"] == 1,
+	_expect(quest_log.active[0]["objectives"][0]["required"] == 1,
 		"a requirement of zero is floored, so nothing divides by it")
 
 
 func _step_fraction_counts_what_is_done() -> void:
-	var log := QuestState.new()
-	log.ingest(Const.CH_CHAR_QUESTS, _payload())
+	var quest_log := QuestState.new()
+	quest_log.ingest(Const.CH_CHAR_QUESTS, _payload())
 
-	_expect(is_equal_approx(QuestState.step_fraction(log.active[0]), 0.5),
+	_expect(is_equal_approx(QuestState.step_fraction(quest_log.active[0]), 0.5),
 		"one of two objectives done is half a step")
 	_expect(is_equal_approx(QuestState.step_fraction({}), 1.0),
 		"a step that asks for nothing reads as complete")
@@ -146,27 +146,27 @@ func _step_fraction_counts_what_is_done() -> void:
 func _a_dropped_socket_clears_the_log() -> void:
 	# A websocket close ends the Evennia Session, so what this held describes a
 	# character nobody is puppeting any more.
-	var log := QuestState.new()
-	log.ingest(Const.CH_CHAR_QUESTS, _payload())
-	log.reset()
+	var quest_log := QuestState.new()
+	quest_log.ingest(Const.CH_CHAR_QUESTS, _payload())
+	quest_log.reset()
 
-	_expect(not log.has_data and log.active.is_empty(),
+	_expect(not quest_log.has_data and quest_log.active.is_empty(),
 		"reset forgets everything")
 
 
 func _the_view_draws_whatever_it_was_sent() -> void:
 	# It names no quest and must not learn any: adding a quest is one file under
 	# systems/gameplay/quests/content/, and a table here would be what goes stale.
-	var log := QuestState.new()
+	var quest_log := QuestState.new()
 	var view := QuestsView.new()
 	add_child(view)
-	view.bind(log)
+	view.bind(quest_log)
 
 	var before := _text_of(view)
 	_expect(before.contains(QuestsView.NO_DATA_TEXT),
 		"before the server answers it says so")
 
-	log.ingest(Const.CH_CHAR_QUESTS, _payload())
+	quest_log.ingest(Const.CH_CHAR_QUESTS, _payload())
 
 	var after := _text_of(view)
 	_expect(after.contains("Test Quest"), "the quest's title is drawn")

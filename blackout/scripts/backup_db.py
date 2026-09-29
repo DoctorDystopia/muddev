@@ -40,7 +40,7 @@ import sys
 from datetime import datetime
 
 # The game dir (blackout/), one level up from this file in scripts/. See the
-# same note in map_sync.py: running `python scripts/backup_db.py` puts THIS
+# note in the archived map_sync.py: running `python scripts/backup_db.py` puts THIS
 # file's directory on sys.path[0], not the caller's cwd.
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

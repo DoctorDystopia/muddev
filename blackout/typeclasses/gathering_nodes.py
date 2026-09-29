@@ -178,7 +178,7 @@ class CopperPole(GatheringNode):
 
 @register_spawner("Rusty pole clearing")
 def spawn_rusty_pole(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.gathering_nodes.RustyPole",
         key="rusty pole",
@@ -188,7 +188,7 @@ def spawn_rusty_pole(room):
 
 @register_spawner("Metal pole clearing")
 def spawn_metal_pole(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.gathering_nodes.MetalPole",
         key="metal pole",
@@ -198,7 +198,7 @@ def spawn_metal_pole(room):
 
 @register_spawner("Copper pole clearing")
 def spawn_copper_pole(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.gathering_nodes.CopperPole",
         key="copper pole",

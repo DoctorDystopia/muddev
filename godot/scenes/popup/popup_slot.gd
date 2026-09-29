@@ -102,8 +102,8 @@ func bind_settings(settings: ClientSettings) -> void:
 
 
 ## Show one row, or an empty frame for `{}`.
-func bind(row: Dictionary) -> void:
-	_row = row
+func bind(row_data: Dictionary) -> void:
+	_row = row_data
 
 	var occupied := not _row.is_empty()
 	modulate = COLOR_FILLED if occupied else COLOR_EMPTY

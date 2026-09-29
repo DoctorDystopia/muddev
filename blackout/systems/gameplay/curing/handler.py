@@ -7,9 +7,9 @@ Description: CuringHandler — one character's in-progress cures.
 Why the character and not the chamber
 -------------------------------------
 ``systems/gameplay/spawning/teardown.py`` destroys every facility with its room
-on a map rebuild, DEPTH-FIRST, so a chamber's contents die before the chamber
+or its tile, DEPTH-FIRST, so a chamber's contents die before the chamber
 does. Meat left in a chamber would be destroyed by
-``clean_and_reload_all_maps.ps1`` -- an operator action, not an accident. The
+a tile sync that changes its tile -- an operator action, not an accident. The
 bank reached the same conclusion for the same reason: the terminal on the map is
 UI and the vault hangs off the character.
 

@@ -69,10 +69,14 @@ const MAX_RING_RADIUS := 0.44
 ##
 ## A SCALE, not a radius: everything the resolver hands back is a unit across,
 ## so this is the single number that sizes a modelled sword and a procedural
-## figure alike. Matches the browser's ENTITY_SCALE, and is close to the 0.26
-## diameter of the spheres it replaced -- big enough that a silhouette reads,
-## small enough that four in a ring do not touch.
-const ENTITY_SCALE := 0.5
+## figure alike.
+##
+## 1.0 since 09/27/2026 (Nick): one figure fills its tile. It was 0.5, and
+## then a ring of up to five on one tile did not touch. At 1.0 no ring inside
+## [constant MAX_RING_RADIUS] can hold two figures apart, so figures that share
+## a tile overlap. That is the accepted look (Nick, 09/28/2026). The ring still
+## spreads them as far as its cap allows.
+const ENTITY_SCALE := 1.0
 
 ## How far a ring may be turned from slot 0 pointing at +X, as a share of one
 ## slot. A ROTATION of the whole ring, not a per-occupant nudge -- see
@@ -82,6 +86,16 @@ const RING_TURN_SHARE := 0.35
 const HIT_FLASH_SECONDS := 0.32
 
 const COLOR_HIT_FLASH := Color.WHITE
+
+## How long a new figure takes to rise out of the fog, in seconds.
+##
+## DESIGN-0011 section 6.6: entities arrive at the edge of the statefeed
+## radius, and a figure that appears at once reads as pop-in. A true alpha
+## fade is not possible here. The Compatibility renderer ignores
+## `GeometryInstance3D.transparency`, and an alpha material is a new shader,
+## which is a compile on the web (see [MeshGlow]). Thus, the fade is an albedo
+## tween from the fog colour, the same uniform write as the hit flash.
+const FADE_IN_SECONDS := 1.0
 
 ## What a hovered entity glows. Dim and neutral: it says "this is what a click
 ## would take", and anything stronger competes with the hit flash for attention
@@ -125,8 +139,8 @@ const COLOR_LABEL_OUTLINE := Color(0.04, 0.05, 0.07, 0.85)
 ## [constant COLOR_LABEL_FALLBACK] and still reads — so the server may name a
 ## new kind without waiting on a client edit.
 ##
-## The reverse needs no guard, unlike [constant MapPalette.ROOM_KIND_COLORS]
-## next door, and the difference is the keys: these are GENERATED constants, so
+## The reverse needs no guard, unlike [constant AreaLook.LOOKS], and the
+## difference is the keys: these are GENERATED constants, so
 ## a kind renamed or dropped server-side is a GDScript parse error on the next
 ## export rather than a row quietly colouring nothing. That is the same
 ## argument `FamilyShapes.MODELS` makes for having only its values checked.
@@ -240,6 +254,18 @@ var _marked: Array = []
 ## down by [WorldView] so the observer and everyone else answer to one switch.
 var _animated := true
 
+## The colour a new figure starts at. The fog colour of the area, pushed down by
+## [WorldView] from [signal AreaEnvironment.look_changed].
+var _fade_color: Color = AreaLook.FALLBACK["fog_color"]
+
+## int id -> the tint-in of that entity: `{"tween": Tween, "bases": Array}`.
+## Each base is `[material, colour]`, the albedo that the tween moves to.
+##
+## Kept, because the hit flash also owns albedo. A flash in the middle of a
+## tint-in reads the albedo as its base. Without this record, the flash puts
+## back a colour that is part fog, and the figure stays tinted.
+var _fades: Dictionary = {}
+
 ## One tile, in world units. GIVEN by the pane, because the pane is what lays
 ## tiles out -- a copy here would be free to disagree with the grid actually
 ## drawn, which is the same reason `_locate` is a callable.
@@ -265,7 +291,7 @@ func bind(resolver: MeshResolver, locate: Callable, step: float) -> void:
 	_resolver.refreshed.connect(_on_art_arrived)
 
 
-## Place everything again. Call when the islands move under them.
+## Place everything again. Call when a chunk lands or goes under them.
 ##
 ## Takes no anchor any more: every entity carries its own `coords` and is placed
 ## from those, so there is no single tile for the pool to be moved to. What DOES
@@ -348,14 +374,14 @@ static func _index_of(entities: Array, entity_id: int) -> int:
 ## re-sent after it moved, took damage or gained an action carries the new
 ## values, and keeping the first copy would pin the client to whatever it
 ## happened to hear first.
-func _upsert(entities: Array, entity: Dictionary) -> void:
-	var at := _index_of(entities, _id_of(entity))
+func _upsert(entities: Array, entity_data: Dictionary) -> void:
+	var at := _index_of(entities, _id_of(entity_data))
 
 	if at < 0:
-		entities.append(entity)
+		entities.append(entity_data)
 		return
 
-	entities[at] = entity
+	entities[at] = entity_data
 
 
 ## Replace everything visible. `room_players` is the full list, sent on arrival
@@ -363,17 +389,17 @@ func _upsert(entities: Array, entity: Dictionary) -> void:
 func replace_all(entities: Array) -> void:
 	_entities.clear()
 
-	for entity: Dictionary in entities:
-		_upsert(_entities, entity)
+	for entity_data: Dictionary in entities:
+		_upsert(_entities, entity_data)
 
 	_sync()
 
 
-func add(entity: Dictionary) -> void:
-	if entity.is_empty():
+func add(entity_data: Dictionary) -> void:
+	if entity_data.is_empty():
 		return
 
-	_upsert(_entities, entity)
+	_upsert(_entities, entity_data)
 	_sync()
 
 
@@ -386,9 +412,9 @@ func add(entity: Dictionary) -> void:
 func remove(entity_id: int) -> void:
 	var kept: Array[Dictionary] = []
 
-	for entity: Dictionary in _entities:
-		if _id_of(entity) != entity_id:
-			kept.append(entity)
+	for entity_data: Dictionary in _entities:
+		if _id_of(entity_data) != entity_id:
+			kept.append(entity_data)
 
 	if kept.size() == _entities.size():
 		return
@@ -429,15 +455,15 @@ func apply_delta(added: Array, removed: Array) -> void:
 
 		var kept: Array[Dictionary] = []
 
-		for entity: Dictionary in _entities:
-			if not dropped.has(_id_of(entity)):
-				kept.append(entity)
+		for entity_data: Dictionary in _entities:
+			if not dropped.has(_id_of(entity_data)):
+				kept.append(entity_data)
 
 		_entities = kept
 
-	for entity in added:
-		if entity is Dictionary and not entity.is_empty():
-			_upsert(_entities, entity)
+	for entity_data in added:
+		if entity_data is Dictionary and not entity_data.is_empty():
+			_upsert(_entities, entity_data)
 
 	_sync()
 
@@ -501,6 +527,10 @@ func flash(entity_id: int) -> void:
 	if node == null:
 		return
 
+	# The flash reads the albedo as its base. Finish a tint-in first, or the
+	# flash returns the figure to a colour that is part fog.
+	_end_fade(entity_id)
+
 	# Must finish inside the 0.6s server tick, so the world is never mid-tween
 	# when the next state arrives.
 	var tween := create_tween()
@@ -522,6 +552,19 @@ func flash(entity_id: int) -> void:
 
 	if not tweened:
 		tween.kill()
+
+
+## Set the colour that a new figure rises out of. See [constant FADE_IN_SECONDS].
+##
+## A figure that is part of the way through its tint-in keeps its start colour.
+## It is already most of the way to its own colour.
+func set_fade_color(color: Color) -> void:
+	_fade_color = color
+
+
+## Whether this entity is part of the way through its tint-in.
+func is_fading(entity_id: int) -> bool:
+	return _fades.has(entity_id)
 
 
 ## Light one entity and put the last one back. Zero means none.
@@ -660,8 +703,8 @@ func _publish_marks() -> void:
 func _group_by_tile() -> Dictionary:
 	var by_tile: Dictionary = {}
 
-	for entity: Dictionary in _entities:
-		var coords: Array = entity.get("coords", [])
+	for entity_data: Dictionary in _entities:
+		var coords: Array = entity_data.get("coords", [])
 		var where: Variant = _locate.call(coords)
 
 		# Drawn nowhere rather than somewhere wrong. Its map has not arrived, so
@@ -675,7 +718,7 @@ func _group_by_tile() -> Dictionary:
 		if not by_tile.has(key):
 			by_tile[key] = {"origin": where, "entities": []}
 
-		by_tile[key]["entities"].append(entity)
+		by_tile[key]["entities"].append(entity_data)
 
 	for key: String in by_tile:
 		by_tile[key]["entities"].sort_custom(_by_id)
@@ -739,9 +782,18 @@ func _sync() -> void:
 		_tile_origins[key] = group["origin"]
 
 		for index: int in here.size():
-			var entity: Dictionary = here[index]
-			var entity_id := _id_of(entity)
-			var node := _node_for_entity(entity)
+			var entity_data: Dictionary = here[index]
+			var entity_id := _id_of(entity_data)
+			# A first sighting: no node and no animator yet. A rebuild for a new
+			# look keeps its animator. Thus, new gear or new art does not make a
+			# figure rise out of the fog a second time.
+			var first_sighting := (not _animators.has(entity_id)
+				and not _nodes.has(entity_id))
+			var node := _node_for_entity(entity_data)
+
+			if first_sighting:
+				_fade_in(entity_id, node)
+
 			var slot := _slot_position(
 				group["origin"], key, ring["first"] + index, ring["occupants"])
 
@@ -785,13 +837,13 @@ func _prune(by_tile: Dictionary) -> void:
 	var wanted: Dictionary = {}
 
 	for key: String in by_tile:
-		for entity: Dictionary in by_tile[key]["entities"]:
-			wanted[_id_of(entity)] = entity
+		for entity_data: Dictionary in by_tile[key]["entities"]:
+			wanted[_id_of(entity_data)] = entity_data
 
 	for entity_id: int in _nodes.keys():
-		var entity: Dictionary = wanted.get(entity_id, {})
+		var entity_data: Dictionary = wanted.get(entity_id, {})
 
-		if entity.is_empty() or _looks.get(entity_id) != _look_of(entity):
+		if entity_data.is_empty() or _looks.get(entity_id) != _look_of(entity_data):
 			_drop_node(entity_id)
 
 
@@ -806,6 +858,7 @@ func _drop_node(entity_id: int) -> void:
 		remove_child(node)
 		node.queue_free()
 
+	_end_fade(entity_id)
 	_nodes.erase(entity_id)
 	_looks.erase(entity_id)
 	_lift.erase(entity_id)
@@ -814,28 +867,84 @@ func _drop_node(entity_id: int) -> void:
 		_hovered = 0
 
 
+## Start one figure at the fog colour and tween each material to its own albedo.
+##
+## Every material, for the reason [method flash] gives. The alpha of each base
+## stays as it is, so a see-through part stays see-through during the tint.
+func _fade_in(entity_id: int, node: Node3D) -> void:
+	var tween := create_tween()
+	var bases: Array = []
+
+	for material: StandardMaterial3D in _materials_of(node):
+		var base := material.albedo_color
+		var start := Color(_fade_color, base.a)
+
+		bases.append([material, base])
+		material.albedo_color = start
+
+		if bases.size() > 1:
+			tween.parallel()
+
+		tween.tween_property(material, "albedo_color", base, FADE_IN_SECONDS)
+
+	if bases.is_empty():
+		tween.kill()
+		return
+
+	_fades[entity_id] = {"tween": tween, "bases": bases}
+	tween.finished.connect(_on_fade_finished.bind(entity_id, tween))
+
+
+## Forget a tint-in that ran to its end. The tween is compared, because a newer
+## tint-in of the same id must not lose its record to an older one.
+func _on_fade_finished(entity_id: int, tween: Tween) -> void:
+	var fade: Dictionary = _fades.get(entity_id, {})
+
+	if not fade.is_empty() and fade["tween"] == tween:
+		_fades.erase(entity_id)
+
+
+## Stop a tint-in and put each material at its own albedo at once.
+func _end_fade(entity_id: int) -> void:
+	var fade: Dictionary = _fades.get(entity_id, {})
+
+	if fade.is_empty():
+		return
+
+	var tween: Tween = fade["tween"]
+
+	tween.kill()
+
+	for pair: Array in fade["bases"]:
+		var material: StandardMaterial3D = pair[0]
+
+		material.albedo_color = pair[1]
+
+	_fades.erase(entity_id)
+
+
 ## The node of this entity. Built, measured and labelled when it has none.
 ##
 ## Two entries with one id share one node. [method _upsert] keeps that from
 ## happening, and this makes sure that it cannot draw a second copy.
-func _node_for_entity(entity: Dictionary) -> Node3D:
-	var entity_id := _id_of(entity)
+func _node_for_entity(entity_data: Dictionary) -> Node3D:
+	var entity_id := _id_of(entity_data)
 	var existing: Node3D = _nodes.get(entity_id)
 
 	if existing != null:
 		return existing
 
-	var node := _build(entity)
+	var node := _build(entity_data)
 
 	# The lift is measured BEFORE the label is attached. Both read the bounds
 	# of the node. A label attached first counts as part of the mesh, and it
 	# lifts the entity off the ground by the height of its own text.
 	_lift[entity_id] = _rest_offset(node)
-	_attach_label(node, entity)
+	_attach_label(node, entity_data)
 	add_child(node)
 
 	_nodes[entity_id] = node
-	_looks[entity_id] = _look_of(entity)
+	_looks[entity_id] = _look_of(entity_data)
 
 	return node
 
@@ -863,15 +972,16 @@ func _aim(entity_id: int, slot: Vector3) -> StepAnimator:
 
 ## The fields that decide what the node of an entity looks like.
 ##
-## [method _build] reads `asset` and `family`. [method _attach_label] reads
-## `label` and `label_kind`. A new field that either one reads goes here too,
-## or a changed row keeps its old node.
-static func _look_of(entity: Dictionary) -> Array:
+## [method _build] reads `asset`, `family`, and the facing.
+## [method _attach_label] reads `label` and `label_kind`. A new field that
+## either one reads goes here too, or a changed row keeps its old node.
+static func _look_of(entity_data: Dictionary) -> Array:
 	return [
-		str(entity.get("asset", "")),
-		str(entity.get("family", "")),
-		str(entity.get("label", "")),
-		str(entity.get("label_kind", "")),
+		str(entity_data.get("asset", "")),
+		str(entity_data.get("family", "")),
+		str(entity_data.get("label", "")),
+		str(entity_data.get("label_kind", "")),
+		str(entity_data.get(_Const.ENTITY_FACING_KEY, "")),
 	]
 
 
@@ -881,11 +991,17 @@ static func _look_of(entity: Dictionary) -> Array:
 ## file decides nothing about what a thing looks like. An entity ALWAYS gets a
 ## mesh -- resolve_entity never returns null -- because something unmodelled
 ## still has to be visible and clickable.
-func _build(entity: Dictionary) -> Node3D:
+func _build(entity_data: Dictionary) -> Node3D:
 	var node := _resolver.resolve_entity(
-		str(entity.get("asset", "")), str(entity.get("family", "")))
+		str(entity_data.get("asset", "")), str(entity_data.get("family", "")))
 
 	node.scale = Vector3.ONE * ENTITY_SCALE
+
+	# The rotation of the chunk object that stood the entity up. A row with
+	# no facing keeps the model as it comes.
+	if entity_data.has(_Const.ENTITY_FACING_KEY):
+		node.rotation.y = TerrainView.model_yaw(
+			int(entity_data[_Const.ENTITY_FACING_KEY]))
 
 	return node
 
@@ -909,8 +1025,8 @@ func _build(entity: Dictionary) -> Node3D:
 ## Placed from the mesh's own top rather than a fixed height, for the reason
 ## [method _rest_offset] exists: one number cannot clear a sword, a figure and
 ## a rigged character at once.
-func _attach_label(node: Node3D, entity: Dictionary) -> void:
-	var text := str(entity.get("label", ""))
+func _attach_label(node: Node3D, entity_data: Dictionary) -> void:
+	var text := str(entity_data.get("label", ""))
 
 	if text.is_empty():
 		return
@@ -924,7 +1040,7 @@ func _attach_label(node: Node3D, entity: Dictionary) -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.outline_size = LABEL_OUTLINE_SIZE
 	label.outline_modulate = COLOR_LABEL_OUTLINE
-	label.modulate = _label_colour(str(entity.get("label_kind", "")))
+	label.modulate = _label_colour(str(entity_data.get("label_kind", "")))
 
 	# Y-only billboard: the text turns to face the orbit camera as it swings
 	# around, but never tips. A fully billboarded label lies flat on its back
@@ -970,7 +1086,7 @@ func _label_colour(kind: String) -> Color:
 func _slot_position(origin: Vector3, tile: String, index: int,
 		total: int) -> Vector3:
 	var spread := maxi(total, 1)
-	var turn := float(MapPalette.stable_hash(tile) % 100) / 100.0
+	var turn := float(StableHash.of(tile) % 100) / 100.0
 	var angle := (float(index) + turn * RING_TURN_SHARE) / float(spread) * TAU
 	var radius := _ring_radius(spread)
 
@@ -1015,9 +1131,10 @@ func _rest_offset(node: Node3D) -> float:
 ## started piling them up at three.
 ##
 ## Still capped, so a crowded tile spreads within its own square rather than
-## sprawling across its neighbours. Five is what fits inside that cap; a sixth
-## occupant starts the overlapping again — which is the honest outcome, because
-## the alternative is one room's occupants standing on the next room's floor.
+## sprawling across its neighbours. At the ENTITY_SCALE of 0.5, five fit inside
+## that cap. At 1.0, even two overlap (see [constant ENTITY_SCALE]). Overlap is
+## the honest outcome. Without the cap, the occupants of one room would stand
+## on the floor of the next room.
 func _ring_radius(total: int) -> float:
 	if total <= 1:
 		return 0.0
@@ -1041,12 +1158,12 @@ func _ring_radius(total: int) -> float:
 func _on_art_arrived(asset_key: String) -> void:
 	var redrawn := false
 
-	for entity: Dictionary in _entities:
-		var asset := str(entity.get("asset", ""))
-		var family := str(entity.get("family", ""))
+	for entity_data: Dictionary in _entities:
+		var asset := str(entity_data.get("asset", ""))
+		var family := str(entity_data.get("family", ""))
 
 		if _resolver.redraws_for(asset, family, asset_key):
-			_drop_node(_id_of(entity))
+			_drop_node(_id_of(entity_data))
 			redrawn = true
 
 	if redrawn:
@@ -1079,5 +1196,5 @@ static func _by_id(first: Dictionary, second: Dictionary) -> bool:
 ## Entity ids arrive as floats, like every other number Godot parses out of
 ## JSON. Converted here, at the point of use, because this is where they become
 ## dictionary keys -- and a key of 20743.0 never matches one written as 20743.
-static func _id_of(entity: Dictionary) -> int:
-	return int(entity.get("id", 0))
+static func _id_of(entity_data: Dictionary) -> int:
+	return int(entity_data.get("id", 0))

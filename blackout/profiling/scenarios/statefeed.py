@@ -19,9 +19,11 @@ Description: Profiling scenarios for the statefeed layer -- the serialisers
              make it impossible to say which of them a regression was in.
 """
 
+from systems.core.tilegrid import chunkfile
+from systems.core.tilegrid import constants as tile_const
 from systems.interface.statefeed import serializers
 from systems.interface.statefeed import skills as skills_feed
-from systems.interface.statefeed.payloads import CharItemsPayload, MapChunkPayload
+from systems.interface.statefeed.payloads import CharItemsPayload, TileChunkPayload
 from systems.interface.summary.service import summary_data
 
 from .. import constants as const
@@ -44,7 +46,6 @@ _ENTITY_REPEAT = 200
 # A payload body big enough that asdict's recursive walk is measurable against
 # the dataclass construction around it.
 _ITEM_ROWS = 60
-_MAP_ROWS = 40
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -164,22 +165,21 @@ def payload_to_dict_items(world):
     return work
 
 
-@scenario(name="payload.to_dict (map chunk, 1600 nodes)",
+@scenario(name="payload.to_dict (tile chunk, 64 x 64)",
           layer=const.LAYER_STATEFEED,
           repeat=_ENTITY_REPEAT,
-          notes="The largest single payload the feed sends, which is why it "
-                "is the one that had to be chunked.")
-def payload_to_dict_map(world):
-    """Measure the conversion on the map-chunk payload."""
-    nodes = []
-    links = []
-
-    for row in range(_MAP_ROWS):
-        for column in range(_MAP_ROWS):
-            nodes.append({"x": column, "y": row, "room_kind": "Wastes"})
-            links.append({"from": [column, row], "to": [column + 1, row]})
-
-    payload = MapChunkPayload(z="profiling_fixture", nodes=nodes, links=links)
+          notes="The largest single payload the feed sends: one whole chunk "
+                "file. It replaced the xyzgrid map chunk in DESIGN-0011.")
+def payload_to_dict_tile_chunk(world):
+    """Measure the conversion on the tile chunk payload."""
+    size = tile_const.CHUNK_SIZE
+    tile_count = size * size
+    chunk_file = chunkfile.ChunkFile(
+        cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
+        heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
+        floors=[0] * tile_count, flags=[0] * tile_count,
+        areas=[0] * tile_count, objects=[])
+    payload = TileChunkPayload(chunk_file=chunkfile.to_dict(chunk_file))
 
     def work():
         payload.to_dict()

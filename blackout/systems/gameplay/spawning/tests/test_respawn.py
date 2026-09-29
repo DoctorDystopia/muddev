@@ -22,6 +22,7 @@ from evennia.scripts.models import ScriptDB
 from evennia.utils.dbserialize import dbserialize, dbunserialize
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
+from systems.core.tilegrid.constants import FACING_ATTR
 from systems.gameplay.spawning.respawn import (
     RESPAWN_MANAGER_KEY,
     RESPAWN_SWEEP_SECONDS,
@@ -33,6 +34,9 @@ from systems.gameplay.spawning.respawn import (
 from typeclasses.npc_combat import spawn_mutant_raider
 
 RAIDER_KEY = "mutant_raider"
+
+# A quarter turn that is not the default, so a lost facing shows.
+_TURN = 2
 
 
 def _raiders_in(room):
@@ -278,14 +282,39 @@ class TestHostileNpcDeathPath(EvenniaTest):
         self.assertEqual(raiders[0].db.hp, 5)
         self.assertTrue(raiders[0].is_alive())
 
+    def test_a_respawn_keeps_the_facing_of_the_dead_npc(self):
+        manager = get_respawn_manager()
+        npc = spawn_mutant_raider(self.room1)
+        npc.attributes.add(FACING_ATTR, _TURN)
+
+        npc.at_damage(99, attacker=self.char1)
+        due_at = manager.db.respawn_queue[0]["due_at"]
+        manager.sweep(now=due_at)
+        raider = _raiders_in(self.room1)[0]
+
+        self.assertEqual(raider.attributes.get(FACING_ATTR), _TURN)
+
+    def test_a_respawn_of_an_npc_with_no_facing_gets_none(self):
+        manager = get_respawn_manager()
+        npc = spawn_mutant_raider(self.room1)
+
+        npc.at_damage(99, attacker=self.char1)
+        due_at = manager.db.respawn_queue[0]["due_at"]
+        manager.sweep(now=due_at)
+        raider = _raiders_in(self.room1)[0]
+
+        self.assertIsNone(raider.attributes.get(FACING_ATTR))
+
 
 class TestSpawnerGuard(EvenniaTest):
     def test_spawner_does_not_stack_duplicates(self):
         """Regression: spawn_mutant_raider was the only spawner without a
-        presence guard, so every `xyzgrid spawn` added another raider."""
-        spawn_mutant_raider(self.room1)
+        presence guard, so every `xyzgrid spawn` added another raider. A
+        second run returns the raider that stands, so the tile sync can give
+        it its facing."""
+        first = spawn_mutant_raider(self.room1)
 
-        self.assertIsNone(spawn_mutant_raider(self.room1))
+        self.assertEqual(spawn_mutant_raider(self.room1), first)
         self.assertEqual(len(_raiders_in(self.room1)), 1)
 
     def test_spawner_ignores_a_different_npc_key_in_the_room(self):

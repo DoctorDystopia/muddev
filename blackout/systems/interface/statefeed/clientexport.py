@@ -51,6 +51,11 @@ Description: Render the facts a graphical client must know as source that
 import os as _os
 
 from systems.core.tick import constants as tick_const
+from systems.core.tilegrid import constants as tile_const
+from world import areas as area_table
+from world import floor_types as floor_table
+from world import object_kinds as kind_table
+from world import tile_checks
 
 from . import constants as const
 
@@ -118,10 +123,13 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_CHAR_SKILLS", const.CHANNEL_CHAR_SKILLS),
     ("CH_CHAR_COMBAT", const.CHANNEL_CHAR_COMBAT),
     ("CH_CHAR_POPUP", const.CHANNEL_CHAR_POPUP),
-    ("CH_MAP", const.CHANNEL_MAP),
     ("CH_COMBAT", const.CHANNEL_COMBAT),
     ("CH_AURA", const.CHANNEL_AURA),
     ("CH_XP_DROP", const.CHANNEL_XP_DROP),
+    ("CH_TILE_CHUNK", const.CHANNEL_TILE_CHUNK),
+    ("CH_WALK", const.CHANNEL_WALK),
+    ("CH_WORLD_MAP", const.CHANNEL_WORLD_MAP),
+    ("CH_WORLD_MAP_CHUNK", const.CHANNEL_WORLD_MAP_CHUNK),
     ("CH_SUBSCRIBED", const.CHANNEL_SUBSCRIBED_ACK),
 )
 
@@ -210,16 +218,22 @@ _TILE_KIND_EXPORTS: tuple = (
 _SCALAR_EXPORTS: tuple = (
     ("SUBSCRIBE_ALL", const.SUBSCRIBE_ALL),
     ("ASSET_KEY_CHARACTER", const.ASSET_KEY_CHARACTER),
-    ("ROOM_KIND_TRANSITION", const.ROOM_KIND_TRANSITION),
-    ("ROOM_KIND_DEFAULT", const.ROOM_KIND_DEFAULT),
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
     ("ENTITY_APPROACH_TEMPLATE", const.ENTITY_APPROACH_TEMPLATE),
+    # The walk to a far tile of the tile world. The server spells it, and the
+    # client fills in the tile, as for the approach above. A chunk has 4,096
+    # tiles, so no feed can stamp an action on each one.
+    ("TILE_WALK_TEMPLATE", const.TILE_COMMAND_GOTO_TEMPLATE),
+    # The run toggle. The Run button and its hotkey send it.
+    ("RUN_TOGGLE_COMMAND", const.COMMAND_RUN_TOGGLE),
     # The key a client reads to draw a node it has already stripped. Exported
     # for the same reason every other payload key is: a client that retyped
     # it would be free to disagree with the server about the spelling, and
     # the symptom is a stump that never appears.
     ("ENTITY_SPENT_KEY", const.ENTITY_SPENT_KEY),
+    # The key a client reads to turn the model of an entity.
+    ("ENTITY_FACING_KEY", const.ENTITY_FACING_KEY),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the
@@ -235,6 +249,10 @@ _SCALAR_EXPORTS: tuple = (
     # the SERVER is what decides how big a message gets -- see the constant's
     # own comment, and PERF-0002.
     ("CLIENT_INBOUND_BUFFER_BYTES", const.CLIENT_INBOUND_BUFFER_BYTES),
+    # The characters of a world map summary. The client decodes each tile
+    # with the same string, so the two cannot disagree about a floor.
+    ("WORLD_MAP_ALPHABET", const.WORLD_MAP_ALPHABET),
+    ("WORLD_MAP_COMMAND", const.WORLD_MAP_COMMAND),
 )
 
 # What a line of game TEXT is about. Generated for the same reason the channel
@@ -278,13 +296,112 @@ _MESSAGE_TYPE_EXPORTS: tuple = (
 # it, so a copy re-declared beside the channel names would be a second owner of
 # the game's heartbeat.
 #
-# IT IS EXPORTED BECAUSE A CLIENT THAT ANIMATES MUST MATCH IT. `goto` steps one
-# tile per tick (BlackoutGotoCmd.auto_step_delay), so a walk animation that
+# IT IS EXPORTED BECAUSE A CLIENT THAT ANIMATES MUST MATCH IT. A walk steps on
+# the tick (systems/gameplay/movement/walk.py), so a walk animation that
 # takes any other time either arrives early and waits, or falls behind and
 # keeps falling. Typing 0.6 into GDScript is the hazard CLAUDE.md names: a
 # literal that already had a constant, on a number the server is free to retune.
 _CLOCK_EXPORTS: tuple = (
     ("TICK_SECONDS", tick_const.TICK_SECONDS),
+)
+
+# The tile grid and its chunk file (DESIGN-0011 section 6.2). The owner is
+# systems/core/tilegrid/constants.py, as the tick's owner is its own package.
+#
+# Exported because the Godot chunk file reader and the editor must refuse and
+# write exactly what the Python reader refuses and reads. A flag bit typed
+# twice is two owners of one fact.
+_TILE_GRID_EXPORTS: tuple = (
+    ("CHUNK_FORMAT_VERSION", tile_const.CHUNK_FORMAT_VERSION),
+    ("CHUNK_SIZE", tile_const.CHUNK_SIZE),
+    ("CHUNK_CORNERS_PER_SIDE", tile_const.CORNERS_PER_SIDE),
+    ("CHUNK_PLANE_MAX", tile_const.PLANE_MAX),
+    ("CHUNK_HEIGHT_MIN", tile_const.HEIGHT_MIN),
+    ("CHUNK_HEIGHT_MAX", tile_const.HEIGHT_MAX),
+    ("CHUNK_ROTATION_COUNT", tile_const.ROTATION_COUNT),
+    ("CHUNK_NAME_PATTERN", tile_const.CHUNK_NAME_PATTERN),
+    ("CHUNK_TEXT_PATTERN", tile_const.CHUNK_TEXT_PATTERN),
+    ("CHUNK_TEXT_MAX_CHARS", tile_const.CHUNK_TEXT_MAX_CHARS),
+    ("CHUNK_FILE_TEMPLATE", tile_const.CHUNK_FILE_TEMPLATE),
+    ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
+    ("TILE_SYNC_STAMP_FILE", tile_const.SYNC_STAMP_FILE),
+    ("CHUNK_STREAM_RADIUS", tile_const.STREAM_RADIUS_CHUNKS),
+    ("TILE_WORLD_Z", tile_const.WORLD_Z),
+    # The client draws a triangle steeper than this as a cliff face.
+    ("TILE_WALK_LIMIT", tile_const.WALK_LIMIT),
+    ("TILE_FLAG_BLOCKED", tile_const.FLAG_BLOCKED),
+    ("TILE_FLAG_WATER", tile_const.FLAG_WATER),
+    ("TILE_FLAG_WALL_NORTH", tile_const.FLAG_WALL_NORTH),
+    ("TILE_FLAG_WALL_EAST", tile_const.FLAG_WALL_EAST),
+    ("TILE_FLAG_WALL_SOUTH", tile_const.FLAG_WALL_SOUTH),
+    ("TILE_FLAG_WALL_WEST", tile_const.FLAG_WALL_WEST),
+    ("TILE_FLAGS_UNWALKABLE", tile_const.FLAGS_UNWALKABLE),
+    ("TILE_FLAGS_ALL", tile_const.FLAGS_ALL),
+    ("OBJECT_CATEGORY_FACILITY", tile_const.OBJECT_CATEGORY_FACILITY),
+    ("OBJECT_CATEGORY_GATHERING", tile_const.OBJECT_CATEGORY_GATHERING),
+    ("OBJECT_CATEGORY_LANDMARK", tile_const.OBJECT_CATEGORY_LANDMARK),
+    ("OBJECT_CATEGORY_NPC", tile_const.OBJECT_CATEGORY_NPC),
+    ("OBJECT_CATEGORY_SIGN", tile_const.OBJECT_CATEGORY_SIGN),
+    ("OBJECT_CATEGORY_TRANSITION", tile_const.OBJECT_CATEGORY_TRANSITION),
+    ("OBJECT_CATEGORY_CLIMB", tile_const.OBJECT_CATEGORY_CLIMB),
+    ("OBJECT_TEXT_CATEGORY", tile_const.OBJECT_TEXT_CATEGORY),
+    ("OBJECT_SIGNPOST_KIND", kind_table.SIGNPOST_KIND),
+    ("SCENERY_LADDER", tile_const.SCENERY_LADDER),
+    ("SCENERY_STAIRS", tile_const.SCENERY_STAIRS),
+    ("SCENERY_HATCH", tile_const.SCENERY_HATCH),
+    ("TILE_DEFAULT_FLOOR", floor_table.DEFAULT_FLOOR_TYPE),
+    ("TILE_DEFAULT_AREA", area_table.DEFAULT_AREA),
+    # Planes (Phase 7). The client reads the plane of the player from the
+    # room Z, and draws no triangle on a void tile.
+    ("TILE_GROUND_PLANE", tile_const.GROUND_PLANE),
+    ("TILE_PLANE_Z_TEMPLATE", tile_const.PLANE_Z_TEMPLATE),
+    ("TILE_VOID_FLOOR", floor_table.VOID_FLOOR_TYPE),
+    ("TILE_RESPAWN_KIND", kind_table.RESPAWN_KIND),
+    ("CLIMB_UP", tile_const.CLIMB_UP),
+    ("CLIMB_DOWN", tile_const.CLIMB_DOWN),
+    # The rules of world/tile_checks.py. The editor runs the same rules.
+    ("TILE_CHECK_UNKNOWN_KIND", tile_checks.RULE_UNKNOWN_KIND),
+    ("TILE_CHECK_OBJECT_UNWALKABLE", tile_checks.RULE_OBJECT_UNWALKABLE),
+    ("TILE_CHECK_TRANSITION_LANDING", tile_checks.RULE_TRANSITION_LANDING),
+    ("TILE_CHECK_CLIMB_LANDING", tile_checks.RULE_CLIMB_LANDING),
+    ("TILE_CHECK_VOID_OPEN", tile_checks.RULE_VOID_OPEN),
+    ("TILE_CHECK_RESPAWN_COUNT", tile_checks.RULE_RESPAWN_COUNT),
+    ("TILE_CHECK_SIGN_TEXT", tile_checks.RULE_SIGN_TEXT),
+)
+
+# The names that the Godot editor paints and places (DESIGN-0011 section 6.3).
+# The owners are the three data tables under world/. Each list keeps the order
+# of its table, not the alphabet, because the editor lists them in that order.
+# The kinds are a map, kind -> category, so the editor can group its markers.
+_TILE_GRID_LIST_EXPORTS: tuple = (
+    ("TILE_FLOOR_TYPES", tuple(floor_table.FLOOR_TYPES)),
+    ("TILE_AREAS", tuple(area_table.AREAS)),
+    ("OBJECT_CATEGORIES", tile_const.OBJECT_CATEGORIES),
+    ("TILE_CHECK_RULES", tile_checks.RULES),
+    ("SCENERY_PRIMITIVES", tile_const.SCENERY_PRIMITIVES),
+)
+
+# The target of each transition and the ways of each climb let the editor
+# draw each link and run the checks of world/tile_checks.py. The scenery of a
+# kind is the model or the primitive that the client stands on its tile. A
+# kind with no target, no climb, or no scenery has no row in that map.
+_TILE_GRID_MAP_EXPORTS: tuple = (
+    ("OBJECT_KINDS", tuple((key, kind.category)
+                           for key, kind in kind_table.OBJECT_KINDS.items())),
+    ("OBJECT_KIND_TARGETS", tuple((key, kind.target)
+                                  for key, kind in kind_table.OBJECT_KINDS.items()
+                                  if kind.target)),
+    ("OBJECT_KIND_CLIMBS", tuple((key, kind.climbs)
+                                 for key, kind in kind_table.OBJECT_KINDS.items()
+                                 if kind.climbs)),
+    ("OBJECT_KIND_SCENERY", tuple((key, kind.scenery)
+                                  for key, kind in kind_table.OBJECT_KINDS.items()
+                                  if kind.scenery)),
+    # Only the terrain editor reads it, to draw the entity of a kind.
+    ("OBJECT_KIND_PREVIEW", tuple((key, kind.preview)
+                                  for key, kind in kind_table.OBJECT_KINDS.items()
+                                  if kind.preview)),
+    ("CLIMB_PLANE_STEPS", tuple(tile_const.CLIMB_PLANE_STEPS.items())),
 )
 
 _LANGUAGE_GD: str = "gd"
@@ -383,6 +500,52 @@ def _render_list(values, syntax: dict) -> str:
         syntax["list_open"], ", ".join(rendered), syntax["list_close"])
 
 
+def _render_map(pairs, syntax: dict, indent: str) -> str:
+    """
+    Purpose: Render a sequence of (key, value) pairs as a map literal.
+
+    Entry:
+        pairs  - an iterable of (scalar, value) tuples, in the order to write.
+                 A value is a scalar, or a tuple of scalars, which renders as
+                 a list.
+        syntax - one of the _*_SYNTAX tables.
+        indent - the leading whitespace of the declaration.
+
+    Exit/Returns:
+        The map literal, one pair on each line, with no trailing newline.
+
+    Module Globals:
+        None
+
+    Methodology:
+        1. Open the map on the declaration line.
+        2. Write each pair on its own line, one tab deeper.
+        3. Close the map at the indent of the declaration.
+
+    Notes/References:
+        One pair on each line, not one line for the map. A map grows one row
+        at a time, and then a diff shows the one row.
+
+    Author: Nick Hobar
+    Creation date: 09/24/2026
+    """
+    lines = [syntax["map_open"]]
+
+    for key, value in pairs:
+        if isinstance(value, tuple):
+            rendered = _render_list(value, syntax)
+        else:
+            rendered = _quote(value)
+
+        pair = syntax["pair"] % (_quote(key), rendered)
+
+        lines.append("%s\t%s," % (indent, pair))
+
+    lines.append(indent + syntax["map_close"])
+
+    return "\n".join(lines)
+
+
 def _render_header(syntax: dict) -> str:
     """
     Purpose: Render the do-not-edit banner in the target language's comments.
@@ -427,7 +590,8 @@ def _render_body(syntax: dict, indent: str) -> str:
     Module Globals:
         _CHANNEL_EXPORTS, _KIND_EXPORTS, _ITEM_FAMILY_EXPORTS,
         _LABEL_KIND_EXPORTS, _TILE_KIND_EXPORTS, _MESSAGE_TYPE_EXPORTS,
-        _CLOCK_EXPORTS, _SCALAR_EXPORTS read.
+        _CLOCK_EXPORTS, _TILE_GRID_EXPORTS, _TILE_GRID_LIST_EXPORTS,
+        _TILE_GRID_MAP_EXPORTS, _SCALAR_EXPORTS read.
 
     Methodology:
         Walk the export tables in the order they are declared above,
@@ -464,6 +628,20 @@ def _render_body(syntax: dict, indent: str) -> str:
             "shows it is the client's own.", _MESSAGE_TYPE_EXPORTS)
     section("The server clock. One tile per tick is walking speed.",
             _CLOCK_EXPORTS)
+    section("The tile grid and its chunk file. DESIGN-0011 section 6.2.",
+            _TILE_GRID_EXPORTS)
+
+    lines.append("%s%s What the terrain editor paints and places. The order is"
+                 % (indent, marker))
+    lines.append("%s%s the order of each table under world/." % (indent, marker))
+
+    for name, values in _TILE_GRID_LIST_EXPORTS:
+        lines.append(indent + declare % (name, _render_list(values, syntax)))
+
+    for name, pairs in _TILE_GRID_MAP_EXPORTS:
+        lines.append(indent + declare % (name, _render_map(pairs, syntax, indent)))
+
+    lines.append("")
     section("Everything else.", _SCALAR_EXPORTS)
 
     lines.append("%s%s Derived sets, so a client can iterate rather than"

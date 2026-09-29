@@ -198,7 +198,7 @@ class TestPuppetHook(EvenniaTest):
         # send_full_state swallows its own failures, which is why
         # at_post_puppet calls it unguarded. This is the test that keeps that
         # true: break the feed for real and the player still gets in.
-        with mock.patch("systems.interface.statefeed.resync._send_map",
+        with mock.patch("systems.interface.statefeed.resync._send_room",
                         side_effect=RuntimeError("feed is down")):
             self.char1.at_post_puppet()
 

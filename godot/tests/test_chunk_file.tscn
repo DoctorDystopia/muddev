@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_chunk_file.gd" id="1_chunk"]
+
+[node name="TestChunkFile" type="Node"]
+script = ExtResource("1_chunk")

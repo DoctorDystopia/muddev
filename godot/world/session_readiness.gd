@@ -7,7 +7,7 @@ extends Node
 ## Logging in is not arriving. [LoginView] dismisses itself the moment
 ## `char_vitals` lands, because vitals are only sent for a PUPPETED character
 ## and that is the honest signal that a body exists. But a body is not a world:
-## `blackout_map` is still arriving in chunks, `room_info` has not necessarily
+## `blackout_chunk` is still arriving, `room_info` has not necessarily
 ## said where you are standing, and not one `.glb` has been fetched. For a
 ## second or three the player is looking at a pane that is empty, then wrong,
 ## then right — and every click they land in that window is a real command sent
@@ -20,7 +20,7 @@ extends Node
 ##
 ##     a body      char_vitals landed          -> CharState.has_vitals
 ##     a place     room_info named a map       -> WorldState.current_z
-##     a map       every chunk of it arrived   -> Level.is_complete()
+##     a map       the chunk under you arrived -> WorldState.has_ground()
 ##     the art     nothing fetched, unwarmed   -> MeshResolver.in_flight_count()
 ##                 or awaiting the manifest
 ##
@@ -42,7 +42,7 @@ extends Node
 ## ## Why it POLLS rather than binding a signal
 ##
 ## Three of the four facts announce themselves ([signal CharState.changed],
-## [signal WorldState.map_ready], [signal MeshResolver.refreshed]) and the
+## [signal WorldState.chunks_changed], [signal MeshResolver.refreshed]) and the
 ## fourth does not: a model going INTO flight emits nothing, because
 ## [method ModelLoader.request] is called from a draw and adding a signal there
 ## would make every entity rebuild chatter. Binding the three that do exist
@@ -147,7 +147,7 @@ var _skipped := false
 ## session that never receives a map would report MAPPING forever and the
 ## ceiling would be unreachable.
 static func phase_for(has_body: bool, has_room: bool, map_complete: bool,
-		in_flight: int, art_idle: float, waited: float,
+		requests_in_flight: int, art_idle: float, waited: float,
 		skipped: bool) -> Phase:
 	if not has_body:
 		return Phase.OFFSTAGE
@@ -161,7 +161,7 @@ static func phase_for(has_body: bool, has_room: bool, map_complete: bool,
 	if not map_complete:
 		return Phase.MAPPING
 
-	if in_flight > 0 or art_idle < SETTLE_SECONDS:
+	if requests_in_flight > 0 or art_idle < SETTLE_SECONDS:
 		return Phase.ART
 
 	return Phase.READY
@@ -172,8 +172,9 @@ static func phase_for(has_body: bool, has_room: bool, map_complete: bool,
 ## OFFSTAGE and READY are both "not loading", and they are deliberately not the
 ## same thing anywhere else: OFFSTAGE is the login form's screen. A veil that
 ## covered it would hide the one control the player needs.
-static func is_loading(phase: Phase) -> bool:
-	return phase == Phase.PLACING or phase == Phase.MAPPING or phase == Phase.ART
+static func is_loading(current_phase: Phase) -> bool:
+	return current_phase == Phase.PLACING or current_phase == Phase.MAPPING \
+		or current_phase == Phase.ART
 
 
 ## Follow the models that answer the four questions.
@@ -280,21 +281,16 @@ func _has_room() -> bool:
 	return not _world.current_z.is_empty()
 
 
-## Whether every chunk of the map the observer is standing on has landed.
+## Whether the ground under the observer has landed.
 ##
-## False for a map with no [WorldState.Level] at all, which is the state between
-## `room_info` naming a z and the first chunk of it arriving — the level is
-## keyed by the name the room named, so a missing entry means nothing of that
-## map has been received rather than that it is empty.
+## On the tile world, that is the chunk of the tile of the observer
+## ([method WorldState.has_ground]). Off the tile world (Limbo) it is always
+## true. No ground comes there, so a wait only holds the veil up.
 func _map_complete() -> bool:
-	var z := _world.current_z
+	if not _world.on_tile_world():
+		return true
 
-	if not _world.levels.has(z):
-		return false
-
-	var level: WorldState.Level = _world.levels[z]
-
-	return level.is_complete()
+	return _world.has_ground()
 
 
 ## Store the phase and announce a change, then stop ticking once there is

@@ -160,10 +160,12 @@ class WorldPanel(BasePanel):
 
         coords = room_coords(location)
 
-        if not coords:
-            return str(location.key)
+        name = location.get_display_name(character)
 
-        text = f"{location.key} ({coords[0]}, {coords[1]}, {coords[2]})"
+        if not coords:
+            return str(name)
+
+        text = f"{name} ({coords[0]}, {coords[1]}, {coords[2]})"
 
         return text
 
@@ -333,7 +335,7 @@ class WorldPanel(BasePanel):
             room_name = ""
             coords = []
         else:
-            room_name = str(location.key)
+            room_name = str(location.get_display_name(character))
             coords = room_coords(location)
 
         payload = {

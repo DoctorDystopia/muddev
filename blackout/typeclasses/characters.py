@@ -31,6 +31,14 @@ from systems.interface.statefeed import resync
 from world.respawn import get_respawn_room
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.ui import move_text
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.world import get_world
+from world import tile_travel
+
+# The tile of a character on the tile world at its last logout, as [x, y].
+# A tile room moves through a pool, so the room of a logout is not safe to
+# keep (Character.at_pre_puppet). The tile is.
+PRELOGOUT_TILE_ATTR = "prelogout_tile"
 
 # The routing tags this module sends, bound once rather than repeated at
 # every call site. The SERVER says what a line IS; the client decides which
@@ -452,8 +460,76 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         except Exception as exc:
             logger.log_err(f"Character.at_post_unpuppet playtime bank failed: {exc!r}")
 
+        self._remember_tile()
+
         parent_class = super()
         parent_class.at_post_unpuppet(account, session=session, **kwargs)
+
+    def _remember_tile(self) -> None:
+        """
+        Store the tile and the plane of a character on the tile world, as
+        [x, y, plane], before the logout moves it to no location. See
+        at_pre_puppet.
+        """
+        tile = tile_travel.tile_of(self)
+
+        if tile is None:
+            self.attributes.remove(PRELOGOUT_TILE_ATTR)
+            return
+
+        plane = tile_travel.plane_of(self)
+        self.attributes.add(PRELOGOUT_TILE_ATTR, [tile[0], tile[1], plane])
+
+    def at_pre_puppet(self, account, session=None, **kwargs):
+        """
+        Purpose: Put a character back on its tile of the tile world at login.
+
+        Entry:
+            account, session - as Evennia passes them.
+
+        Exit/Returns:
+            None. The parent hook then moves the character in.
+
+        Module Globals:
+            PRELOGOUT_TILE_ATTR read.
+
+        Methodology:
+            Evennia stores the room of a logout in `db.prelogout_location`.
+            A tile room moves through a pool, so after a logout another
+            walker can send that room to a different tile. The tile is the
+            fact that holds. This hook gets the room at the stored tile, and
+            it puts that room in `prelogout_location` before the parent hook
+            reads it.
+
+            A character with no stored tile, no logout room, and no home
+            goes to the respawn point (world/respawn.py).
+
+        Notes/References:
+            DESIGN-0011 section 6.1, option B. The pool is in
+            systems/core/tilegrid/rooms.py.
+
+        Author: Nick Hobar
+        Creation date: 09/24/2026
+        """
+        stored = self.attributes.get(PRELOGOUT_TILE_ATTR, default=None)
+
+        if self.location is None and stored:
+            # A tile stored before planes (Phase 7) has no plane: plane 0.
+            x, y = int(stored[0]), int(stored[1])
+            plane = int(stored[2]) if len(stored) > 2 else tile_const.GROUND_PLANE
+            view = get_world().plane(plane)
+            flags = view.grid.flags_at(x, y)
+
+            if not flags & tile_const.FLAGS_UNWALKABLE:
+                self.db.prelogout_location = view.rooms.ensure_room(x, y)
+
+        # Evennia tries the room of the logout, then the home. The cutover
+        # deleted the xyzgrid rooms, so both can be gone.
+        if self.location is None and not self.db.prelogout_location and not self.home:
+            self.db.prelogout_location = get_respawn_room()
+
+        parent_class = super()
+        parent_class.at_pre_puppet(account, session=session, **kwargs)
 
 
     # ─── Death ──────────────────────────────────────────────────────────────
@@ -537,7 +613,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
         self.msg(("|rYou black out.|n", _MSG_COMBAT))
         self.msg(
-            (f"|wYou wake up at {room.key}, your wounds closed over.|n",
+            (f"|wYou wake up at {room.get_display_name(self)}, your wounds closed over.|n",
              _MSG_COMBAT))
 
 

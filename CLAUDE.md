@@ -31,6 +31,20 @@ never through a shell heredoc. In the PowerShell snippets of this repo, `$`,
 backticks, and nested quotes break heredoc bodies with no error. They also
 break the shell command around the heredoc.
 
+**Line endings do not matter in a commit.** `.gitattributes` sets
+`* text=auto eol=lf`, so git stores every text file with LF. The ending on
+disk never reaches the repo. Do not spend time on it:
+
+- The Write tool gives CRLF files on this machine. Git stores them as LF.
+- A Python script that reads a file in text mode gets LF. A write back with
+  `newline=""` then gives an LF file on disk. That is correct. Do not add
+  code to keep the CRLF.
+- The git warning "CRLF will be replaced by LF" is expected. It is not a
+  fault.
+- A byte comparison must normalize CRLF first. Both chunk file parity tests
+  do this.
+- `*.ps1` is the one exception. Git checks it out with CRLF.
+
 ## Layout
 
 ```
@@ -65,7 +79,7 @@ Inside `blackout/`:
 
 | Sub-domain | Holds | Contains |
 |---|---|---|
-| `systems/gameplay/` | Mechanics with content and rules — what a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/`, `consumables/`, `graffiti/` |
+| `systems/gameplay/` | Mechanics with content and rules — what a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/`, `consumables/`, `graffiti/`, `movement/` |
 | `systems/interface/` | How TRUE state is shaped for a player | `statefeed/` (Godot wire protocol), `summary/` (dossier), `menus/` (EvMenu flows), `ui/` (colours, meters) |
 | `systems/core/` | Engine plumbing the others ride on | `tick/`, `stat_tracker/`, `managers.py` |
 
@@ -83,70 +97,60 @@ ungrouped: neither gameplay content, presentation, nor infra.
 
 ## Danger: `blackout/scripts/`
 
-These act on the **live** development database, not a test DB. `map_sync.py`
-(formerly `xyz_cleanup.py`) deletes tiles.
+These act on the **live** development database, not a test DB.
+`sync_tile_objects.py --apply` demolishes the contents of a changed tile.
+`move_to_tile_world.py --apply` deletes every xyzgrid room that is left.
 
 - **Never write a loop that bulk-imports modules under `blackout/`,** not for
   an import check, a linter, or a doc pass. One time, a loop of this type ran
-  the map cleanup script and deleted 347 tiles. Everything here is now behind
-  an `if __name__ == "__main__"` guard, but treat the directory as
+  the old map cleanup script and deleted 347 tiles. Everything here is now
+  behind an `if __name__ == "__main__"` guard, but treat the directory as
   import-unsafe and exclude it explicitly.
 - **Nothing outside this directory may name a module inside it.** The trap is
   a typeclass path, because it is in a DB row, not in an import statement.
   Until 08/28/2026, `ShopkeepCleanup` sat in 34 `ScriptDB` rows. Thus, every
   server start imported code from the import-unsafe directory. It now lives
-  beside its only user, in `typeclasses/npcs.py`. On the next map rebuild,
-  `ShopkeepNPC.ensure_cleanup_script` re-points stale shopkeeps. General
-  rule: see "An import path belongs in the code, never in a database row".
+  beside its only user, in `typeclasses/npcs.py`.
+  `ShopkeepNPC.ensure_cleanup_script` re-points a stale shopkeep when its
+  spawner runs again. General rule: see "An import path belongs in the code,
+  never in a database row".
 - `export_client_constants.py` touches no database but lives behind the same
   guard. Code that needs its output imports
   `systems/interface/statefeed/clientexport.py` instead. The staleness test
   cannot import this directory, so the output-path table lives in
   `clientexport.py`.
-- Maps are regenerable from `world/maps/*.py` via
-  `scripts/clean_and_reload_all_maps.ps1`. Accounts and characters are not.
+- The world is regenerable from the chunk files in `world/chunks/` through
+  `sync_tile_objects.py`. Accounts and characters are not.
 
-**`scripts/map_manifest.json` decides which maps exist.** An added row adds a
-map. A deleted row removes that map and its rooms on the next map rebuild.
+**The chunk files decide what stands in the world.** The tile sync reads
+them. It reports by default and changes things only with `--apply`. Stop the
+server first, because the server keeps the tile room index in memory.
+`systems/gameplay/spawning/tile_sync.py` owns the four verbs.
 
-`world/maps/manifest.py` parses the manifest, and that module is importable
-and tested. `scripts/map_sync.py` applies it. The `.ps1` and `.sh` scripts are
-thin wrappers. `clean_and_reload_all_maps.ps1 -DryRun` (`--dry-run` for `.sh`)
-reports the diff without touching anything.
-
-**`map_sync.py` reconciles against the DATABASE, not the grid Script.** A diff
-of `grid.db.map_data` alone made a whole class of map permanently invisible.
-If a map left the manifest after the grid forgot it, the map was in neither
-list. Thus, nothing reaped it. Until the fix on 08/28/2026,
-`trade town sector 1` sat as 59 live rooms and 144 exits that belonged to no
-map.
-
-The map rebuild also spawns in-process. It does not call
-`evennia xyzgrid spawn` in a subprocess, because that command asks for stdin
-confirmation with no way to decline. The old rebuild thus could not run
-unattended, and nothing ever checked its exit code.
+**The xyzgrid maps are gone** (DESIGN-0011 Phase 4b, 09/25/2026). Their
+sources, `map_sync.py`, the manifest, and the rebuild wrappers are in
+`archive/xyzgrid-maps/`. The cutover (`world/tile_cutover.py`,
+`scripts/move_to_tile_world.py`) moves each character to its tile and deletes
+the map rooms. It stays live for a database that still holds the maps.
 
 **A deleted room destroys what stands on it.**
 `systems/gameplay/spawning/teardown.py` owns the rule.
-`GridTile.at_object_delete` runs it.
+`GridTile.at_object_delete` runs it, and `TileRoom` inherits the hook.
 
 Evennia's `clear_contents` does not delete contents. It moves them to their
 home. If the home IS the room that Evennia deletes, it changes that home to
-`settings.DEFAULT_HOME`. As a result, map rebuilds used to *exile* the NPCs,
-nodes, and facilities of the grid to Limbo. By 08/28/2026, Limbo held 623 of
-these objects, with 197 more nested inside them. The live grid had 23 real
-ones.
+`settings.DEFAULT_HOME`. As a result, xyzgrid map rebuilds used to *exile* the
+NPCs, nodes, and facilities of the grid to Limbo. By 08/28/2026, Limbo held
+623 of these objects, with 197 more nested inside them. The live grid had 23
+real ones.
 
 `scripts/reap_orphans.py` drains a backlog. By default it only reports, and it
 needs `--apply` to change anything. The hook prevents a new backlog.
 
-The hook is the seam, because it is the only point common to every way a tile
-dies:
-
-- The manifest purge
-- `XYZGrid.remove_map`
-- The contrib, when `XYMap.spawn_nodes` deletes a tile that fell off the map.
-  No operator script can reach this path.
+The hook is the seam, because it is the only point common to every way a room
+dies: the cutover, a full pool that deletes an empty room, and any staff
+`destroy`. The tile sync demolishes the contents of a changed tile through
+the same teardown module, and the room stays.
 
 The hook encodes two rules:
 
@@ -178,8 +182,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (2879 tests, ~23 min,
-measured 09/21/2026):
+**Before a merge or a major change**, run the full suite (3060 tests, ~25 min,
+measured 09/28/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -344,7 +348,7 @@ grep, and a moved directory all reach a path in Python. None of them reaches a
 path stamped into a `ScriptDB` row or an Attribute. Declare it on the
 **class**. Every read of a class attribute gets the current value. Thus, a fix
 to the constant corrects every object already in the DB, with no migration and
-no map rebuild.
+no tile sync.
 
 | What was persisted | Broke on | Symptom |
 |---|---|---|
@@ -360,7 +364,7 @@ reads it **before** `db.menu_module`. That order is the fix, not the fallback.
 If the code reads the row first, a stale path shadows the corrected constant
 forever.
 
-Where a row is unavoidable, the migration rides the map rebuild that the
+Where a row is unavoidable, the migration rides the tile sync that the
 operator already runs. `ShopkeepNPC.ensure_cleanup_script` is the model. Also,
 the launcher refuses an unresolvable path and does not forward it.
 
@@ -498,9 +502,10 @@ in `statefeed/tests/test_freshness.py`.
 
 ### Client-side facts that cannot be generated
 
-`ROOM_KIND_COLORS`, `Z_LAYOUT_ORDER`, and `SKILL_CATEGORY_COLORS` mix a server
-fact (which room kinds, maps, and skill categories exist) with a client fact
-(what color, what order). Thus,
+`SKILL_CATEGORY_COLORS`, `AreaLook.LOOKS`, and `FloorPalette.COLORS` mix a
+server fact (which skill categories, areas, and floor types exist) with a
+client fact (what color, what fog). The room kind and map order tables went
+with the xyzgrid maps in DESIGN-0011 Phase 4b. Thus,
 `systems/interface/statefeed/tests/test_client_constants.py` guards them, and
 nothing generates them.
 
@@ -700,8 +705,8 @@ effect is a check that someone forgets on the ninth effect.
 **Nothing here re-implements what exists.** Boot and ban type Evennia's own
 commands through `execute_cmd`. Thus, the `server_bans` ServerConfig row keeps
 one writer, and `ban`'s Developer lock still refuses an Admin. The item, skill,
-and map lists read live from `ITEM_DB`, `SKILL_REGISTRY`, and
-`scripts/map_manifest.json`, so new content reaches the menu with no edit
+and area lists read live from `ITEM_DB`, `SKILL_REGISTRY`, and
+`world/areas.py`, so new content reaches the menu with no edit
 here.
 
 **Quest writes belong to `QuestHandler`, not to the tool.**
@@ -734,7 +739,7 @@ to delete anything that carries it.
 `CombatEntity.at_damage` (`typeclasses/mixins.py`) reads it and returns 0
 before the HP write. `at_damage` reads the flag inline, not through
 `actions.godmode_enabled`, because that module imports `ITEM_DB`, the skill
-registry, and the xyzgrid contrib. And `at_damage` is the combat hot path:
+registry, and the tile world. And `at_damage` is the combat hot path:
 every combatant, every tick.
 
 The two readers share only the attribute NAME, from `constants.py`, and
@@ -846,6 +851,92 @@ Four rules:
    today.
 4. **Godot's runtime loader cannot read Draco, meshopt, or quantized meshes.**
    `pipeline/glb.py` owns the list of extensions that it can read.
+
+## The tile grid (DESIGN-0011)
+
+The tile world is the only world since Phase 4b (09/25/2026). The xyzgrid
+maps are in `archive/xyzgrid-maps/`. Phase 6 (the walk limit and line of
+sight) is done since 09/26/2026. Phase 7 (planes) is done in code since
+09/26/2026: the server (7a), the client (7b), and the editor (7c). Bridges
+are a later step. The design is
+[docs/2026-09-23-DESIGN-0011-terrain-verticality-fog.md](docs/2026-09-23-DESIGN-0011-terrain-verticality-fog.md).
+The state of each phase and the next steps are in
+[docs/2026-09-24-HANDOFF-0001-tile-grid.md](docs/2026-09-24-HANDOFF-0001-tile-grid.md).
+Read the handoff before you continue this work.
+
+| Part | Where |
+|---|---|
+| Fog and light for each area | `godot/world/area_look.gd`, `area_environment.gd` |
+| Grid arrays, step rule, A*, tile rooms and pool | `blackout/systems/core/tilegrid/` |
+| `TileRoom` | `typeclasses/rooms.py` |
+| Chunk file, Python | `systems/core/tilegrid/chunkfile.py` |
+| Chunk file, GDScript | `godot/world/terrain/chunk_file.gd` |
+| World chunk files | `blackout/world/chunks/` |
+| Floor types, areas, object kinds | `world/floor_types.py`, `world/areas.py`, `world/object_kinds.py` |
+| Chunk mesh, `surface_height`, the chunk set, picking | `godot/world/terrain/` |
+| The terrain editor | `godot/addons/blackout_terrain/` |
+| Spike measurements | `profiling/scenarios/tilegrid.py` |
+| The tile world: chunk files as one grid and one room index | `systems/core/tilegrid/world.py` |
+| Room text, travel, and the telnet map of a tile | `world/tile_text.py`, `world/tile_travel.py`, `world/tile_map.py` |
+| Direction commands, `goto`, `run`, and `tiletp` on the tile world | `commands/tile_movement.py` |
+| The walk on the tick, the run toggle, and the one writer of the walk, `set_walk` | `systems/gameplay/movement/walk.py` |
+| One move across several tiles (the run and its tile skip) | `stride` in `systems/core/tilegrid/movement.py` |
+| A held movement key in the client, and the Run button | `godot/world/held_movement.gd`, `godot/scenes/console.gd`, `godot/scenes/minimap/minimap_view.gd` |
+| The tile sync of chunk objects | `systems/gameplay/spawning/tile_sync.py`, `scripts/sync_tile_objects.py` |
+| The respawn point (the `respawn_point` object kind) | `world/respawn.py` |
+| The cutover from the xyzgrid maps | `world/tile_cutover.py`, `scripts/move_to_tile_world.py` |
+| Line of sight, and reach with sight (`can_strike`) | `systems/core/tilegrid/sight.py`, `systems/gameplay/combat/reach.py` |
+| The sweep of empty tile rooms | `systems/core/tilegrid/sweep.py` |
+| The room Z of each plane, `TilePlane`, and `climb` | `systems/core/tilegrid/planes.py`, `world.py`, `world/tile_travel.py` |
+| Planes in the client, and "Hide roofs" | `godot/world/world_state.gd`, `godot/world/terrain/terrain_view.gd` |
+| The water surface | `godot/world/terrain/water_mesh_builder.gd` |
+| The walls, and the scenery of a chunk object | `godot/world/terrain/wall_mesh_builder.gd`, `terrain_view.gd`, `scenery` in `world/object_kinds.py` |
+| The primitives: ladder, stairs, hatch | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
+| The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
+| The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
+| The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/terrain_sync_state.gd` |
+| The walk feed (`blackout_walk`), with the run toggle | `systems/interface/statefeed/events.py`, `systems/gameplay/movement/walk.py` |
+| The minimap, and the world map with its feed and `worldmap` | `godot/scenes/minimap/`, `godot/scenes/worldmap/`, `systems/interface/statefeed/worldmap.py`, `world/tile_world_map.py` |
+
+Nine rules:
+
+- **A tile room stores no fact about its tile.** The pool moves a room to
+  another tile. Thus, a name, a sign label, or a reference to "the room where
+  it was" goes stale. Store the tile coordinates, or pin the tile
+  (`TileRooms.pin`). Three places needed this in Phase 4a: the room name, the
+  sign label, and the room of a logout.
+- **The editor and the client draw the ground with one class.**
+  `ChunkMeshBuilder` owns the diagonal of each tile and `surface_height`.
+  `test_chunk_mesh.gd` fails if the drawn ground and the height read differ.
+- **Both chunk file readers change together.** The parity test is
+  `test_chunkfile.py` plus `godot/tests/test_chunk_file.gd`. A Python guard
+  fails if their lists of refused files differ.
+- **Both content checks change together.** `world/tile_checks.py` and
+  `terrain_checks.gd` check one fixture world against one `expected.json`.
+  A new rule is a function in each, an exported rule name, and a case in
+  `world/tests/check_fixture_builder.py`.
+- **Never retag a room through `tags.remove` and `tags.add` on a step.** Each
+  call re-reads all tags of the room. `TileRooms._retag` writes the join rows.
+- **The tile grid constants live in `systems/core/tilegrid/constants.py`.**
+  The GDScript copy is generated. Run `export_client_constants.py` after an
+  edit.
+- **A test installs its own world.** `get_world()` caches the world in a
+  module global. `test_settings.py` points `TILE_WORLD_DIR` at a directory
+  that does not exist, so the implicit world of a test is empty. A real
+  world would keep the rooms of a rolled-back test. A test that needs tiles
+  calls `set_world(world)` in `setUp` and `set_world(None)` in `tearDown`.
+- **The height rules come from the vault.** The walk limit is in
+  `03_Systems/Movement_and_Traversal.md`, and line of sight is in
+  `03_Systems/Combat_System.md`. Godot reads `TILE_WALK_LIMIT` to draw a
+  cliff face. The path search tests the slope inline. Its test must stay the
+  same as `TileGrid._check_slope`, and `test_pathfind.py` compares the two.
+- **Every step of a player moves on the tick** (09/29/2026). A direction
+  command and `goto` only start a walk. `walk.advance_all` moves every walker
+  at `PHASE_START`: one tile, or two tiles with run on. A direction command is
+  one tick of movement, so a held key never stacks steps and needs no "stop".
+  A click on the next tile sends `goto (x,y)`, not a direction word, so a run
+  never moves it two tiles. A test moves the walkers with
+  `walk.advance_all()` and calls `walk.forget_all()` in `tearDown`.
 
 ## The website
 

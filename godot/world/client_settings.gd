@@ -47,8 +47,12 @@ const KEY_SFX_VOLUME := "sfx_volume"
 const KEY_SHOW_XP_DROPS := "show_xp_drops"
 const KEY_SHOW_SKILL_RATES := "show_skill_rates"
 const KEY_SMOOTH_MOVEMENT := "smooth_movement"
+const KEY_CAMERA_RELATIVE_KEYS := "camera_relative_keys"
+const KEY_HIDE_ROOFS := "hide_roofs"
 const KEY_AMOUNT_SIZE := "amount_size"
 const KEY_POPUP_RECT := "popup_rect"
+const KEY_MINIMAP_RADIUS := "minimap_radius"
+const KEY_SHOW_WALK_PATH := "show_walk_path"
 
 const DEFAULT_FONT_SIZE := 14
 const MIN_FONT_SIZE := 9
@@ -182,6 +186,35 @@ const DEFAULT_SHOW_SKILL_RATES := false
 ## it off sees exactly the same facts one frame sooner.
 const DEFAULT_SMOOTH_MOVEMENT := true
 
+## Turn the movement keys with the camera: W walks where the camera looks,
+## not to the north. Off by default, so W is north, as on the website and in
+## the help. The server gets a plain direction word either way
+## ([method MovementKeys.steered]).
+const DEFAULT_CAMERA_RELATIVE_KEYS := false
+
+## Hide every plane above the plane of the player (DESIGN-0011 Phase 7b), as
+## the OSRS "Hide roofs" setting does. On by default (Nick, 09/26/2026): with
+## it off, the floor above hides a player who stands indoors.
+##
+## A LOOK, like [constant DEFAULT_SMOOTH_MOVEMENT]. The server sends every
+## plane either way.
+const DEFAULT_HIDE_ROOFS := true
+
+## How many tiles the minimap shows on each side of the player: its zoom.
+##
+## A LOOK. The steps are [constant MinimapView.ZOOM_RADII], and the pane owns
+## them. This file keeps the step the player left and clamps a hand-edited
+## number into the range of the steps. The pane then snaps it to the nearest
+## step. 20 is the window that the minimap had before it could zoom.
+const DEFAULT_MINIMAP_RADIUS := 20
+
+## Whether the minimap and the world map draw the walk path (09/28/2026).
+##
+## Off by default. The destination marker always shows, as in OSRS. The path is
+## the extra that Nick asked for as a toggle. The server sends the path either
+## way, so the toggle hides a line and changes no fact.
+const DEFAULT_SHOW_WALK_PATH := false
+
 ## How big the player made the amount box, in pixels, or zero on either axis
 ## before they sized one.
 ##
@@ -279,6 +312,10 @@ var sfx_volume := DEFAULT_SFX_VOLUME
 var show_xp_drops := DEFAULT_SHOW_XP_DROPS
 var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
 var smooth_movement := DEFAULT_SMOOTH_MOVEMENT
+var camera_relative_keys := DEFAULT_CAMERA_RELATIVE_KEYS
+var hide_roofs := DEFAULT_HIDE_ROOFS
+var minimap_radius := DEFAULT_MINIMAP_RADIUS
+var show_walk_path := DEFAULT_SHOW_WALK_PATH
 var amount_size := DEFAULT_AMOUNT_SIZE
 var popup_rect := DEFAULT_POPUP_RECT
 var panel_size := DEFAULT_PANEL_SIZE
@@ -323,6 +360,14 @@ func load_from_disk() -> void:
 		SECTION, KEY_SHOW_SKILL_RATES, DEFAULT_SHOW_SKILL_RATES))
 	smooth_movement = bool(config.get_value(
 		SECTION, KEY_SMOOTH_MOVEMENT, DEFAULT_SMOOTH_MOVEMENT))
+	camera_relative_keys = bool(config.get_value(
+		SECTION, KEY_CAMERA_RELATIVE_KEYS, DEFAULT_CAMERA_RELATIVE_KEYS))
+	hide_roofs = bool(config.get_value(
+		SECTION, KEY_HIDE_ROOFS, DEFAULT_HIDE_ROOFS))
+	minimap_radius = _clamp_minimap_radius(int(config.get_value(
+		SECTION, KEY_MINIMAP_RADIUS, DEFAULT_MINIMAP_RADIUS)))
+	show_walk_path = bool(config.get_value(
+		SECTION, KEY_SHOW_WALK_PATH, DEFAULT_SHOW_WALK_PATH))
 	amount_size = _clamp_box_size(config.get_value(
 		SECTION, KEY_AMOUNT_SIZE, DEFAULT_AMOUNT_SIZE))
 	popup_rect = _clamp_box_rect(config.get_value(
@@ -350,6 +395,10 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_SHOW_XP_DROPS, show_xp_drops)
 	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
 	config.set_value(SECTION, KEY_SMOOTH_MOVEMENT, smooth_movement)
+	config.set_value(SECTION, KEY_CAMERA_RELATIVE_KEYS, camera_relative_keys)
+	config.set_value(SECTION, KEY_HIDE_ROOFS, hide_roofs)
+	config.set_value(SECTION, KEY_MINIMAP_RADIUS, minimap_radius)
+	config.set_value(SECTION, KEY_SHOW_WALK_PATH, show_walk_path)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
 	config.set_value(SECTION, KEY_POPUP_RECT, popup_rect)
 	config.set_value(SECTION, KEY_PANEL_SIZE, panel_size)
@@ -522,6 +571,48 @@ func set_smooth_movement(value: bool) -> void:
 	changed.emit()
 
 
+## Turn the movement keys with the camera, or keep W at north, and persist it.
+func set_camera_relative_keys(value: bool) -> void:
+	if value == camera_relative_keys:
+		return
+
+	camera_relative_keys = value
+	save_to_disk()
+	changed.emit()
+
+
+## Hide the planes above the player, or show them, and persist it.
+func set_hide_roofs(value: bool) -> void:
+	if value == hide_roofs:
+		return
+
+	hide_roofs = value
+	save_to_disk()
+	changed.emit()
+
+
+## Set the zoom of the minimap, clamped, and persist it.
+func set_minimap_radius(value: int) -> void:
+	var clamped := _clamp_minimap_radius(value)
+
+	if clamped == minimap_radius:
+		return
+
+	minimap_radius = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Draw the walk path on the maps, or hide it, and persist it.
+func set_show_walk_path(value: bool) -> void:
+	if value == show_walk_path:
+		return
+
+	show_walk_path = value
+	save_to_disk()
+	changed.emit()
+
+
 ## Remember how big the player made the amount box, and persist it.
 ##
 ## Called when the box closes, so a resize drag writes the file one time. A
@@ -581,6 +672,10 @@ func reset() -> void:
 	show_xp_drops = DEFAULT_SHOW_XP_DROPS
 	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
 	smooth_movement = DEFAULT_SMOOTH_MOVEMENT
+	camera_relative_keys = DEFAULT_CAMERA_RELATIVE_KEYS
+	hide_roofs = DEFAULT_HIDE_ROOFS
+	minimap_radius = DEFAULT_MINIMAP_RADIUS
+	show_walk_path = DEFAULT_SHOW_WALK_PATH
 	amount_size = DEFAULT_AMOUNT_SIZE
 	popup_rect = DEFAULT_POPUP_RECT
 	panel_size = DEFAULT_PANEL_SIZE
@@ -606,6 +701,12 @@ func _clamp_scale(value: float) -> float:
 
 func _clamp_volume(value: float) -> float:
 	return clampf(value, MIN_SFX_VOLUME, MAX_SFX_VOLUME)
+
+
+func _clamp_minimap_radius(value: int) -> int:
+	var steps := MinimapView.ZOOM_RADII
+
+	return clampi(value, steps[0], steps[steps.size() - 1])
 
 
 ## A saved box size, or zero when the file holds something else.

@@ -427,16 +427,46 @@ def spawn_signpost(room):
     Creation date: 09/11/2026
     """
     authored = room.attributes.get(SIGNPOST_LABEL_ATTR, default="")
+    described = room.attributes.get(SIGNPOST_DESC_ATTR, default="")
 
-    if not authored:
+    return place_signpost(room, authored, described)
+
+
+def place_signpost(room, label: str, desc: str = ""):
+    """
+    Purpose: Stand one signpost with these words in a room, or correct the
+             words of the signpost that stands there.
+
+    Entry:
+        room  - any room.
+        label - the words. "" places nothing.
+        desc  - what the post looks like, or "" for the stock text.
+
+    Exit/Returns:
+        The Sign in the room, or None for an empty label.
+
+    Module Globals:
+        SIGNPOST_KEY and _SIGN_TYPECLASS read.
+
+    Methodology:
+        The body of spawn_signpost, with the words as arguments. The tile
+        grid calls this with the label of an object kind, because a tile room
+        moves through a pool and must not carry a label attribute to its next
+        tile (world/object_kinds.py).
+
+    Notes/References:
+        systems/gameplay/spawning/tile_sync.py calls this.
+
+    Author: Nick Hobar
+    Creation date: 09/24/2026
+    """
+    if not label:
         return None
 
     sign = spawn_once(room, _SIGN_TYPECLASS, key=SIGNPOST_KEY)
-    sign.world_label = authored
+    sign.world_label = label
 
-    described = room.attributes.get(SIGNPOST_DESC_ATTR, default="")
-
-    if described:
-        sign.db.desc = described
+    if desc:
+        sign.db.desc = desc
 
     return sign

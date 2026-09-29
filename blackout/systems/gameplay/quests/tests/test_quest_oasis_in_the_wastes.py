@@ -181,15 +181,27 @@ class LoneAndroidSpawnerTests(EvenniaTest):
         self.assertEqual(first, second)
 
 
-    def test_the_map_tile_and_the_spawner_agree_on_the_key(self):
-        # SPAWNER_REGISTRY dispatches on the room key, so a rename on either
-        # side silently stops placing the NPC.
+    def test_the_world_chunks_place_the_android(self):
+        # The tile sync stands a kind up through its spawner key. A rename on
+        # either side thus stops placing the NPC, with no error. The xyzgrid
+        # version of this test read the oasis map. The chunk files replaced
+        # it in DESIGN-0011 Phase 4b.
+        import os
+
+        from django.conf import settings
+
+        from systems.core.tilegrid import chunkfile
+        from systems.core.tilegrid import constants as tile_const
         from typeclasses.npcs import LONE_ANDROID_KEY
-        from world.maps.oasis import PROTOTYPES
+        from world.object_kinds import OBJECT_KINDS
 
-        tile = PROTOTYPES[(2, 0)]
+        kinds = {key for key, kind in OBJECT_KINDS.items()
+                 if kind.spawner == LONE_ANDROID_KEY}
+        directory = os.path.join(settings.GAME_DIR, tile_const.CHUNK_DIRECTORY)
+        placed = {thing.kind for chunk_file in chunkfile.load_directory(directory)
+                  for thing in chunk_file.objects}
 
-        self.assertEqual(tile["key"], LONE_ANDROID_KEY)
+        self.assertTrue(kinds & placed, "no chunk file places the quest giver")
 
 
 

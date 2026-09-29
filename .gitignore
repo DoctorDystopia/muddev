@@ -69,3 +69,6 @@ blackout/profiling_out/
 # `npm ci` in blackout/assets/. .build is scratch space for one build.
 blackout/assets/node_modules/
 blackout/assets/.build/
+
+# The tile sync stamp describes the dev database, as the database does.
+blackout/server/tile_sync_state.json

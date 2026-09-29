@@ -135,7 +135,7 @@ shell that exists beats two that can drift.
 The one Windows-specific thing left in it is `cygpath`: `wrangler` is a native
 Windows binary and cannot open a POSIX path, so `--file` is translated on the way
 in. On a real POSIX box there is nothing to translate and the path passes
-through, which is the same shape `scripts/clean_and_reload_all_maps.sh` already
+through, which is the same shape that the retired `clean_and_reload_all_maps.sh` (now in `archive/xyzgrid-maps/`)
 uses for the virtualenv.
 
 The bucket is the origin and the site deploy is the router, so a publish with no

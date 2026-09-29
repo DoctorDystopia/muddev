@@ -5,7 +5,7 @@ layer, and none of them tells you which layers a given change affects:
 
 | Doc | Owns |
 |---|---|
-| [`blackout/README.md`](../blackout/README.md) | Server operations — reload/reboot, map rebuild, tests |
+| [`blackout/README.md`](../blackout/README.md) | Server operations — reload/reboot, the tile sync, tests |
 | [`deploy/cloudflared/README.md`](cloudflared/README.md) | The tunnel that makes `game.playblackout.io` reachable |
 | [`deploy/webexport/README.md`](webexport/README.md) | Building and publishing the Godot client |
 | [`docs/old/2026-08-21-INFRA-0001-public-hosting.md`](../docs/old/2026-08-21-INFRA-0001-public-hosting.md) | Why the architecture is shaped this way |
@@ -25,9 +25,9 @@ That asymmetry is the whole reason that "deploy" does not mean one thing here.
 
 | Changed | Do this |
 |---|---|
-| Game logic (`systems/`, `typeclasses/`, `commands/`, `items/`, `world/*.py` other than maps) | `evennia reload` from `blackout/` |
+| Game logic (`systems/`, `typeclasses/`, `commands/`, `items/`, `world/*.py`) | `evennia reload` from `blackout/` |
 | A `server/conf/*.py` module named in `PORTAL_SERVICES_PLUGIN_MODULES` (e.g. `godot_websocket.py`) | `evennia reboot`, not `reload` — Portal plugins are only read at Portal start, and `reload` restarts the Server process only |
-| Maps (`world/maps/*.py`, `scripts/map_manifest.json`) | `scripts/clean_and_reload_all_maps.ps1` / `.sh` — stops Evennia, syncs the grid, spawns, reloads, all in one |
+| Chunk files (`world/chunks/*.json`) | `full_deploy.sh --tiles`: it stops Evennia, runs `scripts/sync_tile_objects.py --apply`, and starts Evennia |
 | `systems/interface/statefeed/constants.py` | Regenerate the generated client file **before** anything else touches it — see below |
 | Godot client (`godot/**`) | The full export → publish → deploy pipeline — see below |
 | `deploy/cloudflared/config.yml` | Manual, rare, needs an elevated shell — copy to `C:\ProgramData\cloudflared\`, substitute the tunnel id, `Restart-Service Cloudflared`. Not part of routine deploys; see the cloudflared README |
@@ -89,7 +89,7 @@ directory runs exactly this sequence, in this order:
 
 ```bash
 ./deploy/full_deploy.sh              # constants -> reload -> Godot export/publish/deploy -> verify
-./deploy/full_deploy.sh --maps       # ... with a map rebuild instead of a plain reload
+./deploy/full_deploy.sh --tiles      # ... with a tile sync instead of a plain reload
 ./deploy/full_deploy.sh --reboot     # ... evennia reboot instead of reload
 ./deploy/full_deploy.sh --skip-godot # server-only, no Godot leg
 ./deploy/full_deploy.sh --dry-run    # print every command instead of running it
@@ -100,15 +100,14 @@ the inputs of a step did not change, treat the step as a no-op.
 
 1. Run `python scripts/export_client_constants.py --check`. It fails fast if
    the generated client files are stale, before anything else runs.
-2. If `world/maps/**` or `scripts/map_manifest.json` changed, run
-   `scripts/clean_and_reload_all_maps.ps1` / `.sh`. This script already stops
-   and reloads Evennia itself. If it ran, skip step 3.
+2. If `world/chunks/**` changed, stop Evennia, run
+   `scripts/sync_tile_objects.py --apply` from `blackout/`, and start Evennia.
+   `full_deploy.sh --tiles` does all three. If it ran, skip step 3.
 
-   Since 08/28/2026, this step is safe to run unattended. The spawn used to be
-   a separate `evennia xyzgrid spawn` step, which asks for confirmation on
-   stdin and offers no way to decline. Thus, `full_deploy.sh --maps` would hang
-   on a terminal, and raise `EOFError` with no terminal. The spawn now happens
-   inside `map_sync.py`, and the wrapper checks its exit code.
+   The sync needs the server down, because the server keeps the tile room
+   index in memory. Without `--apply`, the sync only prints its plan, and
+   `full_deploy.sh --tiles --dry-run` does that. The xyzgrid map rebuild that
+   stood here went to `archive/xyzgrid-maps/` on 09/25/2026.
 3. Otherwise, reload the game server with `evennia reload` from `blackout/`.
    If a `PORTAL_SERVICES_PLUGIN_MODULES` entry changed, use `evennia reboot`
    instead. `reboot` also restarts the Portal, so expect a brief player
@@ -140,6 +139,7 @@ new build, not a stale cached one.
   background. Make this change by hand, as the cloudflared README tells you.
   Before you leave, make sure that you see `UDP=4` and a `200`.
 - **Anything under `blackout/scripts/` other than `export_client_constants.py`
-  and the map rebuild scripts.** That directory acts on the live database (see
+  and `sync_tile_objects.py`.** That directory acts on the live database (see
   the warning in `CLAUDE.md`). Do not add anything from it to an automated
-  pipeline without the same scrutiny that `map_sync.py` already gets.
+  pipeline without the same scrutiny that the tile sync gets. The cutover
+  (`move_to_tile_world.py`) is a one-time operator step and stays out.

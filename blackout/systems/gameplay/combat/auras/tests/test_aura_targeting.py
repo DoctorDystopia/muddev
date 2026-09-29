@@ -10,8 +10,11 @@ Run from blackout/:
 
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
+from systems.core.tilegrid import chunkfile
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.world import TileWorld, set_world
 from systems.gameplay.combat.auras.targeting import (
     hostiles_in_rooms,
     is_hostile_pulse_target,
@@ -124,6 +127,43 @@ class TestRoomsWithinRadius(EvenniaTest):
             rooms_within_radius(origin, 2)
 
         self.assertEqual(len(captured.captured_queries), 1)
+
+
+class TestTileWorldRadius(EvenniaTestCase):
+    """A tile room reads the tile grid index, with no query (debt 17)."""
+
+    def setUp(self):
+        super().setUp()
+        size = tile_const.CHUNK_SIZE
+        chunk_file = chunkfile.ChunkFile(
+            cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
+            heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
+            floors=[0] * size * size, flags=[0] * size * size,
+            areas=[0] * size * size)
+        self.world = TileWorld([chunk_file])
+        self.world.rooms.load()
+        set_world(self.world)
+
+    def tearDown(self):
+        set_world(None)
+        super().tearDown()
+
+    def test_the_radius_of_a_tile_room_costs_no_query(self):
+        rooms = self.world.rooms
+        origin = rooms.ensure_room(5, 5)
+        near = rooms.ensure_room(6, 5)
+        far = rooms.ensure_room(20, 20)
+
+        # Warm the .xyz tag cache, as the other query count test does.
+        origin.xyz
+
+        with CaptureQueriesContext(connection) as captured:
+            in_range = rooms_within_radius(origin, 2)
+
+        self.assertEqual(len(captured.captured_queries), 0)
+        self.assertIn(origin, in_range)
+        self.assertIn(near, in_range)
+        self.assertNotIn(far, in_range)
 
 
 class TestIsHostilePulseTarget(EvenniaTest):

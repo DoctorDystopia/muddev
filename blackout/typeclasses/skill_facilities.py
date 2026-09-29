@@ -408,7 +408,7 @@ class GastroWorktableFacility(GastronomyBaseFacility):
 
 @register_spawner("Foundry Furnace Facility")
 def spawn_foundry_facility(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.skill_facilities.FurnaceFacility",
         key="Foundry Furnace",
@@ -417,7 +417,7 @@ def spawn_foundry_facility(room):
 
 @register_spawner("Metalsmith Anvil Facility")
 def spawn_anvil_facility(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.skill_facilities.AnvilFacility",
         key="Metalsmith Anvil",
@@ -426,7 +426,7 @@ def spawn_anvil_facility(room):
 
 @register_spawner("Rendering Cooker Facility")
 def spawn_rendering_cooker_facility(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.skill_facilities.RenderingCookerFacility",
         key="Rendering Cooker",
@@ -435,7 +435,7 @@ def spawn_rendering_cooker_facility(room):
 
 @register_spawner("Curing Chamber Facility")
 def spawn_curing_chamber_facility(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.skill_facilities.CuringChamberFacility",
         key="Curing Chamber",
@@ -444,7 +444,7 @@ def spawn_curing_chamber_facility(room):
 
 @register_spawner("Gunsmith Bench Facility")
 def spawn_gunbench_facility(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.skill_facilities.GunbenchFacility",
         key="Gunsmith Bench",
@@ -453,7 +453,7 @@ def spawn_gunbench_facility(room):
 
 @register_spawner("Gastronomy Worktable Facility")
 def spawn_gastro_worktable_facility(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.skill_facilities.GastroWorktableFacility",
         key="Gastronomy Worktable",

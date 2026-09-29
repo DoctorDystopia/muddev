@@ -195,7 +195,7 @@ class TestCollectAtASecondChamber(CollectCommandTestBase):
 
         teardown.py destroys a facility with its room, depth-first, so contents
         die before the container. A cure held in the chamber would be destroyed
-        by clean_and_reload_all_maps.ps1 -- an operator action.
+        by a tile sync that changes its tile -- an operator action.
         """
         self._start_a_cure()
 

@@ -147,12 +147,12 @@ func _only_the_loading_phases_draw_the_veil() -> void:
 	# covered here without an edit -- and has to be classified deliberately.
 	var loading := [_Phase.PLACING, _Phase.MAPPING, _Phase.ART]
 
-	for name: String in _Phase:
-		var phase: int = _Phase[name]
+	for phase_name: String in _Phase:
+		var phase: int = _Phase[phase_name]
 		var expected: bool = loading.has(phase)
 
 		_expect(SessionReadiness.is_loading(phase) == expected,
-			"%s %s the veil" % [name, "draws" if expected else "does not draw"])
+			"%s %s the veil" % [phase_name, "draws" if expected else "does not draw"])
 
 
 
@@ -181,7 +181,7 @@ func _the_live_node_walks_the_phases() -> void:
 	_expect(readiness.phase() == _Phase.PLACING,
 		"live: vitals alone put the veil up at PLACING")
 
-	world.ingest_room_info({"coords": [1.0, 2.0, "oasis"]})
+	world.ingest_room_info({"coords": [1.0, 2.0, _Const.TILE_WORLD_Z]})
 	await _ticks()
 	_expect(readiness.phase() == _Phase.MAPPING,
 		"live: a named room moves it to MAPPING")
@@ -198,8 +198,8 @@ func _the_live_node_walks_the_phases() -> void:
 	# read like a bug in the settle window rather than a wrong expectation.
 	# The window itself is covered above, by the cases that hand `phase_for` the
 	# quiet directly.
-	world.ingest_map_chunk({"z": "oasis", "chunk_index": 0, "chunk_count": 1,
-		"nodes": [], "links": []})
+	world.ingest_chunk(
+		{"chunk_file": JSON.parse_string(ChunkFile.blank(0, 0).to_text())})
 	await _ticks()
 	_expect(readiness.phase() == _Phase.READY,
 		"live: a session with no art to fetch is not held by the settle window")

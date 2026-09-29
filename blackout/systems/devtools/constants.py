@@ -147,12 +147,6 @@ MAX_NPC_SPAWN: int = 20
 MIN_XP_GRANT: int = 1
 MAX_XP_GRANT: int = 10000000
 
-# Where a map teleport lands. Both shipped maps define (0, 0) as their
-# entrance tile, and world/respawn.py already anchors the death loop there --
-# so this restates an existing convention rather than inventing a second one.
-# _map_anchor_room degrades to any room on the map when a future map does not
-# honour it, so the convention is a preference, not a requirement.
-MAP_ANCHOR_XY: tuple = (0, 0)
 
 
 # ─── Message templates ───────────────────────────────────────────────────────
@@ -256,13 +250,13 @@ MSG_RESTORE_DONE: str = (
     f"{RESET_COLOR}"
 )
 
-MSG_TELEPORT_UNKNOWN_MAP: str = (
-    f"{ERROR_COLOR}No map named '{{zcoord}}' is in the manifest.{RESET_COLOR}"
+MSG_TELEPORT_UNKNOWN_AREA: str = (
+    f"{ERROR_COLOR}No area named '{{area}}' is in world/areas.py.{RESET_COLOR}"
 )
 
-MSG_TELEPORT_NO_ROOM: str = (
-    f"{ERROR_COLOR}Map '{{zcoord}}' has no rooms built. Run the map rebuild "
-    f"script.{RESET_COLOR}"
+MSG_TELEPORT_NO_TILE: str = (
+    f"{ERROR_COLOR}Area '{{area}}' has no open tile in the loaded chunks."
+    f"{RESET_COLOR}"
 )
 
 MSG_TELEPORT_FAILED: str = (

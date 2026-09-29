@@ -17,16 +17,18 @@ Description: Every effect a moderator may apply to the live world, as plain
              the ninth one.
 """
 
-from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
 
 from items.equipment.constants import MAX_INVENTORY_SLOTS
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.world import get_world
 from systems.gameplay.graffiti import service as graffiti_service
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
+from world.areas import AREAS
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
-from world.maps.manifest import ManifestError, load_entries, zcoords_of
+from world.respawn import respawn_tile
 
 from systems.devtools import constants as dev_constants
 from systems.interface.statefeed import constants as feed_const
@@ -200,50 +202,58 @@ def _grant_copies(target, item_def, count: int) -> int:
     return granted
 
 
-def _map_anchor_room(zcoord: str):
+def _chunk_tiles(key: tuple):
+    """Yield each world tile of one chunk, south row first, west to east."""
+    size = tile_const.CHUNK_SIZE
+
+    for local_y in range(size):
+        for local_x in range(size):
+            yield (key[0] * size + local_x, key[1] * size + local_y)
+
+
+def _area_arrival_tile(world, area: str):
     """
-    Purpose: Resolve the room a teleport to `zcoord` should land in.
+    Purpose: Find the tile a teleport to `area` lands on.
 
     Entry:
-        zcoord names a map that the manifest lists.
+        world - the TileWorld.
+        area  - a key of world/areas.py.
 
     Exit/Returns:
-        Returns a room object, or None when the map has no rooms built.
+        Returns the world tile (x, y), or None when no loaded chunk holds an
+        open tile of the area.
 
     Module Globals:
-        dev_constants.MAP_ANCHOR_XY read.
+        None.
 
     Methodology:
-        Prefer the anchor tile, then fall back to the lowest-id room on the
-        map. The anchor is a CONVENTION -- both shipped maps put an entrance
-        at (0, 0), and world/respawn.py already anchors the death loop there
-        -- and the fallback is what keeps it a convention rather than a rule a
-        future map has to know about to be reachable.
+        The respawn point, if it stands in the area. Else the first open
+        tile of the area, in chunk order and then tile order. The order is
+        fixed, so the same teleport lands on the same tile every time.
 
     Notes/References:
-        get_xyz raises rather than returning None: DoesNotExist on a grid that
-        was never built, MultipleObjectsReturned when a rebuild left duplicate
-        rows. Both mean "not resolvable here", so both fall through.
+        This replaced the anchor tile (0, 0) of each xyzgrid map in
+        DESIGN-0011 Phase 4b.
 
     Author: Nick Hobar
-    Creation date: 08/25/2026
+    Creation date: 09/25/2026
     """
-    anchor_x, anchor_y = dev_constants.MAP_ANCHOR_XY
+    respawn = respawn_tile(world)
 
-    try:
-        anchor = XYZRoom.objects.get_xyz(xyz=(anchor_x, anchor_y, zcoord))
+    if respawn is not None and world.area_at(*respawn) == area:
+        return respawn
 
-        return anchor
-    except Exception:
-        logger.log_info(
-            f"{dev_constants.AUDIT_LOG_PREFIX} no anchor tile "
-            f"({anchor_x},{anchor_y}) on map '{zcoord}'; using any room."
-        )
+    for key in world.chunk_keys():
+        for tile in _chunk_tiles(key):
+            if world.area_at(*tile) != area:
+                continue
 
-    rooms = XYZRoom.objects.filter_xyz(xyz=("*", "*", zcoord)).order_by("id")
-    fallback = rooms.first()
+            if world.grid.flags_at(*tile) & tile_const.FLAGS_UNWALKABLE:
+                continue
 
-    return fallback
+            return tile
+
+    return None
 
 
 # ─── Audit ───────────────────────────────────────────────────────────────────
@@ -791,67 +801,55 @@ def erase_graffiti(actor, target) -> tuple:
 
 # ─── Teleport ────────────────────────────────────────────────────────────────
 
-def map_zcoords() -> list:
+def area_keys() -> list:
     """
-    Purpose: Name every map a teleport may target.
+    Purpose: Name every area a teleport may target.
 
     Entry:
         No conditions.
 
     Exit/Returns:
-        Returns a sorted list of z-coordinate strings, or an empty list when
-        the manifest cannot be read.
+        Returns a sorted list of area keys.
 
     Module Globals:
-        None.
+        AREAS read.
 
     Methodology:
-        Read from scripts/map_manifest.json through world/maps/manifest.py --
-        the one file that decides which maps exist. Adding a map row therefore
-        adds a teleport destination with no edit here.
+        Read from world/areas.py, the one table that decides which areas
+        exist. A new area row thus adds a teleport destination with no edit
+        here.
 
     Notes/References:
-        Destinations are whole MAPS today, one arrival tile each. Named
-        landmarks (the Bank, the Shopkeeper), a jump to another player and a
-        "bring them to me" are the obvious expansions; each is a different
-        target vocabulary answering the same question this function answers
-        for maps, and _map_anchor_room is where the landing tile is decided.
+        Until DESIGN-0011 Phase 4b the destinations were the maps of
+        scripts/map_manifest.json (now in archive/xyzgrid-maps/). Each area has the name of the map that it
+        replaced.
 
     Author: Nick Hobar
     Creation date: 08/25/2026
     """
-    try:
-        entries = load_entries()
-    except ManifestError as exc:
-        logger.log_err(f"{dev_constants.AUDIT_LOG_PREFIX} manifest unreadable: {exc!r}")
-
-        return []
-
-    zcoords = zcoords_of(entries)
-    ordered = sorted(zcoords)
+    ordered = sorted(AREAS)
 
     return ordered
 
 
-def teleport_to_map(actor, target, zcoord: str) -> tuple:
+def teleport_to_area(actor, target, area: str) -> tuple:
     """
-    Purpose: Move a character to another map's arrival tile.
+    Purpose: Move a character to the arrival tile of an area.
 
     Entry:
-        actor is the moderator. target is the Character to move. zcoord names
-        a map listed in the manifest.
+        actor is the moderator. target is the Character to move. area is a
+        key of world/areas.py.
 
     Exit/Returns:
-        Returns (succeeded, message). Failure means an unknown map, a map with
-        no rooms built, or a move the engine refused.
+        Returns (succeeded, message). Failure means an unknown area, an area
+        with no open tile in the loaded chunks, or a move the engine refused.
 
     Module Globals:
-        dev_constants.MSG_TELEPORT_* read.
+        AREAS, dev_constants.MSG_TELEPORT_* read.
 
     Methodology:
-        Validate the map name against the manifest before touching the
-        database, so a typo is a message rather than a query that finds
-        nothing and has to guess why.
+        Validate the area name before any database work, so a typo is a
+        message rather than a search that finds nothing.
 
         The move is quiet, and the arrival is announced to the target alone.
         Default move messaging would tell the destination room that someone
@@ -861,18 +859,17 @@ def teleport_to_map(actor, target, zcoord: str) -> tuple:
     Author: Nick Hobar
     Creation date: 08/25/2026
     """
-    known = map_zcoords()
-    listed = zcoord in known
+    if area not in AREAS:
+        return False, dev_constants.MSG_TELEPORT_UNKNOWN_AREA.format(area=area)
 
-    if not listed:
-        return False, dev_constants.MSG_TELEPORT_UNKNOWN_MAP.format(zcoord=zcoord)
+    world = get_world()
+    tile = _area_arrival_tile(world, area)
 
-    room = _map_anchor_room(zcoord)
+    if tile is None:
+        return False, dev_constants.MSG_TELEPORT_NO_TILE.format(area=area)
 
-    if room is None:
-        return False, dev_constants.MSG_TELEPORT_NO_ROOM.format(zcoord=zcoord)
-
-    succeeded, message = _move_to_room(actor, target, room, zcoord)
+    room = world.rooms.ensure_room(tile[0], tile[1])
+    succeeded, message = _move_to_room(actor, target, room, area)
 
     return succeeded, message
 
@@ -934,7 +931,7 @@ def _move_to_room(actor, target, room, detail: str) -> tuple:
     Entry:
         actor is the moderator. target is the Character to move. room is a
         resolved destination. detail names what the moderator asked for, for
-        the audit line -- a map name, or a character's key.
+        the audit line -- an area key, or a character's key.
 
     Exit/Returns:
         Returns (succeeded, message).
@@ -950,23 +947,28 @@ def _move_to_room(actor, target, room, detail: str) -> tuple:
         teleport comes from. Character.respawn makes the same choice.
 
     Notes/References:
-        Shared by teleport_to_map and teleport_to_character. Everything that
+        Shared by teleport_to_area and teleport_to_character. Everything that
         differs between them is the choosing of `room`, and everything that is
         the same is here.
+
+        The room is named by `get_display_name`, not by its key. Every tile
+        room has the key `tile`. Its name comes from the tile.
 
     Author: Nick Hobar
     Creation date: 08/25/2026
     """
+    name = room.get_display_name(actor)
+
     try:
         target.move_to(room, quiet=True, move_type="teleport")
     except Exception as exc:
         logger.log_err(f"{dev_constants.AUDIT_LOG_PREFIX} teleport failed: {exc!r}")
 
-        return False, dev_constants.MSG_TELEPORT_FAILED.format(room=room.key)
+        return False, dev_constants.MSG_TELEPORT_FAILED.format(room=name)
 
     target.msg((dev_constants.MSG_TELEPORT_ARRIVAL, _MSG_SYSTEM))
-    _audit(actor, dev_constants.ACTION_TELEPORT, target, f"{detail} -> {room.key}")
-    message = dev_constants.MSG_TELEPORT_DONE.format(target=target.key, room=room.key)
+    _audit(actor, dev_constants.ACTION_TELEPORT, target, f"{detail} -> {name}")
+    message = dev_constants.MSG_TELEPORT_DONE.format(target=target.key, room=name)
 
     return True, message
 

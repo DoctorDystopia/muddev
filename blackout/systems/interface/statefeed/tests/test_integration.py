@@ -24,6 +24,7 @@ from unittest import mock
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.core.tilegrid.constants import FACING_ATTR, ROTATION_COUNT
 from systems.gameplay.banking.handler import BankHandler
 from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.combat.combat import ensure_combat_handler
@@ -178,6 +179,30 @@ class TestEntitySerialisation(EvenniaTest):
 
         self.assertEqual(body["name"], npc.key)
 
+    def test_a_turned_entity_sends_its_facing(self):
+        # The tile sync writes the facing. The client turns the model by it.
+        for turn in range(ROTATION_COUNT):
+            with self.subTest(turn=turn):
+                self.obj1.attributes.add(FACING_ATTR, turn)
+
+                body = serializers.serialize_entity(self.obj1)
+
+                self.assertEqual(body[const.ENTITY_FACING_KEY], turn)
+
+    def test_an_entity_with_no_facing_sends_no_facing_field(self):
+        body = serializers.serialize_entity(self.obj1)
+
+        self.assertNotIn(const.ENTITY_FACING_KEY, body)
+
+    def test_a_facing_out_of_range_is_not_sent(self):
+        for bad in (-1, ROTATION_COUNT, "north"):
+            with self.subTest(bad=bad):
+                self.obj1.attributes.add(FACING_ATTR, bad)
+
+                body = serializers.serialize_entity(self.obj1)
+
+                self.assertNotIn(const.ENTITY_FACING_KEY, body)
+
     def test_a_combatant_carries_health(self):
         npc = spawn_mutant_raider(self.room1)
 
@@ -277,8 +302,7 @@ class TestCharAvatarChannel(EvenniaTest):
         recorder = _FeedRecorder()
 
         with mock.patch("systems.interface.statefeed.events.emit", recorder):
-            with mock.patch("systems.interface.statefeed.resync.emit", recorder):
-                resync.send_full_state(self.char1)
+            resync.send_full_state(self.char1)
 
         self.assertTrue(recorder.of_type(CharAvatarPayload))
 
@@ -287,8 +311,7 @@ class TestCharAvatarChannel(EvenniaTest):
         recorder = _FeedRecorder()
 
         with mock.patch("systems.interface.statefeed.events.emit", recorder):
-            with mock.patch("systems.interface.statefeed.resync.emit", recorder):
-                resync.send_full_state(self.char1)
+            resync.send_full_state(self.char1)
 
         order = [type(payload) for payload in recorder.payloads]
         self.assertLess(order.index(CharAvatarPayload),
@@ -321,48 +344,6 @@ class TestRoomSerialisation(EvenniaTest):
         exits = serializers.serialize_exits(self.room1)
 
         self.assertEqual(exits["out"], self.room2.id)
-
-    def test_a_room_reports_its_key_as_its_kind(self):
-        kind = serializers.room_kind(self.room1)
-
-        self.assertEqual(kind, self.room1.key)
-
-    def test_room_kind_ignores_an_auto_generated_prototype_tag(self):
-        # Regression. room_kind used to prefer the prototype tag, which for a
-        # grid room is an auto-generated per-room hash ("prototype-8ede16d")
-        # rather than anything meaningful. Live, that made room_info report a
-        # hash while blackout_map reported "Oasis" for the very same tile, so
-        # a client could not match the two.
-        from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
-
-        self.room1.tags.add("prototype-deadbeef",
-                            category=PROTOTYPE_TAG_CATEGORY)
-
-        kind = serializers.room_kind(self.room1)
-
-        self.assertEqual(kind, self.room1.key)
-        self.assertNotIn("prototype-", kind)
-
-    def test_room_kind_matches_what_the_map_export_reports(self):
-        # The contract that makes the field usable: a client looks the tile it
-        # is standing on up in the map it was sent, so both sides must derive
-        # room_kind from the same value -- the prototype's "key".
-        from systems.interface.statefeed.mapexport import build_map_chunks
-
-        prototypes = {("*", "*"): {"key": self.room1.key}}
-        node = SimpleNamespace(X=0, Y=0, links={})
-        xymap = SimpleNamespace(
-            node_index_map={0: node}, prototypes=prototypes, Z="oasis")
-
-        from_map = build_map_chunks(xymap)[0].nodes[0]["room_kind"]
-        from_room = serializers.room_kind(self.room1)
-
-        self.assertEqual(from_map, from_room)
-
-    def test_a_none_room_falls_back_to_the_default_kind(self):
-        kind = serializers.room_kind(None)
-
-        self.assertEqual(kind, const.ROOM_KIND_DEFAULT)
 
     def test_contents_exclude_exits(self):
         entities = serializers.serialize_contents(self.room1)

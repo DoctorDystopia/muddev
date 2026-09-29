@@ -17,6 +17,11 @@ extends Node
 
 const CONSOLE := "res://scenes/console.tscn"
 
+## A scratch profile. The console never sees the player's `client.cfg`, so a
+## dragged dock or `show_world=false` there cannot fail a case (handoff debt
+## 9.1.4).
+const SETTINGS_PATH := "user://smoke_console.cfg"
+
 ## A window to lay the scene out in. Headless boots at 64x64, which is smaller
 ## than the dock's own minimum and puts every rect on top of every other one.
 const WINDOW := Vector2i(1600, 900)
@@ -63,7 +68,10 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
+
 	var console: Node = packed.instantiate()
+	console.settings_path = SETTINGS_PATH
 	add_child(console)
 
 	_every_unique_name_resolves(console)
@@ -74,8 +82,12 @@ func _ready() -> void:
 	await _the_shipped_layout_fits_each_window(console)
 	_the_panel_survives_the_world_going_off(console)
 	_the_input_hint_follows_login_and_focus(console)
+	_the_world_map_sits_over_the_docks_and_under_the_veil(console)
+	_the_minimap_strip_stays_inside_the_minimap(console)
+	_the_keys_follow_the_camera_only_when_asked(console)
 
 	console.queue_free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -117,6 +129,62 @@ func _the_input_hint_follows_login_and_focus(console: Node) -> void:
 		"a logout puts the login line back")
 
 
+## The world map (09/28/2026) covers the docks, as the OSRS world map covers
+## the game. The right-click menu and the veil stay over it. The minimap
+## button reaches it, and it opens and closes.
+func _the_world_map_sits_over_the_docks_and_under_the_veil(console: Node) -> void:
+	var view: WorldMapView = console._world_map_view
+	var pane: Control = console.get_node("%WorldPane")
+	var at := view.get_index()
+
+	_expect(view.get_parent() == pane, "the world map is a box of the world pane")
+	_expect(at > console.get_node("%PanelDock").get_index(),
+		"the world map is over the panel dock")
+	_expect(at < console.get_node("%ChooseOption").get_index(),
+		"and under the right-click menu")
+	_expect(at < console.get_node("%LoadingVeil").get_index(),
+		"and under the veil")
+	_expect(console._minimap.world_map_requested.is_connected(
+		console._open_world_map), "the minimap button opens it")
+
+	view.open()
+	_expect(view.visible, "it opens")
+	view.close()
+	_expect(not view.visible, "and it closes")
+
+
+## The button strip of the minimap is part of the minimap rect, so the dock
+## check above covers it. The XP HUD sits to the left of it.
+## The real camera gives a heading, and the console turns a key by it only
+## with the Options box on.
+func _the_keys_follow_the_camera_only_when_asked(console: Node) -> void:
+	var forward: Vector2 = console._world.camera_forward()
+	var settings: ClientSettings = console._settings
+	var was := settings.camera_relative_keys
+
+	_expect(not forward.is_zero_approx(), "the camera gives a heading")
+
+	settings.camera_relative_keys = false
+	_expect(console._steer("north") == "north", "with the box off, W is north")
+
+	settings.camera_relative_keys = true
+	_expect(console._steer("north") == MovementKeys.nearest(forward),
+		"with the box on, W walks where the camera looks")
+
+	settings.camera_relative_keys = was
+
+
+func _the_minimap_strip_stays_inside_the_minimap(console: Node) -> void:
+	var minimap: MinimapView = console.get_node("%Minimap")
+	var hud: Control = console.get_node("%XpHud")
+	var rect := minimap.get_global_rect()
+
+	_expect(rect.encloses(minimap._world_map_button.get_global_rect()),
+		"the world map button is inside the minimap")
+	_expect(not rect.intersects(hud.get_global_rect()),
+		"the minimap does not cover the XP HUD")
+
+
 ## The control panel hangs from the bottom-right corner of the world pane, and
 ## the minimap owns the top-right of it. That is the whole reason the dock
 ## picked that corner, and a default size that covered the map would undo it.
@@ -149,10 +217,10 @@ func _the_dock_keeps_clear_of_the_minimap(console: Node) -> void:
 
 ## Put both docks back at their shipped sizes, in memory only.
 ##
-## The console loads the REAL player profile, and a player who dragged a dock
-## has a saved size in it. These cases check the SHIPPED sizes, so a saved size
-## must not reach them. The setting is written on the object, not through its
-## setter, so the profile on disk does not change.
+## The console reads a scratch profile ([constant SETTINGS_PATH]), so no saved
+## size is in it at the start. These cases check the SHIPPED sizes, so this
+## also drops a size that an earlier case left. The setting is written on the
+## object, not through its setter, so nothing goes to disk.
 func _forget_saved_dock_sizes(console: Node) -> void:
 	for key: String in ClientSettings.DOCK_SIZE_KEYS:
 		console._settings.set(key, Vector2i.ZERO)

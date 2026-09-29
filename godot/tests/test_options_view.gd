@@ -28,6 +28,7 @@ func _ready() -> void:
 	_the_sfx_slider_writes_the_volume_and_follows_it()
 	_the_xp_tracker_checks_write_settings_and_reset_only_asks()
 	_the_movement_check_writes_the_setting_and_follows_it()
+	_the_roofs_check_writes_the_setting_and_follows_it()
 	_the_credits_button_asks_for_the_box_and_sends_no_command()
 
 	_clean()
@@ -257,6 +258,22 @@ func _the_movement_check_writes_the_setting_and_follows_it() -> void:
 	_settings.reset()
 
 	_expect(_view._smooth_movement_check.button_pressed,
+		"and a reset elsewhere ticks it again")
+
+
+func _the_roofs_check_writes_the_setting_and_follows_it() -> void:
+	_fresh()
+
+	_expect(_view._hide_roofs_check.button_pressed,
+		"the roofs check starts on, as the default is")
+
+	_view._hide_roofs_check.toggled.emit(false)
+
+	_expect(not _settings.hide_roofs, "unticking it shows the roofs")
+
+	_settings.reset()
+
+	_expect(_view._hide_roofs_check.button_pressed,
 		"and a reset elsewhere ticks it again")
 
 

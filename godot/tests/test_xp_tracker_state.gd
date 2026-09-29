@@ -45,10 +45,10 @@ func _tracker() -> XpTrackerState:
 
 
 ## One award shaped as events.emit_xp_drop builds it, every number a float.
-func _row(key: String, name: String, category: String, amount: float,
+func _row(key: String, skill_name: String, category: String, amount: float,
 		level: float = 3.0, current: float = 40.0, needed: float = 120.0) -> Dictionary:
 	return {
-		"skill_key": key, "name": name, "category": category,
+		"skill_key": key, "name": skill_name, "category": category,
 		"amount": amount, "level": level,
 		"current_xp": current, "needed_xp": needed,
 	}

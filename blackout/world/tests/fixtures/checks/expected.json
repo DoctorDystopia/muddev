@@ -1,0 +1,13 @@
+[
+["climb_landing", 11, 10, 0],
+["climb_landing", 12, 10, 0],
+["climb_landing", 10, 10, 1],
+["object_unwalkable", 3, 3, 0],
+["respawn_count", 1, 1, 0],
+["respawn_count", 2, 1, 0],
+["sign_text", 22, 20, 0],
+["sign_text", 24, 20, 0],
+["transition_landing", 5, 5, 0],
+["unknown_kind", 20, 20, 0],
+["void_open", 30, 30, 1]
+]

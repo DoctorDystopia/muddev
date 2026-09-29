@@ -51,6 +51,7 @@ import time
 from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 from systems.core.managers import get_singleton_script, register_manager
+from systems.core.tilegrid.constants import FACING_ATTR
 
 # ─── module constants ──────────────────────────────────────────────────────
 
@@ -77,12 +78,23 @@ def npc_present(npc_key, room) -> bool:
     A falsy `npc_key` never matches, so an NPC carrying no key cannot be
     mistaken for anything.
     """
+    standing = npc_standing(npc_key, room)
+
+    return standing is not None
+
+
+def npc_standing(npc_key, room):
+    """Return the live NPC with this registry key in `room`, or None.
+
+    The identity rule of `npc_present`. A spawner returns this NPC when one
+    already stands, so the tile sync can give it its facing.
+    """
     if not npc_key or room is None or getattr(room, "pk", None) is None:
-        return False
+        return None
     for obj in room.contents:
         if obj.attributes.get("npc_key") == npc_key:
-            return True
-    return False
+            return obj
+    return None
 
 
 # ─── the manager ───────────────────────────────────────────────────────────
@@ -153,7 +165,8 @@ class BlackoutRespawnManager(DefaultScript):
 
     # ── scheduling ───────────────────────────────────────────────────────
 
-    def schedule(self, npc_key, room, delay_seconds, now=None) -> bool:
+    def schedule(self, npc_key, room, delay_seconds, now=None,
+                 facing=None) -> bool:
         """Queue `npc_key` to reappear in `room` after `delay_seconds`.
 
         Entry:
@@ -162,6 +175,9 @@ class BlackoutRespawnManager(DefaultScript):
             delay_seconds - whole seconds from now.
             now           - injectable clock, so tests can pin the deadline
                             without mocking time.time.
+            facing        - the facing of the NPC that died, or None. The
+                            new NPC gets it, so a respawn keeps the turn
+                            that the chunk file gave.
 
         Exit/Returns:
             True if an entry was added; False if the request was rejected or
@@ -184,13 +200,18 @@ class BlackoutRespawnManager(DefaultScript):
             if entry.get("npc_key") == npc_key and entry.get("room") == room:
                 return False
 
-        queue.append(
-            {
-                "npc_key": npc_key,
-                "room": room,
-                "due_at": (time.time() if now is None else now) + delay,
-            }
-        )
+        entry = {
+            "npc_key": npc_key,
+            "room": room,
+            "due_at": (time.time() if now is None else now) + delay,
+        }
+
+        # Absent, not None, when there is no facing: an entry of an older
+        # queue has no key, and _spawn reads both the same way.
+        if facing is not None:
+            entry[FACING_ATTR] = facing
+
+        queue.append(entry)
         self._write_queue(queue)
         return True
 
@@ -207,6 +228,21 @@ class BlackoutRespawnManager(DefaultScript):
             for entry in queue
             if not (entry.get("npc_key") == npc_key and entry.get("room") == room)
         ]
+        dropped = len(queue) - len(keep)
+        if dropped:
+            self._write_queue(keep)
+        return dropped
+
+    def cancel_room(self, room) -> int:
+        """Drop every pending entry for `room`. Returns the count dropped.
+
+        The tile sync (systems/gameplay/spawning/tile_sync.py) calls this when
+        it demolishes a tile. A tile room survives the sync, so an entry for
+        it stays valid, and the old NPC would come back on a tile that no
+        longer places it.
+        """
+        queue = self._read_queue()
+        keep = [entry for entry in queue if entry.get("room") != room]
         dropped = len(queue) - len(keep)
         if dropped:
             self._write_queue(keep)
@@ -285,6 +321,12 @@ class BlackoutRespawnManager(DefaultScript):
             return False
 
         npc = npc_def.create(location=room)
+        facing = entry.get(FACING_ATTR)
+
+        # Before the announcement, so the first row that a client gets
+        # already carries the facing.
+        if facing is not None:
+            npc.attributes.add(FACING_ATTR, facing)
 
         # Announce the arrival, because nothing else will. NpcDef.create goes
         # through create_object(location=...), and Evennia does not fire
@@ -327,9 +369,11 @@ def get_respawn_manager() -> BlackoutRespawnManager:
     return manager
 
 
-def schedule_respawn(npc_key, room, delay_seconds, now=None) -> bool:
+def schedule_respawn(npc_key, room, delay_seconds, now=None,
+                     facing=None) -> bool:
     """Convenience wrapper — the single entry point callers should use."""
-    return get_respawn_manager().schedule(npc_key, room, delay_seconds, now=now)
+    return get_respawn_manager().schedule(npc_key, room, delay_seconds,
+                                          now=now, facing=facing)
 
 
 @register_manager

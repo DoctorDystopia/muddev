@@ -8,6 +8,7 @@ Rooms are simple containers that has no location of their own.
 from evennia.objects.objects import DefaultRoom
 from evennia.contrib.grid.xyzgrid.xyzroom import XYZRoom
 from evennia.utils import logger
+from evennia.utils.utils import iter_to_str
 
 from systems.gameplay.quests import constants as quest_constants
 from systems.gameplay.quests.hooks import notify_quests
@@ -19,6 +20,9 @@ from systems.interface.statefeed import neighbourhood
 from systems.interface.statefeed import subscriptions
 from systems.interface.ui import move_text
 from systems.interface.ui.colors import RESET_COLOR, ROOM_NAME_COLOR
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.world import get_world
+from world import tile_map, tile_text, tile_travel
 from .objects import ObjectParent
 from .spawners import (
     ATTRIBUTE_SPAWNER_REGISTRY,
@@ -55,8 +59,17 @@ class Room(ObjectParent, DefaultRoom):
 class GridTile(ObjectParent, XYZRoom):
     """
     The baseline 1x1 coordinate tile for the physical world of Blackout.
+
+    The base of TileRoom since DESIGN-0011 Phase 4b. It keeps XYZRoom for the
+    coordinate tags (`room.xyz`, `filter_xyz`), and nothing else of the
+    xyzgrid contrib: see return_appearance.
     """
-    map_visual_range = 6  # None = full map; default is 2 tiles in each direction
+
+    # Whether the birth or the death of this room clears the statefeed's
+    # neighbourhood cache. True for an xyzgrid tile, because its room set is
+    # the map. TileRoom sets False. The tile grid makes and frees its rooms as
+    # players walk, and systems/core/tilegrid/rooms.py keeps its own index.
+    invalidates_neighbourhood = True
 
     # The template of DefaultObject, with the name line moved into {header}.
     # In the Evennia template, the colour codes sit around {name}. Thus, a
@@ -104,70 +117,36 @@ class GridTile(ObjectParent, XYZRoom):
         """
         super().at_object_creation()
 
-        neighbourhood.invalidate()
+        if self.invalidates_neighbourhood:
+            neighbourhood.invalidate()
 
     def return_appearance(self, looker, **kwargs):
         """
-        Purpose: Show the room, with the grid map tinted to mark the tiles the
-        looker's active damage aura is burning.
+        Purpose: Show the room, with no xyzgrid map.
 
         Entry:
-            looker - the entity looking. Need not have an aura.
+            looker - the entity looking.
 
         Exit/Returns:
-            Returns the room description string. The map is sent separately by
-            msg(), matching the contrib's own behaviour.
+            Returns the room description string.
 
         Module Globals:
             None.
 
         Methodology:
-            Falls through to the contrib untouched whenever there is no aura to
-            draw -- which is the overwhelmingly common case, so `look` pays only
-            one attribute check for a feature most players are not using.
-
-            THE CONTRIB PRINTS THE MAP ITSELF, and that is why `automap` is
-            applied through _appearance_kwargs rather than inside
-            _send_tinted_map. It was inside it for a few hours on 08/28/2026,
-            which suppressed the map on the AURA path only -- so `automap off`
-            reported success and the map kept appearing on every step for every
-            player without an aura, which is nearly all of them. One decision,
-            taken once, applied to both branches.
-
-            When there IS an aura, the contrib's own map block is suppressed by
-            passing map_display=False, and a tinted map is built and sent in its
-            place. Suppressing rather than post-processing matters because
-            return_appearance msg()s the map itself; without the flag the looker
-            would receive two maps.
-
-            Any failure in the overlay falls back to the plain contrib map. A
-            cosmetic highlight must never be able to break `look`.
+            Calls DefaultRoom, and skips XYZRoom.return_appearance on
+            purpose. That method reads `self.xyzgrid`, which calls the
+            contrib's get_xyzgrid(). With no grid Script, get_xyzgrid MAKES
+            one. After the cutover deleted the grid Script, every look would
+            thus make an empty one again. TileRoom sends its own tile map.
 
         Notes/References:
-            systems/gameplay/combat/auras/map_overlay.py owns the tinting itself, and
-            documents the xygrid coordinate maths it depends on.
+            DESIGN-0011 Phase 4b. The aura tint moved to world/tile_map.py.
 
         Author: Nick Hobar
         Creation date: 08/03/2026
         """
-        kwargs = self._appearance_kwargs(looker, kwargs)
-        radius = self._active_aura_radius(looker)
-
-        if radius <= 0:
-            return super().return_appearance(looker, **kwargs)
-
-        # The tinted map replaces the contrib's, so the contrib's is always off
-        # on this branch whatever automap says.
-        kwargs["map_display"] = False
-        room_desc = super().return_appearance(looker, **kwargs)
-
-        try:
-            self._send_tinted_map(looker, radius, **kwargs)
-        except Exception:
-            logger.log_trace()
-            # Re-send the plain map so a failed overlay does not leave the
-            # looker with no map at all.
-            super().return_appearance(looker, **kwargs)
+        room_desc = DefaultRoom.return_appearance(self, looker, **kwargs)
 
         return room_desc
 
@@ -187,36 +166,27 @@ class GridTile(ObjectParent, XYZRoom):
 
     def _appearance_kwargs(self, looker, kwargs: dict) -> dict:
         """
-        Purpose: Turn the contrib's own map off when this looker does not want
-        it.
+        Purpose: Turn the tile map off when this looker does not want it.
 
         Entry:
             looker - the character looking.
             kwargs - whatever return_appearance was given.
 
         Exit/Returns:
-            Returns a dict to pass to the contrib. A copy, always, so a
-            caller's own dict is never mutated under it.
+            Returns a copy of the kwargs, always, so a caller's own dict is
+            never mutated under it.
 
         Module Globals:
             None.
 
         Methodology:
-            `map_display` is the contrib's own switch, read in
-            XYZRoom.return_appearance as
-            `kwargs.get("map_display", ...)`. Setting it False is the only way
-            to stop the contrib msg'ing the map, because it does that itself
-            rather than returning it.
+            `map_display` was the switch of the xyzgrid contrib. TileRoom
+            keeps the name and reads it before it sends the tile map.
 
-            An explicit `map_display` from the CALLER is overridden rather than
-            respected, and that is deliberate: `automap` is the player's
-            setting and a caller asking for a map the player has turned off is
-            asking on their behalf, wrongly. Nothing in the game passes it
-            except this class.
-
-            A no-op returns a copy too. Returning `kwargs` itself would make
-            the aura branch's `kwargs["map_display"] = False` write into the
-            caller's dictionary.
+            This hook overrides an explicit `map_display` from the CALLER, on
+            purpose. `automap` is the setting of the player. A caller that
+            asks for a map that the player turned off is wrong. Nothing in the
+            game passes it except this class.
 
         Notes/References:
             Whether the looker wants it is _wants_ascii_map; the player sets it
@@ -374,65 +344,6 @@ class GridTile(ObjectParent, XYZRoom):
         hidden = kwargs.get(move_text.HIDDEN_PARTS_KWARG, ())
 
         return part in hidden
-
-    def _send_tinted_map(self, looker, radius: int, **kwargs) -> None:
-        """Build the highlighted map and msg it, or fall back to the plain one.
-
-        Mirrors the contrib's own option resolution: an explicit kwarg wins,
-        then the map's own options, then the class default.
-        """
-        from systems.gameplay.combat.auras.map_overlay import build_tinted_map
-
-        xyz = self.xyz
-        xymap = self.xyzgrid.get_map(xyz[2])
-
-        if not xymap:
-            return
-
-        def _option(name, default):
-            return kwargs.get(name, xymap.options.get(name, default))
-
-        if not _option("map_display", self.map_display):
-            return
-
-        sessions = looker.sessions.get()
-        client_width = (
-            sessions[0].get_client_size()[0] if sessions else CLIENT_DEFAULT_WIDTH
-        )
-
-        display_width = client_width
-        map_indent = 0
-
-        if _option("map_align", self.map_align) == "c":
-            map_indent = max(0, (display_width - xymap.max_x) // 2)
-        elif _option("map_align", self.map_align) == "r":
-            map_indent = max(0, display_width - xymap.max_x)
-
-        path_data = looker.ndb.xy_path_data
-        target_xy = path_data.target.xyz[:2] if path_data else None
-
-        map_display = build_tinted_map(
-            xymap,
-            (xyz[0], xyz[1]),
-            radius,
-            character_symbol=_option("map_character_symbol", self.map_character_symbol),
-            visual_range=_option("map_visual_range", self.map_visual_range),
-            mode=_option("map_mode", self.map_mode),
-            max_size=(display_width, None),
-            indent=map_indent,
-            target_xy=target_xy,
-            target_path_style=_option(
-                "map_target_path_style", self.map_target_path_style
-            ),
-        )
-
-        if map_display is None:
-            return
-
-        separator = _option("map_separator_char", self.map_separator_char) * display_width
-        framed = f"{separator}|n\n{map_display}\n{separator}"
-
-        looker.msg(text=(framed, _MSG_MAP), options=None)
 
     def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
         """
@@ -646,7 +557,8 @@ class GridTile(ObjectParent, XYZRoom):
         # XYZGrid.remove_map, and the contrib deleting a tile that fell off the
         # map -- which is exactly the property the invalidator needs. See
         # systems/interface/statefeed/neighbourhood.py.
-        neighbourhood.invalidate()
+        if self.invalidates_neighbourhood:
+            neighbourhood.invalidate()
 
         return True
 
@@ -748,3 +660,125 @@ class GridTile(ObjectParent, XYZRoom):
                     f"at_object_post_spawn: the '{attr_name}' spawner failed "
                     f"on {self.key}."
                 )
+
+class TileRoom(GridTile):
+    """
+    A room on the tile grid. It exists only while something stands on its tile.
+
+    DESIGN-0011 section 6.1, option B. `systems/core/tilegrid/rooms.py` makes
+    it, moves it to a new tile from its pool, and frees it. The coordinate
+    tags are the same as on an xyzgrid tile, so `room.xyz` and every reader of
+    it work unchanged. The Z names the plane (`tilegrid/planes.py`): `WORLD_Z`
+    on the ground, `<WORLD_Z>_p<plane>` above it. It is not a map name.
+
+    The room stores no name and no description. `get_display_name` and
+    `get_display_desc` read them from the chunk file facts of the tile,
+    through `world/tile_text.py`. A pooled room is off the grid, so it shows
+    its key.
+    """
+
+    invalidates_neighbourhood = False
+
+    def _plane(self):
+        """
+        Return the TilePlane of this room, or None for a room off the tile
+        world. A pooled room is an example.
+        """
+        return get_world().plane_for_z(self.xyz[2])
+
+    def _tile(self):
+        """Return the (x, y) tile of this room, or None off the tile world."""
+        if self._plane() is None:
+            return None
+
+        coordinates = self.xyz
+
+        return (int(coordinates[0]), int(coordinates[1]))
+
+    def _tile_facts(self):
+        """Return (kinds, area key) of the tile of this room, or ((), None)."""
+        view = self._plane()
+        tile = self._tile()
+
+        if view is None or tile is None:
+            return ((), None)
+
+        return (view.kinds_at(*tile), view.area_at(*tile))
+
+    def get_display_name(self, looker=None, **kwargs):
+        """Give the name of the object on the tile, or of its area."""
+        kinds, area_key = self._tile_facts()
+
+        return tile_text.tile_name(kinds, area_key, fallback=self.key)
+
+    def get_display_desc(self, looker, **kwargs):
+        """Give the desc of the object on the tile, or of its area."""
+        if self._hides(move_text.PART_DESC, kwargs):
+            return ""
+
+        kinds, area_key = self._tile_facts()
+        derived = tile_text.tile_desc(kinds, area_key)
+
+        if derived:
+            return derived
+
+        return super().get_display_desc(looker, **kwargs)
+
+    def get_display_exits(self, looker, **kwargs):
+        """
+        Give the Exits line from the step rule. A tile room has no exit
+        objects, so the line names each direction that a step can take.
+        """
+        tile = self._tile()
+
+        if self._hides(move_text.PART_EXITS, kwargs) or tile is None:
+            return ""
+
+        names = tile_travel.open_directions(self._plane(), tile)
+        text = iter_to_str(names, endsep=", and")
+
+        return f"|wExits:|n {text}" if text else ""
+
+    def return_appearance(self, looker, **kwargs):
+        """
+        Show the room, then send the tile map to a looker who wants a text
+        map. The xyzgrid map cannot draw the tile world (world/tile_map.py).
+        """
+        room_desc = super().return_appearance(looker, **kwargs)
+        prepared = self._appearance_kwargs(looker, kwargs)
+
+        if prepared.get("map_display", True):
+            self._send_tile_map(looker)
+
+        return room_desc
+
+    def _send_tile_map(self, looker) -> None:
+        """
+        Draw the tile map around this room and send it, with the looker's
+        aura tinted. Never raises.
+        """
+        from systems.gameplay.combat.auras.targeting import within_metric
+
+        tile = self._tile()
+
+        if tile is None:
+            return
+
+        try:
+            aura_radius = self._active_aura_radius(looker)
+            drawn = tile_map.render(self._plane(), tile,
+                                    aura_radius=aura_radius,
+                                    aura_metric=within_metric)
+        except Exception:
+            logger.log_trace()
+            return
+
+        separator = self.map_separator_char * CLIENT_DEFAULT_WIDTH
+        framed = f"{separator}|n\n{drawn}\n{separator}"
+        plane = self._plane().plane
+
+        # The ground needs no caption. A floor above it does (Phase 7).
+        if plane != tile_const.GROUND_PLANE:
+            framed = f"|wPlane {plane}|n\n{framed}"
+
+        looker.msg(text=(framed, _MSG_MAP), options=None)

@@ -217,6 +217,32 @@ def format_out_of_reach(target, distance, reach: int) -> str:
     )
 
 
+def format_out_of_sight(target) -> str:
+    """
+    Purpose: One-line message refusing a shot because a wall or a Blocked
+             tile stands between the two.
+
+    Entry:
+        target - the entity in reach but out of sight.
+
+    Exit/Returns:
+        Gray single-line string, in the style of format_out_of_reach.
+
+    Module Globals:
+        TAG_MISS, TAG_OUTGOING_NAME, TAG_RESET read.
+
+    Notes/References:
+        systems/gameplay/combat/reach.py, can_strike. The rule is in the
+        vault, Combat_System.md, "Line of sight".
+
+    Author: Nick Hobar
+    Creation date: 09/26/2026
+    """
+    name = f"{TAG_OUTGOING_NAME}{target.key}{TAG_MISS}"
+
+    return f"{TAG_MISS}You have no clear shot at {name}.{TAG_RESET}"
+
+
 
 # ─── Incoming perspective (the defender sees these) ─────────────────────────
 

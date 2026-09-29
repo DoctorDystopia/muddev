@@ -39,13 +39,6 @@ const UNMODELLED_CREATURE := "a_creature_with_no_art_of_its_own"
 ## family rather than by asset key.
 const _Const := preload("res://autoload/blackout_constants.gd")
 
-## How far off square a terrain tile's footprint may land, as a ratio.
-##
-## Tighter than UNIT_TOLERANCE because this is not float slop: a tile is either
-## the square the grid stamps it as or it is not, and the difference between
-## 1.00 and 0.88 is a visible gap between every pair of tiles in the world.
-const SQUARE_TOLERANCE := 0.02
-
 ## How far off a unit the longest axis may land. Generous: the normalise divides
 ## by a measured extent, so this is float slop rather than a tolerance on the
 ## intent.
@@ -105,6 +98,16 @@ func _on_manifest(count: int) -> void:
 
 	_expect(scenery == null, "scenery with no art draws nothing at all")
 
+	# Each model that the server names for a chunk object must be served, or
+	# its tile stays bare. The transition pad is one.
+	var Const := preload("res://autoload/blackout_constants.gd")
+
+	for kind: String in Const.OBJECT_KIND_SCENERY:
+		var asset_key: String = Const.OBJECT_KIND_SCENERY[kind]
+
+		_expect(_resolver.may_have_art(asset_key),
+			"the scenery of %s (%s) is served" % [kind, asset_key])
+
 	_resolver.refreshed.connect(_on_refreshed)
 
 
@@ -121,11 +124,6 @@ func _on_refreshed(asset_key: String) -> void:
 
 	if asset_key == FamilyShapes.model_for(_Const.FAMILY_CORPSE):
 		_a_body_is_lying_down()
-		_reported(asset_key)
-		return
-
-	if MapPalette.TILE_MODELS.values().has(asset_key):
-		_a_terrain_tile_is_a_unit_square(asset_key)
 		_reported(asset_key)
 		return
 
@@ -192,8 +190,6 @@ func _on_refreshed(asset_key: String) -> void:
 	if again != null:
 		again.free()
 
-	_scenery_draws_only_what_has_art()
-
 	# Kicks off the character fetch. Finishing waits for it: measuring now
 	# would measure the FAMILY SHAPE, which is what the first version of this
 	# test did -- it passed while checking the procedural figure, because the
@@ -215,9 +211,9 @@ func _on_refreshed(asset_key: String) -> void:
 	if corpse_model.is_empty():
 		_expect(false, "the corpse family names a model to stand in for it")
 	elif not _resolver.may_have_art(corpse_model):
-		# Asked before it is waited on, for the reason the terrain loop below
-		# spells out: a key the manifest does not name never fetches, so the
-		# test would sit out its timeout and blame a server that is fine.
+		# ASKED BEFORE IT IS WAITED ON. A key that the manifest does not name
+		# never fetches, so `refreshed` never fires for it. The test would sit
+		# out its timeout and then blame a server that is fine.
 		_expect(false, "%s is in the served manifest. Repack and run " % corpse_model
 			+ "collectstatic, or every corpse in the game is a grey box")
 	else:
@@ -226,30 +222,6 @@ func _on_refreshed(asset_key: String) -> void:
 		var body := _resolver.resolve_entity(UNMODELLED_CREATURE,
 			_Const.FAMILY_CORPSE)
 		body.free()
-
-	# Every terrain the maps are surfaced with, from the table rather than by
-	# name -- a tile added for a third map is covered without an edit here, and
-	# the footprint check below is exactly the one a new tile is likely to fail.
-	for z: String in MapPalette.TILE_MODELS:
-		var terrain_key: String = MapPalette.TILE_MODELS[z]
-
-		# ASKED BEFORE IT IS WAITED ON. Terrain that the served manifest does
-		# not name never fetches, so `refreshed` never fires for it and this
-		# test would sit out its whole timeout and then report the timeout --
-		# which says "is Evennia running?" about a server that is running fine
-		# and has simply not had collectstatic run over a new .glb.
-		if not _resolver.may_have_art(terrain_key):
-			_expect(false, "%s is in the served manifest (surfaces %s). Repack "
-				% [terrain_key, z]
-				+ "and reload Evennia so collectstatic picks it up")
-			continue
-
-		_outstanding[terrain_key] = true
-
-		var ground := _resolver.resolve_scenery(terrain_key)
-
-		if ground != null:
-			ground.free()
 
 	# Every model that PRESENTATION resizes, from the table and not by name.
 	for sized_key: String in _scaled_keys():
@@ -464,73 +436,6 @@ func _an_export_lying_about_transparency_is_corrected() -> void:
 	_expect(checked > 0, "the eye actually has materials to check")
 
 	eye.free()
-
-
-## A terrain tile comes out a UNIT SQUARE, not merely a unit box.
-##
-## THE TRAP THIS GUARDS, and it is a trap laid by the normalise rather than by
-## any tile. `_normalise` divides by the model's LONGEST axis, which is the
-## right rule for a sword and the wrong assumption to carry into a tileset: the
-## desert set's `block_a` is a 2x2 tile with a rock lip hanging 0.28 past its
-## south edge, so its longest axis is 2.28 and normalising it leaves a footprint
-## of 0.877. Stamped on a grid whose spacing assumes 1.0, that is a visible gap
-## between every pair of tiles in the world -- and it is silent, because the
-## model loaded perfectly and is exactly one unit on the axis it was measured by.
-##
-## The flat `center_*` tiles this ships with are square to the millimetre and
-## pass. The check is here for the day somebody picks a prettier tile.
-##
-## Y IS DELIBERATELY NOT CHECKED. A terrain tile is nearly flat -- these are
-## about 0.015 units tall once normalised -- and the pane rests it on the slab
-## by measurement, so its thickness is not something anything depends on.
-func _a_terrain_tile_is_a_unit_square(asset_key: String) -> void:
-	var ground := _resolver.resolve_scenery(asset_key)
-
-	if ground == null:
-		_expect(false, "%s resolves once fetched" % asset_key)
-		return
-
-	var bounds := ModelLoader.bounds_of(ground)
-	var footprint := maxf(bounds.size.x, bounds.size.z)
-
-	print("%s footprint: %.3f x %.3f, %.3f thick"
-		% [asset_key, bounds.size.x, bounds.size.z, bounds.size.y])
-
-	_expect(absf(bounds.size.x - 1.0) < SQUARE_TOLERANCE
-			and absf(bounds.size.z - 1.0) < SQUARE_TOLERANCE,
-		"%s fills a whole tile (%.3f x %.3f)"
-		% [asset_key, bounds.size.x, bounds.size.z])
-	_expect(absf(footprint - 1.0) < SQUARE_TOLERANCE,
-		"%s is not normalised by an overhang (footprint %.3f)"
-		% [asset_key, footprint])
-	_expect(not ModelLoader.mesh_parts(ground).is_empty(),
-		"%s has meshes for the terrain layer to stamp" % asset_key)
-
-	ground.free()
-
-
-## The tile-prop path, which is the OTHER policy on the same ladder.
-##
-## `map_transition` is a room kind with real art, so scenery must produce it —
-## while a kind with none must still produce nothing. Both halves matter: the
-## first is the feature, and the second is what keeps every ordinary tile from
-## sprouting a grey cube.
-func _scenery_draws_only_what_has_art() -> void:
-	var Const := preload("res://autoload/blackout_constants.gd")
-
-	_expect(_resolver.may_have_art(Const.ROOM_KIND_TRANSITION),
-		"the transition room kind has art")
-
-	# First ask starts the fetch and correctly answers "nothing yet"; the pane
-	# redraws on `refreshed`. Asserting that here rather than waiting, because
-	# it is the behaviour a tile actually sees on the first frame.
-	var pending := _resolver.resolve_scenery(Const.ROOM_KIND_TRANSITION)
-
-	if pending != null:
-		pending.free()
-
-	_expect(_resolver.resolve_scenery(Const.ROOM_KIND_DEFAULT) == null,
-		"an ordinary tile kind never draws a prop, however long it waits")
 
 
 ## Mark one of the last two fetches done, and finish once neither is left.

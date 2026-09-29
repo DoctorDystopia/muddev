@@ -102,7 +102,9 @@ class CmdAttack(Command):
         # tile the weapon covers the target from -- which is the target's own
         # tile for every melee weapon, so nothing about closing on a raider
         # with a sword changed.
-        if not reach.in_reach(caller, target, radius):
+        # Out of sight is a walk too, for a ranged weapon (DESIGN-0011
+        # Phase 6): the walk stops at the first tile with reach and sight.
+        if not reach.can_strike(caller, target, radius):
             self._walk_into_range(target, radius)
             return
 
@@ -153,12 +155,11 @@ class CmdAttack(Command):
             feed_const.ENTITY_APPROACH_TEMPLATE read.
 
         Methodology:
-            THE DESTINATION IS A RING, NOT THE TARGET'S TILE. rooms_in_reach
-            asked of the TARGET returns every tile this weapon could shoot it
-            from, and the walk goes to whichever of them is nearest. A melee
-            weapon covers one tile, its own, so a sword walks exactly where it
-            always walked; a bow stops seven tiles out and opens fire from
-            there.
+            THE DESTINATION IS A RING, NOT THE TILE OF THE TARGET.
+            reach.nearest_tile_in_reach follows the walk to the target. It
+            stops at the first tile of the walk that is in reach. A melee
+            weapon covers only its own tile, so a sword walks onto the
+            target. A bow stops seven tiles out and shoots from there.
 
             The walk goes through `goto (x,y) then attack <name>` -- the same
             string the client used to build for itself, parsed by the same
@@ -186,7 +187,7 @@ class CmdAttack(Command):
             )
             return
 
-        x, y, _z = destination.xyz
+        x, y = destination
         dbref = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref=target.id)
         command = (
             feed_const.ENTITY_APPROACH_TEMPLATE
@@ -219,7 +220,8 @@ class CmdFlee(Command):
     """Command flee — attempt to escape combat."""
 
     key = "flee"
-    aliases = ["run", "escape"]
+    # Not "run": that word is the run toggle (commands/tile_movement.py).
+    aliases = ["escape"]
     help_category = HELP_CATEGORY_COMBAT
 
     def func(self) -> None:

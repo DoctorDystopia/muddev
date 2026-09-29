@@ -42,6 +42,14 @@ extends Node
 ## aliases all point at its one `.glb`. Callers always get their own copy;
 ## the cached prototype is never handed out, because callers reparent, scale and
 ## tint what they receive.
+##
+## ## A directory on disk, for the terrain editor
+##
+## The terrain editor has the served model tree in the repo and no web server.
+## Thus its origin is the directory that holds `static/`, and it calls
+## [method read_local_manifest] and [method load_local]. These read the files
+## on the call, with no request. The game never calls them, so the game path
+## has no new work.
 
 ## Emitted when the manifest has been fetched and folded in.
 ##
@@ -126,6 +134,13 @@ func _init(registry: ModelRegistry, origin: String) -> void:
 ## the engine reports every one as a leaked instance at shutdown. Orphaned nodes
 ## are the caller's to free, and this is the caller.
 func _exit_tree() -> void:
+	free_prototypes()
+
+
+## Free the cached prototypes. [method _exit_tree] does this for a loader in
+## the tree. A loader that never joins the tree, as the one of the terrain
+## editor, calls it before it frees itself.
+func free_prototypes() -> void:
 	for asset_key: String in _prototypes:
 		var prototype: Node3D = _prototypes[asset_key]
 
@@ -304,6 +319,44 @@ func request(asset_key: String) -> void:
 	_start(url)
 
 
+# ─── A directory on disk ─────────────────────────────────────────────────────
+
+## Read the manifest from the origin directory, now. Returns how many models
+## it names: 0 when the file is missing. See the class comment.
+func read_local_manifest() -> int:
+	var text := FileAccess.get_file_as_string(_registry.manifest_url(_origin))
+
+	if text.is_empty():
+		return 0
+
+	return _registry.ingest_manifest(JSON.parse_string(text))
+
+
+## A copy of one model, read and built from the origin directory on the
+## call, or null. A key that fails once fails for good, as with a fetch.
+func load_local(asset_key: String) -> Node3D:
+	if _prototypes.has(asset_key):
+		return cached(asset_key)
+
+	if not can_load(asset_key):
+		return null
+
+	var path := _registry.url_for(_origin, asset_key)
+	var body := FileAccess.get_file_as_bytes(path)
+	var model: Node3D = null
+
+	if not body.is_empty():
+		model = _build(asset_key, body)
+
+	if model == null:
+		_fail(asset_key, "could not be read from " + path)
+		return null
+
+	_prototypes[asset_key] = model
+
+	return cached(asset_key)
+
+
 # ─── Private ─────────────────────────────────────────────────────────────────
 
 func _start(url: String) -> void:
@@ -375,6 +428,13 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
 
+	# Embed each texture as it is. The default EXTRACTS a texture to a file
+	# beside the source. A buffer has no source path, so Godot warns one time
+	# for each texture and then embeds it as it is. The result is the same,
+	# with no warning.
+	state.handle_binary_image_mode = \
+		GLTFState.HANDLE_BINARY_IMAGE_MODE_EMBED_AS_UNCOMPRESSED
+
 	if document.append_from_buffer(body, "", state) != OK:
 		return null
 
@@ -382,6 +442,13 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 
 	if scene == null:
 		return null
+
+	# In the editor, generate_scene gives ImporterMeshInstance3D nodes, which
+	# draw nothing: the import step converts them later. The terrain editor
+	# has no import step, so it converts them here. The game gets
+	# MeshInstance3D nodes and skips this.
+	if Engine.is_editor_hint():
+		_convert_importer_meshes(scene)
 
 	# WRAPPED, and this is load-bearing. The normalise below writes `scale` and
 	# `position`, and every caller then sets `scale` on what it was handed --
@@ -407,6 +474,36 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 	_prepare_materials(scene)
 
 	return wrapper
+
+
+## Put a MeshInstance3D in place of each ImporterMeshInstance3D under `root`,
+## with the same name, transform, mesh, skin, and skeleton. The children move
+## to the new node. See [method _build] for why only the editor needs this.
+static func _convert_importer_meshes(root: Node) -> void:
+	var found: Array[ImporterMeshInstance3D] = []
+	var stack: Array[Node] = [root]
+
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+
+		if node is ImporterMeshInstance3D:
+			found.append(node)
+
+		stack.append_array(node.get_children())
+
+	for importer: ImporterMeshInstance3D in found:
+		var instance := MeshInstance3D.new()
+
+		instance.name = importer.name
+		instance.transform = importer.transform
+		instance.skin = importer.skin
+		instance.skeleton = importer.skeleton_path
+
+		if importer.mesh != null:
+			instance.mesh = importer.mesh.get_mesh()
+
+		importer.replace_by(instance)
+		importer.free()
 
 
 ## Make a prototype's own materials glow-ready, so their shaders outlive every

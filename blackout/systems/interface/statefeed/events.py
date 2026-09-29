@@ -24,6 +24,7 @@ from evennia.utils import logger
 
 from . import constants as const
 from . import buffer, serializers, subscriptions
+from systems.gameplay.movement import constants as walk_const
 from systems.interface.popups import constants as popup_const
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
@@ -43,6 +44,10 @@ from .payloads import (
     RoomPlayerRemovePayload,
     RoomPlayersDeltaPayload,
     RoomPlayersPayload,
+    TileChunkPayload,
+    WalkPayload,
+    WorldMapChunkPayload,
+    WorldMapPayload,
     XpDropPayload,
 )
 
@@ -990,15 +995,218 @@ def emit_room_info(observer, force: bool = False) -> int:
 
     payload = RoomInfoPayload(
         num=room.id,
-        name=str(room.key),
-        room_kind=serializers.room_kind(room),
+        name=str(room.get_display_name(observer)),
         coords=serializers.room_coords(room),
         exits=serializers.serialize_exits(room),
         tile_actions=serializers.tile_actions(room),
         cancel_action=serializers.cancel_action(),
     )
+    sent = emit(observer, payload, force=force)
+
+    # The chunk block follows the room: a new room can be a new chunk.
+    sent += emit_tile_chunks(observer, force=force)
+
+    return sent
+
+
+def emit_tile_chunks(observer, force: bool = False) -> int:
+    """
+    Purpose: Send each chunk of the block around the observer that this
+             observer has not received since its last resync.
+
+    Entry:
+        observer - a character, on the tile world or not.
+        force    - True on a resync. It forgets what was sent, so the new
+                   session gets the whole block.
+
+    Exit/Returns:
+        The number of messages that reached a session.
+
+    Module Globals:
+        const.TILE_CHUNKS_SENT_ATTR read.
+
+    Methodology:
+        1. Nothing for an observer off the tile world.
+        2. List the loaded chunks of the block, on every plane
+           (TileWorld.block_chunks). The plane of the observer comes first.
+        3. Forget each sent chunk outside the block. The client frees it.
+        4. Send each one that is not in the sent set, and record it. A send
+           that reached no session is not recorded, so the next move tries
+           again.
+
+    Notes/References:
+        DESIGN-0011 Phase 5, step 2. The client frees a chunk outside its
+        block by itself, with the same radius (CHUNK_STREAM_RADIUS), so no
+        message removes one. Phase 7b: every plane streams, so the client
+        can draw the floor above and the ground below. A key of the sent set
+        is (cx, cy, plane). A climb changes no key, so it sends nothing.
+
+    Author: Nick Hobar
+    Creation date: 09/25/2026
+    """
+    from world import tile_travel
+
+    tile = tile_travel.tile_of(observer)
+    holder = getattr(observer, "ndb", None)
+
+    if tile is None or holder is None:
+        return 0
+
+    from systems.core.tilegrid.world import get_world
+
+    world = get_world()
+    sent_keys = getattr(holder, const.TILE_CHUNKS_SENT_ATTR, None)
+
+    if force or sent_keys is None:
+        sent_keys = set()
+        setattr(holder, const.TILE_CHUNKS_SENT_ATTR, sent_keys)
+
+    own_plane = tile_travel.plane_of(observer)
+    block = world.block_chunks(*tile, first_plane=own_plane)
+
+    # The client frees each chunk outside the same block. Forget it here too,
+    # so a walk back into it sends it again.
+    sent_keys.intersection_update(block)
+    sent = 0
+
+    for key in block:
+        if key in sent_keys:
+            continue
+
+        cx, cy, plane = key
+        chunk = world.plane(plane).chunk_dict((cx, cy))
+        payload = TileChunkPayload(chunk_file=chunk)
+        reached = emit(observer, payload, force=True)
+
+        if reached:
+            sent_keys.add(key)
+            sent += reached
+
+    return sent
+
+
+def emit_walk(observer, force: bool = False) -> int:
+    """
+    Purpose: Send the current walk of the observer: the goal, the path, the
+             room Z, and the run toggle. No walk sends an empty goal. A
+             direction walk (a held key) also sends an empty goal: it has
+             no destination marker.
+
+    Entry:
+        observer - a character.
+        force    - True on a resync.
+
+    Exit/Returns:
+        The number of sessions that the message reached.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Reads `ndb.tile_walk` (`TileWalk` in
+        systems/gameplay/movement/walk.py) and the run attribute. The path
+        is a copy, because the walk drops tiles at each step. The client
+        drops each tile as the player steps on it or skips it, so a step
+        sends nothing here.
+
+    Notes/References:
+        `walk.set_walk` is the one writer of the walk, and `walk.set_running`
+        the one writer of the run toggle. Both call this.
+        constants.CHANNEL_WALK.
+
+    Author: Nick Hobar
+    Creation date: 09/28/2026
+    """
+    holder = getattr(observer, "ndb", None)
+    walk = getattr(holder, walk_const.WALK_NDB_ATTR, None)         if holder is not None else None
+    attributes = getattr(observer, "attributes", None)
+    running = bool(attributes.get(walk_const.RUN_ATTR, default=False))         if attributes is not None else False
+
+    if walk is None or not walk.shown:
+        return emit(observer, WalkPayload(running=running), force=force)
+
+    room = getattr(observer, "location", None)
+    coords = serializers.room_coords(room) if room is not None else []
+    z = str(coords[2]) if len(coords) == 3 else ""
+    payload = WalkPayload(
+        goal=list(walk.goal),
+        path=[list(tile) for tile in walk.path],
+        z=z,
+        running=running,
+    )
 
     return emit(observer, payload, force=force)
+
+
+def emit_world_map(observer) -> int:
+    """
+    Purpose: Send the world map: the index, then each world map summary that
+             this observer did not get since its last resync.
+
+    Entry:
+        observer - a character, on the tile world or not.
+
+    Exit/Returns:
+        The number of messages that reached a session.
+
+    Module Globals:
+        const.WORLD_MAP_SENT_ATTR read.
+
+    Methodology:
+        1. Send the index every time. The client opens the world map when it
+           arrives, so a typed `worldmap` opens it.
+        2. Send each summary that is not in the sent set, and record it. A
+           send that reached no session is not recorded.
+
+    Notes/References:
+        systems/interface/statefeed/worldmap.py builds both. `resync`
+        clears the sent set.
+
+    Author: Nick Hobar
+    Creation date: 09/28/2026
+    """
+    from systems.core.tilegrid.world import get_world
+    from world import tile_travel
+    from . import worldmap
+
+    holder = getattr(observer, "ndb", None)
+
+    if holder is None:
+        return 0
+
+    world = get_world()
+    own_plane = tile_travel.plane_of(observer)
+    first_plane = own_plane if own_plane is not None else 0
+    index = worldmap.index_of(world, first_plane)
+    sent = emit(observer, WorldMapPayload(**index), force=True)
+    sent_keys = getattr(holder, const.WORLD_MAP_SENT_ATTR, None)
+
+    if sent_keys is None:
+        sent_keys = set()
+        setattr(holder, const.WORLD_MAP_SENT_ATTR, sent_keys)
+
+    for cx, cy, plane in worldmap.chunk_keys(world, first_plane):
+        key = (cx, cy, plane)
+
+        if key in sent_keys:
+            continue
+
+        summary = worldmap.summary_of(world.plane(plane), (cx, cy))
+        reached = emit(observer, WorldMapChunkPayload(**summary), force=True)
+
+        if reached:
+            sent_keys.add(key)
+            sent += reached
+
+    return sent
+
+
+def forget_world_map(observer) -> None:
+    """Forget the world map summaries sent to the observer. Resync calls it."""
+    holder = getattr(observer, "ndb", None)
+
+    if holder is not None:
+        setattr(holder, const.WORLD_MAP_SENT_ATTR, None)
 
 
 
@@ -1325,12 +1533,12 @@ def emit_aura(owner, event: str, aura_key: str, radius: int,
         Sent to the aura's owner only. This is the one channel that names tiles
         the observer is not standing on, and that is legitimate solely because
         the text channel already shows the owner the same footprint, as the
-        tinted map overlay in typeclasses/rooms.py. Broadcasting it to the room
+        aura tint of the tile map (world/tile_map.py). Broadcasting it to the room
         would leak a player's aura radius to everyone nearby, which the text
         game does not do.
 
     Notes/References:
-        systems/gameplay/combat/auras/map_overlay.py owns the equivalent text rendering.
+        world/tile_map.py owns the equivalent text rendering.
 
     Author: Nick Hobar
     Creation date: 08/07/2026

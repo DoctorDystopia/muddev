@@ -9,6 +9,8 @@ extends Node
 ## real client is in before the manifest lands, and the state every entity
 ## without art stays in forever.
 
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 var _failures := 0
 var _pool: EntityPool
 var _resolver: MeshResolver
@@ -160,12 +162,20 @@ func _ready() -> void:
 	_a_step_moves_the_ring_without_rebuilding_it()
 	_another_entity_moving_keeps_every_other_node()
 	_a_changed_look_builds_the_node_again()
+	_a_facing_turns_the_model()
+	_a_new_facing_builds_the_node_again()
+	_a_first_sighting_rises_out_of_the_fog()
+	_a_changed_look_does_not_rise_again()
+	_a_figure_still_in_view_does_not_rise_again()
 
 	# LAST, because each turns the animation back on. See the bind above.
 	_a_moved_entity_is_drawn_where_it_was_not_where_it_is_going()
 	_a_travelling_entity_has_its_true_tile_marked()
 	_two_entities_bound_for_one_tile_ask_for_one_mark()
 	_turning_the_animation_off_lands_everybody()
+
+	# Waits for a flash to run out, so it goes after every case that does not.
+	await _a_flash_during_the_tint_ends_at_the_own_colour()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -562,6 +572,164 @@ func _a_changed_look_builds_the_node_again() -> void:
 	_pool.replace_all([])
 
 
+## The tile sync gives an entity the rotation of its chunk object, and the
+## model turns by it. A row with no facing keeps the model as it comes.
+func _a_facing_turns_the_model() -> void:
+	for turn: int in _Const.CHUNK_ROTATION_COUNT:
+		var turned := RAIDER.duplicate()
+
+		turned[_Const.ENTITY_FACING_KEY] = float(turn)
+		_pool.replace_all([turned])
+
+		var node := _node_for(20743)
+
+		_expect(node != null and is_equal_approx(node.rotation.y,
+				TerrainView.model_yaw(turn)),
+			"facing %d turns the model to its yaw" % turn)
+		_pool.replace_all([])
+
+	_pool.replace_all([RAIDER])
+	_expect(is_zero_approx(_node_for(20743).rotation.y),
+		"a row with no facing does not turn the model")
+	_pool.replace_all([])
+
+
+## A new facing on a held entity must turn it, so the facing is part of the
+## look.
+func _a_new_facing_builds_the_node_again() -> void:
+	var turned := RAIDER.duplicate()
+
+	turned[_Const.ENTITY_FACING_KEY] = 1.0
+	_pool.replace_all([turned])
+
+	var before := _node_for(20743)
+	var again := RAIDER.duplicate()
+
+	again[_Const.ENTITY_FACING_KEY] = 3.0
+	_pool.add(again)
+
+	var after := _node_for(20743)
+
+	_expect(after != before, "a new facing builds a new node")
+	_expect(after != null and is_equal_approx(after.rotation.y,
+			TerrainView.model_yaw(3)), "and the new node faces the new way")
+	_pool.replace_all([])
+
+
+## Colour for the tint-in cases. Far from every palette colour, so a match is
+## the tint and never a coincidence.
+const FADE_TEST_COLOR := Color(0.1, 0.9, 0.2)
+
+## Seconds of margin past a flash, so its tween has certainly run out.
+const FLASH_SETTLE_SECONDS := 0.2
+
+
+## DESIGN-0011 section 6.6. A figure that arrives at the edge of the radius
+## starts at the fog colour, on every material.
+func _a_first_sighting_rises_out_of_the_fog() -> void:
+	_pool.replace_all([])
+	_pool.set_fade_color(FADE_TEST_COLOR)
+	_pool.replace_all([RAIDER])
+
+	var materials := _materials_of(_node_for(20743))
+	var tinted := 0
+
+	for material: StandardMaterial3D in materials:
+		var rgb := Color(material.albedo_color, 1.0)
+
+		if rgb.is_equal_approx(FADE_TEST_COLOR):
+			tinted += 1
+
+	_expect(_pool.is_fading(20743), "a first sighting starts a tint-in")
+	_expect(materials.size() > 0 and tinted == materials.size(),
+		"every material starts at the fog colour (%d of %d)"
+		% [tinted, materials.size()])
+
+	_pool.replace_all([])
+
+
+## A new label or new art builds a new node, but the figure did not just
+## arrive. It must not flicker back into the fog.
+func _a_changed_look_does_not_rise_again() -> void:
+	_pool.replace_all([])
+	_pool.replace_all([SIGN])
+
+	var repainted := SIGN.duplicate()
+
+	repainted["label"] = "TRADE TOWN (CLOSED)"
+	_pool.add(repainted)
+
+	_expect(not _pool.is_fading(20748),
+		"a rebuild for a new look does not tint the figure again")
+
+	_pool.replace_all([])
+
+
+## A resync or a step names the same figure again. It is not a new arrival.
+##
+## The fade colour changes between the two lists. A restarted tint-in would
+## put the raider at the second colour.
+func _a_figure_still_in_view_does_not_rise_again() -> void:
+	_pool.replace_all([])
+	_pool.set_fade_color(Color.BLACK)
+	_pool.replace_all([RAIDER])
+	_pool.set_fade_color(FADE_TEST_COLOR)
+	_pool.replace_all([RAIDER, SWORD])
+
+	var restarted := 0
+
+	for material: StandardMaterial3D in _materials_of(_node_for(20743)):
+		var rgb := Color(material.albedo_color, 1.0)
+
+		if rgb.is_equal_approx(FADE_TEST_COLOR):
+			restarted += 1
+
+	_expect(restarted == 0, "a figure named again is not a first sighting")
+	_expect(_pool.is_fading(20744), "but the one beside it is")
+
+	_pool.replace_all([])
+
+
+## The flash reads the albedo as its base. In the middle of a tint-in, that
+## base is part fog, and the figure stays tinted after the flash.
+func _a_flash_during_the_tint_ends_at_the_own_colour() -> void:
+	var reference := _resolver.resolve_entity(
+		str(RAIDER["asset"]), str(RAIDER["family"]))
+	var own_colours: Array = []
+
+	for material: StandardMaterial3D in _materials_of(reference):
+		own_colours.append(material.albedo_color)
+
+	reference.free()
+
+	_pool.replace_all([])
+	_pool.set_fade_color(FADE_TEST_COLOR)
+	_pool.replace_all([RAIDER])
+	_pool.flash(20743)
+
+	_expect(not _pool.is_fading(20743), "a flash ends the tint-in")
+
+	var wait := EntityPool.HIT_FLASH_SECONDS + FLASH_SETTLE_SECONDS
+
+	await get_tree().create_timer(wait).timeout
+
+	var materials := _materials_of(_node_for(20743))
+	var matched := 0
+
+	for index: int in mini(materials.size(), own_colours.size()):
+		var colour: Color = materials[index].albedo_color
+
+		if colour.is_equal_approx(own_colours[index]):
+			matched += 1
+
+	_expect(materials.size() == own_colours.size()
+		and matched == materials.size(),
+		"after the flash, each material is at its own colour (%d of %d)"
+		% [matched, materials.size()])
+
+	_pool.replace_all([])
+
+
 ## The bug the observer's slot replaced. `emit_room_contents` leaves the observer
 ## out of their own room_players list, so a tile holding you and one dropped
 ## sword arrives describing ONE thing -- a ring of one, radius zero, drawn dead
@@ -604,8 +772,9 @@ func _the_observer_takes_a_slot_in_their_own_ring() -> void:
 	for entity_id: int in [20743, 20744]:
 		var node := _node_for(entity_id)
 
+		# Three share the ring: the observer and the two entities.
 		_expect(node != null and _apart(node.position, _observer_offset)
-			>= EntityPool.ENTITY_SCALE - 0.001,
+			>= _ring_spacing(3) - 0.001,
 			"and nothing is drawn inside the slot left for them (%d)" % entity_id)
 
 	_pool.replace_all([])
@@ -619,15 +788,27 @@ func _the_observer_takes_a_slot_in_their_own_ring() -> void:
 ## What the ring is FOR. The old radius measured arc length rather than the
 ## chord between neighbours, which reads a small ring as roomier than it is --
 ## three entities 0.5 across sat 0.45 apart and overlapped.
+##
+## A figure one tile wide cannot stand clear inside the cap (Nick kept 1.0 on
+## 09/28/2026). Thus, each pair is either a figure apart, or as far apart as
+## the cap allows.
 func _a_ring_leaves_room_between_its_neighbours() -> void:
 	for crowd: int in range(2, 6):
 		_pool.replace_all(_crowd(crowd))
 
 		var nearest := _closest_pair()
 
-		_expect(nearest >= EntityPool.ENTITY_SCALE - 0.001,
-			"%d on one tile stand clear of each other (%.3f apart)"
+		_expect(nearest >= _ring_spacing(crowd) - 0.001,
+			"%d on one tile stand as far apart as the ring allows (%.3f apart)"
 			% [crowd, nearest])
+
+
+## The gap between two neighbours of a ring of `total`: one figure, or the
+## chord of the ring at its cap when a figure does not fit.
+static func _ring_spacing(total: int) -> float:
+	var chord_at_cap := 2.0 * EntityPool.MAX_RING_RADIUS * sin(PI / float(total))
+
+	return minf(EntityPool.ENTITY_SCALE, chord_at_cap)
 
 
 ## The cap. Past six occupants they overlap again, and that is the intended

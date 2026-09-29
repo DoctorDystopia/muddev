@@ -284,7 +284,7 @@ func _can_drop_data(_at: Vector2, data: Variant) -> bool:
 		return false
 
 	var from_kind := str(data.get("kind", ""))
-	var row: Dictionary = data.get("row", {})
+	var row_data: Dictionary = data.get("row", {})
 
 	# Onto a carried square: anything goes. A worn item dropped here is an
 	# unequip, and two carried items are a swap; the server validates both.
@@ -297,7 +297,7 @@ func _can_drop_data(_at: Vector2, data: Variant) -> bool:
 	if from_kind != KIND_CARRIED:
 		return false
 
-	return _state.can_equip(row, str(key))
+	return _state.can_equip(row_data, str(key))
 
 
 func _drop_data(_at: Vector2, data: Variant) -> void:

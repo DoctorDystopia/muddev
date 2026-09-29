@@ -379,7 +379,7 @@ def node_analysis(caller: object, **kwargs) -> tuple:
         "",
         _dialog(greeting),
         _dialog(
-            '"This unit is operating at optimal stability and ready to '
+            '"This unit is operating at optimal stability [23%] and ready to '
             'assist! State [description] of yourself:"'
         ),
     ])
@@ -570,13 +570,12 @@ def node_android_lore(caller: object, **kwargs) -> tuple:
     text = "\n".join([
         _dialog(
             '"Clarify [get to]. If you mean degradation: yes. Chassis '
-            "integrity is falling. Battery stability is at twenty-three "
-            'percent, which is described in my documentation as optimal."'
+            'integrity is falling."'
         ),
         "",
         _dialog(
             '"If you mean the other thing, you are the first entity to '
-            "speak to this unit in four hundred and eleven days. This unit "
+            "speak to this unit in five hundred and eleven days. This unit "
             'logged it.\"'
         ),
     ])
@@ -924,13 +923,13 @@ def node_step4_defend(caller: object, **kwargs) -> tuple:
     """
     text = "\n".join([
         _dialog(
-            '"Movement in the dunes. Heat signature, bipedal, approaching '
+            '"Movement in the dunes. Meat signature, bipedal, approaching '
             'the farm. Probability of [mutant raider] = [96%]."'
         ),
         "",
         _dialog(
-            '"This unit is a farm hand. This unit no longer has no combat protocols '
-            "and would be disassembled. You have a blade now. This unit "
+            '"This unit is a farm hand. This unit no longer has combat protocols. '
+            "You have a blade now. This unit "
             'calculates that this is your task."'
         ),
         "",
@@ -983,9 +982,7 @@ def node_step5_resolution(caller: object, **kwargs) -> tuple:
         ),
         "",
         _dialog(
-            '"Transmitting navigation data. Follow the pylons east. They '
-            "are dead, but they still point at Neo Cairo, which is more than "
-            'most things out here do."'
+            '"Transmitting navigation data. Follow the pylons east. They point at Neo Cairo."'
         ),
     ])
 
@@ -1060,7 +1057,7 @@ def node_post_quest(caller: object, **kwargs) -> tuple:
             'seventy-three point two eight six is sure to live."'
         ),
         "",
-        _dialog('"East, [82% human]. Follow the pylons. Do not sleep in the open."'),
+        _dialog('"East, [82% human]. Follow the pylons. Don\'t die!"'),
     ])
 
     options = (

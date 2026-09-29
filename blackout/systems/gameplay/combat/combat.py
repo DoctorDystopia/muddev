@@ -561,7 +561,9 @@ class ActionAttack(_Action):
 
 
     def is_stalled(self, handler) -> bool:
-        """True when the target is alive but beyond this weapon's reach.
+        """True when the target is alive, but the weapon cannot strike it.
+        Every weapon needs reach. A ranged weapon needs sight too. The test
+        is `can_strike` in reach.py.
 
         A target that is GONE is not stalled, it is invalid -- resolve()
         reports that and the fight ends. The distinction matters: one is
@@ -572,7 +574,7 @@ class ActionAttack(_Action):
         if target_unusable(target):
             return False
 
-        return not reach.in_reach(handler.obj, target, handler.reach_tiles())
+        return not reach.can_strike(handler.obj, target, handler.reach_tiles())
 
 
     def _land_hit(self, context, result) -> bool:
@@ -1665,11 +1667,17 @@ class BlackoutCombatHandler(TickableHandler):
         return self._validate_ammunition()
 
     def _validate_reach(self, target) -> bool:
-        """Refuse a target the weapon cannot carry to, naming both numbers."""
+        """Refuse a target the weapon cannot carry to, naming both numbers.
+        A ranged weapon also needs sight (reach.can_strike). A target in
+        reach but out of sight gets its own refusal."""
         radius = self.reach_tiles()
 
-        if reach.in_reach(self.obj, target, radius):
+        if reach.can_strike(self.obj, target, radius):
             return True
+
+        if reach.in_reach(self.obj, target, radius):
+            self.obj.msg((combat_msg.format_out_of_sight(target), _MSG_COMBAT))
+            return False
 
         distance = reach.tile_distance(self.obj, target)
         self.obj.msg(

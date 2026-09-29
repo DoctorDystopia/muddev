@@ -70,6 +70,89 @@ const BINDINGS := {
 	KEY_N: "southeast",
 }
 
+## The step of each direction on the grid, Y to the north. Only
+## [method combined] reads it, to add two held keys into one diagonal. It
+## makes no claim about the map: the server still decides if the step goes.
+const OFFSETS := {
+	"north": Vector2i(0, 1),
+	"northeast": Vector2i(1, 1),
+	"east": Vector2i(1, 0),
+	"southeast": Vector2i(1, -1),
+	"south": Vector2i(0, -1),
+	"southwest": Vector2i(-1, -1),
+	"west": Vector2i(-1, 0),
+	"northwest": Vector2i(-1, 1),
+}
+
+
+## The direction of a set of held keys, oldest first, or "" for none.
+##
+## Traditional WASD: W and D held together walk northeast. The steps of the
+## held keys add, and each axis keeps only its sign. Two keys that cancel
+## (W and S) give the newest key, so the last key pressed wins a tie.
+static func combined(held: Array) -> String:
+	var total := Vector2i.ZERO
+	var newest := ""
+
+	for keycode: int in held:
+		var command := command_for(keycode)
+
+		if command.is_empty():
+			continue
+
+		total += OFFSETS[command]
+		newest = command
+
+	var step := Vector2i(signi(total.x), signi(total.y))
+
+	for command: String in OFFSETS:
+		if OFFSETS[command] == step:
+			return command
+
+	return newest
+
+
+## A key direction turned to follow the camera, or the same direction.
+##
+## For the Options box "WASD follows the camera". This reads the key
+## direction as if the camera looked north. W ("north") is forward, and D
+## ("east") is right. `forward` is where the camera looks, on the tile grid
+## with Y to the north ([method WorldView.camera_forward]).
+## The turned step snaps to the nearest of the eight directions.
+##
+## A zero `forward` gives the direction back as it is. The result is still a
+## direction word that a telnet player could type.
+static func steered(direction: String, forward: Vector2) -> String:
+	if not OFFSETS.has(direction) or forward.is_zero_approx():
+		return direction
+
+	var ahead := forward.normalized()
+	var right := Vector2(ahead.y, -ahead.x)
+	var intent := Vector2(OFFSETS[direction])
+	var heading := right * intent.x + ahead * intent.y
+
+	return nearest(heading)
+
+
+## The direction whose step points nearest to `heading`, or "" for zero.
+static func nearest(heading: Vector2) -> String:
+	if heading.is_zero_approx():
+		return ""
+
+	var unit := heading.normalized()
+	var best := ""
+	var best_dot := -INF
+
+	for command: String in OFFSETS:
+		var dot := unit.dot(Vector2(OFFSETS[command]).normalized())
+
+		if dot > best_dot:
+			best = command
+			best_dot = dot
+
+	return best
+
+
 ## The eight directions, derived from the table rather than restated.
 ##
 ## Deriving it is the point: a binding added below reaches this list with no

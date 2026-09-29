@@ -560,7 +560,7 @@ def _key_options(keys, goto_node, extra_key: str) -> list:
     Notes/References:
         Every list screen in this menu is this shape -- items, skills, maps --
         because all three are "pick one key out of a registry". The registries
-        are read live, so adding an ItemDef, a skill or a map row reaches this
+        are read live, so adding an ItemDef, a skill or an area row reaches this
         menu with no edit here.
 
     Author: Nick Hobar
@@ -626,7 +626,7 @@ def start(caller, **kwargs):
         {"desc": "Empty inventory (destroys carried AND equipped)",
          "goto": "node_clear_confirm"},
         {"desc": "Erase what they have written", "goto": "node_erase_confirm"},
-        {"desc": "Teleport to a map", "goto": "node_teleport"},
+        {"desc": "Teleport to an area", "goto": "node_teleport"},
         {"desc": "Teleport to a player", "goto": "node_teleport_player"},
         {"desc": "Bring target to me", "goto": _goto_bring_here},
         {"desc": "Grant XP", "goto": "node_xp_skill"},
@@ -825,10 +825,10 @@ def node_erase_confirm(caller, **kwargs):
 
 
 def node_teleport(caller, **kwargs):
-    """List every map the manifest names."""
-    zcoords = dev_actions.map_zcoords()
-    text = f"{_HEADING}\n\nTeleport {_target(caller).key} to which map?"
-    options = _key_options(zcoords, _goto_teleport, "zcoord")
+    """List every area of world/areas.py."""
+    areas = dev_actions.area_keys()
+    text = f"{_HEADING}\n\nTeleport {_target(caller).key} to which area?"
+    options = _key_options(areas, _goto_teleport, "area")
     options.append(back_option(_BACK_TO_EGG, "start"))
 
     return text, tuple(options)
@@ -1186,10 +1186,10 @@ def _goto_erase(caller, raw_string, **kwargs) -> str:
 
 
 def _goto_teleport(caller, raw_string, **kwargs) -> str:
-    """Move the target to the chosen map and return to the root."""
+    """Move the target to the chosen area and return to the root."""
     target = _target(caller)
-    zcoord = kwargs.get("zcoord", "")
-    _succeeded, message = dev_actions.teleport_to_map(caller, target, zcoord)
+    area = kwargs.get("area", "")
+    _succeeded, message = dev_actions.teleport_to_area(caller, target, area)
     _report(caller, message)
 
     return "start"

@@ -57,6 +57,10 @@ where there is art, and the silhouette of the family where there is not.
 | **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
 | **Drag a grip** | Resizes the box that the grip is on. A dock hangs from its corner, so only its top edge and its side edge move. A pop-up has a grip on each edge and each corner, and the docks never cover them. Remembered |
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
+| **Mouse wheel on the minimap**, or its `-` and `+` | Zooms the minimap. Remembered |
+| **`Run` on the minimap**, or **R** in move mode | Turns run on or off. The button shows what the server says. Run moves two tiles each tick |
+| **"Show the walk path on the maps" in Options** | Shows or hides the walk path on both maps. Remembered |
+| **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, Esc to close |
 | **Combat tab** | Your weapon, combat level, attack speed, and a button per style — OSRS's Combat Options |
 | **Click a style** | Sends the row's `combatoptions <style>`. The highlight moves when the server republishes, not on the click |
 | **Character tab** | The sheet — whatever panels `char_summary` sent |
@@ -66,7 +70,8 @@ where there is art, and the silhouette of the family where there is not.
 | **Options tab** | Text size, interface scale, which panes are drawn, where skill detail goes, whether figures slide between tiles. Saved between runs. The Game half asks the server: the text map, and which parts of the room a step prints |
 | **Up / Down in the input** | Walks the command history; a half-typed draft is kept |
 | **Escape in the input** | Hands the keyboard to the map — see "Two modes" below |
-| **WASDQEZC / hjklyubn** | Walk, while the map has the keyboard |
+| **WASDQEZC / hjklyubn** | Walk while held, while the map has the keyboard. One tile each tick, two with run on. W and D together walk northeast |
+| **"WASD follows the camera" in Options** | W walks where the camera looks, not to the north. Off by default. Remembered |
 | **Enter, in move mode** | Hands the keyboard back to the input |
 | **Click a chat tab** | Filters the log to what that tab claims. A dot means lines landed there while you were elsewhere |
 | **3D button** | Hides the 3D world. Persists. The inventory has its own toggle in Options — one switch for both meant giving up the bag to stop the diorama |
@@ -103,6 +108,53 @@ refuses letters looks the same as a client that hung.
 The hint follows login and focus, in `_refresh_input_hint`. Before login it is
 the `connect` line. After login it names Escape while the player types, and it
 names the movement keys while the map has the keyboard.
+
+## A held key walks at the speed of a click
+
+Since 09/29/2026 the server moves every step on the tick
+(`blackout/systems/gameplay/movement/walk.py`). A held key and a click thus
+move at one speed: one tile each tick, or two tiles with run on. The first
+step waits for the next tick, as in OSRS.
+
+A direction command is ONE tick of movement. A held key must thus reach the
+server at least one time each tick. `HeldMovement` sends the direction when
+the key goes down. The console sends it again every half tick while the key
+stays down (`HELD_RESEND_TICKS`). The server makes a new walk from the current
+tile on each command, so the sends never stack.
+
+Three rules follow:
+
+- **The client sends no "stop".** When the player lets go, the sends stop,
+  and the walker moves at most one tick more. A tap is one tick of movement.
+  A lost key-up event thus cannot make a walk that never ends.
+- **A loss of focus forgets the held keys.** A key that goes up while the
+  input has the keyboard never reaches `_unhandled_key_input`. The same is
+  true for a window that loses focus. The console clears `HeldMovement` on
+  both.
+- **Two held keys make one direction.** `MovementKeys.combined` adds the steps
+  of the held keys, and each axis keeps its sign. W and D walk northeast. Two
+  keys that cancel (W and S) give the newest key.
+
+**The keys can follow the camera.** With "WASD follows the camera" on in
+Options, W walks where the camera looks. `MovementKeys.steered` turns the key
+direction by `WorldView.camera_forward()`, and it snaps the result to the
+nearest of the eight directions. The console reads the camera again on each
+send, so a held key follows a turn of the camera within half a tick. The
+server still gets a plain direction word. The box is off by default
+(`ClientSettings.camera_relative_keys`), so W is north, as the website says.
+
+The start angle of the camera (`YAW_START`, 0.40 rad) is 23 degrees west of
+north. That is past the 22.5 degree line, so with the box on, W at the start
+angle walks northwest.
+
+**Run.** The `Run` button in the top-left corner of the minimap and the R key
+send `RUN_TOGGLE_COMMAND`. The server sends `running` on `blackout_walk`, and
+the button shows that value. A press puts the button back to the server value
+until the feed answers. The button is not on the strip, which stays at three
+buttons (Nick, 09/28/2026).
+
+**A click on the next tile sends `goto (x,y)`,** not a direction word. With run
+on, a direction word moves two tiles. A `goto` of one tile moves one tile.
 
 ## Where meshes come from
 
@@ -302,89 +354,63 @@ draw every weapon as a box.
 > model.** It comes from `servers/rendering/dummy/`, which only exists under
 > `--headless`, and does not happen in a real renderer. Noise, not a leak.
 
-## The ground is art on top of the slab, not instead of it
+## The ground is the tile world
 
-Since 08/28/2026, a map can be **surfaced**: every one of its tiles gets a real
-tile mesh on top of the colored slab that it used to be.
-`MapPalette.TILE_MODELS` is the table. Its keys are map names, and its values
-are asset keys:
+Since DESIGN-0011 Phase 5 (09/25/2026), the 3D pane draws the chunks of the
+tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
+`MapPalette`, the `blackout_map` channel, and `room_kind` are gone.
 
-- `oasis` gets a sand tile with a water pool.
-- `oasis_outskirts` gets open sand.
-- `trade town sector 1` gets nothing, and thus keeps the plain slab.
+| Part | Where | What it does |
+|---|---|---|
+| The chunk channel | server `events.emit_tile_chunks` | Sends each chunk of the 3 x 3 block around the player, on every plane, one time for each session. The plane of the player goes first. A resync sends the block again |
+| The model | `world/world_state.gd` | Keeps one `ChunkSet` for each plane, and frees a chunk outside the block. The server forgets the same chunks. `chunks` is the set of the plane of the player |
+| The ground | `world/terrain/terrain_view.gd` | One mesh for each chunk of each plane, from `ChunkMeshBuilder`, the class of the editor. It builds one chunk each frame, the chunk under the player first |
+| The water | `world/terrain/water_mesh_builder.gd` | A flat surface on each water tile, at the height of its highest corner. The editor draws it with the same class |
+| The walls | `world/terrain/wall_mesh_builder.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. A plain primitive until the walls get art. The editor draws it with the same class |
+| The scenery | `TerrainView._place_scenery` | The model that `OBJECT_KIND_SCENERY` names for a chunk object, on the centre of its tile. The server names the model in `world/object_kinds.py`. The transition pad is the first. No art, no model |
+| The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, or a hatch, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. The editor draws it with the same class |
+| The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
+| The pick | `WorldView._cell_under` | `TerrainPicking.ray_hit` on the height grid. No collision shape |
+| The area look | `WorldView._place_marker` | The area of the tile under the player, from its chunk, goes to `AreaEnvironment` |
 
-**A layer, not a replacement, and the slab is the reason.** The slab carries the
-room-kind color, and hover writes through the slab. Hover writes an instance
-color, and these tiles are one MultiMesh, so there is no material for each tile
-to tint. A replacement of the slab would have cost the two. `TERRAIN_SCALE` is
-under 1, so a rim of the slab shows around every tile, and the two facts stay
-visible.
+Four rules:
 
-**A surfaced map colors fewer kinds, on purpose.** `MapPalette.kind_colour`
-hashes an unlisted room kind to a stable hue. That is exactly right on a bare
-map and exactly wrong under art: "Oasis" hashes to magenta, and magenta then
-frames every square meter of desert. `kind_tint` is the same table with no
-fallback. An authored kind keeps its color, and everything else falls to the
-neutral color that a kindless tile already used. `MapPalette.tile_colour`
-chooses between them, and the choice is a property of the ISLAND, not of the
-tile.
+1. **One coordinate rule.** Tile (x, y) has its centre at (x, h, -y). The
+   mesh, the height read, and the pick use it. A figure thus stands on the
+   drawn ground, and a click lands on the tile under the cursor.
+2. **The chunk payload is the chunk file.** The server sends the JSON of the
+   canonical text, and `ChunkFile.from_dict` reads it. A refused chunk is a
+   parity bug between the two readers, and `WorldState.last_chunk_error`
+   keeps the reason.
+3. **A far tile walks by the server template.** A near tile keeps the action
+   that `room_info` names. A far walkable tile sends `TILE_WALK_TEMPLATE`
+   with its coordinates. A chunk has 4,096 tiles, so the server spells the
+   command one time and the client fills in the tile. The chunk flags say
+   which tile is walkable. They are server facts.
+4. **No position is a guess.** `ground_y` gives null for a tile whose chunk
+   has not landed. A figure there waits, and it stands when `chunks_changed`
+   brings the ground.
 
-**The two map panes ask that question, so neither pane owns it.**
-`MapPalette.is_surfaced(z, meshes)` owns it, and the console's shared resolver
-answers it. The minimap binds to that resolver for this question only, because
-nothing on a minimap is a mesh. The question is **"could this key ever produce
-art"**, not "has it arrived". The difference is one round trip, and it matters
-in the two directions:
+A hover mark shows on the tile under the cursor when a click there acts. It
+is the true tile square in `WorldView.COLOR_HOVER`.
 
-- "Has it arrived" makes an island come up in hashed hues and then change color
-  a second later. A whole map that changes color after it is on screen looks
-  like a bug. A map that comes up neutral, while the art fades in on top, does
-  not.
-- "Is it configured" would keep the neutral palette on a map whose art never
-  comes, for example after a failed deploy or with a model tree that the export
-  forgot. There, the hashed hues are the only thing left that tells a bank from
-  a clearing.
+### Planes (DESIGN-0011 Phase 7b)
 
-`may_have_art` is false before the manifest lands, and false again for a key
-that failed. Thus, the two panes fall back together, and neither flickers. For
-that reason, the minimap redraws on `manifest_ready`. Without it, a surfaced map
-would draw one time in the bare palette and stay that way for the session.
+The Z of the room of the player gives its plane: `tile_world` is plane 0, and
+`tile_world_p<p>` is plane p. `WorldState.plane_of_z` is the twin of the
+Python `planes.plane_of_z`, from the same generated names.
 
-**The minimap is better for it on its own merits.** This matters, because
-otherwise the change reads as consistency for its own sake. In a field of
-hashed hues, the bank does not stand out. A minimap exists to show neutral
-ground with four colored landmarks on it.
-
-> **A terrain tile must be a unit SQUARE, and the normalize cannot check
-> that.** `_normalise` divides by the longest axis of the model. That is right
-> for a sword and an assumption for a tileset. `block_a` in the desert set is a
-> 2x2 tile with a rock lip 0.28 past its south edge. Thus, its longest axis is
-> 2.28, and it normalizes to a footprint of **0.877**. That leaves a visible
-> gap between every pair of tiles in the world, from a model that loaded
-> perfectly and is exactly one unit on the axis that the code measured.
->
-> For that reason, `smoke_model_load` measures the footprint of every terrain
-> tile in `TILE_MODELS`. Prefer the flat `center_*` tiles, which are square to
-> the millimeter.
-
-> **A flat tile needs `TERRAIN_LIFT`.** `tile_oasis_outskirts` is a single plane
-> and measures 0.000 thick. A plane that rests exactly on the face it covers is
-> coplanar with that face, and the result is z-fighting, not a picture.
-> Everything else in the pane rests on the face by measurement and needs no
-> epsilon, because everything else has volume.
-
-> **The materials of the tileset declare `alphaMode: BLEND` and are not
-> transparent.** Blender writes BLEND for any material with an RGBA image, used
-> or not. The alpha of the packed palette is 255 everywhere. That is harmless
-> on a prop, but not on the ground. A transparent floor is what every entity,
-> prop, and marker in the pane sorts against. The two tile keys carry `opaque`
-> in `ModelRegistry.PRESENTATION`, and `test_map_terrain` asserts that every
-> terrain key does.
-
-> **The retired browser pane had no terrain layer.** Thus, there was nothing to
-> keep in step with `blackout_models.js` there. The parity rule above applied
-> to a model that the two panes drew, and neither pane drew a tile that the
-> other did not. The served manifest still names the tile keys in every case.
+- **Each plane draws at its own heights.** A plane-1 chunk stores absolute
+  corner heights, so no offset applies.
+- **A void tile has no floor.** `ChunkMeshBuilder` draws no triangle on a
+  tile of the floor type `void`, so the plane below shows through. The
+  minimap draws it clear.
+- **Hide roofs.** Options has a "Hide roofs" box, on by default
+  (`ClientSettings.hide_roofs`). On, it hides every plane above the plane of
+  the player.
+- **The reads of the player read the plane of the player.** The ground
+  height, the pick, the minimap, and `tile_action` read `WorldState.chunks`.
+  An entity stands on the ground of the plane in its own Z.
 
 ## The entity pool holds one entry per id
 
@@ -417,9 +443,9 @@ the property that resync exists for.
 
 ## A figure walks between tiles, and its true tile stays marked
 
-The server moves a character in whole tiles, one tile for each tick. `goto`
-steps at `TICK_SECONDS`, through `BlackoutGotoCmd.auto_step_delay`. Before
-09/20/2026, the client drew each step as a jump. That reads as teleporting, not
+The server moves a character in whole tiles on each tick: one tile, or two
+tiles with run on. The tick engine moves every walker at `TICK_SECONDS`.
+Before 09/20/2026, the client drew each step as a jump. That reads as teleporting, not
 as walking.
 
 `StepAnimator` slides the figure instead. One animator belongs to each figure.
@@ -467,8 +493,11 @@ Three and not one, because `CHANNEL_ROOM_INFO` is in `COALESCABLE_CHANNELS`.
 Two steps that land in one tick reach the client as ONE message that names a
 tile two squares away. That is a real walk the player took, announced late.
 The threshold was 1.5 until 09/21/2026, and it drew that walk as a teleport
-several times each minute. Manual movement makes the case common rather than
-rare: `auto_step_delay` paces the auto-walk, and nothing paces a held key.
+several times each minute. Since 09/29/2026 a run makes the case common: each
+tick of a run moves two tiles in one message.
+
+A run that turns a corner (north, then east) is drawn as one straight line
+across the corner. The client does not know the middle tile of the run.
 
 The honest cost is that a teleport of three tiles or fewer is drawn as a slide
 of under a second, through whatever stands between the two tiles. A
@@ -681,7 +710,7 @@ fail. The verb of a node lives in the node's own cmdset, and `attack` and `get`
 search the tile where you stand.
 
 So `WorldView.approach_command()` wraps any command aimed at an entity on
-another tile of your island in the server's `ENTITY_APPROACH_TEMPLATE`:
+another tile of your Z in the server's `ENTITY_APPROACH_TEMPLATE`:
 `goto (4,7) then cut rusty pole`. The server's `goto` walks the route on the
 tick. It types the follow-up for you **only if the walk ends on the tile that
 it started towards**. An interrupt node, a new click elsewhere, or a manual
@@ -696,9 +725,9 @@ so the menu does not read "Goto" on every line.
   every step and the row does not, so a command stored on each entity would be
   stale after one move. The server owns the spelling. This pane owns the two
   tiles.
-- **The pane sends a command for an entity on another island verbatim.**
-  `goto (X,Y)` reads its numbers on the map where you are, and there the same
-  numbers name a different tile.
+- **The pane sends a command for an entity on another Z verbatim.**
+  `goto (X,Y)` reads its numbers on the Z where you are. On the tile world
+  every entity has the same Z, so this is a guard, not a case.
 - **The walk does not chase a moving NPC.** The walk goes to where the NPC
   stood at the click. If the NPC left, the follow-up says so, as the typed
   command would.
@@ -827,7 +856,7 @@ server says which wield locations exist and in what order to READ them
 (`SLOT_DISPLAY_ORDER`, which arrives as the `equip_slots` frame list). It does
 not say that the head goes above the chest.
 
-The asymmetry is the same one that `ROOM_KIND_COLORS` documents:
+The asymmetry is the same one that `AreaLook.LOOKS` documents:
 
 - **A square that names no wield location is a bug.** The server never sends a
   frame for it, so the doll draws a hole that the player can never fill.
@@ -1001,7 +1030,7 @@ A login is not an arrival. Until 08/29/2026, the client behaved as if it were.
 The third screen was missing. `LoginView` closes itself the moment vitals
 arrive. The server sends vitals only for a PUPPETED character, so vitals are the
 honest signal that a body exists. But a body is not a world. At that moment,
-`blackout_map` can still come in chunks, `room_info` might not yet name the tile
+`blackout_chunk` can still be on its way, `room_info` might not yet name the tile
 where you stand, and the client holds no `.glb` yet. For one to three seconds,
 the player saw a pane that was empty, then half-built, then right. **Every
 click in that time was a real command about a world that the player could not
@@ -1128,6 +1157,94 @@ stops showing 87/100 beside a dead socket, and the login form comes back. The
 visibility of the form is a *function* of whether a body exists, not a one-way
 dismissal, and that keeps "am I puppeted" to a single owner.
 
+## The terrain editor writes chunk files, not scenes
+
+DESIGN-0011 section 6.3. The terrain editor is an editor plugin in
+`addons/blackout_terrain/`. `project.godot` enables it. The web export excludes
+the directory (`exclude_filter` in `export_presets.cfg`), so a player never
+downloads it.
+
+To use it:
+
+1. Open `res://addons/blackout_terrain/terrain_editor.tscn`.
+2. Select the `TerrainWorld` node. The Terrain panel opens on the right.
+3. On the **World** tab, set the centre chunk and the plane. Click
+   **Load block**.
+4. On the **Paint** tab, pick a brush. Drag with the left button. Shift
+   reverses the brush.
+5. Click **Check world** on the **World** tab. Fix each finding.
+6. Press Ctrl+S. The plugin writes each changed chunk to
+   `blackout/world/chunks/`.
+7. Stop the server, run `scripts/sync_tile_objects.py --apply` from
+   `blackout/`, and start the server. The World tab names each chunk file
+   that changed since the last sync.
+
+The panel has three tabs:
+
+| Tab | Holds |
+|---|---|
+| Paint | The tool, the brush size and strength, the floor, the area, the object kind and rotation, the flags, and the noise |
+| Objects | The selected object with **Turn**, **Delete**, **Set kind to the Object choice**, and **Follow link**. A list of every object in the block. A click on a row selects it |
+| World | The centre chunk and the plane, load and save, the marks to show, **Check world** and its findings, and the state of the tile sync |
+
+The **Select** tool picks an object on a click. A second click on the same
+tile picks the next object there. A drag moves the selected object to another
+tile. A tall magenta beacon marks the selection, or the tile of a finding.
+
+**Follow link** loads the block where the selected object leads: the target
+of a transition, or the same tile one plane up or down for a climb. A click
+on a finding loads its block and plane in the same way.
+
+The rules that the editor keeps:
+
+- **The scene holds no terrain.** Every mesh is made at load and has no owner.
+  The chunk files are the only store.
+- **The block is 3 x 3 chunks.** A brush writes a shared corner to every chunk
+  that stores it, so a seam behaves like any other place. The outer edge of the
+  block shows red, and no brush writes it: its corners also belong to chunks
+  that are not loaded.
+- **What the author sees is what the player sees.** The ground comes from
+  `world/terrain/chunk_mesh_builder.gd`, and Phase 5 draws the client with the
+  same class. The flag, area, and object marks are the editor's own.
+- **The lists come from the server.** The floor types, the areas, and the
+  object kinds are rows under `blackout/world/`, exported to
+  `blackout_constants.gd`. A new row needs no edit here.
+- **One stroke is one undo entry.** `TerrainEdit` keeps the first value of each
+  changed corner or tile.
+- **A file that does not read stays out of the block.** The editor never draws
+  a blank chunk in its place, so a save cannot overwrite it.
+- **The noise seed is not in the chunk file.** The file stores the baked
+  integer heights, because the server cannot run Godot's noise. The seed, the
+  frequency, and the amplitude persist in `terrain_editor.cfg`, beside the
+  plugin, so every author gets the same noise.
+- **A new chunk above the ground starts from the chunk below.** Its heights
+  are those below plus 32 height steps (two tiles). Every tile is `void` and
+  Blocked, and the areas are those below. A floor paint on a void tile clears
+  Blocked, and a `void` paint sets it. The planes below show dim.
+- **A move of the block clears the undo history.** An edit keys on world
+  tiles, with no plane. The move saves the old block first. Thus, an undo
+  after the move would write into the wrong plane or a chunk that is not
+  loaded. `TerrainWorld.replay_edit` also refuses an edit of another block.
+- **Check world runs the rules of the server.** `terrain_checks.gd` is the
+  twin of `blackout/world/tile_checks.py`. Each transition and each climb
+  lands on an open tile. Each object stands on a walkable tile. Each void
+  tile is Blocked. The world has one respawn point. The check reads the files
+  on disk, with the unsaved block in place. The two twins check one fixture
+  world against one `expected.json`.
+- **The links show where an object leads.** A transition draws an arc to its
+  target, or a stub toward a target outside the block. A climb draws a post
+  up or down. The targets and the ways come from
+  `blackout/world/object_kinds.py`, through the generated constants. A new
+  sign or transition is still one row there (Nick, 09/26/2026).
+- **The tile sync stamp.** `sync_tile_objects.py --apply` writes
+  `blackout/server/tile_sync_state.json`, a digest of each chunk file. The
+  World tab compares the files with it. Git ignores the stamp, because it
+  describes the dev database.
+
+The brushes follow the workflow of Low Poly Terrain Builder (MIT). None of its
+code is here: its Delaunay mesh cannot give a floor colour to one tile or put a
+wall on a tile edge.
+
 ## Running
 
 Start the game server first. The client connects on load, and if nothing
@@ -1182,8 +1299,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All forty-six tests are headless and exit non-zero on failure. Forty-three need
-nothing running. Three of the four `smoke_*` scenes need an Evennia, and
+All fifty-five tests are headless and exit non-zero on failure. Fifty-two
+need nothing running. Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -1195,6 +1312,7 @@ test leaves:
 |---|---|
 | `smoke_console` | A `%UniqueName` that no longer resolves, a node whose type changed, a theme that came unattached. Every other test builds its subject in code, so a scene edit is invisible to all of them |
 | `test_theme` | A `theme_type_variation` a script names and `ui/blackout_theme.tres` does not declare. The control silently falls back to the default style, which reads as a styling mistake rather than a typo. Also an item that its class does not read, such as `LineEdit/colors/background_color` |
+| `test_theme_preview` | A theme type that the Theme editor preview does not show or name. Each type needs a control that the picker can select |
 
 > **After you add a `class_name`, run `--headless --path godot --import` one
 > time before you run anything headless.** Global class names live in
@@ -1233,6 +1351,19 @@ and every case is a pair of grid cells:
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
 ```
 
+The two maps have four scenes, and each needs nothing running.
+`test_minimap_view` checks the cell maths at each zoom, the dots, and the
+settings. `test_entity_roster` checks the entity model. `test_world_map_state`
+decodes hand-built summaries. `test_world_map_view` checks the pan, the zoom,
+and the planes:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_minimap_view.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_entity_roster.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_state.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_view.tscn
+```
+
 `test_step_animator.tscn` needs nothing running either, and no scene and no
 clock. Each case gives `advance` the frame time it wants to measure:
 
@@ -1245,13 +1376,39 @@ a teleport drawn as a walk through a wall, and a walk that runs at a different
 speed on a different frame rate all look like an animation. Each one makes the
 client tell the player something the server did not say.
 
-`test_map_terrain.tscn` needs nothing running either. A table says which map
-gets which surface, and the test measures the space of the terrain against a
-hand-built model:
+`test_area_look.tscn` needs nothing running either. It checks the fog and light
+table of each area (`AreaLook.LOOKS`), the blend between two areas, and the fog
+that moves with the camera arm:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_map_terrain.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_area_look.tscn
 ```
+
+`test_chunk_file.tscn` needs nothing running either. It is the GDScript half of
+the chunk file parity test. It reads the fixtures in
+`blackout/systems/core/tilegrid/tests/fixtures/`, writes each one back byte for
+byte, matches the committed digests, and refuses the same bad files as
+`test_chunkfile.py`:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_chunk_file.tscn
+```
+
+Three tests cover the terrain editor, and none needs anything running.
+`test_chunk_mesh.tscn` proves that the mesh builder draws the ground that
+`surface_height` reads. `test_terrain_editing.tscn` covers the brushes, the
+seams, and undo. `test_terrain_world.tscn` loads and saves a block in a scratch
+directory under `user://`, never in `blackout/world/chunks/`:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_terrain_editing.tscn
+```
+
+`test_terrain_view.tscn` covers the ground of the client: one mesh for each
+chunk of the model, a mesh built again for a chunk sent again, and no mesh for
+a freed chunk. It also covers the walls layer, the props layer, and the
+scenery. `test_wall_mesh.tscn` covers the wall slabs. `test_prop_mesh.tscn`
+covers the primitives and their rotation.
 
 `test_char_state.tscn` needs nothing running either:
 
@@ -1318,8 +1475,8 @@ highlight:
 
 `test_command_history.tscn`, `test_client_settings.tscn`,
 `test_scrollback_find.tscn`, `test_server_endpoint.tscn`,
-`test_movement_keys.tscn` and `test_reconnect_policy.tscn` need nothing
-running either:
+`test_movement_keys.tscn`, `test_held_movement.tscn` and
+`test_reconnect_policy.tscn` need nothing running either:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
@@ -1393,7 +1550,7 @@ screens and this grid agree with no statement from either. The client owns
 three columns, a bar for each cell, and `world/skill_palette.gd`.
 
 That palette is **guarded, not generated**, on the same asymmetry as
-`ROOM_KIND_COLORS`. A category named there that no skill declares is a bug, and
+`AreaLook.LOOKS`. A category named there that no skill declares is a bug, and
 `test_client_constants.py` fails on it. A category with no entry draws the
 fallback and costs nothing. The guard caught its own first dead key on the run
 that introduced it: `General`, which is `BaseSkill`'s default and which no
@@ -1496,18 +1653,43 @@ public read API of `QuestHandler`. Nothing outside that handler reads
 
 ## The minimap is drawn from the feed, not from the text map
 
-`blackout_map` already carries every node with its `room_kind`, and every link.
-`room_info` carries the tile where you stand and what each near tile affords.
-[WorldState] reassembles the two, and **the console owns that model**. Until
-08/28/2026, the 3D pane built its own. If two panes drew one chunked payload,
-the client would reassemble it two times. On a resync, the two reassemblies
-would briefly disagree about which tiles exist.
+Since Phase 5 (09/25/2026), the minimap draws the chunks that [WorldState]
+holds for the 3D pane. A walkable tile shows the colour of its floor type,
+from `FloorPalette`, the palette of the 3D ground. A blocked tile or a water
+tile shows that colour darker. `MapRaster` owns that rule, and the world map
+uses it too. **The console owns the model**, so the client parses each chunk
+one time for both panes.
 
-The minimap also binds to the console's **resolver**, for one question only:
-does the map that it draws have ground art? The answer decides which of the two
-color palettes it uses. See "The ground is art on top of the slab" above. In
-short, the pane under a minimap must not color the same map in a different
-way.
+Since 09/28/2026, the minimap follows the OSRS minimap:
+
+| Part | What it shows | From |
+|---|---|---|
+| Zoom | 8 to 40 tiles on each side of the player. The mouse wheel, or the `-` and `+` buttons. The zoom is kept in `ClientSettings.minimap_radius` | `MinimapView.ZOOM_RADII` |
+| You | A white square on your tile | `WorldState.current_cell` |
+| Map dots | White for another player, yellow for an NPC, red for an item on the ground | `EntityRoster`, `MinimapView.DOT_COLOURS` |
+| Map icons | A symbol for a bank, a node, a transition, a ladder | the chunk objects, `MapIcons` |
+| Destination marker | A red flag on the goal tile of the walk. A held key shows none | `blackout_walk` |
+| Walk path | A line through the tiles still to walk. A box in Options, and no button on the minimap (Nick, 09/28/2026: less clutter) | `blackout_walk`, `ClientSettings.show_walk_path` |
+| World map | The `Map` button opens the world map | `WorldMapView` |
+| Run | A toggle in the top-left corner of the map square, as the OSRS run orb | `blackout_walk` `running` |
+
+Four rules hold it together:
+
+- **The entity rows have a model now.** `EntityRoster` takes the four entity
+  channels from the console. `WorldView` forwards each roster signal to the
+  same `EntityPool` call as before, and the minimap reads the rows. The
+  handoff debt "the minimap draws no entities" is paid.
+- **The server sends the walk.** `blackout_walk` carries the goal, the whole
+  path, and the room Z. It goes one time, when the walk starts, and again
+  when it ends or breaks. `WorldState` drops each tile of the path as the
+  player steps on it or skips it in a run. A typed `goto` shows a marker too, because the server
+  sends every walk (Nick, 09/28/2026).
+- **The dots stop at 10 tiles.** The feed sends the entities within
+  `STATEFEED_ENTITY_RADIUS`. At a wider zoom, no dot shows past that ring. The
+  map icons come from the chunks, so they show at every zoom.
+- **Each chunk is one image.** The minimap builds an `ImageTexture` for each
+  chunk when it arrives, and draws the part that the window covers. It does
+  not draw one rect for each tile. The dots redraw on every entity message.
 
 So the minimap is a second VIEW. It gets three things that the ASCII print in a
 pane would not give:
@@ -1558,6 +1740,42 @@ The Options tab has an On and an Off button for each part, and `?` and
 `All on` buttons. `MOVE_TEXT_LABELS` in `options_view.gd` holds a server key
 and a client label for each row. `test_move_text_client.py` fails on a key that
 names no part.
+
+## The world map is every chunk, drawn small
+
+The world map (09/28/2026) follows the OSRS world map. It is a large box over
+the world pane, and it shows every chunk of one plane:
+
+- the ground, one pixel for each tile at the closest zoom,
+- a map icon for each chunk object,
+- the name of each area,
+- your tile, the destination marker, and the walk path,
+- the tile under the cursor, as `(x, y)`, for a player who types `goto x,y`.
+
+A drag pans, and the mouse wheel zooms around the cursor. `Up` and `Down`
+change the plane, `Me` centres on you, and `X` or Esc closes it. **A click
+walks nowhere** (Nick, 09/28/2026). A walk across the world can hit the limit
+of the A* search, so a click that walked would often fail.
+
+**The server sends a summary, not the chunk file.** The client holds only the
+block around the player, so it cannot draw the world by itself. The `worldmap`
+command asks for it. The server sends the index on `blackout_world_map`: the
+planes, every chunk, and one label for each area. Then it sends one world map
+summary for each chunk on `blackout_world_map_chunk`. A summary holds one
+character for each tile, so a chunk costs about 4 KB, not 35 KB. The server
+sends a summary one time for each session, and `WorldMapState` keeps it.
+`blackout/systems/interface/statefeed/worldmap.py` owns the encoding, and
+`MapRaster.class_colour` decodes it.
+
+**The button sends the command.** The `Map` button opens the box at once. The
+first time, the client holds no world map, so the button also sends
+`WORLD_MAP_COMMAND`, the word that the server named. A typed `worldmap` opens
+the box when the index arrives. A telnet session gets a text overview of its
+plane instead (`blackout/world/tile_world_map.py`).
+
+**It is a sibling box of the world pane.** `console.gd` builds it in code, as
+it builds the pop-up. It sits over the docks and under the right-click menu
+and the veil. `smoke_console` checks that order.
 
 ## The log is tabbed, and the server never names a tab
 
@@ -1707,8 +1925,11 @@ To add a sound:
 |---|---|
 | `autoload/evennia.gd` | The socket. The only place that knows the `[name, args, kwargs]` wire format. |
 | `scenes/console.tscn` `.gd` | The shell: output, input, and the subscription handshake. |
-| `scenes/world.tscn` | The 3D scene: environment, light, islands, marker, camera rig. |
-| `world/world_state.gd` | The world model. Chunk reassembly and the float boundary. |
+| `scenes/world.tscn` | The 3D scene: environment, light, terrain, marker, camera rig. |
+| `world/world_state.gd` | The world model: the chunks of the block, the room, and the float boundary. |
+| `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds, with its water, walls, and scenery. |
+| `world/terrain/wall_mesh_builder.gd` | The wall slabs of one chunk. The editor uses it too. |
+| `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, and hatches. The editor uses it too. |
 | `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
 | `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
 | `world/meshes/mesh_palette.gd` | Colors and finishes. One owner for both. |
@@ -1732,6 +1953,7 @@ To add a sound:
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
 | `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
 | `world/movement_keys.gd` | Which key means which direction. Knows nothing about focus. |
+| `world/held_movement.gd` | The movement keys held now, and when to send their direction again. Pure state, no clock. |
 | `world/reconnect_policy.gd` | How long to wait before redialing. Pure schedule, no clock. |
 | `world/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
 | `scenes/quests/quests_view.gd` | The quest tab: a bar per objective, drawn from numbers rather than prose. |
@@ -1739,8 +1961,13 @@ To add a sound:
 | `scenes/xp/xp_hud_view.gd` | XP drops, the session strip and the progress bar over the world. Takes no click. |
 | `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
-| `world/map_palette.gd` | Room-kind colors, island order, and which map is surfaced with which terrain. Read by BOTH map panes; guarded from Python by path. |
-| `scenes/minimap/minimap_view.gd` | The map drawn small over the world pane. Clickable, and from the feed rather than the ASCII print. |
+| `world/stable_hash.gd` | A string hash that gives the same number on every client. `EntityPool` turns the ring of figures on a tile by it. |
+| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button. |
+| `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane. Pans, zooms, and changes the plane. Walks nowhere. |
+| `world/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |
+| `world/world_map_state.gd` | The world map summaries, as one image and one icon list for each plane. |
+| `world/map_raster.gd` | The colour of a tile on both maps, and the images the maps draw the ground from. |
+| `world/map_icons.gd` | The symbol of each object category on both maps. |
 | `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. Each tab has an icon, and the labels show when they fit. |
 | `scenes/panel/panel_dock.gd` | A box over the world: the control panel, and the game log. Owns one corner and one size. |
 | `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the pop-up and the docks. The pop-up raises its grips over every other box. |
@@ -1751,14 +1978,15 @@ To add a sound:
 | `world/chat_tabs.gd` | Which tab a line belongs in, and which tabs have unread lines. Holds no text. |
 | `scenes/chat/chat_view.gd` | The tab strip and one RichTextLabel per tab. Appends; never re-renders. |
 | `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, and how big the player made a box or a dock, via ConfigFile under `user://`. |
-| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
+| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Also the red accent: the text box red on the slider bars, check boxes (`ui/icons/check_*.svg`, `radio_*.svg`), the selected tab, scroll bars, pressed buttons, menu hover and `FormHeading` lines. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
+| `ui/theme_preview/` | Two scenes for the scene preview of the Theme editor: `blackout.tscn` shows each type that the theme sets, and `godot.tscn` shows each other type of the default theme. In the Theme editor, click Add Preview, then Add Scene Preview. The picker then selects the type of the clicked sample. A tool script builds the samples from the type lists, so a new variation needs no edit. |
 | `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
 | `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |
 | `scenes/help/help_view.gd` | What the CLIENT does. The game's own `help` covers the rest. |
 | `scenes/options/options_view.gd` | The sliders and the pane toggles. Writes through the settings object, applies nothing. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
-| `world/world_view.gd` | Drawing tiles, links, islands and the marker. Owns the browser-parity hash and colors. |
+| `world/world_view.gd` | The 3D pane: the terrain node, the marker, the hover mark, the pick, and the avatar on the drawn ground. |
 | `world/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash and hover. |
 | `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
 | `world/sound_cues.gd` | Which clip each cue plays, on the SFX bus. The server names no sound. |
@@ -1794,13 +2022,12 @@ Rules that nobody needs to find again:
    EvMenu tables, and `→` drawn as a missing-glyph box. One face on every
    platform also keeps the two clients identical. `tests/test_theme.gd` fails
    on a `SystemFont` in the theme.
-5. **The room-kind palette still matches the retired browser pane.** The two
-   panes once ran side by side on the same character, so a difference meant a
-   bug. For that reason, `MapPalette.stable_hash` reimplements the JS string
-   hash of `blackout3d.js` and does not call Godot's. Also, the HSL-to-HSV
-   conversion beside it is closed-form, not matched by eye.
-   `tests/test_world_state.gd` still checks the two against test vectors
-   computed directly from the JS.
+5. **`StableHash.of` still matches the retired browser pane.** The two panes
+   once ran side by side on the same character, so a difference meant a bug.
+   For that reason, it reimplements the JS string hash of `blackout3d.js` and
+   does not call Godot's. `tests/test_world_state.gd` still checks it against
+   test vectors computed directly from the JS. The room-kind palette that it
+   coloured went with the xyzgrid maps in DESIGN-0011 Phase 4b.
 6. **On the web, Ctrl+V into a LineEdit can fail to paste, and the failure is
    silent.** Godot's export listens for the DOM `paste` event. But its
    `clipboard_get` reads `navigator.clipboard.readText()`, the permission-gated

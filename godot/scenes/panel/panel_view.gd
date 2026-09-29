@@ -195,13 +195,13 @@ func select_panel(title: String) -> void:
 ## `set_tab_hidden` and not `visible`: a TabContainer owns its children's
 ## visibility -- it shows exactly one -- so hiding a body directly fights the
 ## container and the tab stays in the strip pointing at nothing.
-func set_panel_hidden(title: String, hidden: bool) -> void:
+func set_panel_hidden(title: String, is_hidden: bool) -> void:
 	var index := _index_of(title)
 
 	if index == NOT_FOUND:
 		return
 
-	set_tab_hidden(index, hidden)
+	set_tab_hidden(index, is_hidden)
 	_refresh_labels()
 
 

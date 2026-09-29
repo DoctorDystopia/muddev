@@ -205,13 +205,14 @@ class Account(DefaultAccount):
             world.respawn.get_respawn_room read.
 
         Methodology:
-            DefaultAccount.create_character only fills in kwargs["location"]
-            with settings.START_LOCATION when "location" is absent, so
-            setting it here first pre-empts that fallback. get_respawn_room
-            already degrades to None (grid not built yet, e.g. a fresh dev
-            database) -- in that case "location" is left unset and the
-            parent's normal Limbo fallback runs unchanged, exactly as it did
-            before this override existed.
+            DefaultAccount.create_character puts settings.START_LOCATION in
+            kwargs["location"] only when that key is absent. A value set
+            here thus comes first. get_respawn_room gives None when no chunk
+            file places the respawn point. Then this hook sets nothing, and
+            the parent puts the character in Limbo, as before.
+
+            The home is the same room. The pin of the respawn point keeps
+            that room on its tile, so the home cannot move.
 
         Notes/References:
             world/respawn.py is the one place a respawn coordinate may be
@@ -224,6 +225,7 @@ class Account(DefaultAccount):
             room = get_respawn_room()
             if room is not None:
                 kwargs["location"] = room
+                kwargs.setdefault("home", room)
 
         parent_class = super()
         return parent_class.create_character(*args, **kwargs)

@@ -31,7 +31,15 @@ const TYPE_MODE_HINT := "Type a command — Esc to walk with the keyboard"
 
 ## While the map has the keyboard. It names both layouts, with their
 ## diagonals, and the way back. See [MovementKeys].
-const MOVE_MODE_HINT := "Movement: Click on tile / WASD + QEZC / HJKL + YUBN — Enter to type a command"
+const MOVE_MODE_HINT := "Movement: Click on tile / WASD + QEZC / HJKL + YUBN / R to run — Enter to type a command"
+
+## The key that turns run on and off, while the map has the keyboard. No
+## layout binds it to a direction. See [MovementKeys].
+const RUN_KEY := KEY_R
+
+## How often a held movement key goes to the server again, in ticks. Half a
+## tick, so each tick gets a send even with some jitter. See [HeldMovement].
+const HELD_RESEND_TICKS := 0.5
 
 ## The game log. Tabbed, and the tabs are the client's own -- see
 ## [ChatTabs] on why the server names what a line IS and never where it
@@ -145,6 +153,19 @@ var _xp_tracker := XpTrackerState.new()
 ## argument the comment on `_char` above makes, with a worse failure.
 var _world_state := WorldState.new()
 
+## The movement keys held now. A held key walks until the player lets go.
+var _held_movement := HeldMovement.new(Const.TICK_SECONDS * HELD_RESEND_TICKS)
+
+## The entities near you, one row per id. Owned here, not by the 3D pane, for
+## the reason [member _world_state] is: the 3D pane and the minimap draw the
+## same rows. See [EntityRoster].
+var _roster := EntityRoster.new()
+
+## The world map: every chunk of every plane, drawn small. A model like the
+## others, and [member _world_map_view] is the view of it.
+var _world_map := WorldMapState.new()
+var _world_map_view: WorldMapView
+
 ## Which tab a line of game text belongs in, and which tabs have unread lines.
 ##
 ## A model like the others, owned here rather than by the tab strip that draws
@@ -175,9 +196,14 @@ var _readiness := SessionReadiness.new()
 ## obvious and are wrong in half the clients that implement them.
 var _history := CommandHistory.new()
 
+## The file of the settings of the player. A test sets it before `_ready`.
+## Thus, a test run never reads or writes the real profile.
+var settings_path := ClientSettings.DEFAULT_PATH
+
 ## How big everything looks. Persisted with ConfigFile under user://, which on
-## the web is IndexedDB and survives a reload.
-var _settings := ClientSettings.new()
+## the web is IndexedDB and survives a reload. Made in [method _ready], from
+## [member settings_path].
+var _settings: ClientSettings
 
 ## What the game sounds like. A Node because every cue is a player it parents.
 ## Cues hang off MODEL signals, never off a line of text -- see [SoundCues].
@@ -214,7 +240,7 @@ var _world_hover: HoverBar
 
 ## How far the world hover bar stays inside the pane's edges, in pixels. The
 ## same margin the vitals and the minimap keep in console.tscn.
-const WORLD_HOVER_MARGIN := 8
+const WORLD_HOVER_MARGIN := 6
 
 ## Your hit points, and whatever resources follow them. ONE control, moved
 ## between two slots -- see [method _place_vitals].
@@ -222,6 +248,7 @@ var _vitals: VitalsBars
 
 
 func _ready() -> void:
+	_settings = ClientSettings.new(settings_path)
 	Evennia.opened.connect(_on_opened)
 	Evennia.closed.connect(_on_closed)
 	Evennia.text_received.connect(_on_text)
@@ -232,6 +259,10 @@ func _ready() -> void:
 	# bag and the find bar take focus too, and the map then has the keyboard.
 	_input.focus_entered.connect(_refresh_input_hint)
 	_input.focus_exited.connect(_refresh_input_hint)
+
+	# A key that goes up while the input has the keyboard never reaches
+	# _unhandled_key_input. Forget the held keys, so no walk goes on alone.
+	_input.focus_entered.connect(_held_movement.clear)
 	_input.grab_focus()
 	# ServerEndpoint decides where art is fetched from, the same way it decides
 	# where the socket dials -- keyed off the build rather than a constant
@@ -273,6 +304,7 @@ func _ready() -> void:
 	_world.bind_char(_char)
 	_world.bind_meshes(_meshes)
 	_world.bind_world(_world_state)
+	_world.bind_entities(_roster)
 
 	# The settings as well, and only one of them is read there: whether a
 	# figure slides between tiles. Given to the pane rather than applied here,
@@ -285,10 +317,26 @@ func _ready() -> void:
 	# the shared resolver is what keeps its palette and the 3D pane's the same.
 	_minimap.bind(_world_state, _meshes)
 
+	# The map dots, and the zoom and the walk path toggle the player left.
+	_minimap.bind_entities(_roster)
+	_minimap.bind_settings(_settings)
+
 	# Same rule as every other pane: it emits a whole line a telnet player could
 	# type, and this sends it. Clicking a minimap cell is the same
 	# `WorldState.tile_action` lookup a click on the 3D pane makes.
 	_minimap.command_requested.connect(Evennia.command)
+	_minimap.world_map_requested.connect(_open_world_map)
+
+	# The world map, over the world pane and over the docks, but UNDER the
+	# right-click menu and the veil. Built in code, as the pop-up is.
+	_world_map_view = WorldMapView.new()
+	_world_map_view.bind(_world_map, _world_state, _settings)
+	_world_pane.add_child(_world_map_view)
+	_world_pane.move_child(_world_map_view, _choose.get_index())
+
+	# A typed `worldmap` opens the map when the index arrives, as the button
+	# does.
+	_world_map.index_arrived.connect(_world_map_view.open)
 
 	# The right-click menu. The 3D pane raises the question and the menu is a
 	# sibling Control over the pane rather than a child of the Node3D, so the
@@ -689,7 +737,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	var key := event as InputEventKey
 
-	if not key.pressed or key.echo:
+	if not key.pressed:
+		_held_movement.release(key.keycode)
+		return
+
+	if key.echo:
 		return
 
 	if key.ctrl_pressed and key.keycode == KEY_F:
@@ -712,16 +764,51 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if key.ctrl_pressed or key.alt_pressed or key.meta_pressed:
 		return
 
-	var direction := MovementKeys.command_for(key.keycode)
+	if key.keycode == RUN_KEY:
+		Evennia.command(Const.RUN_TOGGLE_COMMAND)
+		get_viewport().set_input_as_handled()
+		return
 
-	if direction.is_empty():
+	if not MovementKeys.is_movement_key(key.keycode):
 		return
 
 	# The same line a telnet player types, through the one path everything in
 	# this client acts through. A key is the player NAMING a direction, not a
 	# claim about geometry -- which is why this does not consult the map.
-	Evennia.command(direction)
+	# [method _process] sends it again while the key stays down.
+	var direction := _held_movement.press(key.keycode)
+
+	if not direction.is_empty():
+		Evennia.command(_steer(direction))
+
 	get_viewport().set_input_as_handled()
+
+
+## Send the direction of a held movement key again, on the interval of
+## [HeldMovement]. The server moves one tick for each command, so a held key
+## walks at the speed of a click.
+func _process(delta: float) -> void:
+	var direction := _held_movement.advance(delta)
+
+	if not direction.is_empty():
+		Evennia.command(_steer(direction))
+
+
+## Turn a key direction to follow the camera, when the player chose that in
+## Options. Each send reads the camera again, so a held key follows a turn of
+## the camera within half a tick. See [method MovementKeys.steered].
+func _steer(direction: String) -> String:
+	if _settings == null or not _settings.camera_relative_keys:
+		return direction
+
+	return MovementKeys.steered(direction, _world.camera_forward())
+
+
+## A window that loses focus gets no key-up event. Forget the held keys, so
+## the player does not walk on alone.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_held_movement.clear()
 
 
 ## Move the keyboard between the input and the map, and say so.
@@ -832,6 +919,16 @@ func _apply_settings() -> void:
 	_console_dock.fill_beside(null if _settings.show_world else _dock)
 
 
+## Open the world map. The first time, the client holds no world map yet, so
+## this also sends the command that asks for it. The server names the word, as
+## it names every line that this client sends.
+func _open_world_map() -> void:
+	_world_map_view.open()
+
+	if not _world_map.has_data():
+		Evennia.command(Const.WORLD_MAP_COMMAND)
+
+
 ## Put the vitals bars wherever the player can still see them.
 ##
 ## Over the world pane when it is drawn, and in a strip above the log when it is
@@ -890,6 +987,12 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _world_state.ingest(channel, _payload):
+			return
+
+		if _roster.ingest(channel, _payload):
+			return
+
+		if _world_map.ingest(channel, _payload):
 			return
 
 		if not _channels.has(channel):

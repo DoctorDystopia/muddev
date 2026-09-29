@@ -23,8 +23,8 @@ the name.
 | emitter | a function that sends a snapshot, for example `emit_vitals` | sender, publisher |
 | tick | one step of the global clock | heartbeat |
 | phase | one stage inside a tick, for example FEED | stage |
-| tile | one room on an XYZ grid map (`GridTile`) | cell, square |
-| map rebuild | a run of `scripts/clean_and_reload_all_maps.ps1` | grid rebuild, respawn |
+| tile | one square of the tile grid. It has a tile room only while something stands there | cell, square |
+| map rebuild | a run of the retired `clean_and_reload_all_maps.ps1` on the xyzgrid maps (`archive/xyzgrid-maps/`). The tile sync took its place | grid rebuild, respawn |
 | shopkeep | an NPC that sells items (`ShopkeepNPC`) | shopkeeper, vendor, merchant |
 | ware | one item kind that a shop sells, one row of `get_buy_items` | good, product |
 | stock level | how many units of a ware a shop has now (`stock.level`) | inventory, supply |
@@ -119,3 +119,88 @@ model file is never a recipe.
 | exception | a reason in a source record that waives the license gate | override, waiver |
 | served tree | `web/static/webclient/models/`, the files the client fetches | model tree, static models |
 | credits box | the box in the Godot client that the Options pane opens | credits pop-up, credits window |
+
+## Terrain
+
+DESIGN-0011 named these on 09/23/2026. "Tile" keeps its meaning from the
+Server section, with one change: on the tile grid, a tile does not always have
+a room.
+
+| Use | For | Not |
+|---|---|---|
+| tile grid | the world-wide grid of heights, floor types, and walk flags | heightmap, world grid, terrain grid |
+| chunk | a 64 x 64 part of the tile grid, stored in one chunk file | map square, region, sector |
+| chunk file | the file that holds one chunk. The editor writes it, and the server reads it | map file, chunk data |
+| height step | the integer unit of a corner height | height unit, elevation level |
+| floor type | the named ground on a tile, for example `sand` | ground type, underlay, terrain |
+| walk flag | a bit that limits movement on a tile or across an edge | collision flag, blocker |
+| area | a named part of the world. The client picks fog and light by area | zone, biome, region |
+| plane | one level in a stack, for example a second floor | floor, level, layer, storey |
+| tile room | a `TileRoom`: the Evennia room at a tile of the tile grid, which exists only while something stands there | sparse room, grid room |
+| pool | the empty tile rooms that wait for the next step (`TileRooms`) | cache, free list |
+| parity test | the pair of tests, one in Python and one in GDScript, that hold the two chunk file readers to the same answers | cross-check, sync test |
+| semantic dump | the text that says what a chunk file means, one fact on each line. The parity test compares its digest | canonical dump, meaning file |
+| object kind | the key of a placed object in a chunk file, a row of `world/object_kinds.py`. One kind for each variant, except the words of a signpost: one `signpost` kind, and each placement holds its own `text` | object type, prefab, object ID |
+| sign text | the words of one `signpost` object, in the `text` of its chunk object. The terrain editor edits it | label field, caption, sign string |
+| terrain editor | the Godot editor plugin in `godot/addons/blackout_terrain/` that writes the chunk files | map editor, world editor, terrain tool |
+| block | the 3 x 3 chunks that the terrain editor loads around its centre chunk | chunk window, loaded area, scene |
+| brush | one tool of the terrain editor that changes the corners or tiles in a circle | tool (for a brush), stamp |
+| stroke | every dab of a brush from a press to its release. One stroke is one undo entry | drag, paint pass |
+| tile world | the chunk files of `world/chunks/`, loaded as one tile grid and one room index (`TileWorld`). Its rooms have the Z `tile_world` | new world, tile map, grid world |
+| transition | an object kind that moves a walker to its target tile when the walker steps onto its tile | portal, warp, map link |
+| pin | the mark on a tile that keeps its tile room out of the pool, for example under a chunk object | lock, anchor, sticky room |
+| tile sync | the operator step that makes the objects on the tile world match the chunk files (`scripts/sync_tile_objects.py`) | map rebuild, respawn, reconcile |
+| tile map | the ASCII map of the tile world that a telnet player sees (`world/tile_map.py`) | minimap, xymap |
+| landmark | an object kind that names its tile and stands nothing up | marker, waypoint, POI |
+| respawn point | the landmark `respawn_point`. A dead player, a new character, and a character with no tile come back on its tile | spawn point, start room, home tile |
+| cutover | the operator step that moves every character to the tile world and deletes the xyzgrid maps (`scripts/move_to_tile_world.py`) | migration, map move, switchover |
+| walk limit | the largest change of tile height, in height steps, that one step may climb or drop (`WALK_LIMIT`) | slope limit, max climb, step height |
+| cliff | an edge between two tiles whose heights differ by more than the walk limit. No step crosses it | ledge, drop, steep edge |
+| cliff face | a triangle of the ground mesh that is steeper than the walk limit. The client draws it in the cliff colour | rock face, slope face |
+| line of sight (short: sight) | a clear line for a shot between two tiles: no wall and no Blocked tile stops it (`tilegrid/sight.py`) | LOS, visibility, line of fire |
+| sweep | the pass that gives each empty tile room with no pin back to the pool (`tilegrid/sweep.py`) | reaper, cleanup, garbage collection |
+| climb | an object kind (a ladder or stairs) that moves a walker on its tile one plane up or down. Also the command that does it | ladder link, stair portal, teleport |
+| void | the floor type `void`: a tile with no floor, on plane 1 and up. It is always Blocked, and the client draws no ground on it | hole, gap, empty tile |
+| hide roofs | the client setting that hides every plane above the plane of the player | roof toggle, x-ray |
+| content check | one rule of `world/tile_checks.py` over the chunk files of a world, for example "a transition lands on an open tile". The terrain editor runs the same rules as "Check world" | validation, world lint, world test |
+| finding | one content check that fails, at one tile | error, issue, violation |
+| wall | a walk flag on one edge of a tile. No step and no shot crosses that edge. The client draws a slab on the edge (`WallMeshBuilder`) | fence, barrier, edge block |
+| scenery | the model that the client stands on the tile of an object kind with no spawner, for example the teleporter pad of a transition. The `scenery` of the kind row names it | prop, decoration, tile prop |
+| primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, or `hatch`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
+| hatch | the primitive on the tile of a climb that only leads down: a framed opening in the floor | trapdoor, stairwell, hole |
+| rotation | the quarter turns of a placed object in a chunk file, 0 to 3, clockwise from north. The Turn action of the terrain editor adds one | orientation, heading, angle |
+| facing | the rotation of the chunk object that stood an entity up. The tile sync writes it on the entity (`FACING_ATTR`), and the statefeed sends it | direction, yaw, heading |
+| preview | the asset key and the family of the entity that an object kind stands up. Only the terrain editor reads it, to draw the model on the tile | editor model, thumbnail |
+| tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
+| link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |
+| ghost | the dim copy of the planes below the edited plane, in the terrain editor | shadow, underlay, onion skin |
+| beacon | the tall mark in the terrain editor over the selected object or the tile of a finding | marker, highlight |
+
+## Maps
+
+The two maps of the Godot client, named on 09/28/2026. The telnet map keeps
+its name: tile map.
+
+| Use | For | Not |
+|---|---|---|
+| minimap | the small map in the corner of the world pane (`MinimapView`) | radar, mini map, tile map |
+| world map | the large map of every chunk of one plane (`WorldMapView`). The `worldmap` command sends its data | overview map, atlas, full map |
+| destination marker | the red flag on the goal tile of the current walk | walk flag, click flag, waypoint |
+| walk path | the tiles that the current walk still has to step on | route, trail, path line |
+| map dot | a dot for a live entity on the minimap | blip, marker, pip |
+| map icon | a symbol for a chunk object (a bank, a node, a transition) on either map | map marker, POI icon, map symbol |
+| world map summary | the compact form of one chunk for the world map: one character for each tile, and its objects | map chunk, thumbnail, overview chunk |
+
+## Movement
+
+The walk and the run, named on 09/29/2026 (`systems/gameplay/movement/`).
+
+| Use | For | Not |
+|---|---|---|
+| walk | the tiles that a character still has to step on, which the tick moves (`TileWalk`). A direction command and `goto` each start one | move queue, route, auto-walk |
+| walker | a character with a walk | mover, pathing character |
+| run | the toggle that moves a walker two tiles each tick, not one. Also the command that sets it | sprint, dash, fast walk |
+| stride | one move of a walker across one or more tiles, with one `move_to` (`movement.stride`) | jump, multi-step, leap |
+| tile skip | the rule that the middle tile of a run gets no room and no arrival hook | skipped step, pass-through |
+| held key | a movement key that the player keeps down. The client sends its direction again every half tick | key repeat, hold-to-walk |
+| Run button | the toggle in the top-left corner of the minimap that sends `run` | run orb, run toggle button |

@@ -92,9 +92,9 @@ func _init(host: Control, box: Control, free_edges: int, raised: bool) -> void:
 		if edges & free_edges != edges:
 			continue
 
-		var grip := _build_grip(edges, raised)
-		host.add_child(grip)
-		_grips[edges] = grip
+		var grip_control := _build_grip(edges, raised)
+		host.add_child(grip_control)
+		_grips[edges] = grip_control
 
 	box.item_rect_changed.connect(place)
 
@@ -139,16 +139,16 @@ func place() -> void:
 	var rect := _box.get_global_rect()
 
 	for edges: int in _grips:
-		var grip: Control = _grips[edges]
+		var grip_control: Control = _grips[edges]
 		var grip_rect := _grip_rect(rect, edges)
-		grip.global_position = grip_rect.position
-		grip.size = grip_rect.size
+		grip_control.global_position = grip_rect.position
+		grip_control.size = grip_rect.size
 
 
 ## Show or hide every grip. A box whose size is not the player's has none.
 func set_shown(shown: bool) -> void:
-	for grip: Control in _grips.values():
-		grip.visible = shown
+	for grip_control: Control in _grips.values():
+		grip_control.visible = shown
 
 
 ## The grip for `edges`, or null when the box offers none there. For tests.
@@ -214,16 +214,16 @@ static func _cursor_for(edges: int) -> Control.CursorShape:
 
 
 func _build_grip(edges: int, raised: bool) -> Control:
-	var grip := Control.new()
-	grip.top_level = raised
-	grip.mouse_filter = Control.MOUSE_FILTER_STOP
-	grip.mouse_default_cursor_shape = _cursor_for(edges)
-	grip.gui_input.connect(_follow_drag.bind(grip, edges))
-	grip.mouse_entered.connect(_set_hot.bind(grip))
-	grip.mouse_exited.connect(_set_hot.bind(null))
-	grip.draw.connect(_draw_grip.bind(grip, edges))
+	var grip_control := Control.new()
+	grip_control.top_level = raised
+	grip_control.mouse_filter = Control.MOUSE_FILTER_STOP
+	grip_control.mouse_default_cursor_shape = _cursor_for(edges)
+	grip_control.gui_input.connect(_follow_drag.bind(grip_control, edges))
+	grip_control.mouse_entered.connect(_set_hot.bind(grip_control))
+	grip_control.mouse_exited.connect(_set_hot.bind(null))
+	grip_control.draw.connect(_draw_grip.bind(grip_control, edges))
 
-	return grip
+	return grip_control
 
 
 ## An edge grip is a plain bar. Visible on purpose: an edge that can be
@@ -231,20 +231,20 @@ func _build_grip(edges: int, raised: bool) -> Control:
 ##
 ## A corner grip draws only while it is hot. The two edge bars already meet
 ## under it.
-func _draw_grip(grip: Control, edges: int) -> void:
-	var hot := grip == _hot or edges == _drag_edges
+func _draw_grip(grip_control: Control, edges: int) -> void:
+	var hot := grip_control == _hot or edges == _drag_edges
 
 	if edges in CORNERS and not hot:
 		return
 
-	grip.draw_rect(Rect2(Vector2.ZERO, grip.size), HOT_COLOR if hot else IDLE_COLOR)
+	grip_control.draw_rect(Rect2(Vector2.ZERO, grip_control.size), HOT_COLOR if hot else IDLE_COLOR)
 
 
-func _set_hot(grip: Control) -> void:
+func _set_hot(grip_control: Control) -> void:
 	var was := _hot
-	_hot = grip
+	_hot = grip_control
 
-	for item: Control in [was, grip]:
+	for item: Control in [was, grip_control]:
 		if item != null:
 			item.queue_redraw()
 
@@ -255,7 +255,7 @@ func _set_hot(grip: Control) -> void:
 ## The control that took the press keeps the motion until the release, so the
 ## drag follows the mouse off the grip. The motion is in the pixels of the
 ## grip, which are the pixels of the box: `gui_input` applies the UI scale.
-func _follow_drag(event: InputEvent, grip: Control, edges: int) -> void:
+func _follow_drag(event: InputEvent, grip_control: Control, edges: int) -> void:
 	if event is InputEventMouseButton:
 		var click := event as InputEventMouseButton
 
@@ -265,8 +265,8 @@ func _follow_drag(event: InputEvent, grip: Control, edges: int) -> void:
 			else:
 				_drag_edges = 0
 
-			grip.queue_redraw()
-			grip.accept_event()
+			grip_control.queue_redraw()
+			grip_control.accept_event()
 
 		return
 
@@ -275,7 +275,7 @@ func _follow_drag(event: InputEvent, grip: Control, edges: int) -> void:
 
 	var motion := (event as InputEventMouseMotion).relative
 	_move(_offset + motion)
-	grip.accept_event()
+	grip_control.accept_event()
 
 
 func _start(edges: int) -> void:

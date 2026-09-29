@@ -1,6 +1,12 @@
+@tool
 class_name FamilyShapes
 extends RefCounted
 ## What each family LOOKS like, as data. The whole table, and nothing else.
+##
+## `@tool` because the tables are `static var`s (see [member SHAPES]). The
+## editor does not run the static initializers of a script with no `@tool`,
+## so the terrain editor saw every table empty and drew no family shape. The
+## annotation does nothing in the game.
 ##
 ## This is tier 2 of the mesh ladder — the shape drawn for anything the server
 ## names that has no real art. Adding a family is adding one entry here, in the

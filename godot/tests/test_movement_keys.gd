@@ -27,6 +27,10 @@ func _ready() -> void:
 	_every_binding_names_a_compass_direction()
 	_an_unbound_key_means_nothing()
 	_the_direction_list_is_derived_from_the_table()
+	_a_camera_to_the_north_changes_nothing()
+	_a_camera_to_the_east_turns_each_key_a_quarter()
+	_a_camera_between_two_directions_snaps_to_one()
+	_no_camera_heading_changes_nothing()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -91,6 +95,44 @@ func _the_direction_list_is_derived_from_the_table() -> void:
 	for direction: String in listed:
 		_expect(MovementKeys.BINDINGS.values().has(direction),
 			"%s is listed only because something is bound to it" % direction)
+
+
+## A camera that looks north is the old layout: W is north, and so on.
+func _a_camera_to_the_north_changes_nothing() -> void:
+	for direction: String in MovementKeys.directions():
+		_expect(MovementKeys.steered(direction, Vector2(0, 1)) == direction,
+			"%s stays %s with the camera to the north" % [direction, direction])
+
+
+## Spelled out for the four keys and one diagonal, because the bug this
+## guards is a turn the wrong way: D walking north, not south.
+func _a_camera_to_the_east_turns_each_key_a_quarter() -> void:
+	var east := Vector2(1, 0)
+	var expected := {
+		"north": "east", "east": "south", "south": "west", "west": "north",
+		"northwest": "northeast",
+	}
+
+	for key: String in expected:
+		_expect(MovementKeys.steered(key, east) == expected[key],
+			"%s walks %s with the camera to the east" % [key, expected[key]])
+
+
+func _a_camera_between_two_directions_snaps_to_one() -> void:
+	var slightly_east_of_north := Vector2(0.2, 1.0)
+	var northeast_ish := Vector2(1.0, 0.9)
+
+	_expect(MovementKeys.steered("north", slightly_east_of_north) == "north",
+		"a small turn keeps W at north")
+	_expect(MovementKeys.steered("north", northeast_ish) == "northeast",
+		"a turn near 45 degrees makes W northeast")
+
+
+func _no_camera_heading_changes_nothing() -> void:
+	_expect(MovementKeys.steered("west", Vector2.ZERO) == "west",
+		"no heading leaves the key as it is")
+	_expect(MovementKeys.steered("", Vector2(1, 0)) == "",
+		"no key stays no key")
 
 
 func _expect(condition: bool, what: String) -> void:
