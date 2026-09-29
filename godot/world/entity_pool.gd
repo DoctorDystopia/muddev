@@ -972,15 +972,16 @@ func _aim(entity_id: int, slot: Vector3) -> StepAnimator:
 
 ## The fields that decide what the node of an entity looks like.
 ##
-## [method _build] reads `asset` and `family`. [method _attach_label] reads
-## `label` and `label_kind`. A new field that either one reads goes here too,
-## or a changed row keeps its old node.
+## [method _build] reads `asset`, `family`, and the facing.
+## [method _attach_label] reads `label` and `label_kind`. A new field that
+## either one reads goes here too, or a changed row keeps its old node.
 static func _look_of(entity_data: Dictionary) -> Array:
 	return [
 		str(entity_data.get("asset", "")),
 		str(entity_data.get("family", "")),
 		str(entity_data.get("label", "")),
 		str(entity_data.get("label_kind", "")),
+		str(entity_data.get(_Const.ENTITY_FACING_KEY, "")),
 	]
 
 
@@ -995,6 +996,12 @@ func _build(entity_data: Dictionary) -> Node3D:
 		str(entity_data.get("asset", "")), str(entity_data.get("family", "")))
 
 	node.scale = Vector3.ONE * ENTITY_SCALE
+
+	# The rotation of the chunk object that stood the entity up. A row with
+	# no facing keeps the model as it comes.
+	if entity_data.has(_Const.ENTITY_FACING_KEY):
+		node.rotation.y = TerrainView.model_yaw(
+			int(entity_data[_Const.ENTITY_FACING_KEY]))
 
 	return node
 

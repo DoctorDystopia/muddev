@@ -201,6 +201,57 @@ class TileChunkPayload(_Payload):
 
 
 @dataclass
+class WalkPayload(_Payload):
+    """The current walk of the observer. Blackout-specific.
+
+    `goal` is [x, y], or [] when no walk runs. `path` is the tiles still to
+    step on, as [x, y] pairs, in order. `z` is the room Z of the walk, so the
+    client draws the destination marker only on the plane of the walk.
+    `running` is the run toggle of the observer, with or without a walk.
+    """
+
+    channel = const.CHANNEL_WALK
+
+    goal: list = field(default_factory=list)
+    path: list = field(default_factory=list)
+    z: str = ""
+    running: bool = False
+
+
+@dataclass
+class WorldMapPayload(_Payload):
+    """The index of the world map. Blackout-specific.
+
+    `planes` is each plane that holds a chunk, lowest first. `chunks` is
+    [cx, cy, plane] for each chunk. `labels` is {text, x, y, plane} for each
+    area. The summaries of the chunks follow on CHANNEL_WORLD_MAP_CHUNK.
+    """
+
+    channel = const.CHANNEL_WORLD_MAP
+
+    planes: list = field(default_factory=list)
+    chunks: list = field(default_factory=list)
+    labels: list = field(default_factory=list)
+
+
+@dataclass
+class WorldMapChunkPayload(_Payload):
+    """The world map summary of one chunk. Blackout-specific.
+
+    `tiles` has one character for each tile, row by row from local y = 0,
+    in WORLD_MAP_ALPHABET. `objects` is {kind, x, y} in world tiles.
+    systems/interface/statefeed/worldmap.py owns the encoding.
+    """
+
+    channel = const.CHANNEL_WORLD_MAP_CHUNK
+
+    chunk: list = field(default_factory=list)   # [cx, cy]
+    plane: int = 0
+    tiles: str = ""
+    objects: list = field(default_factory=list)
+
+
+@dataclass
 class RoomPlayerAddPayload(_Payload):
     """One entity appeared in the observer's room. GMCP Room.AddPlayer."""
 

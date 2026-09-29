@@ -41,6 +41,13 @@ extends Node3D
 ## surface, [WallMeshBuilder] draws the walls, and [PropMeshBuilder] draws
 ## the ladders, the stairs, and the hatches, as in the client. A nose on the
 ## front of each object marker shows its rotation.
+##
+## ## Models
+##
+## [TerrainModels] stands the real model of each object that has one: the
+## entity that the kind stands up, or its scenery. The model turns with the
+## object, as in the game. Its marker then draws no box, so the model shows.
+## The nose and the label stay. [member show_models] turns the models off.
 
 signal block_loaded
 signal chunks_saved(names: PackedStringArray)
@@ -109,6 +116,14 @@ const MARKER_NOSE_NODE := "Nose"
 		if is_inside_tree():
 			_rebuild_links()
 
+## Draw the model of each object that has one. See the class comment.
+@export var show_models := true:
+	set(value):
+		show_models = value
+
+		if is_inside_tree():
+			rebuild_all()
+
 ## Draw the planes below the edited plane, dim.
 @export var show_lower_planes := true:
 	set(value):
@@ -141,6 +156,9 @@ var _block_outline: MeshInstance3D
 var _ghosts: Node3D
 var _links: Node3D
 
+## The model source. Made on the first draw with [member show_models] on.
+var _models: TerrainModels
+
 ## Chunks to redraw on the next frame. A brush dab queues its chunks here, so
 ## many dabs in one frame cost one redraw.
 var _pending := {}
@@ -159,6 +177,12 @@ func _ready() -> void:
 	_beacon = _make_beacon()
 	add_child(_beacon)
 	load_block()
+
+
+func _exit_tree() -> void:
+	if _models != null:
+		_models.release()
+		_models = null
 
 
 # ─── Loading and saving ─────────────────────────────────────────────────────
@@ -390,8 +414,12 @@ func rebuild(chunk_coord: Vector2i) -> void:
 		"border": _mesh_node(TerrainOverlay.outline_mesh(chunks,
 			chunk_coord * _Const.CHUNK_SIZE, _Const.CHUNK_SIZE,
 			TerrainOverlay.COLOR_BORDER), _overlay_material),
-		"objects": _object_markers(chunk),
 	}
+
+	var nodes := _object_nodes(chunk)
+
+	view["objects"] = nodes[0]
+	view["models"] = nodes[1]
 
 	_views[chunk_coord] = view
 	_refresh_visibility()
@@ -440,22 +468,53 @@ func _mesh_node(mesh: ArrayMesh, material: Material) -> MeshInstance3D:
 	return node
 
 
-func _object_markers(chunk: ChunkFile) -> Node3D:
-	var holder := Node3D.new()
+## The marker holder and the model holder of one chunk. A marker of an
+## object with a model draws no box.
+func _object_nodes(chunk: ChunkFile) -> Array[Node3D]:
+	var markers := Node3D.new()
+	var models := Node3D.new()
 
-	add_child(holder)
+	add_child(markers)
+	add_child(models)
 
 	for thing: Dictionary in chunk.global_objects():
-		holder.add_child(_marker(thing))
+		var model := _model_for(thing)
+		var marker := _marker(thing)
 
-	return holder
+		if model != null:
+			models.add_child(model)
+			marker.mesh = null
+
+		markers.add_child(marker)
+
+	return [markers, models]
+
+
+func _model_for(thing: Dictionary) -> Node3D:
+	if not show_models:
+		return null
+
+	if _models == null:
+		_models = TerrainModels.for_repo()
+
+	return _models.stand(chunks, thing)
+
+
+## The models of one chunk of the block, or an empty list. For a test.
+func models_of(chunk_coord: Vector2i) -> Array[Node]:
+	var view: Dictionary = _views.get(chunk_coord, {})
+
+	if view.is_empty():
+		return []
+
+	return view["models"].get_children()
 
 
 ## The marker of one object: a box in the colour of its kind, a nose on the
 ## front face, and a label. A box looks the same at every quarter turn, so
 ## the nose shows the rotation. At rotation 0 it points north, as the front of
 ## a scenery model and of a [PropMeshBuilder] shape.
-func _marker(thing: Dictionary) -> Node3D:
+func _marker(thing: Dictionary) -> MeshInstance3D:
 	var point := Vector2(thing["x"], thing["y"])
 	var base := TerrainOverlay.ground_point(chunks, point, 0.0)
 	var box := BoxMesh.new()
@@ -650,8 +709,8 @@ func objects_in_block() -> Array[Dictionary]:
 
 
 ## Select one object. The beacon marks its tile.
-func select(tile: Vector2i, kind: String, rotation: int, text: String = "") -> void:
-	selected = {"tile": tile, "kind": kind, "rotation": rotation, "text": text}
+func select(tile: Vector2i, kind: String, turn: int, text: String = "") -> void:
+	selected = {"tile": tile, "kind": kind, "rotation": turn, "text": text}
 	show_beacon(tile)
 
 

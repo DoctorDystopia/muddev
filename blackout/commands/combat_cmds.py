@@ -220,7 +220,8 @@ class CmdFlee(Command):
     """Command flee — attempt to escape combat."""
 
     key = "flee"
-    aliases = ["run", "escape"]
+    # Not "run": that word is the run toggle (commands/tile_movement.py).
+    aliases = ["escape"]
     help_category = HELP_CATEGORY_COMBAT
 
     def func(self) -> None:

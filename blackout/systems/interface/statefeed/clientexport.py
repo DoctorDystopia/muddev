@@ -127,6 +127,9 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_AURA", const.CHANNEL_AURA),
     ("CH_XP_DROP", const.CHANNEL_XP_DROP),
     ("CH_TILE_CHUNK", const.CHANNEL_TILE_CHUNK),
+    ("CH_WALK", const.CHANNEL_WALK),
+    ("CH_WORLD_MAP", const.CHANNEL_WORLD_MAP),
+    ("CH_WORLD_MAP_CHUNK", const.CHANNEL_WORLD_MAP_CHUNK),
     ("CH_SUBSCRIBED", const.CHANNEL_SUBSCRIBED_ACK),
 )
 
@@ -222,11 +225,15 @@ _SCALAR_EXPORTS: tuple = (
     # client fills in the tile, as for the approach above. A chunk has 4,096
     # tiles, so no feed can stamp an action on each one.
     ("TILE_WALK_TEMPLATE", const.TILE_COMMAND_GOTO_TEMPLATE),
+    # The run toggle. The Run button and its hotkey send it.
+    ("RUN_TOGGLE_COMMAND", const.COMMAND_RUN_TOGGLE),
     # The key a client reads to draw a node it has already stripped. Exported
     # for the same reason every other payload key is: a client that retyped
     # it would be free to disagree with the server about the spelling, and
     # the symptom is a stump that never appears.
     ("ENTITY_SPENT_KEY", const.ENTITY_SPENT_KEY),
+    # The key a client reads to turn the model of an entity.
+    ("ENTITY_FACING_KEY", const.ENTITY_FACING_KEY),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the
@@ -242,6 +249,10 @@ _SCALAR_EXPORTS: tuple = (
     # the SERVER is what decides how big a message gets -- see the constant's
     # own comment, and PERF-0002.
     ("CLIENT_INBOUND_BUFFER_BYTES", const.CLIENT_INBOUND_BUFFER_BYTES),
+    # The characters of a world map summary. The client decodes each tile
+    # with the same string, so the two cannot disagree about a floor.
+    ("WORLD_MAP_ALPHABET", const.WORLD_MAP_ALPHABET),
+    ("WORLD_MAP_COMMAND", const.WORLD_MAP_COMMAND),
 )
 
 # What a line of game TEXT is about. Generated for the same reason the channel
@@ -285,8 +296,8 @@ _MESSAGE_TYPE_EXPORTS: tuple = (
 # it, so a copy re-declared beside the channel names would be a second owner of
 # the game's heartbeat.
 #
-# IT IS EXPORTED BECAUSE A CLIENT THAT ANIMATES MUST MATCH IT. `goto` steps one
-# tile per tick (BlackoutGotoCmd.auto_step_delay), so a walk animation that
+# IT IS EXPORTED BECAUSE A CLIENT THAT ANIMATES MUST MATCH IT. A walk steps on
+# the tick (systems/gameplay/movement/walk.py), so a walk animation that
 # takes any other time either arrives early and waits, or falls behind and
 # keeps falling. Typing 0.6 into GDScript is the hazard CLAUDE.md names: a
 # literal that already had a constant, on a number the server is free to retune.
@@ -386,6 +397,10 @@ _TILE_GRID_MAP_EXPORTS: tuple = (
     ("OBJECT_KIND_SCENERY", tuple((key, kind.scenery)
                                   for key, kind in kind_table.OBJECT_KINDS.items()
                                   if kind.scenery)),
+    # Only the terrain editor reads it, to draw the entity of a kind.
+    ("OBJECT_KIND_PREVIEW", tuple((key, kind.preview)
+                                  for key, kind in kind_table.OBJECT_KINDS.items()
+                                  if kind.preview)),
     ("CLIMB_PLANE_STEPS", tuple(tile_const.CLIMB_PLANE_STEPS.items())),
 )
 

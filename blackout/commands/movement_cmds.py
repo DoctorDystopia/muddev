@@ -3,8 +3,11 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/14/2026
 Description: The movement command set: `goto`, the direction commands,
-             `climb`, and `tiletp`. All four move on the tile world. The rules live in
-             commands/tile_movement.py.
+             `run`, `climb`, and `tiletp`. All five act on the tile world.
+             The rules live in commands/tile_movement.py.
+
+             `worldmap` sits here too. It shows where a walk can go
+             (commands/world_map_cmds.py).
 
              `goto` was an override of the `goto` of the xyzgrid contrib until
              DESIGN-0011 Phase 4b (09/25/2026). Two of its changes stay:
@@ -18,7 +21,8 @@ Description: The movement command set: `goto`, the direction commands,
                 over and then acts.
 
              The contrib `path` command went with the contrib cmdset. The
-             tile world has no path display.
+             Godot minimap draws the walk path from the walk feed
+             (09/28/2026).
 """
 
 from evennia.commands.cmdset import CmdSet
@@ -27,6 +31,7 @@ from evennia.commands.command import Command
 from systems.interface.statefeed import constants as feed_const
 
 from . import tile_movement
+from .world_map_cmds import CmdWorldMap
 
 
 class BlackoutGotoCmd(Command):
@@ -35,6 +40,7 @@ class BlackoutGotoCmd(Command):
 
     Usage:
         goto <place>                - walk there, one tile each tick
+                                      (two tiles each tick with run on)
         goto (x,y)                  - walk to a tile
         goto <place> then <command> - walk there, then run <command>
         goto                        - stop the walk in progress
@@ -116,5 +122,7 @@ class MovementCmdSet(CmdSet):
         for command_class in tile_movement.TILE_DIRECTION_COMMANDS:
             self.add(command_class())
 
+        self.add(tile_movement.CmdRun())
         self.add(tile_movement.CmdClimb())
         self.add(tile_movement.CmdTileTeleport())
+        self.add(CmdWorldMap())

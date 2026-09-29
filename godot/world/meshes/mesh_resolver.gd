@@ -58,6 +58,13 @@ extends Node
 ## compiles too and the player meets the freezes as loading, not as lag. The
 ## rest of the ladder is unchanged: resolves still answer at once, and a model
 ## still sharpens in if a room draws it before its fetch completes.
+##
+## ## A directory on disk, for the terrain editor
+##
+## [method from_directory] makes a resolver that reads the served model tree
+## from disk on each ask, with no fetch and no [signal refreshed]. The ladder
+## is the same, so the editor draws what the game draws. The game never makes
+## one: its only cost here is one flag test for each ask.
 
 ## Emitted when art arrives for a key that was previously drawn as a fallback.
 ##
@@ -96,6 +103,9 @@ var _prefetch_wanted := false
 ## hold the veil up until its ceiling.
 var _manifest_settled := false
 
+## True for a resolver of [method from_directory]: each ask reads the disk.
+var _local := false
+
 
 ## Build a resolver and its loader.
 ##
@@ -109,6 +119,25 @@ func _init(registry: ModelRegistry, origin: String) -> void:
 	_loader.loaded.connect(_on_loaded)
 	_loader.manifest_ready.connect(_on_manifest_ready)
 	add_child(_loader)
+
+
+## A resolver that reads the served model tree under `directory`, the
+## directory that holds `static/`. It is not in the tree, so the caller calls
+## [method free_models] and then frees it.
+static func from_directory(directory: String) -> MeshResolver:
+	var resolver := MeshResolver.new(ModelRegistry.new(), directory)
+
+	resolver._local = true
+	resolver._loader.read_local_manifest()
+
+	return resolver
+
+
+## Free the models of a resolver of [method from_directory]. A resolver in
+## the tree frees them when it leaves the tree. The caller frees the resolver
+## after this: an object cannot free itself inside its own call.
+func free_models() -> void:
+	_loader.free_prototypes()
 
 
 ## Something that must always be visible: an entity, an inventory item.
@@ -263,6 +292,9 @@ func _art_for(asset_key: String) -> Node3D:
 	# is the client-facing name for that same string.
 	if asset_key.is_empty() or asset_key == _Const.FAMILY_GENERIC:
 		return null
+
+	if _local:
+		return _loader.load_local(asset_key)
 
 	var cached := _loader.cached(asset_key)
 

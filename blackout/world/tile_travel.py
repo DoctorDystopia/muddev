@@ -140,6 +140,24 @@ def step(mover, direction: str) -> str:
                          transition=_target)
 
 
+def stride(mover, directions: list) -> tuple:
+    """
+    Move a walker along one or more hops in one move, through a transition
+    if a hop lands on one. Return (result, hops) of `movement.stride`, or
+    (STEP_OFF_GRID, 0) off the tile world. A run takes two hops a tick.
+    """
+    view = plane_view(mover)
+
+    if view is None:
+        return (tile_const.STEP_OFF_GRID, 0)
+
+    def _target(x, y):
+        return transition_target(view, x, y)
+
+    return movement.stride(view.grid, view.rooms, mover, directions,
+                           transition=_target)
+
+
 def step_toward(mover, goal: tuple, distance) -> bool:
     """
     Purpose: Move a walker one tile toward a goal tile, greedily, as an NPC

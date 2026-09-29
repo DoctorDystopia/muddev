@@ -299,7 +299,22 @@ static func _stand(model: Node3D, chunk: ChunkFile, thing: Dictionary) -> void:
 	model.position = Vector3(world_x * ChunkMeshBuilder.TILE_SIZE,
 		ground - bounds.position.y * SCENERY_SCALE,
 		-world_y * ChunkMeshBuilder.TILE_SIZE)
-	model.rotation.y = -int(thing["rotation"]) * PI * 0.5
+	model.rotation.y = model_yaw(int(thing["rotation"]))
+
+
+## The yaw that turns a model to face `rotation`: quarter turns clockwise
+## from north, the rotation of a chunk object.
+##
+## A served model faces +Z as it comes, as a character does (see
+## [method WorldView.yaw_towards]). +Z is south, so rotation 0 is a half
+## turn. Rotation 1 faces east, the yaw of a step east. A [PropMeshBuilder]
+## shape and an editor marker face -Z as built, so they turn by
+## `-rotation * PI / 2` and do not use this.
+##
+## The scenery here and each entity of [EntityPool] with a facing use this
+## function. Thus, the two cannot turn a model two ways.
+static func model_yaw(rotation: int) -> float:
+	return PI - rotation * PI * 0.5
 
 
 ## Art for a scenery key arrived: stand it on every chunk that names it.

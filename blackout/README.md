@@ -469,6 +469,58 @@ lost its level check on every object already in the DB. A `None` value means
 
 ---
 
+## Movement
+
+Every step moves on the **0.6 s tick**, as in OSRS. A held key, a click, and
+`goto` move at one speed: one tile each tick, or two tiles each tick with run
+on. `systems/gameplay/movement/walk.py` owns the walk.
+
+### In-game commands
+
+```bash
+> north                # one tick of movement: 1 tile, or 2 with run on
+> n, ne, e, se, s, sw, w, nw
+> goto (12,4)          # walk to a tile, one tick for each step
+> goto bank            # walk to a named thing near you
+> goto                 # stop the walk
+> run                  # turn run on or off
+> run on
+> run off
+> climb up             # a ladder or stairs on your tile
+```
+
+In the Godot client, hold a movement key to walk (WASD with QEZC, or HJKL
+with YUBN). Press R, or click `Run` on the minimap, to turn run on or off.
+
+### How a step resolves
+
+1. A direction command and `goto` only start a walk. Neither moves you.
+2. At the start of each tick, the tick engine moves every walker.
+3. A walker moves one tile, or two tiles with run on.
+4. A new direction command or `goto` replaces the walk in progress.
+
+A direction command is one tick of movement. The client sends a held key two
+times each tick, and each command makes a new walk from your tile. The steps
+thus never stack. When you let go, you move at most one tick more.
+
+### The run and the tile skip
+
+A run moves two tiles in ONE move. The middle tile gets no room, no arrival
+hook, and no quest visit: the OSRS tile skip. A path with an odd number of
+tiles ends with one tile at walk speed. A `goto` of one tile moves one tile,
+so a click on the next tile never goes past it.
+
+Run stays on after a logout (`db.run_enabled`). No resource drains yet.
+
+### Inspect movement state (Python)
+
+```python
+from systems.gameplay.movement import walk
+walk.is_running(char)        # True with run on
+walk.current(char)           # the walk in progress, or None
+walk.walker_count()          # the characters that walk now
+```
+
 ## Combat System
 
 Combat is twitch melee on a **0.6 s tick**, with OSRS-derived accuracy and
@@ -480,7 +532,7 @@ damage math rescaled from OSRS's 1–99 to Blackout's 0–127.
 > attack <target>     # begin swinging at a target
 > hold                # stop attacking, stay in combat
 > wield <weapon>      # swap weapons mid-fight, then resume attacking
-> flee                # leave combat
+> flee                # leave combat (alias: escape)
 > tickdebug           # watch the tick that drives all of the above
 ```
 
@@ -1220,7 +1272,15 @@ nothing up, so the sync ignores them.
 > goto (12,4)          # walk to a tile
 > goto bank            # walk to a named thing near you
 > goto (12,4) then look
+> worldmap             # the world map of your plane
 ```
+
+"Movement" above tells how the walk and the run work.
+
+`worldmap` (alias `wmap`) opens the world map in the Godot client. A telnet
+session gets a text map of its plane instead, one mark for each 8 x 8 tiles
+(`world/tile_world_map.py`). The Godot client draws each walk on its minimap:
+the server sends the goal and the path on `blackout_walk`.
 
 ### The respawn point
 
@@ -1307,7 +1367,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3033 tests, ~24 minutes** (measured 09/28/2026). Run it before a merge, or
+**3060 tests, ~25 minutes** (measured 09/28/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

@@ -611,7 +611,7 @@ class BankNode(ObjectParent, DefaultObject):
 
 @register_spawner("Bank")
 def spawn_bank(room):
-    spawn_once(
+    return spawn_once(
         room,
         "typeclasses.bank_nodes.BankNode",
         key="bank terminal",

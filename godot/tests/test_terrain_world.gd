@@ -51,6 +51,7 @@ func _ready() -> void:
 	_a_jump_loads_the_block_of_the_tile(world)
 	_a_selection_knows_its_link_and_an_undo_clears_it(world)
 	_a_sign_keeps_its_words_and_its_marker_shows_its_turn(world)
+	_an_entity_kind_draws_its_model_turned(world)
 	_remove_scratch()
 
 	if _failures > 0:
@@ -266,6 +267,45 @@ func _a_sign_keeps_its_words_and_its_marker_shows_its_turn(world: TerrainWorld) 
 	world.replay_edit(edit, false)
 
 	_expect(world.chunks.objects_at(tile).is_empty(), "an undo removes the sign")
+
+
+## The editor draws the model of an entity kind, turned as its object, and
+## the marker draws no box over it. A primitive draws no model. The kind is
+## the first entity kind that the server names, so a new kind needs no edit.
+func _an_entity_kind_draws_its_model_turned(world: TerrainWorld) -> void:
+	var chunk_coord := Vector2i(5, 5)
+	var tile := chunk_coord * _Const.CHUNK_SIZE + Vector2i(6, 6)
+	var ladder := tile + Vector2i(2, 0)
+	var kind: String = _Const.OBJECT_KIND_PREVIEW.keys()[0]
+	var turn := 3
+	var edit := TerrainEdit.for_world(world)
+
+	edit.add_object(world.chunks, tile, kind, turn)
+	edit.add_object(world.chunks, ladder, "ladder_up", 0)
+	world.rebuild_many(edit.chunk_coords())
+
+	var models := world.models_of(chunk_coord)
+
+	_expect(models.size() == 1, "one model for the entity kind, none for a ladder")
+
+	if models.size() == 1:
+		var model: Node3D = models[0]
+
+		_expect(is_equal_approx(model.rotation.y, TerrainView.model_yaw(turn)),
+			"the model turns as its object")
+
+	var boxes := 0
+
+	for marker: MeshInstance3D in world.markers_of(chunk_coord):
+		if marker.mesh != null:
+			boxes += 1
+
+	_expect(boxes == 1, "only the ladder marker keeps its box")
+
+	world.show_models = false
+	_expect(world.models_of(chunk_coord).is_empty(), "Show models off draws none")
+	world.show_models = true
+	world.replay_edit(edit, false)
 
 
 func _path_on(chunk_coord: Vector2i, plane: int) -> String:

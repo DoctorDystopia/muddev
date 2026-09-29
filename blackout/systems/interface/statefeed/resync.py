@@ -36,6 +36,12 @@ def _send_room(observer) -> int:
     sent = events.emit_room_info(observer, force=True)
     sent += events.emit_room_contents(observer, force=True)
 
+    # A reconnect in the middle of a walk shows the destination marker again.
+    sent += events.emit_walk(observer, force=True)
+
+    # A new session holds no world map. The next `worldmap` sends it whole.
+    events.forget_world_map(observer)
+
     return sent
 
 

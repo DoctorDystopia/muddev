@@ -25,7 +25,9 @@ func _ready() -> void:
 	_the_sfx_volume_persists_clamps_and_resets()
 	_the_xp_tracker_toggles_persist_and_reset()
 	_the_movement_animation_persists_and_resets()
+	_the_camera_keys_persist_and_reset()
 	_hide_roofs_persists_and_resets()
+	_the_map_settings_persist_clamp_and_reset()
 	_a_box_the_player_sized_is_remembered()
 	_a_box_size_from_a_bad_file_falls_back()
 	_the_screen_gives_the_first_scale()
@@ -331,6 +333,26 @@ func _the_movement_animation_persists_and_resets() -> void:
 	_clean()
 
 
+## Off by default, so W is north, as the website and the help say.
+func _the_camera_keys_persist_and_reset() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(not s.camera_relative_keys, "W is north by default")
+
+	s.set_camera_relative_keys(true)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.camera_relative_keys, "turning the keys with the camera persists")
+
+	reloaded.reset()
+	_expect(reloaded.camera_relative_keys
+		== ClientSettings.DEFAULT_CAMERA_RELATIVE_KEYS, "and reset restores it")
+
+	_clean()
+
+
 ## On by default (Nick, 09/26/2026), as the OSRS setting of the same name.
 func _hide_roofs_persists_and_resets() -> void:
 	_clean()
@@ -347,6 +369,35 @@ func _hide_roofs_persists_and_resets() -> void:
 	reloaded.reset()
 	_expect(reloaded.hide_roofs == ClientSettings.DEFAULT_HIDE_ROOFS,
 		"and reset restores it")
+
+	_clean()
+
+
+## The zoom of the minimap and the walk path toggle (09/28/2026).
+func _the_map_settings_persist_clamp_and_reset() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	var steps := MinimapView.ZOOM_RADII
+
+	_expect(s.minimap_radius == ClientSettings.DEFAULT_MINIMAP_RADIUS,
+		"the minimap starts at the shipped zoom")
+	_expect(not s.show_walk_path, "the walk path is off by default")
+
+	s.set_minimap_radius(steps[0])
+	s.set_show_walk_path(true)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.minimap_radius == steps[0], "the zoom persists")
+	_expect(reloaded.show_walk_path, "the walk path toggle persists")
+
+	reloaded.set_minimap_radius(9999)
+	_expect(reloaded.minimap_radius == steps[steps.size() - 1],
+		"a radius past the widest step is clamped")
+
+	reloaded.reset()
+	_expect(reloaded.minimap_radius == ClientSettings.DEFAULT_MINIMAP_RADIUS
+		and not reloaded.show_walk_path, "and reset restores both")
 
 	_clean()
 

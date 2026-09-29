@@ -137,10 +137,14 @@ class TileChunkChannelTests(EvenniaTest):
 
         for name in open_names:
             dx, dy = tile_const.DIRECTION_OFFSETS[name]
-            key = serializers.tile_key(_HOME_TILE[0] + dx, _HOME_TILE[1] + dy)
+            x, y = _HOME_TILE[0] + dx, _HOME_TILE[1] + dy
+            key = serializers.tile_key(x, y)
+            # A goto of one tile, not the direction: a run moves two tiles
+            # for each direction command.
+            command = const.TILE_COMMAND_GOTO_TEMPLATE.format(x=x, y=y)
 
             with self.subTest(direction=name):
-                self.assertEqual(actions[key]["command"], name)
+                self.assertEqual(actions[key]["command"], command)
                 self.assertEqual(actions[key]["kind"],
                                  const.TILE_ACTION_KIND_STEP)
 

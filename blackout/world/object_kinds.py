@@ -60,8 +60,17 @@ Description: The object kinds of the tile grid, one row for each kind.
              kinds use the primitives. `world/tests/test_tile_content.py`
              checks these rules.
 
-             This module imports no game code. `clientexport.py` reads it,
-             and a typeclass import there loads Evennia into the exporter.
+             PREVIEW. A kind that stands up an entity names the model of
+             that entity in `preview`: the asset key and the family that
+             the statefeed sends for it. Only the terrain editor reads it,
+             to draw the model on the tile. The family gives the shape of
+             an entity with no served model. The game client draws the entity from its
+             `room_players` row. `world/tests/test_object_kind_preview.py`
+             stands up each kind and checks the key.
+
+             This module imports only two constant modules, which import
+             nothing. `clientexport.py` reads it, and a typeclass import
+             here loads Evennia into the exporter.
 
              DESIGN-0011 sections 6.2 and 6.3.
 """
@@ -69,6 +78,7 @@ Description: The object kinds of the tile grid, one row for each kind.
 from dataclasses import dataclass
 
 from systems.core.tilegrid import constants as tile_const
+from systems.interface.statefeed import constants as feed_const
 
 
 @dataclass(frozen=True)
@@ -82,7 +92,8 @@ class ObjectKind:
     every other kind. The `climbs` are the directions of a climb kind
     (CLIMB_UP, CLIMB_DOWN), or () for every other kind. The `scenery` is the
     model asset key or the primitive that the client stands on the tile, or
-    "" for nothing.
+    "" for nothing. The `preview` is (asset key, family) of the entity that
+    the kind stands up, or () for a kind that stands up nothing.
     """
 
     key: str
@@ -93,6 +104,7 @@ class ObjectKind:
     target: tuple = ()
     climbs: tuple = ()
     scenery: str = ""
+    preview: tuple = ()
 
 
 _FACILITY = tile_const.OBJECT_CATEGORY_FACILITY
@@ -102,6 +114,11 @@ _NPC = tile_const.OBJECT_CATEGORY_NPC
 _SIGN = tile_const.OBJECT_CATEGORY_SIGN
 _TRANSITION = tile_const.OBJECT_CATEGORY_TRANSITION
 _CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
+
+# The families of the entities, for the `preview` of each kind.
+_STATION = feed_const.ASSET_KIND_STATION
+_GATHERABLE = feed_const.ASSET_KIND_GATHERABLE
+_NPC_FAMILY = feed_const.ASSET_KIND_NPC
 
 # The object kind that marks the respawn point in a chunk file. world/respawn.py
 # finds its tile by this key, and the terrain editor check counts it. Here,
@@ -123,13 +140,15 @@ _DOWN = (tile_const.CLIMB_DOWN,)
 _BOTH = (tile_const.CLIMB_UP, tile_const.CLIMB_DOWN)
 
 
-def _named(key: str, category: str, spawner: str, desc: str) -> ObjectKind:
+def _named(key: str, category: str, spawner: str, desc: str,
+           preview: tuple) -> ObjectKind:
     """
     A kind whose room name is its spawner key, as on the xyzgrid maps. There,
     the room key was both the name that a player saw and the key of the
     spawner.
     """
-    return ObjectKind(key, category, spawner=spawner, name=spawner, desc=desc)
+    return ObjectKind(key, category, spawner=spawner, name=spawner, desc=desc,
+                      preview=preview)
 
 
 # Grouped by category, in the order the editor lists them. Each spawner string
@@ -138,48 +157,66 @@ def _named(key: str, category: str, spawner: str, desc: str) -> ObjectKind:
 _KIND_ROWS: tuple = (
     _named("bank", _FACILITY, "Bank",
            "A Hegemony secure banking facility with a row of storage "
-           "terminals."),
+           "terminals.",
+           ("bank_terminal", _STATION)),
     _named("foundry_furnace", _FACILITY, "Foundry Furnace Facility",
-           "A roaring hot Foundry."),
+           "A roaring hot Foundry.",
+           ("furnace", _STATION)),
     _named("metalsmith_anvil", _FACILITY, "Metalsmith Anvil Facility",
-           "A Metalsmith's heavy steel anvil."),
+           "A Metalsmith's heavy steel anvil.",
+           ("anvil", _STATION)),
     _named("rendering_cooker", _FACILITY, "Rendering Cooker Facility",
            "A rendering cooker, its vat still warm. The smell arrives before "
-           "you do."),
+           "you do.",
+           ("rendering_cooker", _STATION)),
     _named("curing_chamber", _FACILITY, "Curing Chamber Facility",
            "A curing chamber, cold and dry, hung with hooks and smelling of "
-           "salt."),
+           "salt.",
+           ("curing_chamber", _STATION)),
     _named("gunsmith_bench", _FACILITY, "Gunsmith Bench Facility",
-           "A Gunsmith's workbench."),
+           "A Gunsmith's workbench.",
+           ("gunbench", _STATION)),
     _named("gastronomy_worktable", _FACILITY, "Gastronomy Worktable Facility",
            "A scrubbed steel worktable, a pan already warming over a low "
-           "flame."),
+           "flame.",
+           ("gastro_worktable", _STATION)),
 
     _named("rusty_pole", _GATHERING, "Rusty pole clearing",
-           "A rusted pole. Maybe I can cut it down?"),
+           "A rusted pole. Maybe I can cut it down?",
+           ("rusty_pole", _GATHERABLE)),
     _named("metal_pole", _GATHERING, "Metal pole clearing",
-           "A metal pole. Maybe I can cut it down?"),
+           "A metal pole. Maybe I can cut it down?",
+           ("metal_pole", _GATHERABLE)),
     _named("copper_pole", _GATHERING, "Copper pole clearing",
-           "A copper pole. Maybe I can cut it down?"),
+           "A copper pole. Maybe I can cut it down?",
+           ("copper_pole", _GATHERABLE)),
 
     _named("lone_android", _NPC, "Lone Android",
            "An lonely looking android who lives in the wastes of the "
-           "Sahara."),
+           "Sahara.",
+           ("lone_android", _NPC_FAMILY)),
     _named("shopkeeper_oasis", _NPC, "Shopkeeper",
-           "A makeshift market stall shaded by a tattered awning."),
+           "A makeshift market stall shaded by a tattered awning.",
+           ("shopkeeper", _NPC_FAMILY)),
     _named("mutant_raider", _NPC, "Mutant Raider Tile",
-           "A mutant raider with a crude weapon."),
+           "A mutant raider with a crude weapon.",
+           ("mutant_raider", _NPC_FAMILY)),
     _named("big_mutant", _NPC, "Big Mutant Tile",
-           "A large mutant with a crude weapon."),
+           "A large mutant with a crude weapon.",
+           ("big_mutant", _NPC_FAMILY)),
     _named("floating_eye", _NPC, "Floating Eye Tile",
-           "Terrified of needles."),
+           "Terrified of needles.",
+           ("floating_eye", _NPC_FAMILY)),
     _named("mutant_crab", _NPC, "Mutant Crab Tile",
-           "A mutant crab with a hard shell."),
+           "A mutant crab with a hard shell.",
+           ("mutant_crab", _NPC_FAMILY)),
     _named("mutant_giant", _NPC, "Mutant Giant Tile",
-           "A mutant giant, slow and enormous."),
+           "A mutant giant, slow and enormous.",
+           ("mutant_giant", _NPC_FAMILY)),
 
     # A signpost. Its words are the `text` of each chunk object.
-    ObjectKind(SIGNPOST_KIND, _SIGN),
+    ObjectKind(SIGNPOST_KIND, _SIGN,
+               preview=(feed_const.ASSET_KEY_GENERIC, feed_const.ASSET_KIND_SIGN)),
 
     # The respawn point. world/respawn.py finds it by this key. The words are
     # those of the xyzgrid room at (0, 0) of the oasis map.

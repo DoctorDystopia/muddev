@@ -12,7 +12,6 @@ Description: Tests for planes on the tile world (DESIGN-0011 Phase 7, step
              is blocked, as an upper floor covers only its building.
 """
 
-from types import SimpleNamespace
 from unittest import mock
 
 from evennia.utils.create import create_object
@@ -23,6 +22,7 @@ from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid import movement
 from systems.core.tilegrid.world import TileWorld, set_world
 from systems.gameplay.combat import reach
+from systems.gameplay.movement import walk
 from systems.interface.statefeed import neighbourhood
 from systems.interface.statefeed import serializers
 from world import tile_travel
@@ -84,11 +84,19 @@ def _world() -> TileWorld:
     return world
 
 
-def _run_now(_seconds, callback, *args):
-    """Stand in for `delay`: run the callback at once."""
-    callback(*args)
+# More ticks than any walk of these tests takes.
+_TICK_CAP = 200
 
-    return SimpleNamespace(active=lambda: False, cancel=lambda: None)
+
+def _walk_out() -> None:
+    """Move every walker, one tick at a time, until no walk is left."""
+    for _ in range(_TICK_CAP):
+        if not walk.walker_count():
+            return
+
+        walk.advance_all()
+
+    raise AssertionError("a walk did not end")
 
 
 # ─── Tests ───────────────────────────────────────────────────────────────────
@@ -103,6 +111,7 @@ class _PlaneTestBase(EvenniaTest):
         self.char1.msg = mock.Mock()
 
     def tearDown(self):
+        walk.forget_all()
         set_world(None)
         super().tearDown()
 
@@ -169,18 +178,20 @@ class WalkOnAPlaneTests(_PlaneTestBase):
         # plane 1.
         self._go_up()
         self.char1.execute_cmd("west")
+        _walk_out()
 
         self.assertEqual(self._where(), (_LADDER, _UPPER))
 
         self.char1.execute_cmd("east")
+        _walk_out()
 
         self.assertEqual(self._where(), ((_LADDER[0] + 1, _LADDER[1]), _UPPER))
 
     def test_goto_walks_on_the_plane_of_the_walker(self):
         self._go_up()
 
-        with mock.patch("commands.tile_movement.delay", _run_now):
-            self.char1.execute_cmd("goto (%d,%d)" % _CORRIDOR_END)
+        self.char1.execute_cmd("goto (%d,%d)" % _CORRIDOR_END)
+        _walk_out()
 
         self.assertEqual(self._where(), (_CORRIDOR_END, _UPPER))
 

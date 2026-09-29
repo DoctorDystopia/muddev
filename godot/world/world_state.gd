@@ -17,6 +17,12 @@ extends RefCounted
 ## is the set of the plane of the observer. The ground, the pick, the minimap,
 ## and [method tile_action] read that set. [TerrainView] draws every plane.
 ##
+## **The walk.** Since 09/28/2026, the server sends the current walk on
+## `blackout_walk`: the goal, the whole path, and the room Z. The path comes
+## one time, at the start. This class drops each tile of the path as the
+## observer steps on it, so the minimap draws only the tiles still to walk.
+## The destination marker and the walk path are drawn from these fields.
+##
 ## **The float boundary.** `JSON.parse_string` in Godot returns TYPE_FLOAT for
 ## every number in a payload, for example `{"x": 3.0}`. A dictionary key of
 ## 3.0 does not match a key of 3, and nothing reports the miss. Thus, every
@@ -38,6 +44,9 @@ signal chunks_changed
 ## Emitted when the position, the exits, or the tile actions of the observer
 ## change.
 signal room_changed
+
+## Emitted when a walk starts, ends, or loses a tile of its path.
+signal walk_changed
 
 
 ## The chunks of the block around the observer, on the plane of the
@@ -75,6 +84,21 @@ var current_tile_actions: Dictionary = {}
 ## client tracks its own walk.
 var current_cancel_action: Dictionary = {}
 
+## The goal tile of the current walk. Read it only when [method has_walk].
+var walk_goal := Vector2i.ZERO
+
+## The room Z of the current walk, so a map draws it only on its own plane.
+var walk_z := ""
+
+## The tiles that the current walk still has to step on, in order.
+var walk_path: Array[Vector2i] = []
+
+## Whether the player has run on. The walk feed carries it, with or without
+## a walk, and [signal walk_changed] fires when it arrives.
+var running := false
+
+var _walking := false
+
 
 ## Put one feed message into this model.
 ##
@@ -97,6 +121,13 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 
 			if _free_far_chunks():
 				chunks_changed.emit()
+
+			if _trim_walk_path():
+				walk_changed.emit()
+
+		_Const.CH_WALK:
+			ingest_walk(payload)
+			walk_changed.emit()
 
 		_:
 			return false
@@ -177,6 +208,40 @@ func ingest_room_info(payload: Dictionary) -> void:
 	current_exits = payload.get("exits", {})
 	current_tile_actions = payload.get("tile_actions", {})
 	current_cancel_action = payload.get("cancel_action", {})
+
+
+## Record the walk that the server sent. An empty goal ends the walk.
+func ingest_walk(payload: Dictionary) -> void:
+	var goal: Array = payload.get("goal", [])
+
+	running = bool(payload.get("running", false))
+	walk_path.clear()
+	_walking = goal.size() == 2
+
+	if not _walking:
+		walk_z = ""
+		return
+
+	walk_goal = Vector2i(int(goal[0]), int(goal[1]))
+	walk_z = str(payload.get("z", ""))
+
+	for tile in payload.get("path", []):
+		if tile is Array and tile.size() == 2:
+			walk_path.append(Vector2i(int(tile[0]), int(tile[1])))
+
+	# The first step can land before this message does.
+	_trim_walk_path()
+
+
+## True while a walk runs.
+func has_walk() -> bool:
+	return _walking
+
+
+## True while a walk runs on the plane of the observer. A map draws the
+## destination marker and the walk path only then.
+func walk_on_current_plane() -> bool:
+	return _walking and walk_z == current_z
 
 
 ## True when the observer stands on the tile world, on any plane.
@@ -266,6 +331,23 @@ static func block_of(tile: Vector2i) -> Array[Vector2i]:
 			block.append(centre + Vector2i(dx, dy))
 
 	return block
+
+
+## Drop each tile of the walk path up to the tile of the observer. Returns
+## true if one went. A tile not on the path drops nothing: the server ends a
+## walk that leaves its path.
+func _trim_walk_path() -> bool:
+	if not _walking or walk_z != current_z:
+		return false
+
+	var at := walk_path.find(current_cell)
+
+	if at < 0:
+		return false
+
+	walk_path = walk_path.slice(at + 1)
+
+	return true
 
 
 ## Free each chunk outside the block around the observer. Returns true if one

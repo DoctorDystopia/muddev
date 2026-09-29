@@ -93,12 +93,12 @@ class TileMapRenderTests(unittest.TestCase):
 
     def test_each_tile_shows_its_glyph(self):
         cases = (
-            (_CENTER, tile_map._LOOKER_GLYPH),
-            (_BLOCKED, tile_map._VOID_GLYPH),
-            (_WATER, tile_map._WATER_GLYPH),
-            (_OBJECT_TILE, tile_map._CATEGORY_GLYPHS[
+            (_CENTER, tile_map.LOOKER_GLYPH),
+            (_BLOCKED, tile_map.VOID_GLYPH),
+            (_WATER, tile_map.WATER_GLYPH),
+            (_OBJECT_TILE, tile_map.CATEGORY_GLYPHS[
                 tile_const.OBJECT_CATEGORY_FACILITY]),
-            ((12, 12), tile_map._GROUND_GLYPH),
+            ((12, 12), tile_map.GROUND_GLYPH),
         )
 
         for tile, glyph in cases:
@@ -115,13 +115,13 @@ class TileMapRenderTests(unittest.TestCase):
     def test_every_category_has_a_glyph(self):
         for category in tile_const.OBJECT_CATEGORIES:
             with self.subTest(category=category):
-                self.assertIn(category, tile_map._CATEGORY_GLYPHS)
+                self.assertIn(category, tile_map.CATEGORY_GLYPHS)
 
     def test_the_edge_of_the_world_draws_as_void(self):
         lines = tile_map.render(_world(), (0, 0), _RADIUS).split("\n")
         west = _cell(lines, 2 * _RADIUS, 0)
 
-        self.assertEqual(west, tile_map._VOID_GLYPH)
+        self.assertEqual(west, tile_map.VOID_GLYPH)
 
 
 class TileMapAuraTests(unittest.TestCase):
@@ -155,9 +155,9 @@ class TileMapAuraTests(unittest.TestCase):
         lines = self._render(1).split("\n")
         centre_row = lines[2 * _RADIUS]
 
-        self.assertIn(tile_map._LOOKER_GLYPH, centre_row)
-        self.assertNotIn(f"{TAG_AURA_TILE}{tile_map._LOOKER_GLYPH}", centre_row)
-        self.assertNotIn(f"{TAG_AURA_TILE}{tile_map._VOID_GLYPH}", centre_row)
+        self.assertIn(tile_map.LOOKER_GLYPH, centre_row)
+        self.assertNotIn(f"{TAG_AURA_TILE}{tile_map.LOOKER_GLYPH}", centre_row)
+        self.assertNotIn(f"{TAG_AURA_TILE}{tile_map.VOID_GLYPH}", centre_row)
 
     def test_a_metric_that_refuses_every_tile_draws_no_tint(self):
         text = self._render(2, metric=lambda dx, dy, radius: False)
@@ -181,19 +181,19 @@ class TileMapLiveNpcTests(EvenniaTestCase):
         return tile_map.render(self.world, _CENTER, _RADIUS).split("\n")
 
     def test_the_npc_draws_on_the_tile_where_it_stands(self):
-        npc_glyph = tile_map._CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_NPC]
+        npc_glyph = tile_map.CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_NPC]
 
         self.assertEqual(_tile_cell(self._lines(), _NPC_NOW), npc_glyph)
 
     def test_the_empty_spawn_tile_draws_as_ground(self):
         self.assertEqual(_tile_cell(self._lines(), _NPC_SPAWN),
-                         tile_map._GROUND_GLYPH)
+                         tile_map.GROUND_GLYPH)
 
     def test_a_plain_object_draws_no_npc_glyph(self):
         self.npc.attributes.remove("npc_key")
 
         self.assertEqual(_tile_cell(self._lines(), _NPC_NOW),
-                         tile_map._GROUND_GLYPH)
+                         tile_map.GROUND_GLYPH)
 
 
 class TileRoomLookTests(EvenniaTest):
@@ -224,7 +224,7 @@ class TileRoomLookTests(EvenniaTest):
         sent = [str(call.kwargs.get("text", "")) for call in
                 self.char1.msg.call_args_list]
 
-        self.assertTrue(any(tile_map._LOOKER_GLYPH in text for text in sent))
+        self.assertTrue(any(tile_map.LOOKER_GLYPH in text for text in sent))
 
     def test_a_look_with_a_burning_aura_tints_the_map(self):
         room = self.char1.location

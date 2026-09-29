@@ -59,11 +59,13 @@ extends RefCounted
 ## minute. `room_info` is in `COALESCABLE_CHANNELS`, so two steps that land in
 ## one tick reach the client as ONE message naming a tile two squares away.
 ## That is a real walk the player took, announced late, and snapping it drew
-## exactly the jump the animation exists to remove. Manual movement makes it
-## common rather than rare: `BlackoutGotoCmd.auto_step_delay` paces the
-## auto-walk, and nothing paces a held key.
+## exactly the jump the animation exists to remove.
 ##
-## Three, so a coalesced run of two steps — 2.83 across on the diagonal — is
+## Since 09/29/2026 the tick paces every step, a held key included, and a RUN
+## moves two tiles in each tick (`systems/gameplay/movement/walk.py`). One
+## message thus names a tile two squares away on every tick of a run.
+##
+## Three, so a move of two tiles — 2.83 across on the diagonal — is
 ## walked, and a longer one is not. The honest cost is that a teleport of three
 ## tiles or fewer is drawn as a slide of under a second, through whatever
 ## stands between the two tiles. A map-crossing jump, which is what a teleport

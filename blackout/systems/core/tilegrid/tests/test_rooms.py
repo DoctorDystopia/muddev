@@ -161,7 +161,8 @@ class TileRoomsTests(EvenniaTestCase):
         self.assertEqual(fresh.pool_count(), 1)
 
 
-class StepTests(EvenniaTestCase):
+class _StepFixture(EvenniaTestCase):
+    """One open chunk and a mover on the start tile. It holds no test."""
 
     def setUp(self):
         super().setUp()
@@ -175,6 +176,9 @@ class StepTests(EvenniaTestCase):
     def _block(self, tile):
         size = const.CHUNK_SIZE
         self.chunk.flags[tile[1] * size + tile[0]] = const.FLAG_BLOCKED
+
+
+class StepTests(_StepFixture):
 
     def test_a_step_moves_the_mover_and_frees_the_room_behind(self):
         start_room = self.mover.location
@@ -224,3 +228,60 @@ class StepTests(EvenniaTestCase):
         result = movement.step(self.grid, self.rooms, self.mover, "up")
 
         self.assertEqual(result, const.STEP_NOT_ADJACENT)
+
+
+class StrideTests(_StepFixture):
+    """A stride of two hops: the run, with the tile skip of OSRS."""
+
+    _FAR_EAST = (12, 10)
+
+    def test_a_stride_lands_on_the_last_tile_with_one_move(self):
+        moves = []
+        original = self.mover.move_to
+
+        def _count(*args, **kwargs):
+            moves.append(args[0])
+            return original(*args, **kwargs)
+
+        self.mover.move_to = _count
+        result = movement.stride(self.grid, self.rooms, self.mover,
+                                 ["east", "east"], quiet=True)
+
+        self.assertEqual(result, (const.STEP_OK, 2))
+        self.assertEqual(self.mover.location.xyz[:2], self._FAR_EAST)
+        self.assertEqual(len(moves), 1)
+
+    def test_the_skipped_tile_gets_no_room(self):
+        movement.stride(self.grid, self.rooms, self.mover, ["east", "east"],
+                        quiet=True)
+
+        self.assertIsNone(self.rooms.room_at(*_EAST))
+
+    def test_a_refused_second_hop_keeps_the_first(self):
+        self._block(self._FAR_EAST)
+        result = movement.stride(self.grid, self.rooms, self.mover,
+                                 ["east", "east"], quiet=True)
+
+        self.assertEqual(result, (const.STEP_OK, 1))
+        self.assertEqual(self.mover.location.xyz[:2], _EAST)
+
+    def test_a_refused_first_hop_moves_nothing(self):
+        self._block(_EAST)
+        result = movement.stride(self.grid, self.rooms, self.mover,
+                                 ["east", "east"], quiet=True)
+
+        self.assertEqual(result, (const.STEP_BLOCKED, 0))
+        self.assertEqual(self.mover.location.xyz[:2], _START)
+
+    def test_a_hop_onto_a_transition_ends_the_stride_at_its_target(self):
+        target = (20, 20)
+
+        def _transition(x, y):
+            return target if (x, y) == _EAST else None
+
+        result = movement.stride(self.grid, self.rooms, self.mover,
+                                 ["east", "east"], transition=_transition,
+                                 quiet=True)
+
+        self.assertEqual(result, (const.STEP_OK, 1))
+        self.assertEqual(self.mover.location.xyz[:2], target)

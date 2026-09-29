@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://ui/theme_preview/theme_preview.gd" id="1_preview"]
+
+[node name="BlackoutThemePreview" type="VBoxContainer"]
+script = ExtResource("1_preview")

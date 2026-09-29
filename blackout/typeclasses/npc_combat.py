@@ -245,9 +245,11 @@ class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
             try:
                 # Local import: avoids a typeclasses <-> systems import cycle
                 # at load_all_spawners() time, matching the style below.
+                from systems.core.tilegrid.constants import FACING_ATTR
                 from systems.gameplay.spawning.respawn import schedule_respawn
 
-                schedule_respawn(npc_key, room, respawn_seconds)
+                schedule_respawn(npc_key, room, respawn_seconds,
+                                 facing=self.attributes.get(FACING_ATTR))
             except Exception:
                 # A broken respawn queue must never block the death itself. If
                 # delete() were skipped the corpse would linger at 0 hp, the
@@ -277,10 +279,11 @@ def spawn_mutant_raider(room):
     interleavings.
 
     Entry: room (Evennia Room).
-    Exit: the created NPC, or None if one was already standing here.
+    Exit: the NPC on the tile: the one already standing, or a new one.
+          The tile sync gives it its facing.
     Module Globals: None.
     """
-    from systems.gameplay.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_standing
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
@@ -289,8 +292,10 @@ def spawn_mutant_raider(room):
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/
     # to be loaded first.
-    if npc_present("mutant_raider", room):
-        return None
+    standing = npc_standing("mutant_raider", room)
+
+    if standing is not None:
+        return standing
     
     return NPC_DB["mutant_raider"].create(location=room)
 
@@ -313,10 +318,11 @@ def spawn_big_mutant(room):
     interleavings.
 
     Entry: room (Evennia Room).
-    Exit: the created NPC, or None if one was already standing here.
+    Exit: the NPC on the tile: the one already standing, or a new one.
+          The tile sync gives it its facing.
     Module Globals: None.
     """
-    from systems.gameplay.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_standing
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
@@ -325,8 +331,10 @@ def spawn_big_mutant(room):
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/
     # to be loaded first.
-    if npc_present("big_mutant", room):
-        return None
+    standing = npc_standing("big_mutant", room)
+
+    if standing is not None:
+        return standing
     
     return NPC_DB["big_mutant"].create(location=room)
 
@@ -349,10 +357,11 @@ def spawn_floating_eye(room):
     interleavings.
 
     Entry: room (Evennia Room).
-    Exit: the created NPC, or None if one was already standing here.
+    Exit: the NPC on the tile: the one already standing, or a new one.
+          The tile sync gives it its facing.
     Module Globals: None.
     """
-    from systems.gameplay.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_standing
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
@@ -361,8 +370,10 @@ def spawn_floating_eye(room):
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/
     # to be loaded first.
-    if npc_present("floating_eye", room):
-        return None
+    standing = npc_standing("floating_eye", room)
+
+    if standing is not None:
+        return standing
     
     return NPC_DB["floating_eye"].create(location=room)
 
@@ -387,10 +398,11 @@ def spawn_mutant_crab(room):
     interleavings.
 
     Entry: room (Evennia Room).
-    Exit: the created NPC, or None if one was already standing here.
+    Exit: the NPC on the tile: the one already standing, or a new one.
+          The tile sync gives it its facing.
     Module Globals: None.
     """
-    from systems.gameplay.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_standing
     from world.npc_database import NPC_DB  # local import: avoids a world<->
     # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
     # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
@@ -399,8 +411,10 @@ def spawn_mutant_crab(room):
     # existing local-import style in this module's namespace keeps the module
     # importable in isolation (e.g. by the test suite) without forcing world/
     # to be loaded first.
-    if npc_present("mutant_crab", room):
-        return None
+    standing = npc_standing("mutant_crab", room)
+
+    if standing is not None:
+        return standing
 
     return NPC_DB["mutant_crab"].create(location=room)
 
@@ -421,14 +435,17 @@ def spawn_mutant_giant(room):
     giant on a tile that already holds one.
 
     Entry: room (Evennia Room).
-    Exit: the created NPC, or None if one was already standing here.
+    Exit: the NPC on the tile: the one already standing, or a new one.
+          The tile sync gives it its facing.
     Module Globals: None.
     """
-    from systems.gameplay.spawning.respawn import npc_present
+    from systems.gameplay.spawning.respawn import npc_standing
     from world.npc_database import NPC_DB  # local import: matches the style of
     # every other spawner in this module and keeps it importable in isolation.
 
-    if npc_present("mutant_giant", room):
-        return None
+    standing = npc_standing("mutant_giant", room)
+
+    if standing is not None:
+        return standing
 
     return NPC_DB["mutant_giant"].create(location=room)

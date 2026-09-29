@@ -155,6 +155,32 @@ CHANNEL_XP_DROP: str = "blackout_xp"       # -> Blackout.Xp
 # not two versions of one.
 CHANNEL_TILE_CHUNK: str = "blackout_chunk"  # -> Blackout.Chunk
 
+# The current walk of the observer: the goal tile, the tiles still to step
+# on, the room Z of the walk, and the run toggle. An empty goal means "no
+# walk". The minimap draws the destination marker and the walk path from it,
+# and the Run button from `running`. Nick chose a server feed over a client
+# guess on 09/28/2026, so a typed `goto` shows too.
+#
+# The path goes one time, when the walk starts. The client drops each tile
+# as the player steps on it or skips it. `set_walk` in
+# systems/gameplay/movement/walk.py is the one writer of the walk. It sends
+# this channel when a shown walk starts or ends. A held key makes a walk that
+# the feed does not show. A SNAPSHOT, and coalescable: the newest walk is the
+# whole truth.
+CHANNEL_WALK: str = "blackout_walk"  # -> Blackout.Walk
+
+# The world map, in two messages. The index names every chunk of every plane
+# and the area labels. Then one world map summary follows for each chunk that
+# this observer did not get yet. The `worldmap` command is the one trigger.
+# Not coalescable: two summaries are two chunks, as on CHANNEL_TILE_CHUNK.
+CHANNEL_WORLD_MAP: str = "blackout_world_map"  # -> Blackout.WorldMap
+CHANNEL_WORLD_MAP_CHUNK: str = "blackout_world_map_chunk"
+
+# The command that asks for the world map. The key of CmdWorldMap, and the
+# line that the world map button of the Godot client sends. Exported, so the
+# client sends the word that the server named.
+WORLD_MAP_COMMAND: str = "worldmap"
+
 # Every channel a client may subscribe to. A name absent from here is rejected
 # by the subscribe inputfunc rather than silently accepted, so a typo in a
 # client shows up immediately instead of as a channel that never fires.
@@ -177,6 +203,9 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_AURA,
     CHANNEL_XP_DROP,
     CHANNEL_TILE_CHUNK,
+    CHANNEL_WALK,
+    CHANNEL_WORLD_MAP,
+    CHANNEL_WORLD_MAP_CHUNK,
 ))
 
 # Evennia's websocket `send_default` silently DROPS an outputfunc with this
@@ -558,6 +587,7 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,
+    CHANNEL_WALK,
 ))
 
 # How many passes buffer.drain_stale makes before leaving what is still stale
@@ -591,6 +621,19 @@ ROOM_PLAYERS_SNAPSHOT_ATTR: str = "statefeed_room_players"
 # observer since its last resync. A resync clears it, so a new session gets
 # its block again.
 TILE_CHUNKS_SENT_ATTR: str = "statefeed_tile_chunks"
+
+# The ndb attribute that holds the (cx, cy, plane) of each world map summary
+# sent to this observer since its last resync. The same model as
+# TILE_CHUNKS_SENT_ATTR: a second `worldmap` sends only the index.
+WORLD_MAP_SENT_ATTR: str = "statefeed_world_map_chunks"
+
+# The characters of a world map summary. One character is one tile:
+# WORLD_MAP_ALPHABET[floor_index * 2 + unwalkable], where floor_index is the
+# index of the floor type in TILE_FLOOR_TYPES and unwalkable is 1 on a tile
+# that no one can stand on. 64 characters hold 32 floor types. A test fails
+# before the list outgrows it.
+WORLD_MAP_ALPHABET: str = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
 
 # How large a change may be, as a fraction of the new entity list, before
 # emit_room_contents stops sending a delta and sends the whole list instead.
@@ -793,6 +836,12 @@ ENTITY_APPROACH_KEY: str = "approach"
 # ordinary; a node that WOULD afford something and does not right now is the
 # thing a player needs told, and the empty verb list alone cannot say it.
 ENTITY_SPENT_KEY: str = "spent"
+
+# The payload key that holds the facing of an entity. The value is the
+# turn of its chunk object, in quarter turns clockwise from north. Present
+# only on an entity that the tile sync stood up. ABSENT means that
+# the client draws the model as it comes, as it did before this field.
+ENTITY_FACING_KEY: str = "facing"
 
 
 
@@ -1021,6 +1070,11 @@ TILE_COMMAND_CLIMB_TEMPLATE: str = "climb {way}"
 # room.
 TILE_COMMAND_GOTO: str = "goto"
 TILE_COMMAND_GOTO_TEMPLATE: str = "goto ({x},{y})"
+
+# The run toggle: the key of `CmdRun` (commands/tile_movement.py). The Run
+# button and the run hotkey of a client send it. The walk feed says whether
+# run is on.
+COMMAND_RUN_TOGGLE: str = "run"
 
 # What joins a `goto` to the command it runs on arrival: `goto (4,7) then cut
 # rusty pole` walks to (4,7) and, if the player is still standing there when

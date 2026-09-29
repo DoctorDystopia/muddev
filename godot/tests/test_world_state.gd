@@ -30,6 +30,11 @@ func _ready() -> void:
 	_each_plane_keeps_its_own_chunks()
 	_a_figure_stands_on_the_ground_of_its_plane()
 	_a_move_frees_far_chunks_on_every_plane()
+	_a_walk_records_its_goal_and_path()
+	_a_step_drops_the_walked_tiles()
+	_a_walk_whose_first_step_already_landed_starts_trimmed()
+	_an_empty_goal_ends_the_walk()
+	_a_walk_on_another_plane_is_not_on_this_one()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -259,6 +264,74 @@ func _a_move_frees_far_chunks_on_every_plane() -> void:
 
 	_expect(not state.plane_chunks(1).has_chunk(far),
 		"a plane-1 chunk past the block goes too")
+
+
+# ─── The walk (09/28/2026) ───────────────────────────────────────────────────
+
+func _a_walk_records_its_goal_and_path() -> void:
+	var state := _standing_state()
+	var fired: Array[bool] = []
+
+	state.walk_changed.connect(func(): fired.append(true))
+	state.ingest(_Const.CH_WALK, _walk([8, 5], [[6, 5], [7, 5], [8, 5]]))
+
+	_expect(state.has_walk(), "a goal starts a walk")
+	_expect(state.walk_goal == Vector2i(8, 5), "the goal is an int vector")
+	_expect(state.walk_path == [Vector2i(6, 5), Vector2i(7, 5), Vector2i(8, 5)],
+		"the path is kept in order")
+	_expect(fired.size() == 1, "walk_changed fires")
+	_expect(state.walk_on_current_plane(), "the walk is on the plane of the player")
+
+
+func _a_step_drops_the_walked_tiles() -> void:
+	var state := _standing_state()
+
+	state.ingest(_Const.CH_WALK, _walk([8, 5], [[6, 5], [7, 5], [8, 5]]))
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [7.0, 5.0, _Const.TILE_WORLD_Z]})
+
+	_expect(state.walk_path == [Vector2i(8, 5)],
+		"a step drops each tile up to the tile of the player")
+
+
+func _a_walk_whose_first_step_already_landed_starts_trimmed() -> void:
+	var state := _standing_state()
+
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [6.0, 5.0, _Const.TILE_WORLD_Z]})
+	state.ingest(_Const.CH_WALK, _walk([8, 5], [[6, 5], [7, 5], [8, 5]]))
+
+	_expect(state.walk_path == [Vector2i(7, 5), Vector2i(8, 5)],
+		"a walk that arrives after the first step starts past it")
+
+
+func _an_empty_goal_ends_the_walk() -> void:
+	var state := _standing_state()
+
+	state.ingest(_Const.CH_WALK, _walk([8, 5], [[6, 5]]))
+	state.ingest(_Const.CH_WALK, {"goal": [], "path": [], "z": ""})
+
+	_expect(not state.has_walk(), "an empty goal ends the walk")
+	_expect(state.walk_path.is_empty(), "and clears the path")
+
+
+func _a_walk_on_another_plane_is_not_on_this_one() -> void:
+	var state := _standing_state()
+	var payload := _walk([8, 5], [[6, 5]])
+
+	payload["z"] = WorldState.plane_z(1)
+	state.ingest(_Const.CH_WALK, payload)
+
+	_expect(state.has_walk() and not state.walk_on_current_plane(),
+		"a walk on another plane draws no marker here")
+
+
+func _walk(goal: Array, path: Array) -> Dictionary:
+	var floats: Array = []
+
+	for tile: Array in path:
+		floats.append([float(tile[0]), float(tile[1])])
+
+	return {"goal": [float(goal[0]), float(goal[1])], "path": floats,
+		"z": _Const.TILE_WORLD_Z}
 
 
 func _payload(chunk: ChunkFile) -> Dictionary:

@@ -164,6 +164,16 @@ class TilePlane:
 
         return texts
 
+    def placed_at(self, x: int, y: int) -> list:
+        """
+        Return (kind, rotation, text) of each object placed on a tile, in
+        file order. The tile sync gives the rotation to the entity that a
+        kind stands up.
+        """
+        placed = self._objects.get((x, y), ())
+
+        return list(placed)
+
     def placed_objects(self) -> list:
         """Return (kind, x, y, rotation) of every placed object."""
         found = []
@@ -206,6 +216,13 @@ class TilePlane:
             self._wire[key] = cached
 
         return cached
+
+    def chunk_file(self, key: tuple):
+        """
+        Return the loaded ChunkFile at (cx, cy). Raises KeyError for a chunk
+        that is not loaded. The world map summary reads it. Do not change it.
+        """
+        return self._files[key]
 
 
 class TileWorld:

@@ -23,6 +23,8 @@ Description: Turn live Evennia objects into the plain, JSON-safe values the
 from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
 from evennia.utils import logger
 
+from systems.core.tilegrid.constants import FACING_ATTR, ROTATION_COUNT
+
 from . import constants as const
 from . import labels
 
@@ -672,6 +674,48 @@ def _world_label(entity) -> tuple:
     return label, str(kind or const.LABEL_KIND_SIGN)
 
 
+def _facing_of(entity):
+    """
+    Purpose: Read the facing that the tile sync gave an entity.
+
+    Entry:
+        entity - a live object. Only an entity that a chunk object stood up
+                 has a facing.
+
+    Exit/Returns:
+        Returns the facing, an int from 0 to ROTATION_COUNT - 1, or None.
+        The caller sends no facing field for None.
+
+    Module Globals:
+        FACING_ATTR and ROTATION_COUNT read.
+
+    Methodology:
+        One attribute read. Evennia keeps a missing attribute in its cache
+        as missing, so an entity with no facing costs one query for each
+        load of the object, not one for each row.
+
+        Wrapped, as _world_label is. A facing that cannot be read is no
+        facing, and the client draws the model as it comes.
+
+    Notes/References:
+        systems/gameplay/spawning/tile_sync.py writes the attribute.
+
+    Author: Nick Hobar
+    Creation date: 09/28/2026
+    """
+    try:
+        facing = entity.attributes.get(FACING_ATTR, default=None)
+    except Exception as exc:
+        logger.log_err(f"_facing_of: {entity} facing failed: {exc!r}")
+
+        return None
+
+    if not isinstance(facing, int) or not 0 <= facing < ROTATION_COUNT:
+        return None
+
+    return facing
+
+
 def serialize_entity(entity, coords=(), observer=None) -> dict:
     """
     Purpose: Render one visible entity as a plain dict for a graphical client.
@@ -806,6 +850,13 @@ def serialize_entity(entity, coords=(), observer=None) -> dict:
     if label:
         body["label"] = label
         body["label_kind"] = label_kind
+
+    # Sent ONLY by an entity that the tile sync stood up, the same rule as
+    # the label above. The chunk object of the entity gives the value.
+    facing = _facing_of(entity)
+
+    if facing is not None:
+        body[const.ENTITY_FACING_KEY] = facing
 
     max_hp = getattr(entity, "max_hp", None)
 
@@ -1278,11 +1329,13 @@ def _add_tile_world_steps(here, actions: dict) -> None:
         None.
 
     Module Globals:
-        const.TILE_ACTION_KIND_STEP read.
+        const.TILE_ACTION_KIND_STEP and const.TILE_COMMAND_GOTO_TEMPLATE read.
 
     Methodology:
         The step rule decides, through `tile_travel.open_directions`. The
-        command is the direction word, the same line a telnet player types.
+        command is `goto (x,y)`, the same line a telnet player types. It is
+        not the direction word: a direction is one tick of movement, which
+        is two tiles with run on. A click on the next tile moves one tile.
         A far tile has no entry: the client sends TILE_WALK_TEMPLATE there.
 
     Notes/References:
@@ -1305,5 +1358,7 @@ def _add_tile_world_steps(here, actions: dict) -> None:
 
     for name in tile_travel.open_directions(view, tile):
         dx, dy = tile_const.DIRECTION_OFFSETS[name]
-        key = tile_key(tile[0] + dx, tile[1] + dy)
-        actions[key] = tile_action(name, const.TILE_ACTION_KIND_STEP)
+        x, y = tile[0] + dx, tile[1] + dy
+        command = const.TILE_COMMAND_GOTO_TEMPLATE.format(x=x, y=y)
+        actions[tile_key(x, y)] = tile_action(
+            command, const.TILE_ACTION_KIND_STEP)

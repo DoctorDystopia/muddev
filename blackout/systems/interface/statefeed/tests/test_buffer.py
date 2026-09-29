@@ -160,6 +160,9 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,
+            # The whole walk, or no walk. A new `goto` inside a tick must
+            # arrive as the new walk, which is the newest.
+            const.CHANNEL_WALK,
         }
 
         self.assertEqual(set(const.COALESCABLE_CHANNELS), expected)

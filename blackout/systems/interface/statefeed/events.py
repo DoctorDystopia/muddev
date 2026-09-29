@@ -24,6 +24,7 @@ from evennia.utils import logger
 
 from . import constants as const
 from . import buffer, serializers, subscriptions
+from systems.gameplay.movement import constants as walk_const
 from systems.interface.popups import constants as popup_const
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
@@ -44,6 +45,9 @@ from .payloads import (
     RoomPlayersDeltaPayload,
     RoomPlayersPayload,
     TileChunkPayload,
+    WalkPayload,
+    WorldMapChunkPayload,
+    WorldMapPayload,
     XpDropPayload,
 )
 
@@ -1079,6 +1083,130 @@ def emit_tile_chunks(observer, force: bool = False) -> int:
             sent += reached
 
     return sent
+
+
+def emit_walk(observer, force: bool = False) -> int:
+    """
+    Purpose: Send the current walk of the observer: the goal, the path, the
+             room Z, and the run toggle. No walk sends an empty goal. A
+             direction walk (a held key) also sends an empty goal: it has
+             no destination marker.
+
+    Entry:
+        observer - a character.
+        force    - True on a resync.
+
+    Exit/Returns:
+        The number of sessions that the message reached.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Reads `ndb.tile_walk` (`TileWalk` in
+        systems/gameplay/movement/walk.py) and the run attribute. The path
+        is a copy, because the walk drops tiles at each step. The client
+        drops each tile as the player steps on it or skips it, so a step
+        sends nothing here.
+
+    Notes/References:
+        `walk.set_walk` is the one writer of the walk, and `walk.set_running`
+        the one writer of the run toggle. Both call this.
+        constants.CHANNEL_WALK.
+
+    Author: Nick Hobar
+    Creation date: 09/28/2026
+    """
+    holder = getattr(observer, "ndb", None)
+    walk = getattr(holder, walk_const.WALK_NDB_ATTR, None)         if holder is not None else None
+    attributes = getattr(observer, "attributes", None)
+    running = bool(attributes.get(walk_const.RUN_ATTR, default=False))         if attributes is not None else False
+
+    if walk is None or not walk.shown:
+        return emit(observer, WalkPayload(running=running), force=force)
+
+    room = getattr(observer, "location", None)
+    coords = serializers.room_coords(room) if room is not None else []
+    z = str(coords[2]) if len(coords) == 3 else ""
+    payload = WalkPayload(
+        goal=list(walk.goal),
+        path=[list(tile) for tile in walk.path],
+        z=z,
+        running=running,
+    )
+
+    return emit(observer, payload, force=force)
+
+
+def emit_world_map(observer) -> int:
+    """
+    Purpose: Send the world map: the index, then each world map summary that
+             this observer did not get since its last resync.
+
+    Entry:
+        observer - a character, on the tile world or not.
+
+    Exit/Returns:
+        The number of messages that reached a session.
+
+    Module Globals:
+        const.WORLD_MAP_SENT_ATTR read.
+
+    Methodology:
+        1. Send the index every time. The client opens the world map when it
+           arrives, so a typed `worldmap` opens it.
+        2. Send each summary that is not in the sent set, and record it. A
+           send that reached no session is not recorded.
+
+    Notes/References:
+        systems/interface/statefeed/worldmap.py builds both. `resync`
+        clears the sent set.
+
+    Author: Nick Hobar
+    Creation date: 09/28/2026
+    """
+    from systems.core.tilegrid.world import get_world
+    from world import tile_travel
+    from . import worldmap
+
+    holder = getattr(observer, "ndb", None)
+
+    if holder is None:
+        return 0
+
+    world = get_world()
+    own_plane = tile_travel.plane_of(observer)
+    first_plane = own_plane if own_plane is not None else 0
+    index = worldmap.index_of(world, first_plane)
+    sent = emit(observer, WorldMapPayload(**index), force=True)
+    sent_keys = getattr(holder, const.WORLD_MAP_SENT_ATTR, None)
+
+    if sent_keys is None:
+        sent_keys = set()
+        setattr(holder, const.WORLD_MAP_SENT_ATTR, sent_keys)
+
+    for cx, cy, plane in worldmap.chunk_keys(world, first_plane):
+        key = (cx, cy, plane)
+
+        if key in sent_keys:
+            continue
+
+        summary = worldmap.summary_of(world.plane(plane), (cx, cy))
+        reached = emit(observer, WorldMapChunkPayload(**summary), force=True)
+
+        if reached:
+            sent_keys.add(key)
+            sent += reached
+
+    return sent
+
+
+def forget_world_map(observer) -> None:
+    """Forget the world map summaries sent to the observer. Resync calls it."""
+    holder = getattr(observer, "ndb", None)
+
+    if holder is not None:
+        setattr(holder, const.WORLD_MAP_SENT_ATTR, None)
 
 
 

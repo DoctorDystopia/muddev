@@ -24,6 +24,7 @@ from unittest import mock
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.core.tilegrid.constants import FACING_ATTR, ROTATION_COUNT
 from systems.gameplay.banking.handler import BankHandler
 from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.combat.combat import ensure_combat_handler
@@ -177,6 +178,30 @@ class TestEntitySerialisation(EvenniaTest):
         body = serializers.serialize_entity(npc)
 
         self.assertEqual(body["name"], npc.key)
+
+    def test_a_turned_entity_sends_its_facing(self):
+        # The tile sync writes the facing. The client turns the model by it.
+        for turn in range(ROTATION_COUNT):
+            with self.subTest(turn=turn):
+                self.obj1.attributes.add(FACING_ATTR, turn)
+
+                body = serializers.serialize_entity(self.obj1)
+
+                self.assertEqual(body[const.ENTITY_FACING_KEY], turn)
+
+    def test_an_entity_with_no_facing_sends_no_facing_field(self):
+        body = serializers.serialize_entity(self.obj1)
+
+        self.assertNotIn(const.ENTITY_FACING_KEY, body)
+
+    def test_a_facing_out_of_range_is_not_sent(self):
+        for bad in (-1, ROTATION_COUNT, "north"):
+            with self.subTest(bad=bad):
+                self.obj1.attributes.add(FACING_ATTR, bad)
+
+                body = serializers.serialize_entity(self.obj1)
+
+                self.assertNotIn(const.ENTITY_FACING_KEY, body)
 
     def test_a_combatant_carries_health(self):
         npc = spawn_mutant_raider(self.room1)

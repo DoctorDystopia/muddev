@@ -31,6 +31,9 @@ const CH_COMBAT := "blackout_combat"
 const CH_AURA := "blackout_aura"
 const CH_XP_DROP := "blackout_xp"
 const CH_TILE_CHUNK := "blackout_chunk"
+const CH_WALK := "blackout_walk"
+const CH_WORLD_MAP := "blackout_world_map"
+const CH_WORLD_MAP_CHUNK := "blackout_world_map_chunk"
 const CH_SUBSCRIBED := "blackout_subscribed"
 
 # Asset kinds -- the client's mesh `family` vocabulary.
@@ -208,6 +211,26 @@ const OBJECT_KIND_SCENERY := {
 	"stairs_up": "stairs",
 	"stairs_down": "hatch",
 }
+const OBJECT_KIND_PREVIEW := {
+	"bank": ["bank_terminal", "station"],
+	"foundry_furnace": ["furnace", "station"],
+	"metalsmith_anvil": ["anvil", "station"],
+	"rendering_cooker": ["rendering_cooker", "station"],
+	"curing_chamber": ["curing_chamber", "station"],
+	"gunsmith_bench": ["gunbench", "station"],
+	"gastronomy_worktable": ["gastro_worktable", "station"],
+	"rusty_pole": ["rusty_pole", "gatherable"],
+	"metal_pole": ["metal_pole", "gatherable"],
+	"copper_pole": ["copper_pole", "gatherable"],
+	"lone_android": ["lone_android", "npc"],
+	"shopkeeper_oasis": ["shopkeeper", "npc"],
+	"mutant_raider": ["mutant_raider", "npc"],
+	"big_mutant": ["big_mutant", "npc"],
+	"floating_eye": ["floating_eye", "npc"],
+	"mutant_crab": ["mutant_crab", "npc"],
+	"mutant_giant": ["mutant_giant", "npc"],
+	"signpost": ["generic", "sign"],
+}
 const CLIMB_PLANE_STEPS := {
 	"up": 1,
 	"down": -1,
@@ -220,7 +243,9 @@ const INVENTORY_SWAP_TEMPLATE := "swap {source} {target}"
 const TILE_KEY_TEMPLATE := "{x}:{y}"
 const ENTITY_APPROACH_TEMPLATE := "goto ({x},{y}) then {command}"
 const TILE_WALK_TEMPLATE := "goto ({x},{y})"
+const RUN_TOGGLE_COMMAND := "run"
 const ENTITY_SPENT_KEY := "spent"
+const ENTITY_FACING_KEY := "facing"
 const ACTION_AMOUNT_PLACEHOLDER := "{amount}"
 const ACTION_INPUT_KIND_QUANTITY := "quantity"
 const ACTION_INPUT_KIND_KEY := "kind"
@@ -228,9 +253,11 @@ const ACTION_INPUT_MIN_KEY := "min"
 const ACTION_INPUT_MAX_KEY := "max"
 const ACTION_INPUT_LABEL_KEY := "label"
 const CLIENT_INBOUND_BUFFER_BYTES := 2097152
+const WORLD_MAP_ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+const WORLD_MAP_COMMAND := "worldmap"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

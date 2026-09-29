@@ -56,10 +56,10 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -166.0
+offset_left = -250.0
 offset_top = 8.0
 offset_right = -8.0
-offset_bottom = 166.0
+offset_bottom = 282.0
 grow_horizontal = 0
 script = ExtResource("10_minimap")
 

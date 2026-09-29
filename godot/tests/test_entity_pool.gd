@@ -9,6 +9,8 @@ extends Node
 ## real client is in before the manifest lands, and the state every entity
 ## without art stays in forever.
 
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 var _failures := 0
 var _pool: EntityPool
 var _resolver: MeshResolver
@@ -160,6 +162,8 @@ func _ready() -> void:
 	_a_step_moves_the_ring_without_rebuilding_it()
 	_another_entity_moving_keeps_every_other_node()
 	_a_changed_look_builds_the_node_again()
+	_a_facing_turns_the_model()
+	_a_new_facing_builds_the_node_again()
 	_a_first_sighting_rises_out_of_the_fog()
 	_a_changed_look_does_not_rise_again()
 	_a_figure_still_in_view_does_not_rise_again()
@@ -565,6 +569,50 @@ func _a_changed_look_builds_the_node_again() -> void:
 	_expect(label != null and label.text == "TRADE TOWN (CLOSED)",
 		"and the new node shows the new words")
 
+	_pool.replace_all([])
+
+
+## The tile sync gives an entity the rotation of its chunk object, and the
+## model turns by it. A row with no facing keeps the model as it comes.
+func _a_facing_turns_the_model() -> void:
+	for turn: int in _Const.CHUNK_ROTATION_COUNT:
+		var turned := RAIDER.duplicate()
+
+		turned[_Const.ENTITY_FACING_KEY] = float(turn)
+		_pool.replace_all([turned])
+
+		var node := _node_for(20743)
+
+		_expect(node != null and is_equal_approx(node.rotation.y,
+				TerrainView.model_yaw(turn)),
+			"facing %d turns the model to its yaw" % turn)
+		_pool.replace_all([])
+
+	_pool.replace_all([RAIDER])
+	_expect(is_zero_approx(_node_for(20743).rotation.y),
+		"a row with no facing does not turn the model")
+	_pool.replace_all([])
+
+
+## A new facing on a held entity must turn it, so the facing is part of the
+## look.
+func _a_new_facing_builds_the_node_again() -> void:
+	var turned := RAIDER.duplicate()
+
+	turned[_Const.ENTITY_FACING_KEY] = 1.0
+	_pool.replace_all([turned])
+
+	var before := _node_for(20743)
+	var again := RAIDER.duplicate()
+
+	again[_Const.ENTITY_FACING_KEY] = 3.0
+	_pool.add(again)
+
+	var after := _node_for(20743)
+
+	_expect(after != before, "a new facing builds a new node")
+	_expect(after != null and is_equal_approx(after.rotation.y,
+			TerrainView.model_yaw(3)), "and the new node faces the new way")
 	_pool.replace_all([])
 
 

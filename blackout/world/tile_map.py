@@ -26,7 +26,7 @@ xyzgrid map at its range of 6 today. North is up.
 | `~` | water |
 | ` ` | blocked, or off the loaded world |
 
-The object glyphs come from `_CATEGORY_GLYPHS`, one for each category. A new
+The object glyphs come from `CATEGORY_GLYPHS`, one for each category. A new
 category with no row draws `*`.
 
 The aura tint
@@ -46,20 +46,18 @@ from systems.interface.ui.colors import TAG_AURA_TILE, TAG_RESET
 from world.object_kinds import OBJECT_KINDS
 
 
-# ─── Private constant definitions ────────────────────────────────────────────
+# ─── Public constant definitions ─────────────────────────────────────────────
 
-_LOOKER_GLYPH = "@"
-_GROUND_GLYPH = "."
-_WATER_GLYPH = "~"
-_VOID_GLYPH = " "
-_UNKNOWN_OBJECT_GLYPH = "*"
-
-_WALL_BETWEEN_COLUMNS = "|"
-_WALL_BETWEEN_ROWS = "-"
-_OPEN_GAP = " "
+# The glyphs of a tile. Public, because the world map overview of a telnet
+# player (world/tile_world_map.py) draws with the same glyphs.
+LOOKER_GLYPH = "@"
+GROUND_GLYPH = "."
+WATER_GLYPH = "~"
+VOID_GLYPH = " "
+UNKNOWN_OBJECT_GLYPH = "*"
 
 # One glyph for each object category.
-_CATEGORY_GLYPHS: dict = {
+CATEGORY_GLYPHS: dict = {
     tile_const.OBJECT_CATEGORY_FACILITY: "F",
     tile_const.OBJECT_CATEGORY_GATHERING: "†",
     tile_const.OBJECT_CATEGORY_LANDMARK: "+",
@@ -71,6 +69,13 @@ _CATEGORY_GLYPHS: dict = {
 
 # The default radius of the window, in tiles.
 MAP_RADIUS: int = 6
+
+
+# ─── Private constant definitions ────────────────────────────────────────────
+
+_WALL_BETWEEN_COLUMNS = "|"
+_WALL_BETWEEN_ROWS = "-"
+_OPEN_GAP = " "
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -86,7 +91,7 @@ def _object_glyph(world, x: int, y: int):
         if kind is None or kind.category == tile_const.OBJECT_CATEGORY_NPC:
             continue
 
-        return _CATEGORY_GLYPHS.get(kind.category, _UNKNOWN_OBJECT_GLYPH)
+        return CATEGORY_GLYPHS.get(kind.category, UNKNOWN_OBJECT_GLYPH)
 
     return None
 
@@ -111,15 +116,15 @@ def _tile_glyph(world, x: int, y: int, looker_tile: tuple,
                 npc_tiles=frozenset()) -> str:
     """Return the one character of a tile."""
     if (x, y) == looker_tile:
-        return _LOOKER_GLYPH
+        return LOOKER_GLYPH
 
     flags = world.grid.flags_at(x, y)
 
     if flags & tile_const.FLAG_BLOCKED:
-        return _VOID_GLYPH
+        return VOID_GLYPH
 
     if (x, y) in npc_tiles:
-        return _CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_NPC]
+        return CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_NPC]
 
     object_glyph = _object_glyph(world, x, y)
 
@@ -127,9 +132,9 @@ def _tile_glyph(world, x: int, y: int, looker_tile: tuple,
         return object_glyph
 
     if flags & tile_const.FLAG_WATER:
-        return _WATER_GLYPH
+        return WATER_GLYPH
 
-    return _GROUND_GLYPH
+    return GROUND_GLYPH
 
 
 def _walled(world, here: tuple, there: tuple) -> bool:
@@ -152,7 +157,7 @@ def _tinted(glyph: str, offset: tuple, aura) -> str:
     Return a glyph in the aura colour if its tile is inside the aura. `aura`
     is (radius, metric) or None. The looker and a void tile stay plain.
     """
-    if aura is None or glyph == _VOID_GLYPH or offset == (0, 0):
+    if aura is None or glyph == VOID_GLYPH or offset == (0, 0):
         return glyph
 
     radius, metric = aura

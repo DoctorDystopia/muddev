@@ -79,7 +79,7 @@ Inside `blackout/`:
 
 | Sub-domain | Holds | Contains |
 |---|---|---|
-| `systems/gameplay/` | Mechanics with content and rules — what a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/`, `consumables/`, `graffiti/` |
+| `systems/gameplay/` | Mechanics with content and rules — what a player *does* | `combat/`, `crafting/`, `progression/skills/`, `quests/`, `banking/`, `shop/`, `loot/`, `spawning/`, `ai/`, `consumables/`, `graffiti/`, `movement/` |
 | `systems/interface/` | How TRUE state is shaped for a player | `statefeed/` (Godot wire protocol), `summary/` (dossier), `menus/` (EvMenu flows), `ui/` (colours, meters) |
 | `systems/core/` | Engine plumbing the others ride on | `tick/`, `stat_tracker/`, `managers.py` |
 
@@ -182,7 +182,7 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3033 tests, ~24 min,
+**Before a merge or a major change**, run the full suite (3060 tests, ~25 min,
 measured 09/28/2026):
 
 ```bash
@@ -878,7 +878,10 @@ Read the handoff before you continue this work.
 | Spike measurements | `profiling/scenarios/tilegrid.py` |
 | The tile world: chunk files as one grid and one room index | `systems/core/tilegrid/world.py` |
 | Room text, travel, and the telnet map of a tile | `world/tile_text.py`, `world/tile_travel.py`, `world/tile_map.py` |
-| Direction commands, `goto`, and `tiletp` on the tile world | `commands/tile_movement.py` |
+| Direction commands, `goto`, `run`, and `tiletp` on the tile world | `commands/tile_movement.py` |
+| The walk on the tick, the run toggle, and the one writer of the walk, `set_walk` | `systems/gameplay/movement/walk.py` |
+| One move across several tiles (the run and its tile skip) | `stride` in `systems/core/tilegrid/movement.py` |
+| A held movement key in the client, and the Run button | `godot/world/held_movement.gd`, `godot/scenes/console.gd`, `godot/scenes/minimap/minimap_view.gd` |
 | The tile sync of chunk objects | `systems/gameplay/spawning/tile_sync.py`, `scripts/sync_tile_objects.py` |
 | The respawn point (the `respawn_point` object kind) | `world/respawn.py` |
 | The cutover from the xyzgrid maps | `world/tile_cutover.py`, `scripts/move_to_tile_world.py` |
@@ -892,8 +895,10 @@ Read the handoff before you continue this work.
 | The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
 | The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
 | The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/terrain_sync_state.gd` |
+| The walk feed (`blackout_walk`), with the run toggle | `systems/interface/statefeed/events.py`, `systems/gameplay/movement/walk.py` |
+| The minimap, and the world map with its feed and `worldmap` | `godot/scenes/minimap/`, `godot/scenes/worldmap/`, `systems/interface/statefeed/worldmap.py`, `world/tile_world_map.py` |
 
-Eight rules:
+Nine rules:
 
 - **A tile room stores no fact about its tile.** The pool moves a room to
   another tile. Thus, a name, a sign label, or a reference to "the room where
@@ -925,6 +930,13 @@ Eight rules:
   `03_Systems/Combat_System.md`. Godot reads `TILE_WALK_LIMIT` to draw a
   cliff face. The path search tests the slope inline. Its test must stay the
   same as `TileGrid._check_slope`, and `test_pathfind.py` compares the two.
+- **Every step of a player moves on the tick** (09/29/2026). A direction
+  command and `goto` only start a walk. `walk.advance_all` moves every walker
+  at `PHASE_START`: one tile, or two tiles with run on. A direction command is
+  one tick of movement, so a held key never stacks steps and needs no "stop".
+  A click on the next tile sends `goto (x,y)`, not a direction word, so a run
+  never moves it two tiles. A test moves the walkers with
+  `walk.advance_all()` and calls `walk.forget_all()` in `tearDown`.
 
 ## The website
 

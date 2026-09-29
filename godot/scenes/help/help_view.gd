@@ -14,6 +14,11 @@ const ENTRIES := [
 	["Up / Down", "Walk the command history. A half-typed line is kept."],
 	["Ctrl+F", "Find in the log. Enter steps, Escape closes."],
 	["Ctrl+Tab", "Next chat tab. Shift for the previous one."],
+	["Escape / Enter", "Give the keyboard to the map, or back to the input."],
+	["WASD + QEZC", "Hold to walk. W and D together walk northeast. Also HJKL + YUBN.
+"
+		+ "In Options, \"WASD follows the camera\" makes W walk where the camera looks."],
+	["R", "Run on or off: two tiles each tick. Also the Run button on the minimap."],
 	["Click a tile", "Walk there, if the server offered a way."],
 	["Click an NPC or item", "Whatever the server named: attack, get, cut."],
 	["Click an item", "Its first action: equip, eat, deposit, sell."],

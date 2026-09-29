@@ -57,6 +57,10 @@ where there is art, and the silhouette of the family where there is not.
 | **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
 | **Drag a grip** | Resizes the box that the grip is on. A dock hangs from its corner, so only its top edge and its side edge move. A pop-up has a grip on each edge and each corner, and the docks never cover them. Remembered |
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
+| **Mouse wheel on the minimap**, or its `-` and `+` | Zooms the minimap. Remembered |
+| **`Run` on the minimap**, or **R** in move mode | Turns run on or off. The button shows what the server says. Run moves two tiles each tick |
+| **"Show the walk path on the maps" in Options** | Shows or hides the walk path on both maps. Remembered |
+| **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, Esc to close |
 | **Combat tab** | Your weapon, combat level, attack speed, and a button per style — OSRS's Combat Options |
 | **Click a style** | Sends the row's `combatoptions <style>`. The highlight moves when the server republishes, not on the click |
 | **Character tab** | The sheet — whatever panels `char_summary` sent |
@@ -66,7 +70,8 @@ where there is art, and the silhouette of the family where there is not.
 | **Options tab** | Text size, interface scale, which panes are drawn, where skill detail goes, whether figures slide between tiles. Saved between runs. The Game half asks the server: the text map, and which parts of the room a step prints |
 | **Up / Down in the input** | Walks the command history; a half-typed draft is kept |
 | **Escape in the input** | Hands the keyboard to the map — see "Two modes" below |
-| **WASDQEZC / hjklyubn** | Walk, while the map has the keyboard |
+| **WASDQEZC / hjklyubn** | Walk while held, while the map has the keyboard. One tile each tick, two with run on. W and D together walk northeast |
+| **"WASD follows the camera" in Options** | W walks where the camera looks, not to the north. Off by default. Remembered |
 | **Enter, in move mode** | Hands the keyboard back to the input |
 | **Click a chat tab** | Filters the log to what that tab claims. A dot means lines landed there while you were elsewhere |
 | **3D button** | Hides the 3D world. Persists. The inventory has its own toggle in Options — one switch for both meant giving up the bag to stop the diorama |
@@ -103,6 +108,53 @@ refuses letters looks the same as a client that hung.
 The hint follows login and focus, in `_refresh_input_hint`. Before login it is
 the `connect` line. After login it names Escape while the player types, and it
 names the movement keys while the map has the keyboard.
+
+## A held key walks at the speed of a click
+
+Since 09/29/2026 the server moves every step on the tick
+(`blackout/systems/gameplay/movement/walk.py`). A held key and a click thus
+move at one speed: one tile each tick, or two tiles with run on. The first
+step waits for the next tick, as in OSRS.
+
+A direction command is ONE tick of movement. A held key must thus reach the
+server at least one time each tick. `HeldMovement` sends the direction when
+the key goes down. The console sends it again every half tick while the key
+stays down (`HELD_RESEND_TICKS`). The server makes a new walk from the current
+tile on each command, so the sends never stack.
+
+Three rules follow:
+
+- **The client sends no "stop".** When the player lets go, the sends stop,
+  and the walker moves at most one tick more. A tap is one tick of movement.
+  A lost key-up event thus cannot make a walk that never ends.
+- **A loss of focus forgets the held keys.** A key that goes up while the
+  input has the keyboard never reaches `_unhandled_key_input`. The same is
+  true for a window that loses focus. The console clears `HeldMovement` on
+  both.
+- **Two held keys make one direction.** `MovementKeys.combined` adds the steps
+  of the held keys, and each axis keeps its sign. W and D walk northeast. Two
+  keys that cancel (W and S) give the newest key.
+
+**The keys can follow the camera.** With "WASD follows the camera" on in
+Options, W walks where the camera looks. `MovementKeys.steered` turns the key
+direction by `WorldView.camera_forward()`, and it snaps the result to the
+nearest of the eight directions. The console reads the camera again on each
+send, so a held key follows a turn of the camera within half a tick. The
+server still gets a plain direction word. The box is off by default
+(`ClientSettings.camera_relative_keys`), so W is north, as the website says.
+
+The start angle of the camera (`YAW_START`, 0.40 rad) is 23 degrees west of
+north. That is past the 22.5 degree line, so with the box on, W at the start
+angle walks northwest.
+
+**Run.** The `Run` button in the top-left corner of the minimap and the R key
+send `RUN_TOGGLE_COMMAND`. The server sends `running` on `blackout_walk`, and
+the button shows that value. A press puts the button back to the server value
+until the feed answers. The button is not on the strip, which stays at three
+buttons (Nick, 09/28/2026).
+
+**A click on the next tile sends `goto (x,y)`,** not a direction word. With run
+on, a direction word moves two tiles. A `goto` of one tile moves one tile.
 
 ## Where meshes come from
 
@@ -391,9 +443,9 @@ the property that resync exists for.
 
 ## A figure walks between tiles, and its true tile stays marked
 
-The server moves a character in whole tiles, one tile for each tick. `goto`
-steps at `TICK_SECONDS`, through `BlackoutGotoCmd.auto_step_delay`. Before
-09/20/2026, the client drew each step as a jump. That reads as teleporting, not
+The server moves a character in whole tiles on each tick: one tile, or two
+tiles with run on. The tick engine moves every walker at `TICK_SECONDS`.
+Before 09/20/2026, the client drew each step as a jump. That reads as teleporting, not
 as walking.
 
 `StepAnimator` slides the figure instead. One animator belongs to each figure.
@@ -441,8 +493,11 @@ Three and not one, because `CHANNEL_ROOM_INFO` is in `COALESCABLE_CHANNELS`.
 Two steps that land in one tick reach the client as ONE message that names a
 tile two squares away. That is a real walk the player took, announced late.
 The threshold was 1.5 until 09/21/2026, and it drew that walk as a teleport
-several times each minute. Manual movement makes the case common rather than
-rare: `auto_step_delay` paces the auto-walk, and nothing paces a held key.
+several times each minute. Since 09/29/2026 a run makes the case common: each
+tick of a run moves two tiles in one message.
+
+A run that turns a corner (north, then east) is drawn as one straight line
+across the corner. The client does not know the middle tile of the run.
 
 The honest cost is that a teleport of three tiles or fewer is drawn as a slide
 of under a second, through whatever stands between the two tiles. A
@@ -1244,7 +1299,7 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All fifty-four tests are headless and exit non-zero on failure. Fifty-one
+All fifty-five tests are headless and exit non-zero on failure. Fifty-two
 need nothing running. Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
@@ -1257,6 +1312,7 @@ test leaves:
 |---|---|
 | `smoke_console` | A `%UniqueName` that no longer resolves, a node whose type changed, a theme that came unattached. Every other test builds its subject in code, so a scene edit is invisible to all of them |
 | `test_theme` | A `theme_type_variation` a script names and `ui/blackout_theme.tres` does not declare. The control silently falls back to the default style, which reads as a styling mistake rather than a typo. Also an item that its class does not read, such as `LineEdit/colors/background_color` |
+| `test_theme_preview` | A theme type that the Theme editor preview does not show or name. Each type needs a control that the picker can select |
 
 > **After you add a `class_name`, run `--headless --path godot --import` one
 > time before you run anything headless.** Global class names live in
@@ -1293,6 +1349,19 @@ and every case is a pair of grid cells:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
+```
+
+The two maps have four scenes, and each needs nothing running.
+`test_minimap_view` checks the cell maths at each zoom, the dots, and the
+settings. `test_entity_roster` checks the entity model. `test_world_map_state`
+decodes hand-built summaries. `test_world_map_view` checks the pan, the zoom,
+and the planes:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_minimap_view.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_entity_roster.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_state.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_view.tscn
 ```
 
 `test_step_animator.tscn` needs nothing running either, and no scene and no
@@ -1406,8 +1475,8 @@ highlight:
 
 `test_command_history.tscn`, `test_client_settings.tscn`,
 `test_scrollback_find.tscn`, `test_server_endpoint.tscn`,
-`test_movement_keys.tscn` and `test_reconnect_policy.tscn` need nothing
-running either:
+`test_movement_keys.tscn`, `test_held_movement.tscn` and
+`test_reconnect_policy.tscn` need nothing running either:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
@@ -1585,12 +1654,42 @@ public read API of `QuestHandler`. Nothing outside that handler reads
 ## The minimap is drawn from the feed, not from the text map
 
 Since Phase 5 (09/25/2026), the minimap draws the chunks that [WorldState]
-holds for the 3D pane. It shows a window of 41 x 41 tiles around the player.
-A walkable tile shows the colour of its floor type, from `FloorPalette`, the
-palette of the 3D ground. A blocked tile or a water tile shows that colour
-darker. **The console owns the model**, so the client parses each chunk one
-time for both panes. The minimap draws no entities yet: the entity rows live
-in `EntityPool`, not in the model.
+holds for the 3D pane. A walkable tile shows the colour of its floor type,
+from `FloorPalette`, the palette of the 3D ground. A blocked tile or a water
+tile shows that colour darker. `MapRaster` owns that rule, and the world map
+uses it too. **The console owns the model**, so the client parses each chunk
+one time for both panes.
+
+Since 09/28/2026, the minimap follows the OSRS minimap:
+
+| Part | What it shows | From |
+|---|---|---|
+| Zoom | 8 to 40 tiles on each side of the player. The mouse wheel, or the `-` and `+` buttons. The zoom is kept in `ClientSettings.minimap_radius` | `MinimapView.ZOOM_RADII` |
+| You | A white square on your tile | `WorldState.current_cell` |
+| Map dots | White for another player, yellow for an NPC, red for an item on the ground | `EntityRoster`, `MinimapView.DOT_COLOURS` |
+| Map icons | A symbol for a bank, a node, a transition, a ladder | the chunk objects, `MapIcons` |
+| Destination marker | A red flag on the goal tile of the walk. A held key shows none | `blackout_walk` |
+| Walk path | A line through the tiles still to walk. A box in Options, and no button on the minimap (Nick, 09/28/2026: less clutter) | `blackout_walk`, `ClientSettings.show_walk_path` |
+| World map | The `Map` button opens the world map | `WorldMapView` |
+| Run | A toggle in the top-left corner of the map square, as the OSRS run orb | `blackout_walk` `running` |
+
+Four rules hold it together:
+
+- **The entity rows have a model now.** `EntityRoster` takes the four entity
+  channels from the console. `WorldView` forwards each roster signal to the
+  same `EntityPool` call as before, and the minimap reads the rows. The
+  handoff debt "the minimap draws no entities" is paid.
+- **The server sends the walk.** `blackout_walk` carries the goal, the whole
+  path, and the room Z. It goes one time, when the walk starts, and again
+  when it ends or breaks. `WorldState` drops each tile of the path as the
+  player steps on it or skips it in a run. A typed `goto` shows a marker too, because the server
+  sends every walk (Nick, 09/28/2026).
+- **The dots stop at 10 tiles.** The feed sends the entities within
+  `STATEFEED_ENTITY_RADIUS`. At a wider zoom, no dot shows past that ring. The
+  map icons come from the chunks, so they show at every zoom.
+- **Each chunk is one image.** The minimap builds an `ImageTexture` for each
+  chunk when it arrives, and draws the part that the window covers. It does
+  not draw one rect for each tile. The dots redraw on every entity message.
 
 So the minimap is a second VIEW. It gets three things that the ASCII print in a
 pane would not give:
@@ -1641,6 +1740,42 @@ The Options tab has an On and an Off button for each part, and `?` and
 `All on` buttons. `MOVE_TEXT_LABELS` in `options_view.gd` holds a server key
 and a client label for each row. `test_move_text_client.py` fails on a key that
 names no part.
+
+## The world map is every chunk, drawn small
+
+The world map (09/28/2026) follows the OSRS world map. It is a large box over
+the world pane, and it shows every chunk of one plane:
+
+- the ground, one pixel for each tile at the closest zoom,
+- a map icon for each chunk object,
+- the name of each area,
+- your tile, the destination marker, and the walk path,
+- the tile under the cursor, as `(x, y)`, for a player who types `goto x,y`.
+
+A drag pans, and the mouse wheel zooms around the cursor. `Up` and `Down`
+change the plane, `Me` centres on you, and `X` or Esc closes it. **A click
+walks nowhere** (Nick, 09/28/2026). A walk across the world can hit the limit
+of the A* search, so a click that walked would often fail.
+
+**The server sends a summary, not the chunk file.** The client holds only the
+block around the player, so it cannot draw the world by itself. The `worldmap`
+command asks for it. The server sends the index on `blackout_world_map`: the
+planes, every chunk, and one label for each area. Then it sends one world map
+summary for each chunk on `blackout_world_map_chunk`. A summary holds one
+character for each tile, so a chunk costs about 4 KB, not 35 KB. The server
+sends a summary one time for each session, and `WorldMapState` keeps it.
+`blackout/systems/interface/statefeed/worldmap.py` owns the encoding, and
+`MapRaster.class_colour` decodes it.
+
+**The button sends the command.** The `Map` button opens the box at once. The
+first time, the client holds no world map, so the button also sends
+`WORLD_MAP_COMMAND`, the word that the server named. A typed `worldmap` opens
+the box when the index arrives. A telnet session gets a text overview of its
+plane instead (`blackout/world/tile_world_map.py`).
+
+**It is a sibling box of the world pane.** `console.gd` builds it in code, as
+it builds the pop-up. It sits over the docks and under the right-click menu
+and the veil. `smoke_console` checks that order.
 
 ## The log is tabbed, and the server never names a tab
 
@@ -1818,6 +1953,7 @@ To add a sound:
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
 | `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
 | `world/movement_keys.gd` | Which key means which direction. Knows nothing about focus. |
+| `world/held_movement.gd` | The movement keys held now, and when to send their direction again. Pure state, no clock. |
 | `world/reconnect_policy.gd` | How long to wait before redialing. Pure schedule, no clock. |
 | `world/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
 | `scenes/quests/quests_view.gd` | The quest tab: a bar per objective, drawn from numbers rather than prose. |
@@ -1826,7 +1962,12 @@ To add a sound:
 | `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/stable_hash.gd` | A string hash that gives the same number on every client. `EntityPool` turns the ring of figures on a tile by it. |
-| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. |
+| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button. |
+| `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane. Pans, zooms, and changes the plane. Walks nowhere. |
+| `world/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |
+| `world/world_map_state.gd` | The world map summaries, as one image and one icon list for each plane. |
+| `world/map_raster.gd` | The colour of a tile on both maps, and the images the maps draw the ground from. |
+| `world/map_icons.gd` | The symbol of each object category on both maps. |
 | `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. Each tab has an icon, and the labels show when they fit. |
 | `scenes/panel/panel_dock.gd` | A box over the world: the control panel, and the game log. Owns one corner and one size. |
 | `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the pop-up and the docks. The pop-up raises its grips over every other box. |
@@ -1837,7 +1978,8 @@ To add a sound:
 | `world/chat_tabs.gd` | Which tab a line belongs in, and which tabs have unread lines. Holds no text. |
 | `scenes/chat/chat_view.gd` | The tab strip and one RichTextLabel per tab. Appends; never re-renders. |
 | `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, and how big the player made a box or a dock, via ConfigFile under `user://`. |
-| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
+| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Also the red accent: the text box red on the slider bars, check boxes (`ui/icons/check_*.svg`, `radio_*.svg`), the selected tab, scroll bars, pressed buttons, menu hover and `FormHeading` lines. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
+| `ui/theme_preview/` | Two scenes for the scene preview of the Theme editor: `blackout.tscn` shows each type that the theme sets, and `godot.tscn` shows each other type of the default theme. In the Theme editor, click Add Preview, then Add Scene Preview. The picker then selects the type of the clicked sample. A tool script builds the samples from the type lists, so a new variation needs no edit. |
 | `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
 | `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |

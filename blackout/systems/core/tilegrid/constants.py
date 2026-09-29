@@ -77,6 +77,11 @@ HEIGHT_MAX: int = 32767
 # An object turns in quarter turns, 0 to 3, as an OSRS object does.
 ROTATION_COUNT: int = 4
 
+# The attribute that holds the rotation of the chunk object that stood an
+# entity up. The tile sync writes it. The respawn queue keeps it. The
+# statefeed sends it as the facing of the entity. At 0 the entity faces north.
+FACING_ATTR: str = "facing"
+
 # A floor name, an area name, and an object kind. Lower case, digits, and
 # underscores. Thus, no name needs a JSON escape, and the two writers cannot
 # escape a name differently.

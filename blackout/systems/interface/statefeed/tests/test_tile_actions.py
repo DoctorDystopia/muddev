@@ -115,16 +115,21 @@ class TileActionsTests(unittest.TestCase):
         self.assertEqual(own["command"], const.TILE_COMMAND_LOOK)
         self.assertEqual(own["kind"], const.TILE_ACTION_KIND_LOOK)
 
-    def test_each_legal_step_is_the_direction_a_player_would_type(self):
+    def test_each_legal_step_is_a_goto_of_that_one_tile(self):
+        # Not the direction word: a direction is one tick of movement, and a
+        # run moves two tiles a tick. A click on the next tile moves one.
         actions = serializers.tile_actions(_room(*_START))
 
         for name in tile_travel.open_directions(self.world, _START):
             dx, dy = tile_const.DIRECTION_OFFSETS[name]
-            key = serializers.tile_key(_START[0] + dx, _START[1] + dy)
+            x, y = _START[0] + dx, _START[1] + dy
+            command = const.TILE_COMMAND_GOTO_TEMPLATE.format(x=x, y=y)
 
             with self.subTest(direction=name):
-                self.assertEqual(actions[key], serializers.tile_action(
-                    name, const.TILE_ACTION_KIND_STEP))
+                self.assertEqual(
+                    actions[serializers.tile_key(x, y)],
+                    serializers.tile_action(command,
+                                            const.TILE_ACTION_KIND_STEP))
 
     def test_a_blocked_neighbour_affords_nothing(self):
         actions = serializers.tile_actions(_room(*_START))

@@ -48,6 +48,7 @@ func _ready() -> void:
 	_a_transition_gets_the_teleporter()
 	_a_kind_with_no_scenery_stands_nothing()
 	_scenery_stands_when_its_art_arrives()
+	_a_model_yaw_faces_the_way_a_step_faces()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -278,6 +279,8 @@ func _a_transition_gets_the_teleporter() -> void:
 				and is_equal_approx(model.position.z, -6.0),
 			"it stands on the centre of its tile")
 		_expect(model.position.y > 0.0, "it rests on the ground, not through it")
+		_expect(is_equal_approx(model.rotation.y, TerrainView.model_yaw(1)),
+			"it turns by the rotation of its object")
 
 	view.queue_free()
 	resolver.free()
@@ -371,3 +374,16 @@ func _expect(passed: bool, what: String) -> void:
 
 	_failures += 1
 	printerr("  FAIL %s" % what)
+
+
+## Rotation 0 faces north, and each quarter turn goes clockwise from above. A
+## served model faces +Z, as a walking figure does, so each rotation must give
+## the yaw of a step in its direction.
+func _a_model_yaw_faces_the_way_a_step_faces() -> void:
+	var steps := [Vector2i(0, 1), Vector2i(1, 0), Vector2i(0, -1), Vector2i(-1, 0)]
+
+	for rotation: int in _Const.CHUNK_ROTATION_COUNT:
+		var step_yaw := WorldView.yaw_towards(Vector2i.ZERO, steps[rotation], 0.0)
+
+		_expect(is_equal_approx(TerrainView.model_yaw(rotation), step_yaw),
+			"rotation %d faces the way a step %s faces" % [rotation, steps[rotation]])

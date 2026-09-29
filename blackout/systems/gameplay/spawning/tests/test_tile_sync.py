@@ -2,8 +2,9 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/24/2026
-Description: Tests for the tile sync: the plan, and each of its four verbs.
-             The kinds come from the kind table by category, not by name.
+Description: Tests for the tile sync: the plan, each of its four verbs, and
+             the facing of each entity. The kinds come from the kind table
+             by category, not by name.
 """
 
 from evennia.utils.test_resources import EvenniaTestCase
@@ -44,29 +45,49 @@ _NEW_WORDS = "Old Bank"
 # The kind list entry of the sign.
 _SIGN_ENTRY = _SIGN + tile_sync.ENTRY_TEXT_SEPARATOR + _WORDS
 
+# Two different quarter turns, so a swapped facing shows.
+_FACILITY_TURN = 3
+_SIGN_TURN = 1
+
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _world(objects: list) -> TileWorld:
-    """A loaded one-chunk world with these (kind, x, y, text) objects."""
+    """
+    A loaded one-chunk world with these (kind, x, y, text) objects. A fifth
+    item gives the rotation of an object.
+    """
     tile_count = _SIZE * _SIZE
     chunk_file = chunkfile.ChunkFile(
         cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
         heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=[0] * tile_count,
         areas=[0] * tile_count,
-        objects=[chunkfile.ChunkObject(kind, x, y, text=text)
-                 for kind, x, y, text in objects])
+        objects=[chunkfile.ChunkObject(kind, x, y, turn[0] if turn else 0,
+                                       text=text)
+                 for kind, x, y, text, *turn in objects])
     world = TileWorld([chunk_file])
     world.rooms.load()
 
     return world
 
 
-def _placed(words: str = _WORDS):
+def _placed(words: str = _WORDS, facility_turn: int = 0, sign_turn: int = 0):
     """The standard objects: a signed facility, and a lone transition."""
-    return [(_FACILITY, *_FACILITY_TILE, ""), (_SIGN, *_FACILITY_TILE, words),
+    return [(_FACILITY, *_FACILITY_TILE, "", facility_turn),
+            (_SIGN, *_FACILITY_TILE, words, sign_turn),
             (_TRANSITION, *_TRANSITION_TILE, "")]
+
+
+def _facings(room) -> dict:
+    """Return "sign" and "facility" -> the facing of that entity in `room`."""
+    found = {}
+
+    for thing in room.contents:
+        role = "sign" if getattr(thing, "world_label", "") else "facility"
+        found[role] = thing.attributes.get(tile_const.FACING_ATTR)
+
+    return found
 
 
 def _verbs(actions) -> dict:
@@ -176,3 +197,39 @@ class TileSyncTests(EvenniaTestCase):
 
         self.assertFalse(world.rooms.release(room))
         self.assertIs(world.rooms.room_at(*_FACILITY_TILE), room)
+
+    def test_apply_gives_each_entity_the_turn_of_its_object(self):
+        world = _world(_placed(facility_turn=_FACILITY_TURN,
+                               sign_turn=_SIGN_TURN))
+        tile_sync.apply(world, tile_sync.plan(world))
+        room = world.rooms.room_at(*_FACILITY_TILE)
+
+        self.assertEqual(_facings(room), {"facility": _FACILITY_TURN,
+                                          "sign": _SIGN_TURN})
+
+    def test_a_turn_alone_is_a_refresh_that_turns_the_entity(self):
+        # The editor Turn changes no kind, so nothing may be demolished.
+        world = _world(_placed())
+        tile_sync.apply(world, tile_sync.plan(world))
+        before = set(world.rooms.room_at(*_FACILITY_TILE).contents)
+        turned = _world(_placed(facility_turn=_FACILITY_TURN))
+        actions = tile_sync.plan(turned)
+        destroyed = tile_sync.apply(turned, actions)
+        room = turned.rooms.room_at(*_FACILITY_TILE)
+
+        self.assertEqual(_verbs(actions),
+                         {_FACILITY_TILE: tile_sync.VERB_REFRESH})
+        self.assertEqual(destroyed, 0)
+        self.assertEqual(set(room.contents), before)
+        self.assertEqual(_facings(room)["facility"], _FACILITY_TURN)
+
+    def test_an_action_with_no_facings_stamps_nothing(self):
+        world = _world(_placed())
+        actions = [tile_sync.TileAction(action.tile, action.verb, action.kinds,
+                                        action.previous, action.plane)
+                   for action in tile_sync.plan(world)]
+        tile_sync.apply(world, actions)
+        room = world.rooms.room_at(*_FACILITY_TILE)
+
+        self.assertTrue(room.contents)
+        self.assertEqual(_facings(room), {"facility": None, "sign": None})

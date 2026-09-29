@@ -710,14 +710,25 @@ class BlackoutTickEngine(DefaultScript):
         # now, so the handlers below all observe the same world.
         self._drain_inbound()
 
-        _run_phase_hooks(PHASE_START)
-
         registry = self._registry()
 
         # Snapshot the ids first: _advance_one may drop entries, and a handler
         # ending combat mid-tick mutates the registry under us. Iteration order
         # is the registry's insertion order and IS gameplay -- see _registry.
-        for handler_id in list(registry):
+        #
+        # The snapshot comes BEFORE the START hooks, not after. A hook can run
+        # a command: the walk runs the `attack` that its arrival owes. That
+        # command makes a handler and only QUEUES its action, and the queue
+        # drains at the top of the next tick. A snapshot taken after the hooks
+        # put the new handler in this pass. It ticked with no target, saw no
+        # enemy, and reported "You won!" over a fight that had not begun.
+        # Now a handler from any phase ticks first on the NEXT tick, after
+        # INPUT gives it its action.
+        rotation = list(registry)
+
+        _run_phase_hooks(PHASE_START)
+
+        for handler_id in rotation:
             self._advance_one(handler_id)
 
         # Deferred work runs AFTER the handlers, so a callback scheduled for

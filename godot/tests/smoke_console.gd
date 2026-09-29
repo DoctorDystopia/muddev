@@ -82,6 +82,9 @@ func _ready() -> void:
 	await _the_shipped_layout_fits_each_window(console)
 	_the_panel_survives_the_world_going_off(console)
 	_the_input_hint_follows_login_and_focus(console)
+	_the_world_map_sits_over_the_docks_and_under_the_veil(console)
+	_the_minimap_strip_stays_inside_the_minimap(console)
+	_the_keys_follow_the_camera_only_when_asked(console)
 
 	console.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
@@ -124,6 +127,62 @@ func _the_input_hint_follows_login_and_focus(console: Node) -> void:
 
 	_expect(input.placeholder_text == console.LOGIN_HINT,
 		"a logout puts the login line back")
+
+
+## The world map (09/28/2026) covers the docks, as the OSRS world map covers
+## the game. The right-click menu and the veil stay over it. The minimap
+## button reaches it, and it opens and closes.
+func _the_world_map_sits_over_the_docks_and_under_the_veil(console: Node) -> void:
+	var view: WorldMapView = console._world_map_view
+	var pane: Control = console.get_node("%WorldPane")
+	var at := view.get_index()
+
+	_expect(view.get_parent() == pane, "the world map is a box of the world pane")
+	_expect(at > console.get_node("%PanelDock").get_index(),
+		"the world map is over the panel dock")
+	_expect(at < console.get_node("%ChooseOption").get_index(),
+		"and under the right-click menu")
+	_expect(at < console.get_node("%LoadingVeil").get_index(),
+		"and under the veil")
+	_expect(console._minimap.world_map_requested.is_connected(
+		console._open_world_map), "the minimap button opens it")
+
+	view.open()
+	_expect(view.visible, "it opens")
+	view.close()
+	_expect(not view.visible, "and it closes")
+
+
+## The button strip of the minimap is part of the minimap rect, so the dock
+## check above covers it. The XP HUD sits to the left of it.
+## The real camera gives a heading, and the console turns a key by it only
+## with the Options box on.
+func _the_keys_follow_the_camera_only_when_asked(console: Node) -> void:
+	var forward: Vector2 = console._world.camera_forward()
+	var settings: ClientSettings = console._settings
+	var was := settings.camera_relative_keys
+
+	_expect(not forward.is_zero_approx(), "the camera gives a heading")
+
+	settings.camera_relative_keys = false
+	_expect(console._steer("north") == "north", "with the box off, W is north")
+
+	settings.camera_relative_keys = true
+	_expect(console._steer("north") == MovementKeys.nearest(forward),
+		"with the box on, W walks where the camera looks")
+
+	settings.camera_relative_keys = was
+
+
+func _the_minimap_strip_stays_inside_the_minimap(console: Node) -> void:
+	var minimap: MinimapView = console.get_node("%Minimap")
+	var hud: Control = console.get_node("%XpHud")
+	var rect := minimap.get_global_rect()
+
+	_expect(rect.encloses(minimap._world_map_button.get_global_rect()),
+		"the world map button is inside the minimap")
+	_expect(not rect.intersects(hud.get_global_rect()),
+		"the minimap does not cover the XP HUD")
 
 
 ## The control panel hangs from the bottom-right corner of the world pane, and

@@ -168,7 +168,39 @@ a room.
 | scenery | the model that the client stands on the tile of an object kind with no spawner, for example the teleporter pad of a transition. The `scenery` of the kind row names it | prop, decoration, tile prop |
 | primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, or `hatch`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
 | hatch | the primitive on the tile of a climb that only leads down: a framed opening in the floor | trapdoor, stairwell, hole |
+| rotation | the quarter turns of a placed object in a chunk file, 0 to 3, clockwise from north. The Turn action of the terrain editor adds one | orientation, heading, angle |
+| facing | the rotation of the chunk object that stood an entity up. The tile sync writes it on the entity (`FACING_ATTR`), and the statefeed sends it | direction, yaw, heading |
+| preview | the asset key and the family of the entity that an object kind stands up. Only the terrain editor reads it, to draw the model on the tile | editor model, thumbnail |
 | tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
 | link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |
 | ghost | the dim copy of the planes below the edited plane, in the terrain editor | shadow, underlay, onion skin |
 | beacon | the tall mark in the terrain editor over the selected object or the tile of a finding | marker, highlight |
+
+## Maps
+
+The two maps of the Godot client, named on 09/28/2026. The telnet map keeps
+its name: tile map.
+
+| Use | For | Not |
+|---|---|---|
+| minimap | the small map in the corner of the world pane (`MinimapView`) | radar, mini map, tile map |
+| world map | the large map of every chunk of one plane (`WorldMapView`). The `worldmap` command sends its data | overview map, atlas, full map |
+| destination marker | the red flag on the goal tile of the current walk | walk flag, click flag, waypoint |
+| walk path | the tiles that the current walk still has to step on | route, trail, path line |
+| map dot | a dot for a live entity on the minimap | blip, marker, pip |
+| map icon | a symbol for a chunk object (a bank, a node, a transition) on either map | map marker, POI icon, map symbol |
+| world map summary | the compact form of one chunk for the world map: one character for each tile, and its objects | map chunk, thumbnail, overview chunk |
+
+## Movement
+
+The walk and the run, named on 09/29/2026 (`systems/gameplay/movement/`).
+
+| Use | For | Not |
+|---|---|---|
+| walk | the tiles that a character still has to step on, which the tick moves (`TileWalk`). A direction command and `goto` each start one | move queue, route, auto-walk |
+| walker | a character with a walk | mover, pathing character |
+| run | the toggle that moves a walker two tiles each tick, not one. Also the command that sets it | sprint, dash, fast walk |
+| stride | one move of a walker across one or more tiles, with one `move_to` (`movement.stride`) | jump, multi-step, leap |
+| tile skip | the rule that the middle tile of a run gets no room and no arrival hook | skipped step, pass-through |
+| held key | a movement key that the player keeps down. The client sends its direction again every half tick | key repeat, hold-to-walk |
+| Run button | the toggle in the top-left corner of the minimap that sends `run` | run orb, run toggle button |

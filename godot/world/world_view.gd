@@ -452,26 +452,27 @@ func _on_art_arrived(asset_key: String) -> void:
 		_redraw_avatar()
 
 
+## Draw the entities that the console's [EntityRoster] holds.
+##
+## Each roster signal goes to the pool call that the channel reached before
+## 09/28/2026, because the pool animates a whole list, a batch, and one add in
+## different ways. The minimap reads the same roster.
+func bind_entities(roster: EntityRoster) -> void:
+	roster.replaced.connect(_entities.replace_all)
+	roster.delta.connect(_entities.apply_delta)
+	roster.added.connect(_entities.add)
+	roster.removed.connect(_entities.remove)
+	_entities.replace_all(roster.rows())
+
+
 func _on_channel(channel: String, payload: Dictionary) -> void:
-	# CH_TILE_CHUNK and CH_ROOM_INFO are not here on purpose. The console puts
-	# them into the shared WorldState, and this pane draws on its signals. A
-	# second read here would parse each chunk two times. It would also run
-	# BEFORE the console, because a child connects to Evennia in its own
-	# _ready, and the _ready of a child runs first.
+	# The chunks, the room, and the four entity channels are not here on
+	# purpose. The console puts them into the shared WorldState and
+	# EntityRoster, and this pane draws on their signals. A second read here
+	# would parse each message two times. It would also run BEFORE the
+	# console, because a child connects to Evennia in its own _ready, and the
+	# _ready of a child runs first.
 	match channel:
-		Const.CH_ROOM_PLAYERS:
-			_entities.replace_all(payload.get("entities", []))
-
-		Const.CH_ROOM_PLAYERS_DELTA:
-			_entities.apply_delta(payload.get("added", []),
-					payload.get("removed", []))
-
-		Const.CH_PLAYER_ADD:
-			_entities.add(payload.get("entity", {}))
-
-		Const.CH_PLAYER_REMOVE:
-			_entities.remove(int(payload.get("entity_id", 0)))
-
 		Const.CH_COMBAT:
 			if payload.get("hit", false):
 				_entities.flash(int(payload.get("target_id", 0)))
@@ -538,6 +539,22 @@ func _locate_coords(coords: Array) -> Variant:
 	var cell := Vector2i(int(coords[0]), int(coords[1]))
 
 	return _ground_point(cell, plane)
+
+
+## Where the camera looks, flat on the tile grid, with Y to the north.
+##
+## Tile Y grows to the north, and the 3D pane draws north at -Z (see
+## [method _ground_point]). The flat part of the view direction thus maps as
+## (x, -z). The pitch never reaches straight down (`PITCH_MAX` in
+## `orbit_camera.gd`), so the flat part is never zero in play. Zero before the
+## camera is in the tree.
+func camera_forward() -> Vector2:
+	if _camera == null or not _camera.is_inside_tree():
+		return Vector2.ZERO
+
+	var look := -_camera.global_basis.z
+
+	return Vector2(look.x, -look.z)
 
 
 ## The point on the drawn ground at the centre of a tile, or null when its
