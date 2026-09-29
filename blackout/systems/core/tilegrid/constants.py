@@ -82,6 +82,18 @@ ROTATION_COUNT: int = 4
 # escape a name differently.
 CHUNK_NAME_PATTERN: str = "^[a-z0-9_]+$"
 
+# The words of an object that carries text: a signpost (Nick, 09/27/2026).
+# One line of printable ASCII, with no space at either end. The pattern
+# refuses `"` and `\`, so no text needs a JSON escape, as for a name. It
+# refuses `|`, the start of an Evennia colour code, because a label strips
+# markup and the chunk file must hold what a player reads.
+CHUNK_TEXT_PATTERN: str = r"^[!#-\[\]-{}~]([ !#-\[\]-{}~]*[!#-\[\]-{}~])?$"
+
+# The most characters in the text of one object. Not more than
+# WORLD_LABEL_MAX_CHARS of the statefeed, so the label cap never cuts a sign
+# that the chunk file holds. A test holds the two in that order.
+CHUNK_TEXT_MAX_CHARS: int = 64
+
 # The file name of a chunk file, and the directory of the world, from the
 # game directory.
 CHUNK_FILE_TEMPLATE: str = "chunk_{cx}_{cy}_p{plane}.json"
@@ -121,6 +133,31 @@ OBJECT_CATEGORIES: tuple = (
     OBJECT_CATEGORY_NPC,
     OBJECT_CATEGORY_SIGN,
     OBJECT_CATEGORY_TRANSITION,
+)
+
+# A kind of this category carries text in the chunk file: the words of a
+# signpost. A kind of any other category carries none. The chunk file reader
+# does not know the kinds, so `world/tile_checks.py` holds this rule.
+OBJECT_TEXT_CATEGORY: str = OBJECT_CATEGORY_SIGN
+
+# ─── Scenery primitives ──────────────────────────────────────────────────────
+# The scenery keys that the client draws as a plain shape, with no model
+# record: art comes later (Nick, 09/27/2026). A scenery key of an object kind
+# names a model record or one of these, never both. When the art arrives, the
+# key moves out of this tuple and a model record takes the same name.
+# `godot/world/terrain/prop_mesh_builder.gd` draws each one. The rotation of
+# the object turns the shape.
+#
+# A ladder and a flight of stairs rise one plane. The top of a climb that
+# only leads down is a hatch: a framed opening in the floor.
+SCENERY_LADDER: str = "ladder"
+SCENERY_STAIRS: str = "stairs"
+SCENERY_HATCH: str = "hatch"
+
+SCENERY_PRIMITIVES: tuple = (
+    SCENERY_LADDER,
+    SCENERY_STAIRS,
+    SCENERY_HATCH,
 )
 
 # ─── Climbing (Phase 7) ──────────────────────────────────────────────────────

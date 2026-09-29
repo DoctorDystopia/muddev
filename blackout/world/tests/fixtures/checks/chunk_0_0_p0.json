@@ -278,6 +278,9 @@
     {"kind":"ladder_up","x":10,"y":10,"rotation":0},
     {"kind":"ladder_up","x":11,"y":10,"rotation":0},
     {"kind":"ladder_down","x":12,"y":10,"rotation":0},
-    {"kind":"no_such_kind","x":20,"y":20,"rotation":0}
+    {"kind":"no_such_kind","x":20,"y":20,"rotation":0},
+    {"kind":"signpost","x":22,"y":20,"rotation":0},
+    {"kind":"metal_pole","x":24,"y":20,"rotation":0,"text":"Cut me"},
+    {"kind":"signpost","x":26,"y":20,"rotation":0,"text":"Oasis Market"}
   ]
 }

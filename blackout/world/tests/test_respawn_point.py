@@ -41,7 +41,7 @@ class TestTheRespawnPoint(unittest.TestCase):
 
         self.assertEqual(kind.category, tile_const.OBJECT_CATEGORY_LANDMARK)
         self.assertTrue(kind.name)
-        self.assertFalse(kind.spawner or kind.label)
+        self.assertFalse(kind.spawner)
 
     def test_the_world_places_exactly_one(self):
         placed = [obj for obj in self.world.placed_objects()

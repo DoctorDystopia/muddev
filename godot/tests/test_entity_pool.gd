@@ -724,8 +724,9 @@ func _the_observer_takes_a_slot_in_their_own_ring() -> void:
 	for entity_id: int in [20743, 20744]:
 		var node := _node_for(entity_id)
 
+		# Three share the ring: the observer and the two entities.
 		_expect(node != null and _apart(node.position, _observer_offset)
-			>= EntityPool.ENTITY_SCALE - 0.001,
+			>= _ring_spacing(3) - 0.001,
 			"and nothing is drawn inside the slot left for them (%d)" % entity_id)
 
 	_pool.replace_all([])
@@ -739,15 +740,27 @@ func _the_observer_takes_a_slot_in_their_own_ring() -> void:
 ## What the ring is FOR. The old radius measured arc length rather than the
 ## chord between neighbours, which reads a small ring as roomier than it is --
 ## three entities 0.5 across sat 0.45 apart and overlapped.
+##
+## A figure one tile wide cannot stand clear inside the cap (Nick kept 1.0 on
+## 09/28/2026). Thus, each pair is either a figure apart, or as far apart as
+## the cap allows.
 func _a_ring_leaves_room_between_its_neighbours() -> void:
 	for crowd: int in range(2, 6):
 		_pool.replace_all(_crowd(crowd))
 
 		var nearest := _closest_pair()
 
-		_expect(nearest >= EntityPool.ENTITY_SCALE - 0.001,
-			"%d on one tile stand clear of each other (%.3f apart)"
+		_expect(nearest >= _ring_spacing(crowd) - 0.001,
+			"%d on one tile stand as far apart as the ring allows (%.3f apart)"
 			% [crowd, nearest])
+
+
+## The gap between two neighbours of a ring of `total`: one figure, or the
+## chord of the ring at its cap when a figure does not fit.
+static func _ring_spacing(total: int) -> float:
+	var chord_at_cap := 2.0 * EntityPool.MAX_RING_RADIUS * sin(PI / float(total))
+
+	return minf(EntityPool.ENTITY_SCALE, chord_at_cap)
 
 
 ## The cap. Past six occupants they overlap again, and that is the intended

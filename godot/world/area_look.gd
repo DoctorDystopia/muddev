@@ -6,17 +6,17 @@ extends RefCounted
 ## this table. The server says which area the player is in. This file says what
 ## that area looks like. 117 HD's `environments.json` uses the same split.
 ##
-## ## An area is a map, for now
+## ## The area of the player
 ##
-## The `areas` layer of a chunk file does not exist yet. Until it does, the
-## area of the player is the name of the map (`WorldState.current_z`). A key
-## here is therefore a map name. When chunk files arrive, the keys become area
-## names, and the guard test moves with them.
+## The `areas` layer of the chunk file gives the area of each tile.
+## [method WorldState.area_at] reads it for the tile of the player. Each key
+## here is a row of `blackout/world/areas.py`. Those rows still carry the old
+## map names (handoff debt 9).
 ##
 ## ## The guard
 ##
 ## `blackout/systems/interface/statefeed/tests/test_client_constants.py` reads
-## this file as TEXT. It fails when a key names no map. An area with no row is
+## this file as TEXT. It fails when a key names no area. An area with no row is
 ## fine, because it gets [constant FALLBACK]. Thus, new content never needs a
 ## client edit. Keep each row key at one tab of indent, on its own line, with
 ## its opening brace. The test finds the keys by that shape.
@@ -39,7 +39,7 @@ extends RefCounted
 ## A RefCounted with only static members. Nothing makes an instance of it.
 
 ## The look of an area that has no row. It is also the look before the first
-## map arrives.
+## chunk arrives.
 ##
 ## The values match `world.tscn` before 09/24/2026: a dark blue void and a sun
 ## 60 degrees up. A player in an area with no row thus sees the old client,

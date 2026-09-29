@@ -17,6 +17,11 @@ extends Node
 
 const CONSOLE := "res://scenes/console.tscn"
 
+## A scratch profile. The console never sees the player's `client.cfg`, so a
+## dragged dock or `show_world=false` there cannot fail a case (handoff debt
+## 9.1.4).
+const SETTINGS_PATH := "user://smoke_console.cfg"
+
 ## A window to lay the scene out in. Headless boots at 64x64, which is smaller
 ## than the dock's own minimum and puts every rect on top of every other one.
 const WINDOW := Vector2i(1600, 900)
@@ -63,7 +68,10 @@ func _ready() -> void:
 		get_tree().quit(1)
 		return
 
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
+
 	var console: Node = packed.instantiate()
+	console.settings_path = SETTINGS_PATH
 	add_child(console)
 
 	_every_unique_name_resolves(console)
@@ -76,6 +84,7 @@ func _ready() -> void:
 	_the_input_hint_follows_login_and_focus(console)
 
 	console.queue_free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -149,10 +158,10 @@ func _the_dock_keeps_clear_of_the_minimap(console: Node) -> void:
 
 ## Put both docks back at their shipped sizes, in memory only.
 ##
-## The console loads the REAL player profile, and a player who dragged a dock
-## has a saved size in it. These cases check the SHIPPED sizes, so a saved size
-## must not reach them. The setting is written on the object, not through its
-## setter, so the profile on disk does not change.
+## The console reads a scratch profile ([constant SETTINGS_PATH]), so no saved
+## size is in it at the start. These cases check the SHIPPED sizes, so this
+## also drops a size that an earlier case left. The setting is written on the
+## object, not through its setter, so nothing goes to disk.
 func _forget_saved_dock_sizes(console: Node) -> void:
 	for key: String in ClientSettings.DOCK_SIZE_KEYS:
 		console._settings.set(key, Vector2i.ZERO)

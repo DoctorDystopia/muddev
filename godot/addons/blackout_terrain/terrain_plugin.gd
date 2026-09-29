@@ -431,13 +431,41 @@ func _object_click(point: Vector2) -> void:
 
 		var last: Dictionary = here[here.size() - 1]
 
-		edit.remove_object(chunks, tile, last["kind"], last["rotation"])
+		edit.remove_object(chunks, tile, last["kind"], last["rotation"], last["text"])
 	else:
-		edit.add_object(chunks, tile, _dock.kind(), _dock.object_rotation())
-		_world.select(tile, _dock.kind(), _dock.object_rotation())
+		var text: Variant = _text_for(_dock.kind(), "")
+
+		if text == null:
+			return
+
+		edit.add_object(chunks, tile, _dock.kind(), _dock.object_rotation(), text)
+		_world.select(tile, _dock.kind(), _dock.object_rotation(), text)
 
 	_world.queue_rebuild(edit.chunk_coords())
 	_commit(edit, "Object")
+
+
+## The text that an object of `kind` gets: "" for a kind with no text, else
+## `kept`, else the Sign text of the dock. Null, with a status line, when a
+## sign would get no legal text. The reader refuses what
+## [method ChunkFile.text_problem] refuses, so the editor never writes it.
+func _text_for(kind: String, kept: String) -> Variant:
+	if not TerrainChecks.takes_text(kind):
+		return ""
+
+	var text := kept if not kept.is_empty() else _dock.object_text()
+
+	if text.is_empty():
+		_dock.set_status("A %s needs words. Type them in Sign text first." % kind)
+		return null
+
+	var problem := ChunkFile.text_problem(text)
+
+	if not problem.is_empty():
+		_dock.set_status("Sign text: " + problem)
+		return null
+
+	return text
 
 
 func _on_noise_fill_requested() -> void:
@@ -471,7 +499,8 @@ func _select_press(tile: Vector2i) -> void:
 	if not _world.selected.is_empty() and _world.selected["tile"] == tile:
 		index = (_index_on_tile(here) + 1) % here.size()
 
-	_world.select(tile, here[index]["kind"], here[index]["rotation"])
+	_world.select(tile, here[index]["kind"], here[index]["rotation"],
+		here[index]["text"])
 	_drag_from = tile
 	_refresh_dock()
 
@@ -479,7 +508,8 @@ func _select_press(tile: Vector2i) -> void:
 func _index_on_tile(here: Array[Dictionary]) -> int:
 	for index: int in here.size():
 		if here[index]["kind"] == _world.selected["kind"] \
-				and here[index]["rotation"] == _world.selected["rotation"]:
+				and here[index]["rotation"] == _world.selected["rotation"] \
+				and here[index]["text"] == _world.selected["text"]:
 			return index
 
 	return -1
@@ -500,20 +530,20 @@ func _end_drag(point: Variant) -> void:
 		return
 
 	_replace_selected(to, _world.selected["kind"], _world.selected["rotation"],
-		"Move object")
+		_world.selected["text"], "Move object")
 
 
-## Replace the selected object with one at `tile` of `kind` and `rotation`,
-## as one undo entry, and select the new one.
-func _replace_selected(tile: Vector2i, kind: String, rotation: int,
+## Replace the selected object with one at `tile` of `kind`, `rotation`, and
+## `text`, as one undo entry, and select the new one.
+func _replace_selected(tile: Vector2i, kind: String, rotation: int, text: String,
 		label: String) -> void:
 	var chunks := _world.chunks
 	var edit := TerrainEdit.for_world(_world)
 	var old: Dictionary = _world.selected
 
-	edit.remove_object(chunks, old["tile"], old["kind"], old["rotation"])
-	edit.add_object(chunks, tile, kind, rotation)
-	_world.select(tile, kind, rotation)
+	edit.remove_object(chunks, old["tile"], old["kind"], old["rotation"], old["text"])
+	edit.add_object(chunks, tile, kind, rotation, text)
+	_world.select(tile, kind, rotation, text)
 	_world.queue_rebuild(edit.chunk_coords())
 	_commit(edit, label)
 
@@ -527,21 +557,51 @@ func _on_selection_action(action: String) -> void:
 
 	match action:
 		TerrainDock.ACTION_TURN:
-			_replace_selected(chosen["tile"], chosen["kind"], turned, "Turn object")
+			_replace_selected(chosen["tile"], chosen["kind"], turned, chosen["text"],
+				"Turn object")
 		TerrainDock.ACTION_SET_KIND:
-			_replace_selected(chosen["tile"], _dock.kind(), chosen["rotation"],
-				"Set object kind")
+			_set_selected_kind(chosen)
+		TerrainDock.ACTION_SET_TEXT:
+			_set_selected_text(chosen)
 		TerrainDock.ACTION_DELETE:
 			_delete_selected()
 		TerrainDock.ACTION_FOLLOW:
 			_follow_link()
 
 
+## Give the selected object the kind of the Object choice. A sign keeps its
+## words. A kind with no text drops them.
+func _set_selected_kind(chosen: Dictionary) -> void:
+	var text: Variant = _text_for(_dock.kind(), chosen["text"])
+
+	if text == null:
+		return
+
+	_replace_selected(chosen["tile"], _dock.kind(), chosen["rotation"], text,
+		"Set object kind")
+
+
+## Give the selected sign the words of the Sign text.
+func _set_selected_text(chosen: Dictionary) -> void:
+	if not TerrainChecks.takes_text(chosen["kind"]):
+		_dock.set_status("A %s has no text. Only a sign kind has text." % chosen["kind"])
+		return
+
+	var text: Variant = _text_for(chosen["kind"], "")
+
+	if text == null:
+		return
+
+	_replace_selected(chosen["tile"], chosen["kind"], chosen["rotation"], text,
+		"Set sign text")
+
+
 func _delete_selected() -> void:
 	var chosen: Dictionary = _world.selected
 	var edit := TerrainEdit.for_world(_world)
 
-	edit.remove_object(_world.chunks, chosen["tile"], chosen["kind"], chosen["rotation"])
+	edit.remove_object(_world.chunks, chosen["tile"], chosen["kind"], chosen["rotation"],
+		chosen["text"])
 	_world.clear_selection()
 	_world.queue_rebuild(edit.chunk_coords())
 	_commit(edit, "Delete object")
@@ -562,7 +622,7 @@ func _on_object_chosen(thing: Dictionary) -> void:
 	if _world == null:
 		return
 
-	_world.select(thing["tile"], thing["kind"], thing["rotation"])
+	_world.select(thing["tile"], thing["kind"], thing["rotation"], thing["text"])
 	_dock.select_tool(TerrainDock.Tool.SELECT)
 	_dock.set_selection(_world.selected, _world.selected_link_end())
 

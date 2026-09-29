@@ -8,9 +8,7 @@ Why a new renderer
 ------------------
 The xyzgrid contrib draws its map from the map string of each map. The tile
 world has no map string, so the xyzgrid map cannot draw it. Nick chose a small
-renderer for Phase 4a on 09/24/2026 (DESIGN-0011 section 8, question 5). It is
-also the test view of the tile world until the Godot client draws it in
-Phase 5.
+renderer for Phase 4a on 09/24/2026 (DESIGN-0011 section 8, question 5).
 
 The layout
 ----------
@@ -22,7 +20,8 @@ xyzgrid map at its range of 6 today. North is up.
 | Glyph | Tile |
 |---|---|
 | `@` | the looker |
-| a category glyph | a tile with a placed object |
+| `!` | a tile where an NPC stands now |
+| a category glyph | a tile with a placed object that is not an NPC |
 | `.` | walkable ground |
 | `~` | water |
 | ` ` | blocked, or off the loaded world |
@@ -41,6 +40,8 @@ own tile get no tint. This replaces the xyzgrid overlay of 08/03/2026
 """
 
 from systems.core.tilegrid import constants as tile_const
+from systems.interface.statefeed.constants import ASSET_KIND_NPC
+from systems.interface.statefeed.serializers import entity_kind
 from systems.interface.ui.colors import TAG_AURA_TILE, TAG_RESET
 from world.object_kinds import OBJECT_KINDS
 
@@ -75,11 +76,14 @@ MAP_RADIUS: int = 6
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _object_glyph(world, x: int, y: int):
-    """Return the glyph of the first placed object on a tile, or None."""
+    """
+    Return the glyph of the first placed object on a tile, or None. An NPC
+    kind draws nothing here: `_live_npc_tiles` draws each NPC where it stands.
+    """
     for key in world.kinds_at(x, y):
         kind = OBJECT_KINDS.get(key)
 
-        if kind is None:
+        if kind is None or kind.category == tile_const.OBJECT_CATEGORY_NPC:
             continue
 
         return _CATEGORY_GLYPHS.get(kind.category, _UNKNOWN_OBJECT_GLYPH)
@@ -87,7 +91,24 @@ def _object_glyph(world, x: int, y: int):
     return None
 
 
-def _tile_glyph(world, x: int, y: int, looker_tile: tuple) -> str:
+def _live_npc_tiles(world, center: tuple, radius: int) -> set:
+    """
+    Return each tile inside the window where an NPC stands now. The room
+    index answers with no query, and `entity_kind` decides what an NPC is.
+    """
+    npc_tiles = set()
+    rooms = world.rooms.rooms_near(center[0], center[1], radius)
+
+    for room in rooms:
+        if any(entity_kind(obj) == ASSET_KIND_NPC for obj in room.contents):
+            x, y, _z = room.xyz
+            npc_tiles.add((int(x), int(y)))
+
+    return npc_tiles
+
+
+def _tile_glyph(world, x: int, y: int, looker_tile: tuple,
+                npc_tiles=frozenset()) -> str:
     """Return the one character of a tile."""
     if (x, y) == looker_tile:
         return _LOOKER_GLYPH
@@ -96,6 +117,9 @@ def _tile_glyph(world, x: int, y: int, looker_tile: tuple) -> str:
 
     if flags & tile_const.FLAG_BLOCKED:
         return _VOID_GLYPH
+
+    if (x, y) in npc_tiles:
+        return _CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_NPC]
 
     object_glyph = _object_glyph(world, x, y)
 
@@ -140,12 +164,12 @@ def _tinted(glyph: str, offset: tuple, aura) -> str:
 
 
 def _tile_line(world, y: int, columns: range, looker_tile: tuple,
-               aura=None) -> str:
+               aura=None, npc_tiles=frozenset()) -> str:
     """Return the text line of one row of tiles, with its column gaps."""
     parts = []
 
     for x in columns:
-        glyph = _tile_glyph(world, x, y, looker_tile)
+        glyph = _tile_glyph(world, x, y, looker_tile, npc_tiles)
         offset = (x - looker_tile[0], y - looker_tile[1])
         parts.append(_tinted(glyph, offset, aura))
 
@@ -194,7 +218,8 @@ def render(world, center: tuple, radius: int = MAP_RADIUS,
     Methodology:
         The layout and the tint in the module docstring. A tile off the
         loaded world reads as blocked (`TileGrid.flags_at`), so the edge of
-        the world draws as void.
+        the world draws as void. An NPC draws on the tile where it stands
+        now, not on its spawn tile (handoff debt 14).
 
     Notes/References:
         `TileRoom.return_appearance` sends the result.
@@ -204,6 +229,7 @@ def render(world, center: tuple, radius: int = MAP_RADIUS,
     """
     cx, cy = center
     columns = range(cx - radius, cx + radius + 1)
+    npc_tiles = _live_npc_tiles(world, center, radius)
     aura = None
     lines = []
 
@@ -211,7 +237,8 @@ def render(world, center: tuple, radius: int = MAP_RADIUS,
         aura = (aura_radius, aura_metric)
 
     for y in range(cy + radius, cy - radius - 1, -1):
-        lines.append(_tile_line(world, y, columns, center, aura).rstrip())
+        row = _tile_line(world, y, columns, center, aura, npc_tiles)
+        lines.append(row.rstrip())
 
         if y != cy - radius:
             lines.append(_gap_line(world, y, columns).rstrip())

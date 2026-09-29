@@ -26,7 +26,7 @@ const LAYER_AREAS := "areas"
 ## tile layer key is a world tile.
 var _layers := {}
 
-## Each object change, in order: `[added (bool), tile, kind, rotation]`.
+## Each object change, in order: `[added (bool), tile, kind, rotation, text]`.
 var _objects: Array = []
 
 ## The plane and the centre chunk of the block that this edit was made on.
@@ -105,15 +105,15 @@ func apply_area(chunks: ChunkSet, tile: Vector2i, area_name: String) -> void:
 
 
 func add_object(chunks: ChunkSet, tile: Vector2i, kind: String,
-		rotation: int) -> void:
-	_objects.append([true, tile, kind, rotation])
-	chunks.add_object(tile, kind, rotation)
+		rotation: int, text: String = "") -> void:
+	_objects.append([true, tile, kind, rotation, text])
+	chunks.add_object(tile, kind, rotation, text)
 
 
 func remove_object(chunks: ChunkSet, tile: Vector2i, kind: String,
-		rotation: int) -> void:
-	if chunks.remove_object(tile, kind, rotation):
-		_objects.append([false, tile, kind, rotation])
+		rotation: int, text: String = "") -> void:
+	if chunks.remove_object(tile, kind, rotation, text):
+		_objects.append([false, tile, kind, rotation, text])
 
 
 func _note(layer: String, key: Vector2i, before: Variant, after: Variant) -> void:
@@ -167,6 +167,6 @@ func _replay_objects(chunks: ChunkSet, forward: bool) -> void:
 		var adds: bool = change[0] == forward
 
 		if adds:
-			chunks.add_object(change[1], change[2], change[3])
+			chunks.add_object(change[1], change[2], change[3], change[4])
 		else:
-			chunks.remove_object(change[1], change[2], change[3])
+			chunks.remove_object(change[1], change[2], change[3], change[4])

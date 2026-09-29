@@ -284,9 +284,8 @@ func _has_room() -> bool:
 ## Whether the ground under the observer has landed.
 ##
 ## On the tile world, that is the chunk of the tile of the observer
-## ([method WorldState.has_ground]). On an xyzgrid map it is always true. The
-## client draws no ground there until Phase 4b (Nick, 09/25/2026). No ground
-## comes, so a wait only holds the veil up.
+## ([method WorldState.has_ground]). Off the tile world (Limbo) it is always
+## true. No ground comes there, so a wait only holds the veil up.
 func _map_complete() -> bool:
 	if not _world.on_tile_world():
 		return true

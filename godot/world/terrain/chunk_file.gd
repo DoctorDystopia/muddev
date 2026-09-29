@@ -33,6 +33,10 @@ const KEYS := ["format", "chunk", "plane", "size", "floor_names", "area_names",
 ## The keys of one object, in the order that the writer writes them.
 const OBJECT_KEYS := ["kind", "x", "y", "rotation"]
 
+## The key of the optional text of an object: the words of a signpost. The
+## writer writes it last, and only when the text is not empty.
+const OBJECT_TEXT_KEY := "text"
+
 const _INDENT := "  "
 const _ROW_INDENT := "    "
 
@@ -53,7 +57,8 @@ var floors := PackedInt32Array()
 var flags := PackedInt32Array()
 var areas := PackedInt32Array()
 
-## Each object is `{kind, x, y, rotation}`, at LOCAL tile coordinates.
+## Each object is `{kind, x, y, rotation, text}`, at LOCAL tile coordinates.
+## The text is "" for an object that carries none.
 var objects: Array[Dictionary] = []
 
 ## Empty for a good file. Otherwise the first reason the file was refused.
@@ -243,7 +248,7 @@ func _names(value: Variant, what: String) -> PackedStringArray:
 		return names
 
 	for name: Variant in value:
-		if not (name is String) or _name_regex.search(name) == null:
+		if not (name is String) or not _whole_match(_name_regex, name):
 			_fail("%s holds %s, which is not a name" % [what, str(name)])
 			return names
 
@@ -308,15 +313,17 @@ func _read_objects(value: Variant) -> void:
 
 		var keys: Array = item.keys()
 
+		keys.erase(OBJECT_TEXT_KEY)
 		keys.sort()
 
 		if keys != expected:
-			_fail("object %d must have exactly the keys %s" % [index, OBJECT_KEYS])
+			_fail("object %d must have exactly the keys %s, and may have %s"
+				% [index, OBJECT_KEYS, OBJECT_TEXT_KEY])
 			return
 
 		var kind: Variant = item["kind"]
 
-		if not (kind is String) or _name_regex.search(kind) == null:
+		if not (kind is String) or not _whole_match(_name_regex, kind):
 			_fail("object %d has the kind %s" % [index, str(kind)])
 			return
 
@@ -326,7 +333,56 @@ func _read_objects(value: Variant) -> void:
 			"y": _int_in(item["y"], 0, last, "object %d y" % index),
 			"rotation": _int_in(item["rotation"], 0,
 				_Const.CHUNK_ROTATION_COUNT - 1, "object %d rotation" % index),
+			"text": _object_text(item, index),
 		})
+
+
+## The text of an object, or "". The text must match the text pattern and
+## the text cap. The reader refuses an empty text, so an object with no words
+## has one form: no key. The Python `_object_text_value` has the same rule.
+func _object_text(item: Dictionary, index: int) -> String:
+	if not item.has(OBJECT_TEXT_KEY):
+		return ""
+
+	var text: Variant = item[OBJECT_TEXT_KEY]
+
+	if not (text is String):
+		_fail("object %d has the text %s, which is not a string" % [index, str(text)])
+		return ""
+
+	var problem := text_problem(text)
+
+	if not problem.is_empty():
+		_fail("object %d %s" % [index, problem])
+		return ""
+
+	return text
+
+
+## Why `text` cannot be the text of an object, or "" when it can. The reader
+## and the terrain editor both ask here. Thus, the editor never writes a text
+## that the reader refuses.
+static func text_problem(text: String) -> String:
+	var pattern := RegEx.create_from_string(_Const.CHUNK_TEXT_PATTERN)
+
+	if not _whole_match(pattern, text):
+		return "text \"%s\" does not match %s" % [text, _Const.CHUNK_TEXT_PATTERN]
+
+	if text.length() > _Const.CHUNK_TEXT_MAX_CHARS:
+		return "text is %d characters, more than %d" % [text.length(),
+			_Const.CHUNK_TEXT_MAX_CHARS]
+
+	return ""
+
+
+## True when `pattern` matches all of `text`. A `$` also matches before a last
+## "\n". Thus, a plain search takes "sand\n". The writer then puts a raw line
+## break in a JSON string. The Python reader uses `fullmatch` for this reason.
+static func _whole_match(pattern: RegEx, text: String) -> bool:
+	var found := pattern.search(text)
+
+	return found != null and found.get_start() == 0 \
+		and found.get_end() == text.length()
 
 
 # ─── Meaning ─────────────────────────────────────────────────────────────────
@@ -361,7 +417,7 @@ func area_name(lx: int, ly: int) -> String:
 	return area_names[areas[ly * _Const.CHUNK_SIZE + lx]]
 
 
-## Each object as `{kind, x, y, rotation}` at WORLD tile coordinates.
+## Each object as `{kind, x, y, rotation, text}` at WORLD tile coordinates.
 func global_objects() -> Array[Dictionary]:
 	var placed: Array[Dictionary] = []
 	var origin_x := cx * _Const.CHUNK_SIZE
@@ -369,7 +425,8 @@ func global_objects() -> Array[Dictionary]:
 
 	for thing: Dictionary in objects:
 		placed.append({"kind": thing["kind"], "x": origin_x + thing["x"],
-			"y": origin_y + thing["y"], "rotation": thing["rotation"]})
+			"y": origin_y + thing["y"], "rotation": thing["rotation"],
+			"text": thing.get("text", "")})
 
 	return placed
 
@@ -450,10 +507,12 @@ func _object_lines() -> PackedStringArray:
 	for index: int in objects.size():
 		var thing: Dictionary = objects[index]
 		var comma := "," if index < objects.size() - 1 else ""
+		var text: String = thing.get("text", "")
+		var words := "" if text.is_empty() else ',"%s":"%s"' % [OBJECT_TEXT_KEY, text]
 
 		lines.append(_ROW_INDENT
-			+ '{"kind":"%s","x":%d,"y":%d,"rotation":%d}' % [thing["kind"],
-				thing["x"], thing["y"], thing["rotation"]]
+			+ '{"kind":"%s","x":%d,"y":%d,"rotation":%d%s}' % [thing["kind"],
+				thing["x"], thing["y"], thing["rotation"], words]
 			+ comma)
 
 	lines.append(_INDENT + "]")
@@ -505,8 +564,13 @@ func semantic_dump() -> String:
 				floor_name(lx, ly), area_name(lx, ly)])
 
 	for thing: Dictionary in global_objects():
-		lines.append("object %s %d %d %d" % [thing["kind"], thing["x"],
-			thing["y"], thing["rotation"]])
+		var line := "object %s %d %d %d" % [thing["kind"], thing["x"],
+			thing["y"], thing["rotation"]]
+
+		if not thing["text"].is_empty():
+			line += " " + thing["text"]
+
+		lines.append(line)
 
 	return "\n".join(lines) + "\n"
 

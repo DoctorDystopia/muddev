@@ -135,6 +135,7 @@ INVALID_CASES: dict = {
     "fractional_number": _set("plane", 0.5),
     "floor_names_empty": _set("floor_names", []),
     "bad_name": _set("floor_names", ["Sand", "asphalt", "rubble"]),
+    "name_line_break": _set("floor_names", ["sand\n", "asphalt", "rubble"]),
     "duplicate_name": _set("floor_names", ["sand", "sand", "rubble"]),
     "short_height_rows": _pop_row("heights"),
     "short_row": _pop_value("floors"),
@@ -148,6 +149,14 @@ INVALID_CASES: dict = {
     "object_outside_chunk": _set_object("x", const.CHUNK_SIZE),
     "object_bad_rotation": _set_object("rotation", const.ROTATION_COUNT),
     "object_bad_kind": _set_object("kind", "Bad Kind"),
+    "object_empty_text": _set_object("text", ""),
+    "object_text_not_string": _set_object("text", 7),
+    "object_text_quote": _set_object("text", 'Say "hi"'),
+    "object_text_markup": _set_object("text", "|rRed"),
+    "object_text_edge_space": _set_object("text", "Bank "),
+    "object_text_line_break": _set_object("text", "Bank\n"),
+    "object_text_too_long": _set_object(
+        "text", "x" * (const.CHUNK_TEXT_MAX_CHARS + 1)),
 }
 
 
@@ -234,6 +243,22 @@ class MeaningTests(unittest.TestCase):
                                   self.chunk_file.cy * size + first.y,
                                   first.rotation))
 
+    def test_an_object_text_reads_and_an_object_without_text_has_none(self):
+        # The writer writes the text key only for an object with text, so a
+        # file with no text is the same bytes as before the key.
+        written = json.loads(chunkfile.to_text(self.chunk_file))["objects"]
+        texts = [thing.text for thing in self.chunk_file.objects]
+
+        self.assertIn("", texts)
+        self.assertTrue(any(texts))
+
+        for thing, item in zip(self.chunk_file.objects, written):
+            with self.subTest(kind=thing.kind):
+                self.assertEqual(item.get(chunkfile.OBJECT_TEXT_KEY, ""),
+                                 thing.text)
+                self.assertEqual(chunkfile.OBJECT_TEXT_KEY in item,
+                                 bool(thing.text))
+
     def test_the_grid_reads_the_file_at_world_coordinates(self):
         grid = chunkfile.build_grid([self.chunk_file])
         size = const.CHUNK_SIZE
@@ -297,8 +322,7 @@ class DirectoryTests(unittest.TestCase):
                 chunkfile.load_directory(directory)
 
     def test_every_world_chunk_file_loads_and_its_seams_match(self):
-        # No world chunk exists until Phase 4 moves the live maps. Then this
-        # test covers every file that an author commits.
+        # This covers every chunk file that an author commits.
         found = chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY)
 
         self.assertEqual(chunkfile.seam_mismatches(found), [])

@@ -9,7 +9,8 @@ Description: Tests for the telnet map of the tile world (`world/tile_map.py`)
 import unittest
 from unittest import mock
 
-from evennia.utils.test_resources import EvenniaTest
+from evennia.utils.create import create_object
+from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
@@ -34,11 +35,17 @@ _OBJECT_TILE = (10, 8)
 
 _FACILITY = next(key for key, kind in OBJECT_KINDS.items()
                  if kind.category == tile_const.OBJECT_CATEGORY_FACILITY)
+_NPC_KIND = next(key for key, kind in OBJECT_KINDS.items()
+                 if kind.category == tile_const.OBJECT_CATEGORY_NPC)
+
+# The spawn tile of the NPC kind, and the tile where the NPC stands now.
+_NPC_SPAWN = (12, 8)
+_NPC_NOW = (8, 12)
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
-def _world() -> TileWorld:
+def _world(extra_objects=()) -> TileWorld:
     tile_count = _SIZE * _SIZE
     flags = [0] * tile_count
     marks = {_BLOCKED: tile_const.FLAG_BLOCKED,
@@ -52,7 +59,8 @@ def _world() -> TileWorld:
         cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
         heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=flags, areas=[0] * tile_count,
-        objects=[chunkfile.ChunkObject(_FACILITY, *_OBJECT_TILE)])
+        objects=[chunkfile.ChunkObject(_FACILITY, *_OBJECT_TILE),
+                 *extra_objects])
 
     return TileWorld([chunk_file])
 
@@ -155,6 +163,37 @@ class TileMapAuraTests(unittest.TestCase):
         text = self._render(2, metric=lambda dx, dy, radius: False)
 
         self.assertEqual(self._tinted_count(text), 0)
+
+
+class TileMapLiveNpcTests(EvenniaTestCase):
+    """An NPC draws where it stands now, not on its spawn tile (debt 14)."""
+
+    def setUp(self):
+        super().setUp()
+        spawn = chunkfile.ChunkObject(_NPC_KIND, *_NPC_SPAWN)
+        self.world = _world(extra_objects=[spawn])
+        self.world.rooms.load()
+        self.npc = create_object(key="wanderer")
+        self.npc.db.npc_key = _NPC_KIND
+        movement.place(self.world.rooms, self.npc, *_NPC_NOW, quiet=True)
+
+    def _lines(self) -> list:
+        return tile_map.render(self.world, _CENTER, _RADIUS).split("\n")
+
+    def test_the_npc_draws_on_the_tile_where_it_stands(self):
+        npc_glyph = tile_map._CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_NPC]
+
+        self.assertEqual(_tile_cell(self._lines(), _NPC_NOW), npc_glyph)
+
+    def test_the_empty_spawn_tile_draws_as_ground(self):
+        self.assertEqual(_tile_cell(self._lines(), _NPC_SPAWN),
+                         tile_map._GROUND_GLYPH)
+
+    def test_a_plain_object_draws_no_npc_glyph(self):
+        self.npc.attributes.remove("npc_key")
+
+        self.assertEqual(_tile_cell(self._lines(), _NPC_NOW),
+                         tile_map._GROUND_GLYPH)
 
 
 class TileRoomLookTests(EvenniaTest):

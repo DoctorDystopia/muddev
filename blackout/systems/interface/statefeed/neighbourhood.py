@@ -111,26 +111,15 @@ def _tile_world_rooms(room, radius: int):
 
     Notes/References:
         CLAUDE.md, "A tile room stores no fact about its tile".
+        `targeting.tile_world_rooms` owns the read, so the aura and the
+        neighbourhood cannot disagree.
 
     Author: Nick Hobar
     Creation date: 09/25/2026
     """
-    from systems.core.tilegrid.planes import plane_of_z
+    from systems.gameplay.combat.auras.targeting import tile_world_rooms
 
-    coordinates = getattr(room, "xyz", None)
-
-    # The rooms of the same plane only: a figure one floor up is not near.
-    if not coordinates or plane_of_z(coordinates[2]) is None:
-        return None
-
-    from systems.core.tilegrid.world import get_world
-    from systems.gameplay.combat.auras.targeting import within_metric
-
-    view = get_world().plane_for_z(coordinates[2])
-    found = view.rooms.rooms_near(int(coordinates[0]), int(coordinates[1]),
-                                  radius, metric=within_metric)
-
-    return found
+    return tile_world_rooms(room, radius)
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────

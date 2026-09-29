@@ -38,7 +38,9 @@ extends Node3D
 ## [member selected] is the object that the Select tool picked. A tall beacon
 ## marks it, or the tile of a finding of "Check world". The links show where
 ## each transition and each climb leads. [WaterMeshBuilder] draws the water
-## surface, as in the client.
+## surface, [WallMeshBuilder] draws the walls, and [PropMeshBuilder] draws
+## the ladders, the stairs, and the hatches, as in the client. A nose on the
+## front of each object marker shows its rotation.
 
 signal block_loaded
 signal chunks_saved(names: PackedStringArray)
@@ -58,6 +60,12 @@ const GHOST_SHADE := Color(0.45, 0.45, 0.5)
 ## The beacon over a selected object or a finding.
 const BEACON_SIZE := Vector3(0.12, 4.0, 0.12)
 const BEACON_COLOR := Color(1.0, 0.3, 1.0)
+
+## The nose of an object marker shows its front. These give the side of the
+## nose over the side of the marker, the colour, and the node name.
+const MARKER_NOSE_SCALE := 0.4
+const MARKER_NOSE_COLOR := Color(1.0, 1.0, 1.0)
+const MARKER_NOSE_NODE := "Nose"
 
 ## The chunk at the centre of the block. A move saves the changed chunks of
 ## the old block first, so no edit is lost.
@@ -114,7 +122,8 @@ var chunks := ChunkSet.new()
 ## Each chunk file of the block that exists but does not read, with the reason.
 var load_errors := PackedStringArray()
 
-## The object that the Select tool picked: `{tile, kind, rotation}`, or empty.
+## The object that the Select tool picked: `{tile, kind, rotation, text}`, or
+## empty.
 var selected := {}
 
 var _centre := Vector2i.ZERO
@@ -373,6 +382,8 @@ func rebuild(chunk_coord: Vector2i) -> void:
 	var view := {
 		"ground": _mesh_node(ChunkMeshBuilder.build(chunk), _ground_material),
 		"water": _mesh_node(WaterMeshBuilder.build(chunk), _ground_material),
+		"walls": _mesh_node(WallMeshBuilder.build(chunk), _ground_material),
+		"props": _mesh_node(PropMeshBuilder.build(chunk), _ground_material),
 		"flags": _mesh_node(TerrainOverlay.flag_mesh(chunks, chunk_coord),
 			_overlay_material),
 		"areas": _mesh_node(_area_mesh_if_shown(chunk_coord), _overlay_material),
@@ -440,6 +451,10 @@ func _object_markers(chunk: ChunkFile) -> Node3D:
 	return holder
 
 
+## The marker of one object: a box in the colour of its kind, a nose on the
+## front face, and a label. A box looks the same at every quarter turn, so
+## the nose shows the rotation. At rotation 0 it points north, as the front of
+## a scenery model and of a [PropMeshBuilder] shape.
 func _marker(thing: Dictionary) -> Node3D:
 	var point := Vector2(thing["x"], thing["y"])
 	var base := TerrainOverlay.ground_point(chunks, point, 0.0)
@@ -454,13 +469,53 @@ func _marker(thing: Dictionary) -> Node3D:
 	node.material_override = paint
 	node.position = base + Vector3.UP * TerrainOverlay.MARKER_SIZE * 0.5
 	node.rotation.y = -thing["rotation"] * PI * 0.5
-	label.text = thing["kind"]
+	node.add_child(_marker_nose())
+	label.text = _marker_text(thing)
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.position = Vector3.UP * TerrainOverlay.MARKER_SIZE * 1.4
 	label.pixel_size = 0.004
 	node.add_child(label)
 
 	return node
+
+
+## The nose of a marker: a small box that sticks out of its front face.
+static func _marker_nose() -> MeshInstance3D:
+	var nose := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	var paint := StandardMaterial3D.new()
+	var size := TerrainOverlay.MARKER_SIZE * MARKER_NOSE_SCALE
+
+	box.size = Vector3.ONE * size
+	paint.albedo_color = MARKER_NOSE_COLOR
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	nose.name = MARKER_NOSE_NODE
+	nose.mesh = box
+	nose.material_override = paint
+	nose.position = Vector3.FORWARD * (TerrainOverlay.MARKER_SIZE + size) * 0.5
+
+	return nose
+
+
+## The label of a marker: the kind, and the words of a sign.
+static func _marker_text(thing: Dictionary) -> String:
+	var text: String = thing.get("text", "")
+
+	if text.is_empty():
+		return thing["kind"]
+
+	return "%s\n\"%s\"" % [thing["kind"], text]
+
+
+## The object markers of one chunk of the block, or an empty list. For a
+## test.
+func markers_of(chunk_coord: Vector2i) -> Array[Node]:
+	var view: Dictionary = _views.get(chunk_coord, {})
+
+	if view.is_empty():
+		return []
+
+	return view["objects"].get_children()
 
 
 func _free_view(chunk_coord: Vector2i) -> void:
@@ -518,12 +573,18 @@ func _add_ghost(coord: Vector2i, lower: int) -> void:
 	if not chunk.error.is_empty():
 		return
 
-	for mesh: ArrayMesh in [ChunkMeshBuilder.build(chunk), WaterMeshBuilder.build(chunk)]:
+	# One holder for each chunk, so a new layer does not change the count.
+	var holder := Node3D.new()
+
+	_ghosts.add_child(holder)
+
+	for mesh: ArrayMesh in [ChunkMeshBuilder.build(chunk), WaterMeshBuilder.build(chunk),
+			WallMeshBuilder.build(chunk), PropMeshBuilder.build(chunk)]:
 		var node := MeshInstance3D.new()
 
 		node.mesh = mesh
 		node.material_override = _ghost_material
-		_ghosts.add_child(node)
+		holder.add_child(node)
 
 
 ## How many ghost chunks show. For a test.
@@ -531,8 +592,7 @@ func ghost_count() -> int:
 	if _ghosts == null:
 		return 0
 
-	@warning_ignore("integer_division")
-	return _ghosts.get_child_count() / 2
+	return _ghosts.get_child_count()
 
 
 # ─── Links ──────────────────────────────────────────────────────────────────
@@ -569,14 +629,16 @@ func _rebuild_links() -> void:
 
 # ─── Objects and the selection ──────────────────────────────────────────────
 
-## Every object of the block as `{tile, kind, rotation}`, south row first.
+## Every object of the block as `{tile, kind, rotation, text}`, south row
+## first.
 func objects_in_block() -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 
 	for coord: Vector2i in chunks.chunk_coords():
 		for thing: Dictionary in chunks.get_chunk(coord).global_objects():
 			found.append({"tile": Vector2i(thing["x"], thing["y"]),
-				"kind": thing["kind"], "rotation": thing["rotation"]})
+				"kind": thing["kind"], "rotation": thing["rotation"],
+				"text": thing["text"]})
 
 	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if a["tile"].y != b["tile"].y:
@@ -588,8 +650,8 @@ func objects_in_block() -> Array[Dictionary]:
 
 
 ## Select one object. The beacon marks its tile.
-func select(tile: Vector2i, kind: String, rotation: int) -> void:
-	selected = {"tile": tile, "kind": kind, "rotation": rotation}
+func select(tile: Vector2i, kind: String, rotation: int, text: String = "") -> void:
+	selected = {"tile": tile, "kind": kind, "rotation": rotation, "text": text}
 	show_beacon(tile)
 
 
@@ -620,7 +682,8 @@ func _check_selection() -> void:
 
 	for thing: Dictionary in chunks.objects_at(selected["tile"]):
 		if thing["kind"] == selected["kind"] \
-				and thing["rotation"] == selected["rotation"]:
+				and thing["rotation"] == selected["rotation"] \
+				and thing["text"] == selected["text"]:
 			return
 
 	clear_selection()
@@ -639,7 +702,7 @@ func jump_to(tile: Vector2i, on_plane: int) -> void:
 		show_beacon(tile)
 		return
 
-	select(tile, here[0]["kind"], here[0]["rotation"])
+	select(tile, here[0]["kind"], here[0]["rotation"], here[0]["text"])
 
 
 ## Where the selected object leads: `{tile, plane}`, or empty when it does

@@ -175,9 +175,14 @@ var _readiness := SessionReadiness.new()
 ## obvious and are wrong in half the clients that implement them.
 var _history := CommandHistory.new()
 
+## The file of the settings of the player. A test sets it before `_ready`.
+## Thus, a test run never reads or writes the real profile.
+var settings_path := ClientSettings.DEFAULT_PATH
+
 ## How big everything looks. Persisted with ConfigFile under user://, which on
-## the web is IndexedDB and survives a reload.
-var _settings := ClientSettings.new()
+## the web is IndexedDB and survives a reload. Made in [method _ready], from
+## [member settings_path].
+var _settings: ClientSettings
 
 ## What the game sounds like. A Node because every cue is a player it parents.
 ## Cues hang off MODEL signals, never off a line of text -- see [SoundCues].
@@ -222,6 +227,7 @@ var _vitals: VitalsBars
 
 
 func _ready() -> void:
+	_settings = ClientSettings.new(settings_path)
 	Evennia.opened.connect(_on_opened)
 	Evennia.closed.connect(_on_closed)
 	Evennia.text_received.connect(_on_text)

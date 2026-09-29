@@ -14,7 +14,8 @@ Description: Guards for the three tables that a chunk file names: the floor
              - Every key is a legal chunk file name.
              - Every kind names a category that exists, and a spawner that
                exists.
-             - A sign has words, and nothing else has words.
+             - The chunk file holds the words of a sign, and the label cap
+               never cuts them.
              - Every world chunk file names only rows of these tables.
 """
 
@@ -22,8 +23,10 @@ import os
 import re
 import unittest
 
+from assets.pipeline import records as model_records
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
+from systems.interface.statefeed import constants as feed_const
 from typeclasses import spawners
 from world import areas
 from world import floor_types
@@ -82,12 +85,18 @@ class ObjectKindTests(unittest.TestCase):
             with self.subTest(kind=key, spawner=kind.spawner):
                 self.assertIn(kind.spawner, spawners.SPAWNER_REGISTRY)
 
-    def test_a_sign_has_words_and_nothing_else_does(self):
-        for key, kind in object_kinds.OBJECT_KINDS.items():
-            is_sign = kind.category == tile_const.OBJECT_CATEGORY_SIGN
+    def test_the_text_category_is_a_category(self):
+        self.assertIn(tile_const.OBJECT_TEXT_CATEGORY,
+                      tile_const.OBJECT_CATEGORIES)
+        self.assertEqual(
+            object_kinds.OBJECT_KINDS[object_kinds.SIGNPOST_KIND].category,
+            tile_const.OBJECT_TEXT_CATEGORY)
 
-            with self.subTest(kind=key):
-                self.assertEqual(bool(kind.label), is_sign)
+    def test_the_label_cap_never_cuts_a_chunk_text(self):
+        # labels.normalise cuts at WORLD_LABEL_MAX_CHARS. A sign must show
+        # every word that its chunk file holds.
+        self.assertLessEqual(tile_const.CHUNK_TEXT_MAX_CHARS,
+                             feed_const.WORLD_LABEL_MAX_CHARS)
 
     def test_every_kind_that_stands_something_up_has_a_spawner(self):
         # A sign, a landmark, a transition, and a climb stand up nothing of
@@ -132,6 +141,65 @@ class ObjectKindTests(unittest.TestCase):
         for key, kind in object_kinds.OBJECT_KINDS.items():
             with self.subTest(kind=key):
                 self.assertEqual(bool(kind.name), bool(kind.desc))
+
+    def test_a_kind_with_a_spawner_has_no_scenery(self):
+        # The entity of a spawner is already on the screen. Scenery on the
+        # same tile would draw the thing two times.
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if not kind.scenery:
+                continue
+
+            with self.subTest(kind=key):
+                self.assertEqual(kind.spawner, "")
+
+    def test_every_scenery_key_names_a_model_record_or_a_primitive(self):
+        served = set()
+
+        for path in model_records.record_paths():
+            served.update(model_records.load_record(path).keys)
+
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if not kind.scenery:
+                continue
+
+            with self.subTest(kind=key, scenery=kind.scenery):
+                is_model = kind.scenery in served
+                is_primitive = kind.scenery in tile_const.SCENERY_PRIMITIVES
+                self.assertNotEqual(is_model, is_primitive,
+                                    "a scenery key names a model record or "
+                                    "a primitive, never both")
+
+    def test_no_primitive_is_also_a_model_record(self):
+        # When art arrives, the key leaves SCENERY_PRIMITIVES. A key in both
+        # places would draw the primitive and never the art.
+        served = set()
+
+        for path in model_records.record_paths():
+            served.update(model_records.load_record(path).keys)
+
+        for primitive in tile_const.SCENERY_PRIMITIVES:
+            with self.subTest(primitive=primitive):
+                self.assertNotIn(primitive, served)
+
+    def test_every_climb_shows_scenery(self):
+        # A player must see where to type `climb`.
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if kind.category != tile_const.OBJECT_CATEGORY_CLIMB:
+                continue
+
+            with self.subTest(kind=key):
+                self.assertTrue(kind.scenery)
+
+    def test_every_transition_shows_the_teleporter(self):
+        # A transition tile was a bare tile after Phase 4b. The pad tells a
+        # player where the map ends.
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if kind.category != tile_const.OBJECT_CATEGORY_TRANSITION:
+                continue
+
+            with self.subTest(kind=key):
+                self.assertEqual(kind.scenery,
+                                 object_kinds.TRANSITION_SCENERY)
 
     def test_every_area_has_room_texts(self):
         for key, area in areas.AREAS.items():

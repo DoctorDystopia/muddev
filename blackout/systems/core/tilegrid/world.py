@@ -103,8 +103,13 @@ class TilePlane:
         self._objects = {}
 
         for chunk_file in mine:
-            for kind, x, y, rotation in chunk_file.global_objects():
-                self._objects.setdefault((x, y), []).append((kind, rotation))
+            origin_x = chunk_file.cx * const.CHUNK_SIZE
+            origin_y = chunk_file.cy * const.CHUNK_SIZE
+
+            for thing in chunk_file.objects:
+                tile = (origin_x + thing.x, origin_y + thing.y)
+                self._objects.setdefault(tile, []).append(
+                    (thing.kind, thing.rotation, thing.text))
 
         # A tile with a placed object keeps its room (TileRooms.pin).
         self.rooms.pin(self._objects)
@@ -145,16 +150,26 @@ class TilePlane:
     def kinds_at(self, x: int, y: int) -> list:
         """Return the object kinds placed on a tile, in file order."""
         placed = self._objects.get((x, y), ())
-        kinds = [kind for kind, _rotation in placed]
+        kinds = [kind for kind, _rotation, _text in placed]
 
         return kinds
+
+    def texts_at(self, x: int, y: int) -> list:
+        """
+        Return (kind, text) of each object placed on a tile, in file order.
+        The text is "" for an object that carries none.
+        """
+        placed = self._objects.get((x, y), ())
+        texts = [(kind, text) for kind, _rotation, text in placed]
+
+        return texts
 
     def placed_objects(self) -> list:
         """Return (kind, x, y, rotation) of every placed object."""
         found = []
 
         for (x, y), placed in sorted(self._objects.items()):
-            for kind, rotation in placed:
+            for kind, rotation, _text in placed:
                 found.append((kind, x, y, rotation))
 
         return found
@@ -297,6 +312,10 @@ class TileWorld:
     def kinds_at(self, x: int, y: int) -> list:
         """Plane 0: see TilePlane.kinds_at."""
         return self.ground.kinds_at(x, y)
+
+    def texts_at(self, x: int, y: int) -> list:
+        """Plane 0: see TilePlane.texts_at."""
+        return self.ground.texts_at(x, y)
 
     def placed_objects(self) -> list:
         """Plane 0: see TilePlane.placed_objects."""

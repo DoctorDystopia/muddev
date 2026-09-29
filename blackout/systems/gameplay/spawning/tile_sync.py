@@ -20,12 +20,22 @@ A tile room that holds chunk objects stores the kind list of its last sync in
 the attribute `TILE_KINDS_ATTR`. The attribute is safe on this room, because
 a pin keeps the room on its tile (`TileRooms.pin`). The pool never moves it.
 
+A signpost entry holds its words too: `signpost:Bank`
+(`ENTRY_TEXT_SEPARATOR`). No kind name holds the separator
+(CHUNK_NAME_PATTERN), so the first separator splits the entry.
+
+New words on a sign are a refresh, not a change. `place_signpost` corrects
+the words of the sign that stands, so a typo fix demolishes nothing. A
+change would demolish the whole tile, and a sign often stands on the tile of
+a facility. A sign that loses all of its words is a change, because
+`place_signpost` cannot take the words away. `_entry_shape` holds this rule.
+
 The four verbs
 --------------
 | Verb | When | What `apply` does |
 |---|---|---|
 | new | The chunk file places kinds on a tile with no record | Stand up each kind. Write the record |
-| refresh | The kinds equal the record | Stand up each kind again. Each spawner does nothing if its object stands |
+| refresh | The kinds equal the record. Only the words of a sign may differ | Stand up each kind again. Each spawner does nothing if its object stands. A sign takes its new words. Write the record |
 | changed | The kinds differ from the record | Demolish the contents, then stand up each kind. Write the record |
 | removed | A record, but the chunk file places nothing | Demolish the contents. Delete the record. Unpin and release the room |
 
@@ -48,6 +58,9 @@ from world.object_kinds import OBJECT_KINDS
 
 # The room attribute that holds the kind list of the last sync.
 TILE_KINDS_ATTR: str = "tile_kinds"
+
+# Between the kind and the words of a sign entry in the kind list.
+ENTRY_TEXT_SEPARATOR: str = ":"
 
 VERB_NEW: str = "new"
 VERB_REFRESH: str = "refresh"
@@ -73,28 +86,61 @@ class TileAction:
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
+def _is_sign(kind) -> bool:
+    """Return True if a kind stands a signpost with the text of its object."""
+    return kind.category == tile_const.OBJECT_TEXT_CATEGORY
+
+
 def _stands_something(kind) -> bool:
     """
     Return True if a kind stands an object up: a spawner or a sign. A
     transition and a landmark stand up nothing.
     """
-    return bool(kind.spawner or kind.label)
+    return bool(kind.spawner) or _is_sign(kind)
+
+
+def _entry(key: str, text: str) -> str:
+    """Return the kind list entry of one object: the key, and any words."""
+    if not text:
+        return key
+
+    return key + ENTRY_TEXT_SEPARATOR + text
+
+
+def _entry_shape(entry: str) -> str:
+    """
+    Return an entry without its words: the key, and the separator if the
+    entry had words. Two kind lists of the same shapes differ only in the
+    words of a sign, and the sync refreshes them (see the module docstring).
+    """
+    key, separator, _text = entry.partition(ENTRY_TEXT_SEPARATOR)
+
+    return key + separator
+
+
+def _same_shapes(kinds: tuple, previous: tuple) -> bool:
+    """Return True if two kind lists differ at most in the words of signs."""
+    shapes = tuple(_entry_shape(entry) for entry in kinds)
+    previous_shapes = tuple(_entry_shape(entry) for entry in previous)
+
+    return shapes == previous_shapes
 
 
 def _standing_kinds(world, x: int, y: int) -> tuple:
     """
-    Return the kinds on a tile that stand something up, in file order. A
-    name that is not a row is left to `world/tests/test_tile_content.py`.
+    Return the entries of the kinds on a tile that stand something up, in
+    file order. A name that is not a row is left to
+    `world/tests/test_tile_content.py`.
     """
     found = []
 
-    for key in world.kinds_at(x, y):
+    for key, text in world.texts_at(x, y):
         kind = OBJECT_KINDS.get(key)
 
         if kind is None or not _stands_something(kind):
             continue
 
-        found.append(key)
+        found.append(_entry(key, text))
 
     return tuple(found)
 
@@ -112,18 +158,23 @@ def _records(world) -> dict:
     return found
 
 
-def _stand_up(room, key: str) -> None:
-    """Run the spawner of one kind in a room. Each spawner is idempotent."""
+def _stand_up(room, entry: str) -> None:
+    """
+    Run the spawner of one kind list entry in a room, or stand its sign.
+    Each spawner is idempotent. A sign with no words stands nothing, and
+    `world/tile_checks.py` reports it.
+    """
     from typeclasses.signs import place_signpost
     from typeclasses.spawners import SPAWNER_REGISTRY, load_all_spawners
 
     load_all_spawners()
+    key, _separator, text = entry.partition(ENTRY_TEXT_SEPARATOR)
     kind = OBJECT_KINDS[key]
 
     if kind.spawner:
         SPAWNER_REGISTRY[kind.spawner](room)
-    elif kind.label:
-        place_signpost(room, kind.label)
+    elif _is_sign(kind):
+        place_signpost(room, text)
 
 
 def _demolish(room) -> int:
@@ -139,9 +190,9 @@ def _demolish(room) -> int:
 
 
 def _stand_up_all(room, kinds: tuple) -> None:
-    """Stand up each kind, and record the list on the room."""
-    for key in kinds:
-        _stand_up(room, key)
+    """Stand up each kind list entry, and record the list on the room."""
+    for entry in kinds:
+        _stand_up(room, entry)
 
     room.attributes.add(TILE_KINDS_ATTR, list(kinds))
 
@@ -196,7 +247,7 @@ def _plan_plane(view) -> list:
             verb = VERB_REMOVED
         elif tile not in records:
             verb = VERB_NEW
-        elif kinds == previous:
+        elif _same_shapes(kinds, previous):
             verb = VERB_REFRESH
         else:
             verb = VERB_CHANGED

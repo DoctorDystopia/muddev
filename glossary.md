@@ -140,7 +140,8 @@ a room.
 | pool | the empty tile rooms that wait for the next step (`TileRooms`) | cache, free list |
 | parity test | the pair of tests, one in Python and one in GDScript, that hold the two chunk file readers to the same answers | cross-check, sync test |
 | semantic dump | the text that says what a chunk file means, one fact on each line. The parity test compares its digest | canonical dump, meaning file |
-| object kind | the key of a placed object in a chunk file, a row of `world/object_kinds.py`. One kind for each variant, for example each signpost | object type, prefab, object ID |
+| object kind | the key of a placed object in a chunk file, a row of `world/object_kinds.py`. One kind for each variant, except the words of a signpost: one `signpost` kind, and each placement holds its own `text` | object type, prefab, object ID |
+| sign text | the words of one `signpost` object, in the `text` of its chunk object. The terrain editor edits it | label field, caption, sign string |
 | terrain editor | the Godot editor plugin in `godot/addons/blackout_terrain/` that writes the chunk files | map editor, world editor, terrain tool |
 | block | the 3 x 3 chunks that the terrain editor loads around its centre chunk | chunk window, loaded area, scene |
 | brush | one tool of the terrain editor that changes the corners or tiles in a circle | tool (for a brush), stamp |
@@ -163,6 +164,10 @@ a room.
 | hide roofs | the client setting that hides every plane above the plane of the player | roof toggle, x-ray |
 | content check | one rule of `world/tile_checks.py` over the chunk files of a world, for example "a transition lands on an open tile". The terrain editor runs the same rules as "Check world" | validation, world lint, world test |
 | finding | one content check that fails, at one tile | error, issue, violation |
+| wall | a walk flag on one edge of a tile. No step and no shot crosses that edge. The client draws a slab on the edge (`WallMeshBuilder`) | fence, barrier, edge block |
+| scenery | the model that the client stands on the tile of an object kind with no spawner, for example the teleporter pad of a transition. The `scenery` of the kind row names it | prop, decoration, tile prop |
+| primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, or `hatch`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
+| hatch | the primitive on the tile of a climb that only leads down: a framed opening in the floor | trapdoor, stairwell, hole |
 | tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
 | link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |
 | ghost | the dim copy of the planes below the edited plane, in the terrain editor | shadow, underlay, onion skin |

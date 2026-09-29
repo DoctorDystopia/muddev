@@ -8,9 +8,8 @@ extends RefCounted
 ## tile world. The server sends each chunk of the block around the player on
 ## `blackout_chunk`, one time for each session. This class keeps the chunks in
 ## one [ChunkSet] for each plane. The 3D pane and the minimap both draw from
-## these sets, so the client parses one payload one time. The island levels of the xyzgrid maps
-## are gone. Nick chose "tile world only". Thus, a player on an xyzgrid map
-## sees no ground in Godot until Phase 4b moves every player.
+## these sets, so the client parses one payload one time. A room off the tile
+## world (Limbo) has no chunk, so it shows no ground.
 ##
 ## **Planes.** Since DESIGN-0011 Phase 7b (09/26/2026), the server streams the
 ## block of every plane. The Z of the room of the observer gives its plane.

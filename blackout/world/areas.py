@@ -13,9 +13,10 @@ Description: The areas of the tile grid, one row for each area.
              `LOOKS` in `godot/world/area_look.gd`. An area with no row there
              gets the fallback look, so a new area needs no client edit.
 
-             Until Phase 4 moves the live maps into chunk files, each area has
-             the name of the map that it replaces. DESIGN-0011 sections 6.2
-             and 6.7.
+             Each area has the name of the xyzgrid map that it replaced
+             (handoff debt 9). Rename a row when the world gets real area
+             names. `AreaLook.LOOKS` and its guard follow. DESIGN-0011
+             sections 6.2 and 6.7.
 
              A tile room stores no name and no description. On a tile with no
              named object, `look` shows the `name` and the `desc` of the area.

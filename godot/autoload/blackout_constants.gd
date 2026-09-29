@@ -103,6 +103,8 @@ const CHUNK_HEIGHT_MIN := -32768
 const CHUNK_HEIGHT_MAX := 32767
 const CHUNK_ROTATION_COUNT := 4
 const CHUNK_NAME_PATTERN := "^[a-z0-9_]+$"
+const CHUNK_TEXT_PATTERN := "^[!#-\\[\\]-{}~]([ !#-\\[\\]-{}~]*[!#-\\[\\]-{}~])?$"
+const CHUNK_TEXT_MAX_CHARS := 64
 const CHUNK_FILE_TEMPLATE := "chunk_{cx}_{cy}_p{plane}.json"
 const CHUNK_DIRECTORY := "world/chunks"
 const TILE_SYNC_STAMP_FILE := "server/tile_sync_state.json"
@@ -124,6 +126,11 @@ const OBJECT_CATEGORY_NPC := "npc"
 const OBJECT_CATEGORY_SIGN := "sign"
 const OBJECT_CATEGORY_TRANSITION := "transition"
 const OBJECT_CATEGORY_CLIMB := "climb"
+const OBJECT_TEXT_CATEGORY := "sign"
+const OBJECT_SIGNPOST_KIND := "signpost"
+const SCENERY_LADDER := "ladder"
+const SCENERY_STAIRS := "stairs"
+const SCENERY_HATCH := "hatch"
 const TILE_DEFAULT_FLOOR := "sand"
 const TILE_DEFAULT_AREA := "oasis"
 const TILE_GROUND_PLANE := 0
@@ -138,13 +145,15 @@ const TILE_CHECK_TRANSITION_LANDING := "transition_landing"
 const TILE_CHECK_CLIMB_LANDING := "climb_landing"
 const TILE_CHECK_VOID_OPEN := "void_open"
 const TILE_CHECK_RESPAWN_COUNT := "respawn_count"
+const TILE_CHECK_SIGN_TEXT := "sign_text"
 
 # What the terrain editor paints and places. The order is
 # the order of each table under world/.
 const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "void"]
 const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains"]
 const OBJECT_CATEGORIES := ["climb", "facility", "gathering", "landmark", "npc", "sign", "transition"]
-const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count"]
+const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text"]
+const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch"]
 const OBJECT_KINDS := {
 	"bank": "facility",
 	"foundry_furnace": "facility",
@@ -163,23 +172,17 @@ const OBJECT_KINDS := {
 	"floating_eye": "npc",
 	"mutant_crab": "npc",
 	"mutant_giant": "npc",
-	"signpost_bank": "sign",
-	"signpost_foundry_furnace": "sign",
-	"signpost_metalsmith_anvil": "sign",
-	"signpost_gunsmith_bench": "sign",
-	"signpost_rendering_cooker": "sign",
-	"signpost_curing_chamber": "sign",
-	"signpost_gastronomy_worktable": "sign",
+	"signpost": "sign",
 	"respawn_point": "landmark",
 	"transition_oasis_to_outskirts": "transition",
 	"transition_outskirts_to_oasis": "transition",
+	"transition_outskirts_to_azm_plains": "transition",
+	"transition_azm_plains_to_outskirts": "transition",
 	"ladder_up": "climb",
 	"ladder_down": "climb",
 	"ladder_both": "climb",
 	"stairs_up": "climb",
 	"stairs_down": "climb",
-	"transition_outskirts_to_azm_plains": "transition",
-	"transition_azm_plains_to_outskirts": "transition",
 }
 const OBJECT_KIND_TARGETS := {
 	"transition_oasis_to_outskirts": [72, 10],
@@ -193,6 +196,17 @@ const OBJECT_KIND_CLIMBS := {
 	"ladder_both": ["up", "down"],
 	"stairs_up": ["up"],
 	"stairs_down": ["down"],
+}
+const OBJECT_KIND_SCENERY := {
+	"transition_oasis_to_outskirts": "map_transition",
+	"transition_outskirts_to_oasis": "map_transition",
+	"transition_outskirts_to_azm_plains": "map_transition",
+	"transition_azm_plains_to_outskirts": "map_transition",
+	"ladder_up": "ladder",
+	"ladder_down": "hatch",
+	"ladder_both": "ladder",
+	"stairs_up": "stairs",
+	"stairs_down": "hatch",
 }
 const CLIMB_PLANE_STEPS := {
 	"up": 1,

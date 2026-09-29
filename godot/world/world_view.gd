@@ -3,10 +3,9 @@ extends Node3D
 ## The 3D world pane: the ground of the tile world, and who stands on it.
 ##
 ## **The tile world only.** DESIGN-0011 Phase 5 (09/25/2026) replaced the
-## xyzgrid islands with the chunks of the tile world. [TerrainView] draws one
-## mesh for each chunk that [WorldState] holds. Nick chose to drop the island
-## renderer at once. Thus, a player on an xyzgrid map sees no ground here until
-## Phase 4b moves every player.
+## xyzgrid islands with the chunks of the tile world, and Phase 4b removed the
+## xyzgrid maps. [TerrainView] draws one mesh for each chunk that [WorldState]
+## holds. A room off the tile world (Limbo) shows no ground.
 ##
 ## **One coordinate rule.** Tile (x, y) has its centre at (x, h, -y), where h
 ## is the height of the drawn ground there ([method WorldState.ground_y]). Grid
@@ -296,6 +295,7 @@ func bind_meshes(resolver: MeshResolver) -> void:
 	_entities.observer_slot_changed.connect(_on_observer_slot)
 	_entities.true_tiles_changed.connect(_on_entity_marks)
 	_meshes.refreshed.connect(_on_art_arrived)
+	_terrain.bind_meshes(_meshes)
 
 	# In THIS pane's world, because a shader is compiled for the lighting it is
 	# drawn under, and this is the lighting every model will be drawn under.

@@ -40,8 +40,8 @@ Enjoy!
 
 # BLACKOUT Game Documentation
 
-> **Blackout** is a cyberpunk MUD built on Evennia with the XYZGrid
-> contrib for tiled overworld maps. It features a skill-progression and
+> **Blackout** is a cyberpunk MUD built on Evennia, on a tile world of
+> chunk files (DESIGN-0011). It features a skill-progression and
 > crafting-economy loop: gather raw materials from the world, process them at
 > facilities, forge tools, and bank your haul.
 >
@@ -1053,20 +1053,20 @@ annotation.
 
 ### Permanent signage belongs in a chunk file
 
-Each signpost is its own object kind, with its words in the row:
+A signpost is one object kind, `signpost`. Each placement holds its own words
+in the `text` of its chunk object:
 
-```python
-# world/object_kinds.py
-ObjectKind("signpost_bank", _SIGN, label="Bank"),
+```json
+{"kind":"signpost","x":10,"y":0,"rotation":0,"text":"Bank"}
 ```
 
-Place the kind in the terrain editor, on its own tile or on the tile of a
-facility. A tile holds any number of objects, so a sign costs no neighbour
-tile. Then run the tile sync (see "World Building Workflow").
+In the terrain editor, type the words in "Sign text", then place a
+`signpost`, on its own tile or on the tile of a facility. A tile holds any
+number of objects, so a sign costs no neighbour tile. Then run the tile sync
+(see "World Building Workflow").
 
-`world/object_kinds.py` stays the **owner** of the words. The sign spawner
-sets them again on each sync, so a typo fix is an edit plus a sync, not a
-destroyed tile.
+The chunk file is the **owner** of the words. The tile sync sets them again
+on each run, so a typo fix is an edit plus a sync, not a destroyed tile.
 
 ### Player graffiti (`write`)
 
@@ -1307,7 +1307,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3020 tests, ~26 minutes** (measured 09/26/2026). Run it before a merge, or
+**3033 tests, ~24 minutes** (measured 09/28/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

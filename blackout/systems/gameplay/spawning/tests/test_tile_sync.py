@@ -37,28 +37,36 @@ _TRANSITION = _first_of(tile_const.OBJECT_CATEGORY_TRANSITION)
 _FACILITY_TILE = (4, 4)
 _TRANSITION_TILE = (9, 9)
 
+# The words of the sign, before and after an edit.
+_WORDS = "Bank"
+_NEW_WORDS = "Old Bank"
+
+# The kind list entry of the sign.
+_SIGN_ENTRY = _SIGN + tile_sync.ENTRY_TEXT_SEPARATOR + _WORDS
+
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _world(objects: list) -> TileWorld:
-    """A loaded one-chunk world with these (kind, x, y) objects."""
+    """A loaded one-chunk world with these (kind, x, y, text) objects."""
     tile_count = _SIZE * _SIZE
     chunk_file = chunkfile.ChunkFile(
         cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
         heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=[0] * tile_count,
         areas=[0] * tile_count,
-        objects=[chunkfile.ChunkObject(kind, x, y) for kind, x, y in objects])
+        objects=[chunkfile.ChunkObject(kind, x, y, text=text)
+                 for kind, x, y, text in objects])
     world = TileWorld([chunk_file])
     world.rooms.load()
 
     return world
 
 
-def _placed():
+def _placed(words: str = _WORDS):
     """The standard objects: a signed facility, and a lone transition."""
-    return [(_FACILITY, *_FACILITY_TILE), (_SIGN, *_FACILITY_TILE),
-            (_TRANSITION, *_TRANSITION_TILE)]
+    return [(_FACILITY, *_FACILITY_TILE, ""), (_SIGN, *_FACILITY_TILE, words),
+            (_TRANSITION, *_TRANSITION_TILE, "")]
 
 
 def _verbs(actions) -> dict:
@@ -74,7 +82,7 @@ class TileSyncTests(EvenniaTestCase):
         actions = tile_sync.plan(world)
 
         self.assertEqual(_verbs(actions), {_FACILITY_TILE: tile_sync.VERB_NEW})
-        self.assertEqual(actions[0].kinds, (_FACILITY, _SIGN))
+        self.assertEqual(actions[0].kinds, (_FACILITY, _SIGN_ENTRY))
 
     def test_the_plan_changes_nothing(self):
         world = _world(_placed())
@@ -90,7 +98,7 @@ class TileSyncTests(EvenniaTestCase):
         self.assertIsNotNone(room)
         self.assertTrue(room.contents)
         self.assertEqual(room.attributes.get(tile_sync.TILE_KINDS_ATTR),
-                         [_FACILITY, _SIGN])
+                         [_FACILITY, _SIGN_ENTRY])
 
     def test_a_second_run_is_a_refresh_that_adds_nothing(self):
         world = _world(_placed())
@@ -107,7 +115,7 @@ class TileSyncTests(EvenniaTestCase):
     def test_a_new_kind_list_is_a_change(self):
         world = _world(_placed())
         tile_sync.apply(world, tile_sync.plan(world))
-        edited = _world([(_FACILITY, *_FACILITY_TILE)])
+        edited = _world([(_FACILITY, *_FACILITY_TILE, "")])
         actions = tile_sync.plan(edited)
         tile_sync.apply(edited, actions)
         room = edited.rooms.room_at(*_FACILITY_TILE)
@@ -116,6 +124,36 @@ class TileSyncTests(EvenniaTestCase):
                          {_FACILITY_TILE: tile_sync.VERB_CHANGED})
         self.assertEqual(room.attributes.get(tile_sync.TILE_KINDS_ATTR),
                          [_FACILITY])
+
+    def test_new_words_are_a_refresh_that_keeps_the_facility(self):
+        # A typo fix on a sign must not demolish the facility beside it.
+        world = _world(_placed())
+        tile_sync.apply(world, tile_sync.plan(world))
+        before = set(world.rooms.room_at(*_FACILITY_TILE).contents)
+        edited = _world(_placed(_NEW_WORDS))
+        actions = tile_sync.plan(edited)
+        destroyed = tile_sync.apply(edited, actions)
+        room = edited.rooms.room_at(*_FACILITY_TILE)
+        labels = [thing.world_label for thing in room.contents
+                  if getattr(thing, "world_label", "")]
+
+        self.assertEqual(_verbs(actions),
+                         {_FACILITY_TILE: tile_sync.VERB_REFRESH})
+        self.assertEqual(destroyed, 0)
+        self.assertEqual(set(room.contents), before)
+        self.assertEqual(labels, [_NEW_WORDS])
+        self.assertEqual(room.attributes.get(tile_sync.TILE_KINDS_ATTR),
+                         [_FACILITY, _SIGN_ENTRY.replace(_WORDS, _NEW_WORDS)])
+
+    def test_a_sign_that_loses_its_words_is_a_change(self):
+        # place_signpost cannot take words away, so only a demolish can.
+        world = _world(_placed())
+        tile_sync.apply(world, tile_sync.plan(world))
+        edited = _world(_placed(""))
+        actions = tile_sync.plan(edited)
+
+        self.assertEqual(_verbs(actions),
+                         {_FACILITY_TILE: tile_sync.VERB_CHANGED})
 
     def test_a_tile_that_lost_every_kind_is_cleared_and_released(self):
         world = _world(_placed())

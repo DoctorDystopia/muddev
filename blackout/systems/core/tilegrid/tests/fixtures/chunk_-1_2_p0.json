@@ -274,6 +274,6 @@
     {"kind":"rendering_cooker","x":12,"y":40,"rotation":0},
     {"kind":"desert_anvil","x":0,"y":63,"rotation":1},
     {"kind":"npc_spawn_raider","x":63,"y":0,"rotation":2},
-    {"kind":"sign","x":31,"y":7,"rotation":3}
+    {"kind":"sign","x":31,"y":7,"rotation":3,"text":"Bank #2: 'Oasis' [east] {open} ~ !"}
   ]
 }

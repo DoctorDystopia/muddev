@@ -98,6 +98,16 @@ func _on_manifest(count: int) -> void:
 
 	_expect(scenery == null, "scenery with no art draws nothing at all")
 
+	# Each model that the server names for a chunk object must be served, or
+	# its tile stays bare. The transition pad is one.
+	var Const := preload("res://autoload/blackout_constants.gd")
+
+	for kind: String in Const.OBJECT_KIND_SCENERY:
+		var asset_key: String = Const.OBJECT_KIND_SCENERY[kind]
+
+		_expect(_resolver.may_have_art(asset_key),
+			"the scenery of %s (%s) is served" % [kind, asset_key])
+
 	_resolver.refreshed.connect(_on_refreshed)
 
 

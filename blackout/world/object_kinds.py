@@ -9,17 +9,19 @@ Description: The object kinds of the tile grid, one row for each kind.
              belongs in the code"). The Godot editor places from this list,
              through the generated constants.
 
-             ONE KIND FOR EACH VARIANT. A format 1 object holds no text. Thus,
-             each signpost is its own kind, with its words in this row, and
-             each shopkeeper is its own kind. OSRS does the same: each
-             signpost is its own object ID. A new sign is one row here and one
-             object in a chunk file. Nick chose this over a format 2 with
-             object properties, 09/24/2026.
+             ONE KIND FOR EACH VARIANT, EXCEPT THE WORDS OF A SIGN. Each
+             shopkeeper is its own kind. OSRS does the same. A signpost is
+             one kind, `signpost`, and each placement holds its own words in
+             the `text` of its chunk object. The terrain editor edits them.
+             Nick chose this on 09/27/2026. On 09/24/2026 he chose one kind
+             for each sign, with the words in this table. That kept the words
+             out of the editor.
 
              Each row names the spawner that stands the thing up: a key of
-             `SPAWNER_REGISTRY` in `typeclasses/spawners.py`. A row with
-             `label` is a signpost. A test checks every spawner name, so the
-             table cannot rot.
+             `SPAWNER_REGISTRY` in `typeclasses/spawners.py`. A kind of the
+             category `OBJECT_TEXT_CATEGORY` stands a signpost with the text of
+             its object. A test checks every spawner name, so the table cannot
+             rot.
 
              THE ROOM TEXT. A tile room stores no name. `look` on a tile shows
              the `name` and the `desc` of the first kind on it that has a
@@ -47,6 +49,17 @@ Description: The object kinds of the tile grid, one row for each kind.
              placement, because the landing needs no target in the row (Nick,
              09/26/2026). Like a landmark, it stands nothing up.
 
+             SCENERY. A kind that stands nothing up is not an entity, so no
+             `room_players` row tells the client what to draw. Its `scenery`
+             names what the client stands on the tile of each placement. The
+             server names, the client draws (CLAUDE.md). A kind that stands
+             something up has no scenery, because its entity is already on
+             the screen. A kind with no scenery shows nothing, as before. The
+             key names a model record in `assets/models/`, or a primitive of
+             `SCENERY_PRIMITIVES`: a plain shape until art arrives. The climb
+             kinds use the primitives. `world/tests/test_tile_content.py`
+             checks these rules.
+
              This module imports no game code. `clientexport.py` reads it,
              and a typeclass import there loads Evennia into the exporter.
 
@@ -64,21 +77,22 @@ class ObjectKind:
     One object kind. The `key` is the name that a chunk file stores. The
     `category` is one of `OBJECT_CATEGORIES` in the tile grid constants. The
     `spawner` is a key of `SPAWNER_REGISTRY`, or "" when nothing stands up.
-    The `label` holds the words of a signpost. The `name` and the `desc` are
-    the room texts of a tile that holds this kind. The `target` is the world
-    tile (x, y) of a transition, or () for every other kind. The `climbs` are
-    the directions of a climb kind (CLIMB_UP, CLIMB_DOWN), or () for every
-    other kind.
+    The `name` and the `desc` are the room texts of a tile that holds this
+    kind. The `target` is the world tile (x, y) of a transition, or () for
+    every other kind. The `climbs` are the directions of a climb kind
+    (CLIMB_UP, CLIMB_DOWN), or () for every other kind. The `scenery` is the
+    model asset key or the primitive that the client stands on the tile, or
+    "" for nothing.
     """
 
     key: str
     category: str
     spawner: str = ""
-    label: str = ""
     name: str = ""
     desc: str = ""
     target: tuple = ()
     climbs: tuple = ()
+    scenery: str = ""
 
 
 _FACILITY = tile_const.OBJECT_CATEGORY_FACILITY
@@ -94,6 +108,15 @@ _CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
 # not in respawn.py, because the client export reads this module and
 # respawn.py imports Evennia.
 RESPAWN_KIND: str = "respawn_point"
+
+# The one signpost kind. Each placement holds its own words in its chunk
+# object text.
+SIGNPOST_KIND: str = "signpost"
+
+# The teleporter pad that the client stands on each transition tile. The key
+# of assets/models/world_objects/map_transition.toml. The xyzgrid maps drew
+# the same model on each transition node until Phase 4b.
+TRANSITION_SCENERY: str = "map_transition"
 
 _UP = (tile_const.CLIMB_UP,)
 _DOWN = (tile_const.CLIMB_DOWN,)
@@ -155,15 +178,8 @@ _KIND_ROWS: tuple = (
     _named("mutant_giant", _NPC, "Mutant Giant Tile",
            "A mutant giant, slow and enormous."),
 
-    # The signs of the Oasis map, with the words it gives them today.
-    ObjectKind("signpost_bank", _SIGN, label="Bank"),
-    ObjectKind("signpost_foundry_furnace", _SIGN, label="Foundry Furnace"),
-    ObjectKind("signpost_metalsmith_anvil", _SIGN, label="Metalsmith Anvil"),
-    ObjectKind("signpost_gunsmith_bench", _SIGN, label="Gunsmith Bench"),
-    ObjectKind("signpost_rendering_cooker", _SIGN, label="Rendering Cooker"),
-    ObjectKind("signpost_curing_chamber", _SIGN, label="Curing Chamber"),
-    ObjectKind("signpost_gastronomy_worktable", _SIGN,
-               label="Gastronomy Worktable"),
+    # A signpost. Its words are the `text` of each chunk object.
+    ObjectKind(SIGNPOST_KIND, _SIGN),
 
     # The respawn point. world/respawn.py finds it by this key. The words are
     # those of the xyzgrid room at (0, 0) of the oasis map.
@@ -174,25 +190,33 @@ _KIND_ROWS: tuple = (
     # The four joins of the three maps. oasis is chunk (0, 0),
     # oasis_outskirts is chunk (1, 0), and azm_plains is chunk (2, 0).
     ObjectKind("transition_oasis_to_outskirts", _TRANSITION,
-               target=(72, 10)),
-    ObjectKind("transition_outskirts_to_oasis", _TRANSITION, target=(1, 2)),
+               target=(72, 10), scenery=TRANSITION_SCENERY),
+    ObjectKind("transition_outskirts_to_oasis", _TRANSITION, target=(1, 2),
+               scenery=TRANSITION_SCENERY),
+    ObjectKind("transition_outskirts_to_azm_plains", _TRANSITION,
+               target=(129, 2), scenery=TRANSITION_SCENERY),
+    ObjectKind("transition_azm_plains_to_outskirts", _TRANSITION,
+               target=(73, 8), scenery=TRANSITION_SCENERY),
 
     # Ladders and stairs (Phase 7). Generic: every placement shares a kind,
     # because a climb lands on the same tile one plane up or down.
+    # A way up draws the ladder or the stairs. A way down draws a hatch. The
+    # ladder or the stairs of the plane below reach up to that hatch.
     ObjectKind("ladder_up", _CLIMB, name="Ladder",
-               desc="A ladder leads up.", climbs=_UP),
+               desc="A ladder leads up.", climbs=_UP,
+               scenery=tile_const.SCENERY_LADDER),
     ObjectKind("ladder_down", _CLIMB, name="Ladder",
-               desc="A ladder leads down.", climbs=_DOWN),
+               desc="A ladder leads down.", climbs=_DOWN,
+               scenery=tile_const.SCENERY_HATCH),
     ObjectKind("ladder_both", _CLIMB, name="Ladder",
-               desc="A ladder leads up and down.", climbs=_BOTH),
+               desc="A ladder leads up and down.", climbs=_BOTH,
+               scenery=tile_const.SCENERY_LADDER),
     ObjectKind("stairs_up", _CLIMB, name="Staircase",
-               desc="A staircase leads up.", climbs=_UP),
+               desc="A staircase leads up.", climbs=_UP,
+               scenery=tile_const.SCENERY_STAIRS),
     ObjectKind("stairs_down", _CLIMB, name="Staircase",
-               desc="A staircase leads down.", climbs=_DOWN),
-    ObjectKind("transition_outskirts_to_azm_plains", _TRANSITION,
-               target=(129, 2)),
-    ObjectKind("transition_azm_plains_to_outskirts", _TRANSITION,
-               target=(73, 8)),
+               desc="A staircase leads down.", climbs=_DOWN,
+               scenery=tile_const.SCENERY_HATCH),
 )
 
 # key -> ObjectKind, in the order of _KIND_ROWS.

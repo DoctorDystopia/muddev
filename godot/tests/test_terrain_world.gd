@@ -50,6 +50,7 @@ func _ready() -> void:
 	_the_world_files_put_the_block_over_the_disk(world)
 	_a_jump_loads_the_block_of_the_tile(world)
 	_a_selection_knows_its_link_and_an_undo_clears_it(world)
+	_a_sign_keeps_its_words_and_its_marker_shows_its_turn(world)
 	_remove_scratch()
 
 	if _failures > 0:
@@ -229,6 +230,42 @@ func _a_selection_knows_its_link_and_an_undo_clears_it(world: TerrainWorld) -> v
 	world.replay_edit(edit, false)
 
 	_expect(world.selected.is_empty(), "an undo that removes the object clears it")
+
+
+func _a_sign_keeps_its_words_and_its_marker_shows_its_turn(world: TerrainWorld) -> void:
+	var chunk_coord := Vector2i(5, 5)
+	var tile := chunk_coord * _Const.CHUNK_SIZE + Vector2i(3, 3)
+	var kind: String = _Const.OBJECT_SIGNPOST_KIND
+	var words := "Oasis Market"
+	var edit := TerrainEdit.for_world(world)
+
+	edit.add_object(world.chunks, tile, kind, 1, words)
+	world.rebuild_many(edit.chunk_coords())
+	world.select(tile, kind, 1, words)
+	world.rebuild_many(edit.chunk_coords())
+
+	_expect(world.selected.get("text", "") == words,
+		"the selection of a sign keeps its words over a redraw")
+	_expect(world.chunks.objects_at(tile)[0]["text"] == words,
+		"the chunk holds the words")
+
+	var markers := world.markers_of(chunk_coord)
+
+	_expect(markers.size() == 1, "one marker stands for the sign")
+
+	if markers.size() == 1:
+		var marker: Node3D = markers[0]
+		var label: Label3D = marker.get_child(1)
+		var nose: Node3D = marker.get_node(TerrainWorld.MARKER_NOSE_NODE)
+		var facing := marker.basis * nose.position
+
+		_expect(words in label.text, "the marker label shows the words")
+		_expect(facing.x > 0.0 and absf(facing.z) < 0.001,
+			"at rotation 1 the nose points east")
+
+	world.replay_edit(edit, false)
+
+	_expect(world.chunks.objects_at(tile).is_empty(), "an undo removes the sign")
 
 
 func _path_on(chunk_coord: Vector2i, plane: int) -> String:

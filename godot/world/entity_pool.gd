@@ -69,10 +69,14 @@ const MAX_RING_RADIUS := 0.44
 ##
 ## A SCALE, not a radius: everything the resolver hands back is a unit across,
 ## so this is the single number that sizes a modelled sword and a procedural
-## figure alike. Matches the browser's ENTITY_SCALE, and is close to the 0.26
-## diameter of the spheres it replaced -- big enough that a silhouette reads,
-## small enough that four in a ring do not touch.
-const ENTITY_SCALE := 0.5
+## figure alike.
+##
+## 1.0 since 09/27/2026 (Nick): one figure fills its tile. It was 0.5, and
+## then a ring of up to five on one tile did not touch. At 1.0 no ring inside
+## [constant MAX_RING_RADIUS] can hold two figures apart, so figures that share
+## a tile overlap. That is the accepted look (Nick, 09/28/2026). The ring still
+## spreads them as far as its cap allows.
+const ENTITY_SCALE := 1.0
 
 ## How far a ring may be turned from slot 0 pointing at +X, as a share of one
 ## slot. A ROTATION of the whole ring, not a per-occupant nudge -- see
@@ -287,7 +291,7 @@ func bind(resolver: MeshResolver, locate: Callable, step: float) -> void:
 	_resolver.refreshed.connect(_on_art_arrived)
 
 
-## Place everything again. Call when the islands move under them.
+## Place everything again. Call when a chunk lands or goes under them.
 ##
 ## Takes no anchor any more: every entity carries its own `coords` and is placed
 ## from those, so there is no single tile for the pool to be moved to. What DOES
@@ -1120,9 +1124,10 @@ func _rest_offset(node: Node3D) -> float:
 ## started piling them up at three.
 ##
 ## Still capped, so a crowded tile spreads within its own square rather than
-## sprawling across its neighbours. Five is what fits inside that cap; a sixth
-## occupant starts the overlapping again — which is the honest outcome, because
-## the alternative is one room's occupants standing on the next room's floor.
+## sprawling across its neighbours. At the ENTITY_SCALE of 0.5, five fit inside
+## that cap. At 1.0, even two overlap (see [constant ENTITY_SCALE]). Overlap is
+## the honest outcome. Without the cap, the occupants of one room would stand
+## on the floor of the next room.
 func _ring_radius(total: int) -> float:
 	if total <= 1:
 		return 0.0

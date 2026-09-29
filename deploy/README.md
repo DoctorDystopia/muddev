@@ -5,7 +5,7 @@ layer, and none of them tells you which layers a given change affects:
 
 | Doc | Owns |
 |---|---|
-| [`blackout/README.md`](../blackout/README.md) | Server operations — reload/reboot, map rebuild, tests |
+| [`blackout/README.md`](../blackout/README.md) | Server operations — reload/reboot, the tile sync, tests |
 | [`deploy/cloudflared/README.md`](cloudflared/README.md) | The tunnel that makes `game.playblackout.io` reachable |
 | [`deploy/webexport/README.md`](webexport/README.md) | Building and publishing the Godot client |
 | [`docs/old/2026-08-21-INFRA-0001-public-hosting.md`](../docs/old/2026-08-21-INFRA-0001-public-hosting.md) | Why the architecture is shaped this way |

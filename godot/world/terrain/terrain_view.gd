@@ -23,7 +23,22 @@ extends Node3D
 ## every plane above the plane of the player is hidden, as in OSRS.
 ##
 ## A chunk with a water tile also gets a "Water" child: the flat surface of
-## [WaterMeshBuilder].
+## [WaterMeshBuilder]. A chunk with a wall flag gets a "Walls" child: the slabs
+## of [WallMeshBuilder]. A chunk with a ladder, stairs, or a hatch gets a
+## "Props" child: the plain shapes of [PropMeshBuilder], until they get art.
+##
+## ## Scenery
+##
+## A chunk object whose kind stands nothing up on the server is not an entity,
+## so no `room_players` row draws it. The server names a model for such a kind
+## in [code]OBJECT_KIND_SCENERY[/code], and this node stands that model on the
+## tile, in a "Scenery" child. The transition pad is the first. The pick
+## ignores scenery, as it ignores the ground mesh: a click on the pad is a
+## click on its tile.
+##
+## Scenery takes the policy of [method MeshResolver.resolve_scenery]: no art,
+## no model. The first ask starts a fetch, and [signal MeshResolver.refreshed]
+## stands the model when it arrives.
 ##
 ## ## One build for each frame
 ##
@@ -36,8 +51,25 @@ extends Node3D
 ## Chunk meshes built in one frame.
 const BUILDS_PER_FRAME := 1
 
+## How much of a tile a scenery model covers. The same value as the tile props
+## of the xyzgrid maps: the transition pad reads as a pad only when it reaches
+## the edges of its tile.
+const SCENERY_SCALE := 0.9
+
+## The name of the scenery child of a chunk node.
+const SCENERY_NODE := "Scenery"
+
+## The name of the child that draws the primitive scenery of a chunk.
+const PROPS_NODE := "Props"
+
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 ## The world model, bound by the world pane.
 var _state: WorldState
+
+## The mesh source of the scenery, bound by the world pane. Null in a test and
+## in the terrain editor: then no scenery draws.
+var _meshes: MeshResolver
 
 ## Key (Vector3i: cx, cy, plane) -> the MeshInstance3D that draws it.
 var _nodes := {}
@@ -67,6 +99,15 @@ func bind(state: WorldState) -> void:
 	_state.chunks_changed.connect(sync)
 	_state.room_changed.connect(_on_room_changed)
 	sync()
+
+
+## Stand scenery models on the tiles of their objects, now and on each build.
+func bind_meshes(resolver: MeshResolver) -> void:
+	_meshes = resolver
+	_meshes.refreshed.connect(_on_art_arrived)
+
+	for key: Vector3i in _nodes:
+		_place_scenery(key)
 
 
 ## Hide or show the planes above the plane of the player.
@@ -110,6 +151,16 @@ func chunk_count() -> int:
 ## The mesh node of one chunk, or null. For a test.
 func chunk_node(chunk_coord: Vector2i, plane: int) -> MeshInstance3D:
 	return _nodes.get(Vector3i(chunk_coord.x, chunk_coord.y, plane))
+
+
+## The scenery models of one chunk, or an empty list. For a test.
+func scenery_of(chunk_coord: Vector2i, plane: int) -> Array[Node]:
+	var node := chunk_node(chunk_coord, plane)
+
+	if node == null or not node.has_node(SCENERY_NODE):
+		return []
+
+	return node.get_node(SCENERY_NODE).get_children()
 
 
 func _process(_delta: float) -> void:
@@ -170,20 +221,96 @@ func _build(key: Vector3i, chunk: ChunkFile) -> void:
 	node.material_override = _material
 	node.visible = _plane_shows(key.z)
 
-	# The water surface is a child, so it hides with the roof of its plane.
-	var water := WaterMeshBuilder.build(chunk)
-
-	if water.get_surface_count() > 0:
-		var surface := MeshInstance3D.new()
-
-		surface.name = "Water"
-		surface.mesh = water
-		surface.material_override = _material
-		node.add_child(surface)
+	# The water and the walls are children, so they hide with the roof of
+	# their plane.
+	_add_layer(node, "Water", WaterMeshBuilder.build(chunk))
+	_add_layer(node, "Walls", WallMeshBuilder.build(chunk))
+	_add_layer(node, PROPS_NODE, PropMeshBuilder.build(chunk))
 
 	add_child(node)
 	_nodes[key] = node
 	_built[key] = chunk
+	_place_scenery(key)
+
+
+## Add `mesh` as a child of a chunk node, when it has a surface.
+func _add_layer(node: MeshInstance3D, layer_name: String, mesh: ArrayMesh) -> void:
+	if mesh.get_surface_count() == 0:
+		return
+
+	var layer := MeshInstance3D.new()
+
+	layer.name = layer_name
+	layer.mesh = mesh
+	layer.material_override = _material
+	node.add_child(layer)
+
+
+## Stand the scenery of one built chunk again, in a new "Scenery" child.
+func _place_scenery(key: Vector3i) -> void:
+	var node: Node = _nodes.get(key)
+
+	if node == null or _meshes == null:
+		return
+
+	var old := node.get_node_or_null(SCENERY_NODE)
+
+	if old != null:
+		node.remove_child(old)
+		old.queue_free()
+
+	var holder := Node3D.new()
+	var chunk: ChunkFile = _built[key]
+
+	holder.name = SCENERY_NODE
+	node.add_child(holder)
+
+	for thing: Dictionary in chunk.objects:
+		var asset_key: String = _Const.OBJECT_KIND_SCENERY.get(thing["kind"], "")
+
+		# The "Props" child draws a primitive. No model record has its key.
+		if asset_key in _Const.SCENERY_PRIMITIVES:
+			continue
+
+		var model := _meshes.resolve_scenery(asset_key)
+
+		if model != null:
+			holder.add_child(model)
+			_stand(model, chunk, thing)
+
+
+## Put a scenery model on the ground of its tile, turned as its object.
+##
+## A normalised model fills the unit box on its LONGEST axis only. The pad is
+## far flatter than it is wide, so the scaled copy is measured to rest it ON
+## the ground, not through it.
+static func _stand(model: Node3D, chunk: ChunkFile, thing: Dictionary) -> void:
+	var lx: int = thing["x"]
+	var ly: int = thing["y"]
+	var world_x := chunk.cx * _Const.CHUNK_SIZE + lx
+	var world_y := chunk.cy * _Const.CHUNK_SIZE + ly
+	var ground := ChunkMeshBuilder.surface_height(chunk, lx + 0.5, ly + 0.5) \
+		* ChunkMeshBuilder.HEIGHT_STEP
+
+	model.scale = Vector3.ONE * SCENERY_SCALE
+
+	var bounds := ModelLoader.bounds_of(model)
+
+	model.position = Vector3(world_x * ChunkMeshBuilder.TILE_SIZE,
+		ground - bounds.position.y * SCENERY_SCALE,
+		-world_y * ChunkMeshBuilder.TILE_SIZE)
+	model.rotation.y = -int(thing["rotation"]) * PI * 0.5
+
+
+## Art for a scenery key arrived: stand it on every chunk that names it.
+func _on_art_arrived(asset_key: String) -> void:
+	for key: Vector3i in _nodes:
+		var chunk: ChunkFile = _built[key]
+
+		for thing: Dictionary in chunk.objects:
+			if _Const.OBJECT_KIND_SCENERY.get(thing["kind"], "") == asset_key:
+				_place_scenery(key)
+				break
 
 
 func _free(key: Vector3i) -> void:

@@ -50,6 +50,12 @@ static func describe(finding: Dictionary) -> String:
 	return "%s: %s" % [finding["rule"], finding["message"]]
 
 
+## True when an object of `kind` carries text: the words of a signpost. The
+## sign text rule and the editor both ask here.
+static func takes_text(kind: String) -> bool:
+	return _Const.OBJECT_KINDS.get(kind, "") == _Const.OBJECT_TEXT_CATEGORY
+
+
 # ─── The rules ───────────────────────────────────────────────────────────────
 
 static func _plane_sets(chunk_files: Array[ChunkFile]) -> Dictionary:
@@ -84,6 +90,12 @@ static func _check_object(planes: Dictionary, plane: int,
 		found.append(_finding(_Const.TILE_CHECK_UNKNOWN_KIND, tile, plane,
 			where + ": no such object kind"))
 		return found
+
+	if takes_text(kind) == thing["text"].is_empty():
+		var problem := "has no text" if takes_text(kind) else "has text, but is no sign"
+
+		found.append(_finding(_Const.TILE_CHECK_SIGN_TEXT, tile, plane,
+			where + ": " + problem))
 
 	if not _walkable(planes, plane, tile):
 		found.append(_finding(_Const.TILE_CHECK_OBJECT_UNWALKABLE, tile, plane,

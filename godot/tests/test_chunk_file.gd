@@ -89,6 +89,8 @@ func _every_invalid_case_is_refused() -> void:
 		d["floor_names"] = [])
 	_refuses("bad_name", func(d: Dictionary) -> void:
 		d["floor_names"] = ["Sand", "asphalt", "rubble"])
+	_refuses("name_line_break", func(d: Dictionary) -> void:
+		d["floor_names"] = ["sand\n", "asphalt", "rubble"])
 	_refuses("duplicate_name", func(d: Dictionary) -> void:
 		d["floor_names"] = ["sand", "sand", "rubble"])
 	_refuses("short_height_rows", func(d: Dictionary) -> void:
@@ -113,6 +115,20 @@ func _every_invalid_case_is_refused() -> void:
 		d["objects"][0]["rotation"] = _Const.CHUNK_ROTATION_COUNT)
 	_refuses("object_bad_kind", func(d: Dictionary) -> void:
 		d["objects"][0]["kind"] = "Bad Kind")
+	_refuses("object_empty_text", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = "")
+	_refuses("object_text_not_string", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = 7)
+	_refuses("object_text_quote", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = 'Say "hi"')
+	_refuses("object_text_markup", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = "|rRed")
+	_refuses("object_text_edge_space", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = "Bank ")
+	_refuses("object_text_line_break", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = "Bank\n")
+	_refuses("object_text_too_long", func(d: Dictionary) -> void:
+		d["objects"][0]["text"] = "x".repeat(_Const.CHUNK_TEXT_MAX_CHARS + 1))
 
 
 func _refuses(case_name: String, mutate: Callable) -> void:

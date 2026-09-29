@@ -278,6 +278,17 @@ def _mesh_family(entity, kind: str) -> str:
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
+def entity_kind(entity) -> str:
+    """
+    Return the ASSET_KIND_* of an entity. `_classify` owns the rule, so a
+    reader outside the statefeed (the telnet tile map) cannot classify an
+    entity in a different way.
+    """
+    kind, _asset_key = _classify(entity)
+
+    return kind
+
+
 def interact_command(entity, kind: str) -> str:
     """
     Purpose: Name the command a client should send to act on this entity.

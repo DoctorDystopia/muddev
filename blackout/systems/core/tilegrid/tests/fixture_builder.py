@@ -23,7 +23,7 @@ Every feature that a reader can get wrong, in three files:
 
 | File | Covers |
 |---|---|
-| chunk_-1_2_p0.json | Negative chunk x, every flag bit, negative heights, three floors, two areas, objects in all four rotations |
+| chunk_-1_2_p0.json | Negative chunk x, every flag bit, negative heights, three floors, two areas, objects in all four rotations, one object with text |
 | chunk_0_2_p0.json | The east neighbour of the first. Its west edge corners equal the first's east edge, so the seam matches |
 | chunk_0_0_p1.json | Plane 1, one floor, one area, no objects |
 """
@@ -59,6 +59,10 @@ _FLAG_CHOICES = (0, 0, 0, 0, const.FLAG_BLOCKED, const.FLAG_WATER,
                  const.FLAG_WALL_NORTH | const.FLAG_WALL_WEST,
                  const.FLAG_BLOCKED | const.FLAG_WALL_EAST)
 
+# The text of one object. It holds the edges of CHUNK_TEXT_PATTERN: `!`, `#`,
+# `[`, `]`, `{`, `}`, `~`, and inner spaces.
+_SIGN_TEXT = "Bank #2: 'Oasis' [east] {open} ~ !"
+
 _WEST_CHUNK = (-1, 2)
 _EAST_CHUNK = (0, 2)
 _UPPER_CHUNK = (0, 0)
@@ -82,7 +86,7 @@ def _west_chunk(rng) -> chunkfile.ChunkFile:
     objects = [chunkfile.ChunkObject("rendering_cooker", 12, 40, 0),
                chunkfile.ChunkObject("desert_anvil", 0, 63, 1),
                chunkfile.ChunkObject("npc_spawn_raider", 63, 0, 2),
-               chunkfile.ChunkObject("sign", 31, 7, 3)]
+               chunkfile.ChunkObject("sign", 31, 7, 3, text=_SIGN_TEXT)]
 
     return chunkfile.ChunkFile(
         cx=_WEST_CHUNK[0], cy=_WEST_CHUNK[1], plane=0,

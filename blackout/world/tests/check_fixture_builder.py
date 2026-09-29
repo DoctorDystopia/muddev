@@ -28,8 +28,9 @@ The fixture world
 | chunk_0_0_p0.json | Sand, a few Blocked tiles, two respawn points, and one object that breaks each object rule |
 | chunk_0_0_p1.json | Void and Blocked, but two concrete tiles and one void tile with no Blocked flag |
 
-Every rule gives at least one finding, and every good case gives none: a
-ladder that lands, and the down way of a ladder that lands.
+Every rule gives at least one finding. Every good case gives none. The good
+cases are a ladder that lands, the down way of a ladder, and a sign with
+words.
 """
 
 import json
@@ -39,6 +40,7 @@ from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as const
 from systems.core.tilegrid import syncstamp
 from world import floor_types
+from world import object_kinds
 from world import tile_checks
 
 
@@ -65,6 +67,8 @@ EXPECTED: list = sorted([
     (tile_checks.RULE_VOID_OPEN, 30, 30, 1),
     (tile_checks.RULE_RESPAWN_COUNT, 1, 1, 0),
     (tile_checks.RULE_RESPAWN_COUNT, 2, 1, 0),
+    (tile_checks.RULE_SIGN_TEXT, 22, 20, 0),
+    (tile_checks.RULE_SIGN_TEXT, 24, 20, 0),
 ], key=lambda row: (row[0], row[3], row[2], row[1]))
 
 
@@ -101,6 +105,13 @@ def _ground() -> chunkfile.ChunkFile:
         # Leads under plane 0.
         chunkfile.ChunkObject("ladder_down", 12, 10),
         chunkfile.ChunkObject("no_such_kind", 20, 20),
+        # A sign with no words.
+        chunkfile.ChunkObject(object_kinds.SIGNPOST_KIND, 22, 20),
+        # Words on a kind that is not a sign.
+        chunkfile.ChunkObject("metal_pole", 24, 20, text="Cut me"),
+        # A sign with words: good.
+        chunkfile.ChunkObject(object_kinds.SIGNPOST_KIND, 26, 20,
+                              text="Oasis Market"),
     ]
 
     return ground

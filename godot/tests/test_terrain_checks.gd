@@ -76,13 +76,15 @@ func _an_empty_world_has_no_respawn_point() -> void:
 
 
 func _every_rule_is_a_generated_name() -> void:
-	for rule: String in [_Const.TILE_CHECK_UNKNOWN_KIND,
-			_Const.TILE_CHECK_OBJECT_UNWALKABLE, _Const.TILE_CHECK_TRANSITION_LANDING,
-			_Const.TILE_CHECK_CLIMB_LANDING, _Const.TILE_CHECK_VOID_OPEN,
-			_Const.TILE_CHECK_RESPAWN_COUNT]:
+	var twin_rules := [_Const.TILE_CHECK_UNKNOWN_KIND,
+		_Const.TILE_CHECK_OBJECT_UNWALKABLE, _Const.TILE_CHECK_TRANSITION_LANDING,
+		_Const.TILE_CHECK_CLIMB_LANDING, _Const.TILE_CHECK_VOID_OPEN,
+		_Const.TILE_CHECK_RESPAWN_COUNT, _Const.TILE_CHECK_SIGN_TEXT]
+
+	for rule: String in twin_rules:
 		_expect(_Const.TILE_CHECK_RULES.has(rule), "%s is in TILE_CHECK_RULES" % rule)
 
-	_expect(_Const.TILE_CHECK_RULES.size() == 6,
+	_expect(_Const.TILE_CHECK_RULES.size() == twin_rules.size(),
 		"this twin checks every rule of tile_checks.py")
 
 

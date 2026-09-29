@@ -51,6 +51,7 @@ const SCULPT_TOOLS := [Tool.RAISE, Tool.LOWER, Tool.FLATTEN, Tool.SMOOTH,
 const ACTION_TURN := "turn"
 const ACTION_DELETE := "delete"
 const ACTION_SET_KIND := "set_kind"
+const ACTION_SET_TEXT := "set_text"
 const ACTION_FOLLOW := "follow"
 
 ## Flag bits and their names, in the order of the check boxes.
@@ -78,6 +79,7 @@ var _floor := OptionButton.new()
 var _area := OptionButton.new()
 var _kind := OptionButton.new()
 var _rotation := SpinBox.new()
+var _text := LineEdit.new()
 var _flag_boxes: Array[CheckBox] = []
 var _seed := SpinBox.new()
 var _frequency := SpinBox.new()
@@ -152,6 +154,11 @@ func object_rotation() -> int:
 	return int(_rotation.value)
 
 
+## The words of a new sign, with no space at either end.
+func object_text() -> String:
+	return _text.text.strip_edges()
+
+
 ## The OR of every checked flag.
 func flag_bits() -> int:
 	var bits := 0
@@ -214,13 +221,17 @@ func set_status(text: String) -> void:
 	_status.text = text
 
 
-## Fill the object list with `{tile, kind, rotation}` rows.
+## Fill the object list with `{tile, kind, rotation, text}` rows.
 func set_objects(things: Array[Dictionary]) -> void:
 	_objects.clear()
 
 	for thing: Dictionary in things:
-		var row := _objects.add_item("%s  %s  r%d" % [thing["kind"], thing["tile"],
-			thing["rotation"]])
+		var line := "%s  %s  r%d" % [thing["kind"], thing["tile"], thing["rotation"]]
+
+		if not thing["text"].is_empty():
+			line += "  \"%s\"" % thing["text"]
+
+		var row := _objects.add_item(line)
 
 		_objects.set_item_metadata(row, thing)
 		_objects.set_item_custom_fg_color(row, TerrainOverlay.kind_color(thing["kind"]))
@@ -239,6 +250,9 @@ func set_selection(selected: Dictionary, link_end: Dictionary) -> void:
 
 	var lines := ["%s at %s, rotation %d" % [selected["kind"], selected["tile"],
 		selected["rotation"]]]
+
+	if not selected["text"].is_empty():
+		lines.append("Text: \"%s\"" % selected["text"])
 
 	if not link_end.is_empty():
 		lines.append("Leads to %s on plane %d" % [link_end["tile"], link_end["plane"]])
@@ -304,7 +318,10 @@ func _build_paint_rows() -> void:
 	_fill(_kind, _Const.OBJECT_KINDS.keys())
 	_row("Object", _kind)
 	_spin(_rotation, 0.0, _Const.CHUNK_ROTATION_COUNT - 1, 1.0, 0.0)
-	_row("Rotation (quarter turns)", _rotation)
+	_row("Rotation (quarter turns clockwise, 0 faces north)", _rotation)
+	_text.max_length = _Const.CHUNK_TEXT_MAX_CHARS
+	_text.placeholder_text = "The words of a new %s" % _Const.OBJECT_SIGNPOST_KIND
+	_row("Sign text (a sign kind only)", _text)
 
 	var flags := HFlowContainer.new()
 
@@ -346,7 +363,8 @@ func _build_object_rows() -> void:
 	var buttons := HFlowContainer.new()
 
 	for pair: Array in [["Turn", ACTION_TURN], ["Delete", ACTION_DELETE],
-			["Set kind to the Object choice", ACTION_SET_KIND]]:
+			["Set kind to the Object choice", ACTION_SET_KIND],
+			["Set text to the Sign text", ACTION_SET_TEXT]]:
 		var button := Button.new()
 
 		button.text = pair[0]

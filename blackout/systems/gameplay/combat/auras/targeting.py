@@ -27,6 +27,8 @@ from evennia.contrib.grid.xyzgrid.xyzroom import (
 )
 from evennia.utils import logger
 
+from systems.core.tilegrid.planes import plane_of_z
+
 from .. import constants as const
 from ..protocols import Combatant
 
@@ -112,6 +114,53 @@ def _coordinate_keys(center: int, radius: int) -> list:
     return keys
 
 
+def tile_world_rooms(origin, radius: int):
+    """
+    Purpose: Return the rooms within `radius` of a tile room, from the tile
+             grid index.
+
+    Entry:
+        origin - any room.
+        radius - non-negative radius in tiles.
+
+    Exit/Returns:
+        A list of live tile rooms of the plane of `origin`, `origin` included.
+        None when `origin` is not a room of the tile world. Then the caller
+        uses the tag query.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        `TileRooms.rooms_near` reads a dict and makes no query (DESIGN-0011
+        section 6.1.1). The metric is `within_metric`, so the aura and the
+        statefeed neighbourhood agree on "near". Only the rooms of the same
+        plane count: a figure one floor up is not near.
+
+    Notes/References:
+        Handoff debt 17. The statefeed neighbourhood calls this too, so the
+        tile world branch has one owner.
+
+    Author: Nick Hobar
+    Creation date: 09/27/2026
+    """
+    coordinates = getattr(origin, "xyz", None)
+
+    if not coordinates or plane_of_z(coordinates[2]) is None:
+        return None
+
+    from systems.core.tilegrid.world import get_world
+
+    view = get_world().plane_for_z(coordinates[2])
+    found = view.rooms.rooms_near(int(coordinates[0]), int(coordinates[1]),
+                                  radius, metric=within_metric)
+
+    if origin not in found:
+        found.append(origin)
+
+    return found
+
+
 def rooms_within_radius(origin, radius: int) -> list:
     """
     Purpose: Return every grid room within `radius` tiles of `origin`, same Z.
@@ -128,6 +177,8 @@ def rooms_within_radius(origin, radius: int) -> list:
         MAP_*_TAG_CATEGORY read.
 
     Methodology:
+        A room of the tile world reads the tile grid index, with no query
+        (`tile_world_rooms`). Any other room costs
         ONE database query, not (2r+1)^2 of them:
 
         1. Read origin.xyz. XYZRoom caches this into self._xyz after the first
@@ -146,9 +197,8 @@ def rooms_within_radius(origin, radius: int) -> list:
         of the actual game world.
 
     Notes/References:
-        Rooms can be deleted out from under a cached result by
-        scripts/map_sync.py, so callers must re-resolve rather than hold
-        these objects indefinitely.
+        The pool moves a tile room to another tile, and a tile sync can
+        delete one. Thus, callers must re-resolve and not hold these objects.
 
     Author: Nick Hobar
     Creation date: 08/03/2026
@@ -158,6 +208,11 @@ def rooms_within_radius(origin, radius: int) -> list:
 
     if radius <= 0:
         return [origin]
+
+    tile_rooms = tile_world_rooms(origin, radius)
+
+    if tile_rooms is not None:
+        return tile_rooms
 
     coordinates = getattr(origin, "xyz", None)
     if coordinates is None:

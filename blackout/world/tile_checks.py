@@ -59,6 +59,11 @@ RULE_VOID_OPEN: str = "void_open"
 # respawn point at all is one finding at tile (0, 0) of plane 0.
 RULE_RESPAWN_COUNT: str = "respawn_count"
 
+# A sign has no text, or an object of another kind has text. A sign with no
+# words stands nothing in the tile sync, and the text of another kind has no
+# reader.
+RULE_SIGN_TEXT: str = "sign_text"
+
 # Every rule, in the order the editor lists them.
 RULES: tuple = (
     RULE_UNKNOWN_KIND,
@@ -67,6 +72,7 @@ RULES: tuple = (
     RULE_CLIMB_LANDING,
     RULE_VOID_OPEN,
     RULE_RESPAWN_COUNT,
+    RULE_SIGN_TEXT,
 )
 
 
@@ -100,7 +106,7 @@ def _walkable(grids: dict, plane: int, x: int, y: int) -> bool:
 
 
 def _check_object(grids: dict, plane: int, kind_key: str, x: int,
-                  y: int) -> list:
+                  y: int, text: str) -> list:
     """Return the findings of one placed object."""
     kind = object_kinds.OBJECT_KINDS.get(kind_key)
     where = f"{kind_key} at ({x}, {y}) plane {plane}"
@@ -110,6 +116,11 @@ def _check_object(grids: dict, plane: int, kind_key: str, x: int,
                         f"{where}: no such object kind")]
 
     found = []
+    takes_text = kind.category == tile_const.OBJECT_TEXT_CATEGORY
+
+    if takes_text != bool(text):
+        problem = "has no text" if takes_text else "has text, but is no sign"
+        found.append(Finding(RULE_SIGN_TEXT, plane, y, x, f"{where}: {problem}"))
 
     if not _walkable(grids, plane, x, y):
         found.append(Finding(RULE_OBJECT_UNWALKABLE, plane, y, x,
@@ -207,8 +218,9 @@ def check_world(chunk_files: list) -> list:
     for chunk_file in chunk_files:
         found.extend(_check_void(chunk_file))
 
-        for kind_key, x, y, _rotation in chunk_file.global_objects():
-            found.extend(_check_object(grids, chunk_file.plane, kind_key, x, y))
+        for kind_key, x, y, text in chunk_file.global_texts():
+            found.extend(_check_object(grids, chunk_file.plane, kind_key, x, y,
+                                       text))
 
             if kind_key == object_kinds.RESPAWN_KIND:
                 respawns.append((chunk_file.plane, x, y))

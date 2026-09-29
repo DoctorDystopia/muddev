@@ -309,6 +309,8 @@ _TILE_GRID_EXPORTS: tuple = (
     ("CHUNK_HEIGHT_MAX", tile_const.HEIGHT_MAX),
     ("CHUNK_ROTATION_COUNT", tile_const.ROTATION_COUNT),
     ("CHUNK_NAME_PATTERN", tile_const.CHUNK_NAME_PATTERN),
+    ("CHUNK_TEXT_PATTERN", tile_const.CHUNK_TEXT_PATTERN),
+    ("CHUNK_TEXT_MAX_CHARS", tile_const.CHUNK_TEXT_MAX_CHARS),
     ("CHUNK_FILE_TEMPLATE", tile_const.CHUNK_FILE_TEMPLATE),
     ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
     ("TILE_SYNC_STAMP_FILE", tile_const.SYNC_STAMP_FILE),
@@ -331,6 +333,11 @@ _TILE_GRID_EXPORTS: tuple = (
     ("OBJECT_CATEGORY_SIGN", tile_const.OBJECT_CATEGORY_SIGN),
     ("OBJECT_CATEGORY_TRANSITION", tile_const.OBJECT_CATEGORY_TRANSITION),
     ("OBJECT_CATEGORY_CLIMB", tile_const.OBJECT_CATEGORY_CLIMB),
+    ("OBJECT_TEXT_CATEGORY", tile_const.OBJECT_TEXT_CATEGORY),
+    ("OBJECT_SIGNPOST_KIND", kind_table.SIGNPOST_KIND),
+    ("SCENERY_LADDER", tile_const.SCENERY_LADDER),
+    ("SCENERY_STAIRS", tile_const.SCENERY_STAIRS),
+    ("SCENERY_HATCH", tile_const.SCENERY_HATCH),
     ("TILE_DEFAULT_FLOOR", floor_table.DEFAULT_FLOOR_TYPE),
     ("TILE_DEFAULT_AREA", area_table.DEFAULT_AREA),
     # Planes (Phase 7). The client reads the plane of the player from the
@@ -348,6 +355,7 @@ _TILE_GRID_EXPORTS: tuple = (
     ("TILE_CHECK_CLIMB_LANDING", tile_checks.RULE_CLIMB_LANDING),
     ("TILE_CHECK_VOID_OPEN", tile_checks.RULE_VOID_OPEN),
     ("TILE_CHECK_RESPAWN_COUNT", tile_checks.RULE_RESPAWN_COUNT),
+    ("TILE_CHECK_SIGN_TEXT", tile_checks.RULE_SIGN_TEXT),
 )
 
 # The names that the Godot editor paints and places (DESIGN-0011 section 6.3).
@@ -359,11 +367,13 @@ _TILE_GRID_LIST_EXPORTS: tuple = (
     ("TILE_AREAS", tuple(area_table.AREAS)),
     ("OBJECT_CATEGORIES", tile_const.OBJECT_CATEGORIES),
     ("TILE_CHECK_RULES", tile_checks.RULES),
+    ("SCENERY_PRIMITIVES", tile_const.SCENERY_PRIMITIVES),
 )
 
 # The target of each transition and the ways of each climb let the editor
-# draw each link and run the checks of world/tile_checks.py. A kind with no
-# target or no climb has no row.
+# draw each link and run the checks of world/tile_checks.py. The scenery of a
+# kind is the model or the primitive that the client stands on its tile. A
+# kind with no target, no climb, or no scenery has no row in that map.
 _TILE_GRID_MAP_EXPORTS: tuple = (
     ("OBJECT_KINDS", tuple((key, kind.category)
                            for key, kind in kind_table.OBJECT_KINDS.items())),
@@ -373,6 +383,9 @@ _TILE_GRID_MAP_EXPORTS: tuple = (
     ("OBJECT_KIND_CLIMBS", tuple((key, kind.climbs)
                                  for key, kind in kind_table.OBJECT_KINDS.items()
                                  if kind.climbs)),
+    ("OBJECT_KIND_SCENERY", tuple((key, kind.scenery)
+                                  for key, kind in kind_table.OBJECT_KINDS.items()
+                                  if kind.scenery)),
     ("CLIMB_PLANE_STEPS", tuple(tile_const.CLIMB_PLANE_STEPS.items())),
 )
 

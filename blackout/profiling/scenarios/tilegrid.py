@@ -10,7 +10,8 @@ The question
 DESIGN-0011 section 6.1 picks option B: one tile grid for the whole world, and
 an Evennia room only at a tile that holds a thing. A step onto an empty tile
 then needs a room at that tile. This module times that step three ways, beside
-the xyzgrid step that the game takes today:
+the xyzgrid step that the game took until Phase 4b (09/25/2026). The baseline
+stays as the reference for the spike numbers:
 
 | Row | The room at the next tile |
 |---|---|

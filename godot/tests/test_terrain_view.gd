@@ -11,6 +11,29 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 var _failures := 0
 
 
+## A resolver with art for every key, and no fetch. The real one needs the
+## served manifest.
+class _FakeResolver extends MeshResolver:
+	## Keys with no art yet. [method resolve_scenery] answers null for them.
+	var pending := {}
+
+	func _init() -> void:
+		super(ModelRegistry.new(), "")
+
+	func resolve_scenery(asset_key: String) -> Node3D:
+		if asset_key.is_empty() or pending.has(asset_key):
+			return null
+
+		var model := MeshInstance3D.new()
+		var box := BoxMesh.new()
+
+		box.size = Vector3(1.0, 0.2, 1.0)
+		model.mesh = box
+		model.name = asset_key
+
+		return model
+
+
 func _ready() -> void:
 	_each_chunk_gets_one_mesh()
 	_a_chunk_sent_again_is_built_again()
@@ -20,6 +43,11 @@ func _ready() -> void:
 	_roofs_hide_the_planes_above_the_player()
 	_a_climb_shows_the_plane_it_reaches()
 	_the_chunk_under_the_player_builds_first()
+	_a_chunk_with_walls_gets_a_walls_layer()
+	_a_climb_draws_a_primitive_and_asks_for_no_model()
+	_a_transition_gets_the_teleporter()
+	_a_kind_with_no_scenery_stands_nothing()
+	_scenery_stands_when_its_art_arrives()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -180,7 +208,146 @@ func _the_chunk_under_the_player_builds_first() -> void:
 	view.queue_free()
 
 
+func _a_chunk_with_walls_gets_a_walls_layer() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var walled := ChunkFile.blank(0, 0)
+
+	walled.flags[3] = _Const.TILE_FLAG_WALL_NORTH
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(walled))
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(ChunkFile.blank(1, 0)))
+	view.flush()
+
+	_expect(view.chunk_node(Vector2i(0, 0), 0).has_node("Walls"),
+		"a chunk with a wall flag draws its walls")
+	_expect(not view.chunk_node(Vector2i(1, 0), 0).has_node("Walls"),
+		"a chunk with no wall has no walls layer")
+	view.queue_free()
+
+
+func _a_climb_draws_a_primitive_and_asks_for_no_model() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var resolver := _FakeResolver.new()
+	var climbing := ChunkFile.blank(0, 0)
+
+	climbing.objects.append({"kind": _a_primitive_kind(), "x": 3, "y": 3,
+		"rotation": 2})
+	view.bind_meshes(resolver)
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(climbing))
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(ChunkFile.blank(1, 0)))
+	view.flush()
+
+	_expect(view.chunk_node(Vector2i(0, 0), 0).has_node(TerrainView.PROPS_NODE),
+		"a chunk with a climb draws its primitive")
+	_expect(not view.chunk_node(Vector2i(1, 0), 0).has_node(TerrainView.PROPS_NODE),
+		"a chunk with no primitive has no props layer")
+	# The fake resolver has art for every key. A model here would draw the
+	# climb two times.
+	_expect(view.scenery_of(Vector2i.ZERO, 0).is_empty(),
+		"a primitive asks the resolver for no model")
+	view.queue_free()
+	resolver.free()
+
+
+func _a_transition_gets_the_teleporter() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var resolver := _FakeResolver.new()
+	var chunk := ChunkFile.blank(0, 0)
+	var kind := _a_scenery_kind()
+
+	chunk.objects.append({"kind": kind, "x": 4, "y": 6, "rotation": 1})
+	view.bind_meshes(resolver)
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(chunk))
+	view.flush()
+
+	var scenery := view.scenery_of(Vector2i.ZERO, 0)
+
+	_expect(scenery.size() == 1, "a transition stands one scenery model")
+
+	if scenery.size() == 1:
+		var model: Node3D = scenery[0]
+
+		_expect(model.name == _Const.OBJECT_KIND_SCENERY[kind],
+			"the model is the one that the server names")
+		_expect(is_equal_approx(model.position.x, 4.0)
+				and is_equal_approx(model.position.z, -6.0),
+			"it stands on the centre of its tile")
+		_expect(model.position.y > 0.0, "it rests on the ground, not through it")
+
+	view.queue_free()
+	resolver.free()
+
+
+func _a_kind_with_no_scenery_stands_nothing() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var resolver := _FakeResolver.new()
+	var chunk := ChunkFile.blank(0, 0)
+
+	chunk.objects.append({"kind": "respawn_point", "x": 1, "y": 1, "rotation": 0})
+	view.bind_meshes(resolver)
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(chunk))
+	view.flush()
+
+	_expect(view.scenery_of(Vector2i.ZERO, 0).is_empty(),
+		"a kind with no scenery row stands nothing")
+	view.queue_free()
+	resolver.free()
+
+
+func _scenery_stands_when_its_art_arrives() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var resolver := _FakeResolver.new()
+	var chunk := ChunkFile.blank(0, 0)
+	var kind := _a_scenery_kind()
+	var asset_key: String = _Const.OBJECT_KIND_SCENERY[kind]
+
+	resolver.pending[asset_key] = true
+	chunk.objects.append({"kind": kind, "x": 2, "y": 2, "rotation": 0})
+	view.bind_meshes(resolver)
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(chunk))
+	view.flush()
+
+	_expect(view.scenery_of(Vector2i.ZERO, 0).is_empty(),
+		"no art yet, no model")
+
+	resolver.pending.clear()
+	resolver.refreshed.emit(asset_key)
+
+	_expect(view.scenery_of(Vector2i.ZERO, 0).size() == 1,
+		"the model stands when its art arrives")
+	view.queue_free()
+	resolver.free()
+
+
 # ─── Private helpers ─────────────────────────────────────────────────────────
+
+## The first kind whose scenery is a primitive.
+func _a_primitive_kind() -> String:
+	for kind: String in _Const.OBJECT_KIND_SCENERY:
+		if _Const.OBJECT_KIND_SCENERY[kind] in _Const.SCENERY_PRIMITIVES:
+			return kind
+
+	_expect(false, "some kind shows a primitive")
+
+	return ""
+
+
+## The first transition kind that names a scenery model.
+func _a_scenery_kind() -> String:
+	for kind: String in _Const.OBJECT_KIND_SCENERY:
+		if _Const.OBJECT_KINDS[kind] == _Const.OBJECT_CATEGORY_TRANSITION:
+			return kind
+
+	return ""
 
 ## A new state and a view bound to it, in the tree.
 func _bound() -> Array:

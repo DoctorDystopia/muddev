@@ -182,8 +182,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3020 tests, ~26 min,
-measured 09/26/2026):
+**Before a merge or a major change**, run the full suite (3033 tests, ~24 min,
+measured 09/28/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -887,6 +887,9 @@ Read the handoff before you continue this work.
 | The room Z of each plane, `TilePlane`, and `climb` | `systems/core/tilegrid/planes.py`, `world.py`, `world/tile_travel.py` |
 | Planes in the client, and "Hide roofs" | `godot/world/world_state.gd`, `godot/world/terrain/terrain_view.gd` |
 | The water surface | `godot/world/terrain/water_mesh_builder.gd` |
+| The walls, and the scenery of a chunk object | `godot/world/terrain/wall_mesh_builder.gd`, `terrain_view.gd`, `scenery` in `world/object_kinds.py` |
+| The primitives: ladder, stairs, hatch | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
+| The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
 | The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
 | The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/terrain_sync_state.gd` |
 

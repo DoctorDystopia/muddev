@@ -24,7 +24,12 @@ A JSON object with these keys, in this order::
     floors       CHUNK_SIZE rows of CHUNK_SIZE floor indexes
     flags        CHUNK_SIZE rows of CHUNK_SIZE walk flag ints
     areas        CHUNK_SIZE rows of CHUNK_SIZE area indexes
-    objects      [{"kind", "x", "y", "rotation"}, ...]
+    objects      [{"kind", "x", "y", "rotation"}, ...]. An object may also
+                 have "text": the words of a signpost (09/27/2026)
+
+An object without text writes the same bytes as before the text key, so no
+file of format 1 needed a rewrite. The text follows CHUNK_TEXT_PATTERN, so no
+text needs a JSON escape, as for a name.
 
 Row 0 is the south edge (y = 0), and item 0 of a row is the west edge. That is
 the order of the lists in memory, so no reader flips an axis. An object stands
@@ -70,10 +75,18 @@ CHUNK_FILE_KEYS: tuple = ("format", "chunk", "plane", "size", "floor_names",
 # The keys of one object, in the order that the writer writes them.
 OBJECT_KEYS: tuple = ("kind", "x", "y", "rotation")
 
+# The key of the optional text of an object. The writer writes it last, and
+# only when the text is not empty.
+OBJECT_TEXT_KEY: str = "text"
+
 
 # ─── Private constant definitions ────────────────────────────────────────────
 
+# Use `fullmatch` with these, never `match`. A `$` also matches before a last
+# "\n". Thus, `match` takes "sand\n". The writer then puts a raw line break
+# in a JSON string. `ChunkFile._whole_match` is the GDScript twin.
 _NAME_RE = re.compile(const.CHUNK_NAME_PATTERN)
+_TEXT_RE = re.compile(const.CHUNK_TEXT_PATTERN)
 
 # The file name, as a pattern, for `load_directory`.
 _FILE_NAME_RE = re.compile(r"^chunk_(-?\d+)_(-?\d+)_p(\d+)\.json$")
@@ -90,12 +103,16 @@ class ChunkFileError(ValueError):
 
 @dataclass
 class ChunkObject:
-    """One placed object, at local tile coordinates."""
+    """
+    One placed object, at local tile coordinates. The `text` is the words of
+    a signpost, or "" for an object that carries none.
+    """
 
     kind: str
     x: int
     y: int
     rotation: int = 0
+    text: str = ""
 
 
 @dataclass
@@ -151,7 +168,10 @@ class ChunkFile:
         return self.area_names[index]
 
     def global_objects(self) -> list:
-        """Return (kind, x, y, rotation) of each object, at world tiles."""
+        """
+        Return (kind, x, y, rotation) of each object, at world tiles. The
+        text is not in the tuple. `global_texts` gives it.
+        """
         origin_x = self.cx * const.CHUNK_SIZE
         origin_y = self.cy * const.CHUNK_SIZE
         placed = []
@@ -159,6 +179,18 @@ class ChunkFile:
         for thing in self.objects:
             placed.append((thing.kind, origin_x + thing.x, origin_y + thing.y,
                            thing.rotation))
+
+        return placed
+
+    def global_texts(self) -> list:
+        """Return (kind, x, y, text) of each object, at world tiles."""
+        origin_x = self.cx * const.CHUNK_SIZE
+        origin_y = self.cy * const.CHUNK_SIZE
+        placed = []
+
+        for thing in self.objects:
+            placed.append((thing.kind, origin_x + thing.x, origin_y + thing.y,
+                           thing.text))
 
         return placed
 
@@ -203,7 +235,7 @@ def _names(value, what: str) -> list:
         _fail("%s must be a list with at least one name", what)
 
     for name in value:
-        if not isinstance(name, str) or not _NAME_RE.match(name):
+        if not isinstance(name, str) or not _NAME_RE.fullmatch(name):
             _fail("%s holds %r, which does not match %s", what, name,
                   const.CHUNK_NAME_PATTERN)
 
@@ -252,13 +284,13 @@ def _objects(value) -> list:
     found = []
 
     for index, item in enumerate(value):
-        if not isinstance(item, dict) or set(item) != set(OBJECT_KEYS):
-            _fail("object %d must have exactly the keys %s", index,
-                  ", ".join(OBJECT_KEYS))
+        if not isinstance(item, dict) or not _has_object_keys(item):
+            _fail("object %d must have exactly the keys %s, and may have %s",
+                  index, ", ".join(OBJECT_KEYS), OBJECT_TEXT_KEY)
 
         kind = item["kind"]
 
-        if not isinstance(kind, str) or not _NAME_RE.match(kind):
+        if not isinstance(kind, str) or not _NAME_RE.fullmatch(kind):
             _fail("object %d has the kind %r", index, kind)
 
         found.append(ChunkObject(
@@ -266,9 +298,41 @@ def _objects(value) -> list:
             x=_int_in(item["x"], 0, last, "object %d x" % index),
             y=_int_in(item["y"], 0, last, "object %d y" % index),
             rotation=_int_in(item["rotation"], 0, const.ROTATION_COUNT - 1,
-                             "object %d rotation" % index)))
+                             "object %d rotation" % index),
+            text=_object_text_value(item, index)))
 
     return found
+
+
+def _has_object_keys(item: dict) -> bool:
+    """Return True if an object has OBJECT_KEYS, and at most the text too."""
+    keys = set(item)
+    keys.discard(OBJECT_TEXT_KEY)
+
+    return keys == set(OBJECT_KEYS)
+
+
+def _object_text_value(item: dict, index: int) -> str:
+    """
+    Return the text of an object, or "". A text key that is present must
+    hold one line that matches CHUNK_TEXT_PATTERN, at most
+    CHUNK_TEXT_MAX_CHARS long. An empty text is refused, so each object has
+    one canonical form: no key.
+    """
+    if OBJECT_TEXT_KEY not in item:
+        return ""
+
+    text = item[OBJECT_TEXT_KEY]
+
+    if not isinstance(text, str) or not _TEXT_RE.fullmatch(text):
+        _fail("object %d has the text %r, which does not match %s", index,
+              text, const.CHUNK_TEXT_PATTERN)
+
+    if len(text) > const.CHUNK_TEXT_MAX_CHARS:
+        _fail("object %d text is %d characters, more than %d", index,
+              len(text), const.CHUNK_TEXT_MAX_CHARS)
+
+    return text
 
 
 def _header(data: dict) -> tuple:
@@ -330,8 +394,14 @@ def _name_list_text(names: list) -> str:
 
 
 def _object_text(thing: ChunkObject) -> str:
-    return '{"kind":"%s","x":%d,"y":%d,"rotation":%d}' % (
-        thing.kind, thing.x, thing.y, thing.rotation)
+    """Return one object as one line. The text key comes last, if any."""
+    words = ""
+
+    if thing.text:
+        words = ',"%s":"%s"' % (OBJECT_TEXT_KEY, thing.text)
+
+    return '{"kind":"%s","x":%d,"y":%d,"rotation":%d%s}' % (
+        thing.kind, thing.x, thing.y, thing.rotation, words)
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -482,7 +552,7 @@ def write_file(path: str, chunk_file: ChunkFile) -> None:
 
 def is_chunk_file_name(name: str) -> bool:
     """Return True if `name` has the form `chunk_<cx>_<cy>_p<plane>.json`."""
-    return _FILE_NAME_RE.match(name) is not None
+    return _FILE_NAME_RE.fullmatch(name) is not None
 
 
 def load_directory(directory: str) -> list:
@@ -516,7 +586,7 @@ def load_directory(directory: str) -> list:
     found = []
 
     for name in sorted(os.listdir(directory)):
-        if not _FILE_NAME_RE.match(name):
+        if not _FILE_NAME_RE.fullmatch(name):
             continue
 
         path = os.path.join(directory, name)
@@ -609,7 +679,8 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
 
     Methodology:
         One line for the chunk, one for each name list, one for each tile in
-        row order, and one for each object. A tile line gives its world
+        row order, and one for each object. An object line ends with its
+        text, when it has one. A tile line gives its world
         coordinates, its four corners, its tile height, its flags, and its
         floor and area names. A reader that swaps x and y, loses a corner, or
         adds the chunk offset wrong writes a different line.
@@ -640,8 +711,14 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
                 chunk_file.floor_name(lx, ly),
                 chunk_file.area_name(lx, ly)))
 
-    for kind, x, y, rotation in chunk_file.global_objects():
-        lines.append("object %s %d %d %d" % (kind, x, y, rotation))
+    for thing in chunk_file.objects:
+        line = "object %s %d %d %d" % (thing.kind, origin_x + thing.x,
+                                       origin_y + thing.y, thing.rotation)
+
+        if thing.text:
+            line += " " + thing.text
+
+        lines.append(line)
 
     return "\n".join(lines) + "\n"
 

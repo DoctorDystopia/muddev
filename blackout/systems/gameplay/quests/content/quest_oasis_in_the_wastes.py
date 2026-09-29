@@ -15,6 +15,8 @@ systems/interface/menus/npc_dialogues/npc_oasis_guide.py. This module owns only 
 TRUE about the quest -- its phases, what satisfies them, and what it pays.
 """
 
+
+
 from world.item_database import ITEM_DB
 
 from systems.gameplay.progression.skills import constants as skill_constants
@@ -22,6 +24,8 @@ from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.quests.quests import QuestBlueprint, QuestStep
 from systems.interface.ui.colors import highlight as _hl
 from systems.interface.statefeed import constants as feed_const
+
+
 
 # Every line this module sends a player is about a quest, so the routing tag
 # is bound once here rather than repeated at every call site.

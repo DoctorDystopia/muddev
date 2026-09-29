@@ -3,8 +3,8 @@
 [ext_resource type="Script" uid="uid://chd2u1l80buka" path="res://world/world_view.gd" id="1_world"]
 [ext_resource type="Script" uid="uid://b4i56mvkkmj4k" path="res://world/orbit_camera.gd" id="2_camera"]
 [ext_resource type="Script" uid="uid://buaeo37g0vebp" path="res://world/entity_pool.gd" id="3_entities"]
-[ext_resource type="Script" path="res://world/area_environment.gd" id="4_area"]
-[ext_resource type="Script" path="res://world/terrain/terrain_view.gd" id="5_terrain"]
+[ext_resource type="Script" uid="uid://e6dqfk4ae1ae" path="res://world/area_environment.gd" id="4_area"]
+[ext_resource type="Script" uid="uid://bxk2cpovjbwam" path="res://world/terrain/terrain_view.gd" id="5_terrain"]
 
 [sub_resource type="Environment" id="Environment_world"]
 background_mode = 1

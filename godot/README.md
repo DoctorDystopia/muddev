@@ -314,6 +314,9 @@ tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
 | The model | `world/world_state.gd` | Keeps one `ChunkSet` for each plane, and frees a chunk outside the block. The server forgets the same chunks. `chunks` is the set of the plane of the player |
 | The ground | `world/terrain/terrain_view.gd` | One mesh for each chunk of each plane, from `ChunkMeshBuilder`, the class of the editor. It builds one chunk each frame, the chunk under the player first |
 | The water | `world/terrain/water_mesh_builder.gd` | A flat surface on each water tile, at the height of its highest corner. The editor draws it with the same class |
+| The walls | `world/terrain/wall_mesh_builder.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. A plain primitive until the walls get art. The editor draws it with the same class |
+| The scenery | `TerrainView._place_scenery` | The model that `OBJECT_KIND_SCENERY` names for a chunk object, on the centre of its tile. The server names the model in `world/object_kinds.py`. The transition pad is the first. No art, no model |
+| The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, or a hatch, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. The editor draws it with the same class |
 | The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
 | The pick | `WorldView._cell_under` | `TerrainPicking.ray_hit` on the height grid. No collision shape |
 | The area look | `WorldView._place_marker` | The area of the tile under the player, from its chunk, goes to `AreaEnvironment` |
@@ -1334,7 +1337,9 @@ directory under `user://`, never in `blackout/world/chunks/`:
 
 `test_terrain_view.tscn` covers the ground of the client: one mesh for each
 chunk of the model, a mesh built again for a chunk sent again, and no mesh for
-a freed chunk.
+a freed chunk. It also covers the walls layer, the props layer, and the
+scenery. `test_wall_mesh.tscn` covers the wall slabs. `test_prop_mesh.tscn`
+covers the primitives and their rotation.
 
 `test_char_state.tscn` needs nothing running either:
 
@@ -1787,7 +1792,9 @@ To add a sound:
 | `scenes/console.tscn` `.gd` | The shell: output, input, and the subscription handshake. |
 | `scenes/world.tscn` | The 3D scene: environment, light, terrain, marker, camera rig. |
 | `world/world_state.gd` | The world model: the chunks of the block, the room, and the float boundary. |
-| `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds. |
+| `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds, with its water, walls, and scenery. |
+| `world/terrain/wall_mesh_builder.gd` | The wall slabs of one chunk. The editor uses it too. |
+| `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, and hatches. The editor uses it too. |
 | `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
 | `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
 | `world/meshes/mesh_palette.gd` | Colors and finishes. One owner for both. |

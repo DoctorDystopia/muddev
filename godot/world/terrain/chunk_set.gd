@@ -272,7 +272,7 @@ static func _name_index(names: PackedStringArray, name: String) -> int:
 
 # ─── Objects ────────────────────────────────────────────────────────────────
 
-## Each object on world tile `tile`, as `{kind, rotation}`.
+## Each object on world tile `tile`, as `{kind, rotation, text}`.
 func objects_at(tile: Vector2i) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	var chunk := _tile_chunk(tile)
@@ -284,12 +284,15 @@ func objects_at(tile: Vector2i) -> Array[Dictionary]:
 
 	for thing: Dictionary in chunk.objects:
 		if thing["x"] == local.x and thing["y"] == local.y:
-			found.append({"kind": thing["kind"], "rotation": thing["rotation"]})
+			found.append({"kind": thing["kind"], "rotation": thing["rotation"],
+				"text": thing.get("text", "")})
 
 	return found
 
 
-func add_object(tile: Vector2i, kind: String, rotation: int) -> void:
+## Place an object on `tile`. `text` is the words of a signpost, or "".
+func add_object(tile: Vector2i, kind: String, rotation: int,
+		text: String = "") -> void:
 	var chunk := _tile_chunk(tile)
 
 	if chunk == null:
@@ -298,13 +301,14 @@ func add_object(tile: Vector2i, kind: String, rotation: int) -> void:
 	var local := local_of(tile, chunk_of_tile(tile))
 
 	chunk.objects.append({"kind": kind, "x": local.x, "y": local.y,
-		"rotation": rotation})
+		"rotation": rotation, "text": text})
 	_dirty[chunk_of_tile(tile)] = true
 
 
-## Remove one object with this kind and rotation from `tile`. True when one
-## was there.
-func remove_object(tile: Vector2i, kind: String, rotation: int) -> bool:
+## Remove one object with this kind, rotation, and text from `tile`. True
+## when one was there.
+func remove_object(tile: Vector2i, kind: String, rotation: int,
+		text: String = "") -> bool:
 	var chunk := _tile_chunk(tile)
 
 	if chunk == null:
@@ -316,7 +320,8 @@ func remove_object(tile: Vector2i, kind: String, rotation: int) -> bool:
 		var thing: Dictionary = chunk.objects[index]
 
 		if thing["x"] == local.x and thing["y"] == local.y \
-				and thing["kind"] == kind and thing["rotation"] == rotation:
+				and thing["kind"] == kind and thing["rotation"] == rotation \
+				and thing.get("text", "") == text:
 			chunk.objects.remove_at(index)
 			_dirty[chunk_of_tile(tile)] = true
 			return true

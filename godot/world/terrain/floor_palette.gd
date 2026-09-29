@@ -42,6 +42,27 @@ const CLIFF_COLOR := Color("5e5249")
 ## to tune.
 const WATER_COLOR := Color("3d6f86")
 
+## The colour of a wall on a tile edge, on any floor type. [WallMeshBuilder]
+## picks it. A plain primitive until the walls get art. A look, for Nick to
+## tune.
+const WALL_COLOR := Color("7b7870")
+
+## The colour of the top of a wall. Lighter than the sides, so the line of a
+## wall reads from the camera above.
+const WALL_TOP_COLOR := Color("a19d93")
+
+## The colours of the primitive scenery of [PropMeshBuilder]: a ladder, a
+## flight of stairs, and a hatch. Plain shapes until the climbs get art. A
+## look, for Nick to tune.
+const LADDER_COLOR := Color("8a5a36")
+const STAIRS_COLOR := Color("8f8b82")
+const HATCH_COLOR := Color("2b2622")
+const HATCH_FRAME_COLOR := Color("6b5a48")
+
+## How much lighter the top face of a primitive is than its sides, so its
+## shape reads from the camera above.
+const PROP_TOP_LIGHTEN := 0.15
+
 ## The saturation and the value of a hashed fallback colour.
 const FALLBACK_SATURATION := 0.35
 const FALLBACK_VALUE := 0.55
