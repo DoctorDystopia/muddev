@@ -41,8 +41,12 @@ extends Control
 ## It also survives the CLIENT, in [ClientSettings], because a rect that lives
 ## only in this node is one a player who moved the bank off their minimap set
 ## again on every run. The write is debounced for the reason
-## [constant PanelDock.SIZE_SAVE_DELAY] gives: `gui_input` fires for each frame of the
-## gesture, and each setter writes the file.
+## [constant HudArranger.SAVE_DELAY] gives: `gui_input` fires for each frame of
+## the gesture, and each setter writes the file.
+##
+## The pop-up is not a HUD element of the layout editor. It opens and closes
+## with the server, so the editor would have no box to show most of the time.
+## The player moves and sizes it where it is.
 ##
 ## ## It opens between the docks
 ##
@@ -878,7 +882,7 @@ func _on_header_input(event: InputEvent) -> void:
 ##
 ## The clamped rect off `_box`, not `_box_rect`: a drag past the edge leaves
 ## the raw rect outside the pane, and the number worth keeping is the one the
-## player can see. This is the rule [method PanelDock._save_size] follows.
+## player can see. [method HudArranger.set_rect] follows the same rule.
 func _remember_box() -> void:
 	if _settings == null:
 		return

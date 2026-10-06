@@ -13,6 +13,28 @@
     ]
   },
   {
+    "title": "Bank",
+    "author": "Harsh Patel",
+    "url": "TODO",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "bank_terminal"
+    ]
+  },
+  {
+    "title": "Copper pole",
+    "author": "Harsh Patel",
+    "url": "TODO",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "copper_pole"
+    ]
+  },
+  {
     "title": "Low Poly Food Asset Pack",
     "author": "Kyle Fuji",
     "url": "https://www.patreon.com/kylefuji",
@@ -56,16 +78,14 @@
     ]
   },
   {
-    "title": "Old Tower",
-    "author": "shoaib8",
-    "url": "https://sketchfab.com/3d-models/old-tower-b882aacdc89b4e58925600829fd6604d",
-    "license": "CC BY 4.0",
-    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "title": "Metal pole",
+    "author": "Harsh Patel",
+    "url": "TODO",
+    "license": "Made for Blackout",
+    "license_url": "",
     "confirmed": true,
     "models": [
-      "copper_pole",
-      "metal_pole",
-      "rusty_pole"
+      "metal_pole"
     ]
   },
   {
@@ -110,6 +130,17 @@
     "confirmed": true,
     "models": [
       "lone_android"
+    ]
+  },
+  {
+    "title": "Rusty pole",
+    "author": "Harsh Patel",
+    "url": "TODO",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "rusty_pole"
     ]
   },
   {

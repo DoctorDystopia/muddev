@@ -55,7 +55,8 @@ where there is art, and the silhouette of the family where there is not.
 | **Left-click an inventory cell** | The server's first action on that row: `Equip` on a wearable, `Deposit` or `Sell` while a pop-up is open |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
-| **Drag a grip** | Resizes the box that the grip is on. A dock hangs from its corner, so only its top edge and its side edge move. A pop-up has a grip on each edge and each corner, and the docks never cover them. Remembered |
+| **Edit layout** in Options | Opens the layout editor. Drag a frame to move a HUD element, and drag a grip to size it. Click a frame to hide, fade or scale the element. Save and load layouts by name. `Done` or Esc closes it. Remembered |
+| **Drag a pop-up grip** | Resizes the pop-up. It has a grip on each edge and each corner. Remembered |
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
 | **Mouse wheel on the minimap**, or its `-` and `+` | Zooms the minimap. Remembered |
 | **`Run` on the minimap**, or **R** in move mode | Turns run on or off. The button shows what the server says. Run moves two tiles each tick |
@@ -73,7 +74,9 @@ where there is art, and the silhouette of the family where there is not.
 | **WASDQEZC / hjklyubn** | Walk while held, while the map has the keyboard. One tile each tick, two with run on. W and D together walk northeast |
 | **"WASD follows the camera" in Options** | W walks where the camera looks, not to the north. Off by default. Remembered |
 | **Enter, in move mode** | Hands the keyboard back to the input |
-| **Click a chat tab** | Filters the log to what that tab claims. A dot means lines landed there while you were elsewhere |
+| **Click a chat button** | The buttons sit under the input: All, Game, Combat, Local, Private, Channel. A click shows only the lines of that tab. A dot means that lines landed there while you were elsewhere |
+| **Right-click a chat button** | "Set chat mode" for each mode whose lines the tab shows, and "Show in All". Both are remembered |
+| **Click the chat mode** | The name in front of the input, `Nick [Public]:`. A menu of every mode. In a chat mode, the client adds the prefix of the mode to each typed line. A line that starts with `/` goes out as a command in every mode |
 | **3D button** | Hides the 3D world. Persists. The inventory has its own toggle in Options — one switch for both meant giving up the bag to stop the diorama |
 | **Drag the divider** | Resizes the log against the world, and it is remembered. Both offsets were a literal 300 in the scene until 08/28/2026 |
 | **Ctrl+F** | Find in the log. Enter steps, Escape closes |
@@ -766,47 +769,113 @@ it.
 > about the viewport hints at it, so `test_inventory_view` asserts that the two
 > worlds differ and does not trust a comment.
 
-## Two docks hang over the world, and the player sizes both
+## The player places every HUD element
 
 Until 09/21/2026 the panel was the bottom half of a `VSplitContainer`, under
 the world pane. Until 09/22/2026 the game log was the left half of an
 `HSplitContainer`. Each pixel that a split gave to a pane was a pixel that the
-world did not get. A split also changes one axis only, so the log always took
-the full height.
+world did not get. Until 09/29/2026 each dock hung from a fixed bottom corner
+(`PanelDock`), and the minimap, the vitals and the XP drops had fixed offsets
+in `console.tscn`. The player could size the two docks and nothing else.
 
-`PanelDock` is one script for both boxes. Each box hangs from a bottom corner
-of the world, and the player drags the side edge and the top edge:
+Now the player moves, sizes, hides, fades and scales six HUD elements in the
+layout editor. The "Edit layout" button in Options opens it. `Done` and Esc
+close it.
 
-| Dock | Corner | Holds | Size in `ClientSettings` |
-|---|---|---|---|
-| `%ConsoleDock` | bottom-left | The login form, the game log, the input | `console_size` |
-| `%PanelDock` | bottom-right | The control panel tabs | `panel_size` |
+| Key | Element | Control | Can hide | Fades |
+|---|---|---|---|---|
+| `log` | Game log | `%ConsoleDock/Box` | No, it holds the input | The background |
+| `panel` | Control panel | `%PanelDock/Box` | No, it holds Options | The background |
+| `minimap` | Minimap | `%Minimap` | Yes | The whole element |
+| `xp` | XP drops | `%XpHud` | Yes | The whole element |
+| `vitals` | Vitals | `%WorldVitals` | Yes | The whole element |
+| `hover` | Hover text | the world `HoverBar` | Yes | The whole element |
 
-The node exports the corner, the setting key, the shipped size and the
-shipped share.
-Thus, a third dock is one node in `console.tscn` and one entry in
-`ClientSettings.DOCK_SIZE_KEYS`.
+Five files share the work. Each one has one job:
 
-**The corner is the whole geometry.** The player owns the SIZE. The dock owns
-where that size hangs from. For that reason, a dock setting keeps a size and
-not a rect: a stored position would be a second owner of a fact that the dock
-already decides.
+| File | Owns |
+|---|---|
+| `world/hud_layout.gd` | The rules: the anchor of a drop, the position from an anchor, the clamp, the snap, and the check of a saved entry. Static, and it knows no node |
+| `scenes/layout/hud_elements.gd` | The table: the key of each element and where it ships |
+| `scenes/layout/hud_slot.gd` | One row of that table, with its control |
+| `scenes/layout/hud_arranger.gd` | The one owner of where each element sits. It places every element on each pane resize and each layout change |
+| `scenes/layout/layout_editor.gd` | The mode: a frame over each element, the grips, the snap, the bar, and the presets |
 
-The docks use the bottom corners only. The minimap and the XP drops use the
-top-right of the world pane, and the vitals use the top-left. The world's hover
-bar runs along the bottom, in the gap between the two docks.
+**A new HUD element is one row in `HudElements.ROWS` and one control** in
+`Console._build_layout`. The arranger and the editor name no element. Never
+change a key after it ships: the saved layout of each player uses the key.
 
-**The shipped size follows the pane.** Before the first drag, a dock takes
-`default_size` or `default_share` of the room, whichever is smaller. A fixed
-size that suits a 1920 x 1080 window covered the minimap in a 1280 x 720
-window. `smoke_console` checks the shipped layout at five window sizes, from
-1280 x 720 to 2560 x 1440.
+**An element keeps its distance from its nearest corner.** A drop stores an
+anchor and an offset, not a position. The anchor comes from the third of the
+pane that holds the centre of the element: left, centre or right, and top,
+centre or bottom. Thus a minimap that the player moved to the top right stays
+at the top right, the same distance from the corner, in any window. The player
+never sets an anchor by hand.
 
-**The two docks never overlap.** The log dock draws over the panel dock, so a
-log dragged over the panel covered the side grip of the panel.
-`keep_clear_of` stops each box one margin short of the other. The docks do not
-raise their grips as the pop-up does, because a raised grip also draws over
-the loading veil.
+**The arranger is the one owner of "the element is on the screen".** Its pass
+runs on every resize of the window and on every layout change. It clamps each
+element into the pane, and it never makes an element smaller than its
+content. A `TabContainer` reports the widest minimum of its tabs, so the
+content usually sets the floor of the panel. A layout that a wide window saved
+comes back into a narrow one here.
+
+**The layout is locked outside the editor.** No grip hangs on a dock during
+play, so a drag in the world never moves a box. The editor covers the whole
+console and takes each click and each key while it is open. A movement key
+thus never walks the player behind it. It is the last child of the console,
+so its grips draw over every element, and the docks no longer need to keep
+clear of each other.
+
+**A drag snaps.** An edge snaps to the pane edge one margin in, to the edge of
+another element, or one gap beside it. The centre snaps to the centre of the
+pane. Shift stops the snap. No line puts two edges flush: that line is less
+than the snap distance from the gap line, and the drag would jump between
+them. A drag also does not snap to an element that follows other elements,
+such as the shipped hover bar. Its edge moves with the dragged edge, so the
+snap pulled the log back 2 pixels on each mouse step, and the log jittered.
+
+**Three facts decide whether an element is drawn.** The player hides it in
+the editor. A setting in Options turns it off: the 3D world takes the minimap,
+the vitals, the XP drops and the hover text with it. The console calls that a
+gate (`HudArranger.set_gate`). The two stay apart, so the minimap comes back
+where the player put it when the world comes back. A hidden element keeps a
+faint frame in the editor, so the player can find it and show it again.
+
+**A dock fades its background, not its text.** The log and the panel fade
+through `self_modulate` on their box. A clear log is still a log that the
+player can read. Every other element fades whole, with a floor of 20%, because
+Hide does the job of 0%.
+
+**A scale keeps the anchored corner.** The element scale multiplies the global
+interface scale of Options. A panel at the bottom right grows up and to the
+left.
+
+**Presets are layouts by name.** The editor bar saves the current layout under
+a name, loads it, and deletes it. `ClientSettings` keeps up to 20. "Reset to
+defaults" in Options resets the layout and keeps the presets. "Reset all" in
+the editor does the same.
+
+**The arranger writes the layout, and reads it only when told.** A drag writes
+through `ClientSettings.set_layout` after 0.4 seconds. The arranger reads the
+layout again only on `ClientSettings.layout_replaced`: a load, a reset, or a
+preset. A pane that follows the setting it writes is how a slider in Options
+came to collapse the pane it sat in.
+
+**The dock sizes of an older build move into the layout.** Before 09/29/2026
+`client.cfg` kept `panel_size` and `console_size`. The first load takes each
+one as the size of its element, and the dock keeps its shipped corner.
+
+**The shipped size follows the pane.** Before the first edit, a dock takes its
+row size or its share of the room, whichever is smaller. A fixed size that
+suits a 1920 x 1080 window covered the minimap in a 1280 x 720 window.
+`smoke_console` checks that no two shipped elements overlap at five window
+sizes, from 1280 x 720 to 2560 x 1440. That check found two old overlaps on
+09/29/2026: the XP drops ended under the minimap, and the panel covered the
+bottom of the minimap in the two smallest windows.
+
+**The pop-up is not a HUD element.** The server opens and closes it, so the
+editor would have no box to show most of the time. The player moves and sizes
+it where it is, and it keeps its own grips.
 
 **The first-run UI scale comes from the screen.** The console gives
 `ClientSettings` the scale for the screen DPI: 144 DPI gives 1.5. A browser
@@ -818,13 +887,13 @@ must be the last child of the world pane, and it covers that pane only. The
 log thus stays readable while the world loads, as the old text column did.
 
 **With the 3D world off, the log fills the space beside the panel.**
-`fill_beside` gives the log the full height and the width that the panel
-leaves, and it hides the log's grips. The saved size does not change, and the
-log returns to it when the world comes back.
+`HudArranger.fill_beside` gives the log the full height, and the width on the
+wider side of the panel. The editor shows no grips on the log then. The saved
+layout does not change, and the log returns to it when the world comes back.
 
 **The world pane is never hidden, and the panel dock is the reason.**
-`show_world` turns off the 3D view and the two HUD pieces over it, not the
-pane itself. The panel holds Options, so a hidden pane would be a setting that
+`show_world` turns off the 3D view and the HUD elements over it, not the pane
+itself. The panel holds Options, so a hidden pane would be a setting that
 hides the screen that you change it on.
 
 **The panel dock draws over the pop-up and under the right-click menu.** That order
@@ -834,16 +903,8 @@ put every Deposit action on it out of reach.
 
 **It is not a `Window`.** `PanelView` says why the three floating windows went
 in 08/2026: a web export is one canvas, so a Window is an embedded subwindow
-that cannot leave the game area. The dock is an ordinary `Control` over the
-world pane, which is what the minimap, the vitals, the veil and the right-click
-menu already are.
-
-**The box never gets smaller than what is in it.** A `TabContainer` reports the
-widest minimum of any tab, and the carried grid is four cells across. Thus, the
-floor is usually the content and not `MIN_SIZE`. This is the rule that
-`PopupView` follows, and `_place_box` is the one owner of it: it runs on every
-drag AND on every resize of the window, so a size saved by a wide window comes
-back into a narrow one.
+that cannot leave the game area. Each HUD element is an ordinary `Control`
+over the world pane, and so are the veil and the right-click menu.
 
 ## The paper doll is the client's picture of the server's slots
 
@@ -1199,7 +1260,8 @@ The rules that the editor keeps:
 
 - **The scene holds no terrain.** Every mesh is made at load and has no owner.
   The chunk files are the only store.
-- **The block is 3 x 3 chunks.** A brush writes a shared corner to every chunk
+- **The block is 4 x 4 chunks.** The centre chunk is the south-west chunk of
+  the middle four. A brush writes a shared corner to every chunk
   that stores it, so a seam behaves like any other place. The outer edge of the
   block shows red, and no brush writes it: its corners also belong to chunks
   that are not loaded.
@@ -1299,8 +1361,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All fifty-five tests are headless and exit non-zero on failure. Fifty-two
-need nothing running. Three of the four `smoke_*` scenes need an Evennia, and
+All sixty-three tests are headless and exit non-zero on failure. Sixty need
+nothing running (counted 09/29/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -1349,6 +1411,27 @@ and every case is a pair of grid cells:
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
+```
+
+The HUD layout has three scenes, and each needs nothing running.
+`test_hud_layout` checks the rules with numbers only. `test_hud_arranger`
+checks the placement with plain controls. `test_layout_editor` checks the
+drags, the settings bar, the presets, and that no key reaches the console
+while the editor is open:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_hud_layout.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_hud_arranger.tscn
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_layout_editor.tscn
+```
+
+The Help pane has one scene, and it needs nothing running. `test_help_view`
+sizes the pane from the narrowest dock to 2000 px. At each width, it checks that
+no label passes the right edge, that the rows ask for no width, and that the
+rows stack when the pane is narrow:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_help_view.tscn
 ```
 
 The two maps have four scenes, and each needs nothing running.
@@ -1420,6 +1503,14 @@ covers the primitives and their rotation.
 
 ```bash
 "/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_model_registry.tscn
+```
+
+`test_model_loader.tscn` needs nothing running. It checks that one read
+holds the largest served model, and it checks which failed fetches get a
+retry:
+
+```bash
+"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_model_loader.tscn
 ```
 
 `test_inventory_state.tscn` needs nothing running either:
@@ -1819,6 +1910,65 @@ because there is no max-lines property.
 `active_log_changed`. A find across tabs would scroll a tab that the player
 cannot see, and count matches in logs that the player does not read.
 
+### The chat interface (09/29/2026)
+
+The model is the OSRS chat interface. Nick made four choices:
+
+1. **The buttons sit under the input:** All, Game, Combat, Local, Private,
+   Channel. Game takes every line that is not chat or combat, untagged lines
+   too. Local is the OSRS Public tab. Nick renamed it, because the default
+   Evennia channel is also named Public. `ChatTabs.DEFAULT_TABS` is still the
+   whole table.
+2. **A right-click on a button** offers "Set chat mode" for each mode whose
+   lines the tab shows, and "Show in All". The settings file keeps both.
+3. **The server names the chat modes** on `char_chat`. The client names no
+   mode except Command.
+4. **A typed line goes to the chosen mode.** A line that starts with `/` goes
+   out as a command in every mode.
+
+**The server names each mode, and the client names one.** Each row of
+`char_chat` is `{key, label, type, prefix}`. The builder is
+`blackout/systems/interface/statefeed/chat.py`:
+
+| Mode | Prefix | Type |
+|---|---|---|
+| Say | `say ` | `say` |
+| Reply | `page/reply ` | `page` |
+| One row for each channel that the player listens to and can send to | `@channel <key> = `, from the nick replacement of the channel class | `channel` |
+
+`ChatModes.command_for` adds the typed text to the prefix. The console sends
+the result through `Evennia.command`, so a chat line is a line that a telnet
+player could type. Every lock and cooldown of the command still applies.
+Command, the empty key, sends the line as it is. It is the default, and it is
+the one mode that the client owns.
+
+**A mode goes on the tab that shows its type.** The bar asks
+`ChatModes.modes_for_types` with the types of the tab. Thus, a new channel
+shows under Channel, with no client edit. All shows every mode.
+
+**`page/reply` exists for the Reply mode.** Evennia's `page` reads the first
+word as a target when an account has that name. A chat mode that sent
+`page <text>` could thus page the wrong account. `page/reply` in
+`blackout/commands/comms_cmds.py` sends to the last page partner and reads no
+target. The same command tags every page line `page`, so a page reaches the
+Private tab.
+
+**The input hint names the mode.** In Command mode the hints are as before.
+In a chat mode, the map hint reads "Press Enter to chat in Say", and the
+typing hint names the mode and the slash. The console reads the hint again
+on each change of `ChatModes`.
+
+**The chosen key outlives the payload.** The settings file loads before the
+server sends the modes, and a channel can go away. `ChatModes` keeps the
+wanted key and gives Command until a mode with that key exists. Thus, the
+login line is never sent as a chat line.
+
+**"Hide from All" draws All again.** A log that only appends cannot remove a
+line. `ChatView` keeps the source of each line, capped at `MAX_LINES`, and on
+a filter change it draws All again with one `append_text`. A filter change is
+rare, so the one full parse costs nothing that a player feels. A tab switch
+still draws nothing again.
+
 ## XP drops ride an event; the session is the client's
 
 The HUD sits just left of the minimap, right-aligned against it, where OSRS
@@ -1969,21 +2119,28 @@ To add a sound:
 | `world/map_raster.gd` | The colour of a tile on both maps, and the images the maps draw the ground from. |
 | `world/map_icons.gd` | The symbol of each object category on both maps. |
 | `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. Each tab has an icon, and the labels show when they fit. |
-| `scenes/panel/panel_dock.gd` | A box over the world: the control panel, and the game log. Owns one corner and one size. |
-| `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the pop-up and the docks. The pop-up raises its grips over every other box. |
+| `world/hud_layout.gd` | The rules of the HUD layout: anchors, the clamp, the snap, and the check of a saved entry. Static, and it knows no node. |
+| `scenes/layout/hud_elements.gd` | The HUD elements that the player can place, and where each one ships. One row for each. |
+| `scenes/layout/hud_slot.gd` | One HUD element: its control and its shipped place. |
+| `scenes/layout/hud_arranger.gd` | Places every HUD element from the layout of the player. The one owner of where an element sits. |
+| `scenes/layout/layout_editor.gd` | The layout editor: frames, grips, snap, the settings of an element, and presets. |
+| `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the pop-up and the layout editor. The pop-up raises its grips over every other box. |
 | `ui/icons/` | The tab icons, from game-icons.net (CC BY 3.0). `PanelView.TAB_ICONS` names the author of each, and the Credits box shows them. |
 | `world/doll_layout.gd` | Where each equipment frame sits on the paper doll. A picture, not a rule; guarded from Python by path. |
 | `scenes/equipment/equipment_view.gd` | The paper doll. Draws the frames the server sent, in the shape the table says. |
 | `scenes/vitals/vitals_bars.gd` | Your resources as bars. One control, two homes. |
-| `world/chat_tabs.gd` | Which tab a line belongs in, and which tabs have unread lines. Holds no text. |
-| `scenes/chat/chat_view.gd` | The tab strip and one RichTextLabel per tab. Appends; never re-renders. |
-| `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, and how big the player made a box or a dock, via ConfigFile under `user://`. |
+| `world/chat_tabs.gd` | Which tab a line belongs in, which tab is open, which tabs have unread lines, and which tabs are hidden from All. Holds no text. |
+| `world/chat_modes.gd` | The chat modes from `char_chat`, the chosen mode, and the line to send for a typed line. |
+| `scenes/chat/chat_view.gd` | One RichTextLabel per tab. Appends. Draws All again only when the filter changes. |
+| `scenes/chat/chat_bar.gd` | The tab buttons under the input, and the right-click menu of each. |
+| `scenes/chat/chat_mode_button.gd` | The chat mode in front of the input, and its menu. |
+| `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, how big the player made a box, the HUD layout and its presets, via ConfigFile under `user://`. |
 | `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Also the red accent: the text box red on the slider bars, check boxes (`ui/icons/check_*.svg`, `radio_*.svg`), the selected tab, scroll bars, pressed buttons, menu hover and `FormHeading` lines. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
 | `ui/theme_preview/` | Two scenes for the scene preview of the Theme editor: `blackout.tscn` shows each type that the theme sets, and `godot.tscn` shows each other type of the default theme. In the Theme editor, click Add Preview, then Add Scene Preview. The picker then selects the type of the clicked sample. A tool script builds the samples from the type lists, so a new variation needs no edit. |
 | `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
 | `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |
-| `scenes/help/help_view.gd` | What the CLIENT does. The game's own `help` covers the rest. |
+| `scenes/help/help_view.gd` | What the CLIENT does. The game's own `help` covers the rest. Every row wraps at any pane width, and a narrow pane stacks each name over its text. No entry has a line break in a sentence. |
 | `scenes/options/options_view.gd` | The sliders and the pane toggles. Writes through the settings object, applies nothing. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | The 3D pane: the terrain node, the marker, the hover mark, the pick, and the avatar on the drawn ground. |

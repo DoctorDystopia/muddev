@@ -960,6 +960,10 @@ pipeline that connects the two:
 2. Publish it to R2.
 3. Deploy the Worker of the site repo.
 
+`deploy/diff_deploy.sh` runs the same pipeline, but each leg runs only when
+its inputs changed. Its records are in `deploy/.deploy_state/`, and git
+ignores them.
+
 Read `deploy/README.md` before you change either side. This section is a
 pointer, not a substitute.
 

@@ -26,18 +26,27 @@
 # exists beats two that can drift.
 #
 # Pass --dry-run to list every key that would be written without uploading.
+#
+# Pass --changed-only to upload only the files that differ from the last
+# upload. Each upload records the SHA-256 of its file in the publish record,
+# `deploy/.deploy_state/r2_<bucket>.tsv`. A run with no flag also writes the
+# record, so a diff deploy after a full deploy uploads nothing. The record
+# describes the bucket as this machine last wrote it. If something else wrote
+# the bucket, delete the record, and the next run uploads every file.
 
 set -u
 
 BUCKET="playblackout-assets"
 DRY_RUN=0
+CHANGED_ONLY=0
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --dry-run) DRY_RUN=1 ;;
-        --bucket)  shift; BUCKET="${1:-}" ;;
+        --dry-run)      DRY_RUN=1 ;;
+        --changed-only) CHANGED_ONLY=1 ;;
+        --bucket)       shift; BUCKET="${1:-}" ;;
         *) echo "Unknown argument: $1" >&2
-           echo "Usage: publish.sh [--dry-run] [--bucket NAME]" >&2
+           echo "Usage: publish.sh [--dry-run] [--changed-only] [--bucket NAME]" >&2
            exit 2 ;;
     esac
     shift
@@ -85,10 +94,34 @@ TREES=(
     "$MODEL_DIR:static/webclient/models"
 )
 
+# The publish record: one "key<TAB>sha256" line for each object that this
+# machine uploaded. It is keyed by bucket, because a record of one bucket says
+# nothing about another.
+STATE_FILE="$REPO_ROOT/deploy/.deploy_state/r2_$BUCKET.tsv"
+declare -A PUBLISHED=()
+declare -A CURRENT=()
+
+if [ -f "$STATE_FILE" ]; then
+    while IFS=$'\t' read -r KEY HASH; do
+        [ -n "$KEY" ] && PUBLISHED["$KEY"]="$HASH"
+    done < "$STATE_FILE"
+fi
+
+# Write the whole record again. It runs after each upload, so a failed run
+# still records each object that did land.
+save_state() {
+    mkdir -p "$( dirname "$STATE_FILE" )"
+    for KEY in "${!PUBLISHED[@]}"; do
+        printf '%s\t%s\n' "$KEY" "${PUBLISHED[$KEY]}"
+    done | sort > "$STATE_FILE"
+}
+
 KEYS=()
 FILES=()
 SIZES=()
+HASHES=()
 TOTAL_BYTES=0
+UNCHANGED=0
 
 for TREE in "${TREES[@]}"; do
     ROOT="${TREE%%:*}"
@@ -98,11 +131,21 @@ for TREE in "${TREES[@]}"; do
     # publish logs is about what changed rather than about directory order.
     while IFS= read -r FILE; do
         RELATIVE="${FILE#"$ROOT"/}"
+        KEY="$PREFIX/$RELATIVE"
+        HASH="$( sha256sum "$FILE" | cut -c1-64 )"
+        CURRENT["$KEY"]=1
+
+        if [ "$CHANGED_ONLY" -eq 1 ] && [ "${PUBLISHED[$KEY]:-}" = "$HASH" ]; then
+            UNCHANGED=$(( UNCHANGED + 1 ))
+            continue
+        fi
+
         SIZE="$( stat -c %s "$FILE" )"
 
-        KEYS+=( "$PREFIX/$RELATIVE" )
+        KEYS+=( "$KEY" )
         FILES+=( "$FILE" )
         SIZES+=( "$SIZE" )
+        HASHES+=( "$HASH" )
         TOTAL_BYTES=$(( TOTAL_BYTES + SIZE ))
     done < <( find "$ROOT" -type f | sort )
 done
@@ -111,14 +154,30 @@ COUNT="${#KEYS[@]}"
 TOTAL_MIB="$( awk -v b="$TOTAL_BYTES" 'BEGIN { printf "%.1f", b / 1048576 }' )"
 
 echo "=== $COUNT objects, $TOTAL_MIB MiB -> r2://$BUCKET ==="
+if [ "$CHANGED_ONLY" -eq 1 ]; then
+    echo "    ($UNCHANGED unchanged since the last upload, skipped)"
+fi
 
 for INDEX in "${!KEYS[@]}"; do
     SIZE_MIB="$( awk -v b="${SIZES[$INDEX]}" 'BEGIN { printf "%.2f", b / 1048576 }' )"
     printf '  %-48s %8s MiB\n' "${KEYS[$INDEX]}" "$SIZE_MIB"
 done
 
+# A key with no local file stays in the bucket. This script never deletes: a
+# player with an old client open can still ask for the old art.
+for KEY in "${!PUBLISHED[@]}"; do
+    if [ -z "${CURRENT[$KEY]:-}" ]; then
+        echo "  (in R2, no local file, not deleted) $KEY"
+    fi
+done
+
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "=== Dry run: nothing uploaded ==="
+    exit 0
+fi
+
+if [ "$COUNT" -eq 0 ]; then
+    echo "=== Nothing to upload ==="
     exit 0
 fi
 
@@ -131,6 +190,8 @@ for INDEX in "${!KEYS[@]}"; do
         echo "Upload failed at ${KEYS[$INDEX]}; bucket is now PARTIALLY updated" >&2
         exit 1
     fi
+    PUBLISHED["${KEYS[$INDEX]}"]="${HASHES[$INDEX]}"
+    save_state
 done
 
 echo "=== Done. Deploy the site so the worker routes are live. ==="

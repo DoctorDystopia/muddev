@@ -428,6 +428,32 @@ class CharCombatPayload(_Payload):
 
 
 @dataclass
+class CharChatPayload(_Payload):
+    """Where a typed line can go. Char.Chat.
+
+    A SNAPSHOT: a join or a leave of a channel sends the whole list again.
+
+    `speaker` is the name that the chat bar shows before the input, as OSRS
+    shows the name of the player. `modes` is a LIST in the order that the
+    client offers them. Each row is `{key, label, type, prefix}`:
+
+    - `key` stays the same across sessions, so a client can keep the choice.
+    - `type` is the message type of the lines that the mode makes. The client
+      offers the mode on the tab that shows that type.
+    - `prefix` is the start of the whole command. The client adds the typed
+      text to it and sends the result verbatim.
+
+    The empty mode, a line sent as it is, is the client's own and is not in
+    the list.
+    """
+
+    channel = const.CHANNEL_CHAR_CHAT
+
+    speaker: str = ""
+    modes: list = field(default_factory=list)    # [{key, label, type, prefix}]
+
+
+@dataclass
 class CharPopupPayload(_Payload):
     """The pop-up the observer has open, or the closed state. Char.Popup.
 

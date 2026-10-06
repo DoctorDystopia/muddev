@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_hud_arranger.gd" id="1_hudarranger"]
+
+[node name="TestHudArranger" type="Node"]
+script = ExtResource("1_hudarranger")

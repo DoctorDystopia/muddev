@@ -19,7 +19,7 @@ extends Control
 ## server has told it anything.
 const Const := preload("res://autoload/blackout_constants.gd")
 
-## The three hints in the input. See [method _refresh_input_hint].
+## The hints in the input. See [method _refresh_input_hint].
 ##
 ## Before login, the line that logs in. The form above the log sends the same
 ## line, and this tells a player who prefers to type it.
@@ -31,7 +31,13 @@ const TYPE_MODE_HINT := "Type a command — Esc to walk with the keyboard"
 
 ## While the map has the keyboard. It names both layouts, with their
 ## diagonals, and the way back. See [MovementKeys].
-const MOVE_MODE_HINT := "Movement: Click on tile / WASD + QEZC / HJKL + YUBN / R to run — Enter to type a command"
+const MOVE_MODE_HINT := "Press Enter to type a command"
+
+## The two hints above, in a chat mode. `%s` is the label of the mode. The
+## typing hint also names the slash, because in a chat mode a typed command
+## goes to the chat unless it starts with one. See [ChatModes].
+const CHAT_TYPE_HINT := "Chat in %s — start with / for a command — Esc to walk with the keyboard"
+const CHAT_MOVE_HINT := "Press Enter to chat in %s — for a command type /[command]"
 
 ## The key that turns run on and off, while the map has the keyboard. No
 ## layout binds it to a direction. See [MovementKeys].
@@ -46,29 +52,36 @@ const HELD_RESEND_TICKS := 0.5
 ## goes.
 @onready var _chat: ChatView = %Chat
 @onready var _input: LineEdit = %Input
+
+## The tab buttons under the input, and the chat mode in front of it. See
+## [ChatBar] and [ChatModeButton].
+@onready var _chat_bar: ChatBar = %ChatBar
+@onready var _chat_mode_button: ChatModeButton = %ChatMode
 @onready var _inventory: InventoryView = %Inventory
 @onready var _login: LoginView = %Login
 
-## The box the game log, the login form and the input hang in, over the
-## bottom-left corner of the world pane. A [PanelDock], like the control panel.
+## The box the game log, the login form and the input hang in. The HUD
+## element [constant HudElements.LOG]. [HudArranger] places it.
 ##
 ## A sibling of the world pane and not a child of it. The loading veil covers
 ## the world pane only, so the log stays readable while the world loads. That
 ## is how the old text column behaved.
-@onready var _console_dock: PanelDock = %ConsoleDock
+@onready var _console_box: Control = get_node("%ConsoleDock/Box")
 
 ## Where the vitals bars sit, and there are two because one of them can be
 ## hidden. See [method _place_vitals].
 @onready var _world_vitals: MarginContainer = %WorldVitals
 @onready var _text_vitals: MarginContainer = %TextVitals
 
-## The box the control panel hangs in, over the world pane.
+## The box the control panel hangs in, over the world pane. The HUD element
+## [constant HudElements.PANEL].
 ##
 ## ALWAYS VISIBLE, and that is a decision rather than an oversight. The panel
 ## holds Options, and a setting that can hide the screen you change it on is a
-## trap. A player who wants the world back drags the dock small instead, and
-## the size is remembered. See [PanelDock].
-@onready var _dock: PanelDock = %PanelDock
+## trap. The layout editor thus offers no Shown box for it. A player who wants
+## the world back makes the panel small instead.
+@onready var _dock: Control = %PanelDock
+@onready var _panel_box: Control = get_node("%PanelDock/Box")
 
 ## The control panel. Inventory, worn gear, character sheet, options, help.
 @onready var _panel: PanelView = %Panel
@@ -174,6 +187,10 @@ var _world_map_view: WorldMapView
 ## model that also kept a copy would store every line twice to save nothing.
 var _chat_tabs := ChatTabs.new()
 
+## Where a typed line goes, from `char_chat`. The chat bar and the mode button
+## write it, and [method _on_submitted] reads it.
+var _chat_modes := ChatModes.new()
+
 ## Where every mesh in the client comes from, for BOTH 3D panes.
 ##
 ## Owned here rather than by either pane, because a second resolver would mean a
@@ -240,11 +257,20 @@ var _world_hover: HoverBar
 
 ## How far the world hover bar stays inside the pane's edges, in pixels. The
 ## same margin the vitals and the minimap keep in console.tscn.
-const WORLD_HOVER_MARGIN := 6
+const WORLD_HOVER_MARGIN := 8
+
+## The narrowest gap between the docks that the hover bar ships in, in pixels.
+const WORLD_HOVER_MIN_WIDTH := 120.0
 
 ## Your hit points, and whatever resources follow them. ONE control, moved
 ## between two slots -- see [method _place_vitals].
 var _vitals: VitalsBars
+
+## Places every HUD element from the layout of the player. See [HudArranger].
+var _arranger: HudArranger
+
+## The mode in which the player changes that layout. Opened from Options.
+var _layout_editor: LayoutEditor
 
 
 func _ready() -> void:
@@ -287,6 +313,15 @@ func _ready() -> void:
 	# very first thing this method does after binding is open a socket.
 	_chat.bind(_chat_tabs)
 	_chat.active_log_changed.connect(_on_active_log_changed)
+	_chat_bar.bind(_chat_tabs, _chat_modes)
+	_chat_mode_button.bind(_chat_modes)
+
+	# The chosen mode and the tabs hidden from All are the player's, so the
+	# settings file keeps them. The models load from it in _apply_chat_settings.
+	_chat_modes.changed.connect(func():
+		_settings.set_chat_mode(_chat_modes.wanted_key()))
+	_chat_tabs.filter_changed.connect(func():
+		_settings.set_chat_hidden_from_all(_chat_tabs.hidden_keys()))
 
 	_vitals = VitalsBars.new()
 	_vitals.bind(_char)
@@ -409,6 +444,7 @@ func _ready() -> void:
 	# Login and logout move the hint as well. The login form hides on the
 	# same fact, so the hint and the form cannot disagree.
 	_char.changed.connect(_refresh_input_hint)
+	_chat_modes.changed.connect(_refresh_input_hint)
 	_refresh_input_hint()
 
 	# Built, bound, then handed over. The panel adds them to the tree, so
@@ -495,17 +531,14 @@ func _ready() -> void:
 	_retry_timer.timeout.connect(_redial)
 	add_child(_retry_timer)
 
-	# The size the player dragged each dock to. Bound AFTER the settings exist
-	# and before the file lands, which is the arrangement the dock's own
-	# `_player_size` is written for.
-	_dock.bind_settings(_settings)
-	_console_dock.bind_settings(_settings)
+	# Every HUD element, placed from the layout of the player. Built AFTER the
+	# settings exist and before the file lands: the load emits
+	# `layout_replaced`, and the arranger reads the layout then.
+	_build_layout()
 
-	# The log dock draws over the panel dock, so a log dragged over the panel
-	# covers the side grip of the panel. Each box stops one margin short of the
-	# other. See [method PanelDock.keep_clear_of].
-	_dock.keep_clear_of(_console_dock)
-	_console_dock.keep_clear_of(_dock)
+	# The layout editor opens from Options. It writes through the arranger,
+	# the same as a drag, so the two cannot place an element differently.
+	_options.layout_edit_requested.connect(_layout_editor.open)
 
 	# The find bar replaces the placeholder node the scene reserves for it, so
 	# the layout slot is authored and the widget is built in code like the
@@ -525,12 +558,18 @@ func _ready() -> void:
 	# Applied AFTER load, so a saved preference is in effect before the first
 	# frame the player sees rather than snapping a moment later.
 	_settings.changed.connect(_apply_settings)
+
+	# Options -> Reset gives the chat models their defaults too. The models
+	# write the file on each change, so this read gives back what they hold,
+	# and it changes nothing.
+	_settings.changed.connect(_apply_chat_settings)
 	# The scale of a first run comes from the screen, so a high-density screen
 	# does not open at half size. A saved scale wins.
 	_settings.set_shipped_ui_scale(
 		ClientSettings.ui_scale_for_dpi(DisplayServer.screen_get_dpi()))
 	_settings.load_from_disk()
 	_apply_settings()
+	_apply_chat_settings()
 
 	var err := Evennia.open()
 
@@ -550,33 +589,77 @@ func _ready() -> void:
 func _build_world_hover() -> void:
 	_world_hover = HoverBar.new()
 	_world_hover.outline()
-	_world_hover.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE,
-		Control.PRESET_MODE_MINSIZE, WORLD_HOVER_MARGIN)
-	_world_hover.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_world_pane.add_child(_world_hover)
 	_world_pane.move_child(_world_hover, _popup_view.get_index())
 
 	_world.hover_text_changed.connect(_world_hover.show_text)
 	_world_view.mouse_exited.connect(_world.clear_hover)
 
-	# The two docks cover the bottom corners. The bar and the pop-up follow
-	# the gap between them. `item_rect_changed` and not `resized`: a window
-	# resize moves the box of the panel, and its size can stay the same.
-	_console_dock.get_node("Box").item_rect_changed.connect(_fit_dock_gap)
-	_dock.get_node("Box").item_rect_changed.connect(_fit_dock_gap)
+
+## Give each HUD element to the arranger, and build the layout editor over
+## the whole console.
+##
+## The rows come from [HudElements]. The controls come from here, because
+## only the console holds them. The hover bar ships in the gap between the two
+## docks, so its row has a rect function and no geometry.
+func _build_layout() -> void:
+	var controls := {
+		HudElements.LOG: _console_box,
+		HudElements.PANEL: _panel_box,
+		HudElements.MINIMAP: _minimap,
+		HudElements.XP: _xp_hud,
+		HudElements.VITALS: _world_vitals,
+		HudElements.HOVER: _world_hover,
+	}
+
+	_arranger = HudArranger.new()
+	add_child(_arranger)
+	_arranger.bind(_world_pane, _settings)
+
+	for key: String in HudElements.ROWS:
+		var slot := HudSlot.from_row(key, HudElements.ROWS[key], controls[key])
+
+		if key == HudElements.HOVER:
+			slot.default_rect = _hover_rect
+
+		_arranger.add_slot(slot)
+
+	# The pop-up opens in the gap between the docks, wherever the player put
+	# them.
+	_arranger.placed.connect(_fit_dock_gap)
+
+	# Over everything, the veil and the right-click menu included: the mode
+	# takes every click and every key while it is open.
+	_layout_editor = LayoutEditor.new()
+	add_child(_layout_editor)
+	_layout_editor.bind(_arranger, _settings)
+	_layout_editor.opened.connect(_held_movement.clear)
+	_layout_editor.closed.connect(func() -> void: _set_typing(true))
 
 
-## Fit two things to the gap between the two docks: the [HoverBar] of the
-## world, and the first rect of the pop-up.
+## The shipped rect of the hover bar: along the bottom of the world pane, in
+## the gap between the two docks.
 ##
 ## The text of the bar starts at the left edge of the bar. With the bar under
-## the log dock, the player cannot see the start of the text.
-func _fit_dock_gap() -> void:
-	var left := _console_dock.box_rect().end.x
-	var right := _dock.box_rect().position.x
+## the log dock, the player cannot see the start of the text. A gap too narrow
+## for a line of text gives the bar the full width instead.
+func _hover_rect(pane: Vector2) -> Rect2:
+	var height := _world_hover.get_combined_minimum_size().y
+	var left := _arranger.footprint(HudElements.LOG).end.x + WORLD_HOVER_MARGIN
+	var right := _arranger.footprint(HudElements.PANEL).position.x - WORLD_HOVER_MARGIN
 
-	_world_hover.offset_left = left + WORLD_HOVER_MARGIN
-	_world_hover.offset_right = right - WORLD_HOVER_MARGIN - _world_pane.size.x
+	if right - left < WORLD_HOVER_MIN_WIDTH:
+		left = WORLD_HOVER_MARGIN
+		right = pane.x - WORLD_HOVER_MARGIN
+
+	return Rect2(left, pane.y - WORLD_HOVER_MARGIN - height, right - left, height)
+
+
+## Give the pop-up the gap between the two docks. Its first rect opens there.
+func _fit_dock_gap() -> void:
+	var left := _arranger.footprint(HudElements.LOG).end.x
+	var right := _arranger.footprint(HudElements.PANEL).position.x
+
 	_popup_view.set_dock_gap(left, right)
 
 
@@ -611,6 +694,7 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_quest_log.reset()
 	_skills.reset()
 	_combat_options.reset()
+	_chat_modes.reset()
 	_xp_tracker.reset()
 	_popup.reset()
 
@@ -668,12 +752,19 @@ func _on_active_log_changed(pane: RichTextLabel) -> void:
 		_find.bind(pane)
 
 
+## Send a typed line, in the chat mode the player chose.
+##
+## The history keeps the line as typed, so an up-arrow gives back what the
+## player wrote, not the prefix. [method ChatModes.command_for] adds the
+## prefix, or strips a leading slash.
 func _on_submitted(line: String) -> void:
 	_input.clear()
 	_history.push(line)
 
-	if not line.is_empty():
-		Evennia.command(line)
+	var command := _chat_modes.command_for(line)
+
+	if not command.is_empty():
+		Evennia.command(command)
 
 
 ## Up and down walk the history; everything else is the LineEdit's own.
@@ -714,7 +805,7 @@ func _on_input_key(event: InputEvent) -> void:
 	# whole point of binding it here as well as below: a player mid-sentence
 	# can check the combat log and keep typing.
 	if key.ctrl_pressed and key.keycode == KEY_TAB:
-		_chat.cycle(not key.shift_pressed)
+		_chat_tabs.cycle(not key.shift_pressed)
 		_input.accept_event()
 		return
 
@@ -750,7 +841,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 
 	if key.ctrl_pressed and key.keycode == KEY_TAB:
-		_chat.cycle(not key.shift_pressed)
+		_chat_tabs.cycle(not key.shift_pressed)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -847,16 +938,30 @@ func _set_typing(typing: bool) -> void:
 ##
 ## Before login the hint is the login line whatever the focus. The movement
 ## keys do nothing on the connection screen.
+##
+## The chat mode is the third fact (09/29/2026). In a chat mode, each hint
+## names the mode, so the player knows where Enter sends a line.
 func _refresh_input_hint() -> void:
 	if not _char.has_vitals:
 		_input.placeholder_text = LOGIN_HINT
 		return
 
-	if _input.has_focus():
-		_input.placeholder_text = TYPE_MODE_HINT
+	var typing := _input.has_focus()
+
+	if _chat_modes.active_key() == ChatModes.COMMAND_KEY:
+		_input.placeholder_text = TYPE_MODE_HINT if typing else MOVE_MODE_HINT
 		return
 
-	_input.placeholder_text = MOVE_MODE_HINT
+	var hint := CHAT_TYPE_HINT if typing else CHAT_MOVE_HINT
+
+	_input.placeholder_text = hint % _chat_modes.active_label()
+
+
+## Give the chat models what the settings file keeps: after the load, and
+## after each change, which Options -> Reset can be.
+func _apply_chat_settings() -> void:
+	_chat_modes.prefer(_settings.chat_mode)
+	_chat_tabs.set_hidden_keys(_settings.chat_hidden_from_all)
 
 
 ## Turn preferences into pixels. The ONLY place that does.
@@ -894,8 +999,12 @@ func _apply_settings() -> void:
 	# Nothing unsubscribes. The models keep ingesting, so turning the view back
 	# on shows the current world rather than an empty one waiting for a
 	# snapshot.
+	# The HUD elements over the world go off as gates, not by `visible`. The
+	# arranger owns `visible`, because the player can also hide an element.
 	_world_view.visible = _settings.show_world
-	_minimap.visible = _settings.show_world
+	_arranger.set_gate(HudElements.MINIMAP, _settings.show_world)
+	_arranger.set_gate(HudElements.VITALS, _settings.show_world)
+	_arranger.set_gate(HudElements.HOVER, _settings.show_world)
 
 	# BOTH halves of the bag. They were one pane until 09/21/2026, and a setting
 	# that hid the carried grid while leaving the doll in the strip would be a
@@ -909,14 +1018,15 @@ func _apply_settings() -> void:
 	# HUD back on shows the session so far. Off with the 3D view as well as on
 	# its own setting, because XP drops are drawn over the world and there is no
 	# world to draw them over.
-	_xp_hud.visible = _settings.show_xp_drops and _settings.show_world
+	_arranger.set_gate(HudElements.XP, _settings.show_xp_drops and _settings.show_world)
 	_xp_hud.set_skill_rates_shown(_settings.show_skill_rates)
 
 	# With no world behind it, the log takes the full height and the width that
-	# the control panel leaves. The docks are NOT pushed their sizes here. A
-	# dock WRITES that setting, and a pane pushed the setting it writes is how a
-	# slider in Options came to collapse the pane it sat in.
-	_console_dock.fill_beside(null if _settings.show_world else _dock)
+	# the control panel leaves. The layout is NOT pushed to the arranger here.
+	# The arranger WRITES that setting, and a pane pushed the setting it writes
+	# is how a slider in Options came to collapse the pane it sat in.
+	_arranger.fill_beside(HudElements.LOG,
+		"" if _settings.show_world else HudElements.PANEL)
 
 
 ## Open the world map. The first time, the client holds no world map yet, so
@@ -972,6 +1082,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _skills.ingest(channel, _payload):
+			return
+
+		if _chat_modes.ingest(channel, _payload):
 			return
 
 		if _combat_options.ingest(channel, _payload):

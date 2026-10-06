@@ -55,6 +55,10 @@ docs/
 # reads it from here; nothing commits it.
 deploy/webexport/build/
 
+# The records of deploy/diff_deploy.sh and publish.sh: what this machine last
+# deployed. They describe production, not the repo.
+deploy/.deploy_state/
+
 # Profiling run artefacts: the text and JSON audit reports plus one .prof per
 # scenario. Machine-specific by definition -- the numbers are this laptop's,
 # not the project's -- so a committed run is a diff nobody can review and a

@@ -4,7 +4,8 @@ extends TabContainer
 ##
 ## Inventory, worn gear, the character sheet, settings and client help, in a box
 ## over the 3D world. It replaced three floating [Window]s on 08/28/2026, and
-## the column it sat in became [PanelDock] on 09/21/2026.
+## the column it sat in became a dock on 09/21/2026. Since 09/29/2026 the
+## player places the dock in the layout editor. See [HudArranger].
 ##
 ## ## Why the windows went
 ##

@@ -92,8 +92,10 @@ func _write_existing_files() -> void:
 func _the_block_loads_what_exists(world: TerrainWorld) -> void:
 	var size: int = _Const.CHUNK_SIZE
 
-	_expect(world.chunks.chunk_coords().size() == 8,
-		"eight of nine chunks load, found %d" % world.chunks.chunk_coords().size())
+	var whole := TerrainWorld.BLOCK_SIDE * TerrainWorld.BLOCK_SIDE
+
+	_expect(world.chunks.chunk_coords().size() == whole - 1,
+		"all chunks but the broken one load, found %d" % world.chunks.chunk_coords().size())
 	_expect(world.load_errors.size() == 1, "one file does not read")
 	_expect(not world.chunks.has_chunk(Vector2i(0, 1)), "the broken chunk stays out")
 	_expect(world.chunks.get_corner(Vector2i(size + 5, 5)) == 7,

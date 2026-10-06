@@ -14,6 +14,40 @@ to be modified.
 
 from evennia.comms.comms import DefaultChannel
 
+from systems.interface.statefeed import events as feed
+
+
+def _characters_of(subscriber) -> list:
+    """
+    Purpose: Find the characters whose chat modes a subscription change moves.
+
+    Entry:
+        subscriber - the Account or the Object that joined or left.
+
+    Exit/Returns:
+        Returns a list of objects. An Account gives its puppets. An Object
+        gives itself.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        An Account subscribes to a channel, but the feed goes to the
+        character that the account puppets.
+
+    Notes/References:
+        systems/interface/statefeed/chat.py builds the modes.
+
+    Author: Nick Hobar
+    Creation date: 09/29/2026
+    """
+    get_puppets = getattr(subscriber, "get_all_puppets", None)
+
+    if get_puppets is None:
+        return [subscriber]
+
+    return list(get_puppets())
+
 
 class Channel(DefaultChannel):
     r"""
@@ -115,4 +149,62 @@ class Channel(DefaultChannel):
 
     """
 
-    pass
+    def post_join_channel(self, joiner, **kwargs):
+        """
+        Purpose: Add the channel nicks, then send the new chat modes of the
+        joiner.
+
+        Entry:
+            joiner - the Account or the Object that joined.
+            kwargs - passed to the parent.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The parent adds the nicks. The chat modes of the Godot client
+            list each channel that the player listens to, so a join adds a
+            mode.
+
+        Notes/References:
+            systems/interface/statefeed/chat.py.
+
+        Author: Nick Hobar
+        Creation date: 09/29/2026
+        """
+        super().post_join_channel(joiner, **kwargs)
+
+        for character in _characters_of(joiner):
+            feed.emit_chat(character)
+
+    def post_leave_channel(self, leaver, **kwargs):
+        """
+        Purpose: Remove the channel nicks, then send the new chat modes of
+        the leaver.
+
+        Entry:
+            leaver - the Account or the Object that left.
+            kwargs - passed to the parent.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The same as post_join_channel. A leave removes a mode.
+
+        Notes/References:
+            systems/interface/statefeed/chat.py.
+
+        Author: Nick Hobar
+        Creation date: 09/29/2026
+        """
+        super().post_leave_channel(leaver, **kwargs)
+
+        for character in _characters_of(leaver):
+            feed.emit_chat(character)

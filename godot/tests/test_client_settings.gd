@@ -19,8 +19,10 @@ func _ready() -> void:
 	_reset_restores_the_shipped_defaults()
 	_changed_fires_for_a_real_change_only()
 	_the_two_panes_toggle_independently()
-	_the_panel_dock_size_is_remembered_and_fenced()
-	_each_dock_keeps_its_own_size()
+	_the_layout_is_remembered_and_fenced()
+	_a_layout_preset_saves_loads_and_deletes()
+	_the_presets_have_a_limit()
+	_an_old_dock_size_moves_into_the_layout()
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 	_the_sfx_volume_persists_clamps_and_resets()
 	_the_xp_tracker_toggles_persist_and_reset()
@@ -31,6 +33,7 @@ func _ready() -> void:
 	_a_box_the_player_sized_is_remembered()
 	_a_box_size_from_a_bad_file_falls_back()
 	_the_screen_gives_the_first_scale()
+	_the_chat_choices_persist_fence_and_reset()
 
 	_clean()
 
@@ -118,13 +121,15 @@ func _reset_restores_the_shipped_defaults() -> void:
 		"and the reset was written, not just held in memory")
 
 	s.set_show_inventory(false)
-	s.set_dock_size(ClientSettings.KEY_CONSOLE_SIZE, Vector2i(500, 300))
+	s.set_layout({HudElements.LOG: {HudLayout.KEY_SIZE: Vector2(500, 300)}})
+	s.save_layout_preset("Mine", s.layout)
 	s.set_skill_detail(ClientSettings.SKILL_DETAIL_LOG)
 	s.reset()
 	_expect(s.show_inventory == ClientSettings.DEFAULT_SHOW_INVENTORY,
 		"reset restores the pane toggles")
-	_expect(s.console_size == ClientSettings.DEFAULT_CONSOLE_SIZE,
-		"and the dock sizes")
+	_expect(s.layout.is_empty(), "and the layout")
+	_expect(s.layout_presets.has("Mine"),
+		"but keeps the presets, which are the work of the player")
 	_expect(s.skill_detail == ClientSettings.DEFAULT_SKILL_DETAIL,
 		"and where skill detail is shown")
 
@@ -161,56 +166,97 @@ func _the_two_panes_toggle_independently() -> void:
 		"and both survive a reload")
 
 
-## The control panel was the bottom half of a VSplitContainer until 09/21/2026,
-## so its height was the `world_split` offset this case replaces. It hangs in
-## [PanelDock] now, and the player sizes it in both axes.
-func _the_panel_dock_size_is_remembered_and_fenced() -> void:
+## The layout survives a reload, and a runaway number in it is fenced. Keeping
+## an element on the screen is the job of the arranger, on every pass. A second
+## rule here would be a second owner of it.
+func _the_layout_is_remembered_and_fenced() -> void:
 	_clean()
 	var s := ClientSettings.new(TEST_PATH)
 
-	_expect(s.panel_size == Vector2i.ZERO,
-		"no remembered dock until the player drags one")
+	_expect(s.layout.is_empty(), "no layout until the player edits one")
 
-	s.set_dock_size(ClientSettings.KEY_PANEL_SIZE, Vector2i(640, 480))
+	var entry := {
+		HudLayout.KEY_ANCHOR: Vector2(1, 0),
+		HudLayout.KEY_OFFSET: Vector2(-20, 30),
+		HudLayout.KEY_SIZE: Vector2(99999, 300),
+		HudLayout.KEY_OPACITY: 0.5,
+	}
+	s.set_layout({HudElements.MINIMAP: entry})
 
 	var reloaded := ClientSettings.new(TEST_PATH)
 	reloaded.load_from_disk()
-	_expect(reloaded.panel_size == Vector2i(640, 480), "the dock size persists")
+	var saved: Dictionary = reloaded.layout.get(HudElements.MINIMAP, {})
 
-	# Fenced rather than made usable. Keeping the box on screen and no smaller
-	# than its content is PanelDock._place_box's job, and it does that on every
-	# layout pass. A second rule here would be a second owner of it.
-	reloaded.set_dock_size(ClientSettings.KEY_PANEL_SIZE, Vector2i(99999, 99999))
-	_expect(reloaded.panel_size
-		== Vector2i(ClientSettings.MAX_BOX_PIXELS, ClientSettings.MAX_BOX_PIXELS),
+	_expect(saved.get(HudLayout.KEY_OFFSET) == Vector2(-20, 30), "the layout persists")
+	_expect(is_equal_approx(saved.get(HudLayout.KEY_OPACITY, 0.0), 0.5),
+		"with its opacity")
+	_expect((saved.get(HudLayout.KEY_SIZE) as Vector2).x == HudLayout.MAX_PIXELS,
 		"and a runaway size is fenced")
 
-	reloaded.reset()
-	_expect(reloaded.panel_size == ClientSettings.DEFAULT_PANEL_SIZE,
-		"reset forgets the dock")
+	var count := {"n": 0}
+	reloaded.layout_replaced.connect(func(): count["n"] += 1)
+	reloaded.set_layout({})
+	_expect(count["n"] == 0,
+		"a write from the arranger does not tell the arranger to read again")
 
 
-## Two docks share one setter, so a write to one key must not reach the other.
-## An unknown key writes nothing, and it reads as "never dragged".
-func _each_dock_keeps_its_own_size() -> void:
+## A preset keeps a layout by name. Loading it replaces the layout and tells
+## the arranger. Deleting it leaves the layout alone.
+func _a_layout_preset_saves_loads_and_deletes() -> void:
 	_clean()
 	var s := ClientSettings.new(TEST_PATH)
-	s.set_dock_size(ClientSettings.KEY_CONSOLE_SIZE, Vector2i(420, 260))
+	var wide := {HudElements.LOG: {HudLayout.KEY_SIZE: Vector2(900, 300)}}
+
+	_expect(s.save_layout_preset("  Wide log  ", wide), "a preset saves")
+	_expect(s.layout_preset_names() == ["Wide log"],
+		"under its name without the spaces at its ends")
+	_expect(not s.save_layout_preset("   ", wide), "an empty name saves nothing")
+
+	var count := {"n": 0}
+	s.layout_replaced.connect(func(): count["n"] += 1)
+	_expect(s.apply_layout_preset("Wide log"), "the preset loads")
+	_expect(s.layout == wide and count["n"] == 1,
+		"and becomes the layout, and the arranger hears it")
+	_expect(not s.apply_layout_preset("No such preset"), "a missing preset loads nothing")
 
 	var reloaded := ClientSettings.new(TEST_PATH)
 	reloaded.load_from_disk()
-	_expect(reloaded.dock_size(ClientSettings.KEY_CONSOLE_SIZE)
-		== Vector2i(420, 260), "the log dock size persists")
-	_expect(reloaded.dock_size(ClientSettings.KEY_PANEL_SIZE) == Vector2i.ZERO,
-		"and the panel dock keeps its own size")
+	_expect(reloaded.layout_presets.has("Wide log"), "the preset survives a reload")
 
-	var count := {"n": 0}
-	reloaded.changed.connect(func(): count["n"] += 1)
-	reloaded.set_dock_size("font_size", Vector2i(10, 10))
-	_expect(count["n"] == 0 and reloaded.font_size == ClientSettings.DEFAULT_FONT_SIZE,
-		"a key that names no dock writes nothing")
-	_expect(reloaded.dock_size("font_size") == Vector2i.ZERO,
-		"and reads as never dragged")
+	reloaded.delete_layout_preset("Wide log")
+	_expect(reloaded.layout_preset_names().is_empty(), "a deleted preset goes")
+	_expect(reloaded.layout == wide, "and the layout stays")
+
+
+## The player can keep [constant ClientSettings.MAX_LAYOUT_PRESETS] presets. A
+## new name past that is refused, and a save over an old name is not.
+func _the_presets_have_a_limit() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	for index: int in ClientSettings.MAX_LAYOUT_PRESETS:
+		s.save_layout_preset("Layout %d" % index, {})
+
+	_expect(not s.save_layout_preset("One more", {}), "a new preset past the limit is refused")
+	_expect(s.save_layout_preset("Layout 0", {}), "but a save over an old one is not")
+
+
+## A build before 09/29/2026 saved a size for each dock. The first load takes
+## each one into the layout, as a size only, so the dock keeps its corner.
+func _an_old_dock_size_moves_into_the_layout() -> void:
+	_clean()
+	var handle := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	handle.store_string("[display]\npanel_size=Vector2i(640, 480)\nconsole_size=Vector2i(0, 0)\n")
+	handle.close()
+
+	var s := ClientSettings.new(TEST_PATH)
+	s.load_from_disk()
+	var panel: Dictionary = s.layout.get(HudElements.PANEL, {})
+
+	_expect(panel.get(HudLayout.KEY_SIZE) == Vector2(640, 480),
+		"the old panel size is now the size of the panel element")
+	_expect(not panel.has(HudLayout.KEY_ANCHOR), "and the panel keeps its shipped corner")
+	_expect(not s.layout.has(HudElements.LOG), "a zero size moves nothing")
 
 
 func _an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid() -> void:
@@ -499,6 +545,39 @@ func _the_screen_gives_the_first_scale() -> void:
 	_expect(is_equal_approx(second.ui_scale, 1.5),
 		"and Reset goes back to the scale of the screen")
 
+	_clean()
+
+
+## The chat mode and the tabs hidden from All (09/29/2026). A bad file gives
+## Command and nothing hidden, never a broken strip.
+func _the_chat_choices_persist_fence_and_reset() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	s.set_chat_mode("channel:public")
+	s.set_chat_hidden_from_all(PackedStringArray(["combat", "combat", "game"]))
+
+	var back := ClientSettings.new(TEST_PATH)
+	back.load_from_disk()
+	_expect(back.chat_mode == "channel:public", "the chat mode survives a reload")
+	_expect(back.chat_hidden_from_all == PackedStringArray(["combat", "game"]),
+		"and the hidden tabs too, each one time")
+
+	var config := ConfigFile.new()
+	config.set_value(ClientSettings.CHAT_SECTION, ClientSettings.KEY_CHAT_MODE, 42)
+	config.set_value(ClientSettings.CHAT_SECTION, ClientSettings.KEY_CHAT_HIDDEN,
+		"not a list")
+	config.save(TEST_PATH)
+
+	var bad := ClientSettings.new(TEST_PATH)
+	bad.load_from_disk()
+	_expect(bad.chat_mode == ClientSettings.DEFAULT_CHAT_MODE,
+		"a chat mode that is not text gives Command")
+	_expect(bad.chat_hidden_from_all.is_empty(),
+		"and hidden tabs that are not a list give none")
+
+	back.reset()
+	_expect(back.chat_mode == ClientSettings.DEFAULT_CHAT_MODE
+		and back.chat_hidden_from_all.is_empty(), "reset clears both")
 	_clean()
 
 

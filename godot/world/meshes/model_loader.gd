@@ -67,6 +67,23 @@ signal loaded(asset_key: String, model: Node3D)
 ## How long to wait on one model before giving up.
 const TIMEOUT_SECONDS := 20.0
 
+## The most bytes that one request reads from its body in one frame.
+##
+## Larger than every served model, so a model arrives in one read. The engine
+## default is 64 KiB, and `HTTPRequest` reads one chunk for each frame. On the
+## web, a model then needs one frame for each 64 KiB: the shopkeeper needs 21.
+## Behind the veil, [ShaderWarmer] freezes some of those frames for 1-5 s. The
+## timeout timer counts the frozen time, so a large model hit the timeout and
+## drew as its fallback for the session. Measured 10/05/2026: the largest model
+## is 1.3 MiB.
+const BODY_CHUNK_BYTES := 4 * 1024 * 1024
+
+## How many more times to ask for a file after a failure that can pass.
+##
+## A timeout, a lost connection, or a 5xx can pass. A 404 cannot, and it fails
+## at once. See [method _can_retry].
+const RETRIES := 2
+
 ## The longest edge every model is scaled to. Matches the unit box tier 2 is
 ## authored in; see the class comment.
 const UNIT := 1.0
@@ -120,6 +137,10 @@ var _waiting: Dictionary = {}
 ## So a key asked for AFTER its file arrived builds from these bytes and never
 ## asks the network again. Small: the whole served tree is a few MiB.
 var _bodies: Dictionary = {}
+
+## url -> how many retries that download used. The end of a download clears
+## its entry.
+var _retries: Dictionary = {}
 
 
 func _init(registry: ModelRegistry, origin: String) -> void:
@@ -251,9 +272,8 @@ static func _take_own_materials(root: Node3D) -> void:
 ## which is a degraded look rather than a broken game.
 func fetch_manifest() -> void:
 	var url := _registry.manifest_url(_origin)
-	var http := HTTPRequest.new()
+	var http := new_request()
 
-	http.timeout = TIMEOUT_SECONDS
 	add_child(http)
 
 	http.request_completed.connect(
@@ -359,9 +379,35 @@ func load_local(asset_key: String) -> Node3D:
 
 # ─── Private ─────────────────────────────────────────────────────────────────
 
-func _start(url: String) -> void:
+## One request, set up for a fetch of art. Public so that a test can read the
+## settings: a request outside the tree makes no connection.
+static func new_request() -> HTTPRequest:
 	var http := HTTPRequest.new()
+
 	http.timeout = TIMEOUT_SECONDS
+	http.download_chunk_size = BODY_CHUNK_BYTES
+
+	return http
+
+
+## Whether a failed download can pass if it is asked for again.
+##
+## A request that got no full answer can pass, and so can a 5xx from the
+## server. A 4xx cannot: the file is not there, and a second ask gets the same.
+## `attempts` counts the retries already used.
+static func _can_retry(result: int, code: int, attempts: int) -> bool:
+	if attempts >= RETRIES:
+		return false
+
+	if result != HTTPRequest.RESULT_SUCCESS:
+		return true
+
+	return code >= HTTPClient.RESPONSE_INTERNAL_SERVER_ERROR
+
+
+func _start(url: String) -> void:
+	var http := new_request()
+
 	add_child(http)
 
 	http.request_completed.connect(
@@ -380,6 +426,16 @@ func _start(url: String) -> void:
 func _finish(url: String, result: int, code: int,
 		body: PackedByteArray) -> void:
 	if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+		var attempts: int = _retries.get(url, 0)
+
+		if _can_retry(result, code, attempts):
+			_retries[url] = attempts + 1
+			push_warning("ModelLoader: retry %d of %d for %s: http %d (result %d)"
+				% [attempts + 1, RETRIES, url, code, result])
+			_start(url)
+			return
+
+		_retries.erase(url)
 		# The likeliest cause on the web is a cross-origin refusal, which the
 		# browser reports to the page and not to us -- so name it here rather
 		# than leaving a bare status code to be puzzled over at 2am.
@@ -389,6 +445,7 @@ func _finish(url: String, result: int, code: int,
 
 	var keys: Array = _waiting.get(url, [])
 
+	_retries.erase(url)
 	_waiting.erase(url)
 	_bodies[url] = body
 

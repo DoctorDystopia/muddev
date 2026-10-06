@@ -157,6 +157,9 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             # The open pop-up whole, or the closed state. A close after an
             # open in one tick must arrive as the close, which is the newest.
             const.CHANNEL_CHAR_POPUP,
+            # Every chat mode in one message. A join and a leave in one tick
+            # must arrive as the list after the leave, which is the newest.
+            const.CHANNEL_CHAR_CHAT,
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,

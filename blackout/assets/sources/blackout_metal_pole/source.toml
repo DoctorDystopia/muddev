@@ -1,0 +1,9 @@
+title     = "Metal pole"
+author    = "Harsh Patel"
+url       = "TODO"
+site      = "TODO"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-09-30
+
+[files]
+"metal_pole2.glb" = "sha256:7f61a0d22858ce6529ee0598bc5fc24b945d31530aa2621d85ac74059b0dbff7"

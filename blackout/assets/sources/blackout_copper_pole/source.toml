@@ -1,0 +1,9 @@
+title     = "Copper pole"
+author    = "Harsh Patel"
+url       = "TODO"
+site      = "TODO"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-09-30
+
+[files]
+"copper_pole1.glb" = "sha256:198215694d8a8bbb2d674062b6673379312ba29f00b508402c2b3fa45a337d70"

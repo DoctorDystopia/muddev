@@ -23,6 +23,9 @@ That asymmetry is the whole reason that "deploy" does not mean one thing here.
 
 ## What did you touch?
 
+`diff_deploy.sh` reads this table for you. It finds the changed rows and runs
+only their legs. Refer to "Deploy only what changed" below.
+
 | Changed | Do this |
 |---|---|
 | Game logic (`systems/`, `typeclasses/`, `commands/`, `items/`, `world/*.py`) | `evennia reload` from `blackout/` |
@@ -115,6 +118,84 @@ the inputs of a step did not change, treat the step as a no-op.
 4. If `godot/**` changed, or step 1 regenerated `blackout_constants.gd`, run
    export → `publish.sh` → `wrangler deploy`, in that order (see above).
 5. Verify the deploy (below).
+
+## Deploy only what changed
+
+`diff_deploy.sh` runs the same sequence as `full_deploy.sh`, with the same
+flags. But a leg runs only when its inputs changed since its last successful
+run:
+
+```bash
+./deploy/diff_deploy.sh              # each changed leg, then verify
+./deploy/diff_deploy.sh --dry-run    # print the plan of each leg. Change nothing
+./deploy/diff_deploy.sh --tiles      # also run the tile sync with no chunk change
+./deploy/diff_deploy.sh --reboot     # also reboot with no Portal plugin change
+./deploy/diff_deploy.sh --skip-godot # server legs only
+./deploy/diff_deploy.sh --baseline   # write the deploy records, deploy nothing
+```
+
+| Leg | Inputs | Runs when |
+|---|---|---|
+| Constants | `statefeed/constants.py` | Always. The check is cheap |
+| Tile sync | `world/chunks/*.json` | A chunk file is different from the tile sync stamp |
+| Reboot | The Portal plugin modules, and each `server.conf` module that they import | One of them changed |
+| Reload | The other server code under `blackout/` | It changed |
+| Godot export | `godot/`, minus the `exclude_filter` of the Web preset | It changed, or `webexport/build/` has no export |
+| R2 publish | The export and the model tree | Always. `publish.sh --changed-only` uploads only the files that changed |
+| Site deploy | `worker/`, `wrangler.jsonc`, and `dist/` of `playblackout-site` | One of them changed |
+
+The script prints each changed file before a leg starts. A tile sync stops
+and starts Evennia, so it also does the work of a reboot and a reload. A
+reboot also does the work of a reload.
+
+**Three facts that the script reads, and does not copy:**
+
+- The tile sync stamp decides the tile sync. `syncstamp.changed_files` gives
+  the result, so the digest rule keeps one owner. The tile sync writes the
+  stamp. Thus, the tile sync needs no deploy record.
+- `settings.PORTAL_SERVICES_PLUGIN_MODULES` gives the Portal plugin list. The
+  script follows each `server.conf` import of a plugin. On 10/05/2026, the
+  list was `godot_websocket.py`, `websocket.py`, `bbcode.py`, and
+  `portal_services_plugins.py`.
+- `godot/export_presets.cfg` gives the files that the export leaves out. A
+  change to the terrain editor addon thus starts no export.
+
+**The site deploy is not tied to the publish.** The worker reads each R2
+object on each request, and it has no edge cache. Thus, a new R2 object needs
+no `wrangler deploy`. Only a change to the worker, to `wrangler.jsonc`, or to
+`dist/` needs one. Neither script runs `astro build`. Build `dist/` in the
+site repo before a deploy.
+
+### The records
+
+The deploy records and the publish record are in `deploy/.deploy_state/`, and
+git ignores that directory. They describe what this machine last deployed,
+not the repo.
+
+- **A deploy record** is the input list of one leg: one `sha256 *path` line
+  for each file. Two lists that differ name the changed files.
+- **The publish record** gives the SHA-256 of each R2 key at its last upload.
+  `publish.sh` writes it after each upload, also in a full deploy. Thus, a
+  diff deploy after a full deploy uploads nothing.
+
+A leg writes its deploy record only after it succeeds. Thus, a leg that fails
+runs again on the next diff deploy. A dry run writes no record.
+
+**With no record, a leg counts every input as changed.** The first diff
+deploy on a machine is a full deploy, and it uploads all 45 MiB. To prevent
+that, do these steps one time:
+
+1. Run `./deploy/full_deploy.sh`. It writes the publish record.
+2. Run `./deploy/diff_deploy.sh --baseline`. It writes the deploy records of
+   the server, the Godot client, and the site.
+
+If a different machine or a manual `wrangler r2 object put` writes the bucket,
+the publish record is wrong. Delete `deploy/.deploy_state/r2_<bucket>.tsv`.
+The next publish then uploads every file.
+
+`publish.sh` never deletes an R2 object. It lists each key in the publish
+record that has no local file, and it leaves that key in the bucket. A player
+with an old client open can still ask for the old art.
 
 ## Verifying it actually landed
 

@@ -1,7 +1,8 @@
 class_name ResizeGrips
 extends RefCounted
 ## The grips that size a box: one on each free edge and one on each free
-## corner. The pop-up and both docks use it.
+## corner. The pop-up and the layout editor use it. The docks used it until
+## 09/29/2026, when their grips moved into the layout editor.
 ##
 ## ## Why one class
 ##
@@ -15,10 +16,9 @@ extends RefCounted
 ##
 ## A grip with `raised` set is a `top_level` Control. Godot draws a top-level
 ## item after every item that is not top-level, and the GUI picks it first. The
-## pop-up raises its grips, so a dock over the pop-up cannot cover them. A
-## dock does not raise its grips, because a raised grip also draws over the
-## loading veil. The docks keep clear of each other instead. See
-## [method PanelDock.keep_clear_of].
+## pop-up raises its grips, so a dock over the pop-up cannot cover them. The
+## layout editor does not raise its grips. It is the last child of the
+## console, so its grips already draw over every element.
 ##
 ## ## A drag reports the whole offset
 ##

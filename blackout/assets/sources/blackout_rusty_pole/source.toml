@@ -1,0 +1,9 @@
+title     = "Rusty pole"
+author    = "Harsh Patel"
+url       = "TODO"
+site      = "blackout"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-09-29
+
+[files]
+"rusty_pole2.glb" = "sha256:8a8e371fcfb5899a72c03805a1ca2ea1b11ef5868bf8935558a89d7f5bf5fabb"

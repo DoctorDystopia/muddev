@@ -121,6 +121,10 @@ func _add_row(label_text: String) -> void:
 
 	var fill := ProgressBar.new()
 	fill.custom_minimum_size = Vector2(BAR_WIDTH, BAR_HEIGHT)
+
+	# The bar takes the width of the row, so a player who makes the vitals
+	# wider in the layout editor gets a longer bar. BAR_WIDTH is the floor.
+	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fill.max_value = 1.0
 	fill.step = 0.001
 	fill.value = 0.0

@@ -18,6 +18,13 @@ func _ready() -> void:
 	_every_tab_names_only_generated_types()
 	_unread_marks_the_tabs_you_are_not_looking_at()
 	_selecting_a_tab_clears_its_mark()
+	_a_move_is_announced_once()
+	_cycling_wraps_both_ways()
+	_an_untagged_line_reaches_game()
+	_a_hidden_tab_keeps_its_lines_out_of_all()
+	_all_cannot_be_hidden_from_itself()
+	_hidden_keys_round_trip_and_ignore_strangers()
+	_every_tab_key_is_unique()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -124,6 +131,113 @@ func _selecting_a_tab_clears_its_mark() -> void:
 	_expect(not tabs.select(2), "reselecting the same clean tab changes nothing")
 	_expect(not tabs.select(99), "an index off the end is refused")
 	_expect(tabs.active == 2, "and does not move the player")
+
+
+func _a_move_is_announced_once() -> void:
+	var tabs := ChatTabs.new()
+	var seen: Array[int] = []
+	tabs.active_changed.connect(func(index: int): seen.append(index))
+
+	tabs.select(3)
+	tabs.select(3)
+
+	_expect(seen == [3], "a move fires active_changed once, with the tab")
+
+
+## Ctrl+Tab in the console. It exists because the buttons refuse focus.
+func _cycling_wraps_both_ways() -> void:
+	var tabs := ChatTabs.new()
+	var last := tabs.count() - 1
+
+	tabs.cycle(true)
+	_expect(tabs.active == 1, "forward moves one tab")
+
+	tabs.select(last)
+	tabs.cycle(true)
+	_expect(tabs.active == 0, "and wraps past the end")
+
+	tabs.cycle(false)
+	_expect(tabs.active == last, "backward wraps the other way")
+
+
+## Game is the OSRS Game tab: everything that is not chat or combat. An
+## untagged line is general, so it belongs there.
+func _an_untagged_line_reaches_game() -> void:
+	var tabs := ChatTabs.new()
+	var found := tabs.tabs_for("")
+	var names: Array[String] = []
+
+	for index: int in found:
+		names.append(tabs.name_of(index))
+
+	_expect(names.has("Game"), "an untagged line reaches Game")
+
+
+func _a_hidden_tab_keeps_its_lines_out_of_all() -> void:
+	var tabs := ChatTabs.new()
+	var combat := _index_named(tabs, "Combat")
+	var fired := {"n": 0}
+	tabs.filter_changed.connect(func(): fired["n"] += 1)
+
+	_expect(tabs.set_hidden_from_all(combat, true), "Combat can be hidden")
+	_expect(fired["n"] == 1, "and the change is announced")
+	_expect(tabs.tabs_for(Const.MSG_COMBAT) == PackedInt32Array([combat]),
+		"a combat line then reaches Combat only")
+	_expect(not tabs.shows_in_all(Const.MSG_VITALS),
+		"and so does every other type that Combat claims")
+	_expect(tabs.shows_in_all(Const.MSG_SAY),
+		"while a type of another tab still reaches All")
+	_expect(tabs.shows_in_all("a_type_invented_next_month"),
+		"and a type that no tab claims still reaches All")
+	_expect(not tabs.set_hidden_from_all(combat, true),
+		"hiding it again changes nothing")
+
+	tabs.set_hidden_from_all(combat, false)
+	_expect(tabs.tabs_for(Const.MSG_COMBAT).has(ChatTabs.FALLBACK_TAB),
+		"shown again, a combat line reaches All")
+
+
+func _all_cannot_be_hidden_from_itself() -> void:
+	var tabs := ChatTabs.new()
+
+	_expect(not tabs.set_hidden_from_all(ChatTabs.FALLBACK_TAB, true),
+		"All refuses to hide from All")
+	_expect(tabs.hidden_keys().is_empty(), "and nothing is hidden")
+
+
+## The settings file keeps the hidden tabs by key. A file from another build
+## can name a tab that is gone, and that must not break the strip.
+func _hidden_keys_round_trip_and_ignore_strangers() -> void:
+	var tabs := ChatTabs.new()
+	var game := _index_named(tabs, "Game")
+
+	tabs.set_hidden_from_all(game, true)
+	var kept := tabs.hidden_keys()
+
+	var fresh := ChatTabs.new()
+	fresh.set_hidden_keys(kept + PackedStringArray(["a_tab_long_gone", "all"]))
+
+	_expect(fresh.is_hidden_from_all(game), "a kept key hides its tab again")
+	_expect(fresh.hidden_keys() == kept,
+		"and a key that names no tab, or names All, is ignored")
+
+
+func _every_tab_key_is_unique() -> void:
+	var tabs := ChatTabs.new()
+	var keys := {}
+
+	for index: int in tabs.count():
+		keys[tabs.key_of(index)] = true
+
+	_expect(keys.size() == tabs.count(), "every tab has its own key")
+
+
+func _index_named(tabs: ChatTabs, tab_name: String) -> int:
+	for index: int in tabs.count():
+		if tabs.name_of(index) == tab_name:
+			return index
+
+	return -1
 
 
 func _expect(passed: bool, what: String) -> void:

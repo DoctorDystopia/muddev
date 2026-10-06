@@ -126,6 +126,14 @@ and are served by `playblackout-site/worker/index.ts`. Two steps, in this order:
 cd ../playblackout-site && npx wrangler deploy
 ```
 
+**`--changed-only` uploads only the files that changed.** Each upload writes
+the SHA-256 of its file to the publish record,
+`deploy/.deploy_state/r2_<bucket>.tsv`. A run without the flag writes the
+record too. With the flag, `publish.sh` skips each key whose hash is the same
+as the record. Thus, a model edit uploads one `.glb`, not the 37.7 MiB
+`index.wasm`. `diff_deploy.sh` always uses the flag. Refer to "Deploy only
+what changed" in [`deploy/README.md`](../README.md) for the record rules.
+
 **It is a bash script and was a PowerShell one until 08/27/2026.** The shell in
 front of this repo is git bash, this machine has no `pwsh`, and what stood here
 was a `powershell -ExecutionPolicy Bypass -File` incantation explaining how to

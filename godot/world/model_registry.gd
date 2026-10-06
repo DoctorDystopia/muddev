@@ -92,6 +92,9 @@ const PRESENTATION := {
 	# with its own model record is drawn as that file builds it.
 	"mutant_giant": {"scale": 1.6},
 	"big_mutant": {"scale": 2.1},
+	"rusty_pole": {"scale": 1.6},
+	"metal_pole": {"scale": 1.6},	
+	"copper_pole": {"scale": 1.9},
 
 	"lone_android": {"scale": 2},
 }

@@ -128,6 +128,21 @@ CHANNEL_CHAR_COMBAT: str = "char_combat"              # -> Char.Combat
 # moves an item on or off the character.
 CHANNEL_CHAR_POPUP: str = "char_popup"                # -> Char.Popup
 
+# The chat modes of the observer: each place that a typed line can go, with
+# the command prefix that sends a line there. A Char.* channel, because it is
+# about YOUR subscriptions. Nick chose a server feed over a client table on
+# 09/29/2026.
+#
+# The server names each mode and the whole prefix, for the reason
+# CHANNEL_CHAR_COMBAT names each `command`. The Godot chat bar wraps a typed
+# line in the prefix of the chosen mode and sends it through Evennia.command,
+# so the line is one a telnet player could type. Each mode also names the
+# MESSAGE TYPE of the lines it makes. The client puts "Set chat mode" on the
+# tab that shows that type, and it names no mode itself.
+#
+# A SNAPSHOT, and coalescable. The builder is statefeed/chat.py.
+CHANNEL_CHAR_CHAT: str = "char_chat"                  # -> Char.Chat
+
 # Blackout-specific extensions.
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
 CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
@@ -199,6 +214,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_SKILLS,
     CHANNEL_CHAR_COMBAT,
     CHANNEL_CHAR_POPUP,
+    CHANNEL_CHAR_CHAT,
     CHANNEL_COMBAT,
     CHANNEL_AURA,
     CHANNEL_XP_DROP,
@@ -242,8 +258,8 @@ RESERVED_CHANNEL_NAME: str = "options"
 # player is by default -- the same degradation an item with no art gets from the
 # mesh ladder.
 #
-# UNTAGGED IS A REAL STATE AND IT IS FINE. EvMenu nodes, `page`, and a good deal
-# of Evennia's error prose carry no tag at all, and requiring every call site in
+# UNTAGGED IS A REAL STATE AND IT IS FINE. EvMenu nodes and a good deal of
+# Evennia's error prose carry no tag at all, and requiring every call site in
 # the game to be correct before anything renders would be the wrong order of
 # work. The client supplies MESSAGE_TYPE_GENERAL for a line that arrives without
 # one; nothing here defaults it, because a default applied server-side would make
@@ -360,6 +376,11 @@ MESSAGE_TYPE_DIALOGUE: str = "dialogue"
 # so Account.channel_msg adds one; see typeclasses/accounts.py.
 MESSAGE_TYPE_CHANNEL: str = "channel"
 
+# A private message between two accounts: Evennia's `page`. The engine tags
+# none of its lines, so commands/comms_cmds.py sends every one with this tag.
+# The spelling is the key of the command, as `say` is.
+MESSAGE_TYPE_PAGE: str = "page"
+
 # Connection notices, permission refusals, and anything the server says as itself
 # rather than as the world.
 MESSAGE_TYPE_SYSTEM: str = "system"
@@ -396,6 +417,7 @@ MESSAGE_TYPES: frozenset = frozenset((
     MESSAGE_TYPE_COMMERCE,
     MESSAGE_TYPE_DIALOGUE,
     MESSAGE_TYPE_CHANNEL,
+    MESSAGE_TYPE_PAGE,
     MESSAGE_TYPE_SYSTEM,
 ))
 
@@ -584,6 +606,7 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_SKILLS,
     CHANNEL_CHAR_COMBAT,
     CHANNEL_CHAR_POPUP,
+    CHANNEL_CHAR_CHAT,
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,

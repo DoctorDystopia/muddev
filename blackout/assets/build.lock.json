@@ -1,4 +1,12 @@
 {
+  "bank_terminal": {
+    "inputs": "sha256:64d2dc289f7446d7d901dd38614b610756cf45148daec37c029dc47a99301362",
+    "output": "sha256:cc8c3e55dec8e1196af1623550823f695ebad88b1f35d6c57d74a015d0daa52c"
+  },
+  "copper_pole": {
+    "inputs": "sha256:40d710c4c1fe7e7793e3dda7e8058ce92d8e211cb8b9bdbd012f7f2a12a9940b",
+    "output": "sha256:e0c1f61dd4105d3bbb23882576e8ed1712ba71afcba8cae3bd4b11df96b6d093"
+  },
   "corpse_skeleton": {
     "inputs": "sha256:8b7e09558b27fa154f9897d6f16b4ae531d70cbdb476437f11be251e79669fe1",
     "output": "sha256:86214cd7050cc841d1f2aaca7b49c11622158afd39490435553ea62f0e0c40cd"
@@ -27,6 +35,10 @@
     "inputs": "sha256:f9e1dcfb72ea05b70ee8c71237ef46c7ff73d17a2316bf832f3e6aa1a3a1754c",
     "output": "sha256:a0cd165e91fa09e6d19078d377dfa5993bb8622c0b59508fdb47f811d296ceb4"
   },
+  "metal_pole": {
+    "inputs": "sha256:6c27ad89510ceafed6780d971bc734d5305a8ab108aa6119fe4a8b2fc73438c9",
+    "output": "sha256:83953507db2e946cc8a09efdcfe9e9696f54925d86df34e162d838bf21d6955d"
+  },
   "moderator_egg": {
     "inputs": "sha256:96cebd84bf9d0532484573889c87198af85ef74556c327c77baac0f84359be80",
     "output": "sha256:396f290b5504b7d907956a697e82d8791e483b6cb9636ccb520414d83e0e8afe"
@@ -52,8 +64,8 @@
     "output": "sha256:c32f4250ae42b323004cc1b639659396dc6cf6f13c2ea32c6331098fb93b182c"
   },
   "rusty_pole": {
-    "inputs": "sha256:0c0d3f1a44f9ad7c041060c7ecfe7761416dd9aa840f313d8df321f15db4b391",
-    "output": "sha256:d8eeef90b0dc4c6d1fab67e522ff11329d1716377d27acbd220d927c0a214976"
+    "inputs": "sha256:cc06a467507ab3e85b105e8fa2d8de4a491bcea3772fff06c7cbcd003bf8fcce",
+    "output": "sha256:7d54e73c17d8851352040a97b5f6c20c3c8b558a0de0f8373b26de51f089c23f"
   },
   "rusty_scrap_shortsword": {
     "inputs": "sha256:c6ee49872fd8638de55a9213ed28cc0a50b636430d343a5055d25d83fcc33ea4",

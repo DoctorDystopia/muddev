@@ -1,6 +1,7 @@
 {
+  "bank_terminal": "world_objects/bank_terminal.glb",
   "big_mutant": "npcs/mutant_raider.glb",
-  "copper_pole": "gathering_nodes/rusty_pole.glb",
+  "copper_pole": "gathering_nodes/copper_pole.glb",
   "corpse_skeleton": "npcs/corpse_skeleton.glb",
   "floating_eye": "npcs/floating_eye.glb",
   "food_meat": "items/food_meat.glb",
@@ -8,7 +9,7 @@
   "heavy_machine_gun_clip": "items/heavy_machine_gun_clip.glb",
   "lone_android": "npcs/lone_android.glb",
   "map_transition": "world_objects/map_transition.glb",
-  "metal_pole": "gathering_nodes/rusty_pole.glb",
+  "metal_pole": "gathering_nodes/metal_pole.glb",
   "moderator_egg": "items/moderator_egg.glb",
   "mutant_giant": "npcs/mutant_raider.glb",
   "mutant_raider": "npcs/mutant_raider.glb",

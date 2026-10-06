@@ -19,6 +19,7 @@ from evennia import default_cmds
 
 from commands.build_cmds import BuildCmdSet
 from commands.cleanup_cmds import CleanupCmdSet
+from commands.comms_cmds import CmdPage
 from commands.display_cmds import DisplayCmdSet
 from commands.combat_cmds import CombatCmdSet
 from commands.crafting_cmds import CraftingCmdSet
@@ -96,6 +97,9 @@ class AccountCmdSet(default_cmds.AccountCmdSet):
         #
         # any commands you add below will overload the default ones.
         #
+        # Replaces Evennia's page by key: the same command, with a routing
+        # tag on every line and a /reply switch.
+        self.add(CmdPage())
 
 
 class UnloggedinCmdSet(default_cmds.UnloggedinCmdSet):

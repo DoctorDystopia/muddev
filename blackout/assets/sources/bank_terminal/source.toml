@@ -1,0 +1,9 @@
+title     = "Bank"
+author    = "Harsh Patel"
+url       = "TODO"
+site      = "TODO"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-10-05
+
+[files]
+"bank1.glb" = "sha256:81c6e15bd2db0cb4655911ea0e94b208d6cb5d6d92f0cacd3dbf314304455983"

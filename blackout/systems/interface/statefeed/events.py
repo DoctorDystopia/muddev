@@ -30,6 +30,7 @@ from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
     CharAvatarPayload,
+    CharChatPayload,
     CharCombatPayload,
     CharItemsPayload,
     CharPopupPayload,
@@ -783,6 +784,50 @@ def emit_combat_options(observer, force: bool = False) -> int:
 
     return emit(observer, combat_options_serializer.build_payload(observer),
                 force=force)
+
+
+def emit_chat(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the chat modes of the observer to the observer alone.
+
+    Entry:
+        observer - the puppeted Character.
+        force    - True to bypass rate caps. The channel is uncapped, so this
+                   keeps the resync call shape the same as every other send.
+
+    Exit/Returns:
+        Returns the number of sends performed. Zero when nobody is subscribed.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST. The build reads the channel
+        subscriptions of the account, and a telnet session needs none of it.
+
+        Called from resync and from Channel.post_join_channel and
+        post_leave_channel (typeclasses/channels.py). A join and a leave are
+        the only changes to the list of modes.
+
+        systems.interface.statefeed.chat is imported inside the routine: it
+        reads the comms models and the command modules.
+
+    Notes/References:
+        The payload is built by systems/interface/statefeed/chat.py.
+
+    Author: Nick Hobar
+    Creation date: 09/29/2026
+    """
+    from . import chat as chat_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharChatPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    return emit(observer, chat_serializer.build_payload(observer), force=force)
 
 
 def emit_popup(observer, force: bool = False) -> int:

@@ -25,6 +25,7 @@ Run from blackout/:
 
 from unittest import mock
 
+from evennia.utils import create
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.core.stat_tracker import constants as stat_constants
@@ -34,6 +35,7 @@ from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import events
 from systems.interface.statefeed import subscriptions
+from typeclasses.channels import Channel
 from typeclasses.characters import Character as BlackoutCharacter
 
 
@@ -50,6 +52,11 @@ _HOSTILE: str = "mutant_raider"
 # A skill outside combat, so an award to it cannot move combat level and drag
 # the combat channels into an assertion. From the gathering tree, not invented.
 _GATHERING_SKILL: str = skill_constants.SKILL_KEY_CUTTING
+
+# A channel to join, made with Blackout's channel typeclass, whose join and
+# leave hooks send the chat modes.
+_CHAT_CHANNEL_KEY: str = "Freshness"
+_CHANNEL_TYPECLASS: str = f"{Channel.__module__}.{Channel.__name__}"
 
 
 # ─── Test cases ──────────────────────────────────────────────────────────────
@@ -233,3 +240,33 @@ class TestStatusFollowsCombat(_FreshnessTest):
 
         self.assertTrue(bodies)
         self.assertTrue(bodies[-1]["panels"][_VITALS_PANEL]["in_combat"])
+
+
+class TestChatModesFollowSubscriptions(_FreshnessTest):
+    """The chat modes, which list each channel that the player listens to."""
+
+    def _channel(self):
+        return create.create_channel(
+            _CHAT_CHANNEL_KEY, typeclass=_CHANNEL_TYPECLASS,
+            locks="listen:all();send:all()")
+
+    def _labels(self) -> list:
+        bodies = self._bodies(const.CHANNEL_CHAR_CHAT)
+
+        self.assertTrue(bodies)
+
+        return [row["label"] for row in bodies[-1]["modes"]]
+
+    def test_a_join_adds_the_mode(self):
+        self._channel().connect(self.account)
+
+        self.assertIn(_CHAT_CHANNEL_KEY, self._labels())
+
+    def test_a_leave_removes_the_mode(self):
+        channel = self._channel()
+        channel.connect(self.account)
+        self.published.clear()
+
+        channel.disconnect(self.account)
+
+        self.assertNotIn(_CHAT_CHANNEL_KEY, self._labels())

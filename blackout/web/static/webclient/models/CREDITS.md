@@ -14,6 +14,20 @@ Options pane.
 - License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - Models: `tile_azm_plains`, `tile_oasis`, `tile_oasis_outskirts`
 
+## Bank
+
+- Author: Harsh Patel
+- Source: TODO
+- License: Made for Blackout
+- Models: `bank_terminal`
+
+## Copper pole
+
+- Author: Harsh Patel
+- Source: TODO
+- License: Made for Blackout
+- Models: `copper_pole`
+
 ## Low Poly Food Asset Pack
 
 - Author: Kyle Fuji
@@ -35,12 +49,12 @@ Options pane.
 - License: Made for Blackout
 - Models: `food_meat`
 
-## Old Tower
+## Metal pole
 
-- Author: shoaib8
-- Source: https://sketchfab.com/3d-models/old-tower-b882aacdc89b4e58925600829fd6604d
-- License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
-- Models: `copper_pole`, `metal_pole`, `rusty_pole`
+- Author: Harsh Patel
+- Source: TODO
+- License: Made for Blackout
+- Models: `metal_pole`
 
 ## OSRS player model (test export)
 
@@ -71,6 +85,13 @@ Options pane.
 - Source: https://pensamientoazul.itch.io/robot-3d-model
 - License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - Models: `lone_android`
+
+## Rusty pole
+
+- Author: Harsh Patel
+- Source: TODO
+- License: Made for Blackout
+- Models: `rusty_pole`
 
 ## Rusty sword
 

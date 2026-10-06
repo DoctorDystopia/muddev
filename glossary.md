@@ -47,8 +47,17 @@ the name.
 | webclient | the retired browser client in `archive/webclient-js/`, and nothing else | web client, JS client |
 | pane | one region of the Godot client UI | window, view |
 | pop-up | a box that the server opens over the world pane, for example the bank (`char_popup`) | window, dialog, interface, modal |
-| dock | a box that hangs from a bottom corner of the world pane: the game log or the control panel (`PanelDock`) | window, sidebar, drawer |
+| dock | the box of the game log or of the control panel. Both are HUD elements (`%ConsoleDock`, `%PanelDock`) | window, sidebar, drawer |
 | grip | the strip on an edge or a corner of a box that a drag resizes (`ResizeGrips`) | handle, resizer, border |
+| HUD element | a box over the world pane that the player places in the layout editor: a dock, the minimap, the vitals, the XP drops, or the hover text (`HudElements`) | widget, frame, panel, component |
+| layout | where each HUD element sits, and its size, opacity, scale and Shown flag (`ClientSettings.layout`) | UI config, arrangement |
+| layout editor | the mode in which the player changes the layout. Options opens it (`LayoutEditor`) | edit mode, UI edit mode, unlock mode |
+| layout preset | a layout that the player saved by name (`ClientSettings.layout_presets`) | profile, saved layout, template |
+| anchor | the point of the pane that a HUD element keeps its distance from: a corner, an edge centre, or the centre (`HudLayout`) | pin, attach point |
+| chat tab | one filter of the game log: All, Game, Combat, Local, Private, or Channel (`ChatTabs`) | chat filter, log tab |
+| chat bar | the row of chat tab buttons under the input (`ChatBar`) | tab strip, chat buttons |
+| chat mode | where a typed line goes: Command, or a mode that `char_chat` names, for example Say (`ChatModes`) | chat channel, talk mode |
+| Command mode | the chat mode that sends a typed line as it is. The default | raw mode, normal mode |
 
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
 server. A pane is a region of the client screen. A Godot node class such as
@@ -143,7 +152,7 @@ a room.
 | object kind | the key of a placed object in a chunk file, a row of `world/object_kinds.py`. One kind for each variant, except the words of a signpost: one `signpost` kind, and each placement holds its own `text` | object type, prefab, object ID |
 | sign text | the words of one `signpost` object, in the `text` of its chunk object. The terrain editor edits it | label field, caption, sign string |
 | terrain editor | the Godot editor plugin in `godot/addons/blackout_terrain/` that writes the chunk files | map editor, world editor, terrain tool |
-| block | the 3 x 3 chunks that the terrain editor loads around its centre chunk | chunk window, loaded area, scene |
+| block | the 4 x 4 chunks that the terrain editor loads around its centre chunk | chunk window, loaded area, scene |
 | brush | one tool of the terrain editor that changes the corners or tiles in a circle | tool (for a brush), stamp |
 | stroke | every dab of a brush from a press to its release. One stroke is one undo entry | drag, paint pass |
 | tile world | the chunk files of `world/chunks/`, loaded as one tile grid and one room index (`TileWorld`). Its rooms have the Z `tile_world` | new world, tile map, grid world |
@@ -204,3 +213,16 @@ The walk and the run, named on 09/29/2026 (`systems/gameplay/movement/`).
 | tile skip | the rule that the middle tile of a run gets no room and no arrival hook | skipped step, pass-through |
 | held key | a movement key that the player keeps down. The client sends its direction again every half tick | key repeat, hold-to-walk |
 | Run button | the toggle in the top-left corner of the minimap that sends `run` | run orb, run toggle button |
+
+## Deploy
+
+The deploy scripts in `deploy/`, named on 10/05/2026.
+
+| Use | For | Not |
+|---|---|---|
+| full deploy | a run of `deploy/full_deploy.sh`. Every leg runs | complete deploy, full push |
+| diff deploy | a run of `deploy/diff_deploy.sh`. A leg runs only when its inputs changed since its last run | incremental deploy, delta deploy, partial deploy |
+| leg | one part of a deploy: the constants check, the server, the Godot client, or the verify | stage, step, phase |
+| deploy record | the list of the inputs of one leg at its last successful run, with a SHA-256 for each file (`deploy/.deploy_state/<leg>.list`) | deploy state, deploy cache, snapshot |
+| publish record | the SHA-256 of each R2 key at its last upload by `publish.sh` (`deploy/.deploy_state/r2_<bucket>.tsv`) | upload log, R2 manifest, R2 cache |
+| baseline | a run of `diff_deploy.sh --baseline`. It writes the deploy records and deploys nothing | seed, mark-deployed |

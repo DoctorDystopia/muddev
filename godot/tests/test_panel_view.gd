@@ -154,7 +154,9 @@ func _every_tab_fits_with_no_scroll_arrows() -> void:
 	_full_strip()
 	var icons_only := _panel._strip_width(PanelView.LABELS_NONE)
 
-	for width: float in [icons_only, PanelDock.DEFAULT_SIZE.x, 2000.0]:
+	var shipped: Vector2 = HudElements.ROWS[HudElements.PANEL][HudSlot.ROW_SIZE]
+
+	for width: float in [icons_only, shipped.x, 2000.0]:
 		_panel.size = Vector2(width, 300)
 		_expect(_panel._strip_width(_panel.label_mode) <= width,
 			"at %d px the strip fits in mode %s" % [width, _panel.label_mode])

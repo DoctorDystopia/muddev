@@ -17,6 +17,9 @@ extends Node
 
 const CONSOLE := "res://scenes/console.tscn"
 
+## Server-owned names, for the hand-built chat payload.
+const Const := preload("res://autoload/blackout_constants.gd")
+
 ## A scratch profile. The console never sees the player's `client.cfg`, so a
 ## dragged dock or `show_world=false` there cannot fail a case (handoff debt
 ## 9.1.4).
@@ -41,7 +44,9 @@ const WINDOWS: Array[Vector2i] = [
 ## A table rather than a run of asserts so a name added to the scene is one row
 ## here -- and so a failure names the node instead of a line number.
 const REQUIRED := {
-	"Chat": "TabContainer",
+	"Chat": "Control",
+	"ChatBar": "HBoxContainer",
+	"ChatMode": "Button",
 	"Input": "LineEdit",
 	"Inventory": "VBoxContainer",
 	"Panel": "TabContainer",
@@ -85,6 +90,7 @@ func _ready() -> void:
 	_the_world_map_sits_over_the_docks_and_under_the_veil(console)
 	_the_minimap_strip_stays_inside_the_minimap(console)
 	_the_keys_follow_the_camera_only_when_asked(console)
+	_the_layout_editor_opens_from_options(console)
 
 	console.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
@@ -122,6 +128,26 @@ func _the_input_hint_follows_login_and_focus(console: Node) -> void:
 
 	_expect(input.placeholder_text == console.MOVE_MODE_HINT,
 		"with the map on the keyboard, the hint names the movement keys")
+
+	# A chat mode names itself in both hints, and Command gives them back.
+	var modes: ChatModes = console._chat_modes
+	modes.ingest(Const.CH_CHAR_CHAT, {"speaker": "Nick", "modes": [
+		{"key": "say", "label": "Say", "type": "say", "prefix": "say "}]})
+	modes.select("say")
+
+	_expect(input.placeholder_text == console.CHAT_MOVE_HINT % "Say",
+		"in a chat mode, the map hint names the mode")
+
+	console._set_typing(true)
+	_expect(input.placeholder_text == console.CHAT_TYPE_HINT % "Say",
+		"and so does the typing hint")
+
+	modes.select(ChatModes.COMMAND_KEY)
+	_expect(input.placeholder_text == console.TYPE_MODE_HINT,
+		"Command mode gives the command hint back")
+
+	console._set_typing(false)
+	modes.reset()
 
 	state.reset()
 
@@ -186,49 +212,28 @@ func _the_minimap_strip_stays_inside_the_minimap(console: Node) -> void:
 
 
 ## The control panel hangs from the bottom-right corner of the world pane, and
-## the minimap owns the top-right of it. That is the whole reason the dock
-## picked that corner, and a default size that covered the map would undo it.
+## the minimap owns the top-right of it. A shipped size that covered the map
+## would undo that.
 ##
-## Checked on the REAL scene, because the two rects come from two files: the
-## minimap's offsets are authored in `console.tscn` and the box's size is
-## [constant PanelDock.DEFAULT_SIZE]. Neither file can see the other.
+## Checked on the REAL scene, because the rects come from the arranger, the
+## rows of [HudElements], and the minimums of the real content. No other test
+## has all three.
 func _the_dock_keeps_clear_of_the_minimap(console: Node) -> void:
-	var dock: PanelDock = console.get_node_or_null("%PanelDock")
-	var minimap: Control = console.get_node_or_null("%Minimap")
-
-	if dock == null or minimap == null:
-		_fail("the dock and the minimap both exist")
-		return
+	var arranger: HudArranger = console._arranger
 
 	# A real window, because headless boots at 64x64 and every rect below would
 	# be meaningless. Two passes after it: the first sizes the console to the
-	# window, the second places the box in the pane that resize gave it.
+	# window, the second places the elements in the pane that resize gave it.
 	get_window().size = WINDOW
-	_forget_saved_dock_sizes(console)
+	arranger.reset_all()
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	var box := dock.box_rect()
+	var box := arranger.footprint(HudElements.PANEL)
 
 	_expect(box.size.x > 0.0 and box.size.y > 0.0, "the box was laid out")
-	_expect(not box.intersects(minimap.get_global_rect()),
+	_expect(not box.intersects(arranger.footprint(HudElements.MINIMAP)),
 		"and the shipped box does not cover the minimap")
-
-
-## Put both docks back at their shipped sizes, in memory only.
-##
-## The console reads a scratch profile ([constant SETTINGS_PATH]), so no saved
-## size is in it at the start. These cases check the SHIPPED sizes, so this
-## also drops a size that an earlier case left. The setting is written on the
-## object, not through its setter, so nothing goes to disk.
-func _forget_saved_dock_sizes(console: Node) -> void:
-	for key: String in ClientSettings.DOCK_SIZE_KEYS:
-		console._settings.set(key, Vector2i.ZERO)
-
-	for dock_name: String in ["%ConsoleDock", "%PanelDock"]:
-		var dock: PanelDock = console.get_node(dock_name)
-		dock._size = Vector2.ZERO
-		dock._place_box()
 
 
 ## The two docks hang from the two bottom corners at their shipped sizes. At
@@ -238,32 +243,24 @@ func _forget_saved_dock_sizes(console: Node) -> void:
 ## Runs after [method _the_dock_keeps_clear_of_the_minimap], which lays the
 ## scene out in the test window.
 func _the_two_docks_ship_apart(console: Node) -> void:
-	var log_dock: PanelDock = console.get_node_or_null("%ConsoleDock")
-	var panel_dock: PanelDock = console.get_node_or_null("%PanelDock")
+	var arranger: HudArranger = console._arranger
+	var log_box := arranger.footprint(HudElements.LOG)
 
-	if log_dock == null or panel_dock == null:
-		_fail("both docks exist")
-		return
-
-	var log_box := log_dock.box_rect()
-
-	_expect(is_equal_approx(log_box.position.x, PanelDock.EDGE_MARGIN),
+	_expect(is_equal_approx(log_box.position.x, HudLayout.EDGE_MARGIN),
 		"the log dock hangs from the left edge")
-	_expect(log_box.end.x < panel_dock.box_rect().position.x,
+	_expect(log_box.end.x < arranger.footprint(HudElements.PANEL).position.x,
 		"and the shipped docks do not overlap")
 
 
-## The shipped layout at each size in [constant WINDOWS]. The panel leaves the
-## minimap clear, and the docks leave a gap. A first pop-up opens in that gap
-## and covers neither dock.
+## The shipped layout at each size in [constant WINDOWS]. No two elements
+## overlap, and the docks leave a gap. A first pop-up opens in that gap and
+## covers neither dock.
 ##
 ## The pop-up rect comes from [method PopupView._default_rect] with the gap
 ## that the console gave the view. The real view reads the player's saved rect
 ## first, and this case checks the shipped one.
 func _the_shipped_layout_fits_each_window(console: Node) -> void:
-	var log_dock: PanelDock = console.get_node("%ConsoleDock")
-	var panel_dock: PanelDock = console.get_node("%PanelDock")
-	var minimap: Control = console.get_node("%Minimap")
+	var arranger: HudArranger = console._arranger
 	var popup: PopupView = console._popup_view
 
 	# The console applies the player's saved scale. Each row is at a scale of 1.
@@ -271,16 +268,16 @@ func _the_shipped_layout_fits_each_window(console: Node) -> void:
 
 	for window: Vector2i in WINDOWS:
 		get_window().size = window
-		_forget_saved_dock_sizes(console)
+		arranger.reset_all()
 		await get_tree().process_frame
 		await get_tree().process_frame
 
-		var log_box := log_dock.box_rect()
-		var panel_box := panel_dock.box_rect()
+		var log_box := arranger.footprint(HudElements.LOG)
+		var panel_box := arranger.footprint(HudElements.PANEL)
 		var pane := popup.size
 
-		_expect(not panel_box.intersects(minimap.get_global_rect()),
-			"%s: the panel leaves the minimap clear" % window)
+		_expect(_nothing_overlaps(arranger),
+			"%s: no two shipped elements overlap" % window)
 		_expect(is_equal_approx(popup._gap_left, log_box.end.x)
 			and is_equal_approx(popup._gap_right, panel_box.position.x),
 			"%s: the pop-up has the gap between the docks" % window)
@@ -293,6 +290,50 @@ func _the_shipped_layout_fits_each_window(console: Node) -> void:
 	get_window().size = WINDOW
 	await get_tree().process_frame
 	await get_tree().process_frame
+
+
+## True when no two drawn elements of the arranger overlap.
+func _nothing_overlaps(arranger: HudArranger) -> bool:
+	var keys: Array[String] = []
+
+	for slot: HudSlot in arranger.slots():
+		if arranger.is_drawn(slot.key):
+			keys.append(slot.key)
+
+	for first: int in keys.size():
+		for second: int in range(first + 1, keys.size()):
+			var one := arranger.footprint(keys[first])
+			var other := arranger.footprint(keys[second])
+
+			if one.intersects(other):
+				printerr("    %s %s overlaps %s %s" % [keys[first], one,
+					keys[second], other])
+				return false
+
+	return true
+
+
+## The layout editor is the last child of the console, so it draws over the
+## docks, the veil and the right-click menu. The Options button opens it, it
+## has a frame for each element, and Escape closes it.
+func _the_layout_editor_opens_from_options(console: Node) -> void:
+	var editor: LayoutEditor = console._layout_editor
+	var options: OptionsView = console._options
+
+	_expect(editor.get_index() == console.get_child_count() - 1,
+		"the layout editor is the last child of the console")
+	_expect(not editor.is_open(), "and it starts closed")
+
+	options.layout_edit_requested.emit()
+	_expect(editor.is_open(), "the Options button opens it")
+	_expect(editor._frames.size() == HudElements.ROWS.size(),
+		"with a frame for each HUD element")
+
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	editor._input(escape)
+	_expect(not editor.is_open(), "and Escape closes it")
 
 
 ## Turning the 3D world off must not take the control panel with it.
@@ -321,13 +362,16 @@ func _the_panel_survives_the_world_going_off(console: Node) -> void:
 		"and the control panel stays")
 
 	# With no world to show, the log takes the height and the width that the
-	# panel leaves. It shows no grips, because the size is not the player's.
-	var log_dock: PanelDock = console.get_node_or_null("%ConsoleDock")
+	# panel leaves. The editor shows no grips on it, because the player did
+	# not choose that size.
+	var arranger: HudArranger = console._arranger
 	var pane := (console as Control).size
 
-	_expect(is_equal_approx(log_dock.box_rect().size.y,
-		pane.y - PanelDock.EDGE_MARGIN * 2.0),
+	_expect(is_equal_approx(arranger.footprint(HudElements.LOG).size.y,
+		pane.y - HudLayout.EDGE_MARGIN * 2.0),
 		"and the log fills the height with the world off")
+	_expect(not arranger.is_drawn(HudElements.MINIMAP),
+		"and the minimap goes with the world")
 
 	console._settings.show_world = true
 	console._apply_settings()

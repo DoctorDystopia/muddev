@@ -1,5 +1,5 @@
 extends Node
-## Unit tests for ChatView -- the tab strip that draws the game log.
+## Unit tests for ChatView -- the logs of the chat interface.
 ##
 ##     godot --headless --path godot res://tests/test_chat_view.tscn
 ##
@@ -8,7 +8,8 @@ extends Node
 ##
 ## Rendering is not tested and is not meant to be: these are the behaviours a
 ## player would report as bugs -- a line in the wrong tab, a log that grows
-## without bound, a find box searching a tab nobody is looking at.
+## without bound, a find box searching a tab nobody is looking at, a hidden
+## tab that still fills All.
 
 const Const := preload("res://autoload/blackout_constants.gd")
 
@@ -23,8 +24,9 @@ func _ready() -> void:
 	_a_log_is_capped_and_it_is_the_oldest_that_goes()
 	_a_line_marks_the_tabs_you_are_not_reading()
 	_the_active_log_follows_the_tab()
-	_the_strip_never_takes_the_keyboard()
-	_ctrl_tab_walks_the_tabs_and_wraps()
+	_only_the_active_log_shows()
+	_the_view_never_takes_the_keyboard()
+	_hiding_a_tab_clears_its_lines_from_all()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -36,10 +38,6 @@ func _ready() -> void:
 
 
 ## A fresh view, bound and in the tree.
-##
-## In the tree because TabContainer does its child bookkeeping on entering it;
-## a detached one reports `get_tab_count() == 0` and every assertion below
-## would pass for the wrong reason.
 func _fresh() -> void:
 	if _view != null:
 		_view.queue_free()
@@ -51,7 +49,15 @@ func _fresh() -> void:
 
 
 func _text_in(index: int) -> String:
-	return (_view.get_child(index) as RichTextLabel).get_parsed_text()
+	return _view.log_at(index).get_parsed_text()
+
+
+func _index_named(tab_name: String) -> int:
+	for index: int in _tabs.count():
+		if _tabs.name_of(index) == tab_name:
+			return index
+
+	return -1
 
 
 func _a_line_reaches_every_tab_that_claims_it() -> void:
@@ -90,7 +96,7 @@ func _a_log_is_capped_and_it_is_the_oldest_that_goes() -> void:
 	for n: int in ChatView.MAX_LINES + 50:
 		_view.append("line %d" % n, Const.MSG_SYSTEM)
 
-	var pane := _view.get_child(ChatTabs.FALLBACK_TAB) as RichTextLabel
+	var pane := _view.log_at(ChatTabs.FALLBACK_TAB)
 
 	_expect(pane.get_paragraph_count() <= ChatView.MAX_LINES,
 		"the log stops at the cap")
@@ -105,23 +111,14 @@ func _a_line_marks_the_tabs_you_are_not_reading() -> void:
 	_fresh()
 	_view.append("You hit the raider.", Const.MSG_COMBAT)
 
-	var combat := _tabs.tabs_for(Const.MSG_COMBAT)
-	var other := -1
+	var combat := _index_named("Combat")
 
-	for index: int in combat:
-		if index != _tabs.active:
-			other = index
-
-	_expect(other != -1, "a combat line reached a tab that was not open")
-	_expect(_tabs.is_unread(other), "and marked it unread")
-	_expect(_view.get_tab_title(other).ends_with(ChatView.UNREAD_MARK),
-		"and the strip says so")
-	_expect(not _view.get_tab_title(_tabs.active).ends_with(ChatView.UNREAD_MARK),
+	_expect(_tabs.is_unread(combat), "a combat line marks Combat unread")
+	_expect(not _tabs.is_unread(_tabs.active),
 		"while the tab being read is not marked")
 
-	_view.current_tab = other
-	_expect(not _view.get_tab_title(other).ends_with(ChatView.UNREAD_MARK),
-		"opening the tab clears the mark")
+	_tabs.select(combat)
+	_expect(not _tabs.is_unread(combat), "opening the tab clears the mark")
 
 
 func _the_active_log_follows_the_tab() -> void:
@@ -132,40 +129,57 @@ func _the_active_log_follows_the_tab() -> void:
 	var seen: Array[RichTextLabel] = []
 	_view.active_log_changed.connect(func(pane): seen.append(pane))
 
-	_view.current_tab = 2
+	_tabs.select(2)
 
-	_expect(_view.active_log() == _view.get_child(2),
+	_expect(_view.active_log() == _view.log_at(2),
 		"active_log names the visible tab")
-	_expect(seen.size() == 1 and seen[0] == _view.get_child(2),
+	_expect(seen.size() == 1 and seen[0] == _view.log_at(2),
 		"and the change was announced once, with that log")
 
 
+func _only_the_active_log_shows() -> void:
+	_fresh()
+	_tabs.select(3)
+
+	for index: int in _tabs.count():
+		_expect(_view.log_at(index).visible == (index == 3),
+			"tab %d shows only when it is open" % index)
+
+
 ## Focus IS the mode in this client: the console only reads movement keys when
-## the input does NOT have the keyboard. A strip that took focus on click would
-## turn the next letter the player typed into a walk.
-func _the_strip_never_takes_the_keyboard() -> void:
+## the input does NOT have the keyboard.
+func _the_view_never_takes_the_keyboard() -> void:
 	_fresh()
 
-	_expect(_view.focus_mode == Control.FOCUS_NONE,
-		"the container refuses focus")
-	_expect(_view.get_tab_bar().focus_mode == Control.FOCUS_NONE,
-		"and so does the tab bar, which is what actually gets clicked")
+	_expect(_view.focus_mode == Control.FOCUS_NONE, "the view refuses focus")
 
 
-## The key route that has to exist BECAUSE of the case above.
-func _ctrl_tab_walks_the_tabs_and_wraps() -> void:
+## "Hide from All" also clears what All already shows, and "Show in All"
+## brings it back. The view draws All again from its history to do this.
+func _hiding_a_tab_clears_its_lines_from_all() -> void:
 	_fresh()
-	var last := _tabs.count() - 1
+	var combat := _index_named("Combat")
 
-	_view.cycle(true)
-	_expect(_view.current_tab == 1, "forward moves one tab")
+	_view.append("You hit the raider.", Const.MSG_COMBAT)
+	_view.append("Bob says, hello.", Const.MSG_SAY)
 
-	_view.current_tab = last
-	_view.cycle(true)
-	_expect(_view.current_tab == 0, "and wraps past the end")
+	_tabs.set_hidden_from_all(combat, true)
 
-	_view.cycle(false)
-	_expect(_view.current_tab == last, "backward wraps the other way")
+	var all := _text_in(ChatTabs.FALLBACK_TAB)
+	_expect(not all.contains("raider"), "a hidden tab's old line leaves All")
+	_expect(all.contains("Bob says"), "while the other lines stay")
+	_expect(_text_in(combat).contains("raider"), "and Combat keeps its line")
+
+	_view.append("You hit the raider again.", Const.MSG_COMBAT)
+	_expect(not _text_in(ChatTabs.FALLBACK_TAB).contains("again"),
+		"a new line of the hidden tab stays out of All")
+
+	_tabs.set_hidden_from_all(combat, false)
+	all = _text_in(ChatTabs.FALLBACK_TAB)
+	_expect(all.contains("raider again") and all.contains("Bob says"),
+		"shown again, All has every line back, in order")
+	_expect(all.find("You hit the raider.") < all.find("Bob says"),
+		"and the order is the order they came in")
 
 
 func _expect(passed: bool, what: String) -> void:

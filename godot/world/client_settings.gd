@@ -40,8 +40,6 @@ const KEY_FONT_SIZE := "font_size"
 const KEY_UI_SCALE := "ui_scale"
 const KEY_SHOW_WORLD := "show_world"
 const KEY_SHOW_INVENTORY := "show_inventory"
-const KEY_PANEL_SIZE := "panel_size"
-const KEY_CONSOLE_SIZE := "console_size"
 const KEY_SKILL_DETAIL := "skill_detail"
 const KEY_SFX_VOLUME := "sfx_volume"
 const KEY_SHOW_XP_DROPS := "show_xp_drops"
@@ -53,6 +51,29 @@ const KEY_AMOUNT_SIZE := "amount_size"
 const KEY_POPUP_RECT := "popup_rect"
 const KEY_MINIMAP_RADIUS := "minimap_radius"
 const KEY_SHOW_WALK_PATH := "show_walk_path"
+
+## The chat interface gets its own section: which mode a typed line goes to,
+## and which tabs the player hid from All. See [ChatModes] and [ChatTabs].
+const CHAT_SECTION := "chat"
+const KEY_CHAT_MODE := "mode"
+const KEY_CHAT_HIDDEN := "hidden_from_all"
+
+## The HUD layout gets its own section. See [HudLayout].
+const LAYOUT_SECTION := "layout"
+const KEY_LAYOUT := "current"
+const KEY_LAYOUT_PRESETS := "presets"
+
+## The dock sizes that builds before 09/29/2026 saved, by the HUD element that
+## takes each one now. [method load_from_disk] reads them one time, into the
+## layout. The next save writes a new file without them.
+const LEGACY_DOCK_SIZES := {
+	HudElements.PANEL: "panel_size",
+	HudElements.LOG: "console_size",
+}
+
+## The most layout presets that the player can keep, and the longest name.
+const MAX_LAYOUT_PRESETS := 20
+const MAX_PRESET_NAME := 32
 
 const DEFAULT_FONT_SIZE := 14
 const MIN_FONT_SIZE := 9
@@ -264,40 +285,30 @@ const DEFAULT_POPUP_RECT := Rect2()
 ## allocates a rect no monitor can hold.
 const MAX_BOX_PIXELS := 4000
 
-## How big the player left the control panel dock, or zero before the first
-## drag.
-##
-## A SIZE and not a rect, because the dock owns the corner it hangs from. See
-## [PanelDock]: the box is pinned to the bottom-right of the world pane, so the
-## left edge and the top edge are the two the player drags and the position
-## follows from the size. A stored position would be a second owner of the one
-## fact the dock already decides.
-##
-## Zero means "never dragged", so a fresh client gets
-## [constant PanelDock.DEFAULT_SIZE] and a returning one gets what it left.
-## [method PanelDock._place_box] clamps whatever comes back into the pane it
-## has, which is the same single owner of "the box stays on screen" that
-## [constant DEFAULT_POPUP_RECT] documents.
-const DEFAULT_PANEL_SIZE := Vector2i.ZERO
+## The key of the chat mode that the player picked. Empty is Command, the line
+## sent as it is. A LOOK of the input and not a fact: the server sends the
+## modes, and [ChatModes] gives Command until the kept mode exists.
+const DEFAULT_CHAT_MODE := ""
 
-## How big the player left the game log dock, or zero before the first drag.
-##
-## The same rules as [constant DEFAULT_PANEL_SIZE]. The log hangs from the
-## bottom-left corner of the world pane, so the player drags its right edge and
-## its top edge.
-##
-## Until 09/22/2026 the log was the left half of an `HSplitContainer`, and
-## `text_split` kept the divider offset. A split can change the width only. The
-## log always took the full height, so the player could not give that height
-## back to the world.
-const DEFAULT_CONSOLE_SIZE := Vector2i.ZERO
+## The longest chat mode key that the file may keep. A fence around a number
+## read from a file, as [constant MAX_BOX_PIXELS] is.
+const MAX_CHAT_MODE_KEY := 64
 
-## Each dock size, by its key. A key is also the name of its property, so
-## [method set_dock_size] and [PanelDock] reach every dock through one path.
-const DOCK_SIZE_KEYS: Array[String] = [KEY_PANEL_SIZE, KEY_CONSOLE_SIZE]
+## The layout that the player gave the HUD: element key -> entry. Empty
+## before the first edit. Each entry is partial. See [HudLayout].
+##
+## The layout editor writes it, and [HudArranger] reads it. Nothing else reads
+## it, so a change of layout does not rebuild a pane.
+const DEFAULT_LAYOUT := {}
 
 ## Emitted after any change, so every consumer redraws from one place.
 signal changed
+
+## Emitted when the layout changes from outside the arranger: a load, a
+## reset, or a preset. [HudArranger] reads the layout again. It does not
+## follow [signal changed], because it WRITES the layout, and a pane that is
+## pushed the setting it writes is how a slider came to collapse its own pane.
+signal layout_replaced
 
 var font_size := DEFAULT_FONT_SIZE
 var ui_scale := DEFAULT_UI_SCALE
@@ -318,8 +329,15 @@ var minimap_radius := DEFAULT_MINIMAP_RADIUS
 var show_walk_path := DEFAULT_SHOW_WALK_PATH
 var amount_size := DEFAULT_AMOUNT_SIZE
 var popup_rect := DEFAULT_POPUP_RECT
-var panel_size := DEFAULT_PANEL_SIZE
-var console_size := DEFAULT_CONSOLE_SIZE
+var layout := DEFAULT_LAYOUT.duplicate()
+var chat_mode := DEFAULT_CHAT_MODE
+
+## The keys of the chat tabs whose lines All does not show. None by default,
+## so All shows everything, as in OSRS.
+var chat_hidden_from_all := PackedStringArray()
+
+## The layouts that the player saved by name: name -> layout.
+var layout_presets := {}
 
 var _path: String
 
@@ -372,12 +390,18 @@ func load_from_disk() -> void:
 		SECTION, KEY_AMOUNT_SIZE, DEFAULT_AMOUNT_SIZE))
 	popup_rect = _clamp_box_rect(config.get_value(
 		SECTION, KEY_POPUP_RECT, DEFAULT_POPUP_RECT))
-	panel_size = _clamp_box_size(config.get_value(
-		SECTION, KEY_PANEL_SIZE, DEFAULT_PANEL_SIZE))
-	console_size = _clamp_box_size(config.get_value(
-		SECTION, KEY_CONSOLE_SIZE, DEFAULT_CONSOLE_SIZE))
+	layout = HudLayout.sanitize(config.get_value(
+		LAYOUT_SECTION, KEY_LAYOUT, DEFAULT_LAYOUT))
+	layout_presets = _sanitize_presets(config.get_value(
+		LAYOUT_SECTION, KEY_LAYOUT_PRESETS, {}))
+	_take_legacy_dock_sizes(config)
+	chat_mode = _clamp_chat_mode(config.get_value(
+		CHAT_SECTION, KEY_CHAT_MODE, DEFAULT_CHAT_MODE))
+	chat_hidden_from_all = _clamp_chat_hidden(config.get_value(
+		CHAT_SECTION, KEY_CHAT_HIDDEN, PackedStringArray()))
 
 	changed.emit()
+	layout_replaced.emit()
 
 
 ## Write the file. Returns the Error, so a caller can report a failure.
@@ -401,8 +425,10 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_SHOW_WALK_PATH, show_walk_path)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
 	config.set_value(SECTION, KEY_POPUP_RECT, popup_rect)
-	config.set_value(SECTION, KEY_PANEL_SIZE, panel_size)
-	config.set_value(SECTION, KEY_CONSOLE_SIZE, console_size)
+	config.set_value(LAYOUT_SECTION, KEY_LAYOUT, layout)
+	config.set_value(LAYOUT_SECTION, KEY_LAYOUT_PRESETS, layout_presets)
+	config.set_value(CHAT_SECTION, KEY_CHAT_MODE, chat_mode)
+	config.set_value(CHAT_SECTION, KEY_CHAT_HIDDEN, chat_hidden_from_all)
 
 	return config.save(_path)
 
@@ -476,34 +502,73 @@ func set_show_inventory(value: bool) -> void:
 	changed.emit()
 
 
-## The size the player left one dock at, or zero before the first drag.
+## Keep the layout of the HUD, and persist it.
 ##
-## `key` is one of [constant DOCK_SIZE_KEYS]. An unknown key gives zero, which
-## the dock reads as "use the shipped size".
-func dock_size(key: String) -> Vector2i:
-	if not DOCK_SIZE_KEYS.has(key):
-		push_warning("ClientSettings: no dock size named %s" % key)
-		return Vector2i.ZERO
+## [HudArranger] calls this after a drag stops. It does not emit
+## [signal layout_replaced], because the arranger already holds this layout.
+func set_layout(value: Dictionary) -> void:
+	var clean := HudLayout.sanitize(value)
 
-	return get(key)
-
-
-## Remember how big the player made one dock, and persist it.
-##
-## The caller passes the size that the box ENDED at, after
-## [method PanelDock._place_box] clamped it into the pane. The number that the
-## player can see is the number to keep.
-func set_dock_size(key: String, value: Vector2i) -> void:
-	if not DOCK_SIZE_KEYS.has(key):
-		push_warning("ClientSettings: no dock size named %s" % key)
+	if clean == layout:
 		return
 
-	var clamped := _clamp_box_size(value)
+	layout = clean
+	save_to_disk()
+	changed.emit()
 
-	if clamped == get(key):
+
+## The names of the saved layout presets, in order.
+func layout_preset_names() -> Array[String]:
+	var names: Array[String] = []
+
+	for preset_name: String in layout_presets:
+		names.append(preset_name)
+
+	names.sort()
+
+	return names
+
+
+## Save `value` as the preset `preset_name`. A preset of that name is replaced.
+##
+## Returns false for an empty name, and for a new name when the player already
+## keeps [constant MAX_LAYOUT_PRESETS] presets.
+func save_layout_preset(preset_name: String, value: Dictionary) -> bool:
+	var clean_name := _clean_preset_name(preset_name)
+	var is_new := not layout_presets.has(clean_name)
+
+	if clean_name.is_empty():
+		return false
+
+	if is_new and layout_presets.size() >= MAX_LAYOUT_PRESETS:
+		return false
+
+	layout_presets[clean_name] = HudLayout.sanitize(value)
+	save_to_disk()
+	changed.emit()
+
+	return true
+
+
+## Make the preset `preset_name` the layout of the HUD. Returns false when no
+## preset has that name.
+func apply_layout_preset(preset_name: String) -> bool:
+	if not layout_presets.has(preset_name):
+		return false
+
+	layout = (layout_presets[preset_name] as Dictionary).duplicate(true)
+	save_to_disk()
+	changed.emit()
+	layout_replaced.emit()
+
+	return true
+
+
+## Forget the preset `preset_name`. The layout of the HUD does not change.
+func delete_layout_preset(preset_name: String) -> void:
+	if not layout_presets.erase(preset_name):
 		return
 
-	set(key, clamped)
 	save_to_disk()
 	changed.emit()
 
@@ -645,6 +710,30 @@ func set_popup_rect(value: Rect2) -> void:
 	changed.emit()
 
 
+## Keep the chat mode that the player picked, and persist it.
+func set_chat_mode(value: String) -> void:
+	var clamped := _clamp_chat_mode(value)
+
+	if clamped == chat_mode:
+		return
+
+	chat_mode = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Keep the chat tabs that the player hid from All, and persist them.
+func set_chat_hidden_from_all(value: PackedStringArray) -> void:
+	var clamped := _clamp_chat_hidden(value)
+
+	if clamped == chat_hidden_from_all:
+		return
+
+	chat_hidden_from_all = clamped
+	save_to_disk()
+	changed.emit()
+
+
 ## True when a clicked skill should open the detail view inside the pane.
 ##
 ## Two readers ask this rather than comparing against a mode string, so the
@@ -678,10 +767,34 @@ func reset() -> void:
 	show_walk_path = DEFAULT_SHOW_WALK_PATH
 	amount_size = DEFAULT_AMOUNT_SIZE
 	popup_rect = DEFAULT_POPUP_RECT
-	panel_size = DEFAULT_PANEL_SIZE
-	console_size = DEFAULT_CONSOLE_SIZE
+	layout = DEFAULT_LAYOUT.duplicate()
+	chat_mode = DEFAULT_CHAT_MODE
+	chat_hidden_from_all = PackedStringArray()
 	save_to_disk()
 	changed.emit()
+	layout_replaced.emit()
+
+
+## A kept chat mode key, or Command when the file holds something else.
+func _clamp_chat_mode(value: Variant) -> String:
+	if typeof(value) != TYPE_STRING:
+		return DEFAULT_CHAT_MODE
+
+	return (value as String).left(MAX_CHAT_MODE_KEY)
+
+
+## The kept tab keys, with each one that is not a short string dropped.
+func _clamp_chat_hidden(value: Variant) -> PackedStringArray:
+	var keys := PackedStringArray()
+
+	if typeof(value) != TYPE_PACKED_STRING_ARRAY and typeof(value) != TYPE_ARRAY:
+		return keys
+
+	for key: Variant in value:
+		if typeof(key) == TYPE_STRING and not keys.has(key):
+			keys.append((key as String).left(MAX_CHAT_MODE_KEY))
+
+	return keys
 
 
 func _clamp_font(value: int) -> int:
@@ -740,3 +853,45 @@ func _clamp_box_rect(value: Variant) -> Rect2:
 		clampf(rect.position.y, -MAX_BOX_PIXELS, MAX_BOX_PIXELS),
 		clampf(rect.size.x, 0.0, MAX_BOX_PIXELS),
 		clampf(rect.size.y, 0.0, MAX_BOX_PIXELS))
+
+
+## The presets as the file gave them, with each unusable one dropped.
+func _sanitize_presets(value: Variant) -> Dictionary:
+	var presets := {}
+
+	if typeof(value) != TYPE_DICTIONARY:
+		return presets
+
+	var raw: Dictionary = value
+
+	for preset_name: Variant in raw:
+		var clean_name := _clean_preset_name(str(preset_name))
+
+		if clean_name.is_empty() or presets.size() >= MAX_LAYOUT_PRESETS:
+			continue
+
+		presets[clean_name] = HudLayout.sanitize(raw[preset_name])
+
+	return presets
+
+
+## A preset name without the spaces at its ends, and no longer than
+## [constant MAX_PRESET_NAME].
+func _clean_preset_name(value: String) -> String:
+	return value.strip_edges().left(MAX_PRESET_NAME)
+
+
+## Put the dock sizes of an older build into the layout, as sizes only. The
+## docks keep their shipped corners. A layout entry that already has a size
+## wins.
+func _take_legacy_dock_sizes(config: ConfigFile) -> void:
+	for element: String in LEGACY_DOCK_SIZES:
+		var old_size := _clamp_box_size(config.get_value(
+			SECTION, LEGACY_DOCK_SIZES[element], Vector2i.ZERO))
+		var entry: Dictionary = layout.get(element, {})
+
+		if old_size == Vector2i.ZERO or entry.has(HudLayout.KEY_SIZE):
+			continue
+
+		entry[HudLayout.KEY_SIZE] = Vector2(old_size)
+		layout[element] = entry

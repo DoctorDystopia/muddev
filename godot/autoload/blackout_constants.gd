@@ -27,6 +27,7 @@ const CH_CHAR_QUESTS := "char_quests"
 const CH_CHAR_SKILLS := "char_skills"
 const CH_CHAR_COMBAT := "char_combat"
 const CH_CHAR_POPUP := "char_popup"
+const CH_CHAR_CHAT := "char_chat"
 const CH_COMBAT := "blackout_combat"
 const CH_AURA := "blackout_aura"
 const CH_XP_DROP := "blackout_xp"
@@ -92,6 +93,7 @@ const MSG_QUEST := "quest"
 const MSG_COMMERCE := "commerce"
 const MSG_DIALOGUE := "dialogue"
 const MSG_CHANNEL := "channel"
+const MSG_PAGE := "page"
 const MSG_SYSTEM := "system"
 
 # The server clock. One tile per tick is walking speed.
@@ -258,6 +260,6 @@ const WORLD_MAP_COMMAND := "worldmap"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_avatar", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
-const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]
+const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "page", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

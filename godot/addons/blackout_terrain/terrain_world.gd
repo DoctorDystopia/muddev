@@ -1,9 +1,12 @@
 @tool
 class_name TerrainWorld
 extends Node3D
-## The terrain that the editor shows: a 3 x 3 block of chunks of one plane
-## around [member centre_chunk], read from and written to the world chunk
-## files.
+## The terrain that the editor shows: a 4 x 4 block of chunks of one plane
+## around [member centre_chunk]. The world chunk files are its store.
+##
+## A block with an even side has no middle chunk. Thus the centre chunk is
+## the south-west chunk of the middle four. The block reaches
+## [constant BLOCK_BELOW] chunks west and south of it, and two east and north.
 ##
 ## The scene holds no terrain data (DESIGN-0011 section 6.3). Every mesh here
 ## is made at load and has no owner, so a scene save stores none of it. The
@@ -12,7 +15,7 @@ extends Node3D
 ## ## Why the neighbours load
 ##
 ## A brush at a chunk edge writes the shared corners to both chunks. Thus the
-## eight neighbours load with the centre, and the author edits across a seam
+## neighbours load with the centre, and the author edits across a seam
 ## as if no seam were there. Only the outer edge of the block is locked: its
 ## corners also belong to chunks that are not loaded. The border of the block
 ## shows red. Move [member centre_chunk] to edit past it.
@@ -54,8 +57,12 @@ signal chunks_saved(names: PackedStringArray)
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
-## How many chunks the block reaches from the centre in each direction.
-const BLOCK_REACH := 1
+## How many chunks are on each side of the block.
+const BLOCK_SIDE := 4
+
+## How many chunks the block reaches west and south of the centre chunk.
+## The block reaches `BLOCK_SIDE - 1 - BLOCK_BELOW` chunks east and north.
+const BLOCK_BELOW := 1
 
 ## The height steps between a plane and a new chunk of the plane above: two
 ## tiles (Nick, 09/26/2026).
@@ -205,20 +212,26 @@ func move_block(centre: Vector2i, new_plane: int) -> void:
 ## Every chunk coordinate of the block.
 func block_coords() -> Array[Vector2i]:
 	var coords: Array[Vector2i] = []
+	var low := block_low()
 
-	for dy: int in range(-BLOCK_REACH, BLOCK_REACH + 1):
-		for dx: int in range(-BLOCK_REACH, BLOCK_REACH + 1):
-			coords.append(_centre + Vector2i(dx, dy))
+	for dy: int in BLOCK_SIDE:
+		for dx: int in BLOCK_SIDE:
+			coords.append(low + Vector2i(dx, dy))
 
 	return coords
 
 
+## The south-west chunk of the block.
+func block_low() -> Vector2i:
+	return _centre - Vector2i.ONE * BLOCK_BELOW
+
+
 ## True when `tile` is in the loaded block.
 func block_has_tile(tile: Vector2i) -> bool:
-	var home := ChunkSet.chunk_of_tile(tile)
+	var offset := ChunkSet.chunk_of_tile(tile) - block_low()
 
-	return absi(home.x - _centre.x) <= BLOCK_REACH \
-		and absi(home.y - _centre.y) <= BLOCK_REACH
+	return offset.x >= 0 and offset.x < BLOCK_SIDE \
+		and offset.y >= 0 and offset.y < BLOCK_SIDE
 
 
 ## The path of a chunk file. `on_plane` -1 means the edited plane.
@@ -387,8 +400,8 @@ func _rebuild_block_outline() -> void:
 		_block_outline.queue_free()
 
 	var size: int = _Const.CHUNK_SIZE
-	var low := (_centre - Vector2i.ONE * BLOCK_REACH) * size
-	var tiles := (2 * BLOCK_REACH + 1) * size
+	var low := block_low() * size
+	var tiles := BLOCK_SIDE * size
 
 	_block_outline = _mesh_node(TerrainOverlay.outline_mesh(chunks, low, tiles,
 		TerrainOverlay.COLOR_LOCKED), _overlay_material)

@@ -47,6 +47,11 @@ signal xp_session_reset_requested
 ## command: the credits box is the client's own, so the console opens it.
 signal credits_requested
 
+## The player asked to open the layout editor. The layout is not a value that
+## a control here can show, so the console opens the editor. See
+## [LayoutEditor].
+signal layout_edit_requested
+
 ## What each skill-detail mode is called on screen.
 ##
 ## Keyed by the stored value, so the list the player sees is built by walking
@@ -190,6 +195,14 @@ func _add_panes_section(column: VBoxContainer) -> void:
 	column.add_child(_world_check)
 	_inventory_check = _check("Inventory and equipment")
 	column.add_child(_inventory_check)
+
+	# The one way into the layout editor. The layout is locked outside it.
+	var edit_layout := Button.new()
+	edit_layout.text = "Edit layout"
+	edit_layout.tooltip_text = "Move, size, hide, fade and scale each part of the screen."
+	edit_layout.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	edit_layout.pressed.connect(func(): layout_edit_requested.emit())
+	column.add_child(edit_layout)
 
 
 ## How a step is drawn, and what the world view and the maps show.

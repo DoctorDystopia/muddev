@@ -1,5 +1,2 @@
-source  = "sketchfab_old_tower"
-file    = "scene.gltf"
-# A stand-in for every pole. One tower draws all three keys until each metal
-# gets its own art. The record key is the first pole a player meets.
-aliases = ["metal_pole", "copper_pole"]
+source  = "blackout_rusty_pole_v3"
+file    = "rusty_pole5.glb"
