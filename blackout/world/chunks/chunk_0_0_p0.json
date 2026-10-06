@@ -313,6 +313,9 @@
     {"kind":"rusty_pole","x":4,"y":1,"rotation":2},
     {"kind":"rusty_pole","x":9,"y":1,"rotation":3},
     {"kind":"rusty_pole","x":10,"y":3,"rotation":3},
-    {"kind":"bank","x":10,"y":0,"rotation":0}
+    {"kind":"bank","x":10,"y":0,"rotation":0},
+    {"kind":"metal_pole","x":59,"y":19,"rotation":0},
+    {"kind":"rusty_pole","x":3,"y":17,"rotation":0},
+    {"kind":"rusty_pole","x":6,"y":13,"rotation":0}
   ]
 }

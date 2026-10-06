@@ -278,6 +278,9 @@
     {"kind":"mutant_raider","x":57,"y":5,"rotation":2},
     {"kind":"mutant_raider","x":54,"y":4,"rotation":3},
     {"kind":"mutant_raider","x":53,"y":7,"rotation":2},
-    {"kind":"mutant_raider","x":59,"y":10,"rotation":3}
+    {"kind":"mutant_raider","x":59,"y":10,"rotation":3},
+    {"kind":"rusty_pole","x":59,"y":17,"rotation":0},
+    {"kind":"rusty_pole","x":56,"y":15,"rotation":0},
+    {"kind":"rusty_pole","x":50,"y":5,"rotation":0}
   ]
 }
