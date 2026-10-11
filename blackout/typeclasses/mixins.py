@@ -12,6 +12,7 @@ from systems.gameplay.combat import constants as combat_constants
 from systems.gameplay.combat import combat_msg
 from systems.gameplay.quests import constants as quest_constants
 from systems.gameplay.quests.hooks import notify_quests
+from systems.gameplay.exterminator.hooks import notify_exterminator
 from systems.gameplay.combat.combat_level.logic import get_combat_level
 from systems.gameplay.combat.protocols import XpEarner
 from systems.devtools import constants as dev_constants
@@ -387,11 +388,82 @@ class CombatEntity:
         new_hp = old_hp - delta
         self.hp = new_hp
 
+        # Before at_death, because the death reads the record of this blow.
+        self._record_damage(attacker, delta)
+
         if old_hp > 0 and new_hp == 0:
             self.at_death(killer=attacker, source=source,
                           damage_type=damage_type)
 
         return delta
+
+
+    def _record_damage(self, attacker, amount: int) -> None:
+        """
+        Purpose: Add one hit to the record of damage dealers.
+
+        Entry:
+            attacker - the CombatEntity that dealt the damage, or None.
+            amount   - the HP that the hit removed. Can be 0.
+
+        Exit/Returns:
+            No return value. Writes ndb.<DAMAGE_RECORD_ATTR>.
+
+        Module Globals:
+            combat_constants.DAMAGE_RECORD_ATTR read.
+
+        Methodology:
+            1. If there is no attacker, or the attacker is this entity, stop.
+            2. If the hit removed no HP, stop. A miss gives no share.
+            3. Add the amount to the total of the attacker id.
+
+        Notes/References:
+            The rules of _record_attacker apply for the same reasons: ids,
+            ndb, and no record of a self-hit. at_death reads the record
+            through damage_record and then clears it. DESIGN-0012.
+
+        Author: Nick Hobar
+        Creation date: 10/06/2026
+        """
+        if attacker is None or attacker is self or amount <= 0:
+            return
+
+        attacker_id = getattr(attacker, "id", None)
+
+        if attacker_id is None:
+            return
+
+        record = getattr(self.ndb, combat_constants.DAMAGE_RECORD_ATTR, None) or {}
+        record[attacker_id] = record.get(attacker_id, 0) + amount
+        setattr(self.ndb, combat_constants.DAMAGE_RECORD_ATTR, record)
+
+
+    def damage_record(self) -> dict:
+        """
+        Purpose: Give the damage that each attacker dealt to this entity.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns a new dict {attacker id: damage}. Empty if nothing hit
+            this entity since its last death.
+
+        Module Globals:
+            combat_constants.DAMAGE_RECORD_ATTR read.
+
+        Methodology:
+            Return a copy, so that a reader cannot change the record.
+
+        Notes/References:
+            The Exterminator kill hook reads it inside at_death.
+
+        Author: Nick Hobar
+        Creation date: 10/06/2026
+        """
+        record = getattr(self.ndb, combat_constants.DAMAGE_RECORD_ATTR, None) or {}
+
+        return dict(record)
 
 
     def _record_attacker(self, attacker) -> None:
@@ -484,6 +556,8 @@ class CombatEntity:
             5. Report the kill to the killer's quests, keyed on the victim's
                stable `db.npc_key`. A player victim has no npc_key and is
                therefore never a quest objective.
+            5b. Report the kill to the Exterminator task of each damage
+               dealer, then clear the record of damage dealers.
             6. leave what death leaves: the loot table, then the corpse.
                Both read db.npc_key, which respawn() is about to delete.
             7. call self.respawn() to permit subclass divergence (player
@@ -547,6 +621,13 @@ class CombatEntity:
         # npc_key is the identifier a blueprint can actually name.
         if npc_key:
             notify_quests(killer, quest_constants.ACTION_KILL, npc_key)
+
+        # Every damage dealer, not only the killer, gets the task kill. The
+        # hook reads db.npc_key, so it runs before respawn() deletes the row.
+        # The record then clears, so a player who survives a fight starts the
+        # next one with no stale shares.
+        notify_exterminator(self)
+        setattr(self.ndb, combat_constants.DAMAGE_RECORD_ATTR, None)
 
         if stats is not None and npc_key:
             try:

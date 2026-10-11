@@ -23,7 +23,7 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.gameplay.loot.drops import award_drops, resolve_table
 from typeclasses.characters import Character as BlackoutCharacter
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from world.loot_database import LootEntry, LootTableDef
 
 
@@ -84,7 +84,7 @@ class TestTableResolution(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
     def test_npc_key_resolves_through_npc_db_to_loot_db(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         table = resolve_table(npc)
 
@@ -93,7 +93,7 @@ class TestTableResolution(EvenniaTest):
 
     def test_instance_override_wins_over_the_npc_def(self):
         """A builder can give one unique NPC its own table."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.loot_table_key = "big_mutant_drops"
 
         table = resolve_table(npc)
@@ -101,7 +101,7 @@ class TestTableResolution(EvenniaTest):
         self.assertEqual(table.key, "big_mutant_drops")
 
     def test_an_unstamped_object_resolves_to_no_table(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.npc_key = None
 
         table = resolve_table(npc)
@@ -109,7 +109,7 @@ class TestTableResolution(EvenniaTest):
         self.assertIsNone(table)
 
     def test_an_unknown_table_key_resolves_to_none_without_raising(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.loot_table_key = "no_such_table"
 
         table = resolve_table(npc)
@@ -118,7 +118,7 @@ class TestTableResolution(EvenniaTest):
 
     def test_resolution_is_live_rather_than_stamped_at_spawn(self):
         """Editing a table plus a reload must reach NPCs already on the grid."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch.dict("world.loot_database.LOOT_DB",
                              {"mutant_raider_drops": _fixed_table("credits")}):
@@ -134,7 +134,7 @@ class TestDelivery(EvenniaTest):
 
     def _kill_with_table(self, table, killer=None):
         """Award drops from `table` on a raider standing in room1."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch("systems.gameplay.loot.drops.resolve_table",
                         return_value=table):
@@ -206,7 +206,7 @@ class TestDelivery(EvenniaTest):
         self.assertEqual(len(self._room_items(_NON_STACKABLE_KEY)), 1)
 
     def test_no_table_drops_nothing(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         before = len(self.room1.contents)
 
         with mock.patch("systems.gameplay.loot.drops.resolve_table", return_value=None):
@@ -226,7 +226,7 @@ class TestDelivery(EvenniaTest):
         self.assertEqual(len(self.room1.contents), before + 1)
 
     def test_a_locationless_npc_drops_nothing(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.location = None
 
         delivered = award_drops(npc, self.char1)
@@ -240,7 +240,7 @@ class TestAnnouncement(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
     def _announce(self, table):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch("systems.gameplay.loot.drops.resolve_table",
                         return_value=table):
@@ -296,7 +296,7 @@ class TestDeathIntegration(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
     def test_a_killing_blow_leaves_loot_and_deletes_the_npc(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         table = _fixed_table(_NON_STACKABLE_KEY, quantity=2)
 
         with mock.patch("systems.gameplay.loot.drops.resolve_table",
@@ -310,7 +310,7 @@ class TestDeathIntegration(EvenniaTest):
 
     def test_loot_rolls_before_the_row_is_deleted(self):
         """respawn() deletes the NPC; drop_loot must have run first."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         seen = {}
 
         def _record(self_npc, killer=None):
@@ -323,7 +323,7 @@ class TestDeathIntegration(EvenniaTest):
 
     def test_a_broken_loot_table_does_not_block_the_death(self):
         """A raised drop must never leave a 0-hp corpse standing."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch("systems.gameplay.loot.drops.award_drops",
                         side_effect=RuntimeError("boom")):
@@ -332,7 +332,7 @@ class TestDeathIntegration(EvenniaTest):
         self.assertIsNone(npc.pk)
 
     def test_a_surviving_hit_drops_nothing(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         before = len(self.room1.contents)
 
         npc.at_damage(1, attacker=self.char1)

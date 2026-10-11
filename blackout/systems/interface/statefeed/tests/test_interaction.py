@@ -37,7 +37,7 @@ from systems.interface.statefeed import events, serializers
 from typeclasses.bank_nodes import BankNode
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from typeclasses.npcs import ShopkeepNPC
 from typeclasses.skill_facilities import (
     AnvilFacility,
@@ -230,7 +230,7 @@ class TestInteractionVerbs(EvenniaTest):
         # above it has to name its target -- and it names it by DBREF, because
         # six raiders share one key and a click has to reach the one that was
         # clicked. See DBREF_TARGET_VERBS.
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         expected = const.ENTITY_DBREF_TEMPLATE.format(dbref=npc.id)
 
         body = serializers.serialize_entity(npc)
@@ -243,7 +243,7 @@ class TestInteractionVerbs(EvenniaTest):
         The flag rides the entity beside `interact`, and its ABSENCE means
         walk -- so this asserts the value, not merely the key.
         """
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         body = serializers.serialize_entity(npc)
 
@@ -321,8 +321,8 @@ class TestEntityRadius(EvenniaTest):
         self.assertEqual(visible, [])
 
     def test_an_area_gathers_entities_from_every_room_in_it(self):
-        here = spawn_mutant_raider(self.room1)
-        there = spawn_mutant_raider(self.room2)
+        here = spawn_npc("mutant_raider", self.room1)
+        there = spawn_npc("mutant_raider", self.room2)
 
         entities = serializers.serialize_area([self.room1, self.room2])
 
@@ -351,7 +351,7 @@ class TestEntityRadius(EvenniaTest):
         self.assertEqual(entities, [])
 
     def test_every_entity_says_where_it_is_standing(self):
-        spawn_mutant_raider(self.room1)
+        spawn_npc("mutant_raider", self.room1)
 
         entities = serializers.serialize_area([self.room1])
 
@@ -361,7 +361,7 @@ class TestEntityRadius(EvenniaTest):
     def test_a_single_room_stamps_the_same_coords_field(self):
         # serialize_contents and serialize_area must produce the same entity
         # shape, or a client has to tell which call built its list.
-        spawn_mutant_raider(self.room1)
+        spawn_npc("mutant_raider", self.room1)
 
         contents = serializers.serialize_contents(self.room1)
         area = serializers.serialize_area([self.room1])

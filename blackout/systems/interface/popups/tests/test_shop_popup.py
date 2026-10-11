@@ -33,7 +33,8 @@ from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npcs import BUY_COMMAND_KEY, TALK_COMMAND_KEY, TRADE_COMMAND_KEY
 from typeclasses.npcs import VALUE_COMMAND_KEY
 from typeclasses.npcs import SHOPKEEP_CMD_SET_KEY, ShopkeepCmdSet, ShopkeepNPC
-from typeclasses.npcs import spawn_shopkeep
+from typeclasses.npc_spawners import spawn_npc
+from world.npc_database import NPC_DB
 from world.item_database import ITEM_DB
 
 
@@ -41,6 +42,9 @@ from world.item_database import ITEM_DB
 
 # Enough to buy several of anything the oasis shop stocks.
 _PURSE = 10_000
+
+# The NpcDef of the oasis shopkeep.
+_SHOPKEEP_KEY = "shopkeeper_oasis"
 
 # How many of one ware a limited purse can pay for, in the clamp case.
 _AFFORD_COUNT = 3
@@ -55,7 +59,7 @@ class _ShopFixture(EvenniaCommandTest):
 
     def setUp(self):
         super().setUp()
-        self.keeper = create_object(ShopkeepNPC, key="Shopkeeper", location=self.room1)
+        self.keeper = NPC_DB[_SHOPKEEP_KEY].create(location=self.room1)
         buffer.reset()
         self.addCleanup(buffer.reset)
 
@@ -366,13 +370,13 @@ class TestOneTradeCommand(EvenniaCommandTest):
                    if cmdset.key == SHOPKEEP_CMD_SET_KEY)
 
     def test_a_spawned_keeper_has_one_copy(self):
-        keeper = spawn_shopkeep(self.room1)
+        keeper = spawn_npc(_SHOPKEEP_KEY, self.room1)
 
         self.assertEqual(1, self._copies(keeper))
 
     def test_a_second_rebuild_adds_no_copy(self):
-        spawn_shopkeep(self.room1)
-        keeper = spawn_shopkeep(self.room1)
+        spawn_npc(_SHOPKEEP_KEY, self.room1)
+        keeper = spawn_npc(_SHOPKEEP_KEY, self.room1)
 
         self.assertEqual(1, self._copies(keeper))
 
@@ -388,8 +392,8 @@ class TestOneTradeCommand(EvenniaCommandTest):
         self.assertEqual(1, keeper.cmdset_storage.count(path))
 
     def test_trade_names_one_command(self):
-        spawn_shopkeep(self.room1)
-        spawn_shopkeep(self.room1)
+        spawn_npc(_SHOPKEEP_KEY, self.room1)
+        spawn_npc(_SHOPKEEP_KEY, self.room1)
 
         with mock.patch.object(self.char1, "msg") as msg:
             self.char1.execute_cmd(TRADE_COMMAND_KEY, session=self.session)

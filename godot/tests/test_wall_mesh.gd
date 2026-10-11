@@ -1,6 +1,7 @@
 extends Node
 ## Unit tests for WallMeshBuilder: a slab stands on each tile edge with a
-## wall flag, inside its own tile, on the ground of that edge.
+## wall flag, inside its own tile, on the ground of that edge. Its top meets
+## the floor of the plane above.
 ##
 ##     godot --headless --path godot res://tests/test_wall_mesh.tscn
 ##
@@ -23,6 +24,13 @@ func _ready() -> void:
 	_a_slab_stands_inside_its_own_tile()
 	_a_slab_stands_on_the_ground_of_its_edge()
 	_every_face_points_out_of_its_slab()
+	_a_wall_under_a_floor_meets_it()
+	_a_wall_under_void_keeps_its_height()
+	_walls_down_draws_low()
+	_each_style_draws_at_its_own_height()
+	_a_style_colours_its_walls()
+	_an_unknown_style_draws_as_the_default()
+	_a_style_with_no_wall_bit_draws_nothing()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -132,15 +140,139 @@ func _every_face_points_out_of_its_slab() -> void:
 	_expect(outward == vertices.size() / 3, "every face of a slab points out")
 
 
+## DESIGN-0013 section 6.3. The tile above has a floor: each top corner takes
+## the corner height of the plane above, and a raised corner gives a slope.
+func _a_wall_under_a_floor_meets_it() -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var chunk := ChunkFile.blank(0, 0)
+	var above := TerrainWorld.upper_chunk(chunk, 1)
+
+	chunk.flags[2 * size + 2] = _Const.TILE_FLAG_WALL_NORTH
+	above.floor_names.append("concrete")
+	above.floors[2 * size + 2] = 1
+	above.heights[3 * side + 3] = 40
+
+	var top_west := -INF
+	var top_east := -INF
+
+	for vertex: Vector3 in _vertices_of(WallMeshBuilder.build(chunk, above)):
+		if vertex.x < 2.0 - 0.25:
+			top_west = maxf(top_west, vertex.y)
+		elif vertex.x > 2.0 + 0.25:
+			top_east = maxf(top_east, vertex.y)
+
+	var rise := TerrainWorld.NEW_PLANE_RISE * ChunkMeshBuilder.HEIGHT_STEP
+
+	_expect(is_equal_approx(top_west, rise), "the west top meets the floor above")
+	_expect(is_equal_approx(top_east, 40 * ChunkMeshBuilder.HEIGHT_STEP),
+		"the east top meets the raised corner above")
+
+
+func _a_wall_under_void_keeps_its_height() -> void:
+	var chunk := ChunkFile.blank(0, 0)
+	var above := TerrainWorld.upper_chunk(chunk, 1)
+
+	chunk.flags[0] = _Const.TILE_FLAG_WALL_SOUTH
+
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk, above)),
+		WallMeshBuilder.height_of(_Const.TILE_DEFAULT_WALL_STYLE)),
+		"a void tile above leaves the height of the wall style")
+
+
+func _walls_down_draws_low() -> void:
+	var chunk := ChunkFile.blank(0, 0)
+	var above := TerrainWorld.upper_chunk(chunk, 1)
+
+	chunk.flags[0] = _Const.TILE_FLAG_WALL_SOUTH
+	above.floor_names.append("concrete")
+	above.floors.fill(1)
+
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk, null, true)),
+		WallMeshBuilder.DOWN_HEIGHT), "walls down draws at the low height")
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk, above, true)),
+		WallMeshBuilder.DOWN_HEIGHT), "walls down stays low under a floor")
+
+
+## DESIGN-0013 section 6.4. Each tile has a wall style. The style gives the
+## height with nothing above, and the colour of the walls of its tile.
+func _each_style_draws_at_its_own_height() -> void:
+	for style: String in _Const.TILE_WALL_STYLES:
+		var chunk := _styled_chunk(style)
+		var steps: int = _Const.TILE_WALL_STYLE_HEIGHTS[style]
+
+		_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk)),
+			steps * ChunkMeshBuilder.HEIGHT_STEP),
+			"a %s wall stands %d height steps tall" % [style, steps])
+
+
+func _a_style_colours_its_walls() -> void:
+	var colors := {}
+
+	for style: String in _Const.TILE_WALL_STYLES:
+		var mesh := WallMeshBuilder.build(_styled_chunk(style))
+		var found: PackedColorArray = mesh.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+		var side := WallPalette.side_color(style)
+		var near := absf(found[0].r - side.r) <= side.r * FloorPalette.FACET_SHADE + _NEAR
+
+		_expect(near, "a %s wall has the %s colour" % [style, style])
+		colors[side.to_html()] = true
+
+	_expect(colors.size() > 1, "two wall styles can differ in colour")
+
+
+func _an_unknown_style_draws_as_the_default() -> void:
+	var chunk := _styled_chunk("no_such_style")
+	var default_style: String = _Const.TILE_DEFAULT_WALL_STYLE
+
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk)),
+		WallMeshBuilder.height_of(default_style)),
+		"an unknown style has the height of the default style")
+	_expect(WallPalette.side_color("no_such_style") == WallPalette.side_color(default_style),
+		"and its colour")
+
+
+func _a_style_with_no_wall_bit_draws_nothing() -> void:
+	var chunk := _styled_chunk("brick")
+
+	chunk.flags[0] = 0
+
+	_expect(WallMeshBuilder.build(chunk).get_surface_count() == 0,
+		"a wall style on a tile with no wall bit draws nothing")
+
+
 # ─── Private helpers ─────────────────────────────────────────────────────────
 
 func _vertices(chunk: ChunkFile) -> PackedVector3Array:
-	var mesh := WallMeshBuilder.build(chunk)
+	return _vertices_of(WallMeshBuilder.build(chunk))
 
+
+## A flat chunk with one south wall on tile 0, in `style`.
+static func _styled_chunk(style: String) -> ChunkFile:
+	var chunk := ChunkFile.blank(0, 0)
+
+	chunk.flags[0] = _Const.TILE_FLAG_WALL_SOUTH
+	chunk.wall_names.append(style)
+	chunk.walls[0] = 1
+
+	return chunk
+
+
+static func _vertices_of(mesh: ArrayMesh) -> PackedVector3Array:
 	if mesh.get_surface_count() == 0:
 		return PackedVector3Array()
 
 	return mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+
+
+## The highest point of a mesh.
+static func _top(mesh: ArrayMesh) -> float:
+	var top := -INF
+
+	for vertex: Vector3 in _vertices_of(mesh):
+		top = maxf(top, vertex.y)
+
+	return top
 
 
 func _expect(passed: bool, what: String) -> void:

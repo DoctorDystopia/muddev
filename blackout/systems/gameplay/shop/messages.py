@@ -8,7 +8,7 @@ Description: Player-facing wording for shop trades — the presentation half of
 Why this is a separate module
 -----------------------------
 Mirrors systems/gameplay/banking/messages.py, and for the same reason: there are now
-TWO callers. The shopkeep dialogue in systems/interface/menus/npc_dialogues/npc_shopkeep
+TWO callers. The shopkeep dialogue in world/npc_dialogues/shopkeep
 .py has always rendered a completed trade, and `sell <slot>` renders the same
 event from a command with no menu anywhere near it. Phrasing it in both would
 put one sentence in two files, and the first copy edit would make a sale

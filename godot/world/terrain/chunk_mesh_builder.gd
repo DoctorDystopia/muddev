@@ -17,6 +17,9 @@ extends RefCounted
 ##    The edge rule keeps the seam between two chunks closed.
 ## 5. A void tile ([constant _Const.TILE_VOID_FLOOR], Phase 7b) gets no
 ##    triangle. It is a gap in a plane above the ground.
+## 6. A roof floor type ([code]TILE_ROOF_FLOOR_TYPES[/code], DESIGN-0013
+##    section 6.2) never draws in the cliff colour. A roof is steeper than a
+##    walk on purpose, and no walk reaches it.
 ##
 ## ## The ground surface
 ##
@@ -217,6 +220,7 @@ static func build_arrays(chunk: ChunkFile) -> Array:
 	var size: int = _Const.CHUNK_SIZE
 	var positions := corner_positions(chunk)
 	var floor_colors := _floor_colors(chunk)
+	var roof_indices := _roof_indices(chunk)
 	var void_index := chunk.floor_names.find(_Const.TILE_VOID_FLOOR)
 	var out := _Surface.new()
 
@@ -230,7 +234,7 @@ static func build_arrays(chunk: ChunkFile) -> Array:
 
 			var base: Color = floor_colors[floor_index]
 
-			_add_tile(chunk, positions, lx, ly, base, out)
+			_add_tile(chunk, positions, lx, ly, base, roof_indices.has(floor_index), out)
 
 	var arrays := []
 
@@ -251,9 +255,21 @@ static func _floor_colors(chunk: ChunkFile) -> Array[Color]:
 	return colors
 
 
-## Add the two triangles of local tile (lx, ly) to `out`.
+## The indices into [member ChunkFile.floor_names] of the roof floor types.
+static func _roof_indices(chunk: ChunkFile) -> Dictionary:
+	var found := {}
+
+	for index: int in chunk.floor_names.size():
+		if _Const.TILE_ROOF_FLOOR_TYPES.has(chunk.floor_names[index]):
+			found[index] = true
+
+	return found
+
+
+## Add the two triangles of local tile (lx, ly) to `out`. A roof tile never
+## takes the cliff colour.
 static func _add_tile(chunk: ChunkFile, positions: PackedVector3Array, lx: int,
-		ly: int, base: Color, out: _Surface) -> void:
+		ly: int, base: Color, roof: bool, out: _Surface) -> void:
 	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
 	var sw := positions[ly * side + lx]
 	var se := positions[ly * side + lx + 1]
@@ -266,8 +282,8 @@ static func _add_tile(chunk: ChunkFile, positions: PackedVector3Array, lx: int,
 	var heights := chunk.corner_heights(lx, ly)
 	var sw_ne := splits_sw_ne(heights)
 	var triangles := triangle_corners(sw_ne)
-	var first_base := _face_color(base, heights, triangles[0])
-	var second_base := _face_color(base, heights, triangles[1])
+	var first_base := base if roof else _face_color(base, heights, triangles[0])
+	var second_base := base if roof else _face_color(base, heights, triangles[1])
 	var first_color := FloorPalette.shade(first_base, first_shade)
 	var second_color := FloorPalette.shade(second_base, second_shade)
 

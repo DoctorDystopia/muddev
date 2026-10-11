@@ -24,6 +24,7 @@ from unittest import mock
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaCommandTest
 
+from systems.gameplay.banking import constants as bank_const
 from systems.interface.popups import constants as popup_const
 from systems.interface.popups import service
 from systems.interface.popups.popup_defs import bank as bank_popup
@@ -274,10 +275,13 @@ class TestEveryCommandWorks(_BankFixture):
         self._open()
         row = self._grid(bank_popup.VAULT_GRID_KEY)["items"][0]
 
+        # A row also carries the moves to other tabs. Those move no unit.
+        withdraw_prefix = f"{bank_popup.WITHDRAW_COMMAND_KEY} "
+
         for action in row["actions"]:
             command = action["command"]
 
-            if not command:
+            if not command.startswith(withdraw_prefix):
                 continue
 
             with self.subTest(command=command):
@@ -420,3 +424,138 @@ class TestItCloses(_BankFixture):
         self.assertFalse(self._snapshot()["open"])
         self.assertFalse(service.is_open(self.char1))
 
+
+
+class TestTabs(_BankFixture):
+    """The tabs, the drag templates and the placeholders, each run through
+    the real parser. A template the parser refuses is a drag that does
+    nothing, and only a case of this kind finds it."""
+
+    def _bank_both(self) -> tuple:
+        """Bank the dust and the chunks. Return their two drag keys."""
+        self._bank([self._carry_dust()])
+        self._bank(self._carry(_CHUNK_KEY, _CHUNK_COUNT))
+        self._open()
+        rows = self._grid(bank_popup.VAULT_GRID_KEY)["items"]
+
+        return tuple(row[bank_popup.ROW_DRAG_KEY_FIELD] for row in rows)
+
+    def _vault(self) -> dict:
+        return self._grid(bank_popup.VAULT_GRID_KEY)
+
+    def _drop(self, template_key: str, source: str, target: str) -> None:
+        """Fill one drag template as the client does, and send it."""
+        template = self._vault()[bank_popup.GRID_DRAG_FIELD][template_key]
+        command = template.replace(feed_const.DRAG_SOURCE_TOKEN, source) \
+            .replace(feed_const.DRAG_TARGET_TOKEN, target)
+        self._send(command)
+
+    def _new_tab_drop_key(self) -> str:
+        return self._vault()[bank_popup.GRID_TABS_FIELD][-1]["drop_key"]
+
+    def test_the_templates_carry_the_client_tokens(self):
+        for template in (bank_const.MOVE_TEMPLATE, bank_const.SWAP_TEMPLATE):
+            with self.subTest(template=template):
+                self.assertIn(feed_const.DRAG_SOURCE_TOKEN, template)
+                self.assertIn(feed_const.DRAG_TARGET_TOKEN, template)
+
+        self.assertIn(feed_const.ACTION_TEXT_PLACEHOLDER, bank_const.NAME_TEMPLATE)
+
+    def test_a_drop_on_the_plus_makes_a_tab(self):
+        dust, _chunks = self._bank_both()
+        tabs_before = len(self._vault()[bank_popup.GRID_TABS_FIELD])
+
+        self._drop(bank_popup.DRAG_ONTO_TAB, dust, self._new_tab_drop_key())
+
+        vault = self._vault()
+        self.assertEqual(tabs_before + 1, len(vault[bank_popup.GRID_TABS_FIELD]))
+        self.assertEqual(dust, vault["items"][-1][bank_popup.ROW_DRAG_KEY_FIELD])
+        self.assertEqual(bank_const.FIRST_TAB,
+                         vault["items"][-1][bank_popup.ROW_TAB_FIELD])
+
+    def test_a_drop_on_a_slot_swaps_the_two(self):
+        dust, chunks = self._bank_both()
+
+        self._drop(bank_popup.DRAG_ONTO_SLOT, dust, chunks)
+
+        keys = [row[bank_popup.ROW_DRAG_KEY_FIELD] for row in self._vault()["items"]]
+        self.assertEqual([chunks, dust], keys)
+
+    def test_every_tab_button_command_is_accepted(self):
+        dust, _chunks = self._bank_both()
+        self._drop(bank_popup.DRAG_ONTO_TAB, dust, self._new_tab_drop_key())
+
+        for button in self._vault()[bank_popup.GRID_TABS_FIELD]:
+            for action in button["actions"]:
+                if not action["command"]:
+                    continue
+
+                with self.subTest(command=action["command"]):
+                    said = self._text_of(action["command"])
+                    self.assertNotIn("usage", said.lower())
+
+    def test_a_tab_click_views_that_tab(self):
+        dust, _chunks = self._bank_both()
+        self._drop(bank_popup.DRAG_ONTO_TAB, dust, self._new_tab_drop_key())
+        tab = self._vault()[bank_popup.GRID_TABS_FIELD][bank_const.FIRST_TAB]
+
+        self._send(tab["actions"][0]["command"])
+
+        self.assertEqual(bank_const.FIRST_TAB,
+                         self._vault()[bank_popup.GRID_VIEW_FIELD])
+
+    def test_the_rename_prompt_names_the_tab_and_hides_the_icon(self):
+        dust, _chunks = self._bank_both()
+        self._drop(bank_popup.DRAG_ONTO_TAB, dust, self._new_tab_drop_key())
+        tab = self._vault()[bank_popup.GRID_TABS_FIELD][bank_const.FIRST_TAB]
+        prompted = [action for action in tab["actions"] if not action["command"]]
+        template = prompted[0]["template"]
+
+        self._send(template.replace(feed_const.ACTION_TEXT_PLACEHOLDER, "Dust"))
+
+        renamed = self._vault()[bank_popup.GRID_TABS_FIELD][bank_const.FIRST_TAB]
+        self.assertEqual("Dust", renamed["label"])
+        self.assertEqual("", renamed["asset"])
+
+    def test_an_unnamed_tab_shows_the_mesh_of_its_first_item(self):
+        dust, _chunks = self._bank_both()
+        self._drop(bank_popup.DRAG_ONTO_TAB, dust, self._new_tab_drop_key())
+
+        vault = self._vault()
+        tab = vault[bank_popup.GRID_TABS_FIELD][bank_const.FIRST_TAB]
+        self.assertEqual(vault["items"][-1]["asset"], tab["asset"])
+
+    def test_a_placeholder_is_dim_and_a_left_click_does_nothing(self):
+        self._bank([self._carry_dust()])
+        self._open()
+        self._send(f"{bank_popup.WITHDRAW_COMMAND_KEY} "
+                   f"{ITEM_DB[_DUST_KEY].name} {popup_const.QUANTITY_ALL}")
+
+        row = self._vault()["items"][0]
+
+        self.assertTrue(row[bank_popup.ROW_PLACEHOLDER_FIELD])
+        self.assertFalse(row["enabled"])
+        self.assertEqual(bank_popup.PLACEHOLDER_QUANTITY, row["quantity"])
+        self.assertEqual("", row["actions"][0]["command"])
+
+    def test_release_and_the_footer_release_all_free_the_slot(self):
+        self._bank([self._carry_dust()])
+        self._open()
+        self._send(f"{bank_popup.WITHDRAW_COMMAND_KEY} "
+                   f"{ITEM_DB[_DUST_KEY].name} {popup_const.QUANTITY_ALL}")
+        labels = [button["label"] for button in self._snapshot()["actions"]]
+        release_all = [button for button in self._snapshot()["actions"]
+                       if button["label"] == bank_popup.LABEL_RELEASE_ALL]
+
+        self._send(release_all[0]["command"])
+
+        self.assertIn(bank_popup.LABEL_RELEASE_ALL, labels)
+        self.assertEqual([], self._vault()["items"])
+
+    def test_the_footer_switch_turns_placeholders_off(self):
+        self._open()
+        switch = self._snapshot()["actions"][0]
+
+        self._send(switch["command"])
+
+        self.assertFalse(self.char1.bank.keeps_placeholders())

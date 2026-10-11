@@ -26,7 +26,7 @@ from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed
 from systems.interface.statefeed import serializers
 from typeclasses.characters import Character as BlackoutCharacter
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 
 
 # ─── Test cases ──────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ class TestRule(EvenniaTest):
         self.assertFalse(pvp.pvp_enabled(self.char1))
 
     def test_only_a_character_is_a_player(self):
-        raider = spawn_mutant_raider(self.room1)
+        raider = spawn_npc("mutant_raider", self.room1)
 
         self.assertTrue(pvp.is_player(self.char1))
         self.assertFalse(pvp.is_player(raider))
@@ -48,12 +48,12 @@ class TestRule(EvenniaTest):
         self.assertFalse(pvp.is_player(None))
 
     def test_a_player_may_always_attack_an_npc(self):
-        raider = spawn_mutant_raider(self.room1)
+        raider = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual("", pvp.attack_refusal(self.char1, raider))
 
     def test_an_npc_may_always_attack_a_player(self):
-        raider = spawn_mutant_raider(self.room1)
+        raider = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual("", pvp.attack_refusal(raider, self.char1))
 

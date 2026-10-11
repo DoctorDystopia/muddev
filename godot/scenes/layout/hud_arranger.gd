@@ -91,8 +91,8 @@ func _ready() -> void:
 
 ## Give the arranger the pane that it places elements in, and the settings
 ## that keep the layout. `settings` can be null in a test that saves nothing.
-func bind(pane: Control, settings: ClientSettings = null) -> void:
-	_pane = pane
+func bind(pane_control: Control, settings: ClientSettings = null) -> void:
+	_pane = pane_control
 	_pane.resized.connect(place_all)
 	_settings = settings
 
@@ -103,11 +103,11 @@ func bind(pane: Control, settings: ClientSettings = null) -> void:
 
 ## Add one element. The control gets top-left anchors, because the arranger
 ## gives its position and its size.
-func add_slot(slot: HudSlot) -> void:
-	_slots.append(slot)
-	_by_key[slot.key] = slot
-	slot.control.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	slot.control.minimum_size_changed.connect(place_all)
+func add_slot(slot_item: HudSlot) -> void:
+	_slots.append(slot_item)
+	_by_key[slot_item.key] = slot_item
+	slot_item.control.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	slot_item.control.minimum_size_changed.connect(place_all)
 	place_all()
 
 
@@ -127,18 +127,18 @@ func place_all() -> void:
 	if _placing or _pane == null:
 		return
 
-	var pane := _pane.size
+	var pane_extent := _pane.size
 
 	# Zero for one frame before the first layout pass.
-	if pane.x <= 0.0 or pane.y <= 0.0:
+	if pane_extent.x <= 0.0 or pane_extent.y <= 0.0:
 		return
 
 	_placing = true
 
-	for slot: HudSlot in _ordered_slots():
-		var rect := _resolve(slot, pane)
-		_rects[slot.key] = rect
-		_apply(slot, rect)
+	for slot_item: HudSlot in _ordered_slots():
+		var rect := _resolve(slot_item, pane_extent)
+		_rects[slot_item.key] = rect
+		_apply(slot_item, rect)
 
 	_placing = false
 	placed.emit()
@@ -363,10 +363,10 @@ func _store(key: String, entry: Dictionary) -> void:
 ## Write the anchor, the offset and the size of the footprint `rect` into
 ## `entry`.
 func _pin(entry: Dictionary, rect: Rect2, scale_value: float) -> void:
-	var pane := pane_size()
-	var anchor := HudLayout.nearest_anchor(rect, pane)
+	var pane_extent := pane_size()
+	var anchor := HudLayout.nearest_anchor(rect, pane_extent)
 	entry[HudLayout.KEY_ANCHOR] = anchor
-	entry[HudLayout.KEY_OFFSET] = HudLayout.offset_for(anchor, rect.position, rect.size, pane)
+	entry[HudLayout.KEY_OFFSET] = HudLayout.offset_for(anchor, rect.position, rect.size, pane_extent)
 	entry[HudLayout.KEY_SIZE] = rect.size / scale_value
 
 
@@ -398,37 +398,37 @@ func _rank(slot_item: HudSlot) -> int:
 	return RANK_PLAIN
 
 
-## The footprint of one element in a pane of `pane` pixels.
-func _resolve(slot_item: HudSlot, pane: Vector2) -> Rect2:
+## The footprint of one element in a pane_extent of `pane_extent` pixels.
+func _resolve(slot_item: HudSlot, pane_extent: Vector2) -> Rect2:
 	var key := slot_item.key
 	var entry := _entry(key)
 	var scale_value := element_scale(key)
 
 	if is_filled(key):
-		return _fill_rect(key, pane)
+		return _fill_rect(key, pane_extent)
 
-	var size: Vector2 = entry.get(HudLayout.KEY_SIZE, _default_size(slot_item, pane))
+	var size: Vector2 = entry.get(HudLayout.KEY_SIZE, _default_size(slot_item, pane_extent))
 	var position := Vector2.ZERO
-	var footprint_size := (size.max(_smallest(slot_item)) * scale_value).min(pane)
+	var footprint_size := (size.max(_smallest(slot_item)) * scale_value).min(pane_extent)
 
 	if entry.has(HudLayout.KEY_ANCHOR):
 		position = HudLayout.position_for(entry[HudLayout.KEY_ANCHOR],
-			entry[HudLayout.KEY_OFFSET], footprint_size, pane)
+			entry[HudLayout.KEY_OFFSET], footprint_size, pane_extent)
 	elif slot_item.default_rect.is_valid():
-		var shipped: Rect2 = slot_item.default_rect.call(pane)
+		var shipped: Rect2 = slot_item.default_rect.call(pane_extent)
 		size = entry.get(HudLayout.KEY_SIZE, shipped.size)
-		footprint_size = (size.max(_smallest(slot_item)) * scale_value).min(pane)
+		footprint_size = (size.max(_smallest(slot_item)) * scale_value).min(pane_extent)
 		position = shipped.position
 	else:
 		position = HudLayout.position_for(slot_item.default_anchor,
-			slot_item.default_offset, footprint_size, pane)
+			slot_item.default_offset, footprint_size, pane_extent)
 
-	return HudLayout.clamp_into(Rect2(position, footprint_size), pane)
+	return HudLayout.clamp_into(Rect2(position, footprint_size), pane_extent)
 
 
 ## The shipped size: the row size, no more than its share of the room.
-func _default_size(slot_item: HudSlot, pane: Vector2) -> Vector2:
-	var room := (pane - Vector2.ONE * HudLayout.EDGE_MARGIN * 2.0).max(Vector2.ONE)
+func _default_size(slot_item: HudSlot, pane_extent: Vector2) -> Vector2:
+	var room := (pane_extent - Vector2.ONE * HudLayout.EDGE_MARGIN * 2.0).max(Vector2.ONE)
 	var size := slot_item.default_size
 
 	if size == Vector2.ZERO:
@@ -451,9 +451,9 @@ func _smallest(slot_item: HudSlot) -> Vector2:
 
 ## The full height, and the width on the wider side of the element that `key`
 ## fills beside.
-func _fill_rect(key: String, pane: Vector2) -> Rect2:
+func _fill_rect(key: String, pane_extent: Vector2) -> Rect2:
 	var margin := HudLayout.EDGE_MARGIN
-	var room := Rect2(Vector2.ONE * margin, (pane - Vector2.ONE * margin * 2.0).max(Vector2.ONE))
+	var room := Rect2(Vector2.ONE * margin, (pane_extent - Vector2.ONE * margin * 2.0).max(Vector2.ONE))
 	var other := footprint(str(_fills[key]))
 
 	if not other.has_area():

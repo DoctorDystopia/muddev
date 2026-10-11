@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="HitsplatStyle" format=3]
+
+[ext_resource type="Script" path="res://world/hitsplats/hitsplat_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+font_size = 76
+color = Color(1, 0.72, 0.1, 1)
+outline_size = 18
+outline_color = Color(0.25, 0.08, 0, 1)
+text_format = "{damage}"
+detail_bonus_format = "MAX {max_hit} +{change} BONUS"
+detail_penalty_format = "MAX {max_hit} -{change} PENALTY"
+detail_font_size = 24
+detail_color = Color(1, 0.86, 0.55, 1)
+detail_gap = 52
+pop_scale = 1.7
+pop_seconds = 0.16
+rise = 0.45
+hold_seconds = 0.75
+fade_seconds = 0.35
+height = 0.2
+jitter = 0.06

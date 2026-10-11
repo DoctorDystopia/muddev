@@ -6,7 +6,8 @@ extends RefCounted
 ## The server names the scenery of each object kind
 ## ([code]OBJECT_KIND_SCENERY[/code]). A key in
 ## [code]SCENERY_PRIMITIVES[/code] has no model record yet, so this class
-## draws it: a ladder, a flight of stairs, or a hatch. When the art arrives,
+## draws it: a ladder, a flight of stairs, a hatch, or a decor shape. When
+## the art arrives,
 ## the key leaves that list, and [TerrainView] stands the model. This class
 ## then draws nothing for it, with no edit here (Nick, 09/27/2026).
 ##
@@ -25,6 +26,9 @@ extends RefCounted
 ## - A flight of stairs rises toward the front. The bottom step is at the back
 ##   edge.
 ## - A hatch has its handle on the front edge.
+## - A crate, a table, and a lamp post are decor (DESIGN-0013 Phase S4). A
+##   crate and a table stand on the centre of the tile. A table is wider
+##   than it is deep. The arm of a lamp post reaches toward the front.
 ##
 ## ## A new primitive
 ##
@@ -36,7 +40,8 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Every primitive that this class draws with its own shape.
 const SHAPES := [_Const.SCENERY_LADDER, _Const.SCENERY_STAIRS,
-	_Const.SCENERY_HATCH]
+	_Const.SCENERY_HATCH, _Const.SCENERY_CRATE, _Const.SCENERY_TABLE,
+	_Const.SCENERY_LAMP_POST]
 
 ## How high a ladder and a flight of stairs rise: one plane. The terrain
 ## editor starts a new plane 32 height steps up (TerrainWorld.NEW_PLANE_RISE),
@@ -67,6 +72,34 @@ const FRAME_WIDTH := 0.06
 const FRAME_HEIGHT := 0.08
 const HATCH_LIFT := 0.03
 const HANDLE_SIZE := 0.08
+
+## The crate: the side of the box, and the height of its lid. The lid is a
+## little wider than the box.
+const CRATE_SIZE := 0.6
+const CRATE_LID_HEIGHT := 0.06
+const CRATE_LID_LIP := 0.02
+
+## The table. The top has a width across the front, a depth, a height, and
+## a thickness. Each leg has a side, and it stands in from the edge of the
+## top by the inset.
+const TABLE_WIDTH := 0.9
+const TABLE_DEPTH := 0.6
+const TABLE_HEIGHT := 0.5
+const TABLE_TOP := 0.05
+const TABLE_LEG := 0.06
+const TABLE_LEG_INSET := 0.05
+
+## The lamp post. The pole has a side and a height. The arm has a length and
+## a thickness. The lamp hangs under the end of the arm. The lamp and the
+## base each have a side and a height.
+const LAMP_POLE_SIZE := 0.08
+const LAMP_HEIGHT := 1.8
+const LAMP_ARM := 0.35
+const LAMP_ARM_SIZE := 0.05
+const LAMP_SIZE := 0.16
+const LAMP_LAMP_HEIGHT := 0.1
+const LAMP_BASE_SIZE := 0.2
+const LAMP_BASE_HEIGHT := 0.06
 
 ## The post of a primitive with no shape here: its side and its height.
 const POST_SIZE := 0.15
@@ -160,11 +193,17 @@ static func _add_shape(shape: String, place: _Place, out: _Surface) -> void:
 		_add_stairs(place, out)
 	elif shape == _Const.SCENERY_HATCH:
 		_add_hatch(place, out)
+	elif shape == _Const.SCENERY_CRATE:
+		_add_crate(place, out)
+	elif shape == _Const.SCENERY_TABLE:
+		_add_table(place, out)
+	elif shape == _Const.SCENERY_LAMP_POST:
+		_add_lamp_post(place, out)
 	else:
 		var half := POST_SIZE * 0.5
 
 		_add_box(place, Vector3(-half, -SINK, -half), Vector3(half, POST_HEIGHT, half),
-			FloorPalette.WALL_COLOR, out)
+			WallPalette.side_color(_Const.TILE_DEFAULT_WALL_STYLE), out)
 
 
 # ─── The shapes ─────────────────────────────────────────────────────────────
@@ -230,6 +269,56 @@ static func _add_hatch(place: _Place, out: _Surface) -> void:
 
 	_add_box(place, Vector3(-handle, HATCH_LIFT, front - handle),
 		Vector3(handle, HATCH_LIFT + HANDLE_SIZE, front + handle), frame, out)
+
+
+## A box with a lid a little wider than the box.
+static func _add_crate(place: _Place, out: _Surface) -> void:
+	var half := CRATE_SIZE * 0.5
+	var body := CRATE_SIZE - CRATE_LID_HEIGHT
+	var lid := half + CRATE_LID_LIP
+
+	_add_box(place, Vector3(-half, -SINK, -half), Vector3(half, body, half),
+		FloorPalette.CRATE_COLOR, out)
+	_add_box(place, Vector3(-lid, body, -lid), Vector3(lid, CRATE_SIZE, lid),
+		FloorPalette.CRATE_LID_COLOR, out)
+
+
+## A flat top on four legs, wider across the front than deep.
+static func _add_table(place: _Place, out: _Surface) -> void:
+	var half_x := TABLE_WIDTH * 0.5
+	var half_z := TABLE_DEPTH * 0.5
+	var under := TABLE_HEIGHT - TABLE_TOP
+	var color := FloorPalette.TABLE_COLOR
+
+	_add_box(place, Vector3(-half_x, under, -half_z), Vector3(half_x, TABLE_HEIGHT, half_z),
+		color, out)
+
+	var leg_x := half_x - TABLE_LEG_INSET - TABLE_LEG
+	var leg_z := half_z - TABLE_LEG_INSET - TABLE_LEG
+
+	for x: float in [-leg_x - TABLE_LEG, leg_x]:
+		for z: float in [-leg_z - TABLE_LEG, leg_z]:
+			_add_box(place, Vector3(x, -SINK, z), Vector3(x + TABLE_LEG, under, z + TABLE_LEG),
+				color, out)
+
+
+## A pole on a base, with an arm toward the front and a lamp under its end.
+static func _add_lamp_post(place: _Place, out: _Surface) -> void:
+	var pole := LAMP_POLE_SIZE * 0.5
+	var base := LAMP_BASE_SIZE * 0.5
+	var arm := LAMP_ARM_SIZE * 0.5
+	var lamp := LAMP_SIZE * 0.5
+	var color := FloorPalette.LAMP_POST_COLOR
+	var arm_low := LAMP_HEIGHT - LAMP_ARM_SIZE
+
+	_add_box(place, Vector3(-base, -SINK, -base), Vector3(base, LAMP_BASE_HEIGHT, base),
+		color, out)
+	_add_box(place, Vector3(-pole, -SINK, -pole), Vector3(pole, LAMP_HEIGHT, pole),
+		color, out)
+	_add_box(place, Vector3(-arm, arm_low, -LAMP_ARM - lamp), Vector3(arm, LAMP_HEIGHT, -pole),
+		color, out)
+	_add_box(place, Vector3(-lamp, arm_low - LAMP_LAMP_HEIGHT, -LAMP_ARM - lamp),
+		Vector3(lamp, arm_low, -LAMP_ARM + lamp), FloorPalette.LAMP_COLOR, out)
 
 
 # ─── Boxes ──────────────────────────────────────────────────────────────────

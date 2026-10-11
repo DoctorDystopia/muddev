@@ -19,7 +19,7 @@ this package is its core.
 | `rooms.py` | `TileRooms`: the index from tile to room, and the pool | `constants`, `typeclasses.rooms` (late) |
 | `movement.py` | `step` and `place`: a move from tile to tile | `constants` |
 | `chunkfile.py` | The chunk file: read, check, write, seams, semantic dump | `constants`, `grid` |
-| `world.py` | `TileWorld`, `TilePlane`, `get_world`: the chunk files of `world/chunks/` as one grid and one room index for each plane | `chunkfile`, `constants`, `planes`, `rooms` |
+| `world.py` | `TileWorld`, `TilePlane`, `get_world`: the chunk files of `world/chunks/` as one grid and one room index for each plane | `chunkfile`, `constants`, `planes`, `rooms`, `world.object_kinds` (late) |
 | `sweep.py` | The tick hook that gives empty rooms back to the pool | `constants`, `world` |
 | `syncstamp.py` | The digest of the chunk files at the last tile sync | `constants`, `chunkfile` |
 

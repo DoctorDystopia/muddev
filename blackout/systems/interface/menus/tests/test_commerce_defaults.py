@@ -28,7 +28,7 @@ from evennia.utils.evmenu import EvMenuGotoAbortMessage
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.interface.menus import banking_menu
-from systems.interface.menus.npc_dialogues import npc_shopkeep
+from world.npc_dialogues import shopkeep as npc_shopkeep
 from typeclasses.bank_nodes import BankNode
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npcs import ShopkeepNPC
@@ -177,7 +177,7 @@ class TestBothMenusCloseOnTheWalk(_CommerceDefaultTest):
         keep = create_object(ShopkeepNPC, key="Shopkeeper", location=self.room1)
         keep.db.shopdef_key = "oasis_shop"
         start_blackout_menu(
-            self.char1, "systems.interface.menus.npc_dialogues.npc_shopkeep",
+            self.char1, "world.npc_dialogues.shopkeep",
             startnode="start", npc=keep,
         )
         self.assertIsNotNone(self.char1.ndb._evmenu)

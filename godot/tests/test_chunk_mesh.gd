@@ -36,6 +36,7 @@ func _ready() -> void:
 	_the_palette_gives_a_stable_colour_to_an_unknown_floor()
 	_a_face_steeper_than_the_walk_limit_is_a_cliff()
 	_one_raised_corner_makes_one_cliff_face_in_each_tile()
+	_a_roof_never_takes_the_cliff_colour()
 	_a_void_tile_has_no_triangle()
 	_a_chunk_of_void_builds_an_empty_mesh()
 
@@ -253,6 +254,26 @@ func _one_raised_corner_makes_one_cliff_face_in_each_tile() -> void:
 			cliffs += 1
 
 	_expect(cliffs == 4, "one raised corner makes 4 cliff faces, found %d" % cliffs)
+
+
+## DESIGN-0013 section 6.2. A roof is steeper than a walk on purpose. The
+## same raised corner on a roof floor type draws in the roof colour.
+func _a_roof_never_takes_the_cliff_colour() -> void:
+	var chunk := ChunkFile.blank(0, 0, 1)
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var corner := Vector2i(5, 5)
+
+	chunk.floor_names = PackedStringArray([_Const.TILE_ROOF_FLOOR_TYPES[0]])
+	chunk.heights[corner.y * side + corner.x] = _Const.TILE_WALK_LIMIT * 4
+
+	var colors: PackedColorArray = ChunkMeshBuilder.build_arrays(chunk)[Mesh.ARRAY_COLOR]
+	var cliffs := 0
+
+	for first: int in range(0, colors.size(), 3):
+		if _near_cliff_color(colors[first]):
+			cliffs += 1
+
+	_expect(cliffs == 0, "a steep roof draws no cliff face, found %d" % cliffs)
 
 
 ## True when `color` is the cliff colour with a facet shade on it.

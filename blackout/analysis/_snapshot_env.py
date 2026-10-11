@@ -493,12 +493,12 @@ def npc_combatants() -> dict:
     Author: Nick Hobar
     Creation date: 08/22/2026
     """
-    from world.npc_database import NPC_DB
+    from world.npc_database import combatant_defs
 
     combatants = {}
 
-    for npc_key, npc_def in NPC_DB.items():
-        block = npc_def.to_combat_block()
+    for npc_key, npc_def in combatant_defs().items():
+        block = npc_def.combat.to_combat_block()
         profile = AttackProfile(
             key=npc_def.key,
             name=npc_def.name,

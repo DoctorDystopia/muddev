@@ -311,8 +311,9 @@ class BaseActionRules:
 
         Entry:
             context - the ActionContext.
-            result  - the ActionResult to write into. Writes `damage`, and may
-                      write `self_damage` for a weapon that can hurt its user.
+            result  - the ActionResult to write into. Writes `damage`,
+                      `max_hit` and `rolled`. An override may also write
+                      `self_damage` for a weapon that can hurt its user.
 
         Exit/Returns:
             No conditions. Returns nothing; the roll is the write.
@@ -328,6 +329,10 @@ class BaseActionRules:
             An override that replaces the die (a d20 weapon) should NOT call
             super(): the max hit is the OSRS ceiling and a replacement die is
             deliberately not bound by it.
+
+            `max_hit` and `rolled` let the hit line and the hitsplat mark a
+            max hit (ActionResult.is_max_hit). An override that replaces the
+            die writes them too, with the highest face of its own die.
 
         Notes/References:
             A 0 here is a successful accuracy check followed by a 0 damage
@@ -345,6 +350,8 @@ class BaseActionRules:
         )
 
         result.damage = modifiers.clamp_damage(modified)
+        result.max_hit = ceiling
+        result.rolled = rolled
 
     # ─── Whole-action resolution ──────────────────────────────────────────────
 

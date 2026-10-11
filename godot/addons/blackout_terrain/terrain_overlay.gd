@@ -38,6 +38,7 @@ const CATEGORY_COLORS := {
 	_Const.OBJECT_CATEGORY_SIGN: Color("f0c674"),
 	_Const.OBJECT_CATEGORY_TRANSITION: Color("4fc1e9"),
 	_Const.OBJECT_CATEGORY_CLIMB: Color("e9954f"),
+	_Const.OBJECT_CATEGORY_DECOR: Color("b0a48c"),
 }
 
 ## The height of a link over the ground, and the highest point of an arc.
@@ -203,6 +204,98 @@ static func outline_mesh(chunks: ChunkSet, low_tile: Vector2i, tiles: int,
 			tool.add_vertex(ground_point(chunks, b, LIFT * 2.0))
 
 	return tool.commit()
+
+
+## Lines draped on the ground, for the marks of a Build tool. Each item of
+## `paths` is an Array of points in tile space, joined in order.
+static func path_mesh(chunks: ChunkSet, paths: Array, color: Color) -> ArrayMesh:
+	var tool := SurfaceTool.new()
+
+	tool.begin(Mesh.PRIMITIVE_LINES)
+
+	for path: Array in paths:
+		for index: int in path.size() - 1:
+			_add_draped_line(tool, chunks, path[index], path[index + 1], color)
+
+	return tool.commit()
+
+
+## One line from `a` to `b`, in pieces of at most one tile, so it follows the
+## ground.
+static func _add_draped_line(tool: SurfaceTool, chunks: ChunkSet, a: Vector2,
+		b: Vector2, color: Color) -> void:
+	var pieces := maxi(1, ceili(a.distance_to(b)))
+
+	for piece: int in pieces:
+		var from := a.lerp(b, float(piece) / pieces)
+		var to := a.lerp(b, float(piece + 1) / pieces)
+
+		tool.set_color(color)
+		tool.add_vertex(ground_point(chunks, from, LIFT * 3.0))
+		tool.set_color(color)
+		tool.add_vertex(ground_point(chunks, to, LIFT * 3.0))
+
+
+## The outline of the Build tab (DESIGN-0013 section 6.7): a lattice of
+## lines through the corner heights of `heights`, which maps a corner to its
+## height in height steps. A line joins each two neighbour corners of the
+## map. Corner (x, y) is the south-west
+## corner of tile (x, y). The Roof tool draws its plan with it before the
+## release.
+static func lattice_mesh(heights: Dictionary, color: Color) -> ArrayMesh:
+	return lattice_layers_mesh([heights], color)
+
+
+## One lattice for each map of `layers`, in one mesh. The Place tool draws
+## the planes of a template copy with it: one map for each plane.
+static func lattice_layers_mesh(layers: Array, color: Color) -> ArrayMesh:
+	var tool := SurfaceTool.new()
+
+	tool.begin(Mesh.PRIMITIVE_LINES)
+
+	for heights: Dictionary in layers:
+		_add_lattice(tool, heights, color)
+
+	return tool.commit()
+
+
+static func _add_lattice(tool: SurfaceTool, heights: Dictionary, color: Color) -> void:
+	for corner: Vector2i in heights:
+		for step: Vector2i in [Vector2i(1, 0), Vector2i(0, 1)]:
+			var next := corner + step
+
+			if not heights.has(next):
+				continue
+
+			tool.set_color(color)
+			tool.add_vertex(_corner_point(corner, heights[corner]))
+			tool.set_color(color)
+			tool.add_vertex(_corner_point(next, heights[next]))
+
+
+## The world position of corner `corner` at `height` height steps, lifted a
+## little so the line shows over a drawn roof.
+static func _corner_point(corner: Vector2i, height: int) -> Vector3:
+	return Vector3((corner.x - 0.5) * ChunkMeshBuilder.TILE_SIZE,
+		height * ChunkMeshBuilder.HEIGHT_STEP + LIFT * 3.0,
+		-(corner.y - 0.5) * ChunkMeshBuilder.TILE_SIZE)
+
+
+## The outline of a rectangle of tiles, as one path for [method path_mesh].
+static func rect_path(rect: Rect2i) -> Array:
+	var low := Vector2(rect.position) - Vector2(0.5, 0.5)
+	var size := Vector2(rect.size)
+
+	return [low, low + Vector2(size.x, 0.0), low + size, low + Vector2(0.0, size.y), low]
+
+
+## The edge `bit` of `tile`, as one path for [method path_mesh].
+static func edge_path(tile: Vector2i, bit: int) -> Array:
+	for wall: Array in _WALLS:
+		if wall[0] == bit:
+			return [Vector2(tile) + wall[1], Vector2(tile) + wall[2]]
+
+	return []
 
 
 ## The brush ring at `centre`, a point in tile space, as a line loop.

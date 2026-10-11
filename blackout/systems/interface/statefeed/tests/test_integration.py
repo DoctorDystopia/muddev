@@ -39,7 +39,7 @@ from systems.interface.statefeed.payloads import (
 )
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from world.item_database import ITEM_DB
 
 
@@ -89,7 +89,7 @@ class TestEntitySerialisation(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
     def test_an_npc_is_named_by_its_npc_key(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         body = serializers.serialize_entity(npc)
 
@@ -149,7 +149,7 @@ class TestEntitySerialisation(EvenniaTest):
         self.assertEqual(body["family"], const.ITEM_FAMILY_WEAPON)
 
     def test_a_non_item_falls_back_to_its_own_kind(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         body = serializers.serialize_entity(npc)
 
@@ -173,7 +173,7 @@ class TestEntitySerialisation(EvenniaTest):
         self.assertTrue(body["family"])
 
     def test_an_entity_carries_its_real_name_for_the_generic_fallback(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         body = serializers.serialize_entity(npc)
 
@@ -204,7 +204,7 @@ class TestEntitySerialisation(EvenniaTest):
                 self.assertNotIn(const.ENTITY_FACING_KEY, body)
 
     def test_a_combatant_carries_health(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         body = serializers.serialize_entity(npc)
 
@@ -219,7 +219,7 @@ class TestEntitySerialisation(EvenniaTest):
         self.assertNotIn("hp", body)
 
     def test_the_body_is_json_safe_throughout(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         body = serializers.serialize_entity(npc, coords=[1, 2, "oasis"])
 
@@ -374,7 +374,7 @@ class TestCombatFeed(EvenniaTest):
     def _swing(self, result):
         """Resolve one controlled swing, recording what the feed emitted."""
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
 
@@ -426,6 +426,28 @@ class TestCombatFeed(EvenniaTest):
 
         self.assertTrue(events)
         self.assertFalse(events[0].hit)
+
+    def test_a_max_hit_is_flagged_with_its_roll(self):
+        result = ActionResult(hit=True, damage=_SMALL_DAMAGE, hit_prob=1.0,
+                              max_hit=_SMALL_DAMAGE, rolled=_SMALL_DAMAGE)
+
+        recorder, _target = self._swing(result)
+        event = recorder.of_type(CombatPayload)[0]
+
+        self.assertTrue(event.max_hit)
+        self.assertEqual(event.max_hit_roll, result.max_hit)
+
+    def test_a_usual_hit_carries_no_max_hit_roll(self):
+        # The roll is the attacker's ceiling. The hit line names it only on
+        # a max hit, so the feed must not name it on any other swing.
+        result = ActionResult(hit=True, damage=_SMALL_DAMAGE, hit_prob=1.0,
+                              max_hit=_SMALL_DAMAGE + 1, rolled=_SMALL_DAMAGE)
+
+        recorder, _target = self._swing(result)
+        event = recorder.of_type(CombatPayload)[0]
+
+        self.assertFalse(event.max_hit)
+        self.assertEqual(event.max_hit_roll, 0)
 
     def test_a_lethal_swing_is_flagged_as_a_kill(self):
         result = ActionResult(hit=True, damage=_LETHAL_DAMAGE, hit_prob=1.0)
@@ -713,7 +735,7 @@ class TestFeedIsSilentWithoutSubscribers(EvenniaTest):
 
     def test_a_swing_sends_no_feed_messages_to_an_unsubscribed_session(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
         result = ActionResult(hit=True, damage=_SMALL_DAMAGE, hit_prob=1.0)

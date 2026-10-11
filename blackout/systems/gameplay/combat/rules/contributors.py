@@ -150,3 +150,74 @@ def collect_contributors(entity) -> tuple:
     ranked.sort(key=lambda pair: pair[0])
 
     return tuple(rules for _sort_key, rules in ranked)
+
+
+def rules_of(source) -> list:
+    """
+    Purpose: Give the rules instances that one object names in combat_rules.
+
+    Entry:
+        source - any object. Most carry no combat_rules.
+
+    Exit/Returns:
+        Returns a list of rules instances, in the order of the key list. The
+        routine logs and skips an unknown key.
+
+    Module Globals:
+        RULES_REGISTRY read.
+
+    Methodology:
+        The resolve step of collect_contributors, for one object, with no
+        sort key. The Exterminator conflict check reads each carried and
+        equipped item through it.
+
+    Notes/References:
+        DESIGN-0012, Phase 3.
+
+    Author: Nick Hobar
+    Creation date: 10/06/2026
+    """
+    resolved = _resolve_keys(source, 0)
+
+    return [rules for _sort_key, rules in resolved]
+
+
+def merge_contributors(contributors: tuple, extra) -> tuple:
+    """
+    Purpose: Add more contributors to a sorted tuple, and keep it sorted.
+
+    Entry:
+        contributors - a tuple from collect_contributors, lowest priority
+                       first.
+        extra        - more rules instances, for example the Exterminator
+                       buffs that apply in this action. May be empty.
+
+    Exit/Returns:
+        Returns one tuple, lowest priority first. With no extra, returns
+        `contributors` itself.
+
+    Module Globals:
+        _UNRANKED_PRIORITY read.
+
+    Methodology:
+        1. Sort the extra by key, so two calls give one order.
+        2. Append the extra after the contributors, then sort by priority.
+           The sort of Python is stable. Thus, the gear keeps its own order, and
+           an extra entry wins a tie of priority against the gear.
+
+    Notes/References:
+        _build_context in combat.py calls this for both sides of an action.
+        The buffs never enter handler.ndb.active_rules, because that cache
+        follows the equipment, and a buff follows the target.
+
+    Author: Nick Hobar
+    Creation date: 10/06/2026
+    """
+    if not extra:
+        return contributors
+
+    ordered_extra = sorted(extra, key=lambda rules: rules.key)
+    merged = list(contributors) + ordered_extra
+    merged.sort(key=lambda rules: getattr(rules, "priority", _UNRANKED_PRIORITY))
+
+    return tuple(merged)

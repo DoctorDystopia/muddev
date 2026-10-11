@@ -199,10 +199,19 @@ var _entity_marks: MultiMeshInstance3D
 ## which owns it. Null until then, and the animation runs until told otherwise.
 var _settings: ClientSettings
 
+## The damage numbers over the figures. Built in code and not placed in
+## world.tscn, so a test scene of this pane needs no extra node. The look is in
+## the style files. See [HitsplatStyle].
+var _hitsplats: HitsplatLayer
+
 
 func _ready() -> void:
 	_build_true_tile_marks()
 	_build_hover_mark()
+
+	_hitsplats = HitsplatLayer.new()
+	_hitsplats.name = "Hitsplats"
+	add_child(_hitsplats)
 
 	# A new figure rises out of the fog of the area, so the pool must know the
 	# fog colour. See [method EntityPool.set_fade_color].
@@ -474,11 +483,26 @@ func _on_channel(channel: String, payload: Dictionary) -> void:
 	# _ready of a child runs first.
 	match channel:
 		Const.CH_COMBAT:
+			var target_id := int(payload.get("target_id", 0))
+
 			if payload.get("hit", false):
-				_entities.flash(int(payload.get("target_id", 0)))
+				_entities.flash(target_id)
+
+			_hitsplats.show_hit(payload, _figure_of(target_id))
 
 		Const.CH_AURA:
 			_on_aura(payload)
+
+
+## The figure of one entity id, or null when this pane draws none.
+##
+## This pane draws your own figure: the avatar. [EntityPool] draws every other
+## figure. Thus, a hit on you looks here first.
+func _figure_of(entity_id: int) -> Node3D:
+	if _char != null and _char.is_me(entity_id):
+		return _avatar
+
+	return _entities.node_for(entity_id)
 
 
 # ─── Clicking ────────────────────────────────────────────────────────────────
@@ -1003,9 +1027,9 @@ func _place_marker() -> void:
 	_aura.position = top
 
 	# The marker is the truth and has already moved. This asks the figure to
-	# walk there. A step slides; a teleport, a resync and an island arriving
-	# late all snap, because StepAnimator refuses to draw a path for a move
-	# longer than one step -- the same rule yaw_towards applies to facing.
+	# walk there. A step slides. A teleport, a resync and a late island all
+	# snap. StepAnimator draws no path for a move longer than SNAP_STEPS
+	# tiles. yaw_towards uses the same rule.
 	_animator.aim(top)
 
 	_draw_avatar()
@@ -1035,14 +1059,22 @@ func _observer_coords() -> Array:
 ## north answers PI rather than 0. Getting this wrong is silent — the figure
 ## simply walks backwards — so `test_world_view` pins all eight compass steps.
 ##
-## Only a step to a NEIGHBOURING tile turns anything. A teleport is not a walk
-## and has no direction in it, so a longer jump keeps the yaw rather than facing
-## wherever the destination happens to lie; so does arriving where you already
-## were, which is what a relayout and a resync each replay.
+## A move turns the figure if [StepAnimator] slides it, and only then. The two
+## read one limit, [constant StepAnimator.SNAP_STEPS]. A run moves two tiles in
+## each tick, so each step of a run is a two-tile move. Until 10/05/2026 only a
+## move to a NEIGHBOURING tile turned the figure, and a runner never turned.
+##
+## A two-tile move can bend, for example east and then northeast. The figure
+## then faces the whole move, because the slide draws it as one straight line.
+##
+## A longer jump snaps. It is not a walk and has no direction in it, so it keeps
+## the yaw. Arriving where you already were keeps it too, which is what a
+## relayout and a resync each replay.
 static func yaw_towards(from: Vector2i, to: Vector2i, keep: float) -> float:
 	var delta := to - from
+	var tiles := Vector2(delta).length()
 
-	if delta == Vector2i.ZERO or absi(delta.x) > 1 or absi(delta.y) > 1:
+	if delta == Vector2i.ZERO or tiles > StepAnimator.SNAP_STEPS:
 		return keep
 
 	return atan2(float(delta.x), float(-delta.y))

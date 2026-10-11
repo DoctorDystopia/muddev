@@ -42,8 +42,15 @@ var key := ""
 var title := ""
 var status := ""
 
-## [{key, title, slots_total, items}] in display order. `items` is indexed:
-## slot (int) -> row, and only occupied slots appear.
+## [{key, title, slots_total, items, tabs, view, searchable, drag}] in display
+## order. `items` is indexed: slot (int) -> row, and only occupied slots
+## appear.
+##
+## The last four fields belong to the bank vault (10/08/2026). No other grid
+## sends them. `tabs` holds the tab buttons. `view` is the tab the player looks
+## at. `searchable` asks for a search box. `drag` maps a drop kind to a
+## command template. A vault row also carries `tab`, `drag_key` and
+## `placeholder`. [method row_groups] decides which rows show.
 var grids: Array = []
 
 ## [{label, command, template, input, active}] — the 1 / 5 / 10 / X / All row.
@@ -188,9 +195,138 @@ func _grids(raw: Variant) -> Array:
 			"title": str(entry.get("title", "")),
 			"slots_total": int(entry.get("slots_total", 0)),
 			"items": _index_rows(entry.get("items", [])),
+			"tabs": _tabs(entry.get("tabs", [])),
+			"view": int(entry.get("view", 0)),
+			"searchable": bool(entry.get("searchable", false)),
+			"drag": _drag(entry.get("drag", {})),
 		})
 
 	return parsed
+
+
+## The tab buttons of a grid, every number converted. Empty for a grid with
+## no tabs, which is every grid but the bank vault today.
+func _tabs(raw: Variant) -> Array:
+	var tabs: Array = []
+
+	if typeof(raw) != TYPE_ARRAY:
+		return tabs
+
+	for entry: Variant in raw:
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+
+		tabs.append({
+			"index": int(entry.get("index", 0)),
+			"label": str(entry.get("label", "")),
+			"title": str(entry.get("title", "")),
+			"asset": str(entry.get("asset", "")),
+			"family": str(entry.get("family", "")),
+			"active": bool(entry.get("active", false)),
+			"drop_key": str(entry.get("drop_key", "")),
+			"actions": _actions(entry.get("actions", [])),
+		})
+
+	return tabs
+
+
+## The drag templates of a grid: drop kind -> template. Empty for a grid that
+## takes no drag.
+func _drag(raw: Variant) -> Dictionary:
+	var templates: Dictionary = {}
+
+	if typeof(raw) != TYPE_DICTIONARY:
+		return templates
+
+	for kind: Variant in raw:
+		templates[str(kind)] = str(raw[kind])
+
+	return templates
+
+
+## True when a grid shows only some of its rows: it has tabs, or a search box.
+## Such a grid sends only its filled slots, so it draws no empty frames.
+func is_filtered(grid_index: int) -> bool:
+	if grid_index < 0 or grid_index >= grids.size():
+		return false
+
+	var entry: Dictionary = grids[grid_index]
+
+	return not (entry["tabs"] as Array).is_empty() or bool(entry["searchable"])
+
+
+## The rows a filtered grid shows now, in slot order, cut into groups.
+##
+##     a search          -> one group: every row whose name holds the text,
+##                          in every tab, as the OSRS search does
+##     a tab other than 0 -> one group: the rows of that tab
+##     tab 0, the main   -> one group for each tab, in the server's order
+##
+## The groups are where the view draws a divider. Every rule here reads a
+## field the server sent: the viewed tab, and the tab of each row.
+func row_groups(grid_index: int, search: String) -> Array:
+	if not is_filtered(grid_index):
+		return []
+
+	var entry: Dictionary = grids[grid_index]
+	var needle := search.strip_edges().to_lower()
+	var view := int(entry["view"])
+	var groups: Array = []
+	var last_tab := -1
+
+	for row: Dictionary in _rows_in_order(entry):
+		if not needle.is_empty():
+			# One tab for every match, so the matches make one group.
+			if str(row.get("name", "")).to_lower().contains(needle):
+				_add_to_group(groups, row, 0, 0)
+			continue
+
+		var tab := int(row.get("tab", 0))
+
+		if view != 0 and tab != view:
+			continue
+
+		_add_to_group(groups, row, last_tab, tab)
+		last_tab = tab
+
+	return groups
+
+
+## Put one row in the last group, or in a new group when its tab differs.
+static func _add_to_group(groups: Array, row: Dictionary, last_tab: int, tab: int) -> void:
+	if groups.is_empty() or last_tab != tab:
+		groups.append([])
+
+	(groups[groups.size() - 1] as Array).append(row)
+
+
+static func _rows_in_order(entry: Dictionary) -> Array:
+	var items: Dictionary = entry["items"]
+	var slots := items.keys()
+	slots.sort()
+
+	return slots.map(func(slot: Variant) -> Dictionary: return items[slot])
+
+
+## The command for a drop, from the server's template, or "".
+##
+## `kind` names the template: a drop on a slot or on a tab. The source is the
+## key of the dragged slot, and the target is the key of the drop target. A
+## drop of a slot on itself asks for nothing. The tokens are the server's own,
+## generated into [code]blackout_constants.gd[/code], as for the inventory
+## swap.
+func drop_command(grid_index: int, kind: String, source: String, target: String) -> String:
+	if grid_index < 0 or grid_index >= grids.size():
+		return ""
+
+	var template := str((grids[grid_index]["drag"] as Dictionary).get(kind, ""))
+
+	if template.is_empty() or source.is_empty() or target.is_empty() or source == target:
+		return ""
+
+	return template \
+		.replace(_Const.DRAG_SOURCE_TOKEN, source) \
+		.replace(_Const.DRAG_TARGET_TOKEN, target)
 
 
 ## Rows keyed by slot. The fields every row carries are converted here, in the
@@ -218,6 +354,11 @@ func _index_rows(raw: Variant) -> Dictionary:
 		# slot lit, as it did before the field existed.
 		copy["enabled"] = bool(row.get("enabled", true))
 		copy["actions"] = _actions(row.get("actions", []))
+		# The vault's fields. Absent on every other grid, so each one has the
+		# value that means "no tab, no drag".
+		copy["tab"] = int(row.get("tab", 0))
+		copy["drag_key"] = str(row.get("drag_key", ""))
+		copy["placeholder"] = bool(row.get("placeholder", false))
 		indexed[copy["slot"]] = copy
 
 	return indexed

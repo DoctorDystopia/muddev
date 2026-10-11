@@ -86,6 +86,8 @@ class TestSlotAccounting(EvenniaTest):
         self.assertEqual(self.handler.free_slots(), 0)
 
     def test_withdrawing_a_whole_name_frees_its_slot(self):
+        # With placeholders on, the slot stays. test_tabs.py covers that.
+        self.handler.set_keep_placeholders(False)
         self.handler.deposit_many(self._make_pile(4))
         stored = self.handler.list_items()
 

@@ -345,6 +345,7 @@ from .item_defs.armor_feet import ITEMS as _ARMOR_FEET
 from .item_defs.dev_tools import ITEMS as _DEV_TOOLS
 from .item_defs.corpses import ITEMS as _CORPSES
 from .item_defs.food import ITEMS as _FOOD
+from .item_defs.exterminator import ITEMS as _EXTERMINATOR
 
 
 
@@ -352,5 +353,5 @@ from .item_defs.food import ITEMS as _FOOD
 # out of the loop contributes nothing and raises nothing -- its items simply
 # do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _AMMUNITION, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BACK, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _AMMUNITION, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BACK, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD, _EXTERMINATOR]:
     ITEM_DB.update(_d)

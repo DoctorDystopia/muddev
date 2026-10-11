@@ -1,0 +1,5 @@
+# A local source. Its files stay on this machine, and git keeps only
+# the source record. `python -m assets.pipeline seal` writes this file.
+*
+!.gitignore
+!source.toml

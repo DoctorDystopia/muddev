@@ -34,21 +34,38 @@ class ServerSession(BaseServerSession):
         both on first connect and after every server reload/restart."""
         super().at_sync()
 
-        # Force server-side echoing for the Godot client. init_session()
-        # only runs on the Portal side, so protocol_flags must be forced
-        # here and pushed back down to the Portal's copy of the session,
-        # which is what actually decides whether to echo typed input.
-        self.protocol_flags["LOCALECHO"] = True
-
-        # The test runner never connects the AMP protocol to a Portal, so
-        # there is nothing to push back down to -- skip the sync there.
-        if EVENNIA_SERVER_SERVICE is not None and EVENNIA_SERVER_SERVICE.amp_protocol is not None:
-            self.sessionhandler.session_portal_partial_sync(
-                {self.sessid: {"protocol_flags": {"LOCALECHO": True}}}
-            )
+        # Server-side echo for the Godot client, but only after login. Before
+        # login, every line is a login line: `connect <name> <password>`, or
+        # `resume <name> <token>` from a saved login. An echo would print the
+        # secret into the game log. A reload syncs a logged-in session, so
+        # its echo stays on.
+        logged_in = bool(getattr(self, "logged_in", False))
+        self._set_local_echo(logged_in)
 
         self._announce_statefeed()
         self._resync_statefeed()
+
+    def at_login(self, account):
+        """Called when the session logs in. The echo starts here."""
+        super().at_login(account)
+
+        self._set_local_echo(True)
+
+    def _set_local_echo(self, enabled):
+        """Set the echo of typed input, here and on the Portal.
+
+        init_session() runs only on the Portal side. Thus, this method sets
+        the flag here and pushes it down to the Portal copy of the session.
+        The Portal copy decides whether to echo typed input.
+        """
+        self.protocol_flags["LOCALECHO"] = enabled
+
+        # The test runner never connects AMP to a Portal. Thus, the push has
+        # no target there.
+        if EVENNIA_SERVER_SERVICE is not None and EVENNIA_SERVER_SERVICE.amp_protocol is not None:
+            self.sessionhandler.session_portal_partial_sync(
+                {self.sessid: {"protocol_flags": {"LOCALECHO": enabled}}}
+            )
 
     def _announce_statefeed(self):
         """Tell a graphical client what it is subscribed to, which after a

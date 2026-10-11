@@ -25,6 +25,10 @@ const Const := preload("res://autoload/blackout_constants.gd")
 ## 9.1.4).
 const SETTINGS_PATH := "user://smoke_console.cfg"
 
+## A scratch saved login, for the same reason. The real one would make the
+## console send `resume` at the first subscription.
+const LOGIN_PATH := "user://smoke_console_login.cfg"
+
 ## A window to lay the scene out in. Headless boots at 64x64, which is smaller
 ## than the dock's own minimum and puts every rect on top of every other one.
 const WINDOW := Vector2i(1600, 900)
@@ -74,9 +78,11 @@ func _ready() -> void:
 		return
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(LOGIN_PATH))
 
 	var console: Node = packed.instantiate()
 	console.settings_path = SETTINGS_PATH
+	console.saved_login_path = LOGIN_PATH
 	add_child(console)
 
 	_every_unique_name_resolves(console)
@@ -94,6 +100,7 @@ func _ready() -> void:
 
 	console.queue_free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(LOGIN_PATH))
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)

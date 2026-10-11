@@ -118,6 +118,28 @@ def _pop_value(key):
     return mutate
 
 
+def _with_walls(names, cell=0):
+    """
+    Make the base fixture a file of format 2 with the wall styles `names`.
+    The first tile gets index `cell`. Every other tile gets index 0.
+    """
+    def mutate(data):
+        size = const.CHUNK_SIZE
+        walls = [[0] * size for _ in range(size)]
+        walls[0][0] = cell
+        data["format"] = const.CHUNK_FORMAT_VERSION
+        data["wall_names"] = list(names)
+        data["walls"] = walls
+
+    return mutate
+
+
+def _plain_walls_in_format_one(data):
+    """Give a file of format 1 the two keys of format 2."""
+    _with_walls(["brick"])(data)
+    data["format"] = const.CHUNK_FORMAT_PLAIN_WALLS
+
+
 # ─── Public constant definitions ─────────────────────────────────────────────
 
 # Each case: a name, and a change to the parsed base fixture that makes it
@@ -157,6 +179,12 @@ INVALID_CASES: dict = {
     "object_text_line_break": _set_object("text", "Bank\n"),
     "object_text_too_long": _set_object(
         "text", "x" * (const.CHUNK_TEXT_MAX_CHARS + 1)),
+    # Format 2, the wall styles (DESIGN-0013 section 6.4).
+    "format_one_with_walls": _plain_walls_in_format_one,
+    "format_two_without_walls": _set("format", const.CHUNK_FORMAT_VERSION),
+    "wall_names_empty": _with_walls([]),
+    "wall_index_past_names": _with_walls(["brick"], 1),
+    "walls_all_default": _with_walls([const.DEFAULT_WALL_STYLE, "brick"]),
 }
 
 
@@ -226,6 +254,20 @@ class RefusalTests(unittest.TestCase):
 
         self.assertEqual(chunkfile.from_dict(data).plane, 0)
 
+    def test_the_wall_cases_differ_from_a_good_file_only_in_their_fault(self):
+        # A wall case that a reader refuses for another reason proves
+        # nothing. The same change with a legal index reads.
+        data = _fixture_dict(_BASE_FIXTURE)
+        _with_walls(["brick"])(data)
+
+        self.assertEqual(chunkfile.from_dict(data).wall_names, ["brick"])
+
+        data = _fixture_dict(_BASE_FIXTURE)
+        _with_walls([const.DEFAULT_WALL_STYLE, "brick"], 1)(data)
+
+        self.assertEqual(chunkfile.from_dict(data).wall_style_name(0, 0),
+                         "brick")
+
 
 class MeaningTests(unittest.TestCase):
     """What a read chunk file says about the world."""
@@ -273,6 +315,40 @@ class MeaningTests(unittest.TestCase):
                 self.assertEqual(grid.tile_height(gx, gy),
                                  self.chunk_file.tile_height(lx, ly))
 
+    def test_a_format_one_file_reads_the_default_wall_style_on_every_tile(self):
+        size = const.CHUNK_SIZE
+
+        self.assertFalse(self.chunk_file.has_wall_styles())
+
+        for lx, ly in ((0, 0), (size - 1, size - 1), (17, 42)):
+            with self.subTest(tile=(lx, ly)):
+                self.assertEqual(self.chunk_file.wall_style_name(lx, ly),
+                                 const.DEFAULT_WALL_STYLE)
+
+    def test_the_writer_picks_the_format_from_the_wall_styles(self):
+        plain = chunkfile.to_text(self.chunk_file)
+        self.chunk_file.wall_names = [const.DEFAULT_WALL_STYLE, "brick"]
+        self.chunk_file.walls[5] = 1
+        styled = chunkfile.to_text(self.chunk_file)
+
+        self.assertEqual(json.loads(plain)["format"],
+                         const.CHUNK_FORMAT_PLAIN_WALLS)
+        self.assertNotIn("walls", json.loads(plain))
+        self.assertEqual(json.loads(styled)["format"],
+                         const.CHUNK_FORMAT_VERSION)
+        self.assertEqual(chunkfile.parse_text(styled).wall_style_name(5, 0),
+                         "brick")
+
+    def test_a_name_list_with_only_unused_styles_still_writes_format_one(self):
+        # The editor may hold a painted-over name until it compacts the
+        # names. What counts is the style of each tile.
+        self.chunk_file.wall_names = [const.DEFAULT_WALL_STYLE, "brick"]
+
+        text = chunkfile.to_text(self.chunk_file)
+
+        self.assertEqual(json.loads(text)["format"],
+                         const.CHUNK_FORMAT_PLAIN_WALLS)
+
     def test_row_zero_is_the_south_edge(self):
         data = _fixture_dict(_BASE_FIXTURE)
         south_west_flags = data["flags"][0][0]
@@ -292,10 +368,10 @@ class SeamTests(unittest.TestCase):
         self.assertEqual(chunkfile.seam_mismatches(built), [])
 
     def test_a_changed_edge_corner_is_a_mismatch(self):
-        west, east, upper = fixture_builder.build_fixtures()
+        west, east, *others = fixture_builder.build_fixtures()
         east.heights[0] += 1
 
-        mismatches = chunkfile.seam_mismatches([west, east, upper])
+        mismatches = chunkfile.seam_mismatches([west, east] + others)
 
         self.assertEqual(mismatches, [(west.file_name(), east.file_name(), 0)])
 

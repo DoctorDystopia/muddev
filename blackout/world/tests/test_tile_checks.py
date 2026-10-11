@@ -95,10 +95,38 @@ class CheckWorldTests(unittest.TestCase):
                          [(tile_checks.RULE_RESPAWN_COUNT, 0, 0, 0)])
 
     def test_a_fixed_world_gives_no_finding(self):
+        size = tile_const.CHUNK_SIZE
         ground, upper = builder.build_fixtures()
         ground.objects = [thing for thing in ground.objects
                           if (thing.x, thing.y) in ((1, 1), (10, 10))]
+        ground.flags = [tile_const.FLAG_NONE] * len(ground.flags)
+        ground.heights = [0] * len(ground.heights)
         upper.objects = []
-        upper.flags[30 * tile_const.CHUNK_SIZE + 30] = tile_const.FLAG_BLOCKED
+        upper.flags = [tile_const.FLAG_BLOCKED] * len(upper.flags)
+        upper.flags[10 * size + 10] = tile_const.FLAG_NONE
 
         self.assertEqual(tile_checks.check_world([ground, upper]), [])
+
+    def test_a_door_opens_the_walled_pocket(self):
+        # The unreachable note names the pocket, and a doorway removes it.
+        x, y = builder.WALLED_ROOM
+        index = y * tile_const.CHUNK_SIZE + x
+        ground, upper = builder.build_fixtures()
+        before = [finding.key() for finding in
+                  tile_checks.check_world([ground, upper])]
+
+        ground.flags[index] &= ~tile_const.FLAG_WALL_SOUTH
+        after = [finding.key() for finding in
+                 tile_checks.check_world([ground, upper])]
+        pocket = (tile_checks.RULE_UNREACHABLE, x, y, 0)
+
+        self.assertIn(pocket, before)
+        self.assertNotIn(pocket, after)
+
+    def test_only_the_note_rules_give_notes(self):
+        found = tile_checks.check_world(builder.build_fixtures())
+
+        for finding in found:
+            with self.subTest(finding=finding.key()):
+                self.assertEqual(finding.is_note(),
+                                 finding.rule in tile_checks.NOTE_RULES)

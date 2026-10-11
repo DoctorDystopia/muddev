@@ -2,7 +2,15 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 07/13/2026
-Description: Talkative and shopkeeper NPC typeclasses, plus the talk command.
+Description: The typeclasses of the NPCs that do not fight, one for each
+             role (talkative, shopkeep, Preceptor), plus the talk command.
+
+             ONE TYPECLASS FOR EACH ROLE, NEVER ONE FOR EACH NPC (Nick,
+             10/09/2026). What one NPC is -- its name, description, model,
+             dialogue, shop and Preceptor row -- is its NpcDef in
+             world/npc_defs/. Until then, each named NPC had a subclass, a
+             set of constants, and a spawner here. typeclasses/npc_spawners.py
+             now stands up every NPC from its def.
 """
 
 
@@ -13,11 +21,12 @@ from evennia.utils import logger
 
 from commands.constants import HELP_CATEGORY_GENERAL
 from systems.interface.statefeed.constants import ASSET_KIND_NPC, COMMERCE_ROLE_SHOP
+from typeclasses.npc_defined import NpcDefined
 from typeclasses.objects import ObjectParent, Unpocketable
 from .scripts import Script
-from .spawners import register_spawner, spawn_once
 from systems.interface.menus.base_menu import start_blackout_menu
 from systems.interface.statefeed import constants as feed_const
+from systems.gameplay.exterminator import constants as ext_const
 
 
 
@@ -49,18 +58,11 @@ VALUE_COMMAND_KEY = "value"
 SHOPKEEP_CMD_SET_KEY = "npc_shopkeep_cmdset"
 SHOPKEEP_CMD_SET_PRIORITY = 10
 
-SHOPKEEP_DIALOGUE_MODULE = "systems.interface.menus.npc_dialogues.npc_shopkeep"
-LONE_ANDROID_DIALOGUE_MODULE = "systems.interface.menus.npc_dialogues.npc_oasis_lone_android"
+# The model of a shopkeep with no def. ShopkeepNPC.fallback_asset_key.
+SHOPKEEP_FALLBACK_ASSET_KEY = "shopkeeper"
 
-# The oasis quest giver. The key must match the room key of the "Lone Android"
-# prototype in world/maps/oasis.py, because that key is what SPAWNER_REGISTRY
-# dispatches on.
-LONE_ANDROID_KEY = "Lone Android"
-LONE_ANDROID_DESC = (
-    "A farm-hand android, alone. Its chassis is sand-scoured down to the "
-    "primer and one knee joint whines when it moves. It is bent over a "
-    "datapad, writing, and does not appear to have noticed you."
-)
+# The label of the `task new` action on a Preceptor. TBD.
+PRECEPTOR_TASK_LABEL = "Get task"
 # The periodic trim that keeps player sales from filling a shopkeep's pockets
 # forever, and how much it leaves behind.
 #
@@ -97,20 +99,32 @@ def _dialogue_module_for(npc: object) -> object:
         None.
 
     Methodology:
-        The typeclass's own declaration wins over anything persisted, so a
-        module that has MOVED is corrected for every NPC already in the
-        database the moment the class attribute is edited. db.menu_module is
-        the fallback, for an NPC built by a script or a prototype with no
-        typeclass of its own to declare on.
+        Three sources, in a fixed order:
+        1. The NpcDef that db.npc_key names. Every NPC that a spawner stands
+           up has one.
+        2. The `dialogue_module` class attribute, for a typeclass that
+           declares one.
+        3. db.menu_module, for an NPC built by a script or a prototype with
+           no def and no typeclass of its own.
+
+        The code wins over a database row. Thus, when a module moves, one
+        edit of the def corrects every NPC in the database.
 
     Notes/References:
-        The order is the whole point. Reading the row first would let a
-        09/08/2026 shopkeep's stale `systems.menus....` path keep shadowing
-        the corrected class attribute forever, which is the bug this resolves.
+        The order is the fix. If this read the row first, the stale
+        `systems.menus....` path of a 09/08/2026 shopkeep would hide the
+        correct path forever. The dialogue modules moved again on
+        10/09/2026, to world/npc_dialogues/. The def made that move a change
+        of one line.
 
     Author: Nick Hobar
     Creation date: 09/08/2026
     """
+    npc_def = getattr(npc, "npc_def", None)
+
+    if npc_def is not None and npc_def.dialogue:
+        return npc_def.dialogue_module()
+
     declared = getattr(npc, "dialogue_module", None)
 
     if declared:
@@ -259,7 +273,7 @@ class TalkCmdSet(CmdSet):
 
 
 
-class TalkativeNPC(Unpocketable, ObjectParent, DefaultObject):
+class TalkativeNPC(NpcDefined, Unpocketable, ObjectParent, DefaultObject):
     """
     Purpose: An NPC that can engage in menu-driven conversations.
 
@@ -273,46 +287,41 @@ class TalkativeNPC(Unpocketable, ObjectParent, DefaultObject):
         None
 
     Methodology:
-        At creation, adds the TalkCmdSet persistently. A subclass names the
-        dialogue module it speaks from by declaring `dialogue_module`; a
-        one-off NPC with no typeclass of its own may set db.menu_module
-        instead.
+        At creation, adds the TalkCmdSet persistently. The NpcDef of the NPC
+        names its dialogue module. A one-off NPC with no def may set
+        db.menu_module instead. NpcDefined gives the description and the
+        model from the def.
 
     Notes/References:
-        None
+        _dialogue_module_for gives the order of the three sources.
 
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
 
-    # The dialogue module this NPC speaks from -- a python path to a module of
-    # EvMenu node functions. Declared on the CLASS, never written to db, for
-    # the reason CLAUDE.md gives about typeclass paths: an import path in a
-    # database row is one no rename, grep or reorganization can reach.
+    # A dialogue module that a typeclass declares -- a python path to a module
+    # of EvMenu node functions. No role declares one now: the NpcDef names the
+    # dialogue. It stays for a typeclass of a later role that speaks one fixed
+    # dialogue with no def.
     #
     # It was a db attribute until 09/08/2026, stamped once at creation. The
     # repo-wide directory reorganization moved every menu under
-    # systems/interface/, the constants below were updated with it, and every
-    # shopkeep already standing on the grid kept its `systems.menus....` row --
-    # so `talk` handed EvMenu a path that no longer imported and tracebacked at
-    # the player. A class attribute is read live and needs no migration, the
-    # same route `asset_kind` and `commerce_role` take below.
+    # systems/interface/, and every shopkeep already standing on the grid kept
+    # its `systems.menus....` row -- so `talk` handed EvMenu a path that no
+    # longer imported and tracebacked at the player.
     dialogue_module = None
 
     # How a graphical client draws this and what it may send to use it. Read
     # by systems/interface/statefeed/serializers.py through getattr.
     #
-    # `asset_kind` has to be declared because nothing else identifies this as
-    # an NPC: it is not an Evennia character, and `db.npc_key` belongs to the
-    # hostile NPC_DB stat blocks, which a shopkeeper has no business carrying.
-    # Without it a shopkeeper served as a generic item, and the 3D pane offered
-    # to pick one up.
+    # `asset_kind` is declared because the statefeed must know the family of
+    # a talkative NPC with no def too. NpcDefined gives `asset_key` from the
+    # def.
     #
     # `talk` rather than `attack` is the whole point of declaring the verb here
     # instead of letting a client infer one from the kind: both are NPCs, and
     # only one of them is a fight.
     asset_kind = ASSET_KIND_NPC
-    asset_key = "talkative_npc"
     interact_verb = TALK_COMMAND_KEY
 
 
@@ -624,11 +633,14 @@ class ShopkeepNPC(TalkativeNPC):
     """
     An NPC that buys and sells items. Extends TalkativeNPC with
     shop-specific attributes and auto-attaches the cleanup script.
+
+    The NpcDef names the shop (`shop_key`). world/shop_defs.shop_def_for
+    reads it there, and falls back to db.shopdef_key only for a shopkeep
+    with no def.
     """
 
-    asset_key = "shopkeeper"
+    fallback_asset_key = SHOPKEEP_FALLBACK_ASSET_KEY
     interact_verb = TRADE_COMMAND_KEY
-    dialogue_module = SHOPKEEP_DIALOGUE_MODULE
 
     # What standing near this NPC lets you do with what you are carrying. Read
     # by systems/interface/statefeed/commerce.py through getattr, the same route
@@ -640,9 +652,41 @@ class ShopkeepNPC(TalkativeNPC):
     def at_object_creation(self) -> None:
         super().at_object_creation()
         self.ensure_shop_cmdset()
-        self.db.shopdef_key = "oasis_shop"
-        self.db.desc = "A shopkeeper attending a stall of salvaged goods."
         self.db.max_held_items = SHOPKEEP_MAX_HELD_ITEMS
+        self.ensure_cleanup_script()
+
+    def refresh_from_def(self) -> None:
+        """
+        Purpose: Bring this shopkeep in step with its def and its role, at a
+                 tile sync.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The name comes from NpcDefined. Then the two ensure methods
+            run. at_object_creation runs one time, so a shopkeep placed
+            before ShopkeepCmdSet existed carries `talk` and no `sell`.
+            Neither cmdset.add nor scripts.add is idempotent, so each ensure
+            method also removes the extra copies of old rebuilds. The
+            cleanup ensure also moves a script persisted under the old
+            blackout/scripts/ typeclass path.
+
+        Notes/References:
+            spawn_shopkeep did this until 10/09/2026.
+            typeclasses/npc_spawners.py calls this now, for every NPC.
+
+        Author: Nick Hobar
+        Creation date: 10/09/2026
+        """
+        super().refresh_from_def()
+        self.ensure_shop_cmdset()
         self.ensure_cleanup_script()
 
     def extra_actions(self, observer=None) -> list:
@@ -698,10 +742,10 @@ class ShopkeepNPC(TalkativeNPC):
             and to cmdset_storage on every call. The cmdset is
             `duplicates = True`, so two copies give two `trade` commands on
             one shopkeep, and the player gets "More than one match".
-            at_object_creation and spawn_shopkeep each added one, so every
-            spawned shopkeep had two, and each map rebuild added one more.
-            spawn_shopkeep calls this on each rebuild, so the rebuild heals
-            the shopkeeps already in the database.
+            at_object_creation and the old spawn_shopkeep each added one, so
+            every spawned shopkeep had two, and each map rebuild added one
+            more. refresh_from_def calls this on each tile sync, so the sync
+            heals the shopkeeps already in the database.
 
         Author: Nick Hobar
         Creation date: 09/18/2026
@@ -740,9 +784,8 @@ class ShopkeepNPC(TalkativeNPC):
         Notes/References:
             This is the migration for the 34 rows persisted under the old
             blackout/scripts/ path. Doing it here rather than in a one-shot
-            operator script means it rides the map rebuild the operator is
-            already running, in the same shape spawn_shopkeep uses to re-stamp
-            `desc` and `shopdef_key` on an NPC that already exists.
+            operator script means it rides the tile sync the operator is
+            already running, through refresh_from_def.
 
             It is also a dedupe. ScriptHandler.add creates unconditionally --
             it has no presence check -- so anything that called it twice on
@@ -782,116 +825,78 @@ class ShopkeepNPC(TalkativeNPC):
             self.scripts.add(SHOPKEEP_CLEANUP_SCRIPT)
 
 
-@register_spawner("Shopkeeper")
-def spawn_shopkeep(room):
-    shopkeep = spawn_once(
-        room,
-        "typeclasses.npcs.ShopkeepNPC",
-        key="Shopkeeper",
-    )
-
-    # Stamped unconditionally, not just on first creation: spawn_once returns
-    # the pre-existing shopkeep on a map rebuild, and re-applying the def keeps
-    # an already-placed NPC in step with edits to these values.
-    shopkeep.db.desc = "A tiny robot with a stall full of salvaged goods."
-    shopkeep.db.shopdef_key = "oasis_shop"
-
-    # Same reasoning, applied to the cmdset rather than an attribute:
-    # at_object_creation runs once, so a shopkeep placed before ShopkeepCmdSet
-    # existed carries `talk` and no `sell`. cmdset.add is NOT idempotent, so
-    # ensure_shop_cmdset also removes the extra copies of old rebuilds.
-    shopkeep.ensure_shop_cmdset()
-
-    # Same reasoning, applied to the cleanup script rather than an attribute:
-    # this is what re-points a shopkeep persisted under the old
-    # blackout/scripts/ typeclass path.
-    shopkeep.ensure_cleanup_script()
-
-    return shopkeep
-
-
-class LoneAndroidNPC(TalkativeNPC):
+class PreceptorNPC(TalkativeNPC):
     """
-    Purpose: The android that tends the oasis farm -- the giver of "Oasis in
-             the Wastes", the game's opening quest.
+    Purpose: An NPC that gives Exterminator tasks and teaches buffs.
 
     Entry:
-        No conditions.
+        The NpcDef of the NPC names `preceptor_key`, a key of PRECEPTOR_DB,
+        and its dialogue.
 
     Exit/Returns:
         No conditions.
 
     Module Globals:
-        LONE_ANDROID_DIALOGUE_MODULE read.
+        TALK_COMMAND_KEY, PRECEPTOR_TASK_LABEL read.
 
     Methodology:
-        A TalkativeNPC that knows which dialogue module it speaks from. It
-        needs its own typeclass rather than a bare TalkativeNPC only so the
-        spawner below can identify one already standing on the tile -- and so
-        the 3D pane can draw it as something other than a shopkeeper.
+        The rules of the Preceptor live in its PreceptorDef. This class
+        reads the key of that row from the NpcDef on each use, never from a
+        db row. Thus, a change to the def reaches the NPC that already
+        stands in the world.
+
+        No cmdset of its own. `task new` is on every character and finds a
+        Preceptor in the room. That avoids the duplicate-cmdset trap of
+        ensure_shop_cmdset.
 
     Notes/References:
-        Design lives in the Obsidian vault, "Oasis in the Wastes"; the quest
-        blueprint is systems/gameplay/quests/content/quest_oasis.py.
+        DESIGN-0012, Phase 2. Nick, 10/06/2026: a player can talk, or go
+        straight to the assignment. One subclass for each Preceptor until
+        10/09/2026.
 
     Author: Nick Hobar
-    Creation date: 08/25/2026
+    Creation date: 10/06/2026
     """
 
-    asset_key = "lone_android"
+    @property
+    def preceptor_key(self) -> str:
+        """The PRECEPTOR_DB key that the def names, or "" with no def."""
+        npc_def = self.npc_def
 
-    dialogue_module = LONE_ANDROID_DIALOGUE_MODULE
+        if npc_def is None or not npc_def.preceptor_key:
+            return ""
 
+        return npc_def.preceptor_key
 
-    def at_object_creation(self) -> None:
-        """Describe the NPC. Its dialogue module is the class attribute."""
-        parent_class = super()
-        parent_class.at_object_creation()
+    def extra_actions(self, observer=None) -> list:
+        """
+        Purpose: Both things a player can do with a Preceptor, for a right
+                 click.
 
-        self.db.desc = LONE_ANDROID_DESC
+        Entry:
+            No conditions.
 
+        Exit/Returns:
+            Returns `talk` first and `task new <name>` second.
 
-@register_spawner("Lone Android")
-def spawn_lone_android(room):
-    """
-    Purpose: Place the oasis quest giver on its map tile.
+        Module Globals:
+            TALK_COMMAND_KEY, PRECEPTOR_TASK_LABEL read.
 
-    Entry:
-        room is the GridTile built from the "Lone Android" prototype in
-        world/maps/oasis.py.
+        Methodology:
+            `talk` leads, so a left click talks, as on an OSRS Slayer
+            master. The task command names this Preceptor, so a room with
+            two Preceptors still sends the right one.
 
-    Exit/Returns:
-        Returns the NPC standing on the tile.
+        Notes/References:
+            systems/interface/statefeed/serializers.py interact_actions
+            reads this.
 
-    Module Globals:
-        LONE_ANDROID_KEY, LONE_ANDROID_DESC read.
+        Author: Nick Hobar
+        Creation date: 10/06/2026
+        """
+        task_command = f"{ext_const.TASK_NEW_COMMAND} {self.key}"
 
-    Methodology:
-        world/maps/oasis.py has carried a "Lone Android" tile at (2, 0) since
-        the map was written, but no spawner was ever registered for that room
-        key -- so the tile built an empty room NAMED "Lone Android" and the
-        quest giver did not exist. npc_oasis_guide.py was unreachable and the
-        opening quest could not be started by any means.
-
-        Stamps the description unconditionally, matching spawn_shopkeep:
-        spawn_once returns the pre-existing NPC on a map rebuild, and
-        re-applying keeps an already-placed android in step with edits here.
-        The dialogue module needs no such stamp -- it is a class attribute,
-        read live, which is why it survived the 09/08/2026 reorganization
-        while the shopkeep's persisted copy did not.
-
-    Notes/References:
-        The tile sync (scripts/sync_tile_objects.py) runs the spawner.
-
-    Author: Nick Hobar
-    Creation date: 08/25/2026
-    """
-    android = spawn_once(
-        room,
-        "typeclasses.npcs.LoneAndroidNPC",
-        key=LONE_ANDROID_KEY,
-    )
-
-    android.db.desc = LONE_ANDROID_DESC
-
-    return android
+        return [
+            {"command": TALK_COMMAND_KEY},
+            {"command": task_command, "label": PRECEPTOR_TASK_LABEL},
+        ]

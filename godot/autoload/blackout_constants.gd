@@ -35,7 +35,9 @@ const CH_TILE_CHUNK := "blackout_chunk"
 const CH_WALK := "blackout_walk"
 const CH_WORLD_MAP := "blackout_world_map"
 const CH_WORLD_MAP_CHUNK := "blackout_world_map_chunk"
+const CH_MOMENT := "blackout_moment"
 const CH_SUBSCRIBED := "blackout_subscribed"
+const CH_LOGIN_TOKEN := "blackout_login_token"
 
 # Asset kinds -- the client's mesh `family` vocabulary.
 const FAMILY_ITEM := "item"
@@ -69,6 +71,9 @@ const KIND_WALK := "walk"
 const KIND_LOOK := "look"
 const KIND_CANCEL := "cancel"
 
+# Game moments -- what a client can mark with a sound.
+const MOMENT_TASK_COMPLETE := "task_complete"
+
 # Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
 const MESSAGE_TYPE_KEY := "type"
 const MSG_GENERAL := "general"
@@ -100,7 +105,8 @@ const MSG_SYSTEM := "system"
 const TICK_SECONDS := 0.6
 
 # The tile grid and its chunk file. DESIGN-0011 section 6.2.
-const CHUNK_FORMAT_VERSION := 1
+const CHUNK_FORMAT_VERSION := 2
+const CHUNK_FORMAT_PLAIN_WALLS := 1
 const CHUNK_SIZE := 64
 const CHUNK_CORNERS_PER_SIDE := 65
 const CHUNK_PLANE_MAX := 3
@@ -112,6 +118,9 @@ const CHUNK_TEXT_PATTERN := "^[!#-\\[\\]-{}~]([ !#-\\[\\]-{}~]*[!#-\\[\\]-{}~])?
 const CHUNK_TEXT_MAX_CHARS := 64
 const CHUNK_FILE_TEMPLATE := "chunk_{cx}_{cy}_p{plane}.json"
 const CHUNK_DIRECTORY := "world/chunks"
+const STRUCTURE_DIRECTORY := "world/structures"
+const STRUCTURE_FILE_SUFFIX := ".json"
+const STRUCTURE_FORMAT_VERSION := 1
 const TILE_SYNC_STAMP_FILE := "server/tile_sync_state.json"
 const CHUNK_STREAM_RADIUS := 1
 const TILE_WORLD_Z := "tile_world"
@@ -123,6 +132,7 @@ const TILE_FLAG_WALL_EAST := 8
 const TILE_FLAG_WALL_SOUTH := 16
 const TILE_FLAG_WALL_WEST := 32
 const TILE_FLAGS_UNWALKABLE := 3
+const TILE_FLAGS_WALLS := 60
 const TILE_FLAGS_ALL := 63
 const OBJECT_CATEGORY_FACILITY := "facility"
 const OBJECT_CATEGORY_GATHERING := "gathering"
@@ -131,13 +141,18 @@ const OBJECT_CATEGORY_NPC := "npc"
 const OBJECT_CATEGORY_SIGN := "sign"
 const OBJECT_CATEGORY_TRANSITION := "transition"
 const OBJECT_CATEGORY_CLIMB := "climb"
+const OBJECT_CATEGORY_DECOR := "decor"
 const OBJECT_TEXT_CATEGORY := "sign"
 const OBJECT_SIGNPOST_KIND := "signpost"
 const SCENERY_LADDER := "ladder"
 const SCENERY_STAIRS := "stairs"
 const SCENERY_HATCH := "hatch"
+const SCENERY_CRATE := "crate"
+const SCENERY_TABLE := "table"
+const SCENERY_LAMP_POST := "lamp_post"
 const TILE_DEFAULT_FLOOR := "sand"
 const TILE_DEFAULT_AREA := "oasis"
+const TILE_DEFAULT_WALL_STYLE := "plain"
 const TILE_GROUND_PLANE := 0
 const TILE_PLANE_Z_TEMPLATE := "{world}_p{plane}"
 const TILE_VOID_FLOOR := "void"
@@ -151,14 +166,20 @@ const TILE_CHECK_CLIMB_LANDING := "climb_landing"
 const TILE_CHECK_VOID_OPEN := "void_open"
 const TILE_CHECK_RESPAWN_COUNT := "respawn_count"
 const TILE_CHECK_SIGN_TEXT := "sign_text"
+const TILE_CHECK_WALL_ON_VOID := "wall_on_void"
+const TILE_CHECK_UNREACHABLE := "unreachable"
+const TILE_CHECK_ROOF_WALKABLE := "roof_walkable"
 
 # What the terrain editor paints and places. The order is
 # the order of each table under world/.
-const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "void"]
+const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void"]
+const TILE_ROOF_FLOOR_TYPES := ["roof_sheet_metal", "roof_tile", "roof_concrete"]
 const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains"]
-const OBJECT_CATEGORIES := ["climb", "facility", "gathering", "landmark", "npc", "sign", "transition"]
-const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text"]
-const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch"]
+const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_link", "rubble"]
+const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "landmark", "npc", "sign", "transition"]
+const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable"]
+const TILE_CHECK_NOTE_RULES := ["unreachable"]
+const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch", "crate", "table", "lamp_post"]
 const OBJECT_KINDS := {
 	"bank": "facility",
 	"foundry_furnace": "facility",
@@ -172,6 +193,8 @@ const OBJECT_KINDS := {
 	"copper_pole": "gathering",
 	"lone_android": "npc",
 	"shopkeeper_oasis": "npc",
+	"atticus_quin": "npc",
+	"atum_musa": "npc",
 	"mutant_raider": "npc",
 	"big_mutant": "npc",
 	"floating_eye": "npc",
@@ -188,6 +211,9 @@ const OBJECT_KINDS := {
 	"ladder_both": "climb",
 	"stairs_up": "climb",
 	"stairs_down": "climb",
+	"crate": "decor",
+	"table": "decor",
+	"lamp_post": "decor",
 }
 const OBJECT_KIND_TARGETS := {
 	"transition_oasis_to_outskirts": [72, 10],
@@ -212,6 +238,9 @@ const OBJECT_KIND_SCENERY := {
 	"ladder_both": "ladder",
 	"stairs_up": "stairs",
 	"stairs_down": "hatch",
+	"crate": "crate",
+	"table": "table",
+	"lamp_post": "lamp_post",
 }
 const OBJECT_KIND_PREVIEW := {
 	"bank": ["bank_terminal", "station"],
@@ -226,6 +255,8 @@ const OBJECT_KIND_PREVIEW := {
 	"copper_pole": ["copper_pole", "gatherable"],
 	"lone_android": ["lone_android", "npc"],
 	"shopkeeper_oasis": ["shopkeeper", "npc"],
+	"atticus_quin": ["talkative_npc", "npc"],
+	"atum_musa": ["atum_musa", "npc"],
 	"mutant_raider": ["mutant_raider", "npc"],
 	"big_mutant": ["big_mutant", "npc"],
 	"floating_eye": ["floating_eye", "npc"],
@@ -236,6 +267,14 @@ const OBJECT_KIND_PREVIEW := {
 const CLIMB_PLANE_STEPS := {
 	"up": 1,
 	"down": -1,
+}
+const TILE_WALL_STYLE_HEIGHTS := {
+	"plain": 12,
+	"concrete": 24,
+	"brick": 24,
+	"sheet_metal": 20,
+	"chain_link": 18,
+	"rubble": 6,
 }
 
 # Everything else.
@@ -254,12 +293,21 @@ const ACTION_INPUT_KIND_KEY := "kind"
 const ACTION_INPUT_MIN_KEY := "min"
 const ACTION_INPUT_MAX_KEY := "max"
 const ACTION_INPUT_LABEL_KEY := "label"
+const ACTION_TEXT_PLACEHOLDER := "{text}"
+const ACTION_INPUT_KIND_TEXT := "text"
+const DRAG_SOURCE_TOKEN := "{source}"
+const DRAG_TARGET_TOKEN := "{target}"
 const CLIENT_INBOUND_BUFFER_BYTES := 2097152
 const WORLD_MAP_ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 const WORLD_MAP_COMMAND := "worldmap"
+const LOGIN_ACCOUNT_KEY := "account"
+const LOGIN_TOKEN_KEY := "token"
+const LOGIN_RESUME_TEMPLATE := "resume {account} {token}"
+const REMEMBER_COMMAND := "remember"
+const FORGET_COMMAND := "forget"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_moment", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "page", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

@@ -26,6 +26,14 @@ Description: The license gate. Which licenses a served model may carry, and
                "Sketchfab Standard", "Editorial" - no right to redistribute.
                An empty field        - a license nobody checked.
 
+             BOUGHT ART (Nick, 10/09/2026). PURCHASED_LICENSE is for a pack
+             that Nick paid for, when the store page names no SPDX license.
+             The purchase lets Blackout use the art. It does not let Blackout
+             give the download to other people, and this repository is
+             public. Thus, the license is `local_only`: its source must be a
+             local source (sources.py), whose files stay out of git. The
+             served .glb is the game itself, and it stays in git.
+
              This module gives no legal advice. It records a policy.
 
              PURE. Importing it reads no file.
@@ -45,17 +53,22 @@ class LicenseTerms:
     attribution is True when the license requires a visible credit. It is
     False for CC0 and for art made here, and the credits list those anyway,
     because a model with no credit row looks the same as a model whose
-    license nobody checked.
+    license nobody checked. local_only is True when the license gives no
+    right to pass the download on: the source must then be a local source.
     """
 
     name: str
     url: str
     attribution: bool
+    local_only: bool = False
 
 
 # The SPDX id for art made for Blackout, which no third party owns. SPDX
 # reserves the "LicenseRef-" prefix for exactly this.
 OWNED_LICENSE: str = "LicenseRef-Blackout-Owned"
+
+# The SPDX id for a pack that Nick bought. See BOUGHT ART above.
+PURCHASED_LICENSE: str = "LicenseRef-Purchased"
 
 ALLOWED_LICENSES: dict = {
     "CC0-1.0": LicenseTerms(
@@ -77,6 +90,14 @@ ALLOWED_LICENSES: dict = {
         name="Made for Blackout",
         url="",
         attribution=False,
+    ),
+    # No store page so far asks for a credit. The credits list the author
+    # anyway, as they do for CC0.
+    PURCHASED_LICENSE: LicenseTerms(
+        name="Purchased license",
+        url="",
+        attribution=False,
+        local_only=True,
     ),
 }
 

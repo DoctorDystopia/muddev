@@ -53,6 +53,7 @@ func _ready() -> void:
 	_a_number_key_picks_the_option()
 	_many_choices_share_one_scroll_with_the_text()
 	_the_count_sits_in_the_corner_not_the_detail_line()
+	_a_card_takes_the_colour_of_its_rarity()
 	_a_timed_station_draws_its_slots()
 	_a_grid_pop_up_has_no_side_panel()
 	_the_box_stays_inside_the_pane()
@@ -62,6 +63,15 @@ func _ready() -> void:
 	await _a_wide_box_can_be_made_narrow_again()
 	await _the_players_box_survives_the_client()
 	_the_grid_fits_its_columns_to_the_width()
+	_the_vault_draws_its_tabs_and_lights_the_viewed_one()
+	_the_main_view_draws_a_block_for_each_tab()
+	_a_tab_click_sends_its_view_command()
+	_a_named_tab_shows_its_name_and_an_icon_tab_shows_none()
+	_a_drop_on_a_slot_sends_the_swap()
+	_a_drop_on_a_tab_sends_the_move()
+	_a_placeholder_click_sends_nothing()
+	_the_search_filters_and_survives_a_snapshot()
+	_another_pop_up_hides_and_clears_the_search()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -296,6 +306,29 @@ func _the_count_sits_in_the_corner_not_the_detail_line() -> void:
 		"and not on the line under the name")
 
 
+## A buff card row carries `rarity`. The slot draws the border and the detail
+## line in the palette colour. A row with no rarity, or an unknown key, draws
+## no border.
+func _a_card_takes_the_colour_of_its_rarity() -> void:
+	var slot := PopupSlot.new()
+	add_child(slot)
+
+	for rarity: String in RarityPalette.RARITY_COLORS:
+		slot.bind({"name": "card", "detail": rarity, "rarity": rarity})
+		_expect(slot.rarity_border_color() == RarityPalette.color_for(rarity),
+			"a %s card has the %s border" % [rarity, rarity])
+
+	slot.bind({"name": "card", "detail": "?", "rarity": "mythic"})
+	_expect(slot.rarity_border_color() == Color.TRANSPARENT,
+		"an unknown rarity draws no border")
+
+	slot.bind({"name": "bread", "detail": "5 cr"})
+	_expect(slot.rarity_border_color() == Color.TRANSPARENT,
+		"a row with no rarity draws no border")
+
+	slot.queue_free()
+
+
 func _a_timed_station_draws_its_slots() -> void:
 	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.curing_payload())
 	var panel := _view.timer_panel()
@@ -499,6 +532,109 @@ func _the_grid_fits_its_columns_to_the_width() -> void:
 
 
 ## True when exactly one command left the view, and it is `command`.
+func _show_vault(view: int) -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.vault_payload(view))
+
+
+func _the_vault_draws_its_tabs_and_lights_the_viewed_one() -> void:
+	_show_vault(1)
+	var buttons := _view.tab_buttons(0)
+
+	_expect(buttons.size() == 4, "every tab the server sent is drawn, the + too")
+	_expect((buttons[1] as PopupTabButton).button_pressed,
+		"the viewed tab is drawn pressed")
+	_expect(not (buttons[0] as PopupTabButton).button_pressed,
+		"the other tabs are not")
+	_expect(_view.slots_in(0).size() == 2, "a tab view draws only its tab")
+
+
+func _the_main_view_draws_a_block_for_each_tab() -> void:
+	_show_vault(0)
+
+	_expect(_view.slots_in(0).size() == 4, "the main view draws every slot")
+	_expect(_view.block_count(0) == 3, "one block for each tab, so a line between")
+
+
+func _a_tab_click_sends_its_view_command() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var button: PopupTabButton = _view.tab_buttons(0)[2]
+
+	button.activate()
+
+	_expect(_sent_only("bank view 2"), "a left click on a tab views it")
+	_expect(not button.button_pressed, "and lights nothing before the snapshot")
+
+
+func _a_named_tab_shows_its_name_and_an_icon_tab_shows_none() -> void:
+	_show_vault(0)
+	var buttons := _view.tab_buttons(0)
+	var icon_tab: PopupTabButton = buttons[1]
+	var named_tab: PopupTabButton = buttons[2]
+
+	_expect(named_tab.text == "Bars" and named_tab.icon == null,
+		"a named tab shows its name")
+	_expect(icon_tab.text.is_empty() and icon_tab.icon != null,
+		"a tab with an asset shows the mesh")
+
+
+func _a_drop_on_a_slot_sends_the_swap() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var target: PopupSlot = _view.slots_in(0)[0]
+	var data := {PopupSlot.DRAG_DATA_KEY: "coal"}
+
+	_expect(target._can_drop_data(Vector2.ZERO, data), "a slot takes a vault drop")
+	target._drop_data(Vector2.ZERO, data)
+
+	_expect(_sent_only("bank swap coal = iron ore"), "a drop on a slot swaps the two")
+
+
+func _a_drop_on_a_tab_sends_the_move() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var plus: PopupTabButton = _view.tab_buttons(0)[3]
+	var data := {PopupSlot.DRAG_DATA_KEY: "coal"}
+
+	_expect(plus._can_drop_data(Vector2.ZERO, data), "the + takes a vault drop")
+	plus._drop_data(Vector2.ZERO, data)
+
+	_expect(_sent_only("bank move coal = new"), "a drop on the + makes a tab")
+
+
+func _a_placeholder_click_sends_nothing() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var placeholder: PopupSlot = _view.slots_in(0)[2]
+
+	placeholder.activate()
+
+	_expect(_sent.is_empty(), "a left click on a placeholder sends nothing")
+
+
+func _the_search_filters_and_survives_a_snapshot() -> void:
+	_show_vault(0)
+	_view.set_search("ore")
+
+	_expect(_view.search_box().visible, "the vault shows a search box")
+	_expect(_view.slots_in(0).size() == 1, "the search keeps the matches only")
+
+	_show_vault(0)
+
+	_expect(_view.search_box().text == "ore", "a snapshot keeps the search text")
+	_expect(_view.slots_in(0).size() == 1, "and the filter")
+
+
+func _another_pop_up_hides_and_clears_the_search() -> void:
+	_show_vault(0)
+	_view.set_search("ore")
+
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+
+	_expect(not _view.search_box().visible, "a grid with no search hides the box")
+	_expect(_view.search_box().text.is_empty(), "and clears it")
+
+
 func _sent_only(command: String) -> bool:
 	return _sent.size() == 1 and _sent[0] == command
 

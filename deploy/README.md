@@ -70,7 +70,7 @@ The pipeline has three steps, always in this order.
 
 ```bash
 # 1. Export (release, not debug — debug dials localhost, not production)
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" \
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" \
     --headless --path godot --export-release "Web" deploy/webexport/build/index.html
 
 # 2. Publish the client build AND the model/art tree to R2 (they must land together —

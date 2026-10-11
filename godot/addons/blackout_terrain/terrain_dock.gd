@@ -1,13 +1,16 @@
 @tool
 class_name TerrainDock
 extends VBoxContainer
-## The panel of the terrain editor, in three tabs:
+## The panel of the terrain editor, in four tabs:
 ##
 ## - **Paint**: the tool, the brush, the paint, and the noise.
 ## - **Objects**: the selected object and its buttons, and every object of
 ##   the block.
 ## - **World**: the block and its plane, load and save, the marks to show,
-##   "Check world", and the chunks changed since the last tile sync.
+##   "Check world", the chunks changed since the last tile sync, and the
+##   buttons of the structure workbench.
+## - **Build**: the structure tools ([BuildPanel], DESIGN-0013). While this
+##   tab shows, the mouse in the 3D view drives the Build tools.
 ##
 ## The plugin reads the choices from here. This panel changes no terrain
 ## itself: each button sends a signal, and the plugin acts.
@@ -31,11 +34,23 @@ signal selection_action(action: String)
 signal object_chosen(thing: Dictionary)
 signal check_requested
 signal finding_chosen(finding: Dictionary)
+signal tab_changed
+signal clear_workbench_requested
+signal switch_scene_requested
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 const CONFIG_PATH := "res://addons/blackout_terrain/terrain_editor.cfg"
 const _CONFIG_SECTION := "noise"
+
+## The names of [enum TerrainWorld.UpperPlanes], in its order.
+const UPPER_PLANE_NAMES := ["Hidden", "Ghost", "Solid"]
+
+## The height of the status box under the tabs, in pixels: about six lines.
+const STATUS_HEIGHT := 120.0
+
+## The colour of a note in the findings list. A note fails no test.
+const NOTE_COLOR := Color(0.6, 0.75, 1.0)
 
 enum Tool { RAISE, LOWER, FLATTEN, SMOOTH, RAMP, NOISE, FLOOR, FLAGS, AREA, OBJECT, SELECT }
 
@@ -67,7 +82,8 @@ const FLAG_CHOICES := [
 const HELP := "Left drag: apply. Shift: lower, clear flags, remove an object, " \
 	+ "or pick a floor or area. Ramp: click the start, then the end. " \
 	+ "Select: click an object, click again for the next one on the tile, " \
-	+ "drag it to move it. Ctrl+S saves the chunk files."
+	+ "drag it to move it. Ctrl+S saves the chunk files. The Build tab names " \
+	+ "its keys in the hint line at the bottom of the 3D view."
 
 var _tabs := TabContainer.new()
 var _page: VBoxContainer
@@ -84,11 +100,16 @@ var _flag_boxes: Array[CheckBox] = []
 var _seed := SpinBox.new()
 var _frequency := SpinBox.new()
 var _amplitude := SpinBox.new()
+var _protect := CheckBox.new()
 
 var _selection := Label.new()
 var _selection_buttons: Array[Button] = []
 var _follow := Button.new()
 var _objects := ItemList.new()
+var _show_decor := CheckBox.new()
+
+## The rows of the last [method set_objects], before the decor filter.
+var _object_rows: Array[Dictionary] = []
 
 var _centre_x := SpinBox.new()
 var _centre_y := SpinBox.new()
@@ -97,14 +118,21 @@ var _show_flags := CheckBox.new()
 var _show_areas := CheckBox.new()
 var _show_links := CheckBox.new()
 var _show_lower := CheckBox.new()
+var _upper := OptionButton.new()
+var _build := BuildPanel.new()
+var _build_page: Control
 var _findings := ItemList.new()
 var _sync_state := Label.new()
+var _switch_scene := Button.new()
+var _clear_workbench := Button.new()
+var _confirm_clear := ConfirmationDialog.new()
 var _status := Label.new()
 
 
 func _init() -> void:
 	name = "Terrain"
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tabs.tab_changed.connect(func(_tab: int) -> void: tab_changed.emit())
 	add_child(_tabs)
 	_page = _new_page("Paint")
 	_build_tool_rows()
@@ -115,8 +143,10 @@ func _init() -> void:
 	_page = _new_page("World")
 	_build_block_rows()
 	_build_check_rows()
-	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	add_child(_status)
+	_page = _new_page("Build")
+	_build_page = _page.get_parent()
+	_page.add_child(_build)
+	_build_status_box()
 	_load_noise_settings()
 
 
@@ -170,6 +200,12 @@ func flag_bits() -> int:
 	return bits
 
 
+## True when a sculpt skips the corners of a structure (DESIGN-0013 section
+## 6.7).
+func protect_structures() -> bool:
+	return _protect.button_pressed
+
+
 func noise_amplitude() -> int:
 	return int(_amplitude.value)
 
@@ -200,6 +236,20 @@ func show_lower_planes() -> bool:
 	return _show_lower.button_pressed
 
 
+## How the planes above the edited plane show: a [enum TerrainWorld.UpperPlanes].
+func upper_planes() -> int:
+	return _upper.selected
+
+
+func build_panel() -> BuildPanel:
+	return _build
+
+
+## True while the Build tab shows.
+func build_active() -> bool:
+	return _tabs.get_current_tab_control() == _build_page
+
+
 # ─── Writing the state ──────────────────────────────────────────────────────
 
 ## Select `name` in the floor list, for the pick with Shift.
@@ -221,11 +271,14 @@ func set_status(text: String) -> void:
 	_status.text = text
 
 
-## Fill the object list with `{tile, kind, rotation, text}` rows.
+## Fill the object list with `{tile, kind, rotation, text}` rows. With "Show
+## decor" off, the list leaves out each decor row, so a busy shop does not
+## flood it (DESIGN-0013 section 6.5).
 func set_objects(things: Array[Dictionary]) -> void:
+	_object_rows = things
 	_objects.clear()
 
-	for thing: Dictionary in things:
+	for thing: Dictionary in listed_objects(things, _show_decor.button_pressed):
 		var line := "%s  %s  r%d" % [thing["kind"], thing["tile"], thing["rotation"]]
 
 		if not thing["text"].is_empty():
@@ -235,6 +288,22 @@ func set_objects(things: Array[Dictionary]) -> void:
 
 		_objects.set_item_metadata(row, thing)
 		_objects.set_item_custom_fg_color(row, TerrainOverlay.kind_color(thing["kind"]))
+
+
+## The rows of `things` that the object list shows: every row, or every row
+## that is not decor.
+static func listed_objects(things: Array[Dictionary],
+		show_decor: bool) -> Array[Dictionary]:
+	if show_decor:
+		return things
+
+	var listed: Array[Dictionary] = []
+
+	for thing: Dictionary in things:
+		if _Const.OBJECT_KINDS.get(thing["kind"], "") != _Const.OBJECT_CATEGORY_DECOR:
+			listed.append(thing)
+
+	return listed
 
 
 ## Show the selected object, and whether it leads anywhere.
@@ -272,6 +341,9 @@ func set_findings(findings: Array[Dictionary], errors: PackedStringArray) -> voi
 
 		_findings.set_item_metadata(row, finding)
 
+		if TerrainChecks.is_note(finding):
+			_findings.set_item_custom_fg_color(row, NOTE_COLOR)
+
 	if findings.is_empty() and errors.is_empty():
 		_findings.add_item("No finding. The world passes every check.")
 
@@ -280,11 +352,31 @@ func set_sync_state(text: String) -> void:
 	_sync_state.text = text
 
 
+## Show the buttons for the structure workbench (`on`), or for the world.
+func set_workbench(on: bool) -> void:
+	_switch_scene.text = "Open the terrain editor" if on else "Open the structure workbench"
+	_clear_workbench.disabled = not on
+
+
 func select_tool(tool_index: int) -> void:
 	_tool.select(tool_index)
 
 
 # ─── Building the panel ─────────────────────────────────────────────────────
+
+## The status sits under the tabs in a box of a fixed height, with its own
+## scroll bar. A long report, for example one line for each seam fault, then
+## cannot push the tabs off the dock.
+func _build_status_box() -> void:
+	var box := ScrollContainer.new()
+
+	box.custom_minimum_size.y = STATUS_HEIGHT
+	box.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_child(_status)
+	add_child(box)
+
 
 func _new_page(title: String) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
@@ -334,6 +426,9 @@ func _build_paint_rows() -> void:
 
 	_flag_boxes[0].button_pressed = true
 	_row("Flags", flags)
+	_protect.text = "Protect structures (a sculpt skips each corner of a wall " \
+		+ "and of a tile under a floor)"
+	_page.add_child(_protect)
 
 
 func _build_noise_rows() -> void:
@@ -381,6 +476,11 @@ func _build_object_rows() -> void:
 	_objects.item_selected.connect(func(row: int) -> void:
 		object_chosen.emit(_objects.get_item_metadata(row)))
 	_row("Objects in the block", _objects)
+	_show_decor.text = "Show decor in the list"
+	_show_decor.button_pressed = true
+	_show_decor.toggled.connect(func(_pressed: bool) -> void:
+		set_objects(_object_rows))
+	_page.add_child(_show_decor)
 	set_selection({}, {})
 
 
@@ -398,6 +498,7 @@ func _build_block_rows() -> void:
 		load_requested.emit(Vector2i(int(_centre_x.value), int(_centre_y.value)),
 			int(_plane.value)))
 	_button("Save changed chunks", save_requested.emit)
+	_build_workbench_rows()
 
 	for pair: Array in [[_show_flags, "Show flags", true],
 			[_show_areas, "Show areas", false], [_show_links, "Show links", true],
@@ -408,6 +509,25 @@ func _build_block_rows() -> void:
 		box.button_pressed = pair[2]
 		box.toggled.connect(func(_pressed: bool) -> void: overlays_changed.emit())
 		_page.add_child(box)
+
+	_fill(_upper, UPPER_PLANE_NAMES)
+	_upper.item_selected.connect(func(_index: int) -> void: overlays_changed.emit())
+	_row("The planes above the edited plane", _upper)
+
+
+## The structure workbench (DESIGN-0013 Phase S6): one button opens the
+## other scene, and one deletes the scratch chunk files after a confirmation.
+func _build_workbench_rows() -> void:
+	_switch_scene.pressed.connect(switch_scene_requested.emit)
+	_page.add_child(_switch_scene)
+	_clear_workbench.text = "Clear the structure workbench"
+	_clear_workbench.tooltip_text = "Delete the scratch chunk files. The templates stay."
+	_clear_workbench.pressed.connect(_confirm_clear.popup_centered)
+	_page.add_child(_clear_workbench)
+	_confirm_clear.dialog_text = "Delete every scratch chunk file of the structure " 		+ "workbench? The templates stay. Undo cannot bring the chunks back."
+	_confirm_clear.confirmed.connect(clear_workbench_requested.emit)
+	add_child(_confirm_clear)
+	set_workbench(false)
 
 
 func _build_check_rows() -> void:
@@ -476,9 +596,11 @@ func _load_noise_settings() -> void:
 		config.get_value(_CONFIG_SECTION, "amplitude", _amplitude.value))
 
 
+## Keep every other section of the file: the Build settings live there too.
 func _on_noise_changed(_value: float) -> void:
 	var config := ConfigFile.new()
 
+	config.load(CONFIG_PATH)
 	config.set_value(_CONFIG_SECTION, "seed", int(_seed.value))
 	config.set_value(_CONFIG_SECTION, "frequency", _frequency.value)
 	config.set_value(_CONFIG_SECTION, "amplitude", int(_amplitude.value))

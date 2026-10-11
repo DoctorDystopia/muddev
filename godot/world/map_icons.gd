@@ -15,9 +15,10 @@ extends RefCounted
 ##
 ## ## The fallback
 ##
-## A category with no row draws nothing. Two categories have no row on
+## A category with no row draws nothing. Three categories have no row on
 ## purpose. An NPC moves, so the minimap draws the live NPC as a map dot, not
-## its spawn tile. A sign says nothing at map size.
+## its spawn tile. A sign says nothing at map size. Decor is a look, and a
+## shop full of crates would hide its facility.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 

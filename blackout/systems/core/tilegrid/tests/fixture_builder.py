@@ -19,13 +19,17 @@ same files, so run `test_chunk_file.tscn` after it.
 
 What the fixtures cover
 -----------------------
-Every feature that a reader can get wrong, in three files:
+Every feature that a reader can get wrong, in four files:
 
 | File | Covers |
 |---|---|
 | chunk_-1_2_p0.json | Negative chunk x, every flag bit, negative heights, three floors, two areas, objects in all four rotations, one object with text |
 | chunk_0_2_p0.json | The east neighbour of the first. Its west edge corners equal the first's east edge, so the seam matches |
 | chunk_0_0_p1.json | Plane 1, one floor, one area, no objects |
+| chunk_3_-2_p0.json | Format 2. Three wall styles, and the default style is not first. Some tiles have a style and no wall bit |
+
+The first three are format 1. Their text and their digests did not change
+with format 2, which proves that a format 1 file reads as before.
 """
 
 import json
@@ -67,6 +71,12 @@ _WEST_CHUNK = (-1, 2)
 _EAST_CHUNK = (0, 2)
 _UPPER_CHUNK = (0, 0)
 _UPPER_PLANE = 1
+
+# The format 2 fixture has no neighbour, so it adds no seam. Its own seed
+# keeps the random grids of the first three fixtures as they were.
+_STYLED_CHUNK = (3, -2)
+_STYLED_SEED = _SEED + 1
+_STYLED_WALL_NAMES = ["brick", const.DEFAULT_WALL_STYLE, "sheet_metal"]
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -135,6 +145,25 @@ def _upper_chunk() -> chunkfile.ChunkFile:
         objects=[])
 
 
+def _styled_chunk() -> chunkfile.ChunkFile:
+    """A chunk of format 2: a wall style on every tile, from three names."""
+    rng = random.Random(_STYLED_SEED)
+    size = const.CHUNK_SIZE
+
+    return chunkfile.ChunkFile(
+        cx=_STYLED_CHUNK[0], cy=_STYLED_CHUNK[1], plane=0,
+        floor_names=["concrete"],
+        area_names=["oasis"],
+        heights=_random_grid(rng, const.CORNERS_PER_SIDE, _HEIGHT_LOW,
+                             _HEIGHT_HIGH),
+        floors=[0] * (size * size),
+        flags=_flag_grid(rng),
+        areas=[0] * (size * size),
+        objects=[chunkfile.ChunkObject("bank_booth", 1, 2, 3)],
+        wall_names=list(_STYLED_WALL_NAMES),
+        walls=_random_grid(rng, size, 0, len(_STYLED_WALL_NAMES) - 1))
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def build_fixtures() -> list:
@@ -143,7 +172,7 @@ def build_fixtures() -> list:
     west = _west_chunk(rng)
     east = _east_chunk(rng, west)
 
-    return [west, east, _upper_chunk()]
+    return [west, east, _upper_chunk(), _styled_chunk()]
 
 
 def digests(chunk_files: list) -> dict:

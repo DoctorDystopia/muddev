@@ -2,7 +2,11 @@ source  = "godot_kyle_fuji_food"
 file    = "Models/meat_haunch.glb"
 aliases = ["mutant_raider_cured_fatless_meat",
            "mutant_raider_cured_filet",
-           "mutant_raider_cured_prime_meat"]
+           "mutant_raider_cured_prime_meat",
+           "mutant_giant_cured_chuck",
+           "mutant_giant_cured_fatless_meat",
+           "mutant_giant_cured_filet",
+           "mutant_giant_cured_prime_meat"]
 
 [texture]
 image = "Textures/T_protein_atlas_diffuse.png"

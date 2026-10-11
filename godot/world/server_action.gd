@@ -47,6 +47,51 @@ static func prompt(action: Dictionary) -> Dictionary:
 	}
 
 
+## The text prompt one of the server's actions asks for, or an empty dictionary.
+##
+## The text kind of [method prompt]: a bank tab name. The same block, with
+## `max` as the longest text and no minimum. Kept apart from [method prompt],
+## because a caller that opens a number box must never get a text action.
+static func text_prompt(action: Dictionary) -> Dictionary:
+	var asked: Variant = action.get("input")
+
+	if typeof(asked) != TYPE_DICTIONARY:
+		return {}
+
+	if str(asked.get(_Const.ACTION_INPUT_KIND_KEY, "")) \
+			!= _Const.ACTION_INPUT_KIND_TEXT:
+		return {}
+
+	return {
+		_Const.ACTION_INPUT_MAX_KEY: maxi(int(asked.get(_Const.ACTION_INPUT_MAX_KEY, 1)), 1),
+		_Const.ACTION_INPUT_LABEL_KEY: str(
+			asked.get(_Const.ACTION_INPUT_LABEL_KEY, "")),
+	}
+
+
+## What to send for a text action, given the text the player typed. The rules
+## of [method command]: a whole command goes as it is, and anything that is not
+## a text action gives "". Empty text gives "" too: a text box confirmed with
+## nothing in it asks for nothing. The server cleans the text again.
+static func command_with_text(action: Dictionary, typed: String) -> String:
+	var whole := str(action.get("command", ""))
+
+	if not whole.is_empty():
+		return whole
+
+	var text := typed.strip_edges()
+
+	if text_prompt(action).is_empty() or text.is_empty():
+		return ""
+
+	var template := str(action.get("template", ""))
+
+	if template.is_empty():
+		return ""
+
+	return template.replace(_Const.ACTION_TEXT_PLACEHOLDER, text)
+
+
 ## What to send for one of the server's actions, given the amount the player
 ## chose.
 ##

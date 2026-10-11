@@ -11,7 +11,7 @@ Design lives in the Obsidian vault, not here:
     Oasis in the Wastes (name TBD) [AI-EDITABLE].md
 
 The android's side of every beat is in
-systems/interface/menus/npc_dialogues/npc_oasis_guide.py. This module owns only what is
+world/npc_dialogues/oasis_lone_android.py. This module owns only what is
 TRUE about the quest -- its phases, what satisfies them, and what it pays.
 """
 

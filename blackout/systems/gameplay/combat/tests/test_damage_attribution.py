@@ -22,7 +22,7 @@ from systems.gameplay.combat.auras.registry import AURA_REGISTRY
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.gameplay.combat.rules.context import ActionResult
 from typeclasses.characters import Character as BlackoutCharacter
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 
 
 # Private constant definitions
@@ -40,7 +40,7 @@ class TestDamageChannelCompatibility(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
     def test_at_damage_still_accepts_the_old_two_argument_call(self):
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         before = target.hp
 
         dealt = target.at_damage(_SMALL_DAMAGE, attacker=self.char1)
@@ -49,7 +49,7 @@ class TestDamageChannelCompatibility(EvenniaTest):
         self.assertEqual(target.hp, before - _SMALL_DAMAGE)
 
     def test_at_damage_accepts_a_source_and_a_damage_type(self):
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
 
         dealt = target.at_damage(
             _SMALL_DAMAGE,
@@ -61,7 +61,7 @@ class TestDamageChannelCompatibility(EvenniaTest):
         self.assertEqual(dealt, _SMALL_DAMAGE)
 
     def test_a_negative_amount_is_still_clamped_to_zero(self):
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         before = target.hp
 
         dealt = target.at_damage(-5, attacker=self.char1,
@@ -78,7 +78,7 @@ class TestMeleeAttribution(EvenniaTest):
 
     def _swing(self, result):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
 
@@ -141,7 +141,7 @@ class TestAuraAttribution(EvenniaTest):
         from systems.gameplay.combat.auras.aura_handler import ensure_aura_handler
 
         aura = AURA_REGISTRY["righteous_fire"]
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         handler = ensure_aura_handler(self.char1)
         handler.activate(aura)
 
@@ -185,7 +185,7 @@ class TestSelfInflictedDeath(EvenniaTest):
     def test_a_normal_kill_still_credits_the_attacker(self):
         # The guard against over-correcting: normalising a self-kill must not
         # switch off attribution for every other death.
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch.object(type(target), "_award_killer_xp") as mocked:
             target.at_damage(
@@ -229,7 +229,7 @@ class TestBackfireSwing(EvenniaTest):
 
     def _backfiring_swing(self, self_damage: int, damage: int = 0):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
 
@@ -254,7 +254,7 @@ class TestBackfireSwing(EvenniaTest):
         # Self-damage must carry the SAME damage_type the rule gave the
         # result, exactly as a hit on a target would.
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
 
@@ -303,7 +303,7 @@ class TestBackfireSwing(EvenniaTest):
     def test_a_zero_damage_swing_with_no_backfire_still_reports_a_miss(self):
         # The guard against over-correcting the test above.
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
         result = ActionResult(hit=False, damage=0, hit_prob=0.0)

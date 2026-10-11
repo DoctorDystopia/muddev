@@ -191,6 +191,27 @@ CHANNEL_WALK: str = "blackout_walk"  # -> Blackout.Walk
 CHANNEL_WORLD_MAP: str = "blackout_world_map"  # -> Blackout.WorldMap
 CHANNEL_WORLD_MAP_CHUNK: str = "blackout_world_map_chunk"
 
+# One game moment that a client can mark: a sound, a flash. The payload
+# carries one MOMENT_* name. The server names the moment. The client decides
+# what it sounds like. The server never names a clip (godot/README.md, "Sound
+# is the client's").
+#
+# AN EVENT, NOT A SNAPSHOT. Two moments in one tick are two messages, so the
+# channel is not in COALESCABLE_CHANNELS. It goes to the player of the moment
+# only, as the text line that it mirrors does. events.emit_moment is the one
+# sender.
+CHANNEL_MOMENT: str = "blackout_moment"  # -> Blackout.Moment
+
+# The moment names. A new moment is one constant here, one entry in MOMENTS,
+# and one export row in clientexport.py.
+#
+# The last kill of an Exterminator task. ExterminatorHandler._complete sends it.
+MOMENT_TASK_COMPLETE: str = "task_complete"
+
+MOMENTS: frozenset = frozenset((
+    MOMENT_TASK_COMPLETE,
+))
+
 # The command that asks for the world map. The key of CmdWorldMap, and the
 # line that the world map button of the Godot client sends. Exported, so the
 # client sends the word that the server named.
@@ -222,6 +243,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_WALK,
     CHANNEL_WORLD_MAP,
     CHANNEL_WORLD_MAP_CHUNK,
+    CHANNEL_MOMENT,
 ))
 
 # Evennia's websocket `send_default` silently DROPS an outputfunc with this
@@ -478,6 +500,28 @@ SUBSCRIBE_ALL: str = "all"
 CHANNEL_SUBSCRIBED_ACK: str = "blackout_subscribed"
 
 
+# ─── Saved login ─────────────────────────────────────────────────────────────
+
+# The outputfunc that gives one session its login token. It is not in
+# SUBSCRIBABLE_CHANNELS, for the reason that CHANNEL_SUBSCRIBED_ACK is not:
+# it goes to the one session that asked, never to every session of the
+# account. Its payload is {account, token}. An EMPTY token tells the client to
+# forget its saved login: `forget` sends one, and so does a refused `resume`.
+#
+# A token never goes out as text. Text reaches the log of the client, and a
+# screenshot of the log would then carry a key to the account.
+CHANNEL_LOGIN_TOKEN: str = "blackout_login_token"
+LOGIN_ACCOUNT_KEY: str = "account"
+LOGIN_TOKEN_KEY: str = "token"
+
+# The three commands of a saved login (commands/login_cmds.py). The client
+# sends them as a telnet player types them. `resume` is a command of the
+# connection screen. `remember` and `forget` are commands of the account.
+COMMAND_REMEMBER: str = "remember"
+COMMAND_FORGET: str = "forget"
+LOGIN_RESUME_TEMPLATE: str = "resume {account} {token}"
+
+
 # ─── Visibility ──────────────────────────────────────────────────────────────
 
 # How many tiles beyond the observer's own room may have their CONTENTS fed to
@@ -488,6 +532,11 @@ CHANNEL_SUBSCRIBED_ACK: str = "blackout_subscribed"
 # It is read in exactly one place -- events._visible_rooms -- so the contents
 # list and the add/remove deltas can never be widened out of step with each
 # other.
+#
+# The say range is this radius too. SAY_RADIUS in
+# systems/gameplay/speech/constants.py reads it. A player hears each person
+# that the client draws (Nick, 10/05/2026). Thus, a change here changes how
+# far a `say` goes.
 #
 # COST. It is (2r+1)^2 rooms per contents emit: 9 at r=1, 49 at r=3, 441 at
 # r=10, which on Blackout's ~95-node maps is the entire map. The room lookup
@@ -500,7 +549,7 @@ CHANNEL_SUBSCRIBED_ACK: str = "blackout_subscribed"
 # Zero is not a dead setting: rooms_within_radius short-circuits to [origin]
 # without a query, so setting it back costs nothing and restores exactly the
 # text channel's visibility.
-STATEFEED_ENTITY_RADIUS: int = 10
+STATEFEED_ENTITY_RADIUS: int = 24
 
 
 # ─── Rate limiting ───────────────────────────────────────────────────────────
@@ -1225,6 +1274,21 @@ INVENTORY_DEPOSIT_SOME_TEMPLATE: str = "deposit {slot} {amount}"
 # themselves are not, because they arrive per action.
 ACTION_AMOUNT_PLACEHOLDER: str = "{amount}"
 ACTION_INPUT_KIND_QUANTITY: str = "quantity"
+
+# A prompted action that asks for TEXT, not a number: the name of a bank tab.
+# It has the same shape: an empty `command`, a `template` with this token
+# where the text goes, and an `input` block. Its `max` is the longest text
+# the server keeps. The server cleans the text again when the command
+# arrives, because a client can send anything.
+ACTION_TEXT_PLACEHOLDER: str = "{text}"
+ACTION_INPUT_KIND_TEXT: str = "text"
+
+# The two tokens of a drag template. INVENTORY_SWAP_TEMPLATE carries them,
+# and so does the `drag` block of a pop-up grid. The client puts the key of
+# the dragged thing at the source and the key of the drop target at the
+# target. Exported, so the client fills them with no literal of its own.
+DRAG_SOURCE_TOKEN: str = "{source}"
+DRAG_TARGET_TOKEN: str = "{target}"
 
 # Keys on a prompted action's `input` block. Named so neither the builder nor
 # a test spells one as a literal.

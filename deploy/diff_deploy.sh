@@ -48,7 +48,7 @@ BUILD_DIR="$SCRIPT_DIR/webexport/build"
 
 PYTHON="$REPO_ROOT/evenv/Scripts/python.exe"
 EVENNIA="$REPO_ROOT/evenv/Scripts/evennia.exe"
-GODOT_BIN="${GODOT_BIN:-/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe}"
+GODOT_BIN="${GODOT_BIN:-/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe}"
 
 # The server leg ignores these. Each one has its own leg or needs no deploy.
 SERVER_EXCLUDES=(

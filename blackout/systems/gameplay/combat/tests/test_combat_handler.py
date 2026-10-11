@@ -39,7 +39,7 @@ from systems.core.tick.engine import (
     get_tick_engine,
     purge_stale_handlers,
 )
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from world.item_database import ITEM_DB
 
 
@@ -153,7 +153,7 @@ class TestSwingCadence(EvenniaTest):
 
     def _swings_over(self, attack_speed, ticks):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
 
         handler.apply_action({"kind": "attack", "target": target})
@@ -209,7 +209,7 @@ class TestHandlerLifecycle(EvenniaTest):
         """Regression: ActionFlee.resolve returned False after end_combat, so
         tick() carried on reading self.db on a deleted row."""
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
         handler.apply_action({"kind": "flee"})
@@ -230,7 +230,7 @@ class TestNpcSeeding(EvenniaTest):
         https://oldschool.runescape.wiki/w/Goblin#Level_2 — the Mutant Raider
         is a faithful goblin-calibration target, not a face-tuned placeholder.
         """
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual(npc.db.attack_speed, 4)            # goblin: 4 ticks (2.4s)
         # The raider declares its own crush/aggressive style in its NpcDef, so
@@ -240,7 +240,7 @@ class TestNpcSeeding(EvenniaTest):
         self.assertTrue(npc.db.combat_stat_bonuses)
 
     def test_spawned_raider_resolves_a_usable_attack_style(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         handler = ensure_combat_handler(npc)
 
         # _refresh_weapon stamps the resolved style as 'active_combat_style'
@@ -254,7 +254,7 @@ class TestNpcSeeding(EvenniaTest):
 
     def test_raider_skill_levels_reach_the_stat_block(self):
         # OSRS Goblin L2: Attack 1, Strength 1, Defence 1, Hitpoints 5.
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_DEFENSE), 1)
         self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_STRIKE), 1)
@@ -267,7 +267,7 @@ class TestNpcSeeding(EvenniaTest):
         all three melee defences -15. Negative bonuses feed the combat math
         identically to positive ones (they only offset the +64 zero-floor)
         so the test asserts exact wiki values."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         b = npc.db.combat_stat_bonuses
         self.assertEqual(b["stab_attack_bonus"], -21)
@@ -280,7 +280,7 @@ class TestNpcSeeding(EvenniaTest):
 
     def test_stance_boost_matches_declared_weapon_style(self):
         """Regression: accurate/aggressive boosts were swapped in the spawner."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         for style in npc.db.combat_styles.values():
             boost = style["weapon_style_level_boost"]
@@ -308,7 +308,7 @@ class TestNpcDefRegistry(EvenniaTest):
         # that forgot a stat. Assert the surface explicitly.
         from world.npc_database import NPC_DB
 
-        block = NPC_DB["mutant_raider"].to_combat_block()
+        block = NPC_DB["mutant_raider"].combat.to_combat_block()
         for key in (
             "strike_level", "brawn_level", "defense_level",
             "max_hp", "attack_speed",
@@ -322,7 +322,7 @@ class TestNpcDefRegistry(EvenniaTest):
         # with the same stats as NpcDef.create directly.
         from world.npc_database import NPC_DB
 
-        via_spawner = spawn_mutant_raider(self.room1)
+        via_spawner = spawn_npc("mutant_raider", self.room1)
         via_def = NPC_DB["mutant_raider"].create(location=self.room1)
 
         self.assertEqual(via_spawner.db.attack_speed, via_def.db.attack_speed)
@@ -343,7 +343,7 @@ class TestDefenderBonuses(EvenniaTest):
     def test_npc_defense_bonuses_come_from_the_npc(self):
         """Regression: the swing read defence bonuses out of the *attacker's*
         weapon block, so defence never applied to anything."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.combat_stat_bonuses = dict(npc.db.combat_stat_bonuses, slash_defense_bonus=42)
 
         bonuses = get_defense_bonuses(npc)
@@ -487,7 +487,7 @@ class TestRuntimeStateIsNotPersisted(EvenniaTest):
 
     def test_no_runtime_field_is_written_to_the_attribute_table(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
 
         # Drive a full action cycle so every field has been assigned.
@@ -539,7 +539,7 @@ class TestNpcAttackerEarnsNothing(EvenniaTest):
 
     def _npc_swing_at_char(self, damage):
         """Land exactly one NPC swing of `damage` on char1."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         handler = ensure_combat_handler(npc)
         ensure_combat_handler(self.char1)
         handler.apply_action({"kind": "attack", "target": self.char1})
@@ -556,7 +556,7 @@ class TestNpcAttackerEarnsNothing(EvenniaTest):
 
     def test_an_npc_hit_plans_no_xp(self):
         style = const.UNARMED_COMBAT_STYLES[const.UNARMED_DEFAULT_COMBAT_STYLE]
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual(_plan_style_xp(npc, style, damage=10), [])
 
@@ -590,7 +590,7 @@ class TestNpcAttackerEarnsNothing(EvenniaTest):
     def test_an_npc_killing_blow_runs_no_killer_xp(self):
         """at_death's killer gate. The NPC must not be credited for the kill."""
         self.char1.db.hp = 2
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch.object(
             type(self.char1), "_award_killer_xp"
@@ -601,7 +601,7 @@ class TestNpcAttackerEarnsNothing(EvenniaTest):
 
     def test_a_character_killing_blow_still_runs_killer_xp(self):
         """The other side of the same gate."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch.object(type(npc), "_award_killer_xp") as mocked_award:
             npc.at_damage(npc.hp, attacker=self.char1)
@@ -640,7 +640,7 @@ class TestSwingReporting(EvenniaTest):
     def _swing_for(self, damage):
         """Land exactly one swing of `damage` and return what char1 was sent."""
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
 
@@ -715,7 +715,7 @@ class TestSwingReporting(EvenniaTest):
 
     def test_a_miss_reports_no_xp(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(target)
         handler.apply_action({"kind": "attack", "target": target})
 
@@ -751,7 +751,7 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
 
     def test_a_carried_target_is_refused(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
         target.move_to(self.char1, quiet=True)
 
         accepted = handler._validate_attack({"kind": "attack", "target": target})
@@ -760,7 +760,7 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
 
     def test_a_target_in_another_room_is_refused(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room2)
+        target = spawn_npc("mutant_raider", self.room2)
 
         accepted = handler._validate_attack({"kind": "attack", "target": target})
 
@@ -768,7 +768,7 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
 
     def test_the_refusal_says_the_target_cannot_be_reached(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room2)
+        target = spawn_npc("mutant_raider", self.room2)
         seen = []
         self.char1.msg = lambda text=None, **kwargs: seen.append(text)
 
@@ -778,7 +778,7 @@ class TestAttackRequiresTheSameRoom(EvenniaTest):
 
     def test_a_target_in_the_same_room_is_still_accepted(self):
         handler = ensure_combat_handler(self.char1)
-        target = spawn_mutant_raider(self.room1)
+        target = spawn_npc("mutant_raider", self.room1)
 
         accepted = handler._validate_attack({"kind": "attack", "target": target})
 
@@ -807,7 +807,7 @@ class TestTheDefenderDoesNotEndTheFight(EvenniaTest):
         self.raider_tile = self._tile(5, 0)
 
         self.char1.location = self.archer_tile
-        self.raider = spawn_mutant_raider(self.raider_tile)
+        self.raider = spawn_npc("mutant_raider", self.raider_tile)
 
         self.archer = ensure_combat_handler(self.char1)
         self.defender = ensure_combat_handler(self.raider)

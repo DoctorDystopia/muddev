@@ -22,6 +22,7 @@ from systems.interface.ui.colors import (  # noqa: E402  (palette, not behaviour
     TAG_DEATH,
     TAG_INCOMING,
     TAG_LOOT,
+    TAG_MAX_HIT,
     TAG_MISS,
     TAG_OUTGOING,
     TAG_OUTGOING_NAME,
@@ -55,9 +56,77 @@ DROP_ENTRY_SEPARATOR = ", "
 # same approach WieldLocation.label uses for slot names.
 STAT_KEY_BONUS_SUFFIX = "_bonus"
 
+# A max hit: the number in brackets, and "!" in place of the full stop. The
+# brackets carry the mark on a telnet client with no colour.
+MAX_HIT_NUMBER_TEMPLATE = "[{damage}]"
+MAX_HIT_END = "!"
+HIT_END = "."
+
+# The note after a max hit that the damage channel changed. It names the
+# roll and the change, so the player sees why the number is not the max hit.
+MAX_HIT_BONUS_TEMPLATE = "(max hit {max_hit} +{change} bonus)"
+MAX_HIT_PENALTY_TEMPLATE = "(max hit {max_hit} -{change} penalty)"
+
 
 
 # ─── Private helper routines ────────────────────────────────────────────────
+
+def _max_hit_note(damage: int, max_hit: int) -> str:
+    """Return the note for a max hit that the damage channel changed.
+
+    Returns "" when the damage equals the max hit, which is the common case.
+    """
+    change = damage - max_hit
+
+    if change > 0:
+        return MAX_HIT_BONUS_TEMPLATE.format(max_hit=max_hit, change=change)
+
+    if change < 0:
+        return MAX_HIT_PENALTY_TEMPLATE.format(max_hit=max_hit, change=-change)
+
+    return ""
+
+
+def _hit_amount(damage: int, max_hit: int, line_tag: str) -> str:
+    """
+    Purpose: Build the end of a hit line: the damage number and the stop.
+
+    Entry:
+        damage   - integer damage of the hit.
+        max_hit  - ActionResult.shown_max_hit(): the max hit for a max hit,
+                   or 0 for every other hit.
+        line_tag - the colour tag of the line around the number. "" for a
+                   line with no colour.
+
+    Exit/Returns:
+        "14." for a usual hit. For a max hit, "[14]!" with the number in
+        TAG_MAX_HIT, and a note when the damage is not the max hit.
+
+    Module Globals:
+        TAG_MAX_HIT, TAG_RESET read.
+        MAX_HIT_NUMBER_TEMPLATE, MAX_HIT_END, HIT_END read.
+
+    Methodology:
+        One routine for the three lines of one hit (attacker, defender and
+        room), so every person in the fight sees the same mark (Nick,
+        10/08/2026). The tag of the line opens again after the number,
+        because TAG_RESET closes the bold of the max hit colour too.
+
+    Author: Nick Hobar
+    Creation date: 10/08/2026
+    """
+    if max_hit <= 0:
+        return f"{damage}{HIT_END}"
+
+    number = MAX_HIT_NUMBER_TEMPLATE.format(damage=damage)
+    marked = f"{TAG_MAX_HIT}{number}{TAG_RESET}{line_tag}{MAX_HIT_END}"
+    note = _max_hit_note(damage, max_hit)
+
+    if not note:
+        return marked
+
+    return f"{marked} {note}"
+
 
 def _miss_verb(damage_type, person_key: str) -> str:
     """Return one wording of the miss verb for a damage type.
@@ -90,7 +159,8 @@ def _label_for_stat_key(stat_key: str) -> str:
 
 # ─── Outgoing perspective (the attacker sees these) ────────────────────────
 
-def format_outgoing_hit(attacker, target, damage: int, xp_text: str = "") -> str:
+def format_outgoing_hit(attacker, target, damage: int, xp_text: str = "",
+                        max_hit: int = 0) -> str:
     """
     Purpose: One-line message describing a successful hit the caller dealt.
 
@@ -103,6 +173,8 @@ def format_outgoing_hit(attacker, target, damage: int, xp_text: str = "") -> str
                    xp_awards.format_xp_suffix. It
                    carries its own leading space and colour tags, so it is
                    appended verbatim.
+        max_hit  - ActionResult.shown_max_hit(). Above 0, the number shows
+                   as a max hit. See _hit_amount.
 
     Exit/Returns:
         Formatted single-line string ready for caller.msg(...).
@@ -124,7 +196,8 @@ def format_outgoing_hit(attacker, target, damage: int, xp_text: str = "") -> str
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    hit_line = f"{TAG_OUTGOING}You hit {TAG_OUTGOING_NAME}{target.key}{TAG_OUTGOING} for {damage}.{TAG_RESET}"
+    amount = _hit_amount(damage, max_hit, TAG_OUTGOING)
+    hit_line = f"{TAG_OUTGOING}You hit {TAG_OUTGOING_NAME}{target.key}{TAG_OUTGOING} for {amount}{TAG_RESET}"
 
     return f"{hit_line}{xp_text}"
 
@@ -246,7 +319,7 @@ def format_out_of_sight(target) -> str:
 
 # ─── Incoming perspective (the defender sees these) ─────────────────────────
 
-def format_incoming_hit(attacker, target, damage: int) -> str:
+def format_incoming_hit(attacker, target, damage: int, max_hit: int = 0) -> str:
     """
     Purpose: One-line message describing damage the caller took.
 
@@ -254,6 +327,7 @@ def format_incoming_hit(attacker, target, damage: int) -> str:
         attacker - the entity that landed the hit.
         target   - the defender (the message recipient; kept for symmetry).
         damage   - integer amount of HP loss.
+        max_hit  - ActionResult.shown_max_hit(). See _hit_amount.
 
     Exit/Returns:
         Red single-line string — immediate visual alarm.
@@ -273,7 +347,9 @@ def format_incoming_hit(attacker, target, damage: int) -> str:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    return f"{TAG_INCOMING}{TAG_OUTGOING_NAME}{attacker.key}{TAG_INCOMING} hits you for {damage}.{TAG_RESET}"
+    amount = _hit_amount(damage, max_hit, TAG_INCOMING)
+
+    return f"{TAG_INCOMING}{TAG_OUTGOING_NAME}{attacker.key}{TAG_INCOMING} hits you for {amount}{TAG_RESET}"
 
 
 
@@ -321,7 +397,7 @@ def format_incoming_miss(attacker, target, damage_type=None) -> str:
 
 # ─── Public room broadcasts ─────────────────────────────────────────────────
 
-def format_third_party_hit(attacker, target, damage: int) -> str:
+def format_third_party_hit(attacker, target, damage: int, max_hit: int = 0) -> str:
     """
     Purpose: Room broadcast line for bystanders watching a hit land.
 
@@ -329,16 +405,20 @@ def format_third_party_hit(attacker, target, damage: int) -> str:
         attacker - the damage dealer.
         target   - the damage taker.
         damage   - integer damage.
+        max_hit  - ActionResult.shown_max_hit(). See _hit_amount.
 
     Exit/Returns:
         Plain (uncolored) single-line string. Bystanders see combat at
-        neutral color to avoid noise-spamming observers.
+        neutral color to avoid noise-spamming observers. A max hit is the
+        one exception: its number has the max hit colour.
 
     Module Globals:
         None.
 
     Methodology:
         Colorless f-string; tags applied only on directed (in/out) messages.
+        Everyone in the fight sees a max hit (Nick, 10/08/2026), so the
+        bystander line marks it the same way the two directed lines do.
 
     Notes/References:
         Research doc §"Combat Logging and ANSI Formatting".
@@ -346,7 +426,9 @@ def format_third_party_hit(attacker, target, damage: int) -> str:
     Author: Nick Hobar
     Creation date: 07/26/2026
     """
-    return f"{attacker.key} hits {target.key} for {damage}."
+    amount = _hit_amount(damage, max_hit, "")
+
+    return f"{attacker.key} hits {target.key} for {amount}"
 
 
 def format_death(victim, killer=None, damage_type=None, self_inflicted=False) -> str:

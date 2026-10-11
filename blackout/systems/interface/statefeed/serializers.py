@@ -133,7 +133,7 @@ def _classify(entity) -> tuple:
         for a rock and classified the entire item catalogue as characters.
 
     Notes/References:
-        world/npc_database.py:143 stamps db.npc_key.
+        NpcDef.create in world/npc_database.py stamps db.npc_key.
         evennia/objects/objects.py:3024 declares the character content type.
 
     Author: Nick Hobar
@@ -142,7 +142,11 @@ def _classify(entity) -> tuple:
     npc_key = entity.attributes.get("npc_key", default=None)
 
     if npc_key:
-        return const.ASSET_KIND_NPC, str(npc_key)
+        # NpcDefined gives the model of the def. An object with no such
+        # attribute uses the npc key, as every hostile did before 10/09/2026.
+        npc_asset_key = getattr(entity, "asset_key", "") or npc_key
+
+        return const.ASSET_KIND_NPC, str(npc_asset_key)
 
     # A typeclass that declares itself is checked BEFORE gatherable_key,
     # which reverses the old order for exactly one case: a corpse carries a

@@ -27,7 +27,8 @@ xyzgrid map at its range of 6 today. North is up.
 | ` ` | blocked, or off the loaded world |
 
 The object glyphs come from `CATEGORY_GLYPHS`, one for each category. A new
-category with no row draws `*`.
+category with no row draws `*`. A category of `SILENT_CATEGORIES` draws no
+glyph: decor is a look, and the tile shows what is under it.
 
 The aura tint
 -------------
@@ -67,6 +68,10 @@ CATEGORY_GLYPHS: dict = {
     tile_const.OBJECT_CATEGORY_CLIMB: "H",
 }
 
+# The categories that draw no glyph. A crate or a table is a look, as a floor
+# colour is, and the telnet map draws no look.
+SILENT_CATEGORIES: tuple = (tile_const.OBJECT_CATEGORY_DECOR,)
+
 # The default radius of the window, in tiles.
 MAP_RADIUS: int = 6
 
@@ -84,11 +89,13 @@ def _object_glyph(world, x: int, y: int):
     """
     Return the glyph of the first placed object on a tile, or None. An NPC
     kind draws nothing here: `_live_npc_tiles` draws each NPC where it stands.
+    A kind of SILENT_CATEGORIES draws nothing anywhere.
     """
     for key in world.kinds_at(x, y):
         kind = OBJECT_KINDS.get(key)
 
-        if kind is None or kind.category == tile_const.OBJECT_CATEGORY_NPC:
+        if kind is None or kind.category == tile_const.OBJECT_CATEGORY_NPC \
+                or kind.category in SILENT_CATEGORIES:
             continue
 
         return CATEGORY_GLYPHS.get(kind.category, UNKNOWN_OBJECT_GLYPH)

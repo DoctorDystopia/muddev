@@ -13,7 +13,7 @@ import unittest
 from systems.gameplay.combat import constants as const
 from systems.gameplay.combat.rules.registry import (
     RULES_REGISTRY,
-    _overridden_seams,
+    overridden_seams,
     find_rules,
 )
 from systems.gameplay.combat.rules.rule_defs.base_rules import (
@@ -80,13 +80,13 @@ class TestSeamDetection(unittest.TestCase):
     """Structural override detection, in place of a hand-maintained tuple."""
 
     def test_the_base_class_overrides_nothing(self):
-        self.assertEqual(_overridden_seams(BaseActionRules), frozenset())
+        self.assertEqual(overridden_seams(BaseActionRules), frozenset())
 
     def test_a_subclass_that_changes_nothing_overrides_nothing(self):
         class _Inert(BaseActionRules):
             key = "inert"
 
-        self.assertEqual(_overridden_seams(_Inert), frozenset())
+        self.assertEqual(overridden_seams(_Inert), frozenset())
 
     def test_one_replaced_method_is_detected(self):
         class _Diced(BaseActionRules):
@@ -95,7 +95,7 @@ class TestSeamDetection(unittest.TestCase):
             def roll_damage(self, context, result) -> None:
                 result.damage = 1
 
-        self.assertEqual(_overridden_seams(_Diced), frozenset({"roll_damage"}))
+        self.assertEqual(overridden_seams(_Diced), frozenset({"roll_damage"}))
 
     def test_two_replaced_methods_are_both_detected(self):
         class _Pair(BaseActionRules):
@@ -108,7 +108,7 @@ class TestSeamDetection(unittest.TestCase):
                 return True
 
         expected = frozenset({"max_hit", "roll_accuracy"})
-        self.assertEqual(_overridden_seams(_Pair), expected)
+        self.assertEqual(overridden_seams(_Pair), expected)
 
     def test_an_inherited_override_is_still_reported(self):
         # A grandchild must report its parent's override too, or the pipeline
@@ -122,7 +122,7 @@ class TestSeamDetection(unittest.TestCase):
         class _Child(_Parent):
             key = "child"
 
-        self.assertIn("roll_damage", _overridden_seams(_Child))
+        self.assertIn("roll_damage", overridden_seams(_Child))
 
     def test_every_detected_seam_is_a_declared_seam_name(self):
         for rules in RULES_REGISTRY.values():
@@ -136,4 +136,4 @@ class TestSeamDetection(unittest.TestCase):
             def some_private_helper(self) -> int:
                 return 1
 
-        self.assertEqual(_overridden_seams(_Helper), frozenset())
+        self.assertEqual(overridden_seams(_Helper), frozenset())

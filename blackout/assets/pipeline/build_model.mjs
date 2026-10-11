@@ -38,6 +38,8 @@ const ALPHA_OPAQUE = 'OPAQUE';
 const FULL_ALPHA = 1.0;
 const METALLIC_NONE = 0.0;
 const DEGREES_TO_RADIANS = Math.PI / 180.0;
+const NO_EMISSION = [0, 0, 0];
+const RGB_CHANNELS = 3;
 
 // Written into asset.generator. A fixed string, so the same inputs give the
 // same bytes on every machine.
@@ -207,6 +209,61 @@ function forceNearest(document) {
     }
 }
 
+/**
+ * Remove every animation, for a record with `[output] animations = false`.
+ *
+ * The client plays no animation today. Each node keeps its own transform,
+ * so the model stands in its rest pose. prune() then removes the keyframe
+ * data that nothing uses any more.
+ *
+ * The samplers and channels go first. A disposed animation leaves them, and
+ * a sampler still refers to its keyframe accessors, so prune() keeps them.
+ */
+function dropAnimations(document) {
+    for (const animation of document.getRoot().listAnimations()) {
+        for (const channel of animation.listChannels()) {
+            channel.dispose();
+        }
+
+        for (const sampler of animation.listSamplers()) {
+            sampler.dispose();
+        }
+
+        animation.dispose();
+    }
+}
+
+/**
+ * Remove each emissive texture that is black in every pixel.
+ *
+ * Such a texture emits nothing, so the model looks the same without it. It
+ * also stops the hover glow. Godot imports a glTF emissive texture as a
+ * MULTIPLIER of the emission colour, and the hover glow (MeshGlow) writes
+ * that colour. Black times the glow colour is black. VoxEdit writes a black
+ * emissive texture on every material (atum_musa, 10/09/2026).
+ *
+ * The material then authors no emission. prune() removes the texture, and
+ * the UV set that only the texture used.
+ */
+async function dropBlackEmission(document) {
+    for (const material of document.getRoot().listMaterials()) {
+        const texture = material.getEmissiveTexture();
+
+        if (!texture) {
+            continue;
+        }
+
+        const stats = await sharp(Buffer.from(texture.getImage())).stats();
+        const colourChannels = stats.channels.slice(0, RGB_CHANNELS);
+        const black = colourChannels.every((channel) => channel.max === 0);
+
+        if (black) {
+            material.setEmissiveTexture(null);
+            material.setEmissiveFactor(NO_EMISSION);
+        }
+    }
+}
+
 /** Apply the recipe's [fix] table, in a fixed order. */
 function applyFix(document, fix) {
     if (fix.rotate) {
@@ -338,6 +395,12 @@ async function build(jobPath) {
     }
 
     applyFix(document, job.fix || {});
+
+    if (job.animations === false) {
+        dropAnimations(document);
+    }
+
+    await dropBlackEmission(document);
 
     await document.transform(
         prune({ keepAttributes: false, keepLeaves: false }),

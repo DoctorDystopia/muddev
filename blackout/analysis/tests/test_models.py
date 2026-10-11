@@ -125,13 +125,13 @@ class TestCombatantsMatchTheGame(unittest.TestCase):
     """A Combatant must carry the numbers the live entity fights with."""
 
     def test_npc_combatant_copies_its_spawn_block(self):
-        from world.npc_database import NPC_DB
+        from world.npc_database import combatant_defs
 
         npcs = env.npc_combatants()
 
-        for npc_key, npc_def in NPC_DB.items():
+        for npc_key, npc_def in combatant_defs().items():
             with self.subTest(npc=npc_key):
-                block = npc_def.to_combat_block()
+                block = npc_def.combat.to_combat_block()
                 combatant = npcs[npc_key]
 
                 self.assertEqual(combatant.fortitude_level, block["fortitude_level"])

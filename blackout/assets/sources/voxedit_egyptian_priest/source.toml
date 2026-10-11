@@ -1,0 +1,14 @@
+title     = "Voxel Priest Avatar - 3D Character Lowpoly Model"
+author    = "MrMGames (Mr Mustache)"
+url       = "https://mrmgames.itch.io/voxel-priest-avatar-3d-character-lowpoly-model"
+site      = "itch.io"
+license   = "LicenseRef-Purchased"
+local     = true
+retrieved = 2026-10-09
+notes     = "A PAID pack. Nick bought it on itch.io (Nick, 10/09/2026). The page names no license and states no terms of use (checked 10/09/2026). Four VoxEdit exports of one model, as they arrived: the glTF, the FBX, the .vox, and a zip of DAE files. The model record reads the glTF. Its rest pose is the first frame of its Idle animation. It holds about 130 animations (22 MB of its 38 MB), and the record drops them. The FBX is in a T-pose and names textures that only the zip holds. The page says that the model works with every VoxEdit animation."
+
+[files]
+"Egyptian_Priest_Gltf.gltf" = "sha256:62f8646b83257d6b6f333e6e374062bde7d42631538e72a6cddcbd6d0cb7f34d"
+"Priest.fbx" = "sha256:ab31e115bc37ad326263ddcaa6efb5df70a70d8d9580ab72297538fad894ad92"
+"Priest.vox" = "sha256:80108928ce5bbab9ac6804b9e1cb6a318ebcaa0e1469bc113fce72b2d219946c"
+"Priest_DAE.zip" = "sha256:b528e16a7d04b0c1a62f5c8a6382dd84daaa5cec6d350d30d42cc4f6370e9f02"

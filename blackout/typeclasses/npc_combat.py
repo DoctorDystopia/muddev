@@ -2,8 +2,12 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 07/26/2026
-Description: Hostile NPC typeclass — CombatEntity-mixin-powered enemy spawnable
-             through the SPAWNER_REGISTRY and immediately attackable in twitch melee.
+Description: Hostile NPC typeclass — CombatEntity-mixin-powered enemy,
+             immediately attackable in twitch melee.
+
+             typeclasses/npc_spawners.py stands up each hostile from its
+             NpcDef. Until 10/09/2026, each hostile had a spawner function
+             here, and the five functions differed only in the key.
 """
 
 from evennia import DefaultObject
@@ -14,12 +18,12 @@ from systems.gameplay.combat import constants as combat_constants
 from systems.gameplay.progression.skills.constants import SKILL_KEYS_CATEGORY_COMBAT
 from systems.gameplay.progression.skills.stat_block import StatBlockSkills
 from typeclasses.mixins import CombatEntity
+from typeclasses.npc_defined import NpcDefined
 from typeclasses.objects import ObjectParent, Unpocketable
 
-from .spawners import register_spawner
 
 
-class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
+class HostileNPC(NpcDefined, Unpocketable, CombatEntity, ObjectParent, DefaultObject):
     """
     Purpose: An aggressive NPC enemy for batch 2 melee combat testing.
 
@@ -43,11 +47,9 @@ class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
         (content, location, move) plus HP, alive-state, damage, death, and
         disconnect cleanup without subclassing TalkativeNPC.
 
-        Spawn registration borrows the @register_spawner decorator used
-        by TalkativeNPC/ShopkeepNPC in npcs.py, so a builder can drop
-        a hostile NPC in-room with::
-
-            @register_spawner("Mutant Raider Tile")
+        NpcDefined (listed first) gives the description and the model from
+        the NpcDef. typeclasses/npc_spawners.py stands up each hostile from
+        its def, keyed by the npc key.
 
     Author: Nick Hobar
     Creation date: 07/26/2026
@@ -193,12 +195,11 @@ class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
             # local-import style used throughout this module.
             from typeclasses.corpses import CORPSE_NPC_KEY_ATTR
             from world.item_database import ITEM_DB
-            from world.npc_database import NPC_DB
-
             npc_key = self.db.npc_key
-            npc_def = NPC_DB.get(npc_key)
+            npc_def = self.npc_def
+            combat = npc_def.combat if npc_def is not None else None
 
-            if npc_def is None or not npc_def.corpse_key:
+            if combat is None or not combat.corpse_key:
                 return
 
             room = self.location
@@ -206,12 +207,12 @@ class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
             if room is None:
                 return
 
-            item_def = ITEM_DB.get(npc_def.corpse_key)
+            item_def = ITEM_DB.get(combat.corpse_key)
 
             if item_def is None:
                 logger.log_err(
                     f"HostileNPC.leave_corpse: {npc_key!r} names unknown "
-                    f"corpse item {npc_def.corpse_key!r}."
+                    f"corpse item {combat.corpse_key!r}."
                 )
                 return
 
@@ -258,194 +259,3 @@ class HostileNPC(Unpocketable, CombatEntity, ObjectParent, DefaultObject):
                 logger.log_trace()
 
         self.delete()
-
-
-@register_spawner("Mutant Raider Tile")
-def spawn_mutant_raider(room):
-    """Spawner entry for the Mutant Raider.
-
-    Stat block lives in world/npc_defs/hostile.py (NpcDef "mutant_raider") and
-    is looked up via NPC_DB — the same data-driven shape ItemDef / ITEM_DB
-    gives items and ShopDef / SHOP_DB gives shops. Keeping this function lets
-    the existing "Mutant Raider Tile" room prototype keep dispatching through
-    SPAWNER_REGISTRY unchanged; only its body is now a one-line registry lookup.
-
-    The presence guard mirrors spawn_bank (bank_nodes.py) and spawn_shopkeep
-    (npcs.py), which this spawner was the only one missing — so re-running
-    `xyzgrid spawn` stacked a fresh raider on the tile every time. It keys on
-    db.npc_key rather than is_typeclass because every hostile shares the
-    HostileNPC typeclass. Paired with the same guard inside the respawn
-    manager, it also closes the grid-rebuild-during-a-dead-window race in both
-    interleavings.
-
-    Entry: room (Evennia Room).
-    Exit: the NPC on the tile: the one already standing, or a new one.
-          The tile sync gives it its facing.
-    Module Globals: None.
-    """
-    from systems.gameplay.spawning.respawn import npc_standing
-    from world.npc_database import NPC_DB  # local import: avoids a world<->
-    # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
-    # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
-    # themselves leaf), so a module-level import is also safe, but matching the
-    # existing local-import style in this module's namespace keeps the module
-    # importable in isolation (e.g. by the test suite) without forcing world/
-    # to be loaded first.
-    standing = npc_standing("mutant_raider", room)
-
-    if standing is not None:
-        return standing
-    
-    return NPC_DB["mutant_raider"].create(location=room)
-
-@register_spawner("Big Mutant Tile")
-def spawn_big_mutant(room):
-    """Spawner entry for the Big Mutant.
-
-    Stat block lives in world/npc_defs/hostile.py (NpcDef "big_mutant") and
-    is looked up via NPC_DB — the same data-driven shape ItemDef / ITEM_DB
-    gives items and ShopDef / SHOP_DB gives shops. Keeping this function lets
-    the existing "Big Mutant Tile" room prototype keep dispatching through
-    SPAWNER_REGISTRY unchanged; only its body is now a one-line registry lookup.
-
-    The presence guard mirrors spawn_bank (bank_nodes.py) and spawn_shopkeep
-    (npcs.py), which this spawner was the only one missing — so re-running
-    `xyzgrid spawn` stacked a fresh raider on the tile every time. It keys on
-    db.npc_key rather than is_typeclass because every hostile shares the
-    HostileNPC typeclass. Paired with the same guard inside the respawn
-    manager, it also closes the grid-rebuild-during-a-dead-window race in both
-    interleavings.
-
-    Entry: room (Evennia Room).
-    Exit: the NPC on the tile: the one already standing, or a new one.
-          The tile sync gives it its facing.
-    Module Globals: None.
-    """
-    from systems.gameplay.spawning.respawn import npc_standing
-    from world.npc_database import NPC_DB  # local import: avoids a world<->
-    # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
-    # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
-    # themselves leaf), so a module-level import is also safe, but matching the
-    # existing local-import style in this module's namespace keeps the module
-    # importable in isolation (e.g. by the test suite) without forcing world/
-    # to be loaded first.
-    standing = npc_standing("big_mutant", room)
-
-    if standing is not None:
-        return standing
-    
-    return NPC_DB["big_mutant"].create(location=room)
-
-@register_spawner("Floating Eye Tile")
-def spawn_floating_eye(room):
-    """Spawner entry for the Floating Eye.
-
-    Stat block lives in world/npc_defs/hostile.py (NpcDef "floating_eye") and
-    is looked up via NPC_DB — the same data-driven shape ItemDef / ITEM_DB
-    gives items and ShopDef / SHOP_DB gives shops. Keeping this function lets
-    the existing "Floating Eye Tile" room prototype keep dispatching through
-    SPAWNER_REGISTRY unchanged; only its body is now a one-line registry lookup.
-
-    The presence guard mirrors spawn_bank (bank_nodes.py) and spawn_shopkeep
-    (npcs.py), which this spawner was the only one missing — so re-running
-    `xyzgrid spawn` stacked a fresh raider on the tile every time. It keys on
-    db.npc_key rather than is_typeclass because every hostile shares the
-    HostileNPC typeclass. Paired with the same guard inside the respawn
-    manager, it also closes the grid-rebuild-during-a-dead-window race in both
-    interleavings.
-
-    Entry: room (Evennia Room).
-    Exit: the NPC on the tile: the one already standing, or a new one.
-          The tile sync gives it its facing.
-    Module Globals: None.
-    """
-    from systems.gameplay.spawning.respawn import npc_standing
-    from world.npc_database import NPC_DB  # local import: avoids a world<->
-    # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
-    # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
-    # themselves leaf), so a module-level import is also safe, but matching the
-    # existing local-import style in this module's namespace keeps the module
-    # importable in isolation (e.g. by the test suite) without forcing world/
-    # to be loaded first.
-    standing = npc_standing("floating_eye", room)
-
-    if standing is not None:
-        return standing
-    
-    return NPC_DB["floating_eye"].create(location=room)
-
-
-
-@register_spawner("Mutant Crab Tile")
-def spawn_mutant_crab(room):
-    """Spawner entry for the Mutant Crab.
-
-    Stat block lives in world/npc_defs/hostile.py (NpcDef "mutant_crab") and
-    is looked up via NPC_DB — the same data-driven shape ItemDef / ITEM_DB
-    gives items and ShopDef / SHOP_DB gives shops. Keeping this function lets
-    the existing "Floating Eye Tile" room prototype keep dispatching through
-    SPAWNER_REGISTRY unchanged; only its body is now a one-line registry lookup.
-
-    The presence guard mirrors spawn_bank (bank_nodes.py) and spawn_shopkeep
-    (npcs.py), which this spawner was the only one missing — so re-running
-    `xyzgrid spawn` stacked a fresh raider on the tile every time. It keys on
-    db.npc_key rather than is_typeclass because every hostile shares the
-    HostileNPC typeclass. Paired with the same guard inside the respawn
-    manager, it also closes the grid-rebuild-during-a-dead-window race in both
-    interleavings.
-
-    Entry: room (Evennia Room).
-    Exit: the NPC on the tile: the one already standing, or a new one.
-          The tile sync gives it its facing.
-    Module Globals: None.
-    """
-    from systems.gameplay.spawning.respawn import npc_standing
-    from world.npc_database import NPC_DB  # local import: avoids a world<->
-    # typeclasses import cycle. npc_combat is imported by SPAWNER_MODULES at
-    # load-all-spawners time; world.npc_database is leaf-of-graph (imports only
-    # systems.gameplay.combat.constants + world.npc_defs.hostile, both of which are
-    # themselves leaf), so a module-level import is also safe, but matching the
-    # existing local-import style in this module's namespace keeps the module
-    # importable in isolation (e.g. by the test suite) without forcing world/
-    # to be loaded first.
-    standing = npc_standing("mutant_crab", room)
-
-    if standing is not None:
-        return standing
-
-    return NPC_DB["mutant_crab"].create(location=room)
-
-
-
-@register_spawner("Mutant Giant Tile")
-def spawn_mutant_giant(room):
-    """Spawner entry for the Mutant Giant.
-
-    Stat block lives in world/npc_defs/hostile.py (NpcDef "mutant_giant") and
-    is looked up via NPC_DB — the same data-driven shape every other spawner in
-    this module uses. The tile prototype named "Mutant Giant Tile" dispatches
-    here through SPAWNER_REGISTRY.
-
-    The presence guard keys on db.npc_key rather than is_typeclass, because
-    every hostile shares the HostileNPC typeclass. Paired with the same guard
-    inside the respawn manager, it stops `xyzgrid spawn` stacking a second
-    giant on a tile that already holds one.
-
-    Entry: room (Evennia Room).
-    Exit: the NPC on the tile: the one already standing, or a new one.
-          The tile sync gives it its facing.
-    Module Globals: None.
-    """
-    from systems.gameplay.spawning.respawn import npc_standing
-    from world.npc_database import NPC_DB  # local import: matches the style of
-    # every other spawner in this module and keeps it importable in isolation.
-
-    standing = npc_standing("mutant_giant", room)
-
-    if standing is not None:
-        return standing
-
-    return NPC_DB["mutant_giant"].create(location=room)

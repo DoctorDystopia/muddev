@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="HitsplatStyle" format=3]
+
+[ext_resource type="Script" path="res://world/hitsplats/hitsplat_style.gd" id="1_style"]
+
+[resource]
+script = ExtResource("1_style")
+font_size = 40
+color = Color(0.55, 0.75, 1, 1)
+outline_size = 10
+outline_color = Color(0.04, 0.08, 0.22, 1)
+text_format = "{damage}"
+pop_scale = 1.0
+pop_seconds = 0.05
+rise = 0.25
+hold_seconds = 0.3
+fade_seconds = 0.25
+height = 0.15
+jitter = 0.12

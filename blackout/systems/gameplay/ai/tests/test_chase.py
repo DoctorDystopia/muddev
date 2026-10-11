@@ -30,7 +30,7 @@ from systems.gameplay.ai.constants import (
 from systems.gameplay.ai.registry import get_behavior
 from systems.gameplay.combat import reach
 from systems.gameplay.combat.combat import ensure_combat_handler
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from typeclasses.rooms import GridTile
 
 
@@ -55,7 +55,7 @@ class _ChaseFixture(EvenniaTest):
         self.tiles = [self._tile(x) for x in range(self.tile_count)]
         self._link(self.tiles)
 
-        self.npc = spawn_mutant_raider(self.tiles[0])
+        self.npc = spawn_npc("mutant_raider", self.tiles[0])
         setattr(self.npc.db, AI_BEHAVIOR_ATTR, AI_BEHAVIOR_CHASING_MELEE)
 
         self.handler = ensure_combat_handler(self.npc)
@@ -242,7 +242,7 @@ class TestTheStallSeam(_ChaseFixture):
         """
         from systems.gameplay.combat.combat import ActionAttack
 
-        other = spawn_mutant_raider(self.tiles[5])
+        other = spawn_npc("mutant_raider", self.tiles[5])
         action = ActionAttack(other.id)
         other.delete()
 

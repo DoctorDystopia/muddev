@@ -4,7 +4,7 @@ Author: Nick Hobar
 Creation date: 08/01/2026
 Description: Tests for the shared menu quantity parser that replaced the two
              divergent numeric-entry implementations in banking_menu and
-             npc_shopkeep.
+             world/npc_dialogues/shopkeep.py.
 
 Run with:
     evennia test --settings settings.py systems.interface.menus

@@ -227,10 +227,10 @@ def resolve_table(npc):
         npc_key = npc.attributes.get("npc_key", default=None)
         npc_def = NPC_DB.get(npc_key)
 
-        if npc_def is None:
+        if npc_def is None or npc_def.combat is None:
             return None
 
-        table_key = npc_def.loot_table
+        table_key = npc_def.combat.loot_table
 
     if not table_key:
         return None

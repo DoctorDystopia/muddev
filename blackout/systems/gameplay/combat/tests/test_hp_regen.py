@@ -22,7 +22,7 @@ from systems.gameplay.combat.hp_regen import (
     get_regen_manager,
     register_for_regen,
 )
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 
 
 class TestRegenManagerWiring(EvenniaTestCase):
@@ -225,7 +225,7 @@ class TestRegenSweep(EvenniaTest):
         delete(), so this uses a plain NPC instead, exactly like respawn's own
         deleted-room test does."""
         manager = get_regen_manager()
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.hp = npc.db.max_hp - 1
         manager.register(npc)
 

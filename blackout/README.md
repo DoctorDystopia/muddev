@@ -297,10 +297,11 @@ The skill key must match a key in `SKILL_REGISTRY`:
 
 | Category | Keys |
 |---|---|
-| Gathering | `cutting`, `brain_farming` |
-| Processing | `foundry` |
-| Production | `metalsmith` |
-| Combat | `strike`, `brawn`, `defense`, `fortitude` |
+| Gathering | `cutting`, `butchery`, `brain_farming` |
+| Processing | `foundry`, `rendering`, `curing` |
+| Production | `metalsmith`, `gunsmith`, `gastronomy` |
+| Combat | `strike`, `brawn`, `defense`, `fortitude`, `guns`, `ballistics` |
+| Utility | `exterminator` |
 
 `systems/gameplay/progression/skills/registry.py` **discovers these
 automatically** when it walks `skill_defs/`. To add a skill, drop one module in
@@ -311,7 +312,7 @@ have correct defaults on `BaseSkill`.
 
 ```python
 > py from systems.gameplay.progression.skills.registry import SKILL_REGISTRY; sorted(SKILL_REGISTRY)
-['brain_farming', 'brawn', 'cutting', 'defense', 'fortitude', 'foundry', 'metalsmith', 'strike']
+['ballistics', 'brain_farming', 'brawn', 'butchery', 'curing', 'cutting', 'defense', 'exterminator', 'fortitude', 'foundry', 'gastronomy', 'guns', 'gunsmith', 'metalsmith', 'rendering', 'strike']
 ```
 
 ### Check skill levels (in-game command)
@@ -653,11 +654,11 @@ died**. Take them with the stock `get` command.
 ### How a drop is resolved
 
 `CombatEntity.at_death` → `drop_loot()` → `systems/gameplay/loot/drops.py`, which reads
-`db.npc_key` → `NPC_DB[key].loot_table` → `LOOT_DB[table_key]` and rolls it.
+`db.npc_key` → `NPC_DB[key].combat.loot_table` → `LOOT_DB[table_key]` and rolls it.
 Resolution is **live**, not stamped at spawn. Thus, if you edit a table and run
 `evennia reload`, the change affects NPCs already on the grid.
 
-An NPC whose `NpcDef` sets no `loot_table` drops nothing. Every NPC is opt-in,
+An NPC whose combat block (`NpcCombat`) sets no `loot_table` drops nothing. Every NPC is opt-in,
 the same way as for `respawn_seconds`.
 
 ### The three stages of a table
@@ -694,7 +695,7 @@ Then name it from the NPC:
 
 ```python
 # world/npc_defs/hostile.py
-"scav": NpcDef(key="scav", ..., loot_table="scav_drops"),
+"scav": NpcDef(key="scav", ..., combat=NpcCombat(..., loot_table="scav_drops")),
 ```
 
 Two NpcDefs can name the same table. A shared rare table works this way, with
@@ -791,6 +792,39 @@ Every other client gets the banking menu. The deposit and withdraw lists of the
 menu show identical items as one row with a total (`rusty scrap metal (x11)`).
 Then they prompt for a quantity, so bulk transfers do not need the command
 form.
+
+### Tabs and placeholders
+
+The vault sorts into bank tabs, as in OSRS. Tab 0 is the main tab. It holds
+each item that is in no other tab, and it shows the whole vault, grouped by
+tab. The number of tabs has no limit, but an empty tab disappears, so the
+100-slot cap also caps the tabs.
+
+```bash
+> bank tabs                          # list each tab and its items
+> bank view 2                        # look at tab 2
+> bank move rusty metal chunk = new  # make a tab for it
+> bank move rusty metal chunk = 0    # put it back in the main tab
+> bank swap rusty metal chunk = hammer
+> bank name 2 = Ores                 # show "Ores", not the first item
+> bank name 2                        # show the first item again
+> bank placeholders off
+> bank release rusty metal dust      # or: bank release all
+```
+
+A new item goes into the tab that you view. An item that is already in the
+vault stays in its own tab.
+
+Placeholders are on for a new vault. When you withdraw the last unit of an
+item, a placeholder keeps its place and its tab. The next deposit of that item
+fills the placeholder. A placeholder uses one of the 100 slots until you
+release it.
+
+In the Godot client, the tabs are buttons above the vault. A left click on a
+tab views it. A right click renames it. Drag a vault item onto a tab to move
+it there, onto the "+" to make a new tab, or onto another item to swap the
+two. The search box filters the whole vault by name. The buttons under the
+vault switch placeholders and release them all.
 
 ### Python inspection
 
@@ -1174,7 +1208,7 @@ What the menu offers:
 |---|---|
 | Inspect | The target's full player dossier (the same one `score` renders) plus a staff addendum: dbrefs, the account and its permissions, god-mode state, the itemized bag, and every quest with live objective counters. Read-only. |
 | Spawn an item | Any `ITEM_DB` key, 1 or N. Stackables arrive as one stack. The menu clamps a request larger than the grid and says so. |
-| Spawn an NPC | Any `NPC_DB` key, 1-20, into **the target's room**. They land live and hostile, with the full combat block and respawn stamp `NpcDef.create` gives a map-placed one. |
+| Spawn an NPC | Any `NPC_DB` key, 1-20, into **the target's room**. `NpcDef.create` makes each one as it makes a map-placed one. A hostile NPC gets its combat block and its respawn stamp. A shopkeep, a Preceptor or a quest giver gets its role. |
 | Toggle god mode | The target ignores all incoming damage. It persists on the CHARACTER, not the egg. If you drop the egg, god mode stays on. |
 | Restore | Refresh max HP from Fortitude, heal to full, drop out of combat. |
 | Empty inventory | Destroys everything carried **and equipped**. A confirmation that counts what it will destroy and names the owner comes first. Staff items are skipped. |
@@ -1367,7 +1401,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3060 tests, ~25 minutes** (measured 09/28/2026). Run it before a merge, or
+**3460 tests, ~29 minutes** (measured 10/09/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

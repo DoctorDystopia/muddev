@@ -31,6 +31,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 # assets/ is import-safe by design -- it touches no database and starts no
 # Evennia. That is what separates it from blackout/scripts/, which CLAUDE.md
@@ -128,6 +129,33 @@ class ModelRecordTests(unittest.TestCase):
 
                     with self.assertRaises(records.RecordError):
                         records.load_record(path)
+
+    def test_a_record_keeps_its_animations_unless_it_says_not_to(self):
+        """
+        The default keeps every served model as it was before the field.
+        Only `animations = false` drops them.
+        """
+        bodies = {"": True, "[output]\nanimations = false\n": False}
+
+        for body, expected in bodies.items():
+            with self.subTest(body=body):
+                with tempfile.TemporaryDirectory() as folder:
+                    path = _write_record(
+                        folder, "npcs", "k",
+                        'source = "s"\nfile = "f.glb"\n' + body)
+                    record = records.load_record(path)
+
+                self.assertIs(record.animations, expected)
+
+    def test_animations_that_is_not_true_or_false_is_refused(self):
+        """A quoted "false" is a string, and a string is always truthy."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(
+                folder, "npcs", "k",
+                'source = "s"\nfile = "f.glb"\n[output]\nanimations = "false"\n')
+
+            with self.assertRaises(records.RecordError):
+                records.load_record(path)
 
     def test_aliases_follow_the_key(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -227,17 +255,35 @@ class CreditTests(unittest.TestCase):
 class LicenseGateTests(unittest.TestCase):
     """The gate refuses what it must, and an exception is never silent."""
 
-    def _source(self, license_id, exception=""):
+    def _source(self, license_id, exception="", local=False):
         return sources.Source(
             source_id="x", directory="", title="t", author="a", url="u",
             site="s", license=license_id, retrieved="2026-09-18",
-            exception=exception)
+            exception=exception, local=local)
 
     def test_an_allowed_license_passes(self):
-        for license_id in licenses.ALLOWED_LICENSES:
+        """A `local_only` license passes on the local source that it needs."""
+        for license_id, terms in licenses.ALLOWED_LICENSES.items():
             with self.subTest(license_id=license_id):
-                source = self._source(license_id)
+                source = self._source(license_id, local=terms.local_only)
                 self.assertEqual(sources.gate_problem(source), "")
+
+    def test_a_local_only_license_needs_a_local_source(self):
+        """
+        The repository is public. A bought download in git is a copy for
+        everyone, and no exception makes that right.
+        """
+        local_only = [license_id
+                      for license_id, terms in licenses.ALLOWED_LICENSES.items()
+                      if terms.local_only]
+
+        self.assertTrue(local_only, "the vacuity guard: no local_only license")
+
+        for license_id in local_only:
+            for exception in ("", "reason"):
+                with self.subTest(license_id=license_id, exception=exception):
+                    source = self._source(license_id, exception=exception)
+                    self.assertIn("local", sources.gate_problem(source))
 
     def test_a_restrictive_or_missing_license_is_refused(self):
         for license_id in ("CC-BY-NC-4.0", "CC-BY-ND-4.0", "TODO", ""):
@@ -267,6 +313,97 @@ class LicenseGateTests(unittest.TestCase):
                 named = [line for line in report.warnings
                          if line.startswith(source_id)]
                 self.assertTrue(named)
+
+
+class LocalSourceTests(unittest.TestCase):
+    """A local source keeps its files out of git, and the check allows it."""
+
+    _RECORD = ('title = "t"\nauthor = "a"\nurl = "u"\nsite = "s"\n'
+               'license = "CC0-1.0"\nretrieved = 2026-10-09\n%s\n[files]\n')
+    _FILE_NAME = "model.glb"
+
+    def setUp(self):
+        self._folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self._folder.cleanup)
+        patch = mock.patch.object(paths, "SOURCES_DIR", self._folder.name)
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def _make(self, source_id, extra, with_file=True):
+        """Write one source record, and one file of the download or none."""
+        directory = os.path.join(self._folder.name, source_id)
+        os.makedirs(directory)
+        record_path = os.path.join(directory, paths.SOURCE_RECORD_NAME)
+
+        with open(record_path, "w", encoding="utf-8") as handle:
+            handle.write(self._RECORD % extra)
+
+        if with_file:
+            with open(os.path.join(directory, self._FILE_NAME), "wb") as handle:
+                handle.write(b"art")
+
+        return sources.load_source(source_id)
+
+    def _sealed(self, source_id, extra):
+        """A source with one file, sealed, and loaded again."""
+        source = self._make(source_id, extra)
+        sources.seal(source)
+
+        return sources.load_source(source_id)
+
+    def test_a_source_is_not_local_unless_its_record_says_so(self):
+        self.assertFalse(self._make("plain", "").local)
+        self.assertTrue(self._make("kept", "local = true").local)
+
+    def test_local_that_is_not_true_or_false_is_refused(self):
+        with self.assertRaises(sources.SourceError):
+            self._make("bad", 'local = "true"')
+
+    def test_the_seal_of_a_local_source_keeps_its_files_from_git(self):
+        """
+        The seal writes the .gitignore. The .gitignore is not a file of the
+        download, so it gets no hash, and the source still matches.
+        """
+        source = self._make("kept", "local = true")
+
+        self.assertTrue(sources.gitignore_problem(source))
+
+        sources.seal(source)
+        sealed = sources.load_source("kept")
+
+        self.assertEqual(sources.gitignore_problem(sealed), "")
+        self.assertEqual(list(sealed.files), [self._FILE_NAME])
+        self.assertEqual(sources.hash_problems(sealed), [])
+
+    def test_a_source_that_is_not_local_needs_no_gitignore(self):
+        source = self._make("plain", "")
+
+        self.assertEqual(sources.gitignore_problem(source), "")
+
+    def test_only_a_local_source_can_be_absent(self):
+        """A missing file of an ordinary source is a changed download."""
+        for extra, expected in (("local = true", True), ("", False)):
+            with self.subTest(extra=extra):
+                source_id = "absent_%s" % expected
+                sealed = self._sealed(source_id, extra)
+                os.remove(os.path.join(sealed.directory, self._FILE_NAME))
+
+                self.assertIs(sources.files_absent(sealed), expected)
+
+    def test_a_local_source_with_its_files_is_not_absent(self):
+        sealed = self._sealed("kept", "local = true")
+
+        self.assertFalse(sources.files_absent(sealed))
+
+    def test_the_seal_refuses_an_absent_local_source(self):
+        """A seal with no files deletes the only record of the hashes."""
+        sealed = self._sealed("kept", "local = true")
+        os.remove(os.path.join(sealed.directory, self._FILE_NAME))
+
+        with self.assertRaises(sources.SourceError):
+            sources.seal(sealed)
+
+        self.assertEqual(sources.load_source("kept").files, sealed.files)
 
 
 class BudgetTableTests(unittest.TestCase):

@@ -145,10 +145,23 @@ class TestPayload(_Fixture, EvenniaTest):
         self.assertEqual(f"{CmdPage.key}/{PAGE_REPLY_SWITCH} ", rows[0]["prefix"])
         self.assertEqual(feed_const.MESSAGE_TYPE_PAGE, rows[0]["type"])
 
-    def test_an_observer_with_no_account_can_only_say(self):
+    def test_an_observer_with_no_account_can_only_speak(self):
         keys = [row["key"] for row in chat_feed.chat_modes(self.obj1)]
 
-        self.assertEqual([chat_feed.MODE_KEY_SAY], keys)
+        self.assertEqual([chat_feed.MODE_KEY_SAY, chat_feed.MODE_KEY_YELL],
+                         keys)
+
+    def test_both_speech_modes_go_on_the_say_tab(self):
+        """A yell line has the `say` type, so its mode goes on that tab."""
+        rows = [row for row in self._modes()
+                if row["key"] in (chat_feed.MODE_KEY_SAY,
+                                  chat_feed.MODE_KEY_YELL)]
+
+        self.assertEqual(2, len(rows))
+
+        for row in rows:
+            with self.subTest(mode=row["key"]):
+                self.assertEqual(feed_const.MESSAGE_TYPE_SAY, row["type"])
 
     def test_the_whole_payload_survives_json(self):
         self._channel().connect(self.account)

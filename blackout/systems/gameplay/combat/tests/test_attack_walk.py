@@ -28,7 +28,7 @@ from systems.core.tilegrid.world import TileWorld, set_world
 from systems.gameplay.combat import pvp
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.gameplay.movement import walk
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -134,7 +134,7 @@ class AttackWalkTests(EvenniaTest):
         world = _open_world()
         set_world(world)
         movement.place(world.rooms, self.char1, *_START, quiet=True)
-        self.raider = spawn_mutant_raider(world.rooms.ensure_room(*_NEXT_TO_START))
+        self.raider = spawn_npc("mutant_raider", world.rooms.ensure_room(*_NEXT_TO_START))
 
         self.seen = []
         self.char1.msg = lambda text=None, **kwargs: self.seen.append(text)

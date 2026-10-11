@@ -60,6 +60,14 @@ tooltip_text = "Read the clipboard. A click is the user gesture browsers require
 theme = ExtResource("1_03nbj")
 text = "Paste"
 
+[node name="RememberBox" type="CheckBox" parent="Margin/Column" unique_id=1415926535]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Keep a login token on this device, never the password. The game logs you in with it at each start."
+theme = ExtResource("1_03nbj")
+button_pressed = true
+text = "Remember me on this device"
+
 [node name="Buttons" type="HBoxContainer" parent="Margin/Column" unique_id=1878371496]
 layout_mode = 2
 theme = ExtResource("1_03nbj")
@@ -77,6 +85,13 @@ layout_mode = 2
 size_flags_horizontal = 3
 theme = ExtResource("1_03nbj")
 text = "Create account"
+
+[node name="ForgetButton" type="Button" parent="Margin/Column" unique_id=1732050807]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Remove the saved login from this device. Type forget all in the game to end it on every device."
+theme = ExtResource("1_03nbj")
+text = "Forget saved login"
 
 [node name="Message" type="Label" parent="Margin/Column" unique_id=742399852]
 unique_name_in_owner = true

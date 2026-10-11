@@ -12,7 +12,8 @@ Description: Blackout hostile NPC NpcDef entries. Stats are faithful OSRS
 """
 
 import systems.gameplay.combat.constants as combat_constants
-from world.npc_database import NpcDef
+from world import creature_types
+from world.npc_database import NpcCombat, NpcDef
 
 
 # ─── Reusable combat-style builders ────────────────────────────────────────
@@ -63,38 +64,41 @@ NPCS = {
         key="mutant_raider",
         name="Mutant Raider",
         desc="A mutant who raids.",
-        strike_level=1,
-        brawn_level=1,
-        defense_level=1,
-        max_hp=5,
-        attack_speed=4,
-        combat_stat_bonuses={
-            # Attack bonuses (per-damage-type; goblin is crush-only but the
-            # math reads whichever *_attack_bonus the active style names, so
-            # we stamp the same bonus on stab/slash to match the wiki's
-            # "Monster attack bonus" of -21 across the board).
-            "stab_attack_bonus": -21,
-            "slash_attack_bonus": -21,
-            "crush_attack_bonus": -21,
-            # Defense bonuses
-            "stab_defense_bonus": -15,
-            "slash_defense_bonus": -15,
-            "crush_defense_bonus": -15,
-            # Other bonuses
-            "melee_strength_bonus": -15,
-        },
-        combat_styles=_headbutt_crush_aggressive_combat_style(),
-        default_combat_style="headbutt",
-        # 30s timed respawn on the raider's spawn tile, driven by
-        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
-        respawn_seconds=15,
-        # Drop table in world/loot_defs/hostile.py, resolved at death through
-        # db.npc_key -> NPC_DB -> LOOT_DB by systems/gameplay/loot/drops.py.
-        loot_table="mutant_raider_drops",
-        # Butchery's starter node. The body carries its own yields via
-        # the ItemDef's gatherable_key, so nothing about chuck or filet
-        # is restated here.
-        corpse_key="mutant_raider_corpse",
+        combat=NpcCombat(
+            strike_level=1,
+            brawn_level=1,
+            defense_level=1,
+            max_hp=5,
+            attack_speed=4,
+            combat_stat_bonuses={
+                # Attack bonuses (per-damage-type; goblin is crush-only but the
+                # math reads whichever *_attack_bonus the active style names, so
+                # we stamp the same bonus on stab/slash to match the wiki's
+                # "Monster attack bonus" of -21 across the board).
+                "stab_attack_bonus": -21,
+                "slash_attack_bonus": -21,
+                "crush_attack_bonus": -21,
+                # Defense bonuses
+                "stab_defense_bonus": -15,
+                "slash_defense_bonus": -15,
+                "crush_defense_bonus": -15,
+                # Other bonuses
+                "melee_strength_bonus": -15,
+            },
+            combat_styles=_headbutt_crush_aggressive_combat_style(),
+            default_combat_style="headbutt",
+            # 30s timed respawn on the raider's spawn tile, driven by
+            # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
+            respawn_seconds=15,
+            # Drop table in world/loot_defs/hostile.py, resolved at death through
+            # db.npc_key -> NPC_DB -> LOOT_DB by systems/gameplay/loot/drops.py.
+            loot_table="mutant_raider_drops",
+            # Butchery's starter node. The body carries its own yields via
+            # the ItemDef's gatherable_key, so nothing about chuck or filet
+            # is restated here.
+            corpse_key="mutant_raider_corpse",
+            creature_types=(creature_types.CREATURE_TYPE_MUTANT,),
+        ),
     ),
     # ─── Mutant Giant ─────────────────────────────────────────────────────
     # OSRS source: Hill Giant — Combat level 28.
@@ -129,124 +133,143 @@ NPCS = {
         key="mutant_giant",
         name="Mutant Giant",
         desc="Huge, slow, and in no hurry about it.",
-        strike_level=18,
-        brawn_level=22,
-        defense_level=26,
-        max_hp=35,
-        attack_speed=6,
-        combat_stat_bonuses={
-            # Attack bonuses. The Hill Giant is crush-only, and the math reads
-            # whichever *_attack_bonus the active style names, so the wiki's
-            # single "Monster attack bonus" of +18 is stamped across all three.
-            "stab_attack_bonus": 18,
-            "slash_attack_bonus": 18,
-            "crush_attack_bonus": 18,
-            # Defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 0,
-            "crush_defense_bonus": 0,
-            # Other bonuses
-            "melee_strength_bonus": 16,
-        },
-        combat_styles=_headbutt_crush_aggressive_combat_style(),
-        default_combat_style="headbutt",
-        # 30s timed respawn, matching the Big Mutant rather than the raider's
-        # 15s. A tier the player clears deliberately should not refill behind
-        # them while they butcher the last one.
-        respawn_seconds=30,
-        # Drop table in world/loot_defs/hostile.py.
-        loot_table="mutant_giant_drops",
-        # Butchery's second node, and the whole giant food chain's source.
-        corpse_key="mutant_giant_corpse",
+        combat=NpcCombat(
+            strike_level=18,
+            brawn_level=22,
+            defense_level=26,
+            max_hp=35,
+            attack_speed=6,
+            combat_stat_bonuses={
+                # Attack bonuses. The Hill Giant is crush-only, and the math reads
+                # whichever *_attack_bonus the active style names, so the wiki's
+                # single "Monster attack bonus" of +18 is stamped across all three.
+                "stab_attack_bonus": 18,
+                "slash_attack_bonus": 18,
+                "crush_attack_bonus": 18,
+                # Defense bonuses
+                "stab_defense_bonus": 0,
+                "slash_defense_bonus": 0,
+                "crush_defense_bonus": 0,
+                # Other bonuses
+                "melee_strength_bonus": 16,
+            },
+            combat_styles=_headbutt_crush_aggressive_combat_style(),
+            default_combat_style="headbutt",
+            # 30s timed respawn, matching the Big Mutant rather than the raider's
+            # 15s. A tier the player clears deliberately should not refill behind
+            # them while they butcher the last one.
+            respawn_seconds=30,
+            # Drop table in world/loot_defs/hostile.py.
+            loot_table="mutant_giant_drops",
+            # Butchery's second node, and the whole giant food chain's source.
+            corpse_key="mutant_giant_corpse",
+            creature_types=(
+                creature_types.CREATURE_TYPE_MUTANT,
+                creature_types.CREATURE_TYPE_GIANT,
+        ),
+        ),
     ),
     "big_mutant": NpcDef(
         key="big_mutant",
         name="Big Mutant",
         desc="Bigger than you'd expect.",
-        strike_level=76,
-        brawn_level=78,
-        defense_level=81,
-        max_hp=87,
-        attack_speed=4,
-        combat_stat_bonuses={
-            # stats based on OSRS Greater Demon
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
-            # Defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 0,
-            "crush_defense_bonus": 0,
-            # Other bonuses
-            "melee_strength_bonus": 0,
-        },
-        combat_styles=_headbutt_crush_aggressive_combat_style(),
-        default_combat_style="headbutt",
-        # 30s timed respawn on the big mutant's spawn tile, driven by
-        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
-        respawn_seconds=30,
-        # Two main-table rolls plus the 1/128 Glass Cannon amulet; see
-        # world/loot_defs/hostile.py.
-        loot_table="big_mutant_drops",
+        combat=NpcCombat(
+            strike_level=76,
+            brawn_level=78,
+            defense_level=81,
+            max_hp=87,
+            attack_speed=4,
+            combat_stat_bonuses={
+                # stats based on OSRS Greater Demon
+                "stab_attack_bonus": 0,
+                "slash_attack_bonus": 0,
+                "crush_attack_bonus": 0,
+                # Defense bonuses
+                "stab_defense_bonus": 0,
+                "slash_defense_bonus": 0,
+                "crush_defense_bonus": 0,
+                # Other bonuses
+                "melee_strength_bonus": 0,
+            },
+            combat_styles=_headbutt_crush_aggressive_combat_style(),
+            default_combat_style="headbutt",
+            # 30s timed respawn on the big mutant's spawn tile, driven by
+            # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
+            respawn_seconds=30,
+            # Two main-table rolls plus the 1/128 Glass Cannon amulet; see
+            # world/loot_defs/hostile.py.
+            loot_table="big_mutant_drops",
+            creature_types=(creature_types.CREATURE_TYPE_MUTANT,),
+        ),
     ),
     "floating_eye": NpcDef(
         key="floating_eye",
         name="Floating Eye",
         desc="Terrified of needles.",
-        strike_level=8,
-        brawn_level=8,
-        defense_level=12,
-        max_hp=20,
-        attack_speed=4,
-        combat_stat_bonuses={
-            # stats based on OSRS chaos druid, defenses lowered for flavor
-            # https://oldschool.runescape.wiki/w/Chaos_druid
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
-            # Defense bonuses
-            "stab_defense_bonus": -42, # based on OSRS gnome child
-            "slash_defense_bonus": -15,
-            "crush_defense_bonus": 0,
-            # Other bonuses
-            "melee_strength_bonus": 8,
-        },
-        combat_styles=_headbutt_crush_aggressive_combat_style(),
-        default_combat_style="headbutt",
-        # 30s timed respawn on the Floating eye's spawn tile, driven by
-        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
-        respawn_seconds=30,
-        # Drop table in world/loot_defs/hostile.py.
-        loot_table="floating_eye_drops",
+        combat=NpcCombat(
+            strike_level=8,
+            brawn_level=8,
+            defense_level=12,
+            max_hp=20,
+            attack_speed=4,
+            combat_stat_bonuses={
+                # stats based on OSRS chaos druid, defenses lowered for flavor
+                # https://oldschool.runescape.wiki/w/Chaos_druid
+                "stab_attack_bonus": 0,
+                "slash_attack_bonus": 0,
+                "crush_attack_bonus": 0,
+                # Defense bonuses
+                "stab_defense_bonus": -42, # based on OSRS gnome child
+                "slash_defense_bonus": -15,
+                "crush_defense_bonus": 0,
+                # Other bonuses
+                "melee_strength_bonus": 8,
+            },
+            combat_styles=_headbutt_crush_aggressive_combat_style(),
+            default_combat_style="headbutt",
+            # 30s timed respawn on the Floating eye's spawn tile, driven by
+            # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
+            respawn_seconds=30,
+            # Drop table in world/loot_defs/hostile.py.
+            loot_table="floating_eye_drops",
+            creature_types=(creature_types.CREATURE_TYPE_EYE,),
+        ),
     ),
     "mutant_crab": NpcDef(
         key="mutant_crab",
         name="Mutant Crab",
         desc="A large, aggressive crab.",
-        strike_level=1,
-        brawn_level=1,
-        defense_level=1,
-        max_hp=60,
-        attack_speed=4,
-        combat_stat_bonuses={
-            # stats based on OSRS chaos druid, defenses lowered for flavor
-            # https://oldschool.runescape.wiki/w/Chaos_druid
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
-            # Defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 0,
-            "crush_defense_bonus": 0,
-            # Other bonuses
-            "melee_strength_bonus": 0,
-        },
-        combat_styles=_headbutt_crush_aggressive_combat_style(),
-        default_combat_style="headbutt",
-        # 30s timed respawn on the Mutant Crab's spawn tile, driven by
-        # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
-        respawn_seconds=30,
-        # Drop table in world/loot_defs/hostile.py.
-        loot_table="mutant_crab_drops",
+        combat=NpcCombat(
+            strike_level=1,
+            brawn_level=1,
+            defense_level=1,
+            max_hp=60,
+            attack_speed=4,
+            combat_stat_bonuses={
+                # stats based on OSRS chaos druid, defenses lowered for flavor
+                # https://oldschool.runescape.wiki/w/Chaos_druid
+                "stab_attack_bonus": 0,
+                "slash_attack_bonus": 0,
+                "crush_attack_bonus": 0,
+                # Defense bonuses
+                "stab_defense_bonus": 0,
+                "slash_defense_bonus": 0,
+                "crush_defense_bonus": 0,
+                # Other bonuses
+                "melee_strength_bonus": 0,
+            },
+            combat_styles=_headbutt_crush_aggressive_combat_style(),
+            default_combat_style="headbutt",
+            # 30s timed respawn on the Mutant Crab's spawn tile, driven by
+            # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
+            respawn_seconds=30,
+            # Drop table in world/loot_defs/hostile.py.
+            loot_table="mutant_crab_drops",
+            # A Mutant task and a Crab task both count it (Nick, 10/06/2026).
+            creature_types=(
+                creature_types.CREATURE_TYPE_MUTANT,
+                creature_types.CREATURE_TYPE_CRAB,
+        ),
+        ),
     ),
 }

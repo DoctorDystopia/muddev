@@ -1,5 +1,5 @@
 extends Node
-## Unit tests for PropMeshBuilder: a ladder, a flight of stairs, or a hatch
+## Unit tests for PropMeshBuilder: a ladder, a flight of stairs, a hatch, or a decor shape
 ## stands on the tile of each object whose scenery is a primitive, and the
 ## rotation of the object turns it.
 ##
@@ -28,6 +28,9 @@ func _ready() -> void:
 	_stairs_rise_toward_the_front()
 	_a_shape_stands_on_the_ground_of_its_tile()
 	_every_face_points_along_its_normal()
+	_each_decor_kind_draws_its_primitive()
+	_a_table_top_stands_at_its_height()
+	_a_lamp_post_reaches_toward_the_front()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -142,6 +145,44 @@ func _every_face_points_along_its_normal() -> void:
 			along += 1
 
 	_expect(along == vertices.size() / 3, "every triangle fronts along its normal")
+
+
+func _each_decor_kind_draws_its_primitive() -> void:
+	# DESIGN-0013 Phase S4. A decor kind whose scenery is a primitive draws
+	# it. A decor kind with a model record draws nothing here.
+	for kind: String in _Const.OBJECT_KINDS:
+		if _Const.OBJECT_KINDS[kind] != _Const.OBJECT_CATEGORY_DECOR \
+				or PropMeshBuilder.primitive_of(kind).is_empty():
+			continue
+
+		var chunk := ChunkFile.blank(0, 0)
+
+		chunk.objects.append(_thing(kind, 0))
+
+		_expect(PropMeshBuilder.build(chunk).get_surface_count() == 1,
+			"the decor %s draws a primitive" % kind)
+
+
+func _a_table_top_stands_at_its_height() -> void:
+	var table := _bounds(_kind_of(_Const.SCENERY_TABLE), 0)
+	var turned := _bounds(_kind_of(_Const.SCENERY_TABLE), 1)
+
+	_expect(is_equal_approx(table.end.y, PropMeshBuilder.TABLE_HEIGHT),
+		"the top of a table is at its height")
+	_expect(is_equal_approx(table.size.x, PropMeshBuilder.TABLE_WIDTH)
+		and is_equal_approx(turned.size.z, PropMeshBuilder.TABLE_WIDTH),
+		"a quarter turn swaps the width and the depth of a table")
+
+
+func _a_lamp_post_reaches_toward_the_front() -> void:
+	var kind := _kind_of(_Const.SCENERY_LAMP_POST)
+
+	for rotation: int in _Const.CHUNK_ROTATION_COUNT:
+		var middle := _bounds(kind, rotation).get_center() - _CENTRE
+		var front := Basis(Vector3.UP, -rotation * PI * 0.5) * Vector3.FORWARD
+
+		_expect(Vector2(middle.x, middle.z).dot(Vector2(front.x, front.z)) > 0.05,
+			"at rotation %d the arm of the lamp post reaches the front" % rotation)
 
 
 # ─── Private helpers ─────────────────────────────────────────────────────────

@@ -105,6 +105,9 @@ class ActionResult:
         damage_type - one of the DAMAGE_TYPE_* constants. Threaded into
                       at_damage so death attribution and messaging can tell a
                       sword from a backfiring gadget.
+        max_hit     - the highest roll that the damage die of this action can
+                      give. 0 when the seam that rolled set no max hit.
+        rolled      - the face of the damage die, before the damage channel.
 
     Exit/Returns:
         Not applicable — a data carrier.
@@ -133,6 +136,59 @@ class ActionResult:
     self_damage: int = 0
     hit_prob: float = 0.0
     damage_type: str = const.DAMAGE_TYPE_MELEE
+    max_hit: int = 0
+    rolled: int = 0
+
+    def is_max_hit(self) -> bool:
+        """
+        Purpose: Tell if this action rolled the highest face of its damage die.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            True if the action connected and `rolled` reached a `max_hit`
+            above 0. Else False.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The test reads the ROLL, not the damage. The damage channel
+            changes the damage after the roll, so a bonus never makes a max
+            hit, and a penalty never takes one away. The hit line shows the
+            two numbers when they differ (Nick, 10/08/2026).
+
+            A max hit of 0 never counts. A 0 roll on a 0 die is not news. A
+            seam that sets no max hit (a whole-action override such as the
+            gizmo) also stays at 0, so it never shows a max hit.
+
+        Notes/References:
+            Each seam that rolls damage writes `max_hit` and `rolled`: the
+            OSRS roll in base_rules, the toy sword (a natural 20), the bit
+            blade, and the best-of-two buff.
+
+        Author: Nick Hobar
+        Creation date: 10/08/2026
+        """
+        if not self.hit:
+            return False
+
+        if self.max_hit <= 0:
+            return False
+
+        return self.rolled >= self.max_hit
+
+    def shown_max_hit(self) -> int:
+        """Return the max hit to show for this action, or 0 for no max hit.
+
+        One reader for the hit line and the statefeed, so the two cannot
+        disagree on which swing was a max hit.
+        """
+        if not self.is_max_hit():
+            return 0
+
+        return self.max_hit
 
 
 

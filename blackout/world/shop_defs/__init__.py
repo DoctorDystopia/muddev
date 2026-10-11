@@ -43,8 +43,18 @@ for _d in [_OASIS]:
 
 
 def shop_def_for(shopkeep) -> ShopDef | None:
-    """The ShopDef that a shopkeeper's db.shopdef_key names, or None."""
-    key = getattr(shopkeep.db, "shopdef_key", None)
+    """
+    The ShopDef of a shopkeep, or None.
+
+    The NpcDef of the shopkeep names it (`shop_key`). A shopkeep with no def
+    falls back to db.shopdef_key, which every shopkeep carried until
+    10/09/2026. The def comes first, so a stale row cannot hide it.
+    """
+    npc_def = getattr(shopkeep, "npc_def", None)
+    key = npc_def.shop_key if npc_def is not None else None
+
+    if not key:
+        key = getattr(shopkeep.db, "shopdef_key", None)
 
     if not key:
         return None

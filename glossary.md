@@ -26,6 +26,10 @@ the name.
 | tile | one square of the tile grid. It has a tile room only while something stands there | cell, square |
 | map rebuild | a run of the retired `clean_and_reload_all_maps.ps1` on the xyzgrid maps (`archive/xyzgrid-maps/`). The tile sync took its place | grid rebuild, respawn |
 | shopkeep | an NPC that sells items (`ShopkeepNPC`) | shopkeeper, vendor, merchant |
+| NPC def | the `NpcDef` of one NPC, one entry in a module under `world/npc_defs/` | NPC template, NPC prototype, NPC data |
+| combat block | the `NpcCombat` of an NPC def. Only an NPC that can fight has one | stat block, combat profile |
+| role | the typeclass of an NPC: hostile, talkative, shopkeep or Preceptor | NPC type, NPC class |
+| dialogue | the EvMenu node tree that an NPC speaks from, one module in `world/npc_dialogues/` | conversation tree, dialogue menu |
 | ware | one item kind that a shop sells, one row of `get_buy_items` | good, product |
 | stock level | how many units of a ware a shop has now (`stock.level`) | inventory, supply |
 | restock | the return of one unit to a ware below its `max_stock` | refill, replenish |
@@ -38,6 +42,13 @@ the name.
 | roster | the skills payload that `CHANNEL_CHAR_SKILLS` sends | skill list |
 | profile | the menu that shows the dossier, skills and records of any character (`profile`, `profile_menu.py`) | inspect screen, public dossier, honours |
 | PvP flag | the per-character choice that allows attacks between two players (`pvp on`, `systems/gameplay/combat/pvp.py`) | PvP mode, PvP toggle, PK flag |
+| login token | the random secret that lets one device log in to one account with no password. The server keeps only its digest (`systems/core/login_tokens/`, `remember`, `resume`, `forget`) | auth token, session token, remember-me token |
+| speech command | a command that speaks to the characters near the speaker: `say` or `yell` (`systems/gameplay/speech/`) | chat command, talk verb |
+| reach | the rule that decides which characters hear a speech command: the say range, or the area of the speaker | earshot, hearing range, scope |
+| say range | the tiles that a `say` reaches: `SAY_RADIUS` tiles on the plane of the speaker. It is the radius of the statefeed contents | hearing radius, say radius, earshot |
+| listener | a character with a connected session that hears a speech command | hearer, audience member, recipient |
+| moment | one game event that the server names for a client to mark, for example `task_complete` (`CHANNEL_MOMENT`, `MOMENTS`) | game event, trigger, sound event |
+| status light | the dot in the nav bar of the website that shows if the game server is up, and the player count (`/status.json`, `systems/interface/serverstatus/`) | status indicator, health check, uptime badge |
 
 ## Client
 
@@ -47,6 +58,10 @@ the name.
 | webclient | the retired browser client in `archive/webclient-js/`, and nothing else | web client, JS client |
 | pane | one region of the Godot client UI | window, view |
 | pop-up | a box that the server opens over the world pane, for example the bank (`char_popup`) | window, dialog, interface, modal |
+| vault layout | the bank tabs, the order of the slots, the tab names and the placeholders of one vault (`systems/gameplay/banking/layout.py`) | bank layout, bank config |
+| bank tab | one numbered group of vault slots. A tab that becomes empty disappears (`bank move`, `bank view`) | bank folder, category, page |
+| main tab | tab 0 of the vault. It holds each slot that is in no other tab, and it shows every slot, grouped by tab | All tab, default tab, tab zero |
+| placeholder | a vault slot that keeps its place and its tab after the last unit leaves. It uses one slot until the player releases it (`bank release`) | ghost slot, empty slot, reserved slot |
 | dock | the box of the game log or of the control panel. Both are HUD elements (`%ConsoleDock`, `%PanelDock`) | window, sidebar, drawer |
 | grip | the strip on an edge or a corner of a box that a drag resizes (`ResizeGrips`) | handle, resizer, border |
 | HUD element | a box over the world pane that the player places in the layout editor: a dock, the minimap, the vitals, the XP drops, or the hover text (`HudElements`) | widget, frame, panel, component |
@@ -58,6 +73,8 @@ the name.
 | chat bar | the row of chat tab buttons under the input (`ChatBar`) | tab strip, chat buttons |
 | chat mode | where a typed line goes: Command, or a mode that `char_chat` names, for example Say (`ChatModes`) | chat channel, talk mode |
 | Command mode | the chat mode that sends a typed line as it is. The default | raw mode, normal mode |
+| cue | the name of one sound that the client plays, mapped to one clip (`SoundCues`) | sound effect, SFX key |
+| saved login | the login token and the account name that the Godot client keeps on one device (`SavedLogin`, `user://login.cfg`) | stored credentials, remembered login, auto-login |
 
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
 server. A pane is a region of the client screen. A Godot node class such as
@@ -108,9 +125,45 @@ Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
 | grace | the ticks an attacker holds after its target leaves reach | grace period, timeout |
 | leash | the tiles a chasing NPC follows before it returns | tether, aggro range |
 | recovery | the chance a spent projectile drops instead of breaking | salvage, refund |
+| max hit | the highest damage that one swing can roll: the top face of its damage die (`ActionResult.max_hit`). A natural 20 is the max hit of a d20 | max damage, crit, perfect hit |
+| hitsplat | the damage number that the Godot client draws over a figure for one swing (`HitsplatLayer`) | damage number, damage popup, floating text, splat |
+| hitsplat style | the look of one kind of hitsplat: one `.tres` file in `godot/world/hitsplats/styles/` (`HitsplatStyle`) | hitsplat theme, hitsplat skin |
+| detail line | the small line under a max hit hitsplat that names the roll and a bonus or a penalty | subtitle, caption, breakdown |
 
 Guns and Ballistics are skill names, so they are identifiers. Guns decides
 whether a shot lands. Ballistics decides how hard it lands.
+
+## Exterminator
+
+DESIGN-0012 named these on 10/06/2026. The vault note
+`03_Systems/Skills/Utility_Skills/Exterminator_Skill.md` owns the rules.
+Most player-facing names are TBD. These are the nouns for prose about the
+code.
+
+| Use | For | Not |
+|---|---|---|
+| Exterminator | the Utility skill of the task loop (`SKILL_KEY_EXTERMINATOR`) | Slayer, hunter skill |
+| Preceptor | an NPC that gives a task and teaches buffs | slayer master, task master, task giver |
+| task | one order from a Preceptor to kill a count of one creature type | assignment, quest, contract, job |
+| creature type | a general kind of hostile NPC that a task names, for example `mutant` (`world/creature_types.py`). One NPC can have several | monster type, category, family, species |
+| task kill | the death of a creature of the task type that counts on the task | slay, task credit |
+| buff | a change to combat or to the task that a player picks during a task, and keeps until the task ends | boon, perk, modifier, rite |
+| archetype | the mechanic of a buff, with no name and no lore, for example `accuracy_vs_type` | buff type, template |
+| pick milestone | a point of task progress where the player gets one pick | checkpoint, threshold |
+| banked pick | a pick that came due and that the player did not use yet | pending pick, stored pick |
+| offer | the cards that one pick shows | draft, choice, roll |
+| card | one buff in an offer | option, slot |
+| rarity | the tier that a card rolls: Common, Rare, Epic, or Legendary. It sets the strength of the buff (`RARITIES`, `strengths`) | grade, quality, tier level |
+| pick menu | the EvMenu that shows the cards to a session with no pop-up (`exterminator_pick_menu.py`) | pick screen, card menu |
+| Exterminator points | the points that a completed task gives | slayer points, currency |
+| streak | the count of tasks completed in a row | combo, run |
+| Task Writ | the free item from a Preceptor that opens the task pop-up (`TASK_WRIT_ITEM_KEY`). Name TBD | slayer gem, task item, task scroll |
+| seam buff | a buff that replaces one seam of an action, for example the damage roll | override buff, mechanic buff |
+| seam conflict | a seam that a buff and an item, or two buffs, both own. The pick card warns about it (`seam_conflicts`) | clash, collision, overlap |
+| damage dealer | a combatant that took HP from a victim before the death of the victim. Each one gets the task kill | contributor, attacker list, participant |
+| damage record | the record of each damage dealer and its damage, on the victim (`damage_record`, `DAMAGE_RECORD_ATTR`) | threat table, hit log, damage log |
+| pool | the buffs that one Preceptor teaches (`PreceptorDef.buff_pool`). Two pools can share a buff | buff list, deck, loot table |
+| par time | the online time inside which a task must end for the `par_time_points` bonus (`par_seconds`) | time limit, deadline, speed target |
 
 ## 3D models
 
@@ -126,6 +179,7 @@ model file is never a recipe.
 | fix | a correction to a bad export, baked into the served file by the build | presentation, override |
 | license gate | the build's refusal of a source whose license is not allowed | license check, whitelist |
 | exception | a reason in a source record that waives the license gate | override, waiver |
+| local source | a source with `local = true`: git keeps its source record and ignores its files. A bought pack is one | private source, paid source, untracked source |
 | served tree | `web/static/webclient/models/`, the files the client fetches | model tree, static models |
 | credits box | the box in the Godot client that the Options pane opens | credits pop-up, credits window |
 
@@ -170,20 +224,44 @@ a room.
 | sweep | the pass that gives each empty tile room with no pin back to the pool (`tilegrid/sweep.py`) | reaper, cleanup, garbage collection |
 | climb | an object kind (a ladder or stairs) that moves a walker on its tile one plane up or down. Also the command that does it | ladder link, stair portal, teleport |
 | void | the floor type `void`: a tile with no floor, on plane 1 and up. It is always Blocked, and the client draws no ground on it | hole, gap, empty tile |
-| hide roofs | the client setting that hides every plane above the plane of the player | roof toggle, x-ray |
+| hide roofs | the client setting that hides every plane above the plane of the player while the player is under a roof | roof toggle, x-ray |
 | content check | one rule of `world/tile_checks.py` over the chunk files of a world, for example "a transition lands on an open tile". The terrain editor runs the same rules as "Check world" | validation, world lint, world test |
 | finding | one content check that fails, at one tile | error, issue, violation |
 | wall | a walk flag on one edge of a tile. No step and no shot crosses that edge. The client draws a slab on the edge (`WallMeshBuilder`) | fence, barrier, edge block |
 | scenery | the model that the client stands on the tile of an object kind with no spawner, for example the teleporter pad of a transition. The `scenery` of the kind row names it | prop, decoration, tile prop |
-| primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, or `hatch`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
+| primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, `hatch`, and the decor shapes `crate`, `table`, and `lamp_post`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
 | hatch | the primitive on the tile of a climb that only leads down: a framed opening in the floor | trapdoor, stairwell, hole |
 | rotation | the quarter turns of a placed object in a chunk file, 0 to 3, clockwise from north. The Turn action of the terrain editor adds one | orientation, heading, angle |
 | facing | the rotation of the chunk object that stood an entity up. The tile sync writes it on the entity (`FACING_ATTR`), and the statefeed sends it | direction, yaw, heading |
 | preview | the asset key and the family of the entity that an object kind stands up. Only the terrain editor reads it, to draw the model on the tile | editor model, thumbnail |
 | tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
 | link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |
-| ghost | the dim copy of the planes below the edited plane, in the terrain editor | shadow, underlay, onion skin |
+| ghost | the dim copy of a plane other than the edited plane, in the terrain editor. The planes below show as a ghost, and the planes above can | shadow, underlay, onion skin |
 | beacon | the tall mark in the terrain editor over the selected object or the tile of a finding | marker, highlight |
+| structure | a building or a wall that the Build tools make from walls, floor types, planes, climbs, and roofs (DESIGN-0013) | building object, WMO, prefab |
+| structure editor | the Build tab of the terrain editor | building editor, construction mode |
+| wall top | the top edge of a wall: the corners of the plane above where that tile has a floor, else the height of its wall style | wall cap, wall height |
+| wall style | the look of the walls of one tile, a row of `world/wall_styles.py`. It sets the colour and the height with nothing above. A chunk file of format 2 holds it | wall type, wall material, wall skin |
+| format 2 | the chunk file format with the wall style layer (`wall_names`, `walls`). The writer writes it only when a tile has a style other than `plain` | wall format, v2 |
+| note | a content check result that warns and does not fail a test. `unreachable` gives a note | warning, soft finding |
+| live check | the cheap content rules that the Build tab runs on the tiles of each gesture | instant check, validation |
+| hint line | the line at the bottom of the 3D view that names the Build tool, its gesture, each modifier, and each toggle | status bar, tooltip |
+| roof | the tiles of a plane above a structure that carry a roof floor type and the Blocked flag. The Roof tool shapes their corner heights | roof object, roof mesh, ceiling |
+| roof floor type | a floor type with `roof` set, in `world/floor_types.py`. The client draws no cliff colour on it | roof tile, roof material |
+| roof shape | the rule that gives the corner heights of a roof: flat, shed, gable, hip, or pyramid (`roof_shapes.gd`) | roof type, roof style |
+| eave | the edge of a roof. The roof meets the walls one plane rise above the base, and the overhang hangs lower | roof edge, roof lip |
+| under a roof | a player whose tile has a floor that is not void on some plane above. "Hide roofs" hides the planes above only then | indoors, inside, covered |
+| outline | the lattice that a Build tool draws before the release, at the heights of its plan. Green builds, amber builds with a warning, red refuses | ghost, preview, blueprint, hologram |
+| template | a saved structure in `blackout/world/structures/<key>.json`. The Place tool writes a copy of it into the chunk files (DESIGN-0013 section 6.6) | prefab, blueprint, stamp |
+| template copy | the tiles, corners, and objects that one click of the Place tool writes from a template. Nothing links it to its template | placement, instance, stamp, spawn |
+| footprint | the tiles that a template covers, at the tile under the mouse of the Place tool | bounds, lot, plot |
+| cover | the mark on a tile of a template that the template owns. The Place tool writes only the covered tiles | mask, used tiles |
+| blend ring | the corners around a footprint that the Place tool moves part of the way to the base height | skirt, falloff, feather |
+| tile selection | the tiles that the Select tool of the Build tab holds, on one plane or on several. Delete, Copy, and Move act on it | selected tiles, marquee, region |
+| clipboard | the template that Ctrl+C makes from the tile selection. It lives in the editor only, until "Save as template" writes it | buffer, copy store |
+| structure workbench | the terrain editor scene on scratch chunk files outside the repo, `structure_workbench.tscn`. The author builds a template there, away from the world (DESIGN-0013 Phase S6). The crafting facility keeps the word "workbench" | workbench, sandbox, prefab mode, test map |
+| protect structures | the Paint tab toggle that stops a sculpt from changing a corner of a tile with a wall or with a floor above it | lock walls, freeze buildings |
+| decor | an object kind of the category `decor`: scenery that pins no tile room and may stand on a Blocked tile. A tile holds one decor. The Decor tool of the Build tab places it (DESIGN-0013 section 6.5) | prop, furniture, clutter |
 
 ## Maps
 

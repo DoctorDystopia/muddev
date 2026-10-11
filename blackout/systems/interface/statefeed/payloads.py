@@ -602,6 +602,12 @@ class CombatPayload(_Payload):
     is emitted before at_damage runs, because a killed NPC deletes itself
     inside at_damage and a client resolving `target_id` afterwards would find
     nothing.
+
+    `max_hit` is True for a swing that rolled the top face of its damage
+    die. See ActionResult.is_max_hit. `max_hit_roll` is that top face. It is
+    0 on every other swing. Thus, a client never learns a max hit that the
+    hit line does not show. A `damage` that differs from `max_hit_roll`
+    tells the client that the damage channel changed the roll.
     """
 
     channel = const.CHANNEL_COMBAT
@@ -619,6 +625,8 @@ class CombatPayload(_Payload):
     max_hp: int = 0
     killed: bool = False
     backfire: bool = False
+    max_hit: bool = False
+    max_hit_roll: int = 0
 
 
 @dataclass
@@ -646,6 +654,19 @@ class XpDropPayload(_Payload):
 
     kind: str = ""
     awards: list = field(default_factory=list)   # [{skill_key, amount, ...}]
+
+
+@dataclass
+class MomentPayload(_Payload):
+    """One game moment, for a client to mark. Blackout.Moment.
+
+    `moment` is one name from const.MOMENTS. The payload carries no clip,
+    because the client decides what a moment sounds like.
+    """
+
+    channel = const.CHANNEL_MOMENT
+
+    moment: str = ""
 
 
 @dataclass

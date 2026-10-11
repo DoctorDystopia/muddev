@@ -31,7 +31,7 @@ from systems.gameplay.spawning.respawn import (
     npc_present,
     schedule_respawn,
 )
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 
 RAIDER_KEY = "mutant_raider"
 
@@ -177,7 +177,7 @@ class TestSweep(EvenniaTest):
         """A grid rebuild during the dead window must not race the queue."""
         manager = get_respawn_manager()
         schedule_respawn(RAIDER_KEY, self.room1, 30, now=1000.0)
-        spawn_mutant_raider(self.room1)
+        spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual(manager.sweep(now=1030.0), 0)
         self.assertEqual(len(_raiders_in(self.room1)), 1)
@@ -218,7 +218,7 @@ class TestHostileNpcDeathPath(EvenniaTest):
     def test_create_stamps_identity_and_spawn_room(self):
         from world.npc_database import NPC_DB
 
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual(npc.db.npc_key, RAIDER_KEY)
         self.assertEqual(npc.db.spawn_room, self.room1)
@@ -229,10 +229,10 @@ class TestHostileNpcDeathPath(EvenniaTest):
         # which told nobody anything except that a designer had changed their
         # mind.
         self.assertEqual(
-            npc.db.respawn_seconds, NPC_DB[RAIDER_KEY].respawn_seconds)
+            npc.db.respawn_seconds, NPC_DB[RAIDER_KEY].combat.respawn_seconds)
 
     def test_raider_with_a_respawn_delay_enqueues_then_deletes(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         npc.at_damage(99, attacker=self.char1)
 
@@ -245,7 +245,7 @@ class TestHostileNpcDeathPath(EvenniaTest):
     def test_raider_with_no_respawn_delay_still_just_despawns(self):
         """Locks the opt-in default: an NpcDef that says nothing keeps the
         historical permanent-despawn behavior."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.respawn_seconds = None
 
         npc.at_damage(99, attacker=self.char1)
@@ -257,7 +257,7 @@ class TestHostileNpcDeathPath(EvenniaTest):
         """Skipping delete() would leave a 0-hp corpse in the room, so
         ActionAttack.resolve's `target.pk is None` guard never fires and the
         fight hangs — worse than losing one respawn."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         with mock.patch(
             "systems.gameplay.spawning.respawn.schedule_respawn",
@@ -269,7 +269,7 @@ class TestHostileNpcDeathPath(EvenniaTest):
 
     def test_full_cycle_death_to_respawn(self):
         manager = get_respawn_manager()
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         old_id = npc.id
 
         npc.at_damage(99, attacker=self.char1)
@@ -284,7 +284,7 @@ class TestHostileNpcDeathPath(EvenniaTest):
 
     def test_a_respawn_keeps_the_facing_of_the_dead_npc(self):
         manager = get_respawn_manager()
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.attributes.add(FACING_ATTR, _TURN)
 
         npc.at_damage(99, attacker=self.char1)
@@ -296,7 +296,7 @@ class TestHostileNpcDeathPath(EvenniaTest):
 
     def test_a_respawn_of_an_npc_with_no_facing_gets_none(self):
         manager = get_respawn_manager()
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         npc.at_damage(99, attacker=self.char1)
         due_at = manager.db.respawn_queue[0]["due_at"]
@@ -308,13 +308,13 @@ class TestHostileNpcDeathPath(EvenniaTest):
 
 class TestSpawnerGuard(EvenniaTest):
     def test_spawner_does_not_stack_duplicates(self):
-        """Regression: spawn_mutant_raider was the only spawner without a
+        """Regression: the mutant raider spawner was the only spawner without a
         presence guard, so every `xyzgrid spawn` added another raider. A
         second run returns the raider that stands, so the tile sync can give
         it its facing."""
-        first = spawn_mutant_raider(self.room1)
+        first = spawn_npc("mutant_raider", self.room1)
 
-        self.assertEqual(spawn_mutant_raider(self.room1), first)
+        self.assertEqual(spawn_npc("mutant_raider", self.room1), first)
         self.assertEqual(len(_raiders_in(self.room1)), 1)
 
     def test_spawner_ignores_a_different_npc_key_in_the_room(self):
@@ -325,7 +325,7 @@ class TestSpawnerGuard(EvenniaTest):
         )
         other.db.npc_key = "feral_dog"
 
-        self.assertIsNotNone(spawn_mutant_raider(self.room1))
+        self.assertIsNotNone(spawn_npc("mutant_raider", self.room1))
         self.assertEqual(len(_raiders_in(self.room1)), 1)
 
     def test_unstamped_npc_never_matches_the_guard(self):

@@ -24,6 +24,7 @@ from systems.gameplay.combat import combat_msg
 from systems.gameplay.combat import constants as const
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
+from systems.interface.ui.colors import TAG_MAX_HIT, TAG_OUTGOING, TAG_RESET
 from systems.interface.ui.meters import METER_WIDTH
 
 
@@ -63,6 +64,92 @@ class TestOutgoingHitCarriesXp(unittest.TestCase):
         self.assertNotIn("\n", visible)
         self.assertIn("for 3.", visible)
         self.assertIn(strip_ansi(xp_awards.format_xp_readout(awards)), visible)
+
+
+
+class TestMaxHitMark(unittest.TestCase):
+    """A max hit shows the same mark on all three lines of one hit."""
+
+    # A fixture max hit and damage change. Not balance values.
+    MAX_HIT = 14
+    CHANGE = 3
+
+    def setUp(self):
+        self.attacker = _FakeCombatant("superuser_val")
+        self.target = _FakeCombatant("Mutant Raider")
+
+    def _three_lines(self, damage: int, max_hit: int) -> list:
+        return [
+            combat_msg.format_outgoing_hit(
+                self.attacker, self.target, damage, max_hit=max_hit
+            ),
+            combat_msg.format_incoming_hit(
+                self.attacker, self.target, damage, max_hit=max_hit
+            ),
+            combat_msg.format_third_party_hit(
+                self.attacker, self.target, damage, max_hit=max_hit
+            ),
+        ]
+
+    def test_every_line_brackets_the_number(self):
+        expected = combat_msg.MAX_HIT_NUMBER_TEMPLATE.format(damage=self.MAX_HIT)
+
+        for line in self._three_lines(self.MAX_HIT, self.MAX_HIT):
+            with self.subTest(line=line):
+                visible = strip_ansi(line)
+
+                self.assertIn(expected, visible)
+                self.assertTrue(visible.endswith(combat_msg.MAX_HIT_END))
+
+    def test_every_line_colours_the_number(self):
+        for line in self._three_lines(self.MAX_HIT, self.MAX_HIT):
+            with self.subTest(line=line):
+                self.assertIn(TAG_MAX_HIT, line)
+
+    def test_a_usual_hit_has_no_mark(self):
+        for line in self._three_lines(self.MAX_HIT, 0):
+            with self.subTest(line=line):
+                visible = strip_ansi(line)
+
+                self.assertNotIn(TAG_MAX_HIT, line)
+                self.assertTrue(visible.endswith(f"for {self.MAX_HIT}."))
+
+    def test_a_bonus_names_the_max_hit_and_the_bonus(self):
+        damage = self.MAX_HIT + self.CHANGE
+
+        for line in self._three_lines(damage, self.MAX_HIT):
+            with self.subTest(line=line):
+                visible = strip_ansi(line)
+
+                self.assertIn(f"[{damage}]", visible)
+                self.assertIn(f"max hit {self.MAX_HIT}", visible)
+                self.assertIn(f"+{self.CHANGE}", visible)
+                self.assertIn("bonus", visible)
+
+    def test_a_penalty_names_the_max_hit_and_the_penalty(self):
+        damage = self.MAX_HIT - self.CHANGE
+
+        for line in self._three_lines(damage, self.MAX_HIT):
+            with self.subTest(line=line):
+                visible = strip_ansi(line)
+
+                self.assertIn(f"max hit {self.MAX_HIT}", visible)
+                self.assertIn(f"-{self.CHANGE}", visible)
+                self.assertIn("penalty", visible)
+
+    def test_an_unchanged_max_hit_has_no_note(self):
+        for line in self._three_lines(self.MAX_HIT, self.MAX_HIT):
+            with self.subTest(line=line):
+                self.assertNotIn("max hit", strip_ansi(line))
+
+    def test_the_line_colour_opens_again_after_the_number(self):
+        # TAG_RESET after the number closes the bold. The "!" must still be
+        # in the colour of the line, not in the terminal default.
+        line = combat_msg.format_outgoing_hit(
+            self.attacker, self.target, self.MAX_HIT, max_hit=self.MAX_HIT
+        )
+
+        self.assertIn(f"{TAG_RESET}{TAG_OUTGOING}{combat_msg.MAX_HIT_END}", line)
 
 
 

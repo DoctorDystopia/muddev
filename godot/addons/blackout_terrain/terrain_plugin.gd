@@ -18,11 +18,35 @@ extends EditorPlugin
 ##
 ## ## A move of the block clears the undo history
 ##
-## An edit keys on world tiles, with no plane. A move to another block or
-## plane saves the old block, so an undo there would change a file that is no
-## longer loaded, or write into the wrong plane. Thus, each load of a block
-## clears the history of the edited scene. [method TerrainWorld.replay_edit]
-## also refuses an edit of another block.
+## A move to another block saves the old block, so an undo there would change
+## a file that is no longer loaded. Thus, each load of a block clears the
+## history of the edited scene. [method TerrainWorld.replay_edit] also
+## refuses an edit of another block.
+##
+## A change of the plane keeps the history (DESIGN-0013 Phase S0). The block
+## holds every plane, and an edit keys on (plane, tile). Thus an undo writes
+## into the plane of its edit.
+##
+## ## The Build tab
+##
+## While the Build tab shows, every event of the 3D view goes to
+## [BuildInput], and [ToolHint] draws the hint line over the view
+## (DESIGN-0013 section 6.7).
+##
+## ## Protect structures
+##
+## With "Protect structures" on, a sculpt, a ramp, and a noise fill skip
+## each corner of a tile with a wall or with a floor above it
+## ([method TerrainBrushes.protect]).
+##
+## ## The structure workbench
+##
+## `structure_workbench.tscn` is the terrain editor on a scratch chunk
+## directory (DESIGN-0013 Phase S6). The author builds a template there, and
+## saves it from the Build tab as in the world. The dock names the scene,
+## and "Check world" leaves out the rules of a whole world
+## ([constant TerrainChecks.WORLD_RULES]). One button opens the other scene.
+## One button deletes the scratch files after a confirmation.
 ##
 ## ## Saving
 ##
@@ -41,6 +65,11 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 ## The ring of the Select tool, in tiles.
 const SELECT_RING := 0.5
 
+## The two scenes of the terrain editor: the world, and the structure
+## workbench.
+const EDITOR_SCENE := "res://addons/blackout_terrain/terrain_editor.tscn"
+const WORKBENCH_SCENE := "res://addons/blackout_terrain/structure_workbench.tscn"
+
 var _dock: TerrainDock
 var _world: TerrainWorld
 var _stroke: TerrainEdit
@@ -57,6 +86,12 @@ var _ramp_start_height := 0
 ## The Select tool drags the selected object from this tile, or null.
 var _drag_from: Variant = null
 
+## The mouse and the keys of the Build tab.
+var _build: BuildInput
+
+## The last mouse position in the 3D view, for the size readout.
+var _mouse := Vector2.ZERO
+
 
 func _enter_tree() -> void:
 	_dock = TerrainDock.new()
@@ -68,6 +103,17 @@ func _enter_tree() -> void:
 	_dock.object_chosen.connect(_on_object_chosen)
 	_dock.check_requested.connect(_on_check_requested)
 	_dock.finding_chosen.connect(_on_finding_chosen)
+	_dock.tab_changed.connect(_on_tab_changed)
+	_dock.clear_workbench_requested.connect(_on_clear_workbench)
+	_dock.switch_scene_requested.connect(_on_switch_scene)
+	_build = BuildInput.new()
+	_build.panel = _dock.build_panel()
+	_build.commit = _commit
+	_build.panel.changed.connect(_build.on_panel_changed)
+	_build.panel.changed.connect(update_overlays)
+	_build.panel.walls_down_toggled.connect(_on_walls_down_toggled)
+	_build.panel.save_template_requested.connect(_on_save_template)
+	_build.panel.reload_templates_requested.connect(_on_reload_templates)
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 	set_process(true)
 
@@ -84,6 +130,7 @@ func _handles(object: Object) -> bool:
 func _edit(object: Object) -> void:
 	if _world != null and _world.block_loaded.is_connected(_on_block_loaded):
 		_world.block_loaded.disconnect(_on_block_loaded)
+		_world.plane_changed.disconnect(_on_plane_changed)
 
 	_world = object as TerrainWorld
 
@@ -91,6 +138,9 @@ func _edit(object: Object) -> void:
 		return
 
 	_world.block_loaded.connect(_on_block_loaded)
+	_world.plane_changed.connect(_on_plane_changed)
+	_build.world = _world
+	_dock.set_workbench(not _world.writes_world())
 	_on_overlays_changed()
 	_refresh_dock()
 	_report_block()
@@ -128,13 +178,20 @@ func _on_load_requested(centre: Vector2i, plane: int) -> void:
 	_world.move_block(centre, plane)
 
 
-## Every load of a block: a move, a plane change, a jump, or a link.
+## Every load of a block: a move, or a jump or a link to another block.
 func _on_block_loaded() -> void:
 	var history := get_undo_redo()
 
 	history.clear_history(history.get_object_history_id(_world))
 	_refresh_dock()
 	_report_block()
+
+
+## A change of the edited plane in the same block. The history stays.
+func _on_plane_changed() -> void:
+	_refresh_dock()
+	_report_block()
+	update_overlays()
 
 
 func _on_overlays_changed() -> void:
@@ -145,11 +202,47 @@ func _on_overlays_changed() -> void:
 	_world.show_areas = _dock.show_areas()
 	_world.show_links = _dock.show_links()
 	_world.show_lower_planes = _dock.show_lower_planes()
+	_world.upper_planes = _dock.upper_planes() as TerrainWorld.UpperPlanes
+	_world.walls_down = _dock.build_panel().walls_down()
+
+
+func _on_walls_down_toggled(down: bool) -> void:
+	if _world != null:
+		_world.walls_down = down
+
+
+## "Save the selection as a template" on the Build tab.
+func _on_save_template(template_key: String) -> void:
+	if _world == null:
+		return
+
+	_dock.set_status(_build.save_template(template_key))
+	update_overlays()
+
+
+func _on_reload_templates() -> void:
+	_build.reload_templates()
+	_dock.set_status("Read the template directory again.")
+	update_overlays()
+
+
+## Leaving the Build tab drops its drag, its marks, and its hint line.
+func _on_tab_changed() -> void:
+	if _world != null and _build.world != null:
+		_build.cancel()
+		_world.show_marks([], Color.WHITE)
+
+	update_overlays()
 
 
 func _report_block() -> void:
 	var lines := PackedStringArray(["Block around chunk %s, plane %d."
 		% [_world.centre_chunk, _world.plane]])
+
+	if not _world.writes_world():
+		lines.insert(0, "The structure workbench: scratch chunk files in %s. "
+			% _world.directory() + "Nothing here reaches the world. Save a template "
+			+ "from the Build tab.")
 
 	lines.append_array(_world.load_errors)
 
@@ -168,7 +261,7 @@ func _refresh_dock() -> void:
 
 
 func _refresh_sync_state() -> void:
-	if not _world.chunk_directory.is_empty():
+	if not _world.writes_world():
 		_dock.set_sync_state("A scratch directory: no tile sync applies.")
 		return
 
@@ -182,6 +275,9 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 	if _world == null:
 		return AFTER_GUI_INPUT_PASS
 
+	if _dock.build_active():
+		return _build_event(camera, event)
+
 	if event is InputEventMouseMotion:
 		return _on_motion(camera, event)
 
@@ -189,6 +285,60 @@ func _forward_3d_gui_input(camera: Camera3D, event: InputEvent) -> int:
 		return _on_left_button(camera, event)
 
 	return AFTER_GUI_INPUT_PASS
+
+
+## One event of the 3D view while the Build tab shows.
+func _build_event(camera: Camera3D, event: InputEvent) -> int:
+	var used := false
+
+	if event is InputEventMouseMotion:
+		_mouse = event.position
+		_world.show_ring(null, 0.0)
+		used = _build.on_motion(_pick(camera, event.position), event.shift_pressed,
+			event.alt_pressed)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			var wall: Variant = _pick_wall(camera, event.position) \
+				if event.alt_pressed else null
+
+			used = _build.on_press(_pick(camera, event.position), event.shift_pressed,
+				event.alt_pressed, wall, event.is_command_or_control_pressed())
+		else:
+			used = _build.on_release()
+	elif event is InputEventKey:
+		used = _build.on_key(event)
+
+		if used:
+			_mark_key_handled(camera)
+	else:
+		return AFTER_GUI_INPUT_PASS
+
+	update_overlays()
+
+	return AFTER_GUI_INPUT_STOP if used else AFTER_GUI_INPUT_PASS
+
+
+## Stop a key that a Build tool used. AFTER_GUI_INPUT_STOP stops only the
+## 3D view. The editor shortcuts still read the key: Page Down is "Snap
+## Object to Floor", and R is the Scale mode. The 3D view sits in a
+## SubViewport. Thus, the key belongs to the window around its container.
+func _mark_key_handled(camera: Camera3D) -> void:
+	var container := camera.get_viewport().get_parent() as Node
+
+	if container == null:
+		return
+
+	var window := container.get_viewport()
+
+	if window != null:
+		window.set_input_as_handled()
+
+
+func _forward_3d_draw_over_viewport(overlay: Control) -> void:
+	if _world == null or not _dock.build_active():
+		return
+
+	ToolHint.draw(overlay, _build.hint(), _build.readout(), _mouse)
 
 
 ## The point in tile space under the mouse, or null.
@@ -201,6 +351,16 @@ func _pick(camera: Camera3D, screen: Vector2) -> Variant:
 		return null
 
 	return TerrainPicking.tile_point(hit)
+
+
+## The tile of the wall slab under the mouse, or null. Alt and a click
+## sample the wall style from it.
+func _pick_wall(camera: Camera3D, screen: Vector2) -> Variant:
+	var origin := camera.project_ray_origin(screen)
+	var direction := camera.project_ray_normal(screen)
+
+	return TerrainPicking.wall_hit(_world.chunks, origin, direction,
+		_world.chunks_on(_world.plane + 1), _world.walls_down)
 
 
 func _on_motion(camera: Camera3D, event: InputEventMouseMotion) -> int:
@@ -312,11 +472,21 @@ func _dab(point: Vector2) -> void:
 	var tool_index := _dock.current_tool()
 
 	if tool_index in TerrainDock.SCULPT_TOOLS:
-		_stroke.apply_heights(chunks, _sculpt(tool_index, point))
+		_stroke.apply_heights(chunks, _protected(_sculpt(tool_index, point)))
 	else:
 		_paint(tool_index, point)
 
-	_world.queue_rebuild(_stroke.chunk_coords())
+	_world.queue_rebuild(_stroke.chunk_keys())
+
+
+## `changes` without the corners of a structure, when "Protect structures"
+## is on.
+func _protected(changes: Dictionary) -> Dictionary:
+	if not _dock.protect_structures():
+		return changes
+
+	return TerrainBrushes.protect(changes, _world.chunks,
+		_world.chunks_on(_world.plane + 1))
 
 
 ## The height changes of one dab of a sculpt tool.
@@ -404,11 +574,11 @@ func _ramp_click(point: Vector2) -> void:
 
 	var edit := TerrainEdit.for_world(_world)
 	var end := TerrainBrushes.corner_point(corner)
-	var changes := TerrainBrushes.ramp(_world.chunks, _ramp_start, end,
-		_dock.radius() * 2.0, _ramp_start_height, _world.chunks.get_corner(corner))
+	var changes := _protected(TerrainBrushes.ramp(_world.chunks, _ramp_start, end,
+		_dock.radius() * 2.0, _ramp_start_height, _world.chunks.get_corner(corner)))
 
 	edit.apply_heights(_world.chunks, changes)
-	_world.queue_rebuild(edit.chunk_coords())
+	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, "Ramp")
 	_ramp_start = null
 
@@ -441,7 +611,7 @@ func _object_click(point: Vector2) -> void:
 		edit.add_object(chunks, tile, _dock.kind(), _dock.object_rotation(), text)
 		_world.select(tile, _dock.kind(), _dock.object_rotation(), text)
 
-	_world.queue_rebuild(edit.chunk_coords())
+	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, "Object")
 
 
@@ -473,11 +643,11 @@ func _on_noise_fill_requested() -> void:
 		return
 
 	var edit := TerrainEdit.for_world(_world)
-	var changes := TerrainBrushes.noise_fill(_world.chunks, _world.centre_chunk,
-		_dock.make_noise(), _dock.noise_amplitude())
+	var changes := _protected(TerrainBrushes.noise_fill(_world.chunks, _world.centre_chunk,
+		_dock.make_noise(), _dock.noise_amplitude()))
 
 	edit.apply_heights(_world.chunks, changes)
-	_world.queue_rebuild(edit.chunk_coords())
+	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, "Noise fill")
 
 
@@ -544,7 +714,7 @@ func _replace_selected(tile: Vector2i, kind: String, rotation: int, text: String
 	edit.remove_object(chunks, old["tile"], old["kind"], old["rotation"], old["text"])
 	edit.add_object(chunks, tile, kind, rotation, text)
 	_world.select(tile, kind, rotation, text)
-	_world.queue_rebuild(edit.chunk_coords())
+	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, label)
 
 
@@ -603,7 +773,7 @@ func _delete_selected() -> void:
 	edit.remove_object(_world.chunks, chosen["tile"], chosen["kind"], chosen["rotation"],
 		chosen["text"])
 	_world.clear_selection()
-	_world.queue_rebuild(edit.chunk_coords())
+	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, "Delete object")
 
 
@@ -637,9 +807,44 @@ func _on_check_requested() -> void:
 	var files := _world.world_chunk_files(errors)
 	var found := TerrainChecks.check_world(files)
 
+	if not _world.writes_world():
+		found = TerrainChecks.for_workbench(found)
+
 	_dock.set_findings(found, errors)
 	_dock.set_status("Check world: %d chunk file(s), %d finding(s)."
 		% [files.size(), found.size() + errors.size()])
+
+
+# ─── The structure workbench ────────────────────────────────────────────────
+
+## "Clear the structure workbench", after the confirmation of the dock. The
+## load of the blank block clears the undo history.
+func _on_clear_workbench() -> void:
+	if _world == null:
+		return
+
+	var deleted := _world.clear_workbench()
+
+	if deleted < 0:
+		_dock.set_status("This scene edits the world chunk files. Nothing deleted.")
+		return
+
+	_dock.set_status("Cleared the structure workbench: %d scratch chunk file(s) deleted."
+		% deleted)
+
+
+## Open the structure workbench from the world, or the world from the
+## workbench. Unsaved chunks refuse the switch. The plugin saves the chunks
+## of the node that it edits only, so edits left in the other scene could
+## go unsaved.
+func _on_switch_scene() -> void:
+	if _world != null and _world.has_unsaved_changes():
+		_dock.set_status("Save the chunk files first (Ctrl+S), then open the other scene.")
+		return
+
+	var leaving_world := _world == null or _world.writes_world()
+
+	EditorInterface.open_scene_from_path(WORKBENCH_SCENE if leaving_world else EDITOR_SCENE)
 
 
 func _on_finding_chosen(finding: Dictionary) -> void:

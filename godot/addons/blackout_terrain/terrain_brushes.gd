@@ -216,14 +216,60 @@ static func _toward(height: int, target: int, strength: int) -> int:
 
 ## The flags of a tile after a floor paint (DESIGN-0011 Phase 7c). A void tile
 ## is a gap, so a void paint sets Blocked. A real floor on a void tile makes
-## ground to stand on, so it clears Blocked. Every other paint keeps the flags.
-## `world/tile_checks.py` refuses a void tile with no Blocked flag.
+## ground to stand on, so it clears Blocked. A roof floor type follows the
+## same rule as the void (DESIGN-0013 section 6.2). Every other paint keeps
+## the flags. `world/tile_checks.py` refuses a void tile or a roof tile with
+## no Blocked flag.
 static func flags_after_floor(old_floor: String, new_floor: String,
 		flags: int) -> int:
-	if new_floor == _Const.TILE_VOID_FLOOR:
+	if _closes_tile(new_floor):
 		return flags | _Const.TILE_FLAG_BLOCKED
 
-	if old_floor == _Const.TILE_VOID_FLOOR:
+	if _closes_tile(old_floor):
 		return flags & ~_Const.TILE_FLAG_BLOCKED
 
 	return flags
+
+
+## The four tiles that share world corner `corner`. Corner (x, y) is the
+## south-west corner of tile (x, y).
+static func corner_tiles(corner: Vector2i) -> Array[Vector2i]:
+	return [corner, corner - Vector2i(1, 0), corner - Vector2i(0, 1), corner - Vector2i.ONE]
+
+
+## True when `tile` of `chunks` is part of a structure: it has a wall bit,
+## or the tile over it on `above` has a floor that is not void. `above` may
+## be null.
+static func is_structure_tile(chunks: ChunkSet, above: ChunkSet, tile: Vector2i) -> bool:
+	if chunks.get_flags(tile) & _Const.TILE_FLAGS_WALLS:
+		return true
+
+	return above != null and above.has_tile(tile) \
+		and above.get_floor(tile) != _Const.TILE_VOID_FLOOR
+
+
+## "Protect structures" (DESIGN-0013 section 6.7): `changes` with each
+## corner of a structure tile taken out. A sculpt then shapes the hills
+## around a town and leaves its floors flat.
+static func protect(changes: Dictionary, chunks: ChunkSet, above: ChunkSet) -> Dictionary:
+	var kept := {}
+
+	for corner: Vector2i in changes:
+		if not _touches_structure(chunks, above, corner):
+			kept[corner] = changes[corner]
+
+	return kept
+
+
+static func _touches_structure(chunks: ChunkSet, above: ChunkSet, corner: Vector2i) -> bool:
+	for tile: Vector2i in corner_tiles(corner):
+		if is_structure_tile(chunks, above, tile):
+			return true
+
+	return false
+
+
+## True for a floor that a walker never stands on: the void, and a roof.
+static func _closes_tile(floor_name: String) -> bool:
+	return floor_name == _Const.TILE_VOID_FLOOR \
+		or _Const.TILE_ROOF_FLOOR_TYPES.has(floor_name)

@@ -79,7 +79,9 @@ func _every_rule_is_a_generated_name() -> void:
 	var twin_rules := [_Const.TILE_CHECK_UNKNOWN_KIND,
 		_Const.TILE_CHECK_OBJECT_UNWALKABLE, _Const.TILE_CHECK_TRANSITION_LANDING,
 		_Const.TILE_CHECK_CLIMB_LANDING, _Const.TILE_CHECK_VOID_OPEN,
-		_Const.TILE_CHECK_RESPAWN_COUNT, _Const.TILE_CHECK_SIGN_TEXT]
+		_Const.TILE_CHECK_RESPAWN_COUNT, _Const.TILE_CHECK_SIGN_TEXT,
+		_Const.TILE_CHECK_WALL_ON_VOID, _Const.TILE_CHECK_UNREACHABLE,
+		_Const.TILE_CHECK_ROOF_WALKABLE]
 
 	for rule: String in twin_rules:
 		_expect(_Const.TILE_CHECK_RULES.has(rule), "%s is in TILE_CHECK_RULES" % rule)

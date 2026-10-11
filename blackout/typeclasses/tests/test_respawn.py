@@ -19,7 +19,7 @@ from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.core.tilegrid.world import get_world
 from systems.gameplay.combat.combat import ensure_combat_handler, get_handler_for
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from typeclasses.tests import respawn_fixture
 from typeclasses.tests.respawn_fixture import RESPAWN_TILE, make_respawn_room
 from world.respawn import get_respawn_room
@@ -150,7 +150,7 @@ class TestPlayerKilledByAnNpc(_EmptyWorldMixin, EvenniaTest):
 
     def _kill_char1_with_an_npc(self):
         """Land a fatal NPC blow on char1 and return the NPC."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         ensure_combat_handler(npc)
         ensure_combat_handler(self.char1)
 

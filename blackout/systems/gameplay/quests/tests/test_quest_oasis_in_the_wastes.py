@@ -13,7 +13,7 @@ from evennia import create_object
 from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
-from systems.interface.menus.npc_dialogues import npc_oasis_lone_android as guide
+from world.npc_dialogues import oasis_lone_android as guide
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.progression.skills.logic import calculate_xp_needed
@@ -138,6 +138,11 @@ class OasisBlueprintTests(EvenniaTest):
 
 
 
+# The npc key of the quest giver: its NpcDef key and its spawner key.
+_LONE_ANDROID_KEY: str = "lone_android"
+
+
+
 class LoneAndroidSpawnerTests(EvenniaTest):
     """The quest giver must actually exist in the world."""
 
@@ -148,33 +153,27 @@ class LoneAndroidSpawnerTests(EvenniaTest):
         world/maps/oasis.py has carried a "Lone Android" tile at (2, 0) since
         the map was written, but no spawner was registered for that room key.
         The tile built an empty room NAMED "Lone Android"; the NPC did not
-        exist, npc_oasis_guide.py was unreachable, and the opening quest could
+        exist, its dialogue was unreachable, and the opening quest could
         not be started by any means.
         """
-        from typeclasses.npcs import LONE_ANDROID_KEY
-
-        self.assertIn(LONE_ANDROID_KEY, SPAWNER_REGISTRY)
+        self.assertIn(_LONE_ANDROID_KEY, SPAWNER_REGISTRY)
 
 
     def test_the_spawner_places_a_talkable_android(self):
-        from typeclasses.npcs import (
-            LONE_ANDROID_DIALOGUE_MODULE,
-            LONE_ANDROID_KEY,
-            _dialogue_module_for,
-        )
+        from typeclasses.npcs import _dialogue_module_for
+        from world.npc_database import NPC_DB
 
-        android = SPAWNER_REGISTRY[LONE_ANDROID_KEY](self.room1)
+        android = SPAWNER_REGISTRY[_LONE_ANDROID_KEY](self.room1)
         speaks_from = _dialogue_module_for(android)
 
         self.assertIsNotNone(android)
-        self.assertEqual(speaks_from, LONE_ANDROID_DIALOGUE_MODULE)
+        self.assertEqual(speaks_from, NPC_DB[_LONE_ANDROID_KEY].dialogue_module())
+        self.assertEqual(speaks_from, guide.__name__)
         self.assertIn(android, self.room1.contents)
 
 
     def test_respawning_the_tile_does_not_stack_androids(self):
-        from typeclasses.npcs import LONE_ANDROID_KEY
-
-        spawner = SPAWNER_REGISTRY[LONE_ANDROID_KEY]
+        spawner = SPAWNER_REGISTRY[_LONE_ANDROID_KEY]
         first = spawner(self.room1)
         second = spawner(self.room1)
 
@@ -192,11 +191,10 @@ class LoneAndroidSpawnerTests(EvenniaTest):
 
         from systems.core.tilegrid import chunkfile
         from systems.core.tilegrid import constants as tile_const
-        from typeclasses.npcs import LONE_ANDROID_KEY
         from world.object_kinds import OBJECT_KINDS
 
         kinds = {key for key, kind in OBJECT_KINDS.items()
-                 if kind.spawner == LONE_ANDROID_KEY}
+                 if kind.spawner == _LONE_ANDROID_KEY}
         directory = os.path.join(settings.GAME_DIR, tile_const.CHUNK_DIRECTORY)
         placed = {thing.kind for chunk_file in chunkfile.load_directory(directory)
                   for thing in chunk_file.objects}

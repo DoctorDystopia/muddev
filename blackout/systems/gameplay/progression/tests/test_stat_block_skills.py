@@ -167,9 +167,10 @@ class TestNpcDefSeeding(EvenniaTest):
     def test_an_explicit_fortitude_beats_the_derived_one(self):
         """A monster whose Fortitude axis deliberately differs from its HP
         pool sets the field; max_hp stops being consulted for it."""
-        from world.npc_database import NpcDef
+        from world.npc_database import NpcCombat, NpcDef
 
-        odd = NpcDef(key="test_odd", name="Odd One", max_hp=40, fortitude_level=7)
+        odd = NpcDef(key="test_odd", name="Odd One",
+                     combat=NpcCombat(max_hp=40, fortitude_level=7))
         npc = odd.create(location=self.room1)
 
         self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_FORTITUDE), 7)
@@ -179,7 +180,7 @@ class TestNpcDefSeeding(EvenniaTest):
         """It runs at creation AND again from the spawner, and once more on
         every respawn."""
         npc = NPC_DB["mutant_raider"].create(location=self.room1)
-        npc.apply_combat_stats(NPC_DB["mutant_raider"].to_combat_block())
+        npc.apply_combat_stats(NPC_DB["mutant_raider"].combat.to_combat_block())
 
         self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_FORTITUDE), 5)
         self.assertEqual(npc.skills.get_level(skill_constants.SKILL_KEY_STRIKE), 1)

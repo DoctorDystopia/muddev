@@ -12,8 +12,8 @@ imported out of that directory to resolve them.
 
 Moving the class beside its only user leaves those rows pointing at a module
 that no longer exists. `ensure_cleanup_script` is the migration: it rides the
-map rebuild the operator is already running, in the same shape spawn_shopkeep
-uses to re-stamp `desc` and `shopdef_key` on an NPC that already exists.
+map rebuild the operator is already running. Since 10/09/2026,
+ShopkeepNPC.refresh_from_def calls it on each tile sync.
 """
 
 from evennia import create_object

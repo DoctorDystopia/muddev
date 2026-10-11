@@ -73,6 +73,7 @@ license   = "CC-BY-4.0"          # an SPDX id
 retrieved = 2026-08-17
 notes     = "Optional. Anything the next person must know."
 exception = ""                   # optional. See "The license gate"
+local     = false                # optional. See "A local source"
 
 [files]                          # written by `seal`. Never edit it by hand
 "scene.gltf" = "sha256:..."
@@ -92,9 +93,34 @@ The build refuses a source whose license is not one of these:
 | `CC0-1.0` | No |
 | `CC-BY-3.0`, `CC-BY-4.0` | Yes |
 | `LicenseRef-Blackout-Owned` | No. Art made for Blackout |
+| `LicenseRef-Purchased` | No. A pack that Nick bought. Its source must be a local source |
 
 NC, ND and SA licenses, "Sketchfab Standard", and `TODO` are refused.
 `pipeline/licenses.py` gives the reasons.
+
+## A local source
+
+This repository is public. A purchase lets Blackout use the art. It does not
+let Blackout give the download to other people. Thus, the files of a bought
+pack stay out of git.
+
+1. Add `local = true` to the source record, above `[files]`.
+2. Run `python -m assets.pipeline seal <source_id>`. The seal writes a
+   `.gitignore` into the source directory. git then keeps only `source.toml`
+   and that `.gitignore`.
+3. Commit the source record, the `.gitignore`, the model record,
+   `build.lock.json`, and the served tree. Keep your own copy of the files.
+
+The served `.glb` is the game, and it stays in git.
+
+On a machine with no copy of the files, the check skips the file hashes of
+that source and prints a warning. It still compares the served file with the
+lock file. Such a machine cannot build a model of that source. After a change
+to the pipeline code, build on the machine that holds the files.
+
+The license gate refuses `LicenseRef-Purchased` on a source that is not local.
+No `exception` waives that. The check fails on a local source that has no
+`.gitignore` from the seal.
 
 To serve a source anyway, add an `exception` with the reason. The check prints
 every exception on every run, and the credits box marks it as "License not
@@ -123,6 +149,7 @@ filter = "nearest"                        # for pixel art and palettes
 [output]                                  # optional
 max_texture_edge = 256                    # below the family budget
 texture_format   = "webp"                 # for photo textures only
+animations       = false                  # drop every animation
 ```
 
 | Field | Use it when |
@@ -133,6 +160,7 @@ texture_format   = "webp"                 # for photo textures only
 | `[fix] rotate` | The model faces the wrong way. The rotation is baked into the file |
 | `[fix] opaque` | A material says it is transparent, but the model must be solid |
 | `[fix] filter` | The texture is pixel art or a palette. `nearest` also resizes with the nearest kernel |
+| `[output] animations` | The file carries animations that the client does not play, and they put it over budget. `false` drops all of them. The model keeps its rest pose |
 
 **A fix corrects the EXPORT.** A display choice is the client's own and stays
 in `ModelRegistry.PRESENTATION`. Two examples: the corpse skeleton lies on its
@@ -149,7 +177,7 @@ glTF and Godot 4 use these conventions. A model that faces another way needs a
 | Step | Tool | What it does |
 |---|---|---|
 | 1. Ingest | Blender, or `picocad.py` | Only for a source that is not glTF |
-| 2. Record and optimize | glTF Transform (`pipeline/build_model.mjs`) | Take the node, attach the texture, bake the fix, remove unused data, resize textures to the family budget |
+| 2. Record and optimize | glTF Transform (`pipeline/build_model.mjs`) | Take the node, attach the texture, bake the fix, remove an all-black emissive texture, remove unused data, resize textures to the family budget |
 | 3. Validate | Khronos glTF Validator | An error stops the model |
 | 4. Budget | `pipeline/budgets.py` | Bytes, triangles and texture edge. Over budget stops the model |
 
@@ -162,6 +190,11 @@ file does not require it. If the file requires it, the build stops.
 `pipeline/glb.py` holds the list. Draco, meshopt and mesh quantization are
 never on it: every other glTF tool supports them, and Godot's runtime loader
 does not.
+
+An emissive texture that is black in every pixel emits nothing, and it stops
+the hover glow. Godot imports a glTF emissive texture as a multiplier of the
+emission colour, and the glow writes that colour. Thus, the build removes it.
+VoxEdit writes one on every material.
 
 Textures are lossless PNG by default. `texture_format = "webp"` gives lossy
 WebP, which is much smaller for a photo texture. Never use it for pixel art or
@@ -178,12 +211,14 @@ runs it in the test suite. It fails on:
 
 - a record or source that does not load, or a missing file
 - a source that fails the license gate, or a file that does not match its hash
+- a local source with no `.gitignore` from the seal
 - a served model that is stale, over budget, not from the build, or uses an
   extension that Godot cannot read
 - a `.glb` in the served tree that no record builds
 - a stale `manifest.json`, `credits.json` or `CREDITS.md`
 
-It warns about each license exception and each source that no record uses.
+It warns about each license exception, each source that no record uses, and
+each local source whose files are not on the machine.
 
 ## Why the design is this way
 

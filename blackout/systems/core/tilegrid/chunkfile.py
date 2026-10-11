@@ -31,6 +31,20 @@ An object without text writes the same bytes as before the text key, so no
 file of format 1 needed a rewrite. The text follows CHUNK_TEXT_PATTERN, so no
 text needs a JSON escape, as for a name.
 
+Format 2: the wall styles (10/09/2026)
+--------------------------------------
+Format 2 adds two keys after `areas` (DESIGN-0013 section 6.4)::
+
+    wall_names   the wall styles. `walls` holds indexes into this list
+    walls        CHUNK_SIZE rows of CHUNK_SIZE wall style indexes
+
+A reader accepts format 1 and format 2. A format 1 file reads as
+DEFAULT_WALL_STYLE on every tile. The writer writes format 1 when every tile
+has DEFAULT_WALL_STYLE. It writes format 2 when one tile has another style.
+Thus, no file of format 1 needed a rewrite. A reader refuses a format 2 file
+whose every tile has DEFAULT_WALL_STYLE. Thus, each chunk has one canonical
+text.
+
 Row 0 is the south edge (y = 0), and item 0 of a row is the west edge. That is
 the order of the lists in memory, so no reader flips an axis. An object stands
 at LOCAL coordinates, 0 to CHUNK_SIZE - 1, as an OSRS object does in its map
@@ -67,10 +81,18 @@ from .grid import Chunk, TileGrid
 
 # ─── Public constant definitions ─────────────────────────────────────────────
 
-# The keys of a chunk file, in the order that the writer writes them.
+# The keys of a chunk file of format 2, in the order that the writer writes
+# them.
 CHUNK_FILE_KEYS: tuple = ("format", "chunk", "plane", "size", "floor_names",
                           "area_names", "heights", "floors", "flags", "areas",
-                          "objects")
+                          "wall_names", "walls", "objects")
+
+# The two keys of the wall style layer. A file of format 1 has neither.
+WALL_STYLE_KEYS: tuple = ("wall_names", "walls")
+
+# The keys of a chunk file of format 1.
+PLAIN_WALL_FILE_KEYS: tuple = tuple(key for key in CHUNK_FILE_KEYS
+                                    if key not in WALL_STYLE_KEYS)
 
 # The keys of one object, in the order that the writer writes them.
 OBJECT_KEYS: tuple = ("kind", "x", "y", "rotation")
@@ -98,7 +120,7 @@ _ROW_INDENT = "    "
 # ─── Public classes ──────────────────────────────────────────────────────────
 
 class ChunkFileError(ValueError):
-    """A chunk file that does not follow format 1."""
+    """A chunk file that follows neither format 1 nor format 2."""
 
 
 @dataclass
@@ -120,6 +142,10 @@ class ChunkFile:
     """
     Every fact in one chunk file. The grids are flat lists, row 0 first, in
     the same order as `grid.Chunk`.
+
+    The wall style layer comes last, after `objects`, and has a default:
+    DEFAULT_WALL_STYLE on every tile. Thus, a caller that builds a chunk with
+    no wall style gets a file of format 1.
     """
 
     cx: int
@@ -132,6 +158,10 @@ class ChunkFile:
     flags: list
     areas: list
     objects: list = field(default_factory=list)
+    wall_names: list = field(
+        default_factory=lambda: [const.DEFAULT_WALL_STYLE])
+    walls: list = field(
+        default_factory=lambda: [0] * (const.CHUNK_SIZE * const.CHUNK_SIZE))
 
     def to_chunk(self) -> Chunk:
         """Return the grid.Chunk of this file. The lists are copied."""
@@ -166,6 +196,22 @@ class ChunkFile:
         index = self.areas[ly * const.CHUNK_SIZE + lx]
 
         return self.area_names[index]
+
+    def wall_style_name(self, lx: int, ly: int) -> str:
+        """Return the wall style name of a local tile."""
+        index = self.walls[ly * const.CHUNK_SIZE + lx]
+
+        return self.wall_names[index]
+
+    def has_wall_styles(self) -> bool:
+        """
+        Return True if a tile has a wall style other than DEFAULT_WALL_STYLE.
+        The writer then writes format 2.
+        """
+        used = {self.wall_names[index] for index in set(self.walls)}
+        used.discard(const.DEFAULT_WALL_STYLE)
+
+        return bool(used)
 
     def global_objects(self) -> list:
         """
@@ -335,13 +381,27 @@ def _object_text_value(item: dict, index: int) -> str:
     return text
 
 
+def _expected_keys(data: dict) -> set:
+    """
+    Return the keys that `data` must have. A file of CHUNK_FORMAT_VERSION
+    must have the keys of format 2. Any other file must have the keys of
+    format 1, and a file with another format then fails the format check.
+    """
+    if data.get("format") == const.CHUNK_FORMAT_VERSION:
+        return set(CHUNK_FILE_KEYS)
+
+    return set(PLAIN_WALL_FILE_KEYS)
+
+
 def _header(data: dict) -> tuple:
-    """Check the keys and the scalar fields. Return (cx, cy, plane)."""
+    """
+    Check the keys and the scalar fields. Return (cx, cy, plane, format).
+    """
     if not isinstance(data, dict):
         _fail("a chunk file must hold one JSON object")
 
     keys = set(data)
-    expected = set(CHUNK_FILE_KEYS)
+    expected = _expected_keys(data)
 
     if keys != expected:
         missing = sorted(expected - keys)
@@ -350,8 +410,10 @@ def _header(data: dict) -> tuple:
 
     version = _as_int(data["format"], "format")
 
-    if version != const.CHUNK_FORMAT_VERSION:
-        _fail("format %d is not %d", version, const.CHUNK_FORMAT_VERSION)
+    if version not in (const.CHUNK_FORMAT_PLAIN_WALLS,
+                       const.CHUNK_FORMAT_VERSION):
+        _fail("format %d is not %d or %d", version,
+              const.CHUNK_FORMAT_PLAIN_WALLS, const.CHUNK_FORMAT_VERSION)
 
     size = _as_int(data["size"], "size")
 
@@ -367,7 +429,29 @@ def _header(data: dict) -> tuple:
     cy = _as_int(chunk[1], "chunk y")
     plane = _int_in(data["plane"], 0, const.PLANE_MAX, "plane")
 
-    return cx, cy, plane
+    return cx, cy, plane, version
+
+
+def _wall_layer(data: dict, version: int) -> tuple:
+    """
+    Return (wall_names, walls) of a checked file. A file of format 1 gives
+    DEFAULT_WALL_STYLE on every tile. A file of format 2 must give one tile
+    another style, so each chunk has one canonical text.
+    """
+    size = const.CHUNK_SIZE
+
+    if version == const.CHUNK_FORMAT_PLAIN_WALLS:
+        return [const.DEFAULT_WALL_STYLE], [0] * (size * size)
+
+    wall_names = _names(data["wall_names"], "wall_names")
+    walls = _grid(data["walls"], size, 0, len(wall_names) - 1, "walls")
+    used = {wall_names[index] for index in set(walls)}
+
+    if used == {const.DEFAULT_WALL_STYLE}:
+        _fail("every tile has the wall style %s, so the file must be format %d",
+              const.DEFAULT_WALL_STYLE, const.CHUNK_FORMAT_PLAIN_WALLS)
+
+    return wall_names, walls
 
 
 def _row_text(row: list) -> str:
@@ -419,16 +503,18 @@ def from_dict(data) -> ChunkFile:
         data - what json.loads returned for the file.
 
     Exit/Returns:
-        A ChunkFile. Raises ChunkFileError for any break of format 1.
+        A ChunkFile. Raises ChunkFileError for a file that follows neither
+        format 1 nor format 2.
 
     Module Globals:
-        CHUNK_FILE_KEYS read.
+        CHUNK_FILE_KEYS, PLAIN_WALL_FILE_KEYS read.
 
     Methodology:
         1. Check the keys, the format, the size, the chunk, and the plane.
         2. Check the two name lists.
         3. Check each grid: its shape, its range, and its indexes.
-        4. Check the objects.
+        4. Check the wall style layer of format 2.
+        5. Check the objects.
 
     Notes/References:
         `godot/world/terrain/chunk_file.gd` `from_dict` must refuse the same
@@ -437,21 +523,28 @@ def from_dict(data) -> ChunkFile:
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
-    cx, cy, plane = _header(data)
+    cx, cy, plane, version = _header(data)
     floor_names = _names(data["floor_names"], "floor_names")
     area_names = _names(data["area_names"], "area_names")
     size = const.CHUNK_SIZE
+    heights = _grid(data["heights"], const.CORNERS_PER_SIDE,
+                    const.HEIGHT_MIN, const.HEIGHT_MAX, "heights")
+    floors = _grid(data["floors"], size, 0, len(floor_names) - 1, "floors")
+    flags = _flags(data["flags"])
+    areas = _grid(data["areas"], size, 0, len(area_names) - 1, "areas")
+    wall_names, walls = _wall_layer(data, version)
 
     return ChunkFile(
         cx=cx, cy=cy, plane=plane,
         floor_names=floor_names,
         area_names=area_names,
-        heights=_grid(data["heights"], const.CORNERS_PER_SIDE,
-                      const.HEIGHT_MIN, const.HEIGHT_MAX, "heights"),
-        floors=_grid(data["floors"], size, 0, len(floor_names) - 1, "floors"),
-        flags=_flags(data["flags"]),
-        areas=_grid(data["areas"], size, 0, len(area_names) - 1, "areas"),
-        objects=_objects(data["objects"]))
+        heights=heights,
+        floors=floors,
+        flags=flags,
+        areas=areas,
+        objects=_objects(data["objects"]),
+        wall_names=wall_names,
+        walls=walls)
 
 
 def parse_text(text: str) -> ChunkFile:
@@ -469,7 +562,7 @@ def to_text(chunk_file: ChunkFile) -> str:
     Purpose: Write a ChunkFile in the canonical layout.
 
     Entry:
-        chunk_file - a ChunkFile whose values follow format 1.
+        chunk_file - a ChunkFile whose values follow format 2.
 
     Exit/Returns:
         The text of the file, "\\n" line ends, with a final "\\n".
@@ -479,7 +572,9 @@ def to_text(chunk_file: ChunkFile) -> str:
 
     Methodology:
         Each scalar key on one line. Each grid row on one line. Each object
-        on one line. The GDScript writer writes the same bytes.
+        on one line. The wall style layer, and format 2, only when a tile has
+        a style other than DEFAULT_WALL_STYLE. Else the text is format 1. The
+        GDScript writer writes the same bytes.
 
     Notes/References:
         The fixtures in `tests/fixtures/` are in this layout, and a test reads
@@ -489,8 +584,11 @@ def to_text(chunk_file: ChunkFile) -> str:
     Creation date: 09/24/2026
     """
     size = const.CHUNK_SIZE
+    styled = chunk_file.has_wall_styles()
+    version = (const.CHUNK_FORMAT_VERSION if styled
+               else const.CHUNK_FORMAT_PLAIN_WALLS)
     lines = ["{",
-             '%s"format": %d,' % (_INDENT, const.CHUNK_FORMAT_VERSION),
+             '%s"format": %d,' % (_INDENT, version),
              '%s"chunk": [%d,%d],' % (_INDENT, chunk_file.cx, chunk_file.cy),
              '%s"plane": %d,' % (_INDENT, chunk_file.plane),
              '%s"size": %d,' % (_INDENT, size),
@@ -504,6 +602,11 @@ def to_text(chunk_file: ChunkFile) -> str:
     lines += _grid_lines("floors", chunk_file.floors, size, False)
     lines += _grid_lines("flags", chunk_file.flags, size, False)
     lines += _grid_lines("areas", chunk_file.areas, size, False)
+
+    if styled:
+        lines.append('%s"wall_names": %s,' % (
+            _INDENT, _name_list_text(chunk_file.wall_names)))
+        lines += _grid_lines("walls", chunk_file.walls, size, False)
 
     if not chunk_file.objects:
         lines.append('%s"objects": []' % _INDENT)
@@ -685,6 +788,11 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
         floor and area names. A reader that swaps x and y, loses a corner, or
         adds the chunk offset wrong writes a different line.
 
+        A file with wall styles (format 2) adds one line for the wall style
+        names, and the wall style name at the end of each tile line. A file
+        of format 1 writes the same text as before format 2, so its digest
+        did not change.
+
     Notes/References:
         The parity test compares the SHA-256 of this text with a committed
         digest, in Python and in GDScript.
@@ -699,17 +807,26 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
                                        chunk_file.plane),
              "floors " + " ".join(chunk_file.floor_names),
              "areas " + " ".join(chunk_file.area_names)]
+    styled = chunk_file.has_wall_styles()
+
+    if styled:
+        lines.append("walls " + " ".join(chunk_file.wall_names))
 
     for ly in range(size):
         for lx in range(size):
             corners = chunk_file.corner_heights(lx, ly)
-            lines.append("tile %d %d %d %d %d %d %d %d %s %s" % (
+            line = "tile %d %d %d %d %d %d %d %d %s %s" % (
                 origin_x + lx, origin_y + ly,
                 corners[0], corners[1], corners[2], corners[3],
                 chunk_file.tile_height(lx, ly),
                 chunk_file.flags[ly * size + lx],
                 chunk_file.floor_name(lx, ly),
-                chunk_file.area_name(lx, ly)))
+                chunk_file.area_name(lx, ly))
+
+            if styled:
+                line += " " + chunk_file.wall_style_name(lx, ly)
+
+            lines.append(line)
 
     for thing in chunk_file.objects:
         line = "object %s %d %d %d" % (thing.kind, origin_x + thing.x,

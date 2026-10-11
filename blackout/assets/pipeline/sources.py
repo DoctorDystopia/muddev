@@ -24,6 +24,18 @@ Description: Source records. One download, one directory, one source.toml.
              The [files] table is always LAST in the file, because seal
              replaces everything from its header to the end. Everything above
              it is written by a person and seal never changes it.
+
+             A LOCAL SOURCE (Nick, 10/09/2026). `local = true` in the record
+             says that the files of the download stay on the machine that
+             holds them. git keeps the source record and ignores the files,
+             through a .gitignore that seal writes into the directory. A
+             bought pack is the reason: this repository is public, and a
+             purchase gives no right to publish the download.
+
+             On a machine with no copy of the files, the check skips the
+             file hashes of a local source and prints a warning. The served
+             .glb and the lock file are in git, so the check still compares
+             them. Such a machine cannot BUILD a model of that source.
 """
 
 import hashlib
@@ -52,6 +64,7 @@ class Source:
 
     files maps a path relative to the source directory (forward slashes) to
     "sha256:<hex>". exception is empty unless the license gate is waived.
+    local is True for a local source: git ignores its files.
     """
 
     source_id: str
@@ -64,7 +77,21 @@ class Source:
     retrieved: str
     notes: str = ""
     exception: str = ""
+    local: bool = False
     files: dict = field(default_factory=dict)
+
+
+# The file that keeps the files of a local source out of git. seal writes it.
+LOCAL_GITIGNORE_NAME: str = ".gitignore"
+
+# Its text. Every file is ignored, except this file and the source record.
+LOCAL_GITIGNORE_TEXT: str = (
+    "# A local source. Its files stay on this machine, and git keeps only\n"
+    "# the source record. `python -m assets.pipeline seal` writes this file.\n"
+    "*\n"
+    "!.gitignore\n"
+    "!source.toml\n"
+)
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -73,14 +100,16 @@ _FILES_TABLE: str = "files"
 _FILES_HEADER: str = "[files]"
 _HASH_PREFIX: str = "sha256:"
 _READ_CHUNK_BYTES: int = 1024 * 1024
-_OPTIONAL_FIELDS: tuple = ("notes", "exception")
+_LOCAL_FIELD: str = "local"
+_OPTIONAL_FIELDS: tuple = ("notes", "exception", _LOCAL_FIELD)
 _KNOWN_FIELDS: frozenset = frozenset(
     REQUIRED_FIELDS + _OPTIONAL_FIELDS + (_FILES_TABLE,))
 
-# Files that are not part of a download: the record itself, and the caches
-# that tools leave behind.
+# Files that are not part of a download: the record itself, the .gitignore of
+# a local source, and the caches that tools leave behind.
 _IGNORED_NAMES: frozenset = frozenset(
-    (paths.SOURCE_RECORD_NAME, "__pycache__", ".DS_Store", "Thumbs.db"))
+    (paths.SOURCE_RECORD_NAME, LOCAL_GITIGNORE_NAME, "__pycache__",
+     ".DS_Store", "Thumbs.db"))
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -156,6 +185,7 @@ def _check_fields(source_id: str, document: dict) -> None:
     """
     missing = [name for name in REQUIRED_FIELDS if not document.get(name)]
     unknown = sorted(set(document) - _KNOWN_FIELDS)
+    local = document.get(_LOCAL_FIELD, False)
 
     if missing:
         raise SourceError("%s: source.toml has no %s"
@@ -164,6 +194,10 @@ def _check_fields(source_id: str, document: dict) -> None:
     if unknown:
         raise SourceError("%s: source.toml has unknown field(s) %s"
                           % (source_id, ", ".join(unknown)))
+
+    if not isinstance(local, bool):
+        raise SourceError("%s: source.toml `local` must be true or false"
+                          % source_id)
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -238,7 +272,8 @@ def load_source(source_id: str) -> Source:
         url=document["url"], site=document["site"],
         license=document["license"], retrieved=retrieved,
         notes=document.get("notes", ""),
-        exception=document.get("exception", ""), files=files)
+        exception=document.get("exception", ""),
+        local=document.get(_LOCAL_FIELD, False), files=files)
 
 
 def gate_problem(source: Source) -> str:
@@ -255,16 +290,95 @@ def gate_problem(source: Source) -> str:
     Module Globals:
         None.
 
+    Methodology:
+        A `local_only` license needs a local source. No exception waives
+        that rule, because the rule keeps a bought download out of a public
+        repository.
+
     Author: Nick Hobar
     Creation date: 09/18/2026
     """
     allowed = licenses.is_allowed(source.license)
+    terms = licenses.terms_for(source.license)
+
+    if allowed and terms.local_only and not source.local:
+        return ("license '%s' gives no right to publish the download. Add "
+                "`local = true` to the source record, then seal it"
+                % source.license)
 
     if allowed or source.exception:
         return ""
 
     return ("license '%s' is not allowed. Use an allowed SPDX id, or add an "
             "`exception` with the reason" % source.license)
+
+
+def files_absent(source: Source) -> bool:
+    """
+    Purpose: Tell whether this machine has no copy of a local source.
+
+    Entry:
+        source is a loaded Source.
+
+    Exit/Returns:
+        Returns True when source is local, its record names files, and none
+        of them is on disk. Returns False for every other source.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        All or nothing. A local source with only some of its files is a
+        changed download, and hash_problems reports it as usual.
+
+    Author: Nick Hobar
+    Creation date: 10/09/2026
+    """
+    if not source.local or not source.files:
+        return False
+
+    on_disk = [name for name in source.files
+               if os.path.isfile(os.path.join(source.directory, name))]
+
+    return not on_disk
+
+
+def gitignore_problem(source: Source) -> str:
+    """
+    Purpose: Tell why git can take the files of a local source, if it can.
+
+    Entry:
+        source is a loaded Source.
+
+    Exit/Returns:
+        Returns "" for a source that is not local, and for a local source
+        whose .gitignore holds LOCAL_GITIGNORE_TEXT. Returns one sentence
+        that names the problem otherwise.
+
+    Module Globals:
+        LOCAL_GITIGNORE_NAME, LOCAL_GITIGNORE_TEXT read.
+
+    Methodology:
+        Line endings are made uniform first, as for every text file here.
+
+    Author: Nick Hobar
+    Creation date: 10/09/2026
+    """
+    if not source.local:
+        return ""
+
+    path = os.path.join(source.directory, LOCAL_GITIGNORE_NAME)
+    text = ""
+
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8", newline="") as handle:
+            text = handle.read().replace("\r\n", "\n")
+
+    if text == LOCAL_GITIGNORE_TEXT:
+        return ""
+
+    return ("a local source needs the %s that seal writes, or git takes its "
+            "files" % LOCAL_GITIGNORE_NAME)
 
 
 def current_files(source: Source) -> dict:
@@ -311,14 +425,34 @@ def seal(source: Source) -> int:
 
     Exit/Returns:
         Returns the number of files sealed. The record is rewritten from its
-        [files] header to the end. Every line above that header stays.
+        [files] header to the end. Every line above that header stays. For a
+        local source, its .gitignore is written too. Raises SourceError for
+        a local source with no files on this machine.
 
     Module Globals:
-        _FILES_HEADER read.
+        _FILES_HEADER, LOCAL_GITIGNORE_NAME, LOCAL_GITIGNORE_TEXT read.
+
+    Methodology:
+        A seal with no files on disk writes an empty [files] table. For a
+        local source on a second machine, that deletes the only record of
+        the hashes. Thus, the seal refuses.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
     """
+    absent = files_absent(source)
+
+    if absent:
+        raise SourceError("%s: the files of this local source are not on "
+                          "this machine, so there is nothing to seal"
+                          % source.source_id)
+
+    if source.local:
+        ignore_path = os.path.join(source.directory, LOCAL_GITIGNORE_NAME)
+
+        with open(ignore_path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(LOCAL_GITIGNORE_TEXT)
+
     record = _record_path(source.source_id)
 
     with open(record, "r", encoding="utf-8") as handle:

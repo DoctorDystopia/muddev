@@ -23,6 +23,7 @@ Run from blackout/:
         systems.interface.statefeed.tests.test_freshness
 """
 
+import random
 from unittest import mock
 
 from evennia.utils import create
@@ -35,8 +36,19 @@ from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import events
 from systems.interface.statefeed import subscriptions
+from systems.gameplay.exterminator import constants as ext_const
+from systems.gameplay.exterminator import service as ext_service
+from systems.gameplay.exterminator.buff_defs.base_buff import BaseExterminatorBuff
+from systems.gameplay.exterminator.buffs import BUFF_REGISTRY, instantiate
+from systems.gameplay.exterminator.preceptors import PRECEPTOR_ATTICUS_QUIN
+from systems.interface.popups import service as popup_service
+from systems.interface.popups.popup_defs.exterminator import (
+    EXTERMINATOR_POPUP_KEY,
+    STATUS_SEPARATOR as EXTERMINATOR_STATUS_SEPARATOR,
+)
 from typeclasses.channels import Channel
 from typeclasses.characters import Character as BlackoutCharacter
+from world.npc_database import NPC_DB
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -57,6 +69,20 @@ _GATHERING_SKILL: str = skill_constants.SKILL_KEY_CUTTING
 # leave hooks send the chat modes.
 _CHAT_CHANNEL_KEY: str = "Freshness"
 _CHANNEL_TYPECLASS: str = f"{Channel.__module__}.{Channel.__name__}"
+
+# A Preceptor to give the Task Writ, and a seed for the task draw.
+_QUIN_KEY: str = "atticus_quin"
+_TASK_SEED: int = 7
+
+
+class _FreshnessBuff(BaseExterminatorBuff):
+    """A test buff to pick. It lives here, not under buff_defs/."""
+
+    key = "test_freshness_buff"
+    name = "Test Freshness"
+
+
+_FRESHNESS_BUFF = instantiate(_FreshnessBuff)
 
 
 # ─── Test cases ──────────────────────────────────────────────────────────────
@@ -270,3 +296,76 @@ class TestChatModesFollowSubscriptions(_FreshnessTest):
         channel.disconnect(self.account)
 
         self.assertNotIn(_CHAT_CHANNEL_KEY, self._labels())
+
+
+class TestTaskPopupFollowsTheTask(_FreshnessTest):
+    """
+    The Exterminator task pop-up (DESIGN-0012). Each public write of
+    ExterminatorHandler marks the open pop-up stale, so the status line
+    follows the task with no reopen.
+    """
+
+    def setUp(self):
+        super().setUp()
+        quin = NPC_DB[_QUIN_KEY].create(location=self.room1)
+        ext_service.give_writ(self.char1, quin)
+        writ = ext_service.carried_writ(self.char1)
+        popup_service.open_popup(self.char1, EXTERMINATOR_POPUP_KEY, writ)
+        self.published.clear()
+
+    def _status(self) -> str:
+        bodies = self._drain(const.CHANNEL_CHAR_POPUP)
+
+        self.assertTrue(bodies)
+
+        return bodies[-1]["status"]
+
+    def _expected(self) -> str:
+        lines = self.char1.exterminator.summary_lines()
+
+        return EXTERMINATOR_STATUS_SEPARATOR.join(lines)
+
+    def test_an_assignment_reaches_the_popup(self):
+        self.char1.exterminator.assign(PRECEPTOR_ATTICUS_QUIN, rng=random.Random(_TASK_SEED))
+
+        self.assertEqual(self._status(), self._expected())
+
+    def test_a_task_kill_reaches_the_popup(self):
+        self.char1.exterminator.assign(PRECEPTOR_ATTICUS_QUIN, rng=random.Random(_TASK_SEED))
+        buffer.drain_stale()
+        self.published.clear()
+        task_type = self.char1.exterminator.creature_type()
+
+        self.char1.exterminator.record_kill((task_type,), 0)
+
+        self.assertEqual(self._status(), self._expected())
+
+    def test_a_skip_reaches_the_popup(self):
+        self.char1.exterminator.assign(PRECEPTOR_ATTICUS_QUIN, rng=random.Random(_TASK_SEED))
+        self.char1.attributes.add(ext_const.POINTS_ATTR, ext_const.SKIP_COST_POINTS)
+        buffer.drain_stale()
+        self.published.clear()
+
+        self.char1.exterminator.skip()
+
+        self.assertEqual(self._status(), self._expected())
+
+    def test_a_pick_reaches_the_popup(self):
+        """A pick moves the bank and closes the offer: the grid follows."""
+        self.char1.exterminator.assign(PRECEPTOR_ATTICUS_QUIN, rng=random.Random(_TASK_SEED))
+        task = self.char1.exterminator.task()
+        task[ext_const.FIELD_OFFER] = [{ext_const.CARD_KEY: _FRESHNESS_BUFF.key,
+                                        ext_const.CARD_RARITY: ext_const.RARITY_COMMON}]
+        self.char1.attributes.add(ext_const.TASK_ATTR, task)
+        buffer.drain_stale()
+        self.published.clear()
+
+        with mock.patch.dict(BUFF_REGISTRY, {_FRESHNESS_BUFF.key: _FRESHNESS_BUFF}):
+            self.char1.exterminator.pick(1, rng=random.Random(_TASK_SEED))
+            bodies = self._drain(const.CHANNEL_CHAR_POPUP)
+            # The held buffs line names the buff through the registry.
+            expected = self._expected()
+
+        self.assertTrue(bodies)
+        self.assertEqual(bodies[-1]["status"], expected)
+        self.assertEqual(bodies[-1]["grids"], [])

@@ -766,7 +766,7 @@ def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
         Character.at_pre_object_receive can veto at 32/32.
 
     Notes/References:
-        systems/interface/menus/npc_dialogues/npc_shopkeep.py _report_trade prints
+        world/npc_dialogues/shopkeep.py _report_trade prints
         bought_count and total_price in one sentence, which is why the two
         have to describe the same goods.
 

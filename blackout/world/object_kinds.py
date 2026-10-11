@@ -60,6 +60,14 @@ Description: The object kinds of the tile grid, one row for each kind.
              kinds use the primitives. `world/tests/test_tile_content.py`
              checks these rules.
 
+             DECOR is scenery and nothing more: a crate, a table, a lamp
+             post (DESIGN-0013 section 6.5, decision 5). It has no spawner,
+             no name, and no text. Two rules differ from the other
+             categories. It pins no tile room (`UNPINNED_KINDS`), because
+             200 crates must not pin 200 rooms. It may stand on a Blocked
+             tile, so an author can stop a walk through a table. The tile
+             sync stands nothing up for it, as for a landmark.
+
              PREVIEW. A kind that stands up an entity names the model of
              that entity in `preview`: the asset key and the family that
              the statefeed sends for it. Only the terrain editor reads it,
@@ -114,6 +122,7 @@ _NPC = tile_const.OBJECT_CATEGORY_NPC
 _SIGN = tile_const.OBJECT_CATEGORY_SIGN
 _TRANSITION = tile_const.OBJECT_CATEGORY_TRANSITION
 _CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
+_DECOR = tile_const.OBJECT_CATEGORY_DECOR
 
 # The families of the entities, for the `preview` of each kind.
 _STATION = feed_const.ASSET_KIND_STATION
@@ -149,6 +158,18 @@ def _named(key: str, category: str, spawner: str, desc: str,
     """
     return ObjectKind(key, category, spawner=spawner, name=spawner, desc=desc,
                       preview=preview)
+
+
+def _npc(key: str, name: str, desc: str, asset_key: str) -> ObjectKind:
+    """
+    An NPC kind. Its key is the npc key of an NpcDef in world/npc_defs/, and
+    its spawner is that key too: typeclasses/npc_spawners.py registers one
+    spawner for each NpcDef under its key. The name and the desc are the room
+    texts of the tile, not the texts of the NPC. The asset key must equal the
+    model of the def, and world/tests/test_object_kind_preview.py checks it.
+    """
+    return ObjectKind(key, _NPC, spawner=key, name=name, desc=desc,
+                      preview=(asset_key, _NPC_FAMILY))
 
 
 # Grouped by category, in the order the editor lists them. Each spawner string
@@ -191,28 +212,30 @@ _KIND_ROWS: tuple = (
            "A copper pole. Maybe I can cut it down?",
            ("copper_pole", _GATHERABLE)),
 
-    _named("lone_android", _NPC, "Lone Android",
-           "An lonely looking android who lives in the wastes of the "
-           "Sahara.",
-           ("lone_android", _NPC_FAMILY)),
-    _named("shopkeeper_oasis", _NPC, "Shopkeeper",
-           "A makeshift market stall shaded by a tattered awning.",
-           ("shopkeeper", _NPC_FAMILY)),
-    _named("mutant_raider", _NPC, "Mutant Raider Tile",
-           "A mutant raider with a crude weapon.",
-           ("mutant_raider", _NPC_FAMILY)),
-    _named("big_mutant", _NPC, "Big Mutant Tile",
-           "A large mutant with a crude weapon.",
-           ("big_mutant", _NPC_FAMILY)),
-    _named("floating_eye", _NPC, "Floating Eye Tile",
-           "Terrified of needles.",
-           ("floating_eye", _NPC_FAMILY)),
-    _named("mutant_crab", _NPC, "Mutant Crab Tile",
-           "A mutant crab with a hard shell.",
-           ("mutant_crab", _NPC_FAMILY)),
-    _named("mutant_giant", _NPC, "Mutant Giant Tile",
-           "A mutant giant, slow and enormous.",
-           ("mutant_giant", _NPC_FAMILY)),
+    _npc("lone_android", "Lone Android",
+         "An lonely looking android who lives in the wastes of the Sahara.",
+         "lone_android"),
+    _npc("shopkeeper_oasis", "Shopkeeper",
+         "A makeshift market stall shaded by a tattered awning.",
+         "shopkeeper"),
+    # The first Preceptor (DESIGN-0012). No model yet: the fallback NPC.
+    _npc("atticus_quin", "Atticus Quin",
+         "A preceptor in a long red coat stands here, watching.",
+         "talkative_npc"),
+    # The second Preceptor (Nick, 10/09/2026). All lore is TBD.
+    _npc("atum_musa", "Atum Musa",
+         "A preceptor in white linen and a collar of gold stands here.",
+         "atum_musa"),
+    _npc("mutant_raider", "Mutant Raider Tile",
+         "A mutant raider with a crude weapon.", "mutant_raider"),
+    _npc("big_mutant", "Big Mutant Tile",
+         "A large mutant with a crude weapon.", "big_mutant"),
+    _npc("floating_eye", "Floating Eye Tile",
+         "Terrified of needles.", "floating_eye"),
+    _npc("mutant_crab", "Mutant Crab Tile",
+         "A mutant crab with a hard shell.", "mutant_crab"),
+    _npc("mutant_giant", "Mutant Giant Tile",
+         "A mutant giant, slow and enormous.", "mutant_giant"),
 
     # A signpost. Its words are the `text` of each chunk object.
     ObjectKind(SIGNPOST_KIND, _SIGN,
@@ -254,7 +277,18 @@ _KIND_ROWS: tuple = (
     ObjectKind("stairs_down", _CLIMB, name="Staircase",
                desc="A staircase leads down.", climbs=_DOWN,
                scenery=tile_const.SCENERY_HATCH),
+
+    # Decor (DESIGN-0013 Phase S4). Scenery only: the primitives draw each
+    # one until a model record takes the same key.
+    ObjectKind("crate", _DECOR, scenery=tile_const.SCENERY_CRATE),
+    ObjectKind("table", _DECOR, scenery=tile_const.SCENERY_TABLE),
+    ObjectKind("lamp_post", _DECOR, scenery=tile_const.SCENERY_LAMP_POST),
 )
 
 # key -> ObjectKind, in the order of _KIND_ROWS.
 OBJECT_KINDS: dict = {row.key: row for row in _KIND_ROWS}
+
+# The kinds whose placement pins no tile room: every decor kind.
+# `TilePlane` pins the tile of each other placed object.
+UNPINNED_KINDS: frozenset = frozenset(
+    key for key, row in OBJECT_KINDS.items() if row.category == _DECOR)

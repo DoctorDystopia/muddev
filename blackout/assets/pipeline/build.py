@@ -170,6 +170,7 @@ def _job(record, source, input_path, output_path) -> dict:
     return {"input": input_path, "output": output_path, "node": record.node,
             "texture": texture, "fix": fix, "max_texture_edge": edge,
             "texture_format": record.texture_format,
+            "animations": record.animations,
             "allowed_extensions": sorted(glb.GODOT_RUNTIME_EXTENSIONS)}
 
 
@@ -193,6 +194,12 @@ def _ingest(record, source, work_dir) -> str:
     """
     original = os.path.join(source.directory, record.file)
     suffix = os.path.splitext(original)[1].lower()
+    absent = sources.files_absent(source)
+
+    if absent:
+        raise BuildError("ingest: the files of local source %s are not on "
+                         "this machine. Only a machine that holds them can "
+                         "build %s" % (source.source_id, record.asset_key))
 
     if not os.path.isfile(original):
         raise BuildError("ingest: %s has no file %s"

@@ -4,6 +4,8 @@ extends Node
 ##
 ##     godot --headless --path godot res://tests/test_sound_cues.tscn
 
+const Const := preload("res://autoload/blackout_constants.gd")
+
 var _failures := 0
 
 
@@ -11,6 +13,9 @@ func _ready() -> void:
 	_the_bus_every_cue_plays_on_exists()
 	_every_cue_plays_a_clip_on_that_bus()
 	_the_level_up_cue_the_console_names_has_a_clip()
+	_every_moment_cue_has_a_clip()
+	_the_task_complete_moment_plays_a_clip()
+	_the_moment_feed_fires_once_for_each_message()
 	_an_unknown_cue_plays_nothing()
 	_a_volume_setting_reaches_the_bus()
 
@@ -68,6 +73,51 @@ func _the_level_up_cue_the_console_names_has_a_clip() -> void:
 	# console.gd names this constant; a table that lost its row would make the
 	# level-up silent with nothing failing anywhere else.
 	_expect(SoundCues.cues().has(SoundCues.LEVEL_UP), "LEVEL_UP has a clip")
+
+
+func _every_moment_cue_has_a_clip() -> void:
+	# A row in the moment table that names a cue with no clip is a silent
+	# moment with nothing failing anywhere else.
+	for moment: String in SoundCues.moments():
+		var cue := SoundCues.cue_for_moment(moment)
+
+		_expect(SoundCues.cues().has(cue), "moment %s names a cue with a clip" % moment)
+
+
+func _the_task_complete_moment_plays_a_clip() -> void:
+	var cues := SoundCues.new()
+	add_child(cues)
+
+	var player := cues.play_moment(Const.MOMENT_TASK_COMPLETE)
+
+	_expect(player != null, "the task_complete moment plays a clip")
+
+	if player != null:
+		_expect(player.stream == cues.play(SoundCues.TASK_COMPLETE).stream,
+			"and the clip is the TASK_COMPLETE cue")
+
+	_expect(cues.play_moment("a_moment_nobody_mapped") == null,
+		"a moment with no cue plays nothing")
+
+	for child: Node in cues.get_children():
+		(child as AudioStreamPlayer).stop()
+
+	cues.free()
+
+
+func _the_moment_feed_fires_once_for_each_message() -> void:
+	var feed := MomentFeed.new()
+	var heard: Array[String] = []
+
+	feed.happened.connect(func(moment: String): heard.append(moment))
+
+	var payload := {"moment": Const.MOMENT_TASK_COMPLETE}
+
+	_expect(feed.ingest(Const.CH_MOMENT, payload), "the feed takes blackout_moment")
+	_expect(not feed.ingest(Const.CH_XP_DROP, payload), "and leaves other channels")
+	_expect(feed.ingest(Const.CH_MOMENT, {}), "a message with no name is still consumed")
+	_expect(heard.size() == 1 and heard[0] == Const.MOMENT_TASK_COMPLETE,
+		"one named message fires one moment")
 
 
 func _an_unknown_cue_plays_nothing() -> void:

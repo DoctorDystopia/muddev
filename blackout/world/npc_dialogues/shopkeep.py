@@ -713,10 +713,12 @@ def start(caller, **kwargs) -> tuple:
     npc_name = npc.key if npc else "Shopkeeper"
     greeting = _dialog(getattr(npc.db, "greeting", None) or get_greeting(npc))
     credits = credits_count(caller)
+    # get_display_desc, not db.desc: the NpcDef owns the description.
+    npc_desc = npc.get_display_desc(caller) if npc else ""
 
     text_lines = [
         _line(npc_name),
-        npc.db.desc or "A shopkeeper.",
+        npc_desc or "A shopkeeper.",
         "",
         greeting,
         "",

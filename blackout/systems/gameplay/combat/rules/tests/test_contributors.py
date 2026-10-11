@@ -26,7 +26,7 @@ from systems.gameplay.combat.rules.rule_defs.malfunctioning_gizmo import (
 )
 from systems.gameplay.combat.rules.rule_defs.toy_sword import ToySwordRules
 from typeclasses.characters import Character as BlackoutCharacter
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from world.item_database import ITEM_DB
 
 
@@ -174,12 +174,12 @@ class TestNpcContributors(EvenniaTest):
     character_typeclass = BlackoutCharacter
 
     def test_a_plain_npc_contributes_nothing(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         self.assertEqual(collect_contributors(npc), ())
 
     def test_an_npc_with_rules_contributes_them_without_equipment(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.db.combat_rules = [MalfunctioningGizmoRules.key]
 
         contributors = collect_contributors(npc)

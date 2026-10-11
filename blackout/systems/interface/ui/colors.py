@@ -37,6 +37,13 @@ TAG_DEATH = DANGER_COLOR
 TAG_XP = HIGHLIGHT_COLOR    # any XP award readout -- see progression/skills/xp_awards.py
 TAG_RESET = RESET_COLOR
 
+# The number of a max hit: bold neon amber (xterm 530, bright). It is not a
+# palette colour above, because nothing else may look like a max hit. A
+# telnet client with no xterm256 gets the nearest ANSI colour, and the
+# brackets of combat_msg still mark the number.
+MAX_HIT_COLOR = "|h|530"
+TAG_MAX_HIT = MAX_HIT_COLOR
+
 # Item names on a kill's drop line. The same highlight XP uses, because both
 # are the reward half of a fight and a player scanning a combat log is looking
 # for exactly those two things.

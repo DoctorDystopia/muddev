@@ -55,7 +55,7 @@ class _CrowdedRoomTestCase(EvenniaTest):
         self.engine.ndb._owner_index = None
         self.engine.ndb._inbound_actions = []
 
-        # NPC_DB.create rather than spawn_mutant_raider: the spawner refuses
+        # NPC_DB.create rather than the mutant raider spawner: the spawner refuses
         # a second raider on one tile ("never two raiders on one tile"), so it
         # would hand back None for all but the first and the crowd this test
         # needs would never exist.

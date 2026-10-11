@@ -9,6 +9,8 @@ from evennia import Command, CmdSet
 
 from commands.constants import HELP_CATEGORY_BANKING
 from systems.gameplay.banking import messages
+from systems.gameplay.banking import verbs as bank_verbs
+from systems.gameplay.banking.constants import BANK_COMMAND_KEY
 from systems.gameplay.banking.handler import BANK_MAX_UNIQUE_KEYS, NOT_STORED_ERROR
 from systems.interface.statefeed.constants import ASSET_KIND_STATION, COMMERCE_ROLE_BANK
 from typeclasses.objects import ObjectParent, DefaultObject
@@ -513,11 +515,27 @@ class CmdBank(Command):
 
     Usage:
         bank
+        bank tabs
+        bank view <tab>
+        bank move <item> = <tab|new>
+        bank swap <item> = <item>
+        bank name <tab> [= <name>]
+        bank placeholders <on|off>
+        bank release <item|all>
 
     A graphical client shows the vault as a pop-up beside your inventory.
     Every other client gets the banking menu.
+
+    Tabs sort the vault. Tab 0 is the main tab: it shows everything, and it
+    holds whatever is in no other tab. A new item goes into the tab you are
+    viewing. A tab that empties disappears. Name a tab to show the name
+    instead of its first item. Give no name to show the item again.
+
+    With placeholders on, an item you withdraw completely leaves a
+    placeholder. It keeps the item's place and tab, and it uses one vault
+    slot until you release it.
     """
-    key = "bank"
+    key = BANK_COMMAND_KEY
     locks = "cmd:all()"
     help_category = HELP_CATEGORY_BANKING
 
@@ -554,6 +572,12 @@ class CmdBank(Command):
         from systems.interface.popups.popup_defs.bank import BANK_POPUP_KEY
 
         caller = self.caller
+
+        if self.args.strip():
+            line = bank_verbs.perform(caller, self.args)
+            caller.msg((line, _MSG_COMMERCE))
+            return
+
         wants = service.wants_popup(caller)
 
         if wants:

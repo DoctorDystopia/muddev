@@ -126,6 +126,49 @@ def quantity_actions(verb_label: str, template: str, mode, units: int,
     return actions
 
 
+def text_action(label: str, template: str, prompt: str, max_length: int) -> dict:
+    """
+    Purpose: Render one action that asks the player for a line of text.
+
+    Entry:
+        label      - the menu entry's text, for example "Rename".
+        template   - the command, with ACTION_TEXT_PLACEHOLDER where the
+                     text goes.
+        prompt     - what the text box asks.
+        max_length - the longest text the server keeps.
+
+    Exit/Returns:
+        Returns an action dict with an EMPTY `command`, a `template` and an
+        `input` block of the text kind.
+
+    Module Globals:
+        feed_const.ACTION_INPUT_* read.
+
+    Methodology:
+        The shape of the quantity prompt, with a different kind. A client
+        that knows only the quantity kind shows the entry and sends nothing,
+        because the command is empty.
+
+    Notes/References:
+        The server cleans the text again when the command arrives. The
+        length here is for the box, not a guard.
+
+    Author: Nick Hobar
+    Creation date: 10/08/2026
+    """
+    return {
+        "label": str(label),
+        "command": "",
+        "template": str(template),
+        "input": {
+            feed_const.ACTION_INPUT_KIND_KEY: feed_const.ACTION_INPUT_KIND_TEXT,
+            feed_const.ACTION_INPUT_MIN_KEY: feed_const.ACTION_INPUT_MIN_AMOUNT,
+            feed_const.ACTION_INPUT_MAX_KEY: int(max_length),
+            feed_const.ACTION_INPUT_LABEL_KEY: str(prompt),
+        },
+    }
+
+
 def item_row(item, slot: int, quantity: int, actions: list,
              detail: str = "", enabled: bool = True, info: str = "") -> dict:
     """

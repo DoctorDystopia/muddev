@@ -43,6 +43,8 @@ func _ready() -> void:
 	_the_eight_steps_face_eight_different_ways()
 	_standing_still_keeps_the_yaw()
 	_a_teleport_keeps_the_yaw()
+	_every_run_step_turns_the_front_along_the_run()
+	_a_bent_run_faces_along_its_slide()
 	_a_diagonal_splits_its_two_cardinals()
 	_a_far_entity_is_walked_to_first()
 	_an_entity_on_your_tile_is_acted_on_directly()
@@ -125,11 +127,37 @@ func _a_teleport_keeps_the_yaw() -> void:
 
 	_expect(is_equal_approx(far, 1.25), "a jump across the map keeps the yaw")
 
-	# Two tiles is already a teleport -- the pane only ever watches single
-	# steps, so anything further arrived some other way.
-	var two := WorldView.yaw_towards(Vector2i(0, 0), Vector2i(0, 2), 1.25)
+	# The first jump that the slide snaps. The limit comes from StepAnimator,
+	# so a change of SNAP_STEPS moves this case with it.
+	var past := floori(StepAnimator.SNAP_STEPS) + 1
+	var snapped := WorldView.yaw_towards(Vector2i.ZERO, Vector2i(past, 0), 1.25)
 
-	_expect(is_equal_approx(two, 1.25), "even a two-tile jump keeps the yaw")
+	_expect(is_equal_approx(snapped, 1.25), "a jump that snaps keeps the yaw")
+
+
+## A run moves two tiles in each tick (`RUN_TILES_PER_TICK`). Thus, each
+## `room_info` of a run names a tile two squares away. Until 10/05/2026 the yaw
+## kept still for a move of two tiles, and a runner never turned.
+func _every_run_step_turns_the_front_along_the_run() -> void:
+	for direction: String in STEPS:
+		var delta: Vector2i = STEPS[direction] * 2
+		var yaw := WorldView.yaw_towards(Vector2i.ZERO, delta, 0.0)
+		var front := AUTHORED_FRONT.rotated(Vector3.UP, yaw)
+		var run := Vector3(delta.x, 0.0, -delta.y).normalized()
+
+		_expect(front.dot(run) > 0.999,
+			"a run %s turns the figure %s" % [direction, direction])
+
+
+## A run of two tiles can bend: east, then northeast. The slide draws the move
+## as one straight line, so the figure faces along that line.
+func _a_bent_run_faces_along_its_slide() -> void:
+	var delta: Vector2i = STEPS["east"] + STEPS["northeast"]
+	var yaw := WorldView.yaw_towards(Vector2i.ZERO, delta, 0.0)
+	var front := AUTHORED_FRONT.rotated(Vector3.UP, yaw)
+	var slide := Vector3(delta.x, 0.0, -delta.y).normalized()
+
+	_expect(front.dot(slide) > 0.999, "a bent run faces along its slide")
 
 
 ## Northeast has to sit exactly between north and east, or the four diagonals

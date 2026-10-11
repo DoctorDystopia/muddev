@@ -1,8 +1,8 @@
 @tool
 class_name TerrainWorld
 extends Node3D
-## The terrain that the editor shows: a 4 x 4 block of chunks of one plane
-## around [member centre_chunk]. The world chunk files are its store.
+## The terrain that the editor shows: a 4 x 4 block of chunks around
+## [member centre_chunk], on every plane. The world chunk files are its store.
 ##
 ## A block with an even side has no middle chunk. Thus the centre chunk is
 ## the south-west chunk of the middle four. The block reaches
@@ -26,15 +26,30 @@ extends Node3D
 ## [member load_errors] names it. The editor never draws a blank chunk in its
 ## place. A blank chunk there would overwrite the file on the next save.
 ##
-## ## Planes (Phase 7c)
+## ## Planes (Phase 7c, DESIGN-0013 Phase S0)
 ##
-## [member plane] picks the plane to edit. The planes below it show as a dim
-## ghost, so the author builds a floor over the ground. A plane-1 chunk with
-## no file starts from the chunk below: its heights plus
+## The block holds every plane at one time: one [ChunkSet] for each plane,
+## from [method chunks_on]. A room on plane 0 and its level on plane 1 are
+## one Build gesture, and one undo entry. [member plane] picks the plane to
+## edit, and [member chunks] is its set. A change of [member plane] reads no
+## file and saves nothing. It keeps every unsaved edit and the undo history.
+##
+## The planes below the edited plane show as a dim ghost, so the author
+## builds a floor over the ground. [member upper_planes] picks how the planes
+## above show. A plane other than the edited one shows only its chunks that
+## exist: a file, or an edit.
+##
+## A plane-1 chunk with no file starts from the chunk below: its heights plus
 ## [constant NEW_PLANE_RISE], every tile void and Blocked, and the areas of
 ## the chunk below (Nick, 09/26/2026). A floor paint on a void tile clears
 ## Blocked ([method TerrainBrushes.flags_after_floor]). Like a blank chunk of
-## plane 0, a new chunk is saved only after an edit.
+## plane 0, a new chunk is saved only after an edit. Until then,
+## [method refresh_new_chunks] makes it again from the chunk below, so a
+## sculpt of the ground moves the new chunks above it.
+##
+## A new chunk on any plane then takes each corner that it shares with a
+## neighbour that exists. A file or an edit exists. Outside the block, only a
+## file counts. Thus the first edit of a new chunk saves no seam fault.
 ##
 ## ## Selection, links, and water
 ##
@@ -45,6 +60,20 @@ extends Node3D
 ## the ladders, the stairs, and the hatches, as in the client. A nose on the
 ## front of each object marker shows its rotation.
 ##
+## A wall meets the plane above when that tile of the plane above has a
+## floor (DESIGN-0013 section 6.3). Thus a redraw of a chunk also redraws the
+## chunk under it. [member walls_down] draws every wall low, so the author
+## sees into a room.
+##
+## ## The structure workbench (DESIGN-0013 Phase S6)
+##
+## `structure_workbench.tscn` holds this node with [member chunk_directory]
+## set to [constant WORKBENCH_DIRECTORY]. The author builds a template there,
+## on flat blank ground, away from the world. Every tool works as in the
+## world, and a save writes only the scratch files. [method writes_world]
+## tells the two apart. [method clear_workbench] deletes the scratch files,
+## and it refuses the world chunk directory.
+##
 ## ## Models
 ##
 ## [TerrainModels] stands the real model of each object that has one: the
@@ -53,9 +82,13 @@ extends Node3D
 ## The nose and the label stay. [member show_models] turns the models off.
 
 signal block_loaded
+signal plane_changed
 signal chunks_saved(names: PackedStringArray)
 
 const _Const := preload("res://autoload/blackout_constants.gd")
+
+## How the planes above the edited plane show.
+enum UpperPlanes { HIDDEN, GHOST, SOLID }
 
 ## How many chunks are on each side of the block.
 const BLOCK_SIDE := 4
@@ -65,11 +98,19 @@ const BLOCK_SIDE := 4
 const BLOCK_BELOW := 1
 
 ## The height steps between a plane and a new chunk of the plane above: two
-## tiles (Nick, 09/26/2026).
+## tiles (Nick, 09/26/2026). The Build tools use the same rise for a level.
 const NEW_PLANE_RISE := 32
 
-## The colour factor of the ghost of a lower plane.
+## The colour factor of the ghost of another plane.
 const GHOST_SHADE := Color(0.45, 0.45, 0.5)
+
+## The chunk directory of the structure workbench (DESIGN-0013 Phase S6). It
+## is outside the repo, so git never sees a scratch chunk.
+const WORKBENCH_DIRECTORY := "user://structure_workbench"
+
+## The file name pattern of a chunk file: the prefix and the suffix.
+const CHUNK_FILE_PREFIX := "chunk_"
+const CHUNK_FILE_SUFFIX := ".json"
 
 ## The beacon over a selected object or a finding.
 const BEACON_SIZE := Vector3(0.12, 4.0, 0.12)
@@ -89,15 +130,17 @@ const MARKER_NOSE_NODE := "Nose"
 	set(value):
 		move_block(value, _plane)
 
-## The plane of every chunk in the block. A change saves first, as a move.
+## The edited plane. A change reads and saves nothing. See the class comment.
 @export_range(0, 3) var plane := 0:
 	get:
 		return _plane
 	set(value):
 		move_block(_centre, value)
 
-## Where the chunk files are, as an OS path. Empty means the world chunk
-## directory, `blackout/world/chunks/`. A test sets a scratch directory here.
+## Where the chunk files are: an OS path, or a `user://` or `res://` path.
+## Empty means the world chunk directory, `blackout/world/chunks/`. A test
+## sets a scratch directory here. The structure workbench sets
+## [constant WORKBENCH_DIRECTORY].
 @export var chunk_directory := ""
 
 ## Draw the walk flags and the walls.
@@ -111,9 +154,7 @@ const MARKER_NOSE_NODE := "Nose"
 @export var show_areas := false:
 	set(value):
 		show_areas = value
-
-		if is_inside_tree():
-			rebuild_all()
+		_redraw()
 
 ## Draw where each transition and each climb leads.
 @export var show_links := true:
@@ -127,19 +168,31 @@ const MARKER_NOSE_NODE := "Nose"
 @export var show_models := true:
 	set(value):
 		show_models = value
-
-		if is_inside_tree():
-			rebuild_all()
+		_redraw()
 
 ## Draw the planes below the edited plane, dim.
 @export var show_lower_planes := true:
 	set(value):
 		show_lower_planes = value
+		_redraw()
 
-		if _ghosts != null:
-			_ghosts.visible = value
+## How the planes above the edited plane show.
+@export var upper_planes := UpperPlanes.HIDDEN:
+	set(value):
+		upper_planes = value
+		_redraw()
 
-var chunks := ChunkSet.new()
+## Draw every wall low, so the author sees into a room. The walls of the
+## game do not change.
+@export var walls_down := false:
+	set(value):
+		walls_down = value
+		_redraw()
+
+## The set of the edited plane.
+var chunks: ChunkSet:
+	get:
+		return _planes[_plane]
 
 ## Each chunk file of the block that exists but does not read, with the reason.
 var load_errors := PackedStringArray()
@@ -151,24 +204,45 @@ var selected := {}
 var _centre := Vector2i.ZERO
 var _plane := 0
 
-## Chunk coordinate to `{ground, water, flags, areas, border, objects}` nodes.
+## One [ChunkSet] for each plane, indexed by plane.
+var _planes: Array[ChunkSet] = []
+
+## (cx, cy, plane) of each chunk of the block that came from a file, or that
+## a save wrote. A chunk with no key here is new.
+var _from_file := {}
+
+## (cx, cy, plane) of a chunk next to the block, to its file as read, or to
+## null for no file. [method _seal] reads each one time for each load.
+var _outside := {}
+
+## True after the first load. Before it, a move only records the block.
+var _block_ready := false
+
+## (cx, cy, plane) to `{ground, water, walls, props, ...}` nodes. A view of
+## the edited plane also has flags, areas, border, objects, and models.
 var _views := {}
 
 var _ground_material: StandardMaterial3D
 var _ghost_material: StandardMaterial3D
 var _overlay_material: StandardMaterial3D
 var _ring: MeshInstance3D
+var _marks: MeshInstance3D
+var _outline: MeshInstance3D
 var _beacon: MeshInstance3D
 var _block_outline: MeshInstance3D
-var _ghosts: Node3D
 var _links: Node3D
 
 ## The model source. Made on the first draw with [member show_models] on.
 var _models: TerrainModels
 
-## Chunks to redraw on the next frame. A brush dab queues its chunks here, so
-## many dabs in one frame cost one redraw.
+## Chunks to redraw on the next frame, as (cx, cy, plane). A brush dab queues
+## its chunks here, so many dabs in one frame cost one redraw.
 var _pending := {}
+
+
+func _init() -> void:
+	for each_plane: int in _plane_range():
+		_planes.append(_new_set(each_plane))
 
 
 func _ready() -> void:
@@ -181,6 +255,12 @@ func _ready() -> void:
 	_ring = MeshInstance3D.new()
 	_ring.material_override = _overlay_material
 	add_child(_ring)
+	_marks = MeshInstance3D.new()
+	_marks.material_override = _overlay_material
+	add_child(_marks)
+	_outline = MeshInstance3D.new()
+	_outline.material_override = _overlay_material
+	add_child(_outline)
 	_beacon = _make_beacon()
 	add_child(_beacon)
 	load_block()
@@ -192,17 +272,86 @@ func _exit_tree() -> void:
 		_models = null
 
 
+static func _plane_range() -> Array:
+	return range(_Const.TILE_GROUND_PLANE, _Const.CHUNK_PLANE_MAX + 1)
+
+
+static func _new_set(on_plane: int) -> ChunkSet:
+	var chunk_set := ChunkSet.new()
+
+	chunk_set.plane = on_plane
+
+	return chunk_set
+
+
+# ─── Planes ─────────────────────────────────────────────────────────────────
+
+## The set of `on_plane`, or null for a plane out of range.
+func chunks_on(on_plane: int) -> ChunkSet:
+	if on_plane < _Const.TILE_GROUND_PLANE or on_plane > _Const.CHUNK_PLANE_MAX:
+		return null
+
+	return _planes[on_plane]
+
+
+## Plane to [ChunkSet], for [method TerrainEdit.replay_planes].
+func plane_sets() -> Dictionary:
+	var sets := {}
+
+	for chunk_set: ChunkSet in _planes:
+		sets[chunk_set.plane] = chunk_set
+
+	return sets
+
+
+## True when the chunk at `chunk_coord` of `on_plane` is a file or an edit.
+func chunk_exists(chunk_coord: Vector2i, on_plane: int) -> bool:
+	var key := Vector3i(chunk_coord.x, chunk_coord.y, on_plane)
+
+	return _from_file.has(key) or _planes[on_plane].is_dirty(chunk_coord)
+
+
+## Make each new chunk above the ground again from the chunk below it, as it
+## is now. A chunk with a file or an edit keeps its data.
+func refresh_new_chunks() -> void:
+	for on_plane: int in range(_Const.TILE_GROUND_PLANE + 1, _Const.CHUNK_PLANE_MAX + 1):
+		var chunk_set := _planes[on_plane]
+
+		for coord: Vector2i in chunk_set.chunk_coords():
+			if not chunk_exists(coord, on_plane):
+				chunk_set.add(upper_chunk(_below(coord, on_plane), on_plane))
+
+		_seal_new_chunks(on_plane)
+
+
+func _set_plane(new_plane: int) -> void:
+	if new_plane == _plane:
+		return
+
+	_plane = new_plane
+	selected = {}
+	refresh_new_chunks()
+	rebuild_all()
+	plane_changed.emit()
+
+
 # ─── Loading and saving ─────────────────────────────────────────────────────
 
-## Move the block to `centre` on `new_plane`, and load it. The changed chunks
-## of the old block are saved first. One load, not two, for a jump that
-## changes both.
+## Move the block to `centre`, and edit `new_plane`. A move to another centre
+## saves the changed chunks of the old block first, and loads the new one. A
+## change of the plane only loads nothing. See the class comment.
 func move_block(centre: Vector2i, new_plane: int) -> void:
+	var clamped := clampi(new_plane, _Const.TILE_GROUND_PLANE, _Const.CHUNK_PLANE_MAX)
+
+	if centre == _centre and _block_ready:
+		_set_plane(clamped)
+		return
+
 	if is_inside_tree() and has_unsaved_changes():
 		save_block()
 
 	_centre = centre
-	_plane = clampi(new_plane, _Const.TILE_GROUND_PLANE, _Const.CHUNK_PLANE_MAX)
+	_plane = clamped
 	selected = {}
 
 	if is_inside_tree():
@@ -243,35 +392,95 @@ func chunk_path(chunk_coord: Vector2i, on_plane: int = -1) -> String:
 	return directory().path_join(file_name)
 
 
+## The chunk directory as an OS path. See [member chunk_directory].
 func directory() -> String:
 	if chunk_directory.is_empty():
 		return ChunkFile.world_directory()
 
-	return chunk_directory
+	return ProjectSettings.globalize_path(chunk_directory)
 
 
-## Read the block from disk. Unsaved changes are lost. [method move_block]
-## saves them first.
+## True when this node edits the world chunk files. False for the structure
+## workbench and for a test.
+func writes_world() -> bool:
+	return same_directory(directory(), ChunkFile.world_directory())
+
+
+## True when the OS paths `first` and `second` name one directory. Windows
+## does not read the case of a path, so the test does not either.
+static func same_directory(first: String, second: String) -> bool:
+	return _directory_key(first) == _directory_key(second)
+
+
+static func _directory_key(path: String) -> String:
+	var key := path.replace("\\", "/").simplify_path().trim_suffix("/")
+
+	if OS.get_name() == "Windows":
+		key = key.to_lower()
+
+	return key
+
+
+static func _is_chunk_file(file_name: String) -> bool:
+	return file_name.begins_with(CHUNK_FILE_PREFIX) and file_name.ends_with(CHUNK_FILE_SUFFIX)
+
+
+# ─── The structure workbench ────────────────────────────────────────────────
+
+## Delete every chunk file of a scratch directory, and load the block again:
+## flat, blank ground. Unsaved edits go too. Returns the number of files
+## deleted, or -1 with no change when this node edits the world: the world
+## chunk files are never scratch.
+func clear_workbench() -> int:
+	if writes_world():
+		push_error("Terrain: the world chunk files are not a workbench. Nothing deleted.")
+		return -1
+
+	var deleted := 0
+
+	if DirAccess.dir_exists_absolute(directory()):
+		for file_name: String in DirAccess.get_files_at(directory()):
+			if _is_chunk_file(file_name) \
+					and DirAccess.remove_absolute(directory().path_join(file_name)) == OK:
+				deleted += 1
+
+	selected = {}
+
+	if is_inside_tree():
+		load_block()
+
+	return deleted
+
+
+## Read the block from disk, every plane. Unsaved changes are lost.
+## [method move_block] saves them first.
 func load_block() -> void:
-	chunks = ChunkSet.new()
 	load_errors = PackedStringArray()
+	_from_file.clear()
+	_outside.clear()
 
-	for coord: Vector2i in block_coords():
-		var chunk := _read_or_new(coord)
+	# The ground first: a new chunk above starts from the chunk below.
+	for on_plane: int in _plane_range():
+		_planes[on_plane] = _new_set(on_plane)
 
-		if chunk != null:
-			chunks.add(chunk)
+		for coord: Vector2i in block_coords():
+			var chunk := _read_or_new(coord, on_plane)
 
+			if chunk != null:
+				_planes[on_plane].add(chunk)
+
+		_seal_new_chunks(on_plane)
+
+	_block_ready = true
 	rebuild_all()
-	_rebuild_ghosts()
 	block_loaded.emit()
 
 
-func _read_or_new(coord: Vector2i) -> ChunkFile:
-	var path := chunk_path(coord)
+func _read_or_new(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var path := chunk_path(coord, on_plane)
 
 	if not FileAccess.file_exists(path):
-		return new_chunk(coord, _plane)
+		return new_chunk(coord, on_plane)
 
 	var chunk := ChunkFile.read_file(path)
 
@@ -279,30 +488,29 @@ func _read_or_new(coord: Vector2i) -> ChunkFile:
 		load_errors.append("%s: %s" % [path.get_file(), chunk.error])
 		return null
 
+	_from_file[Vector3i(coord.x, coord.y, on_plane)] = true
+
 	return chunk
 
 
 ## The chunk that the editor starts where no file exists. Plane 0 is flat and
-## blank. A plane above starts from the chunk below it.
+## blank. A plane above starts from the chunk below it, as it is in memory.
 func new_chunk(coord: Vector2i, on_plane: int) -> ChunkFile:
 	if on_plane <= _Const.TILE_GROUND_PLANE:
 		return ChunkFile.blank(coord.x, coord.y, on_plane)
 
-	return upper_chunk(_chunk_on(coord, on_plane - 1), on_plane)
+	return upper_chunk(_below(coord, on_plane), on_plane)
 
 
-## The chunk file of `coord` on `on_plane`, or the chunk the editor would
-## start there. A file that does not read counts as missing.
-func _chunk_on(coord: Vector2i, on_plane: int) -> ChunkFile:
-	var path := chunk_path(coord, on_plane)
+## The chunk under `coord` of `on_plane`. A chunk below that does not read
+## counts as new.
+func _below(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var below := _planes[on_plane - 1].get_chunk(coord)
 
-	if FileAccess.file_exists(path):
-		var chunk := ChunkFile.read_file(path)
+	if below != null:
+		return below
 
-		if chunk.error.is_empty():
-			return chunk
-
-	return new_chunk(coord, on_plane)
+	return new_chunk(coord, on_plane - 1)
 
 
 ## A new chunk over `below`, on `on_plane`: the heights of `below` plus
@@ -323,27 +531,117 @@ static func upper_chunk(below: ChunkFile, on_plane: int) -> ChunkFile:
 	return chunk
 
 
+# ─── Seams of a new chunk ───────────────────────────────────────────────────
+
+## Give each new chunk of `on_plane` the shared corners of each neighbour that
+## exists. A new chunk follows the chunk below it. A saved neighbour on the
+## same plane does not. Without this step, the first edit of the new chunk
+## saves a seam fault, and `test_chunkfile.py` fails (10/09/2026).
+func _seal_new_chunks(on_plane: int) -> void:
+	var chunk_set := _planes[on_plane]
+
+	for coord: Vector2i in chunk_set.chunk_coords():
+		if not chunk_exists(coord, on_plane):
+			_seal(chunk_set.get_chunk(coord), on_plane)
+
+
+## Copy into `chunk` each corner that it shares with a neighbour that exists.
+## The eight neighbours count, the corner ones too.
+func _seal(chunk: ChunkFile, on_plane: int) -> void:
+	var coord := Vector2i(chunk.cx, chunk.cy)
+
+	for dy: int in [-1, 0, 1]:
+		for dx: int in [-1, 0, 1]:
+			var step := Vector2i(dx, dy)
+
+			if step == Vector2i.ZERO:
+				continue
+
+			var neighbour := _existing_neighbour(coord + step, on_plane)
+
+			if neighbour != null:
+				copy_shared_corners(chunk, neighbour, step)
+
+
+## Copy the corners that `chunk` shares with `neighbour`, which is `step`
+## chunks away. A side neighbour shares one edge. A corner neighbour shares
+## one corner.
+static func copy_shared_corners(chunk: ChunkFile, neighbour: ChunkFile,
+		step: Vector2i) -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var low := (step * size).max(Vector2i.ZERO)
+	var high := (step * size + Vector2i(size, size)).min(Vector2i(size, size))
+
+	for y: int in range(low.y, high.y + 1):
+		for x: int in range(low.x, high.x + 1):
+			var there := Vector2i(x, y) - step * size
+
+			chunk.heights[y * side + x] = neighbour.heights[there.y * side + there.x]
+
+
+## The neighbour at `coord` of `on_plane` when it is a file or an edit, else
+## null. A chunk outside the block counts only as a file on disk.
+func _existing_neighbour(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var block := Rect2i(block_low(), Vector2i(BLOCK_SIDE, BLOCK_SIDE))
+
+	if block.has_point(coord):
+		if chunk_exists(coord, on_plane):
+			return _planes[on_plane].get_chunk(coord)
+
+		return null
+
+	var key := Vector3i(coord.x, coord.y, on_plane)
+
+	if not _outside.has(key):
+		_outside[key] = _read_outside(coord, on_plane)
+
+	return _outside[key]
+
+
+## The file at `coord` of `on_plane`, or null when none reads.
+func _read_outside(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var path := chunk_path(coord, on_plane)
+
+	if not FileAccess.file_exists(path):
+		return null
+
+	var chunk := ChunkFile.read_file(path)
+
+	if not chunk.error.is_empty():
+		return null
+
+	return chunk
+
+
 func has_unsaved_changes() -> bool:
-	return not chunks.dirty_coords().is_empty()
+	for chunk_set: ChunkSet in _planes:
+		if not chunk_set.dirty_coords().is_empty():
+			return true
+
+	return false
 
 
-## Write every changed chunk to its file. Returns the names of the files.
+## Write every changed chunk of every plane to its file. Returns the names of
+## the files.
 func save_block() -> PackedStringArray:
 	var saved := PackedStringArray()
 
 	DirAccess.make_dir_recursive_absolute(directory())
 
-	for coord: Vector2i in chunks.dirty_coords():
-		var chunk := chunks.get_chunk(coord)
-		var path := chunk_path(coord)
+	for chunk_set: ChunkSet in _planes:
+		for coord: Vector2i in chunk_set.dirty_coords():
+			var chunk := chunk_set.get_chunk(coord)
+			var path := chunk_path(coord, chunk_set.plane)
 
-		chunk.compact_names()
+			chunk.compact_names()
 
-		if chunk.write_file(path) == OK:
-			chunks.mark_clean(coord)
-			saved.append(path.get_file())
-		else:
-			push_error("Terrain: cannot write %s" % path)
+			if chunk.write_file(path) == OK:
+				chunk_set.mark_clean(coord)
+				_from_file[Vector3i(coord.x, coord.y, chunk_set.plane)] = true
+				saved.append(path.get_file())
+			else:
+				push_error("Terrain: cannot write %s" % path)
 
 	chunks_saved.emit(saved)
 
@@ -356,9 +654,14 @@ func save_block() -> PackedStringArray:
 ## world". Each file that does not read goes into `errors`.
 func world_chunk_files(errors: PackedStringArray) -> Array[ChunkFile]:
 	var found := {}
+	var names := PackedStringArray()
 
-	for file_name: String in DirAccess.get_files_at(directory()):
-		if not (file_name.begins_with("chunk_") and file_name.ends_with(".json")):
+	# A new structure workbench has no directory until its first save.
+	if DirAccess.dir_exists_absolute(directory()):
+		names = DirAccess.get_files_at(directory())
+
+	for file_name: String in names:
+		if not _is_chunk_file(file_name):
 			continue
 
 		var chunk := ChunkFile.read_file(directory().path_join(file_name))
@@ -368,11 +671,12 @@ func world_chunk_files(errors: PackedStringArray) -> Array[ChunkFile]:
 		else:
 			errors.append("%s: %s" % [file_name, chunk.error])
 
-	for coord: Vector2i in chunks.chunk_coords():
-		var key := Vector3i(coord.x, coord.y, _plane)
+	for chunk_set: ChunkSet in _planes:
+		for coord: Vector2i in chunk_set.chunk_coords():
+			var key := Vector3i(coord.x, coord.y, chunk_set.plane)
 
-		if found.has(key) or chunks.dirty_coords().has(coord):
-			found[key] = chunks.get_chunk(coord)
+			if found.has(key) or chunk_set.is_dirty(coord):
+				found[key] = chunk_set.get_chunk(coord)
 
 	var files: Array[ChunkFile] = []
 
@@ -383,12 +687,18 @@ func world_chunk_files(errors: PackedStringArray) -> Array[ChunkFile]:
 
 # ─── Drawing ────────────────────────────────────────────────────────────────
 
-func rebuild_all() -> void:
-	for coord: Vector2i in _views.keys():
-		_free_view(coord)
+func _redraw() -> void:
+	if is_inside_tree() and _block_ready:
+		rebuild_all()
 
-	for coord: Vector2i in chunks.chunk_coords():
-		rebuild(coord)
+
+func rebuild_all() -> void:
+	for key: Vector3i in _views.keys():
+		_free_view(key)
+
+	for chunk_set: ChunkSet in _planes:
+		for coord: Vector2i in chunk_set.chunk_coords():
+			_rebuild_key(Vector3i(coord.x, coord.y, chunk_set.plane))
 
 	_rebuild_block_outline()
 	_rebuild_links()
@@ -407,25 +717,55 @@ func _rebuild_block_outline() -> void:
 		TerrainOverlay.COLOR_LOCKED), _overlay_material)
 
 
-## Rebuild the ground and the marks of one chunk.
-func rebuild(chunk_coord: Vector2i) -> void:
-	var chunk := chunks.get_chunk(chunk_coord)
+## Rebuild the view of one chunk of one plane, as (cx, cy, plane).
+func _rebuild_key(key: Vector3i) -> void:
+	_free_view(key)
+
+	var coord := Vector2i(key.x, key.y)
+	var chunk := _planes[key.z].get_chunk(coord)
 
 	if chunk == null:
 		return
 
-	_free_view(chunk_coord)
+	if key.z == _plane:
+		_views[key] = _edited_view(chunk, coord)
+		_refresh_visibility()
+		return
 
+	var material := _plane_material(key.z)
+
+	if material == null or not chunk_exists(coord, key.z):
+		return
+
+	_views[key] = _plain_view(chunk, key.z, material)
+
+
+## The ground, the water, the walls, and the props of a chunk of another
+## plane, in `material`.
+func _plain_view(chunk: ChunkFile, on_plane: int, material: Material) -> Dictionary:
+	var coord := Vector2i(chunk.cx, chunk.cy)
+
+	return {
+		"ground": _mesh_node(ChunkMeshBuilder.build(chunk), material),
+		"water": _mesh_node(WaterMeshBuilder.build(chunk), material),
+		"walls": _mesh_node(_walls_mesh(chunk, coord, on_plane), material),
+		"props": _mesh_node(PropMeshBuilder.build(chunk), material),
+	}
+
+
+## The full view of a chunk of the edited plane: the meshes, the marks, and
+## the objects.
+func _edited_view(chunk: ChunkFile, coord: Vector2i) -> Dictionary:
 	var view := {
 		"ground": _mesh_node(ChunkMeshBuilder.build(chunk), _ground_material),
 		"water": _mesh_node(WaterMeshBuilder.build(chunk), _ground_material),
-		"walls": _mesh_node(WallMeshBuilder.build(chunk), _ground_material),
+		"walls": _mesh_node(_walls_mesh(chunk, coord, _plane), _ground_material),
 		"props": _mesh_node(PropMeshBuilder.build(chunk), _ground_material),
-		"flags": _mesh_node(TerrainOverlay.flag_mesh(chunks, chunk_coord),
+		"flags": _mesh_node(TerrainOverlay.flag_mesh(chunks, coord),
 			_overlay_material),
-		"areas": _mesh_node(_area_mesh_if_shown(chunk_coord), _overlay_material),
+		"areas": _mesh_node(_area_mesh_if_shown(coord), _overlay_material),
 		"border": _mesh_node(TerrainOverlay.outline_mesh(chunks,
-			chunk_coord * _Const.CHUNK_SIZE, _Const.CHUNK_SIZE,
+			coord * _Const.CHUNK_SIZE, _Const.CHUNK_SIZE,
 			TerrainOverlay.COLOR_BORDER), _overlay_material),
 	}
 
@@ -434,8 +774,34 @@ func rebuild(chunk_coord: Vector2i) -> void:
 	view["objects"] = nodes[0]
 	view["models"] = nodes[1]
 
-	_views[chunk_coord] = view
-	_refresh_visibility()
+	return view
+
+
+## The walls of a chunk: low with [member walls_down], else each wall meets
+## the plane above where it has a floor.
+func _walls_mesh(chunk: ChunkFile, coord: Vector2i, on_plane: int) -> ArrayMesh:
+	if walls_down:
+		return WallMeshBuilder.build(chunk, null, true)
+
+	var above_set := chunks_on(on_plane + 1)
+	var above: ChunkFile = null if above_set == null else above_set.get_chunk(coord)
+
+	return WallMeshBuilder.build(chunk, above)
+
+
+## The material of a plane other than the edited one, or null when it does
+## not show.
+func _plane_material(on_plane: int) -> Material:
+	if on_plane < _plane:
+		return _ghost_material if show_lower_planes else null
+
+	match upper_planes:
+		UpperPlanes.GHOST:
+			return _ghost_material
+		UpperPlanes.SOLID:
+			return _ground_material
+
+	return null
 
 
 func _area_mesh_if_shown(chunk_coord: Vector2i) -> ArrayMesh:
@@ -445,26 +811,36 @@ func _area_mesh_if_shown(chunk_coord: Vector2i) -> ArrayMesh:
 	return TerrainOverlay.area_mesh(chunks, chunk_coord)
 
 
-## Redraw these chunks on the next frame.
-func queue_rebuild(coords: Array[Vector2i]) -> void:
-	for coord: Vector2i in coords:
-		_pending[coord] = true
+## Redraw these chunks, as (cx, cy, plane), on the next frame.
+func queue_rebuild(keys: Array[Vector3i]) -> void:
+	for key: Vector3i in keys:
+		_pending[key] = true
 
 
 func _process(_delta: float) -> void:
 	if _pending.is_empty():
 		return
 
-	var coords: Array[Vector2i] = []
+	var keys: Array[Vector3i] = []
 
-	coords.assign(_pending.keys())
+	keys.assign(_pending.keys())
 	_pending.clear()
-	rebuild_many(coords)
+	rebuild_many(keys)
 
 
-func rebuild_many(coords: Array[Vector2i]) -> void:
-	for coord: Vector2i in coords:
-		rebuild(coord)
+## Redraw these chunks, as (cx, cy, plane), and the chunk under each: its
+## walls meet the plane above.
+func rebuild_many(keys: Array[Vector3i]) -> void:
+	var all := {}
+
+	for key: Vector3i in keys:
+		all[key] = true
+
+		if key.z > _Const.TILE_GROUND_PLANE:
+			all[key - Vector3i(0, 0, 1)] = true
+
+	for key: Vector3i in all:
+		_rebuild_key(key)
 
 	_rebuild_block_outline()
 	_rebuild_links()
@@ -513,9 +889,14 @@ func _model_for(thing: Dictionary) -> Node3D:
 	return _models.stand(chunks, thing)
 
 
+## The view of one chunk of the edited plane, or an empty Dictionary.
+func _edited_view_of(chunk_coord: Vector2i) -> Dictionary:
+	return _views.get(Vector3i(chunk_coord.x, chunk_coord.y, _plane), {})
+
+
 ## The models of one chunk of the block, or an empty list. For a test.
 func models_of(chunk_coord: Vector2i) -> Array[Node]:
-	var view: Dictionary = _views.get(chunk_coord, {})
+	var view := _edited_view_of(chunk_coord)
 
 	if view.is_empty():
 		return []
@@ -582,7 +963,7 @@ static func _marker_text(thing: Dictionary) -> String:
 ## The object markers of one chunk of the block, or an empty list. For a
 ## test.
 func markers_of(chunk_coord: Vector2i) -> Array[Node]:
-	var view: Dictionary = _views.get(chunk_coord, {})
+	var view := _edited_view_of(chunk_coord)
 
 	if view.is_empty():
 		return []
@@ -590,18 +971,29 @@ func markers_of(chunk_coord: Vector2i) -> Array[Node]:
 	return view["objects"].get_children()
 
 
-func _free_view(chunk_coord: Vector2i) -> void:
-	var view: Dictionary = _views.get(chunk_coord, {})
+## The wall mesh that one chunk of `on_plane` draws now, or null. For a test.
+func walls_of(chunk_coord: Vector2i, on_plane: int) -> ArrayMesh:
+	var view: Dictionary = _views.get(Vector3i(chunk_coord.x, chunk_coord.y, on_plane), {})
+
+	if view.is_empty():
+		return null
+
+	return view["walls"].mesh
+
+
+func _free_view(key: Vector3i) -> void:
+	var view: Dictionary = _views.get(key, {})
 
 	for node: Node in view.values():
 		node.queue_free()
 
-	_views.erase(chunk_coord)
+	_views.erase(key)
 
 
 func _refresh_visibility() -> void:
 	for view: Dictionary in _views.values():
-		view["flags"].visible = show_flags
+		if view.has("flags"):
+			view["flags"].visible = show_flags
 
 
 ## Show the brush ring at `centre`, a point in tile space, or hide it.
@@ -617,54 +1009,53 @@ func show_ring(centre: Variant, radius: float) -> void:
 	_ring.visible = true
 
 
-# ─── The planes below ───────────────────────────────────────────────────────
-
-## Draw each chunk file of each plane below the edited plane, dim. Only files
-## that exist: a plane that is not built yet shows nothing.
-func _rebuild_ghosts() -> void:
-	if _ghosts != null:
-		_ghosts.queue_free()
-
-	_ghosts = Node3D.new()
-	_ghosts.visible = show_lower_planes
-	add_child(_ghosts)
-
-	for lower: int in range(_Const.TILE_GROUND_PLANE, _plane):
-		for coord: Vector2i in block_coords():
-			_add_ghost(coord, lower)
-
-
-func _add_ghost(coord: Vector2i, lower: int) -> void:
-	var path := chunk_path(coord, lower)
-
-	if not FileAccess.file_exists(path):
+## Show the marks of a Build tool: `paths` as [method TerrainOverlay.path_mesh]
+## takes them. An empty list hides them.
+func show_marks(paths: Array, color: Color) -> void:
+	if _marks == null:
 		return
 
-	var chunk := ChunkFile.read_file(path)
+	_marks.visible = not paths.is_empty()
 
-	if not chunk.error.is_empty():
+	if _marks.visible:
+		_marks.mesh = TerrainOverlay.path_mesh(chunks, paths, color)
+
+
+## Show the outline of a Build plan: the lattice of
+## [method TerrainOverlay.lattice_mesh]. An empty `heights` hides it.
+func show_outline(heights: Dictionary, color: Color) -> void:
+	if _outline == null:
 		return
 
-	# One holder for each chunk, so a new layer does not change the count.
-	var holder := Node3D.new()
-
-	_ghosts.add_child(holder)
-
-	for mesh: ArrayMesh in [ChunkMeshBuilder.build(chunk), WaterMeshBuilder.build(chunk),
-			WallMeshBuilder.build(chunk), PropMeshBuilder.build(chunk)]:
-		var node := MeshInstance3D.new()
-
-		node.mesh = mesh
-		node.material_override = _ghost_material
-		holder.add_child(node)
+	show_outline_layers([heights], color)
 
 
-## How many ghost chunks show. For a test.
+## Show the outline of several maps of [method show_outline] at one time:
+## one for each plane of a template copy. An empty list hides it.
+func show_outline_layers(layers: Array, color: Color) -> void:
+	if _outline == null:
+		return
+
+	var corners := 0
+
+	for heights: Dictionary in layers:
+		corners += heights.size()
+
+	_outline.visible = corners > 0
+
+	if _outline.visible:
+		_outline.mesh = TerrainOverlay.lattice_layers_mesh(layers, color)
+
+
+## How many chunks of the other planes show. For a test.
 func ghost_count() -> int:
-	if _ghosts == null:
-		return 0
+	var count := 0
 
-	return _ghosts.get_child_count()
+	for key: Vector3i in _views:
+		if key.z != _plane:
+			count += 1
+
+	return count
 
 
 # ─── Links ──────────────────────────────────────────────────────────────────
@@ -701,8 +1092,8 @@ func _rebuild_links() -> void:
 
 # ─── Objects and the selection ──────────────────────────────────────────────
 
-## Every object of the block as `{tile, kind, rotation, text}`, south row
-## first.
+## Every object of the edited plane of the block as
+## `{tile, kind, rotation, text}`, south row first.
 func objects_in_block() -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 
@@ -761,11 +1152,14 @@ func _check_selection() -> void:
 	clear_selection()
 
 
-## Load the block that holds `tile` of `on_plane`, if it is not the loaded
-## one, and mark the tile. Selects the first object there, if any.
+## Show the block and the plane of `tile` of `on_plane`, and mark the tile.
+## A tile out of the block loads its block. Selects the first object there,
+## if any.
 func jump_to(tile: Vector2i, on_plane: int) -> void:
-	if on_plane != _plane or not block_has_tile(tile):
+	if not block_has_tile(tile):
 		move_block(ChunkSet.chunk_of_tile(tile), on_plane)
+	else:
+		move_block(_centre, on_plane)
 
 	var here := chunks.objects_at(tile)
 
@@ -816,15 +1210,16 @@ func _make_beacon() -> MeshInstance3D:
 # ─── Undo and redo ──────────────────────────────────────────────────────────
 
 ## Apply an edit forward (redo) or back (undo), and redraw what it touched.
-## The editor history calls this. Returns false, and changes nothing, for an
-## edit of another plane or another block: its tiles are not these chunks.
+## The editor history calls this. Each change goes into the set of its own
+## plane, so the edited plane does not matter. Returns false, and changes
+## nothing, for an edit of another block: its tiles are not these chunks.
 func replay_edit(edit: TerrainEdit, forward: bool) -> bool:
-	if edit.plane != _plane or edit.centre != _centre:
-		push_warning("Terrain: the undo entry belongs to plane %d, block %s. "
-			% [edit.plane, edit.centre] + "Load that block to undo it.")
+	if edit.centre != _centre:
+		push_warning("Terrain: the undo entry belongs to block %s. " % edit.centre
+			+ "Load that block to undo it.")
 		return false
 
-	edit.replay(chunks, forward)
-	rebuild_many(edit.chunk_coords())
+	edit.replay_planes(plane_sets(), forward)
+	rebuild_many(edit.chunk_keys())
 
 	return true

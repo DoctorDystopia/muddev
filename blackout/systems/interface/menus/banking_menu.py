@@ -699,7 +699,7 @@ def _parse_deposit_request(caller, raw_string, **kwargs):
         DEPOSIT_COMMAND_KEY read.
 
     Methodology:
-        The mirror of npc_shopkeep._parse_sell_request, and it exists for the
+        The mirror of shopkeep._parse_sell_request, and it exists for the
         same reason: EvMenuCmdSet replaces the caller's cmdset and excludes
         object cmdsets, so CmdDeposit on the terminal that opened this menu
         is unreachable from inside it. Without this, a graphical client that

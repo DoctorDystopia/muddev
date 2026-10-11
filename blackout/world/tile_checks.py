@@ -24,9 +24,16 @@ Description: The content rules of a tile world, checked over its chunk files.
              This module imports no game code and no Evennia, because the
              client export reads it.
 
-             DESIGN-0011 Phase 7c.
+             A rule in NOTE_RULES gives a NOTE, not a finding: it warns, and
+             no test fails on it (DESIGN-0013 section 6.7). The world may hold
+             a closed pocket on purpose.
+
+             DESIGN-0011 Phase 7c. DESIGN-0013 Phase S1 added `wall_on_void`
+             and `unreachable`, and Phase S2 added `roof_walkable`. Phase S4
+             exempts decor from `object_unwalkable`.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 
 from systems.core.tilegrid import chunkfile
@@ -41,7 +48,9 @@ from world import object_kinds
 RULE_UNKNOWN_KIND: str = "unknown_kind"
 
 # An object stands on a Blocked or water tile. A player must stand on the tile
-# of a facility, a climb, and a transition, and an NPC spawns on its tile.
+# of a facility, a climb, and a transition, and an NPC spawns on its tile. A
+# decor kind is exempt, because it is a look. A Blocked tile under a table
+# stops a walk through it (DESIGN-0013 section 6.5).
 RULE_OBJECT_UNWALKABLE: str = "object_unwalkable"
 
 # A transition target is off the loaded world or unwalkable, on the plane of
@@ -64,6 +73,22 @@ RULE_RESPAWN_COUNT: str = "respawn_count"
 # reader.
 RULE_SIGN_TEXT: str = "sign_text"
 
+# A void tile carries a wall bit. No wall draws on a void tile, and no walker
+# stands beside it. A Build tool or a hand edit left it there.
+RULE_WALL_ON_VOID: str = "wall_on_void"
+
+# A pocket of walkable tiles that no walk from the respawn point reaches,
+# through steps, transitions, and climbs. One note for each pocket, at its
+# first tile (lowest y, then x). A pocket is a set of unreached tiles that
+# steps join on one plane. A NOTE: a sealed room with no doorway, or an upper
+# level with no stairs.
+RULE_UNREACHABLE: str = "unreachable"
+
+# A tile with a roof floor type has no Blocked flag. A roof is the ground of
+# the plane above a structure, and no walk may reach it (DESIGN-0013 section
+# 6.2). The Roof tool sets both at once.
+RULE_ROOF_WALKABLE: str = "roof_walkable"
+
 # Every rule, in the order the editor lists them.
 RULES: tuple = (
     RULE_UNKNOWN_KIND,
@@ -73,7 +98,17 @@ RULES: tuple = (
     RULE_VOID_OPEN,
     RULE_RESPAWN_COUNT,
     RULE_SIGN_TEXT,
+    RULE_WALL_ON_VOID,
+    RULE_UNREACHABLE,
+    RULE_ROOF_WALKABLE,
 )
+
+# The rules that give a note. A note warns and fails no test. Nick may make
+# `unreachable` a finding later (DESIGN-0013 section 6.7).
+NOTE_RULES: tuple = (RULE_UNREACHABLE,)
+
+# The eight steps of a walker, as (dx, dy).
+_STEPS: tuple = tuple(tile_const.DIRECTION_OFFSETS.values())
 
 
 @dataclass(frozen=True, order=True)
@@ -89,6 +124,10 @@ class Finding:
     def key(self) -> tuple:
         """Return (rule, x, y, plane), the part that the parity compares."""
         return (self.rule, self.x, self.y, self.plane)
+
+    def is_note(self) -> bool:
+        """Return True for a note: a warning that fails no test."""
+        return self.rule in NOTE_RULES
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -122,7 +161,9 @@ def _check_object(grids: dict, plane: int, kind_key: str, x: int,
         problem = "has no text" if takes_text else "has text, but is no sign"
         found.append(Finding(RULE_SIGN_TEXT, plane, y, x, f"{where}: {problem}"))
 
-    if not _walkable(grids, plane, x, y):
+    is_decor = kind.category == tile_const.OBJECT_CATEGORY_DECOR
+
+    if not is_decor and not _walkable(grids, plane, x, y):
         found.append(Finding(RULE_OBJECT_UNWALKABLE, plane, y, x,
                              f"{where}: stands on a Blocked or water tile"))
 
@@ -141,26 +182,156 @@ def _check_object(grids: dict, plane: int, kind_key: str, x: int,
     return found
 
 
-def _check_void(chunk_file) -> list:
-    """Return a finding for each void tile of a file with no Blocked flag."""
-    names = chunk_file.floor_names
+def _floor_findings(floor: str, flags: int, plane: int, x: int,
+                    y: int) -> list:
+    """
+    Return the findings of one tile by its floor: a void tile with no Blocked
+    flag or with a wall bit, and a roof tile with no Blocked flag.
+    """
+    where = f"{floor} at ({x}, {y}) plane {plane}"
+    blocked = flags & tile_const.FLAG_BLOCKED
+    found = []
 
-    if floor_types.VOID_FLOOR_TYPE not in names:
-        return []
+    if floor == floor_types.VOID_FLOOR_TYPE:
+        if not blocked:
+            found.append(Finding(RULE_VOID_OPEN, plane, y, x,
+                                 f"{where} is not Blocked"))
 
-    void = names.index(floor_types.VOID_FLOOR_TYPE)
+        if flags & tile_const.FLAGS_WALLS:
+            found.append(Finding(RULE_WALL_ON_VOID, plane, y, x,
+                                 f"{where} carries a wall"))
+
+    if floor in floor_types.ROOF_FLOOR_TYPES and not blocked:
+        found.append(Finding(RULE_ROOF_WALKABLE, plane, y, x,
+                             f"{where} is a roof, but is not Blocked"))
+
+    return found
+
+
+def _check_floors(chunk_file) -> list:
+    """Return the findings of _floor_findings for each tile of a file."""
     size = tile_const.CHUNK_SIZE
+    names = chunk_file.floor_names
     found = []
 
     for index, floor in enumerate(chunk_file.floors):
-        if floor != void or chunk_file.flags[index] & tile_const.FLAG_BLOCKED:
-            continue
-
         x = chunk_file.cx * size + index % size
         y = chunk_file.cy * size + index // size
-        found.append(Finding(RULE_VOID_OPEN, chunk_file.plane, y, x,
-                             f"void at ({x}, {y}) plane {chunk_file.plane} "
-                             f"is not Blocked"))
+        found.extend(_floor_findings(names[floor], chunk_file.flags[index],
+                                     chunk_file.plane, x, y))
+
+    return found
+
+
+def _walkable_tiles(chunk_files: list) -> list:
+    """Return (plane, y, x) of every walkable tile, sorted."""
+    size = tile_const.CHUNK_SIZE
+    tiles = []
+
+    for chunk_file in chunk_files:
+        for index, flags in enumerate(chunk_file.flags):
+            if not flags & tile_const.FLAGS_UNWALKABLE:
+                tiles.append((chunk_file.plane,
+                              chunk_file.cy * size + index // size,
+                              chunk_file.cx * size + index % size))
+
+    return sorted(tiles)
+
+
+def _links(chunk_files: list, grids: dict) -> dict:
+    """
+    Return (plane, x, y) -> [(plane, x, y), ...]: where the transitions and
+    the climbs of each tile lead. Only a walkable landing counts.
+    """
+    links = {}
+
+    for chunk_file in chunk_files:
+        plane = chunk_file.plane
+
+        for kind_key, x, y, _text in chunk_file.global_texts():
+            kind = object_kinds.OBJECT_KINDS.get(kind_key)
+
+            if kind is None:
+                continue
+
+            ends = [(plane, *kind.target)] if kind.target else []
+            ends += [(plane + tile_const.CLIMB_PLANE_STEPS[way], x, y)
+                     for way in kind.climbs]
+            links.setdefault((plane, x, y), []).extend(
+                end for end in ends if _walkable(grids, *end))
+
+    return links
+
+
+def _step_ends(grids: dict, plane: int, x: int, y: int) -> list:
+    """Return (plane, x, y) of each tile that one legal step reaches."""
+    grid = grids[plane]
+    ends = []
+
+    for dx, dy in _STEPS:
+        result = grid.check_step((x, y), (x + dx, y + dy))
+
+        if result == tile_const.STEP_OK:
+            ends.append((plane, x + dx, y + dy))
+
+    return ends
+
+
+def _reached(grids: dict, links: dict, starts: list) -> set:
+    """Return (plane, x, y) of every tile that a walk from `starts` reaches."""
+    reached = {point for point in starts if _walkable(grids, *point)}
+    queue = deque(reached)
+
+    while queue:
+        point = queue.popleft()
+
+        for end in _step_ends(grids, *point) + links.get(point, []):
+            if end not in reached:
+                reached.add(end)
+                queue.append(end)
+
+    return reached
+
+
+def _flood_pocket(grids: dict, start: tuple, reached: set, seen: set) -> int:
+    """Mark each unreached tile that steps join to `start`. Return the count."""
+    seen.add(start)
+    queue = deque([start])
+    count = 0
+
+    while queue:
+        point = queue.popleft()
+        count += 1
+
+        for end in _step_ends(grids, *point):
+            if end not in reached and end not in seen:
+                seen.add(end)
+                queue.append(end)
+
+    return count
+
+
+def _check_reach(chunk_files: list, grids: dict, respawns: list) -> list:
+    """Return one unreachable note for each pocket. See RULE_UNREACHABLE."""
+    if not respawns:
+        return []
+
+    reached = _reached(grids, _links(chunk_files, grids), respawns)
+    seen = set()
+    found = []
+
+    # Sorted by plane, y, x: the first tile of a pocket is its lowest.
+    for plane, y, x in _walkable_tiles(chunk_files):
+        point = (plane, x, y)
+
+        if point in reached or point in seen:
+            continue
+
+        count = _flood_pocket(grids, point, reached, seen)
+        found.append(Finding(RULE_UNREACHABLE, plane, y, x,
+                             f"{count} walkable tile(s) from ({x}, {y}) plane "
+                             f"{plane} that no walk from the respawn point "
+                             f"reaches"))
 
     return found
 
@@ -191,7 +362,8 @@ def check_world(chunk_files: list) -> list:
                       no file gives one finding: no respawn point.
 
     Exit/Returns:
-        A sorted list of Finding. Empty means the world is good.
+        A sorted list of Finding, notes included. Empty means the world is
+        good. Finding.is_note picks out the notes.
 
     Module Globals:
         RULE_* read.
@@ -200,8 +372,12 @@ def check_world(chunk_files: list) -> list:
         1. Build one grid for each plane (chunkfile.build_grid).
         2. Check each placed object: its kind, its tile, the landing of a
            transition on the same plane, and the landing of each climb way.
-        3. Check each void tile of each file.
+        3. Check each tile by its floor: a void tile is Blocked and has no
+           wall, and a roof tile is Blocked.
         4. Count the respawn points of the whole world.
+        5. Walk from each respawn point through steps, transitions, and
+           climbs. Give one note for each pocket of walkable tiles that the
+           walk does not reach.
 
     Notes/References:
         The GDScript twin is TerrainChecks.check_world. The world has no
@@ -216,7 +392,7 @@ def check_world(chunk_files: list) -> list:
     respawns = []
 
     for chunk_file in chunk_files:
-        found.extend(_check_void(chunk_file))
+        found.extend(_check_floors(chunk_file))
 
         for kind_key, x, y, text in chunk_file.global_texts():
             found.extend(_check_object(grids, chunk_file.plane, kind_key, x, y,
@@ -226,5 +402,6 @@ def check_world(chunk_files: list) -> list:
                 respawns.append((chunk_file.plane, x, y))
 
     found.extend(_check_respawn(respawns))
+    found.extend(_check_reach(chunk_files, grids, respawns))
 
     return sorted(found)

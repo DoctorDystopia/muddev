@@ -21,17 +21,19 @@ from .payloads import CharChatPayload
 
 # ─── Public constant definitions ─────────────────────────────────────────────
 
-# The keys of the two modes that are not Evennia channels. A client keeps the
+# The keys of the modes that are not Evennia channels. A client keeps the
 # key of the chosen mode between sessions, so a key must never change.
 MODE_KEY_SAY: str = "say"
+MODE_KEY_YELL: str = "yell"
 MODE_KEY_REPLY: str = "reply"
 
 # The start of the key of a channel mode. The rest is the channel key in
 # lower case.
 MODE_KEY_CHANNEL_PREFIX: str = "channel:"
 
-# The labels that the chat bar shows for the two fixed modes.
+# The labels that the chat bar shows for the fixed modes.
 MODE_LABEL_SAY: str = "Say"
+MODE_LABEL_YELL: str = "Yell"
 MODE_LABEL_REPLY: str = "Reply"
 
 
@@ -51,12 +53,20 @@ def _mode(key: str, label: str, message_type: str, prefix: str) -> dict:
     return row
 
 
-def _say_mode() -> dict:
-    """The mode that speaks to the room, through Evennia's `say`."""
-    from evennia.commands.default.general import CmdSay
+def _speech_modes() -> list:
+    """
+    The modes of the speech commands: Say for the say range, and Yell for
+    the area. A yell line has the `say` type, so both modes go on the tab
+    that shows a say.
+    """
+    from commands.speech_cmds import CmdSay, CmdYell
 
-    return _mode(MODE_KEY_SAY, MODE_LABEL_SAY, const.MESSAGE_TYPE_SAY,
-                 f"{CmdSay.key} ")
+    say = _mode(MODE_KEY_SAY, MODE_LABEL_SAY, const.MESSAGE_TYPE_SAY,
+                f"{CmdSay.key} ")
+    yell = _mode(MODE_KEY_YELL, MODE_LABEL_YELL, const.MESSAGE_TYPE_SAY,
+                 f"{CmdYell.key} ")
+
+    return [say, yell]
 
 
 def _reply_mode() -> dict:
@@ -103,8 +113,9 @@ def chat_modes(observer) -> list:
     offers them.
 
     Entry:
-        observer - the puppeted Character. One with no account gets the say
-                   mode only, because page and channels belong to an account.
+        observer - the puppeted Character. One with no account gets the
+                   speech modes only, because page and channels belong to an
+                   account.
 
     Exit/Returns:
         Returns a list of {key, label, type, prefix} rows.
@@ -113,10 +124,10 @@ def chat_modes(observer) -> list:
         None.
 
     Methodology:
-        Say first, because it needs no account. Then reply, then each channel
-        that the account listens to and has the `send` lock for. A channel
-        that the player cannot send to is not a mode, because each line would
-        get a refusal.
+        Say and Yell first, because they need no account. Then reply, then
+        each channel that the account listens to and has the `send` lock for.
+        A channel that the player cannot send to is not a mode, because each
+        line would get a refusal.
 
     Notes/References:
         The client adds the typed text to `prefix` and sends it verbatim.
@@ -124,7 +135,7 @@ def chat_modes(observer) -> list:
     Author: Nick Hobar
     Creation date: 09/29/2026
     """
-    rows = [_say_mode()]
+    rows = _speech_modes()
     account = getattr(observer, "account", None)
 
     if account is None:

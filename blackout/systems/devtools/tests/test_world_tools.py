@@ -20,7 +20,7 @@ from evennia.utils.test_resources import EvenniaTest
 from systems.devtools import actions as dev_actions
 from systems.devtools import constants as dev_constants
 from world.item_database import ITEM_DB
-from world.npc_database import NPC_DB
+from world.npc_database import NPC_DB, combatant_defs
 
 
 _EGG_KEY = "moderator_egg"
@@ -82,7 +82,7 @@ class NpcSpawnTests(EvenniaTest):
         make something that fights but never respawns and answers to no
         behaviour.
         """
-        npc_key = sorted(NPC_DB.keys())[0]
+        npc_key = sorted(combatant_defs())[0]
         dev_actions.spawn_npc(self.char2, self.char1, npc_key, 1)
         spawned = [obj for obj in self.char1.location.contents
                    if getattr(obj.db, "npc_key", None) == npc_key]
@@ -94,7 +94,7 @@ class NpcSpawnTests(EvenniaTest):
     def test_the_spawn_room_is_stamped_where_it_landed(self):
         """Not where its map placement would have put it: a spawned hostile
         with a respawn timer must come back HERE."""
-        npc_key = sorted(NPC_DB.keys())[0]
+        npc_key = sorted(combatant_defs())[0]
         dev_actions.spawn_npc(self.char2, self.char1, npc_key, 1)
         spawned = [obj for obj in self.char1.location.contents
                    if getattr(obj.db, "npc_key", None) == npc_key]

@@ -61,6 +61,21 @@ extends Control
 ## no copy of it. The server puts Deposit or Sell first on each bag row while
 ## the pop-up is open. The side of the box shows [TimerPanel] when the server
 ## sends timers: the curing chamber's slots, with a bar for each.
+##
+## ## Tabs, a search box, and a drag (10/08/2026)
+##
+## A grid that sends `tabs` gets a row of [PopupTabButton] above it. A grid
+## that is `searchable` gets the search box. [method PopupState.row_groups]
+## decides which rows show, and the view draws one block for each group, with a
+## line between two blocks. That line is the OSRS divider between two tabs in
+## the main view.
+##
+## The search text belongs to the client. A snapshot rebuilds the grid and
+## keeps the text, so a withdraw from a search result does not clear the
+## search. A different pop-up starts with an empty box.
+##
+## A drop sends the template of the server, filled by [PopupState]. A drop on
+## a slot swaps the two. A drop on a tab moves the slot into that tab.
 
 ## Emitted with a whole command a telnet player could have typed.
 signal command_requested(command: String)
@@ -111,6 +126,12 @@ const BACKDROP_COLOR := Color(0, 0, 0, 0.35)
 const CLOSE_TEXT := "Close"
 const QUANTITY_TEXT := "Quantity:"
 const EMPTY_GRID_TEXT := "Nothing here."
+const SEARCH_TEXT := "Search"
+
+## The keys of the two drag templates a grid may send. The server names them
+## in `popup_defs/bank.py`.
+const DROP_ONTO_SLOT := "onto_slot"
+const DROP_ONTO_TAB := "onto_tab"
 
 var _state: PopupState
 var _meshes: MeshResolver
@@ -169,6 +190,13 @@ var _hover_key: Array = []
 ## grid index -> ScrollContainer, for the scroll that survives a rebuild.
 var _scrollers: Array = []
 
+## grid index -> the tab buttons of that grid, in order.
+var _tab_rows: Array = []
+
+## The search box, and the text in it. See the class notes.
+var _search: LineEdit
+var _search_text := ""
+
 ## The key of the pop-up the scroll positions belong to.
 var _shown_key := ""
 
@@ -202,6 +230,15 @@ func _init() -> void:
 	_status = Label.new()
 	_status.theme_type_variation = &"RowValue"
 	column.add_child(_status)
+
+	# Kept for the life of the view, not built per snapshot. A rebuild of the
+	# box under the cursor would take the keyboard away at each key press.
+	_search = LineEdit.new()
+	_search.placeholder_text = SEARCH_TEXT
+	_search.clear_button_enabled = true
+	_search.visible = false
+	_search.text_changed.connect(_on_search_changed)
+	column.add_child(_search)
 
 	column.add_child(_body())
 
@@ -276,23 +313,63 @@ func slots_in(grid_index: int) -> Array:
 	if grid_index < 0 or grid_index >= _scrollers.size():
 		return found
 
-	var scroller: ScrollContainer = _scrollers[grid_index]
-
-	for child: Node in scroller.get_child(0).get_children():
-		if child is PopupSlot:
-			found.append(child)
+	for block: GridContainer in _blocks_in(grid_index):
+		for child: Node in block.get_children():
+			if child is PopupSlot:
+				found.append(child)
 
 	return found
 
 
-## The columns of one grid now. For tests.
-func columns_in(grid_index: int) -> int:
+## The blocks of one grid: one GridContainer for each group of rows. A grid
+## with no tabs has one block.
+func _blocks_in(grid_index: int) -> Array:
+	var blocks: Array = []
+
 	if grid_index < 0 or grid_index >= _scrollers.size():
-		return 0
+		return blocks
 
 	var scroller: ScrollContainer = _scrollers[grid_index]
 
-	return (scroller.get_child(0) as GridContainer).columns
+	for child: Node in scroller.get_child(0).get_children():
+		if child is GridContainer:
+			blocks.append(child)
+
+	return blocks
+
+
+## The columns of one grid now. For tests.
+func columns_in(grid_index: int) -> int:
+	var blocks := _blocks_in(grid_index)
+
+	if blocks.is_empty():
+		return 0
+
+	return (blocks[0] as GridContainer).columns
+
+
+## How many blocks one grid draws: the dividers plus one. For tests.
+func block_count(grid_index: int) -> int:
+	return _blocks_in(grid_index).size()
+
+
+## The tab buttons of one grid, in order. For tests.
+func tab_buttons(grid_index: int) -> Array:
+	if grid_index < 0 or grid_index >= _tab_rows.size():
+		return []
+
+	return _tab_rows[grid_index]
+
+
+## The search box. For tests.
+func search_box() -> LineEdit:
+	return _search
+
+
+## Type into the search box as the player would. For tests.
+func set_search(text: String) -> void:
+	_search.text = text
+	_on_search_changed(text)
 
 
 ## The footer buttons, in order. For tests.
@@ -473,7 +550,9 @@ func _rebuild() -> void:
 		return
 
 	# Asked BEFORE anything hides, while the box can still say it has focus.
-	var had_keyboard := _menu_input.has_focus()
+	var had_menu_keyboard := _menu_input.has_focus()
+	var had_search_keyboard := _search.has_focus()
+	var had_keyboard := had_menu_keyboard or had_search_keyboard
 
 	visible = _state.is_open
 
@@ -491,12 +570,16 @@ func _rebuild() -> void:
 	_title.text = _state.title
 	_status.text = _state.status
 	_status.visible = not _state.status.is_empty()
+	_show_search()
 	_build_grids()
 	_timers.show_timers(_state)
 	_build_quantity()
 	_build_footer()
 	_build_menu()
-	_release_keyboard(had_keyboard and not _menu_input.visible)
+	# Give the keyboard back only when the box that held it went away.
+	var lost_menu := had_menu_keyboard and not _menu_input.visible
+	var lost_search := had_search_keyboard and not _search.visible
+	_release_keyboard(lost_menu or lost_search)
 	_restore_scroll(kept)
 	_restore_hover(hovered_key)
 	_shown_key = _state.key
@@ -508,6 +591,9 @@ func _rebuild() -> void:
 
 func _clear_closed() -> void:
 	_shown_key = ""
+	_clear_search()
+	_search.visible = false
+	_tab_rows = []
 	_clear(_grids)
 	_clear(_quantity)
 	_clear(_footer)
@@ -519,18 +605,24 @@ func _clear_closed() -> void:
 	_timers.show_timers(_state)
 
 
-## One column per grid: a heading and a scrolling grid of slots.
+## One column per grid: a heading, the tab buttons, and a scrolling grid of
+## slots.
 ##
 ## Stage indices run across all grids in order, so no two slots claim the same
-## pixels of the one render target.
+## pixels of the one render target. A tab button with a mesh takes an index
+## too.
 func _build_grids() -> void:
 	_clear(_grids)
 	_scrollers = []
+	_tab_rows = []
 
+	var plans: Array = []
 	var total := 0
 
-	for entry: Dictionary in _state.grids:
-		total += int(entry["slots_total"])
+	for grid_index: int in range(_state.grids.size()):
+		var plan := _plan(grid_index)
+		plans.append(plan)
+		total += _plan_size(plan)
 
 	_stage.reserve(total)
 
@@ -538,11 +630,45 @@ func _build_grids() -> void:
 
 	for grid_index: int in range(_state.grids.size()):
 		var entry: Dictionary = _state.grids[grid_index]
-		_grids.add_child(_grid_column(grid_index, entry, first_index))
-		first_index += int(entry["slots_total"])
+		var plan: Dictionary = plans[grid_index]
+		_grids.add_child(_grid_column(grid_index, entry, plan, first_index))
+		first_index += _plan_size(plan)
 
 
-func _grid_column(grid_index: int, entry: Dictionary, first_index: int) -> Control:
+## What one grid draws now: its groups of rows, and its tab buttons.
+##
+## A grid with no tabs and no search draws every slot it counts, empty frames
+## included, in one group. That is the bag of a shop, and every grid before
+## 10/08/2026.
+func _plan(grid_index: int) -> Dictionary:
+	var entry: Dictionary = _state.grids[grid_index]
+
+	if _state.is_filtered(grid_index):
+		return {
+			"groups": _state.row_groups(grid_index, _search_text),
+			"tabs": entry["tabs"],
+		}
+
+	var rows: Array = []
+
+	for slot: int in range(int(entry["slots_total"])):
+		rows.append(_state.row_at(grid_index, slot))
+
+	return {"groups": [rows] if not rows.is_empty() else [], "tabs": []}
+
+
+## How many stage indices one plan takes: one for each cell and each tab.
+static func _plan_size(plan: Dictionary) -> int:
+	var total := (plan["tabs"] as Array).size()
+
+	for group: Array in plan["groups"]:
+		total += group.size()
+
+	return total
+
+
+func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary,
+		first_index: int) -> Control:
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.size_flags_stretch_ratio = WIDE_RATIO if grid_index == 0 else NARROW_RATIO
@@ -551,6 +677,9 @@ func _grid_column(grid_index: int, entry: Dictionary, first_index: int) -> Contr
 	heading.theme_type_variation = &"SectionHeading"
 	heading.text = str(entry["title"])
 	column.add_child(heading)
+
+	var tabs: Array = plan["tabs"]
+	column.add_child(_tab_bar(grid_index, tabs, first_index))
 
 	# SHOW_NEVER and not DISABLED. A disabled axis adds the width of the grid
 	# to the minimum of the scroll. A wide box gives the grid more columns, and
@@ -563,23 +692,74 @@ func _grid_column(grid_index: int, entry: Dictionary, first_index: int) -> Contr
 	column.add_child(scroller)
 	_scrollers.append(scroller)
 
-	var grid := GridContainer.new()
-	grid.columns = _columns_for(scroller.size.x)
-	scroller.add_child(grid)
-	scroller.resized.connect(_reflow.bind(scroller, grid))
+	var content := VBoxContainer.new()
+	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroller.add_child(content)
+	scroller.resized.connect(_reflow.bind(scroller))
 
-	var slots_total := int(entry["slots_total"])
-
-	if slots_total == 0:
-		var empty := Label.new()
-		empty.text = EMPTY_GRID_TEXT
-		grid.add_child(empty)
-		return column
-
-	for slot: int in range(slots_total):
-		grid.add_child(_slot(grid_index, slot, first_index + slot))
+	_fill_blocks(content, grid_index, plan["groups"], first_index + tabs.size(),
+		scroller.size.x)
 
 	return column
+
+
+## One block of slots for each group, with a line between two blocks. An empty
+## plan says so in words.
+func _fill_blocks(content: VBoxContainer, grid_index: int, groups: Array,
+		first_index: int, width: float) -> void:
+	if groups.is_empty():
+		var empty := Label.new()
+		empty.text = EMPTY_GRID_TEXT
+		content.add_child(empty)
+		return
+
+	var slot_position := 0
+
+	for group_index: int in range(groups.size()):
+		if group_index > 0:
+			content.add_child(HSeparator.new())
+			content.add_theme_constant_override("separation", 24)
+
+		var block := GridContainer.new()
+		block.columns = _columns_for(width)
+		content.add_child(block)
+
+		for row: Dictionary in groups[group_index]:
+			block.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
+			slot_position += 1
+
+
+## The tab buttons of one grid, wrapped onto more lines when the box is
+## narrow. The vault has no limit on tabs. An empty grid gets an empty bar.
+func _tab_bar(grid_index: int, tabs: Array, first_index: int) -> Control:
+	var bar := HFlowContainer.new()
+	var buttons: Array = []
+	bar.visible = not tabs.is_empty()
+
+	for tab_index: int in range(tabs.size()):
+		var button := _tab_button(grid_index, tabs[tab_index], first_index + tab_index)
+		bar.add_child(button)
+		buttons.append(button)
+
+	_tab_rows.append(buttons)
+
+	return bar
+
+
+func _tab_button(grid_index: int, tab: Dictionary, stage_index: int) -> PopupTabButton:
+	var button := PopupTabButton.new()
+	var asset := str(tab.get("asset", ""))
+	var art: Texture2D = null
+
+	if not asset.is_empty():
+		_stage.place(stage_index, asset, str(tab.get("family", "")), _meshes)
+		art = _stage.texture_for(stage_index)
+
+	button.bind(tab, art)
+	button.command_requested.connect(command_requested.emit)
+	button.dropped.connect(_on_dropped.bind(grid_index, DROP_ONTO_TAB))
+
+	return button
 
 
 ## As many columns as the width fits, and at least one.
@@ -589,22 +769,29 @@ static func _columns_for(width: float) -> int:
 	return maxi(1, floori((width + SLOT_GAP) / pitch))
 
 
-## Fit the columns to the scroller after a resize: of the box, or of the pane.
-func _reflow(scroller: ScrollContainer, grid: GridContainer) -> void:
+## Fit the columns of every block to the scroller after a resize: of the box,
+## or of the pane.
+func _reflow(scroller: ScrollContainer) -> void:
 	var wanted := _columns_for(scroller.size.x)
 
-	if grid.columns != wanted:
-		grid.columns = wanted
+	for child: Node in scroller.get_child(0).get_children():
+		if child is GridContainer and (child as GridContainer).columns != wanted:
+			(child as GridContainer).columns = wanted
 
 
-func _slot(grid_index: int, slot: int, stage_index: int) -> PopupSlot:
+## One slot. `slot_position` is its place among the slots this grid draws
+## now, and the hover key names it by that place.
+func _slot(grid_index: int, slot_position: int, row: Dictionary, stage_index: int) -> PopupSlot:
 	var cell := PopupSlot.new()
-	var row := _state.row_at(grid_index, slot)
 	cell.bind_settings(_settings)
 	cell.bind(row)
 	cell.command_requested.connect(command_requested.emit)
-	cell.hovered.connect(_on_slot_hovered.bind(cell, grid_index, slot))
-	cell.unhovered.connect(_on_slot_unhovered.bind(grid_index, slot))
+	cell.hovered.connect(_on_slot_hovered.bind(cell, grid_index, slot_position))
+	cell.unhovered.connect(_on_slot_unhovered.bind(grid_index, slot_position))
+
+	if _takes_drag(grid_index):
+		cell.bind_drag(str(row.get("drag_key", "")))
+		cell.dropped_on.connect(_on_dropped.bind(grid_index, DROP_ONTO_SLOT))
 
 	if not row.is_empty():
 		_stage.place(stage_index, str(row.get("asset", "")),
@@ -612,6 +799,54 @@ func _slot(grid_index: int, slot: int, stage_index: int) -> PopupSlot:
 		cell.show_art(_stage.texture_for(stage_index))
 
 	return cell
+
+
+## True when the server sent a drag template for this grid.
+func _takes_drag(grid_index: int) -> bool:
+	var entry: Dictionary = _state.grids[grid_index]
+
+	return not (entry["drag"] as Dictionary).is_empty()
+
+
+## Send the command for one drop, if the server named one. The bound
+## arguments come after the two that the signal gives.
+func _on_dropped(source: String, target: String, grid_index: int, kind: String) -> void:
+	var command := _state.drop_command(grid_index, kind, source, target)
+
+	if not command.is_empty():
+		command_requested.emit(command)
+
+
+# ─── The search box ──────────────────────────────────────────────────────────
+
+## Show the box when a grid asks for it. A different pop-up starts with an
+## empty box, and the same pop-up keeps the text through a snapshot.
+func _show_search() -> void:
+	if _state.key != _shown_key:
+		_clear_search()
+
+	var wanted := false
+
+	for grid_index: int in range(_state.grids.size()):
+		wanted = wanted or bool(_state.grids[grid_index]["searchable"])
+
+	_search.visible = wanted and not _state.is_menu()
+
+	if not _search.visible:
+		_clear_search()
+
+
+func _clear_search() -> void:
+	_search_text = ""
+	_search.text = ""
+
+
+## Draw the grids again for the new text. Only the grids: a rebuild of the
+## whole box would take the keyboard from the search box.
+func _on_search_changed(text: String) -> void:
+	_search_text = text
+	_build_grids()
+	_restore_hover([])
 
 
 ## The 1 / 5 / 10 / X / All row. The active button is drawn pressed, from the

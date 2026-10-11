@@ -14,6 +14,9 @@ from items import stacking
 from items.equipment.handler import EquipmentError
 from items.inventory.handler import InventoryError
 
+from . import constants as bank_const
+from . import layout as vault_layout
+
 # NOTE: Banking currently uses a DefaultRoom as a hidden container.
 # Future plan: transition to Evennia's contrib/game_systems/storage
 # (tag-based storage with location=None). The contrib currently has
@@ -22,6 +25,9 @@ from items.inventory.handler import InventoryError
 # location=None rather than physically placed in a room.
 
 BANK_ROOM_ATTR = "_bank_room"
+# Where the vault layout lives on the character: the tabs, the slot order,
+# the tab names and the placeholders. One plain dict. See layout.py.
+BANK_LAYOUT_ATTR = "_bank_layout"
 BANK_TAG = "bank_vault"
 BANK_TAG_CATEGORY = "banking"
 # A vault holds this many SLOTS. One slot holds one item name, however many
@@ -32,6 +38,10 @@ BANK_TAG_CATEGORY = "banking"
 # so a run of non-stackables burned one slot per copy and the vault filled up
 # roughly eleven times too fast. The "already stored" exemption below existed
 # to paper over that; under slot counting it is simply the rule.
+#
+# A placeholder is a slot too, as in OSRS. It keeps its place for an item
+# that will come back, so it spends one of these until the player releases
+# it.
 BANK_MAX_UNIQUE_KEYS = 100
 
 # Why a transfer delivered nothing. Returned on the result rather than
@@ -42,6 +52,10 @@ BANK_MAX_UNIQUE_KEYS = 100
 VAULT_FULL_ERROR = f"Your bank vault is full ({BANK_MAX_UNIQUE_KEYS} slots max)."
 NOT_STORED_ERROR = "You don't have that item stored in the bank."
 NOTHING_GIVEN_ERROR = "There is nothing to move."
+NO_SUCH_SLOT_ERROR = "Your vault has nothing by that name."
+NO_SUCH_TAB_ERROR = "Your vault has no tab with that number."
+SAME_SLOT_ERROR = "Name two different items to swap."
+NOT_A_PLACEHOLDER_ERROR = "That slot holds an item, not a placeholder."
 
 
 @dataclass
@@ -169,20 +183,17 @@ class BankHandler:
         return room
 
     def _has_existing_stack(self, item_key):
-        """Check if bank already has an entry under this item key.
+        """Check if the bank already has a slot under this item key.
 
-        Deliberately NOT the stacking module's mergeability rule: this asks
-        whether the vault's 100-unique-key budget is already spending a slot
-        on that name, which is true for a non-stackable entry too.
+        This is not the mergeability rule of the stacking module. It asks if
+        the slot cap already counts a slot for that name. That is true for a
+        non-stackable entry too. It is also true for a placeholder: a deposit
+        fills the slot of the placeholder, so it needs no free slot.
         """
-        room = self._get_bank_room()
         wanted = item_key.lower()
+        names = vault_layout.ordered_names(self.layout())
 
-        for obj in room.contents:
-            if obj.key.lower() == wanted:
-                return True
-
-        return False
+        return wanted in names
 
 
     def _vault_has_room_for(self, item_key) -> bool:
@@ -318,6 +329,7 @@ class BankHandler:
         publish cannot be left to the character's move hooks.
         """
         result = self._deposit(item, count)
+        self._fit_layout()
         self._publish()
 
         return result
@@ -409,6 +421,7 @@ class BankHandler:
             return self._deposit(item, take)
 
         result = self._transfer_many(items, count, _move)
+        self._fit_layout()
         self._publish()
 
         return result
@@ -491,6 +504,7 @@ class BankHandler:
             return TransferResult(True, count, obj_key, withdrawn)
 
         obj.move_to(self.obj, quiet=True)
+        self._fit_layout()
 
         return TransferResult(True, count, obj_key, obj)
 
@@ -507,14 +521,32 @@ class BankHandler:
         def _move(item, take):
             return self.withdraw(item.id, take)
 
-        return self._transfer_many(items, count, _move)
+        result = self._transfer_many(items, count, _move)
+        self._fit_layout()
+
+        return result
 
 
     def list_items(self):
-        """Return a list of all item objects currently stored in the bank."""
-        room = self._get_bank_room()
+        """Return every item object stored in the bank, in the order of the
+        vault layout: the main tab, then tab 1, tab 2, and so on.
 
-        return list(room.contents)
+        The order of the main view. Thus, the menu, `withdraw` and `balance`
+        list the vault in the order that the pop-up draws it. The objects of
+        one name stay together, in the order the room holds them.
+        """
+        room = self._get_bank_room()
+        by_name = {}
+
+        for obj in room.contents:
+            by_name.setdefault(obj.key.lower(), []).append(obj)
+
+        ordered = []
+
+        for name in vault_layout.ordered_names(self.layout()):
+            ordered.extend(by_name.get(name, []))
+
+        return ordered
 
 
     def count_items(self):
@@ -534,10 +566,10 @@ class BankHandler:
 
         One slot per distinct item name, matched case-insensitively so it
         agrees with _has_existing_stack and with the stacking rules in
-        items/stacking.py. This is the number BANK_MAX_UNIQUE_KEYS caps.
+        items/stacking.py. Each placeholder is one more slot. This is the
+        number BANK_MAX_UNIQUE_KEYS caps.
         """
-        room = self._get_bank_room()
-        names = {obj.key.lower() for obj in room.contents}
+        names = vault_layout.ordered_names(self.layout())
 
         return len(names)
 
@@ -632,6 +664,267 @@ class BankHandler:
         return match is not None
 
 
+    # ─── The vault layout: tabs, slot order, placeholders ───────────────────
+
+    def _present_names(self) -> dict:
+        """Return stored slot name -> (display key, prototype key), in the
+        order the vault room holds its objects. layout.reconcile takes this.
+
+        The prototype tag is read here, not through the statefeed's
+        serializer. The handler is the domain layer, and a placeholder needs
+        the key only to draw its mesh after the item is gone.
+        """
+        from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
+
+        room = self._get_bank_room()
+        present = {}
+
+        for obj in room.contents:
+            name = obj.key.lower()
+
+            if name in present:
+                continue
+
+            prototype = obj.tags.get(category=PROTOTYPE_TAG_CATEGORY) or ""
+            present[name] = (obj.key, str(prototype))
+
+        return present
+
+
+    def layout(self) -> vault_layout.VaultLayout:
+        """
+        Purpose: Return the vault layout, fitted to what the vault holds.
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            Returns a VaultLayout. A change to it writes nothing. Give it to
+            _save_layout to keep it.
+
+        Module Globals:
+            BANK_LAYOUT_ATTR read.
+
+        Methodology:
+            1. Read the record, and fit it to the stored objects. A new name
+               goes into the viewed tab, as in OSRS.
+            2. Write the record back only if the fit changed it.
+
+        Notes/References:
+            Every reader comes through here: the slot count, the order of
+            list_items, the pop-up, and each layout verb. Thus, an item that
+            reached the vault by any route has a slot, and an item that left
+            becomes a placeholder before anything reads the layout again.
+
+        Author: Nick Hobar
+        Creation date: 10/08/2026
+        """
+        from evennia.utils.dbserialize import deserialize
+
+        # deserialize, because an Attribute gives back a _SaverDict of
+        # _SaverLists. Those are not dict and list, and the layout model
+        # takes plain Python only. Without this, every read started empty.
+        stored = self.obj.attributes.get(BANK_LAYOUT_ATTR, default=None)
+        record = deserialize(stored)
+        current = vault_layout.from_record(record)
+        before = vault_layout.to_record(current)
+
+        vault_layout.reconcile(current, self._present_names(), current.viewed)
+
+        if vault_layout.to_record(current) != before:
+            self._save_layout(current)
+
+        return current
+
+
+    def _fit_layout(self) -> None:
+        """
+        Fit the layout to the vault now, at the end of a transfer.
+
+        A read fits the layout too, but a read can come too late. A slot
+        becomes a placeholder only if the layout saw its item before the item
+        left. A deposit and a withdrawal in one turn, with no read between,
+        would leave no trace. A new name also takes the tab that the player
+        views at the deposit, not at some later read.
+        """
+        self.layout()
+
+
+    def _save_layout(self, current) -> None:
+        """Write one layout back to its Attribute."""
+        record = vault_layout.to_record(current)
+        self.obj.attributes.add(BANK_LAYOUT_ATTR, record)
+
+
+    def _publish_layout(self) -> None:
+        """
+        Send the open bank pop-up again after a layout change.
+
+        A layout change moves no item, so emit_inventory never marks the
+        pop-up. crafting_facilities.cancel_craft has the same problem and the
+        same answer. Imported inside the method for the reason _publish gives.
+        """
+        from evennia.utils import logger
+
+        from systems.interface.popups import service
+
+        try:
+            service.publish_if_open(self.obj)
+        except Exception:
+            logger.log_trace()
+
+
+    def _change_layout(self, change) -> str:
+        """
+        Read the layout and apply `change` to it. `change` takes the layout
+        and returns "" on success, or the reason it failed. On success, keep
+        the layout and send the open pop-up again. Returns the reason.
+
+        One routine for every layout verb. Thus, no verb can forget to save,
+        and no verb can send a pop-up for a change that it refused.
+        """
+        current = self.layout()
+        refusal = change(current)
+
+        if not refusal:
+            self._save_layout(current)
+            self._publish_layout()
+
+        return refusal
+
+
+    def view_tab(self, index: int) -> str:
+        """Look at one tab. A new item name goes into the viewed tab. Returns
+        "" on success, or the reason it failed."""
+        def _view(current):
+            shown = vault_layout.set_view(current, index)
+
+            return "" if shown else NO_SUCH_TAB_ERROR
+
+        return self._change_layout(_view)
+
+
+    def move_to_tab(self, needle: str, target) -> str:
+        """
+        Purpose: Move one slot into a tab, into a new tab, or out of its tab.
+
+        Entry:
+            needle - an item name, whole or the start of one. It may name a
+                     placeholder.
+            target - a tab number, or bank_const.NEW_TAB_WORD for a new tab.
+                     bank_const.MAIN_TAB takes the slot out of its tab.
+
+        Exit/Returns:
+            Returns "" on success, or the reason it failed.
+
+        Module Globals:
+            NO_SUCH_SLOT_ERROR, NO_SUCH_TAB_ERROR read.
+
+        Methodology:
+            Resolve the name to a slot, turn the new-tab word into the number
+            after the last tab, and give both to layout.move.
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 10/08/2026
+        """
+        def _move(current):
+            name = vault_layout.resolve(current, needle)
+
+            if not name:
+                return NO_SUCH_SLOT_ERROR
+
+            wanted = target
+
+            if target == bank_const.NEW_TAB_WORD:
+                wanted = len(current.tabs)
+
+            moved = vault_layout.move(current, name, wanted)
+
+            return "" if moved else NO_SUCH_TAB_ERROR
+
+        return self._change_layout(_move)
+
+
+    def swap_slots(self, first: str, second: str) -> str:
+        """Swap the places of two slots. Each name may name a placeholder.
+        Returns "" on success, or the reason it failed."""
+        def _swap(current):
+            first_name = vault_layout.resolve(current, first)
+            second_name = vault_layout.resolve(current, second)
+
+            if not first_name or not second_name:
+                return NO_SUCH_SLOT_ERROR
+
+            if first_name == second_name:
+                return SAME_SLOT_ERROR
+
+            vault_layout.swap(current, first_name, second_name)
+
+            return ""
+
+        return self._change_layout(_swap)
+
+
+    def rename_tab(self, index: int, text: str) -> str:
+        """Give one tab a text name, or "" to show its item icon again.
+        Returns "" on success, or the reason it failed."""
+        def _rename(current):
+            renamed = vault_layout.rename(current, index, text)
+
+            return "" if renamed else NO_SUCH_TAB_ERROR
+
+        return self._change_layout(_rename)
+
+
+    def set_keep_placeholders(self, keep: bool) -> None:
+        """Turn "always set placeholders" on or off. The placeholders that
+        exist stay. Release them with release_placeholders."""
+        def _set(current):
+            current.keep_placeholders = bool(keep)
+
+            return ""
+
+        self._change_layout(_set)
+
+
+    def keeps_placeholders(self) -> bool:
+        """Return True when the last unit to leave leaves a placeholder."""
+        return self.layout().keep_placeholders
+
+
+    def release_placeholder(self, needle: str) -> str:
+        """Remove one placeholder and free its slot. Returns "" on success, or
+        the reason it failed."""
+        def _release(current):
+            name = vault_layout.resolve(current, needle)
+
+            if not name:
+                return NO_SUCH_SLOT_ERROR
+
+            released = vault_layout.release(current, name)
+
+            return "" if released else NOT_A_PLACEHOLDER_ERROR
+
+        return self._change_layout(_release)
+
+
+    def release_placeholders(self) -> int:
+        """Remove every placeholder. Returns how many slots it freed."""
+        freed = []
+
+        def _release_all(current):
+            freed.append(vault_layout.release_all(current))
+
+            return ""
+
+        self._change_layout(_release_all)
+
+        return freed[0]
+
+
     def delete_bank_room(self):
         """Delete the hidden bank room and all items in it, then clear the stored reference."""
         room = self.obj.db._bank_room
@@ -643,5 +936,7 @@ class BankHandler:
                 room.delete()
             except Exception:
                 pass
-            
+
             self.obj.db._bank_room = None
+
+        self.obj.attributes.remove(BANK_LAYOUT_ATTR)

@@ -261,12 +261,12 @@ class OutOfSightRefusalTests(EvenniaTest):
             combat_profile,
             ensure_combat_handler,
         )
-        from typeclasses.npc_combat import spawn_mutant_raider
+        from typeclasses.npc_spawners import spawn_npc
 
         world = _world({_BETWEEN: tile_const.FLAG_BLOCKED}, [])
         set_world(world)
         movement.place(world.rooms, self.char1, *_START, quiet=True)
-        raider = spawn_mutant_raider(world.rooms.ensure_room(*_GOAL))
+        raider = spawn_npc("mutant_raider", world.rooms.ensure_room(*_GOAL))
         handler = ensure_combat_handler(self.char1)
         handler.init_runtime_state()
         handler.ndb.active_weapon_data = dict(

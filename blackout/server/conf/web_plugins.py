@@ -2,12 +2,17 @@
 Web plugin hooks.
 """
 
+from systems.interface.serverstatus import status
+
 
 def at_webserver_root_creation(web_root):
     """
     This is called as the web server has finished building its default
     path tree. At this point, the media/ and static/ URIs have already
     been added to the web root.
+
+    Blackout adds /status.json here, outside Django, for the status light
+    on the website. See systems/interface/serverstatus/status.py.
 
     Args:
         web_root (twisted.web.resource.Resource): The root
@@ -25,7 +30,7 @@ def at_webserver_root_creation(web_root):
         web_root.putChild("mypage", my_page)
 
     """
-    return web_root
+    return status.mount(web_root)
 
 
 def at_webproxy_root_creation(web_root):

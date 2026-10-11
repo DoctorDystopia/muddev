@@ -19,12 +19,22 @@ extends Node3D
 ##
 ## Each plane stores its own absolute heights, so a plane-1 chunk draws at its
 ## own heights with no offset. A void tile has no triangle, so the plane below
-## shows through it. With "Hide roofs" on (the default, [ClientSettings]),
-## every plane above the plane of the player is hidden, as in OSRS.
+## shows through it.
+##
+## ## Hide roofs (DESIGN-0013 decision 4)
+##
+## With "Hide roofs" on (the default, [ClientSettings]), the planes above the
+## plane of the player hide only while the player is under a roof: some plane
+## above has a floor that is not void on the tile of the player. A player
+## outside a house sees its roof and its upper level. A player who walks in
+## sees into the room. RS3 calls this rule "Selectively". The client holds
+## every streamed plane, so the rule needs no server data.
 ##
 ## A chunk with a water tile also gets a "Water" child: the flat surface of
 ## [WaterMeshBuilder]. A chunk with a wall flag gets a "Walls" child: the slabs
-## of [WallMeshBuilder]. A chunk with a ladder, stairs, or a hatch gets a
+## of [WallMeshBuilder]. A wall under a floor of the plane above meets that
+## floor, so a chunk builds again when the chunk above it comes, goes, or
+## changes. A chunk with a ladder, stairs, or a hatch gets a
 ## "Props" child: the plain shapes of [PropMeshBuilder], until they get art.
 ##
 ## ## Scenery
@@ -78,11 +88,20 @@ var _nodes := {}
 ## again is a new ChunkFile, so a changed object here means "build again".
 var _built := {}
 
+## Key -> the ChunkFile of the plane above that its walls meet, or null. A
+## wall meets the floor above it (DESIGN-0013 section 6.3), so a new chunk
+## above means "build again" too.
+var _built_above := {}
+
 ## Keys to build, first key first.
 var _queue: Array[Vector3i] = []
 
-## Hide every plane above the plane of the player.
+## Hide the planes above the player while the player is under a roof.
 var _hide_roofs := true
+
+## True while the player is under a roof. [method _refresh_visibility] sets
+## it.
+var _covered := false
 
 var _material: StandardMaterial3D
 
@@ -129,9 +148,15 @@ func sync() -> void:
 			_free(key)
 
 	_queue = _queue.filter(func(key: Vector3i) -> bool: return present.has(key))
+	# A chunk above can come or go under the player.
+	_refresh_visibility()
 
 	for key: Vector3i in present:
-		if _built.get(key) != present[key] and not _queue.has(key):
+		var above: Variant = present.get(key + Vector3i(0, 0, 1))
+		var stale: bool = _built.get(key) != present[key] \
+			or _built_above.get(key) != above
+
+		if stale and not _queue.has(key):
 			_queue.append(key)
 
 	_sort_queue()
@@ -146,6 +171,27 @@ func flush() -> void:
 ## How many chunk meshes this node draws. For a test.
 func chunk_count() -> int:
 	return _nodes.size()
+
+
+## True while some plane above the player has a floor that is not void on the
+## tile of the player. Off the tile world, false.
+func under_roof() -> bool:
+	if _state == null or _state.current_plane < 0:
+		return false
+
+	var cell := _state.current_cell
+
+	for plane: int in _state.planes_held():
+		if plane <= _state.current_plane:
+			continue
+
+		var plane_set := _state.plane_chunks(plane)
+
+		if plane_set.has_tile(cell) \
+				and plane_set.get_floor(cell) != _Const.TILE_VOID_FLOOR:
+			return true
+
+	return false
 
 
 ## The mesh node of one chunk, or null. For a test.
@@ -208,10 +254,20 @@ func _build_next() -> void:
 	var chunk := _state.plane_chunks(key.z).get_chunk(Vector2i(key.x, key.y))
 
 	if chunk != null:
-		_build(key, chunk)
+		_build(key, chunk, _chunk_above(key))
 
 
-func _build(key: Vector3i, chunk: ChunkFile) -> void:
+## The chunk over `key` on the plane above, or null.
+func _chunk_above(key: Vector3i) -> ChunkFile:
+	var above := key + Vector3i(0, 0, 1)
+
+	if not _state.planes_held().has(above.z):
+		return null
+
+	return _state.plane_chunks(above.z).get_chunk(Vector2i(above.x, above.y))
+
+
+func _build(key: Vector3i, chunk: ChunkFile, above: ChunkFile) -> void:
 	_free(key)
 
 	var node := MeshInstance3D.new()
@@ -224,12 +280,13 @@ func _build(key: Vector3i, chunk: ChunkFile) -> void:
 	# The water and the walls are children, so they hide with the roof of
 	# their plane.
 	_add_layer(node, "Water", WaterMeshBuilder.build(chunk))
-	_add_layer(node, "Walls", WallMeshBuilder.build(chunk))
+	_add_layer(node, "Walls", WallMeshBuilder.build(chunk, above))
 	_add_layer(node, PROPS_NODE, PropMeshBuilder.build(chunk))
 
 	add_child(node)
 	_nodes[key] = node
 	_built[key] = chunk
+	_built_above[key] = above
 	_place_scenery(key)
 
 
@@ -302,7 +359,7 @@ static func _stand(model: Node3D, chunk: ChunkFile, thing: Dictionary) -> void:
 	model.rotation.y = model_yaw(int(thing["rotation"]))
 
 
-## The yaw that turns a model to face `rotation`: quarter turns clockwise
+## The yaw that turns a model to face `quarter_turns`: quarter turns clockwise
 ## from north, the rotation of a chunk object.
 ##
 ## A served model faces +Z as it comes, as a character does (see
@@ -313,8 +370,8 @@ static func _stand(model: Node3D, chunk: ChunkFile, thing: Dictionary) -> void:
 ##
 ## The scenery here and each entity of [EntityPool] with a facing use this
 ## function. Thus, the two cannot turn a model two ways.
-static func model_yaw(rotation: int) -> float:
-	return PI - rotation * PI * 0.5
+static func model_yaw(quarter_turns: int) -> float:
+	return PI - quarter_turns * PI * 0.5
 
 
 ## Art for a scenery key arrived: stand it on every chunk that names it.
@@ -337,6 +394,7 @@ func _free(key: Vector3i) -> void:
 
 	_nodes.erase(key)
 	_built.erase(key)
+	_built_above.erase(key)
 
 
 func _on_room_changed() -> void:
@@ -345,14 +403,16 @@ func _on_room_changed() -> void:
 
 
 func _refresh_visibility() -> void:
+	_covered = under_roof()
+
 	for key: Vector3i in _nodes:
 		_nodes[key].visible = _plane_shows(key.z)
 
 
-## False for a plane above the player while roofs hide. Off the tile world,
-## every plane shows.
+## False for a plane above the player while roofs hide and the player is
+## under a roof. Off the tile world, every plane shows.
 func _plane_shows(plane: int) -> bool:
-	if not _hide_roofs or _state == null or _state.current_plane < 0:
+	if not _hide_roofs or not _covered:
 		return true
 
 	return plane <= _state.current_plane

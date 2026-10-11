@@ -2,18 +2,21 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/24/2026
-Description: Tests for the tile sync: the plan, each of its four verbs, and
-             the facing of each entity. The kinds come from the kind table
-             by category, not by name.
+Description: Tests for the tile sync: the plan, each of its four verbs, the
+             facing of each entity, and the decor rules. The kinds come from
+             the kind table by category, not by name.
 """
+
+import os
+import tempfile
 
 from evennia.utils.test_resources import EvenniaTestCase
 
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
-from systems.core.tilegrid.world import TileWorld
+from systems.core.tilegrid.world import TileWorld, load_world
 from systems.gameplay.spawning import tile_sync
-from world.object_kinds import OBJECT_KINDS
+from world.object_kinds import OBJECT_KINDS, UNPINNED_KINDS
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -33,10 +36,12 @@ def _first_of(category: str) -> str:
 _FACILITY = _first_of(tile_const.OBJECT_CATEGORY_FACILITY)
 _SIGN = _first_of(tile_const.OBJECT_CATEGORY_SIGN)
 _TRANSITION = _first_of(tile_const.OBJECT_CATEGORY_TRANSITION)
+_DECOR = _first_of(tile_const.OBJECT_CATEGORY_DECOR)
 
 # The tiles of the test world.
 _FACILITY_TILE = (4, 4)
 _TRANSITION_TILE = (9, 9)
+_DECOR_TILE = (6, 6)
 
 # The words of the sign, before and after an edit.
 _WORDS = "Bank"
@@ -52,13 +57,14 @@ _SIGN_TURN = 1
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
-def _world(objects: list) -> TileWorld:
+def _chunk(objects: list) -> chunkfile.ChunkFile:
     """
-    A loaded one-chunk world with these (kind, x, y, text) objects. A fifth
-    item gives the rotation of an object.
+    One chunk file with these (kind, x, y, text) objects. A fifth item gives
+    the rotation of an object.
     """
     tile_count = _SIZE * _SIZE
-    chunk_file = chunkfile.ChunkFile(
+
+    return chunkfile.ChunkFile(
         cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
         heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=[0] * tile_count,
@@ -66,7 +72,11 @@ def _world(objects: list) -> TileWorld:
         objects=[chunkfile.ChunkObject(kind, x, y, turn[0] if turn else 0,
                                        text=text)
                  for kind, x, y, text, *turn in objects])
-    world = TileWorld([chunk_file])
+
+
+def _world(objects: list) -> TileWorld:
+    """A loaded one-chunk world of `_chunk(objects)`, with the real pin rule."""
+    world = TileWorld([_chunk(objects)], unpinned=UNPINNED_KINDS)
     world.rooms.load()
 
     return world
@@ -233,3 +243,37 @@ class TileSyncTests(EvenniaTestCase):
 
         self.assertTrue(room.contents)
         self.assertEqual(_facings(room), {"facility": None, "sign": None})
+
+
+class DecorTests(EvenniaTestCase):
+    """DESIGN-0013 section 6.5: decor stands nothing up and pins nothing."""
+
+    def test_the_sync_stands_nothing_up_for_decor(self):
+        world = _world([(_DECOR, *_DECOR_TILE, "")])
+
+        self.assertEqual(tile_sync.plan(world), [])
+
+    def test_a_tile_of_decor_alone_is_not_pinned(self):
+        world = _world([(_DECOR, *_DECOR_TILE, "")])
+
+        self.assertFalse(world.rooms.is_pinned(*_DECOR_TILE))
+
+    def test_decor_beside_a_facility_keeps_the_pin(self):
+        world = _world([(_DECOR, *_FACILITY_TILE, ""),
+                        (_FACILITY, *_FACILITY_TILE, "")])
+
+        self.assertTrue(world.rooms.is_pinned(*_FACILITY_TILE))
+
+    def test_the_world_of_the_server_pins_no_decor(self):
+        # load_world gives the kinds itself, so a server start and the
+        # operator script share the rule.
+        chunk_file = _chunk([(_DECOR, *_DECOR_TILE, ""),
+                             (_FACILITY, *_FACILITY_TILE, "")])
+
+        with tempfile.TemporaryDirectory() as directory:
+            chunkfile.write_file(os.path.join(directory, chunk_file.file_name()),
+                                 chunk_file)
+            world = load_world(directory)
+
+        self.assertFalse(world.rooms.is_pinned(*_DECOR_TILE))
+        self.assertTrue(world.rooms.is_pinned(*_FACILITY_TILE))

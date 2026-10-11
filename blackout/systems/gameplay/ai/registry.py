@@ -201,7 +201,10 @@ def behavior_key_for(npc) -> str:
     npc_key = getattr(npc.db, NPC_KEY_ATTR, None)
     definition = NPC_DB.get(npc_key) if npc_key else None
 
+    if definition is not None and definition.combat is not None:
+        return definition.combat.ai_behavior or ""
+
     if definition is not None:
-        return definition.ai_behavior or ""
+        return ""
 
     return getattr(npc.db, AI_BEHAVIOR_ATTR, None) or ""

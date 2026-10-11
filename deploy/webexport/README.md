@@ -76,11 +76,17 @@ and an `evennia reload` could interrupt an art fetch.
 
 ## Build
 
+The export needs the export templates of the same version as the editor. For
+Godot 4.7.2, install the `4.7.2.stable` templates one time: in the editor, open
+**Editor > Manage Export Templates**. They go to
+`%APPDATA%\Godot\export_templates\4.7.2.stable`. Without them, the export fails
+with a "No export template found" error.
+
 Export into `build/` beside this README — gitignored, and the one place
 `publish.sh` looks:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot --export-release "Web" deploy/webexport/build/index.html
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot --export-release "Web" deploy/webexport/build/index.html
 ```
 
 The `Web` preset is committed in `godot/export_presets.cfg`. Its one load-bearing

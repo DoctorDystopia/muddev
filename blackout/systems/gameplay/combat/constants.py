@@ -512,7 +512,15 @@ ACTION_MODIFIER_CHANNELS: tuple = (
 RULES_PRIORITY_DEFAULT: int = 0     # BaseActionRules, the OSRS baseline
 RULES_PRIORITY_MODIFIER: int = 100  # contributes modifiers, overrides no seam
 RULES_PRIORITY_WEAPON: int = 200    # the wielded weapon's own behaviour
+RULES_PRIORITY_BUFF: int = 250      # an Exterminator buff, against its task type only
 RULES_PRIORITY_OVERRIDE: int = 300  # replaces the action outright
+
+# The buff tier sits above the weapon tier. A buff enters the rule list only
+# against a creature of the task type, so a seam buff replaces the weapon for
+# that fight alone, and the weapon keeps its seam against every other target.
+# A buff class can declare a lower priority to lose to the weapon. The
+# conflict warning of systems/gameplay/exterminator/conflicts.py names the
+# winner either way. DESIGN-0012, Phase 3.
 
 # Floor applied to the max-hit and damage channels after modifiers run. A
 # modifier that drives damage negative must land on zero, never heal the target.
@@ -663,3 +671,14 @@ PVP_TARGET_OFF_MSG: str = "{name} does not have PvP on."
 PVP_USAGE_MSG: str = "Usage: pvp [on|off]. PvP is {state}."
 PVP_STATE_ON: str = "on"
 PVP_STATE_OFF: str = "off"
+
+# ─── The record of damage dealers ────────────────────────────────────────────
+# The ndb attribute on a combatant that holds {attacker id: damage dealt}.
+# CombatEntity.at_damage adds to it, and at_death reads it, then clears it.
+# The Exterminator kill hook reads it: each player who did damage gets the
+# kill, and the XP is shared by damage (Nick, 10/06/2026, DESIGN-0012).
+#
+# Ids, not objects, for the reason LAST_ATTACKER_ID_ATTR gives. ndb, not db:
+# a write on every hit must not reach the Attribute table, and a reload ends
+# every fight.
+DAMAGE_RECORD_ATTR: str = "damage_record"

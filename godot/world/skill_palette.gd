@@ -41,6 +41,8 @@ const SKILL_CATEGORY_COLORS := {
 	"Gathering": Color("4f9d5a"),
 	"Processing": Color("c08a3a"),
 	"Production": Color("5a7fc0"),
+	# Purple, with the saturation and value of Production. TBD (Nick, 10/06/2026).
+	"Utility": Color("9a5ac0"),
 }
 
 ## Drawn for a category this file has never heard of. See the class docstring:

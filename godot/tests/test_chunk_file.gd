@@ -37,6 +37,8 @@ func _ready() -> void:
 
 	_base = JSON.parse_string(_fixture_text(BASE_FIXTURE))
 	_every_invalid_case_is_refused()
+	_the_wall_cases_differ_from_a_good_file_only_in_their_fault()
+	_the_writer_picks_the_format_from_the_wall_styles()
 	_an_integral_float_counts_as_an_int()
 	_objects_are_local_and_the_reader_adds_the_offset()
 	_the_file_name_follows_the_template()
@@ -129,6 +131,89 @@ func _every_invalid_case_is_refused() -> void:
 		d["objects"][0]["text"] = "Bank\n")
 	_refuses("object_text_too_long", func(d: Dictionary) -> void:
 		d["objects"][0]["text"] = "x".repeat(_Const.CHUNK_TEXT_MAX_CHARS + 1))
+	# Format 2, the wall styles (DESIGN-0013 section 6.4).
+	_refuses("format_one_with_walls", func(d: Dictionary) -> void:
+		_with_walls(d, ["brick"], 0)
+		d["format"] = _Const.CHUNK_FORMAT_PLAIN_WALLS)
+	_refuses("format_two_without_walls", func(d: Dictionary) -> void:
+		d["format"] = _Const.CHUNK_FORMAT_VERSION)
+	_refuses("wall_names_empty", func(d: Dictionary) -> void:
+		_with_walls(d, [], 0))
+	_refuses("wall_index_past_names", func(d: Dictionary) -> void:
+		_with_walls(d, ["brick"], 1))
+	_refuses("walls_all_default", func(d: Dictionary) -> void:
+		_with_walls(d, [_Const.TILE_DEFAULT_WALL_STYLE, "brick"], 0))
+
+
+## Make `data` a file of format 2 with the wall styles `names`. The first
+## tile gets index `cell`. Every other tile gets index 0. The Python
+## `_with_walls` makes the same change.
+static func _with_walls(data: Dictionary, names: Array, cell: int) -> void:
+	var walls := []
+
+	for row: int in _Const.CHUNK_SIZE:
+		var values := []
+
+		values.resize(_Const.CHUNK_SIZE)
+		values.fill(0)
+		walls.append(values)
+
+	walls[0][0] = cell
+	data["format"] = _Const.CHUNK_FORMAT_VERSION
+	data["wall_names"] = names.duplicate()
+	data["walls"] = walls
+
+
+## A wall case that the reader refuses for another reason proves nothing.
+## The same change with a legal index reads.
+func _the_wall_cases_differ_from_a_good_file_only_in_their_fault() -> void:
+	var data: Dictionary = _base.duplicate(true)
+
+	_with_walls(data, ["brick"], 0)
+
+	var chunk := ChunkFile.from_dict(data)
+
+	_expect(chunk.error.is_empty() and chunk.wall_style_name(0, 0) == "brick",
+		"a file of format 2 with one style reads: %s" % chunk.error)
+
+	data = _base.duplicate(true)
+	_with_walls(data, [_Const.TILE_DEFAULT_WALL_STYLE, "brick"], 1)
+	chunk = ChunkFile.from_dict(data)
+	_expect(chunk.error.is_empty() and chunk.wall_style_name(0, 0) == "brick"
+		and chunk.wall_style_name(1, 0) == _Const.TILE_DEFAULT_WALL_STYLE,
+		"each tile reads its own wall style")
+
+
+## A file of format 1 reads the default style on every tile, and the writer
+## picks the format from the styles of the tiles.
+func _the_writer_picks_the_format_from_the_wall_styles() -> void:
+	var chunk := ChunkFile.from_dict(_base.duplicate(true))
+
+	_expect(chunk.wall_style_name(17, 42) == _Const.TILE_DEFAULT_WALL_STYLE,
+		"a file of format 1 reads the default wall style")
+	_expect(JSON.parse_string(chunk.to_text())["format"]
+		== _Const.CHUNK_FORMAT_PLAIN_WALLS, "plain walls write format 1")
+
+	chunk.wall_names = PackedStringArray([_Const.TILE_DEFAULT_WALL_STYLE, "brick"])
+	_expect(JSON.parse_string(chunk.to_text())["format"]
+		== _Const.CHUNK_FORMAT_PLAIN_WALLS, "an unused style name writes format 1")
+
+	chunk.walls[5] = 1
+
+	var text := chunk.to_text()
+
+	_expect(JSON.parse_string(text)["format"] == _Const.CHUNK_FORMAT_VERSION,
+		"a tile with a style writes format 2")
+	_expect(ChunkFile.parse_text(text).wall_style_name(5, 0) == "brick",
+		"format 2 reads back its style")
+
+	chunk.compact_names()
+	_expect(chunk.wall_names.size() == 2, "compact_names keeps the used styles")
+
+	chunk.walls[5] = 0
+	chunk.compact_names()
+	_expect(chunk.wall_names == PackedStringArray([_Const.TILE_DEFAULT_WALL_STYLE]),
+		"compact_names drops an unused style")
 
 
 func _refuses(case_name: String, mutate: Callable) -> void:

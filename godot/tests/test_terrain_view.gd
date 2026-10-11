@@ -41,6 +41,8 @@ func _ready() -> void:
 	_the_mesh_is_the_mesh_of_the_builder()
 	_each_plane_gets_its_own_mesh()
 	_roofs_hide_the_planes_above_the_player()
+	_a_player_outside_sees_the_roof()
+	_walking_under_a_roof_hides_it()
 	_a_climb_shows_the_plane_it_reaches()
 	_the_chunk_under_the_player_builds_first()
 	_a_chunk_with_walls_gets_a_walls_layer()
@@ -165,6 +167,62 @@ func _roofs_hide_the_planes_above_the_player() -> void:
 	view.queue_free()
 
 
+## DESIGN-0013 decision 4. The tile of the player is void on plane 1, so no
+## roof covers the player, and the plane above shows.
+func _a_player_outside_sees_the_roof() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [5.0, 5.0, _Const.TILE_WORLD_Z]})
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(ChunkFile.blank(0, 0)))
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(_roof_over(Vector2i(20, 20))))
+	view.flush()
+
+	_expect(not view.under_roof(), "a player on a void tile of plane 1 is outside")
+	_expect(view.chunk_node(Vector2i.ZERO, 1).visible,
+		"a player outside sees the plane above")
+	view.queue_free()
+
+
+## A step under the roof hides the plane above. A step out shows it again.
+func _walking_under_a_roof_hides_it() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var roofed := Vector2i(20, 20)
+
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [5.0, 5.0, _Const.TILE_WORLD_Z]})
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(ChunkFile.blank(0, 0)))
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(_roof_over(roofed)))
+	view.flush()
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [float(roofed.x), float(roofed.y),
+		_Const.TILE_WORLD_Z]})
+
+	_expect(view.under_roof(), "a player under the roof tile is under a roof")
+	_expect(not view.chunk_node(Vector2i.ZERO, 1).visible,
+		"a player under a roof does not see the plane above")
+
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [5.0, 5.0, _Const.TILE_WORLD_Z]})
+
+	_expect(view.chunk_node(Vector2i.ZERO, 1).visible,
+		"a step out from under the roof shows the plane above again")
+	view.queue_free()
+
+
+## A plane-1 chunk of void and Blocked, with one roof tile at `tile`.
+func _roof_over(tile: Vector2i) -> ChunkFile:
+	var chunk := ChunkFile.blank(0, 0, 1)
+	var size: int = _Const.CHUNK_SIZE
+
+	chunk.floor_names = PackedStringArray([_Const.TILE_VOID_FLOOR,
+		_Const.TILE_ROOF_FLOOR_TYPES[0]])
+	chunk.flags.fill(_Const.TILE_FLAG_BLOCKED)
+	chunk.floors[tile.y * size + tile.x] = 1
+
+	return chunk
+
+
 func _a_climb_shows_the_plane_it_reaches() -> void:
 	var fixture := _bound()
 	var state: WorldState = fixture[0]
@@ -222,6 +280,17 @@ func _a_chunk_with_walls_gets_a_walls_layer() -> void:
 
 	_expect(view.chunk_node(Vector2i(0, 0), 0).has_node("Walls"),
 		"a chunk with a wall flag draws its walls")
+
+	# DESIGN-0013 section 6.3: the walls meet the floor above. A chunk above
+	# that arrives later builds the chunk under it again.
+	var first: Node = view.chunk_node(Vector2i(0, 0), 0)
+	var above := ChunkFile.blank(0, 0, 1)
+
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(above))
+	view.flush()
+
+	_expect(view.chunk_node(Vector2i(0, 0), 0) != first,
+		"the chunk above builds the walls under it again")
 	_expect(not view.chunk_node(Vector2i(1, 0), 0).has_node("Walls"),
 		"a chunk with no wall has no walls layer")
 	view.queue_free()

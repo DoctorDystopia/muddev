@@ -151,8 +151,8 @@ func _on_button_input(event: InputEvent, index: int) -> void:
 
 func _on_menu_id(id: int) -> void:
 	if id == SHOW_IN_ALL_ID:
-		var hidden := _tabs.is_hidden_from_all(_menu_tab)
-		_tabs.set_hidden_from_all(_menu_tab, not hidden)
+		var is_hidden := _tabs.is_hidden_from_all(_menu_tab)
+		_tabs.set_hidden_from_all(_menu_tab, not is_hidden)
 		return
 
 	if id >= 0 and id < _menu_keys.size():

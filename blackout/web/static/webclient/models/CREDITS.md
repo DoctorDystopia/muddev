@@ -33,7 +33,7 @@ Options pane.
 - Author: Kyle Fuji
 - Source: https://www.patreon.com/kylefuji
 - License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
-- Models: `moderator_egg`, `mutant_raider_cured_chuck`, `mutant_raider_cured_fatless_meat`, `mutant_raider_cured_filet`, `mutant_raider_cured_meat_sandwich`, `mutant_raider_cured_prime_meat`, `mutant_raider_prime_cured_meat_sandwich`, `mutant_raider_prime_steak`, `mutant_raider_steak`
+- Models: `moderator_egg`, `mutant_giant_cured_chuck`, `mutant_giant_cured_fatless_meat`, `mutant_giant_cured_filet`, `mutant_giant_cured_meat_sandwich`, `mutant_giant_cured_prime_meat`, `mutant_giant_prime_cured_meat_sandwich`, `mutant_giant_prime_steak`, `mutant_giant_steak`, `mutant_raider_cured_chuck`, `mutant_raider_cured_fatless_meat`, `mutant_raider_cured_filet`, `mutant_raider_cured_meat_sandwich`, `mutant_raider_cured_prime_meat`, `mutant_raider_prime_cured_meat_sandwich`, `mutant_raider_prime_steak`, `mutant_raider_steak`
 
 ## LOWPO: Goblin Assets
 
@@ -121,3 +121,10 @@ Options pane.
 - Source: https://sketchfab.com/3d-models/sus-eye-a57447b72b774a5d99caba699604c81d
 - License: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
 - Models: `floating_eye`
+
+## Voxel Priest Avatar - 3D Character Lowpoly Model
+
+- Author: MrMGames (Mr Mustache)
+- Source: https://mrmgames.itch.io/voxel-priest-avatar-3d-character-lowpoly-model
+- License: Purchased license
+- Models: `atum_musa`

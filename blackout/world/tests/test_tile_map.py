@@ -37,6 +37,9 @@ _FACILITY = next(key for key, kind in OBJECT_KINDS.items()
                  if kind.category == tile_const.OBJECT_CATEGORY_FACILITY)
 _NPC_KIND = next(key for key, kind in OBJECT_KINDS.items()
                  if kind.category == tile_const.OBJECT_CATEGORY_NPC)
+_DECOR = next(key for key, kind in OBJECT_KINDS.items()
+              if kind.category == tile_const.OBJECT_CATEGORY_DECOR)
+_DECOR_TILE = (11, 11)
 
 # The spawn tile of the NPC kind, and the tile where the NPC stands now.
 _NPC_SPAWN = (12, 8)
@@ -112,10 +115,23 @@ class TileMapRenderTests(unittest.TestCase):
         self.assertEqual(_cell(self.lines, row, column),
                          tile_map._WALL_BETWEEN_ROWS)
 
-    def test_every_category_has_a_glyph(self):
+    def test_every_category_has_a_glyph_or_is_silent(self):
         for category in tile_const.OBJECT_CATEGORIES:
             with self.subTest(category=category):
-                self.assertIn(category, tile_map.CATEGORY_GLYPHS)
+                drawn = category in tile_map.CATEGORY_GLYPHS
+                silent = category in tile_map.SILENT_CATEGORIES
+
+                self.assertTrue(drawn != silent)
+
+    def test_decor_draws_the_tile_under_it(self):
+        lines = tile_map.render(
+            _world([chunkfile.ChunkObject(_DECOR, *_DECOR_TILE),
+                    chunkfile.ChunkObject(_DECOR, *_OBJECT_TILE)]),
+            _CENTER, _RADIUS).split("\n")
+        facility = tile_map.CATEGORY_GLYPHS[tile_const.OBJECT_CATEGORY_FACILITY]
+
+        self.assertEqual(_tile_cell(lines, _DECOR_TILE), tile_map.GROUND_GLYPH)
+        self.assertEqual(_tile_cell(lines, _OBJECT_TILE), facility)
 
     def test_the_edge_of_the_world_draws_as_void(self):
         lines = tile_map.render(_world(), (0, 0), _RADIUS).split("\n")

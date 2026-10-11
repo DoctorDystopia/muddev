@@ -40,7 +40,9 @@ too. The world pane draws these things:
 - Your figure, which walks between tiles, and a mark on the tile the server
   has you on while it does
 - The NPCs and items on each tile, which walk the same way
-- A white flash on anything that you hit, and your aura ring.
+- A white flash on anything that you hit, and your aura ring
+- A hitsplat over each figure that a swing reaches, with a larger amber one
+  for a max hit.
 
 The mesh ladder below draws everything on the tile. It uses a fetched model
 where there is art, and the silhouette of the family where there is not.
@@ -298,8 +300,12 @@ draw every weapon as a box.
 >
 > Two rules come with it:
 >
-> 1. **Only a step to a NEIGHBORING tile turns anything.** A teleport has no
->    direction in it, and a relayout replays a zero-length move.
+> 1. **A move turns the figure if `StepAnimator` slides it.** The two read one
+>    limit, `StepAnimator.SNAP_STEPS`. A run moves two tiles in each tick, and
+>    the figure turns on each of them. A longer jump snaps and keeps the yaw,
+>    because a teleport has no direction in it. A relayout replays a
+>    zero-length move, and it keeps the yaw too. Until 10/05/2026 only a step
+>    to a neighboring tile turned the figure, and a runner never turned.
 > 2. **`WorldView` keeps the yaw. The code does not read it back from the
 >    node.** `_redraw_avatar` frees and rebuilds that node whenever
 >    `char_avatar` names a new asset or its art lands. A figure that snapped
@@ -369,7 +375,7 @@ tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
 | The model | `world/world_state.gd` | Keeps one `ChunkSet` for each plane, and frees a chunk outside the block. The server forgets the same chunks. `chunks` is the set of the plane of the player |
 | The ground | `world/terrain/terrain_view.gd` | One mesh for each chunk of each plane, from `ChunkMeshBuilder`, the class of the editor. It builds one chunk each frame, the chunk under the player first |
 | The water | `world/terrain/water_mesh_builder.gd` | A flat surface on each water tile, at the height of its highest corner. The editor draws it with the same class |
-| The walls | `world/terrain/wall_mesh_builder.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. A plain primitive until the walls get art. The editor draws it with the same class |
+| The walls | `world/terrain/wall_mesh_builder.gd`, `wall_palette.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. The wall style of the tile gives its colour and its height. A plain primitive until the walls get art. The editor draws it with the same class |
 | The scenery | `TerrainView._place_scenery` | The model that `OBJECT_KIND_SCENERY` names for a chunk object, on the centre of its tile. The server names the model in `world/object_kinds.py`. The transition pad is the first. No art, no model |
 | The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, or a hatch, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. The editor draws it with the same class |
 | The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
@@ -410,7 +416,12 @@ Python `planes.plane_of_z`, from the same generated names.
   minimap draws it clear.
 - **Hide roofs.** Options has a "Hide roofs" box, on by default
   (`ClientSettings.hide_roofs`). On, it hides every plane above the plane of
-  the player.
+  the player while the player is under a roof: some plane above has a floor
+  that is not void on the tile of the player (DESIGN-0013 decision 4). A
+  player outside a house sees its roof. `TerrainView.under_roof` owns the
+  rule.
+- **A roof is never a cliff.** A roof floor type (`TILE_ROOF_FLOOR_TYPES`)
+  never takes the cliff colour, so a steep roof keeps its own colour.
 - **The reads of the player read the plane of the player.** The ground
   height, the pick, the minimap, and `tile_action` read `WorldState.chunks`.
   An entity stands on the ground of the plane in its own Z.
@@ -961,7 +972,9 @@ Each grid is `{key, title, slots_total, items}`, and each item row has the
 shape of a `char_items_list` row. A row also carries `detail` (one short line
 under the name, for example a price or a skill level), `info` (more lines for
 the tooltip), and `enabled`. A slot with `enabled` false is dim, and a click
-still sends, so the server can say why the action fails. `actions` is the row
+still sends, so the server can say why the action fails. A buff card row also
+carries `rarity`, the key of its rarity. [RarityPalette] gives the colour of
+the border and the detail line: green, blue, purple, orange. `actions` is the row
 of buttons under the grids, for what the pop-up affords as a whole: stop a
 craft, collect a cure.
 
@@ -981,6 +994,38 @@ says "Finishing...", not "Ready": `ready` is the server's word. The server
 marks the pop-up stale at the deadline, and that snapshot says `ready`. The
 curing chamber is the first station. A second timed station needs only a
 `timer_report` on its server-side handler.
+
+**A grid can have tabs, a search box, and a drag.** The bank vault sends all
+three (10/08/2026). A grid that sends them carries four more fields:
+
+| Field | Holds |
+|---|---|
+| `tabs` | One `{index, label, title, asset, family, active, drop_key, actions}` for each tab button, the "+" last |
+| `view` | The tab that the player views. `0` is the main tab |
+| `searchable` | `true` shows the search box |
+| `drag` | `{onto_slot, onto_tab}`: the command template for a drop on a slot or on a tab |
+
+Each vault row also carries `tab`, `drag_key` and `placeholder`.
+`PopupState.row_groups` decides which rows show. A search shows each match in
+every tab. A tab other than `0` shows its own rows. The main tab shows every
+row, in one block for each tab, with a line between two blocks.
+
+The rules that keep the client out of the game:
+
+- **A tab button draws what the server sent.** A tab with an `asset` shows that
+  mesh, and a tab with no asset shows its `label`. A named tab sends no asset.
+  `PopupTabButton` thus never asks what a tab is.
+- **A drop fills a server template.** `PopupState.drop_command` puts the
+  `drag_key` of the dragged slot at `DRAG_SOURCE_TOKEN` and the key of the
+  target at `DRAG_TARGET_TOKEN`. These are the tokens of the inventory swap.
+- **A left click on a vault slot fires on the release.** A click that fired on
+  the press would withdraw the item that the player meant to drag.
+- **The search text belongs to the client.** A snapshot keeps it, so a
+  withdraw from a search result does not clear the search. The filter needs no
+  round trip for each key press.
+- **A rename is a text action.** `input.kind` is `ACTION_INPUT_KIND_TEXT`, and
+  `TextPrompt` asks for the text. `TextPrompt.perform` reads both prompt kinds,
+  so a slot and a tab button send a prompted action the same way.
 
 **The player moves and sizes the box.** A drag on the title bar moves it. A
 drag on any edge or any corner sizes it, and the edges that the grip does not
@@ -1218,6 +1263,51 @@ stops showing 87/100 beside a dead socket, and the login form comes back. The
 visibility of the form is a *function* of whether a body exists, not a one-way
 dismissal, and that keeps "am I puppeted" to a single owner.
 
+A device with a saved login logs in again by itself after a drop. See the
+next section.
+
+## A saved login logs in by itself
+
+The login form has a **Remember me on this device** box, ticked by default.
+With the box ticked, a login by password sends `remember` once the body
+exists. The server answers with a login token on `CH_LOGIN_TOKEN`, and
+`SavedLogin` keeps it in `user://login.cfg`. At the next start, the form sends
+`resume <name> <token>` when the server confirms the subscription. The player
+is in with no password typed.
+
+**The device keeps a token, never the password.** On the web, `user://` is
+IndexedDB, and any script on the page origin can read it. A stolen token
+opens one account until one of these things happens:
+
+- The token goes 30 days with no use.
+- The password changes.
+- The player types `forget` on that device, or `forget all` on any device.
+
+The server keeps only the SHA-256 digest of each token
+(`blackout/systems/core/login_tokens/store.py`).
+
+**The file is not `client.cfg`.** A player can share `client.cfg` to show a
+layout, and a key to the account must not go with it.
+
+Four rules keep the auto-login safe:
+
+| Rule | Why |
+|---|---|
+| One `resume` for each socket | A reload of the server confirms the subscription again. A refused token must not loop |
+| No `resume` with a body | A reload of a logged-in server is not a new login |
+| A clean close (code 1000) stops the auto-login | `quit` and a boot both close with 1000. A client that logged straight back in would make both useless. Connect with an empty password sends `resume` again |
+| The server decides when a token is bad | `forget` and a refused `resume` both send an empty token. The client clears its copy and asks for the password |
+
+**The echo is off before login.** The Portal echoes each typed line back
+when `LOCALECHO` is on. Before 10/05/2026, `ServerSession.at_sync` turned it on
+for every session, so the log printed `connect <name> <password>` as typed.
+Now `at_sync` turns the echo on only for a logged-in session, and
+`ServerSession.at_login` turns it on at login. The `resume` line and its
+token thus never reach the log.
+
+The **Forget saved login** button removes the token from this device only. The
+server copy stays good until it expires or the player types `forget all`.
+
 ## The terrain editor writes chunk files, not scenes
 
 DESIGN-0011 section 6.3. The terrain editor is an editor plugin in
@@ -1240,13 +1330,14 @@ To use it:
    `blackout/`, and start the server. The World tab names each chunk file
    that changed since the last sync.
 
-The panel has three tabs:
+The panel has four tabs:
 
 | Tab | Holds |
 |---|---|
-| Paint | The tool, the brush size and strength, the floor, the area, the object kind and rotation, the flags, and the noise |
-| Objects | The selected object with **Turn**, **Delete**, **Set kind to the Object choice**, and **Follow link**. A list of every object in the block. A click on a row selects it |
-| World | The centre chunk and the plane, load and save, the marks to show, **Check world** and its findings, and the state of the tile sync |
+| Paint | The tool, the brush size and strength, the floor, the area, the object kind and rotation, the flags, the noise, and **Protect structures** |
+| Objects | The selected object with **Turn**, **Delete**, **Set kind to the Object choice**, and **Follow link**. A list of every object in the block. A click on a row selects it. **Show decor in the list** off keeps the decor out of the list |
+| World | The centre chunk and the plane, load and save, the marks to show, how the planes above show, **Check world** and its findings, and the state of the tile sync |
+| Build | The structure tools (DESIGN-0013): Wall line, Room, Doorway, Level above, Stairs, Roof, Wall style, Decor, Select, and Place, with their options. See "The Build tab" below |
 
 The **Select** tool picks an object on a click. A second click on the same
 tile picks the next object there. A drag moves the selected object to another
@@ -1272,7 +1363,11 @@ The rules that the editor keeps:
   object kinds are rows under `blackout/world/`, exported to
   `blackout_constants.gd`. A new row needs no edit here.
 - **One stroke is one undo entry.** `TerrainEdit` keeps the first value of each
-  changed corner or tile.
+  changed corner or tile. A Build gesture is one entry too, over every plane
+  that it writes.
+- **The block holds every plane** (DESIGN-0013 Phase S0). `TerrainWorld` keeps
+  one `ChunkSet` for each plane, and an edit keys on (plane, tile). A change of
+  the plane reads no file, saves nothing, and keeps the undo history.
 - **A file that does not read stays out of the block.** The editor never draws
   a blank chunk in its place, so a save cannot overwrite it.
 - **The noise seed is not in the chunk file.** The file stores the baked
@@ -1282,17 +1377,158 @@ The rules that the editor keeps:
 - **A new chunk above the ground starts from the chunk below.** Its heights
   are those below plus 32 height steps (two tiles). Every tile is `void` and
   Blocked, and the areas are those below. A floor paint on a void tile clears
-  Blocked, and a `void` paint sets it. The planes below show dim.
-- **A move of the block clears the undo history.** An edit keys on world
-  tiles, with no plane. The move saves the old block first. Thus, an undo
-  after the move would write into the wrong plane or a chunk that is not
-  loaded. `TerrainWorld.replay_edit` also refuses an edit of another block.
+  Blocked, and a `void` paint sets it. Until an edit, a new chunk follows the
+  ground under it. The planes below show dim. The planes above show hidden,
+  dim, or solid, as the World tab says.
+- **A move of the block clears the undo history.** The move saves the old
+  block first. Thus, an undo after the move would write into a chunk that is
+  not loaded. `TerrainWorld.replay_edit` also refuses an edit of another
+  block.
 - **Check world runs the rules of the server.** `terrain_checks.gd` is the
   twin of `blackout/world/tile_checks.py`. Each transition and each climb
   lands on an open tile. Each object stands on a walkable tile. Each void
-  tile is Blocked. The world has one respawn point. The check reads the files
-  on disk, with the unsaved block in place. The two twins check one fixture
-  world against one `expected.json`.
+  tile is Blocked and carries no wall. The world has one respawn point. The
+  check reads the files on disk, with the unsaved block in place. The two
+  twins check one fixture world against one `expected.json`.
+- **A note warns and fails no test.** `unreachable` gives one note for each
+  pocket of walkable tiles that no walk from the respawn point reaches. The
+  findings list shows a note in blue. `step_grid.gd` holds the GDScript twin
+  of the server step rule, and the pockets of the fixture test it.
+- **A wall meets the floor above it.** Where the same tile of the plane above
+  has a floor, the wall top takes the corner heights of that tile.
+  `WallMeshBuilder` draws it this way in the client and in the editor.
+
+### The Build tab
+
+DESIGN-0013 section 6.7. A structure is tile grid facts, not a scene: wall
+flags, floor types, a plane above, and a climb pair. The tools write those
+facts, so the server reads nothing new. `structure_tools.gd`,
+`room_fill.gd`, and `roof_shapes.gd` hold the rules.
+`test_structure_tools.tscn` and `test_roof_shapes.tscn` test them.
+
+| Tool | Gesture | Shift |
+|---|---|---|
+| Wall line | Drag along tile edges, on one axis | Remove the walls under the line |
+| Room | Drag a rectangle: the levelled ground, the floor, the area, and walls on the inner edges of the border | Remove the walls in the rectangle |
+| Doorway | Click a wall edge. The wall goes from both sides | Put the wall back |
+| Level above | Click inside a closed room, or drag a rectangle. The plane above gets a floor, flat at the highest corner plus 32 steps | Set the tiles back to void and Blocked |
+| Stairs | Click a tile. The climb goes on this plane and its twin on the plane above. A void landing gets a floor. A tile with the pair refuses a second pair | Remove the pair |
+| Roof | Click inside a closed rectangle room, or drag a rectangle. The plane above gets the roof floor type, Blocked, and the corner heights of the roof shape over the room and its overhang | Set the roof tiles back to void and Blocked |
+| Wall style | Drag the brush ring over walls. Each tile with a wall bit under the ring takes the wall style | Paint the default style, `plain` |
+| Decor | Click a tile, again and again. The decor of the options goes on the tile at the next turn. R and Shift+R turn the next one | Remove the decor on the tile |
+| Select | Drag a rectangle, or click inside a room. Ctrl adds to the tile selection | Take tiles out of the tile selection |
+| Place | Click to write a copy of the template of the options. R turns it, F mirrors it | none. Alt and a click replace the objects on its tiles |
+
+Alt and a click take the floor, the area, and the wall style of a tile into
+the options. On a tile with decor, they also take its kind and its turn. Esc cancels a drag. Page Up and Page Down change the edited
+plane. V toggles "Walls down", which draws each wall low, so the author
+sees into a room.
+
+**Wall styles.** A wall style is the look of the walls of one tile:
+`plain`, `concrete`, `brick`, and so on (DESIGN-0013 section 6.4). The rows
+are in `blackout/world/wall_styles.py`, and each row gives a height for a
+wall with nothing above it. `plain` stays 0.75 units tall, and `rubble` is a
+low ruin wall. The colours are the client's own, in
+`world/terrain/wall_palette.gd`. A style with no colour there draws in the
+colour of `plain`, so a new style needs no client edit.
+
+The Wall line and the Room put the wall style of the options on each tile
+that gets a wall bit. The Wall style brush paints the style on the walls
+under its ring, and the bracket keys step its radius. A removal keeps the
+style of a tile: a style with no wall bit is legal, and nothing draws it.
+A chunk with a style other than `plain` saves as format 2. Every other chunk
+stays format 1, so its file does not change.
+
+**The Roof tool.** A roof is the ground of the plane above (DESIGN-0013
+section 6.2). The options are the shape (Flat, Shed, Gable, Hip, Pyramid),
+the pitch (1 to 16 height steps for each tile), the overhang (0 to 2
+tiles), and the roof floor type. R and Shift+R turn the ridge of a gable or
+the low edge of a shed. The bracket keys step the pitch. The roof meets the
+walls at 32 steps above the highest corner of the room, and the overhang
+hangs one pitch lower for each tile. The walls rise to meet the roof, so a
+gable end fills itself.
+
+While the mouse is down, the outline shows the roof: a lattice at the roof
+heights. A green outline builds on release. A red outline is a refusal, and
+the hint line names the reason, for example a floor on the plane above. To
+roof a house with a level above, edit the plane of that level. The planes
+above are hidden by default, so a note on the hint line tells the author
+where the roof went.
+
+**The Decor tool.** Decor is scenery and nothing more: a crate, a table, a
+lamp post (DESIGN-0013 section 6.5). The kinds are the rows of the `decor`
+category in `blackout/world/object_kinds.py`. A tile holds one decor. A
+click on a tile with decor replaces it, so a second click after R turns it.
+The mark under the mouse shows the edge that the front of the next decor
+faces. A void tile takes no decor. A Blocked tile takes decor, and the
+content check does not refuse it. A Blocked tile under a table stops a walk
+through it. Decor pins no tile room, and the tile sync stands nothing up
+for it. Until a model record takes the key, `PropMeshBuilder` draws a
+plain shape.
+
+**Select, Move, and Delete.** The Select tool of the Build tab holds a tile
+selection, not an object. With "Select every plane" on, a gesture takes the
+edited plane and each plane above it. A click inside a room then takes the
+room, its level, and its roof with the overhang. The keys:
+
+| Key | Does |
+|---|---|
+| Delete | Takes the walls, the wall styles, and the objects off each tile. A ground tile keeps its floor. A tile of a plane above goes back to void and Blocked |
+| Ctrl+C | Copies the tile selection to the clipboard |
+| Ctrl+V | Starts the Place tool with the clipboard |
+| M | Starts the Place tool with the tile selection. The click clears the old tiles and writes the new ones, in one undo entry. The move keeps its planes. A pick of another tool ends it |
+| Esc | Drops the drag, else the tile selection |
+
+**Templates and the Place tool.** A template is a saved structure in
+`blackout/world/structures/<key>.json` (DESIGN-0013 section 6.6).
+`blackout/world/structures/README.md` gives the format. Type a key and
+click "Save the selection as a template". The Place tool then lists it,
+after the row of the clipboard. A copy is plain facts in the chunk files,
+and nothing links it to its template.
+
+The outline of the Place tool follows the mouse, centred on it. Green
+places. Amber places with a warning: the levelling moves a corner more than
+one plane rise, or the blend ring reaches another structure. Red refuses:
+an object on a covered tile (Alt replaces it), a floor on a covered tile of
+a plane above, the locked edge of the block, or the top plane. The hint
+line names the reason. The copy levels its ground to the "Level to" rule,
+and the blend ring moves the corners around it part of the way to that
+base. A copy from the list keeps the tool on, so one click places each
+stall of a market row. `structure_template.gd`, `structure_place.gd`,
+`tile_selection.gd`, and `template_input.gd` hold the rules, and
+`test_structure_template.tscn` tests them.
+
+**Protect structures.** With this box on the Paint tab, a sculpt, a ramp,
+and a noise fill skip each corner of a tile with a wall or with a floor
+above it. The author then shapes the hills around a town, and the floors
+stay flat.
+
+**The structure workbench.** Open
+`res://addons/blackout_terrain/structure_workbench.tscn`, or click "Open
+the structure workbench" on the World tab (DESIGN-0013 Phase S6). It is the
+terrain editor on scratch chunk files in `user://structure_workbench`,
+outside the repo. The ground starts flat and blank. Every tool works as in
+the world. Build a structure, select it, and save it as a template. The
+template goes to `blackout/world/structures/` as from the world, and no
+chunk of the world changes. To change a template, place it in the
+workbench, edit the copy, and save it again with the same key.
+
+- "Check world" in the workbench leaves out `respawn_count` and
+  `unreachable`. A scratch world holds no respawn point.
+- "Clear the structure workbench" deletes the scratch chunk files after a
+  confirmation, and the ground is blank again. The templates stay. The
+  button refuses the world chunk files.
+- "Open the terrain editor" goes back. Save the chunks first: the button
+  refuses a switch with unsaved chunks.
+
+The hint line at the bottom of the 3D view names the tool, its gesture, each
+modifier, and each toggle. A size readout follows the cursor during a drag.
+After each gesture, the live check runs the cheap rules on the changed tiles.
+The hint line names the first finding.
+
+"Block outside" sets Blocked on the ring of tiles around a room, for a
+dungeon. A ring tile with a wall bit is part of another room, and it stays
+open.
 - **The links show where an object leads.** A transition draws an arc to its
   target, or a stub toward a target outside the block. A climb draws a post
   up or down. The targets and the ways come from
@@ -1328,11 +1564,11 @@ cd blackout && ../evenv/Scripts/evennia.exe start
 ```
 
 Then open `godot/` in Godot 4.7 and press F5, or run it headless. Godot is not
-on PATH on this machine. The 4.7.1 build lives in an extracted folder that has
+on PATH on this machine. The 4.7.2 build lives in an extracted folder that has
 the name `...exe` itself, so the binary path repeats:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --path godot
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --path godot
 ```
 
 Log in through the form at the top of the game log, or type the same thing
@@ -1361,8 +1597,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All sixty-three tests are headless and exit non-zero on failure. Sixty need
-nothing running (counted 09/29/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All seventy-one tests are headless and exit non-zero on failure.
+Sixty-eight need nothing running (counted 10/08/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -1387,7 +1623,7 @@ test leaves:
 in the shape that Godot's JSON parser produces:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_state.tscn
 ```
 
 `test_choose_option.tscn` needs nothing running. The payloads are hand-built in
@@ -1395,7 +1631,7 @@ the shape that `serialize_entity` produces, floats included. The menu is a
 plain `Control`, driven with no camera and no pool:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_choose_option.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_choose_option.tscn
 ```
 
 It covers the two things that go silently wrong:
@@ -1410,7 +1646,7 @@ It covers the two things that go silently wrong:
 and every case is a pair of grid cells:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
 ```
 
 The HUD layout has three scenes, and each needs nothing running.
@@ -1420,9 +1656,9 @@ drags, the settings bar, the presets, and that no key reaches the console
 while the editor is open:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_hud_layout.tscn
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_hud_arranger.tscn
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_layout_editor.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hud_layout.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hud_arranger.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_layout_editor.tscn
 ```
 
 The Help pane has one scene, and it needs nothing running. `test_help_view`
@@ -1431,7 +1667,7 @@ no label passes the right edge, that the rows ask for no width, and that the
 rows stack when the pane is narrow:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_help_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_help_view.tscn
 ```
 
 The two maps have four scenes, and each needs nothing running.
@@ -1441,17 +1677,17 @@ decodes hand-built summaries. `test_world_map_view` checks the pan, the zoom,
 and the planes:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_minimap_view.tscn
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_entity_roster.tscn
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_state.tscn
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_minimap_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_entity_roster.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_view.tscn
 ```
 
 `test_step_animator.tscn` needs nothing running either, and no scene and no
 clock. Each case gives `advance` the frame time it wants to measure:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_step_animator.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_step_animator.tscn
 ```
 
 Every bug it catches is SILENT. A figure that drifts a tile behind the server,
@@ -1464,7 +1700,7 @@ table of each area (`AreaLook.LOOKS`), the blend between two areas, and the fog
 that moves with the camera arm:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_area_look.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_area_look.tscn
 ```
 
 `test_chunk_file.tscn` needs nothing running either. It is the GDScript half of
@@ -1474,17 +1710,23 @@ byte, matches the committed digests, and refuses the same bad files as
 `test_chunkfile.py`:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_chunk_file.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_chunk_file.tscn
 ```
 
-Three tests cover the terrain editor, and none needs anything running.
+Four tests cover the terrain editor, and none needs anything running.
 `test_chunk_mesh.tscn` proves that the mesh builder draws the ground that
 `surface_height` reads. `test_terrain_editing.tscn` covers the brushes, the
 seams, and undo. `test_terrain_world.tscn` loads and saves a block in a scratch
-directory under `user://`, never in `blackout/world/chunks/`:
+directory under `user://`, never in `blackout/world/chunks/`. It also covers
+the planes of one block. `test_structure_tools.tscn` covers the Build tools
+and drives one gesture of each through `BuildInput`. `test_roof_shapes.tscn`
+covers the corner heights of each roof shape. `test_structure_template.tscn`
+covers the templates, the tile selection, and the Place tool.
+`test_structure_workbench.tscn` covers the structure workbench in a scratch
+directory, and it never touches a world file:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_terrain_editing.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_terrain_editing.tscn
 ```
 
 `test_terrain_view.tscn` covers the ground of the client: one mesh for each
@@ -1496,13 +1738,13 @@ covers the primitives and their rotation.
 `test_char_state.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_char_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_char_state.tscn
 ```
 
 `test_model_registry.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_model_registry.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_model_registry.tscn
 ```
 
 `test_model_loader.tscn` needs nothing running. It checks that one read
@@ -1510,25 +1752,25 @@ holds the largest served model, and it checks which failed fetches get a
 retry:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_model_loader.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_model_loader.tscn
 ```
 
 `test_inventory_state.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_state.tscn
 ```
 
 `test_inventory_view.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_view.tscn
 ```
 
 `test_summary_state.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_summary_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_summary_state.tscn
 ```
 
 `test_skills_state.tscn` and `test_skills_view.tscn` need nothing running
@@ -1537,7 +1779,7 @@ Every command that leaves the pane is one that the server named. Each of the
 three detail modes asks for exactly what it shows.
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_skills_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_skills_view.tscn
 ```
 
 `test_xp_tracker_state.tscn` and `test_xp_hud_view.tscn` need nothing running
@@ -1546,7 +1788,7 @@ test measures an hour of XP per hour in milliseconds. The view test proves that
 the HUD is hidden before an award, and that no control in it takes the mouse.
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_xp_hud_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_xp_hud_view.tscn
 ```
 
 `test_combat_options_state.tscn` and `test_combat_options_view.tscn` need
@@ -1555,13 +1797,14 @@ the tab is the one that its row carried, and that a click alone never moves the
 highlight:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_combat_options_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_combat_options_view.tscn
 ```
 
-`test_login_view.tscn` needs nothing running either:
+`test_login_view.tscn` and `test_saved_login.tscn` need nothing running
+either. Both write only to a scratch file under `user://`:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
 ```
 
 `test_command_history.tscn`, `test_client_settings.tscn`,
@@ -1570,7 +1813,7 @@ highlight:
 `test_reconnect_policy.tscn` need nothing running either:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
 ```
 
 `test_sound_cues.tscn` needs nothing running either. A headless run uses the
@@ -1578,7 +1821,7 @@ dummy audio driver, so the test plays every cue for real with no speaker
 attached:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/test_sound_cues.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_sound_cues.tscn
 ```
 
 `smoke_reconnect.tscn` needs a running Evennia but no account. It proves the
@@ -1588,14 +1831,14 @@ builds a fresh peer for each open. That change looks obviously correct, but
 only a real server can confirm it.
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/smoke_reconnect.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/smoke_reconnect.tscn
 ```
 
 `smoke_handshake.tscn` needs a running Evennia but no account. The server
 answers `blackout_subscribe` on an unauthenticated session:
 
 ```bash
-"/c/Users/NickR/Downloads/Godot_v4.7.1-stable_win64.exe/Godot_v4.7.1-stable_win64_console.exe" --headless --path godot res://tests/smoke_handshake.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/smoke_handshake.tscn
 ```
 
 ## Skills left the character sheet
@@ -1933,6 +2176,7 @@ The model is the OSRS chat interface. Nick made four choices:
 | Mode | Prefix | Type |
 |---|---|---|
 | Say | `say ` | `say` |
+| Yell | `yell ` | `say` |
 | Reply | `page/reply ` | `page` |
 | One row for each channel that the player listens to and can send to | `@channel <key> = `, from the nick replacement of the channel class | `channel` |
 
@@ -1945,6 +2189,12 @@ the one mode that the client owns.
 **A mode goes on the tab that shows its type.** The bar asks
 `ChatModes.modes_for_types` with the types of the tab. Thus, a new channel
 shows under Channel, with no client edit. All shows every mode.
+
+**The server decides who hears a say or a yell** (10/05/2026). A say
+reaches each person that the client draws, on the plane of the speaker. A
+yell reaches the area of the speaker, on every plane. A yell line has the
+`say` type. Thus, the Yell mode and its lines go on the Local tab, with no
+client edit. The rules are in `blackout/systems/gameplay/speech/`.
 
 **`page/reply` exists for the Reply mode.** Evennia's `page` reads the first
 word as a target when an account has that name. A chat mode that sent
@@ -2010,6 +2260,51 @@ has one owner.
 `test_xp_hud_view` walks every control in it to prove that the mouse passes
 through.
 
+## Hitsplats: the server names the max hit
+
+A hitsplat is the damage number over a figure. Each `blackout_combat` payload
+gives one hitsplat. The payload goes to the attacker, the target and the room.
+Thus, everyone in the fight sees the same hitsplat. `world/hitsplats/` holds
+the code.
+
+| Kind | Shows on | Style file |
+|---|---|---|
+| hit | a swing that connected, 0 included | `styles/hit.tres` |
+| max hit | a swing that rolled the top face of its damage die | `styles/max_hit.tres` |
+| miss | a swing that missed | `styles/miss.tres` |
+
+**To change the look, edit a style file.** Double-click it in the FileSystem
+dock. The Inspector shows four groups: Number, Detail line, Motion and
+Placement. Each field has a tooltip. Save, and the next hitsplat uses the new
+values. No script changes. `HitsplatStyle` documents each field.
+
+**The server decides which swings are max hits.** `ActionResult.is_max_hit`
+compares the ROLL with the top face of the die, before the damage channel. A
+weapon with its own die has the top face of that die as its max hit. Thus, a
+natural 20 is the max hit of the toy sword. The payload carries `max_hit`
+and `max_hit_roll`. The roll is 0 on every other swing, so the client never
+learns a max hit that the hit line does not show.
+
+**A bonus or a penalty after the roll gets a detail line.** The number shows
+the damage, and the line under it shows `MAX 14 +3 BONUS`. Thus, the player
+sees why the number is not the max hit. The hit line in the log says the same
+thing: `You hit Raider for [17]! (max hit 14 +3 bonus)`.
+
+**The text keeps one size at every zoom** (`fixed_size`), as OSRS does. The
+text stands on its point and grows up, so it never covers its figure. The
+gap of the detail line is in font pixels for the same reason.
+
+**A hitsplat stands in the world, not on its figure.** A killed NPC deletes
+its figure in the same tick. A hitsplat on that figure would go with it, and
+the killing blow is the hitsplat that a player most wants to see.
+
+`test_hitsplat_layer` needs nothing running. It reads no colour, size or time
+from a style file, because those are look decisions:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hitsplat_layer.tscn
+```
+
 ## Sound is the client's, and a cue hangs off a fact
 
 `world/sound_cues.gd` is the whole table: a cue NAME (`SoundCues.LEVEL_UP`)
@@ -2030,6 +2325,23 @@ empties the roster that the next one is compared against.
 A cue with no state behind it, such as a miss or a failed craft, needs a
 structured server event, not a pattern over the log. That event is a constant
 in `statefeed/constants.py`, regenerated into `blackout_constants.gd`.
+
+**A moment is that event.** The `blackout_moment` channel sends one moment
+name, for example `task_complete`, to the player of the moment. `MomentFeed`
+turns each message into its `happened` signal. The `_MOMENT_CUES` table in
+`sound_cues.gd` maps the moment to a cue. The server names no clip. A new
+moment needs three edits:
+
+1. Add a `MOMENT_*` constant and its `MOMENTS` entry in `statefeed/constants.py`.
+2. Add its export row in `clientexport.py`, and run `export_client_constants.py`.
+3. Call `events.emit_moment` where the moment occurs.
+
+A sound for it is one more row in `_MOMENT_CUES`. A moment with no row plays
+nothing.
+
+The last kill of an Exterminator task is the first moment.
+`ExterminatorHandler._complete` sends `task_complete`, and the client plays
+`task_complete.wav`.
 
 **Every clip plays on the `SFX` bus** declared in `default_bus_layout.tres`.
 An audio player that names a bus that does not exist plays on Master with no
@@ -2079,7 +2391,8 @@ To add a sound:
 | `world/world_state.gd` | The world model: the chunks of the block, the room, and the float boundary. |
 | `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds, with its water, walls, and scenery. |
 | `world/terrain/wall_mesh_builder.gd` | The wall slabs of one chunk. The editor uses it too. |
-| `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, and hatches. The editor uses it too. |
+| `world/terrain/wall_palette.gd` | The colour of each wall style. A style with no row draws in the colour of `plain`. |
+| `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, hatches, and the decor shapes. The editor uses it too. |
 | `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
 | `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
 | `world/meshes/mesh_palette.gd` | Colors and finishes. One owner for both. |
@@ -2145,6 +2458,7 @@ To add a sound:
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | The 3D pane: the terrain node, the marker, the hover mark, the pick, and the avatar on the drawn ground. |
 | `world/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash and hover. |
+| `world/hitsplats/` | The hitsplats. `hitsplat_layer.gd` picks a style and draws. `hitsplat_style.gd` and `styles/*.tres` hold the look. |
 | `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
 | `world/sound_cues.gd` | Which clip each cue plays, on the SFX bus. The server names no sound. |
 | `audio/sfx/`, `audio/CREDITS.md` | The clips in use, and where each came from. Source packs live outside the repo. |

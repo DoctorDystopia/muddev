@@ -25,6 +25,8 @@ from systems.gameplay.curing.handler import CuringHandler
 from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
 from systems.gameplay.quests.handler import QuestHandler
+from systems.gameplay.exterminator.handler import ExterminatorHandler
+from systems.gameplay.speech import constants as speech_const
 from systems.core.stat_tracker.handler import StatHandler
 from systems.interface.statefeed import events as feed
 from systems.interface.statefeed import resync
@@ -137,6 +139,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     curing = _handler_property(CuringHandler, "curing")
     quests = _handler_property(QuestHandler, "quests")
     stats = _handler_property(StatHandler, "stats")
+    exterminator = _handler_property(ExterminatorHandler, "exterminator")
 
     # Evennia's contrib cooldown handler. Stores absolute expiry timestamps in
     # a persistent Attribute, so unlike the ndb timestamp it replaces, a
@@ -810,6 +813,57 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
             return
 
         self.msg(text=(appearance, _MSG_LOOK))
+
+
+    # ─── Speech ─────────────────────────────────────────────────────────────
+
+    def at_say(self, message, msg_self=None, msg_location=None,
+               receivers=None, msg_receivers=None,
+               reach=speech_const.REACH_SAY, **kwargs):
+        """
+        Purpose: Send a line of speech to each listener in its reach, not
+                 only to the room of the speaker.
+
+        Entry:
+            The arguments of DefaultObject.at_say.
+            reach - a reach in systems/gameplay/speech/constants.py. The
+                    Evennia `say` gives none, so the default is a say.
+
+        Exit/Returns:
+            Returns nothing.
+
+        Module Globals:
+            speech_const.SAY_HEARD read.
+
+        Methodology:
+            1. If the line is a whisper or names its receivers, send it
+               unchanged.
+            2. Find the listeners of the reach outside the room.
+            3. Give them to Evennia as receivers, with the line of the room.
+
+        Notes/References:
+            Evennia still sends the line to the room of the speaker. Thus, a
+            say on one tile is the same as before. Each tile is one room, so
+            the Evennia hook alone gives a say a reach of one tile.
+
+        Author: Nick Hobar
+        Creation date: 10/05/2026
+        """
+        from systems.gameplay.speech import hearing
+
+        if kwargs.get("whisper", False) or receivers:
+            super().at_say(message, msg_self=msg_self,
+                           msg_location=msg_location, receivers=receivers,
+                           msg_receivers=msg_receivers, **kwargs)
+            return
+
+        heard = msg_location or speech_const.SAY_HEARD
+        found = hearing.listeners(self, reach)
+        far = [listener for listener in found
+               if listener.location != self.location]
+
+        super().at_say(message, msg_self=msg_self, msg_location=heard,
+                       receivers=far or None, msg_receivers=heard, **kwargs)
 
 
     def _publish_inventory(self, ignore=None) -> None:

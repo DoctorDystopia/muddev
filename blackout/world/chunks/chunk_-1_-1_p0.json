@@ -271,10 +271,10 @@
     [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
   ],
   "objects": [
-    {"kind":"rusty_pole","x":55,"y":57,"rotation":0},
-    {"kind":"rusty_pole","x":51,"y":61,"rotation":0},
-    {"kind":"rusty_pole","x":61,"y":61,"rotation":0},
     {"kind":"rusty_pole","x":60,"y":54,"rotation":0},
-    {"kind":"rusty_pole","x":57,"y":60,"rotation":0}
+    {"kind":"rusty_pole","x":57,"y":60,"rotation":0},
+    {"kind":"rusty_pole","x":61,"y":61,"rotation":2},
+    {"kind":"rusty_pole","x":51,"y":61,"rotation":3},
+    {"kind":"rusty_pole","x":55,"y":57,"rotation":2}
   ]
 }

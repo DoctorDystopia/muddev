@@ -113,7 +113,7 @@ def _contributes_modifiers(rules) -> bool:
 def _carriers() -> dict:
     """Map each rules key to the ItemDefs and NpcDefs that declare it."""
     from world.item_database import ITEM_DB
-    from world.npc_database import NPC_DB
+    from world.npc_database import combatant_defs
 
     carriers = {}
 
@@ -121,8 +121,8 @@ def _carriers() -> dict:
         for rule_key in item_def.combat_rules:
             carriers.setdefault(rule_key, []).append(item_def.name)
 
-    for npc_def in NPC_DB.values():
-        for rule_key in npc_def.combat_rules:
+    for npc_def in combatant_defs().values():
+        for rule_key in npc_def.combat.combat_rules:
             carriers.setdefault(rule_key, []).append(npc_def.name)
 
     return carriers

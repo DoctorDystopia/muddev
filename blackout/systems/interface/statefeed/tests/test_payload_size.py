@@ -48,6 +48,7 @@ from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import serializers
 from systems.interface.statefeed.payloads import RoomPlayersPayload
 from world.object_kinds import OBJECT_KINDS
+from world.wall_styles import WALL_STYLES
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -95,16 +96,21 @@ _WORST_CASE_ACTIONS = 4
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _worst_chunk_dict() -> dict:
-    """The wire form of a chunk file with the widest value in every cell."""
+    """
+    The wire form of a chunk file with the widest value in every cell. It is
+    format 2: every wall style, and the last one on every tile.
+    """
     size = tile_const.CHUNK_SIZE
     tile_count = size * size
     kind = next(iter(OBJECT_KINDS))
+    styles = list(WALL_STYLES)
     chunk_file = chunkfile.ChunkFile(
         cx=0, cy=0, plane=0, floor_names=["sand"], area_names=["oasis"],
         heights=[tile_const.HEIGHT_MIN] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=[tile_const.FLAGS_ALL] * tile_count,
         areas=[0] * tile_count,
-        objects=[chunkfile.ChunkObject(kind, x, 0) for x in range(size)])
+        objects=[chunkfile.ChunkObject(kind, x, 0) for x in range(size)],
+        wall_names=styles, walls=[len(styles) - 1] * tile_count)
 
     return chunkfile.to_dict(chunk_file)
 

@@ -92,6 +92,10 @@ class BitBladeRules(BaseActionRules):
         """
         roll = context.rng.randint(0, self.MAX_EXPONENT)
         result.damage = 2 ** roll - 1
+        # The max hit is the top face of this blade. The hit line and the
+        # hitsplat read the two through ActionResult.is_max_hit.
+        result.max_hit = 2 ** self.MAX_EXPONENT - 1
+        result.rolled = result.damage
 
 class BrokenBitBladeRules(BitBladeRules):
     key = "broken_bit_blade"

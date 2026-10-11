@@ -44,6 +44,7 @@ import unittest
 
 from world import areas as _area_table
 from world import floor_types as _floor_table
+from world import wall_styles as _wall_table
 
 from .. import clientexport as _clientexport
 from .. import constants as const
@@ -67,6 +68,12 @@ _SKILL_CATEGORY_SOURCES: tuple = (
     os.path.join(_REPO_ROOT, "godot", "world", "skill_palette.gd"),
 )
 
+# The colour of each buff card rarity (DESIGN-0012). Each key names a rarity
+# of RARITIES in systems/gameplay/exterminator/constants.py.
+_RARITY_PALETTE_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "rarity_palette.gd"),
+)
+
 # The fog and the light of each area (DESIGN-0011 section 6.7). Each key
 # names a row of world/areas.py, the table that the `areas` layer of a chunk
 # file names.
@@ -78,6 +85,12 @@ _AREA_LOOK_SOURCES: tuple = (
 # of world/floor_types.py.
 _FLOOR_PALETTE_SOURCES: tuple = (
     os.path.join(_REPO_ROOT, "godot", "world", "terrain", "floor_palette.gd"),
+)
+
+# The colour of each wall style (DESIGN-0013 section 6.4). Each key names a
+# row of world/wall_styles.py. The table has the shape of the floor palette.
+_WALL_PALETTE_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "terrain", "wall_palette.gd"),
 )
 
 # Which whole FAMILY stands in a packed model's place -- tier 2 of the mesh
@@ -131,6 +144,9 @@ _FLOOR_PALETTE_KEY_RE = re.compile(r'^\t"([^"]+)"\s*:\s*Color\(', re.MULTILINE)
 
 _SKILL_CATEGORY_TABLE_RE = re.compile(
     r"SKILL_CATEGORY_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
+
+_RARITY_PALETTE_TABLE_RE = re.compile(
+    r"RARITY_COLORS\s*:?=\s*\{(.*?)\}", re.DOTALL)
 
 # The doll's rows. Anchored on the CLOSING bracket at the start of a line,
 # because every row inside the table is itself a bracketed list: a lazy
@@ -460,6 +476,52 @@ class ClientSkillCategoryTests(unittest.TestCase):
 
 
 
+class ClientRarityPaletteTests(unittest.TestCase):
+    """Every rarity that the card palette names must be a real rarity."""
+
+    def test_a_client_that_is_here_declares_the_table(self):
+        """
+        The check below skips a file whose table it cannot find. Thus, a
+        rename of RARITY_COLORS would make it pass with no check.
+        """
+        for path in _RARITY_PALETTE_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            with self.subTest(client=os.path.basename(path)):
+                self.assertIsNotNone(
+                    _RARITY_PALETTE_TABLE_RE.search(source),
+                    "%s declares no RARITY_COLORS table." % path)
+
+    def test_no_client_names_a_rarity_that_does_not_exist(self):
+        """
+        A key that names no rarity colours nothing. A rarity with no key is
+        fine: its card draws with no colour.
+        """
+        from systems.gameplay.exterminator.constants import RARITIES
+
+        for path in _RARITY_PALETTE_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            match = _RARITY_PALETTE_TABLE_RE.search(source)
+
+            if match is None:
+                continue
+
+            for key in _TABLE_KEY_RE.findall(match.group(1)):
+                with self.subTest(client=os.path.basename(path), rarity=key):
+                    self.assertIn(
+                        key, RARITIES,
+                        "%s colours '%s', but no rarity has that key."
+                        % (os.path.basename(path), key))
+
+
+
 class ClientAreaLookTests(unittest.TestCase):
     """Every area that the fog and light table names must be a real area."""
 
@@ -509,28 +571,37 @@ class ClientAreaLookTests(unittest.TestCase):
                         % (name, os.path.basename(path)))
 
 
+def _palette_keys(sources: tuple) -> list:
+    """
+    Return (client file name, keys) for each palette file of `sources` that
+    is here. A palette is a `const COLORS` table of name -> Color rows: the
+    floor palette and the wall palette have this shape.
+    """
+    found = []
+
+    for path in sources:
+        source = _read_source(path)
+
+        if source is None:
+            continue
+
+        match = _FLOOR_PALETTE_TABLE_RE.search(source)
+        keys = []
+
+        if match:
+            keys = _FLOOR_PALETTE_KEY_RE.findall(match.group(1))
+
+        found.append((os.path.basename(path), keys))
+
+    return found
+
+
 class ClientFloorPaletteTests(unittest.TestCase):
     """Every floor type that the floor palette names must be a real one."""
 
     def _palette_keys(self):
         """Return (client file name, keys) for each palette file here."""
-        found = []
-
-        for path in _FLOOR_PALETTE_SOURCES:
-            source = _read_source(path)
-
-            if source is None:
-                continue
-
-            match = _FLOOR_PALETTE_TABLE_RE.search(source)
-            keys = []
-
-            if match:
-                keys = _FLOOR_PALETTE_KEY_RE.findall(match.group(1))
-
-            found.append((os.path.basename(path), keys))
-
-        return found
+        return _palette_keys(_FLOOR_PALETTE_SOURCES)
 
     def test_a_client_that_is_here_declares_the_table(self):
         """
@@ -550,6 +621,35 @@ class ClientFloorPaletteTests(unittest.TestCase):
             for name in keys:
                 with self.subTest(client=client, floor=name):
                     self.assertIn(name, _floor_table.FLOOR_TYPES)
+
+
+class ClientWallPaletteTests(unittest.TestCase):
+    """Every wall style that the wall palette names must be a real one."""
+
+    def test_a_client_that_is_here_declares_the_table(self):
+        """
+        The vacuity guard. A renamed COLORS table or a changed row shape
+        would turn the check below green while it checks nothing.
+        """
+        for client, keys in _palette_keys(_WALL_PALETTE_SOURCES):
+            with self.subTest(client=client):
+                self.assertTrue(keys, "%s declares no COLORS row" % client)
+
+    def test_no_client_names_a_wall_style_that_does_not_exist(self):
+        """
+        A key that names no wall style is dead configuration. A wall style
+        with no key is fine: it draws in the colour of the default style.
+        """
+        for client, keys in _palette_keys(_WALL_PALETTE_SOURCES):
+            for name in keys:
+                with self.subTest(client=client, style=name):
+                    self.assertIn(name, _wall_table.WALL_STYLES)
+
+    def test_the_fallback_style_has_a_colour(self):
+        """The fallback of the palette is the default style, so it needs a row."""
+        for client, keys in _palette_keys(_WALL_PALETTE_SOURCES):
+            with self.subTest(client=client):
+                self.assertIn(_wall_table.DEFAULT_WALL_STYLE, keys)
 
 
 class ClientFamilyModelTests(unittest.TestCase):
@@ -755,6 +855,15 @@ class ClientTableDiscoveryTests(unittest.TestCase):
             "No client declared a LOOKS table. Either the clients moved or "
             "the table was renamed. Every drift check in this module is now "
             "inert.")
+
+
+class MomentExportTests(unittest.TestCase):
+    """Every game moment reaches the client, and no export names a stray one."""
+
+    def test_the_exports_are_the_moments(self):
+        exported = {value for _name, value in _clientexport._MOMENT_EXPORTS}
+
+        self.assertEqual(exported, set(const.MOMENTS))
 
 
 class GeneratedConstantsTests(unittest.TestCase):

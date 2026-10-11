@@ -35,7 +35,7 @@ OVERRIDDEN_SEAMS_ATTR = "_overridden_seams"
 
 
 
-def _overridden_seams(rules_class) -> frozenset:
+def overridden_seams(rules_class) -> frozenset:
     """
     Purpose: Work out which of the nine seams a rules class actually replaces.
 
@@ -189,7 +189,7 @@ def _discover_rules() -> dict:
                 continue
 
             instance = obj()
-            seams = _overridden_seams(obj)
+            seams = overridden_seams(obj)
             setattr(instance, OVERRIDDEN_SEAMS_ATTR, seams)
 
             if not seams:

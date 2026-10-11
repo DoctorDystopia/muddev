@@ -17,11 +17,25 @@ extends PanelContainer
 ## [ServerAction]. There is no verb here, the contract [InventorySlotCell]
 ## states for the bag.
 ##
-## No drag and drop. A pop-up moves items with commands the server names, and a
-## drag between two grids would be a command this client composed.
+## ## A drag inside one grid, from the server's template
+##
+## A slot drags only when the view gives it a key with [method bind_drag]. Only
+## the bank vault does this today. A drop goes on another slot of the grid, or
+## on a tab button. The view then fills the server's template with the two
+## keys. [PopupState] owns the fill, so this control holds no verb. No drag
+## goes from one grid to another.
+##
+## The left click fires on the RELEASE, as in [InventorySlotCell]. A click that
+## fired on the press would withdraw the item that the player meant to drag.
 
 ## Emitted with a whole command a telnet player could have typed.
 signal command_requested(command: String)
+
+## Emitted when a slot of the same grid is dropped on this one.
+signal dropped_on(source_key: String, target_key: String)
+
+## The key of the drag data. A tab button reads it too.
+const DRAG_DATA_KEY := "popup_drag_key"
 
 ## Emitted when the mouse enters and leaves this slot. The VIEW owns the
 ## [HoverBar] and reads [method hover_text] from the slot.
@@ -45,6 +59,9 @@ const HOVER_SEPARATOR := "  -  "
 const SLOT_SIZE := Vector2(88, 0)
 const ART_HEIGHT := 34
 
+## The border width of a buff card, in pixels. A card row has a `rarity` field.
+const RARITY_BORDER_WIDTH := 2
+
 var _row: Dictionary = {}
 var _art: TextureRect
 var _title: ItemNameLabel
@@ -55,6 +72,13 @@ var _menu: PopupMenu
 ## What the player set, or null. Read for one fact only: how big they left the
 ## amount box. Given by the view, because a slot is made and freed per snapshot.
 var _settings: ClientSettings
+
+## The key a drag names this slot by, or "" for a slot that does not drag.
+var _drag_key := ""
+
+## True after a drag starts, so the release that ends the gesture sends
+## nothing.
+var _skip_left_release := false
 
 
 ## Built in _init, not _ready, for the reason [InventorySlotCell] gives: the
@@ -116,6 +140,7 @@ func bind(row_data: Dictionary) -> void:
 		_detail.text = ""
 		_count.show_quantity(0)
 		tooltip_text = ""
+		_show_rarity("")
 		return
 
 	_title.text = str(_row.get("name", ""))
@@ -123,6 +148,48 @@ func bind(row_data: Dictionary) -> void:
 	_detail.visible = not _detail.text.is_empty()
 	_count.show_quantity(int(_row.get("quantity", 1)))
 	tooltip_text = _tooltip()
+	_show_rarity(str(_row.get("rarity", "")))
+
+
+## The colour of the card rarity: the border of the slot and the detail line.
+## A row with no `rarity`, or a key the palette does not know, draws as before.
+func _show_rarity(rarity: String) -> void:
+	if not RarityPalette.has_color(rarity):
+		remove_theme_stylebox_override("panel")
+		_detail.remove_theme_color_override("font_color")
+		return
+
+	var colour := RarityPalette.color_for(rarity)
+	add_theme_stylebox_override("panel", _rarity_panel(colour))
+	_detail.add_theme_color_override("font_color", colour)
+
+
+## A copy of the theme panel with a border in `colour`. A theme panel that is
+## not flat gives a clear box with the border only.
+func _rarity_panel(colour: Color) -> StyleBoxFlat:
+	var base := get_theme_stylebox("panel", "PanelContainer")
+	var panel: StyleBoxFlat
+
+	if base is StyleBoxFlat:
+		panel = (base as StyleBoxFlat).duplicate()
+	else:
+		panel = StyleBoxFlat.new()
+		panel.bg_color = Color.TRANSPARENT
+
+	panel.set_border_width_all(RARITY_BORDER_WIDTH)
+	panel.border_color = colour
+
+	return panel
+
+
+## The colour of the rarity border, for tests. Clear when the slot shows none.
+func rarity_border_color() -> Color:
+	var panel := get_theme_stylebox("panel")
+
+	if not has_theme_stylebox_override("panel") or not (panel is StyleBoxFlat):
+		return Color.TRANSPARENT
+
+	return (panel as StyleBoxFlat).border_color
 
 
 ## The row this slot shows, or `{}`. Read by the view to decide what to draw.
@@ -160,17 +227,58 @@ func _gui_input(event: InputEvent) -> void:
 
 	var click := event as InputEventMouseButton
 
-	if not click.pressed:
-		return
-
 	if click.button_index == MOUSE_BUTTON_LEFT:
-		activate()
+		if click.pressed:
+			_skip_left_release = false
+		elif _skip_left_release:
+			_skip_left_release = false
+		else:
+			activate()
+
 		accept_event()
 		return
 
-	if click.button_index == MOUSE_BUTTON_RIGHT:
+	if click.button_index == MOUSE_BUTTON_RIGHT and click.pressed:
 		_open_menu()
 		accept_event()
+
+
+## Let this slot drag, under `key`. "" turns the drag off.
+func bind_drag(key: String) -> void:
+	_drag_key = key
+
+
+## The key a drag names this slot by. For tests.
+func drag_key() -> String:
+	return _drag_key
+
+
+# ─── Drag and drop, all of it Godot's ────────────────────────────────────────
+
+func _get_drag_data(_at: Vector2) -> Variant:
+	if _drag_key.is_empty():
+		return null
+
+	_skip_left_release = true
+	var preview := Label.new()
+	preview.text = str(_row.get("name", ""))
+	preview.theme_type_variation = &"CellTitle"
+	set_drag_preview(preview)
+
+	return {DRAG_DATA_KEY: _drag_key}
+
+
+func _can_drop_data(_at: Vector2, data: Variant) -> bool:
+	if _drag_key.is_empty() or typeof(data) != TYPE_DICTIONARY:
+		return false
+
+	var source := str(data.get(DRAG_DATA_KEY, ""))
+
+	return not source.is_empty() and source != _drag_key
+
+
+func _drop_data(_at: Vector2, data: Variant) -> void:
+	dropped_on.emit(str(data.get(DRAG_DATA_KEY, "")), _drag_key)
 
 
 ## Offer exactly what the server offered, in the order it offered it. A slot
@@ -201,23 +309,11 @@ func _on_menu_id(index: int) -> void:
 	_perform(actions[index])
 
 
-## Send one action, asking first when it is a prompted one.
-##
-## The prompt is checked BEFORE the empty-command guard, because a prompted
-## action is shipped with an empty command on purpose.
+## Send one action. A prompted action asks first, for an amount or for a line
+## of text. [method TextPrompt.perform] reads the prompt BEFORE the empty
+## command, because a prompted action has an empty command on purpose.
 func _perform(action: Dictionary) -> void:
-	var prompt := ServerAction.prompt(action)
-
-	if not prompt.is_empty():
-		AmountPrompt.ask(self, action, prompt, command_requested.emit, _settings)
-		return
-
-	var command := ServerAction.command(action)
-
-	if command.is_empty():
-		return
-
-	command_requested.emit(command)
+	TextPrompt.perform(self, action, command_requested.emit, _settings)
 
 
 ## The count this slot draws in its corner. For tests.

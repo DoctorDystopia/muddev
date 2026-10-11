@@ -90,10 +90,14 @@ class TilePlane:
 
     `grid` and `rooms` are the objects that `movement.step` and
     `pathfind.find_path` take. The name reads go through the chunk files.
+
+    `unpinned` holds the object kinds whose placement pins no room: the decor
+    kinds (`world.object_kinds.UNPINNED_KINDS`). This package does not know
+    the kinds, so the caller gives them. An empty set pins every placed tile.
     """
 
     def __init__(self, chunk_files: list, plane: int = const.GROUND_PLANE,
-                 world_z: str = const.WORLD_Z):
+                 world_z: str = const.WORLD_Z, unpinned=frozenset()):
         mine = [f for f in chunk_files if f.plane == plane]
         self.plane = plane
         self.grid = chunkfile.build_grid(mine, plane)
@@ -111,8 +115,10 @@ class TilePlane:
                 self._objects.setdefault(tile, []).append(
                     (thing.kind, thing.rotation, thing.text))
 
-        # A tile with a placed object keeps its room (TileRooms.pin).
-        self.rooms.pin(self._objects)
+        # A tile with a placed object keeps its room (TileRooms.pin). A tile
+        # that holds only unpinned kinds does not.
+        self.rooms.pin(tile for tile, placed in self._objects.items()
+                       if any(kind not in unpinned for kind, _r, _t in placed))
 
     @property
     def world_z(self) -> str:
@@ -234,10 +240,11 @@ class TileWorld:
     walker (`world/tile_travel.plane_view`).
     """
 
-    def __init__(self, chunk_files: list, world_z: str = const.WORLD_Z):
+    def __init__(self, chunk_files: list, world_z: str = const.WORLD_Z,
+                 unpinned=frozenset()):
         self.name = world_z
         self._planes = {
-            plane: TilePlane(chunk_files, plane, world_z)
+            plane: TilePlane(chunk_files, plane, world_z, unpinned)
             for plane in range(const.GROUND_PLANE, const.PLANE_MAX + 1)
         }
 
@@ -369,18 +376,23 @@ def load_world(directory: str = None, world_z: str = const.WORLD_Z):
 
     Methodology:
         `chunkfile.load_directory` reads and checks each file. The room index
-        of each plane then loads with two queries (`TileRooms.load`).
+        of each plane then loads with two queries (`TileRooms.load`). A decor
+        kind pins no room (`world.object_kinds.UNPINNED_KINDS`).
 
     Notes/References:
         A test that needs no database builds `TileWorld(chunk_files)` itself
-        and skips the room load.
+        and skips the room load. The import of the kinds is here, as the
+        import of `typeclasses.rooms` is late in `rooms.py`: the kinds import
+        the statefeed constants, and the tile grid must not need them.
 
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
+    from world.object_kinds import UNPINNED_KINDS
+
     path = directory or chunk_directory()
     chunk_files = chunkfile.load_directory(path)
-    world = TileWorld(chunk_files, world_z)
+    world = TileWorld(chunk_files, world_z, UNPINNED_KINDS)
     world.load_rooms()
 
     return world

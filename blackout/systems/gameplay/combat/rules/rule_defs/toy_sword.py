@@ -72,8 +72,14 @@ class ToySwordRules(BaseActionRules):
     priority = const.RULES_PRIORITY_WEAPON
 
     def roll_damage(self, context, result) -> None:
-        """Roll the d20, sending a natural 1 back at the wielder."""
+        """Roll the d20, sending a natural 1 back at the wielder.
+
+        The max hit of the sword is the top face of its die. Thus, a natural
+        20 is a max hit (Nick, 10/08/2026), whatever the OSRS ceiling is.
+        """
         roll = context.rng.randint(TOY_SWORD_DIE_MIN, TOY_SWORD_DIE_MAX)
+        result.max_hit = TOY_SWORD_DIE_MAX
+        result.rolled = roll
 
         if roll == TOY_SWORD_FUMBLE_ROLL:
             result.damage = 0

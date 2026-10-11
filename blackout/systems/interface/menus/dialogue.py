@@ -158,7 +158,8 @@ def start(caller: object, **kwargs) -> tuple:
     npc = menu_npc(caller)
 
     if npc:
-        npc_desc = npc.db.desc or "An NPC."
+        # get_display_desc, not db.desc: the NpcDef owns the description.
+        npc_desc = npc.get_display_desc(caller) or "An NPC."
         greeting = npc.db.greeting or f'"Greetings, traveler."'
         text = (
             f"{TITLE_COLOR}{npc.key}{RESET_COLOR}\n"

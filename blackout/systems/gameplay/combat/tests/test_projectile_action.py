@@ -25,7 +25,7 @@ from systems.gameplay.combat import constants as const
 from systems.gameplay.combat.combat import combat_profile, ensure_combat_handler
 from systems.gameplay.combat.rules.context import ActionContext, read_skill_levels
 from systems.gameplay.progression.skills import constants as skill_constants
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 from world.item_database import ITEM_DB
 
 
@@ -71,7 +71,7 @@ class _ProjectileFixture(EvenniaTest):
         self.char1.equipment.equip(self.char1.contents[-1])
         self.arrows = self.char1.equipment.slots[WieldLocation.AMMO]
 
-        self.target = spawn_mutant_raider(self.room1)
+        self.target = spawn_npc("mutant_raider", self.room1)
         self.handler = ensure_combat_handler(self.char1)
 
     def _weapon_data(self):

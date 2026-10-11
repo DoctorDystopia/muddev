@@ -24,3 +24,4 @@ Royalty-free licence: https://ovanisound.com/policies/terms-of-service
 | Clip | Source file in the pack | Changes |
 |---|---|---|
 | `sfx/level_up.wav` | `Jingles & Stingers/Level Up.wav` | Renamed. Imported as mono (Force → Mono); the source file is unmodified. |
+| `sfx/task_complete.wav` | `Hollywood/Knife Kills.wav` | Renamed. The source file is unmodified. |

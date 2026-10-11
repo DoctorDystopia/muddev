@@ -40,6 +40,7 @@ from .payloads import (
     CharSummaryPayload,
     CharVitalsPayload,
     CombatPayload,
+    MomentPayload,
     RoomInfoPayload,
     RoomPlayerAddPayload,
     RoomPlayerRemovePayload,
@@ -338,6 +339,10 @@ def emit_swing(context, result, hp_after: int, max_hp: int,
     victim = attacker if backfire else context.defender
     room = getattr(victim, "location", None)
 
+    # A backfire is the wielder's own damage, not a roll of the die against
+    # the target. It never shows as a max hit.
+    max_hit = 0 if backfire else result.shown_max_hit()
+
     payload = CombatPayload(
         attacker_id=attacker.id,
         attacker_name=str(attacker.key),
@@ -352,6 +357,8 @@ def emit_swing(context, result, hp_after: int, max_hp: int,
         max_hp=max_hp,
         killed=bool(killed),
         backfire=backfire,
+        max_hit=max_hit > 0,
+        max_hit_roll=max_hit,
     )
 
     return _broadcast(payload, attacker, context.defender, room)
@@ -724,6 +731,49 @@ def emit_xp_drop(observer, awards, kind: str) -> int:
             return 0
 
         return emit(observer, XpDropPayload(kind=str(kind), awards=rows))
+    except Exception:
+        logger.log_trace()
+        return 0
+
+
+def emit_moment(observer, moment: str) -> int:
+    """
+    Purpose: Tell the observer's client that one game moment occurred.
+
+    Entry:
+        observer - the character of the moment. One with no subscriber (an
+                   NPC, a telnet player, a test stub) is a supported no-op.
+        moment   - one name from const.MOMENTS.
+
+    Exit/Returns:
+        Returns the number of sends. Returns 0 for a name that is not in
+        const.MOMENTS. Never raises.
+
+    Module Globals:
+        const.MOMENTS read.
+
+    Methodology:
+        1. Refuse a name that is not in MOMENTS, and log it. A typed literal
+           must fail loudly, not send a moment that no client knows.
+        2. Send to the observer only. The text line of the moment goes to
+           that player only, and the feed tells a client no more.
+
+        The whole body is in a try. The caller is a gameplay path, and a
+        cosmetic channel must not break it.
+
+    Notes/References:
+        See CHANNEL_MOMENT. The client maps a moment to a sound in
+        godot/world/sound_cues.gd.
+
+    Author: Nick Hobar
+    Creation date: 10/08/2026
+    """
+    try:
+        if moment not in const.MOMENTS:
+            logger.log_err(f"emit_moment: {moment!r} is not in MOMENTS")
+            return 0
+
+        return emit(observer, MomentPayload(moment=moment))
     except Exception:
         logger.log_trace()
         return 0

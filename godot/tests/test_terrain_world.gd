@@ -15,9 +15,12 @@ extends Node
 ## 5. A move of the block saves the changes first.
 ## 6. A new plane-1 chunk starts from the chunk below, and plane 0 shows as
 ##    a ghost under it (Phase 7c).
-## 7. An undo entry of another plane or block changes nothing.
+## 7. An undo entry of another block changes nothing. A change of plane
+##    keeps every edit, and an undo reaches each plane (DESIGN-0013 S0).
 ## 8. "Check world" sees the block over the files on disk.
 ## 9. A jump loads the block of a tile, and a selection knows its link.
+## 10. A new chunk takes the shared corners of a saved neighbour, so a sculpt
+##     of the ground opens no seam above.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -46,12 +49,16 @@ func _ready() -> void:
 	_undo_restores_the_heights(world)
 	_a_move_saves_first(world)
 	_a_new_upper_chunk_starts_from_the_chunk_below(world)
-	_an_edit_of_another_plane_is_refused(world)
+	_an_edit_of_another_block_is_refused(world)
+	_a_plane_change_keeps_the_edits_of_every_plane(world)
+	_a_new_upper_chunk_follows_the_ground(world)
+	_a_ground_sculpt_opens_no_seam_above(world)
 	_the_world_files_put_the_block_over_the_disk(world)
 	_a_jump_loads_the_block_of_the_tile(world)
 	_a_selection_knows_its_link_and_an_undo_clears_it(world)
 	_a_sign_keeps_its_words_and_its_marker_shows_its_turn(world)
 	_an_entity_kind_draws_its_model_turned(world)
+	_a_new_chunk_takes_the_edge_of_a_saved_neighbour(world)
 	_remove_scratch()
 
 	if _failures > 0:
@@ -169,14 +176,88 @@ func _a_new_upper_chunk_starts_from_the_chunk_below(world: TerrainWorld) -> void
 		"the two plane-0 files that read show below, %d" % world.ghost_count())
 
 
-func _an_edit_of_another_plane_is_refused(world: TerrainWorld) -> void:
-	# The edit of the save case was made on plane 0, block (0, 0).
+func _an_edit_of_another_block_is_refused(world: TerrainWorld) -> void:
+	# The edit of the save case was made on block (0, 0).
 	var corner := Vector2i(_Const.CHUNK_SIZE, 10)
-	var before := world.chunks.get_corner(corner)
+	var ground := world.chunks_on(0)
+	var before := ground.get_corner(corner)
 
 	_expect(not world.replay_edit(_edit_for_undo, true),
-		"an edit of plane 0 does not replay on plane 1")
-	_expect(world.chunks.get_corner(corner) == before, "and changes nothing")
+		"an edit of block (0, 0) does not replay on block (1, 0)")
+	_expect(ground.get_corner(corner) == before, "and changes nothing")
+
+
+## DESIGN-0013 Phase S0. One edit writes two planes. A change of plane keeps
+## it, and its undo and redo reach both planes.
+func _a_plane_change_keeps_the_edits_of_every_plane(world: TerrainWorld) -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var corner := Vector2i(size + 20, 5)
+	var tile := Vector2i(size + 20, 5)
+	var edit := TerrainEdit.for_world(world)
+	var loads := [0]
+	var count_load := func() -> void: loads[0] += 1
+
+	world.block_loaded.connect(count_load)
+	world.plane = 0
+	edit.apply_heights(world.chunks_on(0), {corner: 9})
+	edit.apply_floor(world.chunks_on(1), tile, "concrete")
+	world.rebuild_many(edit.chunk_keys())
+	world.plane = 1
+
+	_expect(loads[0] == 0, "a change of plane loads nothing")
+	_expect(world.chunks_on(0).get_corner(corner) == 9,
+		"the edit of plane 0 stays after the change")
+	_expect(world.chunks.get_floor(tile) == "concrete", "and so does the edit of plane 1")
+	_expect(world.replay_edit(edit, false), "an edit of the same block replays")
+	_expect(world.chunks_on(0).get_corner(corner) == 0
+		and world.chunks.get_floor(tile) == _Const.TILE_VOID_FLOOR,
+		"undo restores both planes")
+
+	world.replay_edit(edit, true)
+
+	_expect(world.chunks.get_floor(tile) == "concrete", "redo writes plane 1 again")
+
+	world.replay_edit(edit, false)
+	world.block_loaded.disconnect(count_load)
+
+
+## A new chunk above follows a sculpt of the ground under it, and an edited
+## chunk above does not.
+func _a_new_upper_chunk_follows_the_ground(world: TerrainWorld) -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var corner := Vector2i(2 * size + 4, 4)
+	var edit := TerrainEdit.for_world(world)
+
+	world.plane = 0
+	edit.apply_heights(world.chunks, {corner: 12})
+	world.plane = 1
+
+	var upper := world.chunks.get_chunk(Vector2i(2, 0))
+
+	_expect(upper.heights[4 * side + 4] == 12 + TerrainWorld.NEW_PLANE_RISE,
+		"the new chunk above rises with the ground")
+
+	world.replay_edit(edit, false)
+
+
+## A built chunk above meets a new chunk that follows the ground. A sculpt
+## of the ground at their seam moves the new chunk, but not its shared edge.
+func _a_ground_sculpt_opens_no_seam_above(world: TerrainWorld) -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var seam := Vector2i(2 * size, 4)
+	var edit := TerrainEdit.for_world(world)
+
+	world.plane = 1
+	edit.apply_floor(world.chunks, Vector2i(size + 3, 3), "concrete")
+	world.plane = 0
+	edit.apply_heights(world.chunks, {seam: 12})
+	world.plane = 1
+
+	_expect(world.chunks.seam_mismatches().is_empty(),
+		"the new chunk keeps the edge of the built chunk")
+
+	world.replay_edit(edit, false)
 
 
 func _the_world_files_put_the_block_over_the_disk(world: TerrainWorld) -> void:
@@ -243,9 +324,9 @@ func _a_sign_keeps_its_words_and_its_marker_shows_its_turn(world: TerrainWorld) 
 	var edit := TerrainEdit.for_world(world)
 
 	edit.add_object(world.chunks, tile, kind, 1, words)
-	world.rebuild_many(edit.chunk_coords())
+	world.rebuild_many(edit.chunk_keys())
 	world.select(tile, kind, 1, words)
-	world.rebuild_many(edit.chunk_coords())
+	world.rebuild_many(edit.chunk_keys())
 
 	_expect(world.selected.get("text", "") == words,
 		"the selection of a sign keeps its words over a redraw")
@@ -284,7 +365,7 @@ func _an_entity_kind_draws_its_model_turned(world: TerrainWorld) -> void:
 
 	edit.add_object(world.chunks, tile, kind, turn)
 	edit.add_object(world.chunks, ladder, "ladder_up", 0)
-	world.rebuild_many(edit.chunk_coords())
+	world.rebuild_many(edit.chunk_keys())
 
 	var models := world.models_of(chunk_coord)
 
@@ -308,6 +389,33 @@ func _an_entity_kind_draws_its_model_turned(world: TerrainWorld) -> void:
 	_expect(world.models_of(chunk_coord).is_empty(), "Show models off draws none")
 	world.show_models = true
 	world.replay_edit(edit, false)
+
+
+## A new chunk takes the shared corners of a saved neighbour, in the block
+## and outside it. Plane 1 then has no seam fault before any edit.
+func _a_new_chunk_takes_the_edge_of_a_saved_neighbour(world: TerrainWorld) -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var inside := ChunkFile.blank(10, 10, 1)
+	var outside := ChunkFile.blank(13, 10, 1)
+
+	inside.heights.fill(50)
+	inside.write_file(_path_on(Vector2i(10, 10), 1))
+	outside.heights.fill(60)
+	outside.write_file(_path_on(Vector2i(13, 10), 1))
+	world.move_block(Vector2i(10, 10), 1)
+
+	var east := world.chunks.get_chunk(Vector2i(11, 10))
+	var west := world.chunks.get_chunk(Vector2i(9, 10))
+	var corner := world.chunks.get_chunk(Vector2i(11, 11))
+	var edge := world.chunks.get_chunk(Vector2i(12, 10))
+
+	_expect(east.heights[7 * side] == 50, "the new east chunk takes the west edge")
+	_expect(west.heights[7 * side + size] == 50, "the new west chunk takes the east edge")
+	_expect(corner.heights[0] == 50, "a corner neighbour gives its one corner")
+	_expect(edge.heights[7 * side + size] == 60,
+		"a file outside the block gives its edge")
+	_expect(world.chunks.seam_mismatches().is_empty(), "plane 1 has no seam fault")
 
 
 func _path_on(chunk_coord: Vector2i, plane: int) -> String:

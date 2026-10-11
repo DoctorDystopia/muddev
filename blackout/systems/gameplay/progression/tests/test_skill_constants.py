@@ -28,6 +28,7 @@ _KEYS_BY_CATEGORY: dict = {
     skill_constants.SKILL_CATEGORY_GATHERING: skill_constants.SKILL_KEYS_CATEGORY_GATHERING,
     skill_constants.SKILL_CATEGORY_PROCESSING: skill_constants.SKILL_KEYS_CATEGORY_PROCESSING,
     skill_constants.SKILL_CATEGORY_PRODUCTION: skill_constants.SKILL_KEYS_CATEGORY_PRODUCTION,
+    skill_constants.SKILL_CATEGORY_UTILITY: skill_constants.SKILL_KEYS_CATEGORY_UTILITY,
 }
 
 # The name prefix of a single skill key constant.

@@ -2,8 +2,8 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/24/2026
-Description: Guards for the three tables that a chunk file names: the floor
-             types, the areas, and the object kinds.
+Description: Guards for the four tables that a chunk file names: the floor
+             types, the areas, the wall styles, and the object kinds.
 
              Run from blackout/:
                  ../evenv/Scripts/evennia.exe test --settings test_settings.py world.tests.test_tile_content
@@ -32,6 +32,7 @@ from world import areas
 from world import floor_types
 from world import object_kinds
 from world import tile_checks
+from world import wall_styles
 
 # The game directory, two levels above this file.
 _GAME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(
@@ -45,6 +46,7 @@ _NAME_RE = re.compile(tile_const.CHUNK_NAME_PATTERN)
 _TABLES: tuple = (
     ("floor type", floor_types.FLOOR_TYPES),
     ("area", areas.AREAS),
+    ("wall style", wall_styles.WALL_STYLES),
     ("object kind", object_kinds.OBJECT_KINDS),
 )
 
@@ -62,6 +64,19 @@ class TableShapeTests(unittest.TestCase):
     def test_the_defaults_are_rows_of_their_tables(self):
         self.assertIn(floor_types.DEFAULT_FLOOR_TYPE, floor_types.FLOOR_TYPES)
         self.assertIn(areas.DEFAULT_AREA, areas.AREAS)
+        self.assertIn(wall_styles.DEFAULT_WALL_STYLE, wall_styles.WALL_STYLES)
+
+    def test_the_default_wall_style_is_the_style_of_a_format_one_file(self):
+        # A format 1 file reads as the chunk file default on every tile. The
+        # table must give that name a row, or every old wall loses its style.
+        self.assertEqual(wall_styles.DEFAULT_WALL_STYLE,
+                         tile_const.DEFAULT_WALL_STYLE)
+
+    def test_every_wall_style_stands_above_the_ground(self):
+        for key, style in wall_styles.WALL_STYLES.items():
+            with self.subTest(style=key):
+                self.assertIsInstance(style.height, int)
+                self.assertGreater(style.height, 0)
 
 
 class ObjectKindTests(unittest.TestCase):
@@ -99,9 +114,10 @@ class ObjectKindTests(unittest.TestCase):
                              feed_const.WORLD_LABEL_MAX_CHARS)
 
     def test_every_kind_that_stands_something_up_has_a_spawner(self):
-        # A sign, a landmark, a transition, and a climb stand up nothing of
-        # their own. Every other kind must name its spawner.
+        # A sign, a landmark, a transition, a climb, and decor stand up
+        # nothing of their own. Every other kind must name its spawner.
         spawnless = (tile_const.OBJECT_CATEGORY_CLIMB,
+                     tile_const.OBJECT_CATEGORY_DECOR,
                      tile_const.OBJECT_CATEGORY_LANDMARK,
                      tile_const.OBJECT_CATEGORY_SIGN,
                      tile_const.OBJECT_CATEGORY_TRANSITION)
@@ -136,6 +152,24 @@ class ObjectKindTests(unittest.TestCase):
 
                 for way in kind.climbs:
                     self.assertIn(way, tile_const.CLIMB_PLANE_STEPS)
+
+    def test_decor_is_scenery_and_nothing_more(self):
+        # DESIGN-0013 section 6.5. A decor kind with no scenery draws
+        # nothing, and a name would name the tile of every crate.
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if kind.category != tile_const.OBJECT_CATEGORY_DECOR:
+                continue
+
+            with self.subTest(kind=key):
+                self.assertTrue(kind.scenery)
+                self.assertEqual(kind.name, "")
+                self.assertEqual(kind.preview, ())
+
+    def test_the_unpinned_kinds_are_the_decor_kinds(self):
+        decor = {key for key, kind in object_kinds.OBJECT_KINDS.items()
+                 if kind.category == tile_const.OBJECT_CATEGORY_DECOR}
+
+        self.assertEqual(object_kinds.UNPINNED_KINDS, decor)
 
     def test_a_kind_with_a_room_name_has_a_room_desc(self):
         for key, kind in object_kinds.OBJECT_KINDS.items():
@@ -209,7 +243,7 @@ class ObjectKindTests(unittest.TestCase):
 
 
 class WorldChunkTests(unittest.TestCase):
-    """Every world chunk file names only rows of the three tables."""
+    """Every world chunk file names only rows of the four tables."""
 
     def test_every_name_in_a_world_chunk_file_is_a_row(self):
         found = chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY)
@@ -218,6 +252,7 @@ class WorldChunkTests(unittest.TestCase):
             used = (
                 ("floor type", chunk.floor_names, floor_types.FLOOR_TYPES),
                 ("area", chunk.area_names, areas.AREAS),
+                ("wall style", chunk.wall_names, wall_styles.WALL_STYLES),
                 ("object kind", [thing.kind for thing in chunk.objects],
                  object_kinds.OBJECT_KINDS),
             )
@@ -230,9 +265,11 @@ class WorldChunkTests(unittest.TestCase):
 
     def test_the_world_passes_every_content_check(self):
         """Each transition and each climb lands on an open tile. Each void
-        tile is Blocked. The world has one respawn point. The rules live in
-        `world/tile_checks.py`. The editor runs the same rules."""
+        tile has the Blocked flag. The world has one respawn point. The rules live in
+        `world/tile_checks.py`. The editor runs the same rules. A note warns
+        and does not fail: the world may hold a closed pocket on purpose."""
         found = tile_checks.check_world(
             chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY))
 
-        self.assertEqual([finding.message for finding in found], [])
+        self.assertEqual([finding.message for finding in found
+                          if not finding.is_note()], [])

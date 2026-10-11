@@ -56,6 +56,7 @@ from world import areas as area_table
 from world import floor_types as floor_table
 from world import object_kinds as kind_table
 from world import tile_checks
+from world import wall_styles as wall_table
 
 from . import constants as const
 
@@ -131,7 +132,9 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_WALK", const.CHANNEL_WALK),
     ("CH_WORLD_MAP", const.CHANNEL_WORLD_MAP),
     ("CH_WORLD_MAP_CHUNK", const.CHANNEL_WORLD_MAP_CHUNK),
+    ("CH_MOMENT", const.CHANNEL_MOMENT),
     ("CH_SUBSCRIBED", const.CHANNEL_SUBSCRIBED_ACK),
+    ("CH_LOGIN_TOKEN", const.CHANNEL_LOGIN_TOKEN),
 )
 
 # Asset kinds, as the client's `family` vocabulary. world_view.gd needs
@@ -211,6 +214,14 @@ _TILE_KIND_EXPORTS: tuple = (
     ("KIND_CANCEL", const.TILE_ACTION_KIND_CANCEL),
 )
 
+# The game moments on CHANNEL_MOMENT. The client keys its sound table on
+# these. Thus, a new name here breaks the generated file, not the sound.
+# One row for each name in const.MOMENTS. test_client_constants.py fails
+# when the two sets differ.
+_MOMENT_EXPORTS: tuple = (
+    ("MOMENT_TASK_COMPLETE", const.MOMENT_TASK_COMPLETE),
+)
+
 # Single-value exports that are neither a channel nor a vocabulary.
 #
 # SUBSCRIBE_ALL is what the handshake sends; ASSET_KEY_CHARACTER is the model
@@ -246,6 +257,12 @@ _SCALAR_EXPORTS: tuple = (
     ("ACTION_INPUT_MIN_KEY", const.ACTION_INPUT_MIN_KEY),
     ("ACTION_INPUT_MAX_KEY", const.ACTION_INPUT_MAX_KEY),
     ("ACTION_INPUT_LABEL_KEY", const.ACTION_INPUT_LABEL_KEY),
+    # The text prompt: a bank tab name. The same rule as the amount above.
+    ("ACTION_TEXT_PLACEHOLDER", const.ACTION_TEXT_PLACEHOLDER),
+    ("ACTION_INPUT_KIND_TEXT", const.ACTION_INPUT_KIND_TEXT),
+    # The tokens of a drag template: the inventory swap and the bank vault.
+    ("DRAG_SOURCE_TOKEN", const.DRAG_SOURCE_TOKEN),
+    ("DRAG_TARGET_TOKEN", const.DRAG_TARGET_TOKEN),
     # The socket ceiling. Exported rather than typed into the client because
     # the SERVER is what decides how big a message gets -- see the constant's
     # own comment, and PERF-0002.
@@ -254,6 +271,13 @@ _SCALAR_EXPORTS: tuple = (
     # with the same string, so the two cannot disagree about a floor.
     ("WORLD_MAP_ALPHABET", const.WORLD_MAP_ALPHABET),
     ("WORLD_MAP_COMMAND", const.WORLD_MAP_COMMAND),
+    # The saved login. The client keeps the token from the channel under
+    # these keys, and it sends these commands. The server spells all five.
+    ("LOGIN_ACCOUNT_KEY", const.LOGIN_ACCOUNT_KEY),
+    ("LOGIN_TOKEN_KEY", const.LOGIN_TOKEN_KEY),
+    ("LOGIN_RESUME_TEMPLATE", const.LOGIN_RESUME_TEMPLATE),
+    ("REMEMBER_COMMAND", const.COMMAND_REMEMBER),
+    ("FORGET_COMMAND", const.COMMAND_FORGET),
 )
 
 # What a line of game TEXT is about. Generated for the same reason the channel
@@ -315,6 +339,7 @@ _CLOCK_EXPORTS: tuple = (
 # twice is two owners of one fact.
 _TILE_GRID_EXPORTS: tuple = (
     ("CHUNK_FORMAT_VERSION", tile_const.CHUNK_FORMAT_VERSION),
+    ("CHUNK_FORMAT_PLAIN_WALLS", tile_const.CHUNK_FORMAT_PLAIN_WALLS),
     ("CHUNK_SIZE", tile_const.CHUNK_SIZE),
     ("CHUNK_CORNERS_PER_SIDE", tile_const.CORNERS_PER_SIDE),
     ("CHUNK_PLANE_MAX", tile_const.PLANE_MAX),
@@ -326,6 +351,9 @@ _TILE_GRID_EXPORTS: tuple = (
     ("CHUNK_TEXT_MAX_CHARS", tile_const.CHUNK_TEXT_MAX_CHARS),
     ("CHUNK_FILE_TEMPLATE", tile_const.CHUNK_FILE_TEMPLATE),
     ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
+    ("STRUCTURE_DIRECTORY", tile_const.STRUCTURE_DIRECTORY),
+    ("STRUCTURE_FILE_SUFFIX", tile_const.STRUCTURE_FILE_SUFFIX),
+    ("STRUCTURE_FORMAT_VERSION", tile_const.STRUCTURE_FORMAT_VERSION),
     ("TILE_SYNC_STAMP_FILE", tile_const.SYNC_STAMP_FILE),
     ("CHUNK_STREAM_RADIUS", tile_const.STREAM_RADIUS_CHUNKS),
     ("TILE_WORLD_Z", tile_const.WORLD_Z),
@@ -338,6 +366,7 @@ _TILE_GRID_EXPORTS: tuple = (
     ("TILE_FLAG_WALL_SOUTH", tile_const.FLAG_WALL_SOUTH),
     ("TILE_FLAG_WALL_WEST", tile_const.FLAG_WALL_WEST),
     ("TILE_FLAGS_UNWALKABLE", tile_const.FLAGS_UNWALKABLE),
+    ("TILE_FLAGS_WALLS", tile_const.FLAGS_WALLS),
     ("TILE_FLAGS_ALL", tile_const.FLAGS_ALL),
     ("OBJECT_CATEGORY_FACILITY", tile_const.OBJECT_CATEGORY_FACILITY),
     ("OBJECT_CATEGORY_GATHERING", tile_const.OBJECT_CATEGORY_GATHERING),
@@ -346,13 +375,19 @@ _TILE_GRID_EXPORTS: tuple = (
     ("OBJECT_CATEGORY_SIGN", tile_const.OBJECT_CATEGORY_SIGN),
     ("OBJECT_CATEGORY_TRANSITION", tile_const.OBJECT_CATEGORY_TRANSITION),
     ("OBJECT_CATEGORY_CLIMB", tile_const.OBJECT_CATEGORY_CLIMB),
+    ("OBJECT_CATEGORY_DECOR", tile_const.OBJECT_CATEGORY_DECOR),
     ("OBJECT_TEXT_CATEGORY", tile_const.OBJECT_TEXT_CATEGORY),
     ("OBJECT_SIGNPOST_KIND", kind_table.SIGNPOST_KIND),
     ("SCENERY_LADDER", tile_const.SCENERY_LADDER),
     ("SCENERY_STAIRS", tile_const.SCENERY_STAIRS),
     ("SCENERY_HATCH", tile_const.SCENERY_HATCH),
+    ("SCENERY_CRATE", tile_const.SCENERY_CRATE),
+    ("SCENERY_TABLE", tile_const.SCENERY_TABLE),
+    ("SCENERY_LAMP_POST", tile_const.SCENERY_LAMP_POST),
     ("TILE_DEFAULT_FLOOR", floor_table.DEFAULT_FLOOR_TYPE),
     ("TILE_DEFAULT_AREA", area_table.DEFAULT_AREA),
+    # The style of each tile of a chunk file of format 1 (DESIGN-0013).
+    ("TILE_DEFAULT_WALL_STYLE", tile_const.DEFAULT_WALL_STYLE),
     # Planes (Phase 7). The client reads the plane of the player from the
     # room Z, and draws no triangle on a void tile.
     ("TILE_GROUND_PLANE", tile_const.GROUND_PLANE),
@@ -369,6 +404,9 @@ _TILE_GRID_EXPORTS: tuple = (
     ("TILE_CHECK_VOID_OPEN", tile_checks.RULE_VOID_OPEN),
     ("TILE_CHECK_RESPAWN_COUNT", tile_checks.RULE_RESPAWN_COUNT),
     ("TILE_CHECK_SIGN_TEXT", tile_checks.RULE_SIGN_TEXT),
+    ("TILE_CHECK_WALL_ON_VOID", tile_checks.RULE_WALL_ON_VOID),
+    ("TILE_CHECK_UNREACHABLE", tile_checks.RULE_UNREACHABLE),
+    ("TILE_CHECK_ROOF_WALKABLE", tile_checks.RULE_ROOF_WALKABLE),
 )
 
 # The names that the Godot editor paints and places (DESIGN-0011 section 6.3).
@@ -377,9 +415,13 @@ _TILE_GRID_EXPORTS: tuple = (
 # The kinds are a map, kind -> category, so the editor can group its markers.
 _TILE_GRID_LIST_EXPORTS: tuple = (
     ("TILE_FLOOR_TYPES", tuple(floor_table.FLOOR_TYPES)),
+    # The client draws no cliff colour on these (DESIGN-0013 section 6.2).
+    ("TILE_ROOF_FLOOR_TYPES", floor_table.ROOF_FLOOR_TYPES),
     ("TILE_AREAS", tuple(area_table.AREAS)),
+    ("TILE_WALL_STYLES", tuple(wall_table.WALL_STYLES)),
     ("OBJECT_CATEGORIES", tile_const.OBJECT_CATEGORIES),
     ("TILE_CHECK_RULES", tile_checks.RULES),
+    ("TILE_CHECK_NOTE_RULES", tile_checks.NOTE_RULES),
     ("SCENERY_PRIMITIVES", tile_const.SCENERY_PRIMITIVES),
 )
 
@@ -404,6 +446,10 @@ _TILE_GRID_MAP_EXPORTS: tuple = (
                                   for key, kind in kind_table.OBJECT_KINDS.items()
                                   if kind.preview)),
     ("CLIMB_PLANE_STEPS", tuple(tile_const.CLIMB_PLANE_STEPS.items())),
+    # The height of a wall with nothing above it, in height steps, for each
+    # wall style. The client draws the wall at this height.
+    ("TILE_WALL_STYLE_HEIGHTS", tuple((key, style.height)
+                                      for key, style in wall_table.WALL_STYLES.items())),
 )
 
 _LANGUAGE_GD: str = "gd"
@@ -591,8 +637,8 @@ def _render_body(syntax: dict, indent: str) -> str:
 
     Module Globals:
         _CHANNEL_EXPORTS, _KIND_EXPORTS, _ITEM_FAMILY_EXPORTS,
-        _LABEL_KIND_EXPORTS, _TILE_KIND_EXPORTS, _MESSAGE_TYPE_EXPORTS,
-        _CLOCK_EXPORTS, _TILE_GRID_EXPORTS, _TILE_GRID_LIST_EXPORTS,
+        _LABEL_KIND_EXPORTS, _TILE_KIND_EXPORTS, _MOMENT_EXPORTS,
+        _MESSAGE_TYPE_EXPORTS, _CLOCK_EXPORTS, _TILE_GRID_EXPORTS, _TILE_GRID_LIST_EXPORTS,
         _TILE_GRID_MAP_EXPORTS, _SCALAR_EXPORTS read.
 
     Methodology:
@@ -626,6 +672,8 @@ def _render_body(syntax: dict, indent: str) -> str:
             _LABEL_KIND_EXPORTS)
     section("Tile action kinds -- what a click does to a walk in progress.",
             _TILE_KIND_EXPORTS)
+    section("Game moments -- what a client can mark with a sound.",
+            _MOMENT_EXPORTS)
     section("Text routing -- what a line of game text is ABOUT. Which tab "
             "shows it is the client's own.", _MESSAGE_TYPE_EXPORTS)
     section("The server clock. One tile per tick is walking speed.",

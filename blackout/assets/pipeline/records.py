@@ -28,6 +28,7 @@ Description: Model records. One served model, one file:
                  [output]                             # optional
                  max_texture_edge = 256
                  texture_format   = "webp"
+                 animations       = false
 
              ALIASES. More asset keys that draw the same model. The build
              writes ONE file, and the manifest points every alias at it. Before
@@ -76,7 +77,8 @@ class ModelRecord:
 
     rotate is (x, y, z) in degrees, or None. texture_image is a path relative
     to the source directory, or "". max_texture_edge is 0 when the family
-    budget decides it.
+    budget decides it. animations is False when the served file must carry
+    no animation.
     """
 
     asset_key: str
@@ -93,6 +95,7 @@ class ModelRecord:
     filter: str = FILTER_LINEAR
     max_texture_edge: int = 0
     texture_format: str = TEXTURE_FORMAT_PNG
+    animations: bool = True
 
     @property
     def keys(self) -> tuple:
@@ -106,7 +109,8 @@ _TOP_FIELDS: frozenset = frozenset(
     ("source", "file", "aliases", "node", "texture", "fix", "output"))
 _TEXTURE_FIELDS: frozenset = frozenset(("image", "roughness"))
 _FIX_FIELDS: frozenset = frozenset(("rotate", "opaque", "filter"))
-_OUTPUT_FIELDS: frozenset = frozenset(("max_texture_edge", "texture_format"))
+_OUTPUT_FIELDS: frozenset = frozenset(
+    ("max_texture_edge", "texture_format", "animations"))
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -185,8 +189,9 @@ def _read_output(where: str, output: dict) -> dict:
         output is the parsed table, possibly empty.
 
     Exit/Returns:
-        Returns {"max_texture_edge", "texture_format"}. An edge of 0 means
-        that the family budget decides. Raises RecordError for a bad value.
+        Returns {"max_texture_edge", "texture_format", "animations"}. An
+        edge of 0 means that the family budget decides. Raises RecordError
+        for a bad value.
 
     Module Globals:
         TEXTURE_FORMATS, TEXTURE_FORMAT_PNG read.
@@ -197,6 +202,7 @@ def _read_output(where: str, output: dict) -> dict:
     _refuse_unknown(where + " [output]", output, _OUTPUT_FIELDS)
     edge = output.get("max_texture_edge", 0)
     texture_format = output.get("texture_format", TEXTURE_FORMAT_PNG)
+    animations = output.get("animations", True)
 
     if not isinstance(edge, int) or edge < 0:
         raise RecordError("%s: max_texture_edge must be a whole number"
@@ -206,7 +212,11 @@ def _read_output(where: str, output: dict) -> dict:
         raise RecordError("%s: texture_format must be one of %s"
                           % (where, ", ".join(TEXTURE_FORMATS)))
 
-    return {"max_texture_edge": edge, "texture_format": texture_format}
+    if not isinstance(animations, bool):
+        raise RecordError("%s: animations must be true or false" % where)
+
+    return {"max_texture_edge": edge, "texture_format": texture_format,
+            "animations": animations}
 
 
 def _read_texture(where: str, texture: dict) -> dict:

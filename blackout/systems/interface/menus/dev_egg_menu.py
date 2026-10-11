@@ -62,7 +62,7 @@ _TARGET_LINE = f"Target: {HIGHLIGHT_COLOR}{{target}}{RESET_COLOR}"
 _GODMODE_LINE = "God mode: {state}"
 
 _PROMPT_SPAWN = "How many {item_key}? (1-{maximum})"
-_PROMPT_NPC = "How many {npc_key}? (1-{maximum}) They spawn live and hostile."
+_PROMPT_NPC = "How many {npc_key}? (1-{maximum}) They spawn live."
 _PROMPT_TELEPORT_PLAYER = "Send {target} to which character?"
 _PROMPT_XP = "How much XP for {skill_key}? (1-{maximum})"
 _PROMPT_LEVEL = "What level for {skill_key}? ({minimum}-{maximum})"

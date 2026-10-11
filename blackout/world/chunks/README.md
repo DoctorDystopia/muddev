@@ -26,6 +26,7 @@ Every name in a chunk file is a row of a table under `world/`:
 |---|---|
 | `floor_names` | `world/floor_types.py` |
 | `area_names` | `world/areas.py` |
+| `wall_names` | `world/wall_styles.py` |
 | `objects[].kind` | `world/object_kinds.py` |
 
 `world/tests/test_tile_content.py` fails on a name that is not a row.
@@ -35,8 +36,13 @@ Every name in a chunk file is a row of a table under `world/`:
 - **Name:** `chunk_<cx>_<cy>_p<plane>.json`, for example
   `chunk_-1_2_p0.json`. The name must match the `chunk` and `plane` in the
   file. `load_directory` refuses a file whose name does not.
-- **Format:** format 1, in the canonical layout. The module docstring of
-  `systems/core/tilegrid/chunkfile.py` defines each key.
+- **Format:** format 1 or format 2, in the canonical layout. The module
+  docstring of `systems/core/tilegrid/chunkfile.py` defines each key.
+- **Wall styles:** format 2 adds `wall_names` and `walls`: one wall style
+  for each tile (DESIGN-0013 section 6.4). The writer writes format 2 only
+  when a tile has a style other than `plain`. Thus, a chunk with only plain
+  walls stays format 1, and its file does not change. A style on a tile with
+  no wall bit is legal, and nothing draws it.
 - **Objects:** at local coordinates, 0 to 63. The reader adds the chunk
   offset. The rotation is 0 to 3 quarter turns, clockwise from above. At
   rotation 0, the front of an object faces north.

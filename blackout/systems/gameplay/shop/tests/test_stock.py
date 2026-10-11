@@ -24,6 +24,7 @@ from systems.interface.popups import service
 from systems.interface.popups.popup_defs import shop as shop_popup
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.npcs import ShopkeepNPC
+from world.npc_database import NPC_DB
 from world.item_database import ITEM_DB
 from world.shop_defs import SHOP_DB, ShopDef, WareStock
 
@@ -84,7 +85,7 @@ class TestStockLevel(EvenniaTestCase):
 
     def setUp(self):
         super().setUp()
-        self.keeper = create_object(ShopkeepNPC, key="Shopkeeper")
+        self.keeper = NPC_DB["shopkeeper_oasis"].create()
         self.key, self.ware = _finite_ware()
 
     def test_an_untouched_ware_is_full(self):

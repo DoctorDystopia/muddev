@@ -33,7 +33,7 @@ from world.npc_database import NPC_DB, NPC_KEY_ATTR
 from systems.gameplay.combat.combat import ensure_combat_handler, get_handler_for
 from systems.gameplay.combat.rules.context import ActionResult
 from systems.core.tick.engine import bootstrap_tick, get_tick_engine
-from typeclasses.npc_combat import spawn_mutant_raider
+from typeclasses.npc_spawners import spawn_npc
 
 
 class TestBehaviorRegistry(EvenniaTestCase):
@@ -61,7 +61,7 @@ class TestLastAttackerRecord(EvenniaTest):
     """at_damage's record — the seam a threat table drops into later."""
 
     def test_taking_damage_records_the_attacker(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         npc.at_damage(1, attacker=self.char1)
 
@@ -74,7 +74,7 @@ class TestLastAttackerRecord(EvenniaTest):
 
         at_death normalises a self-kill to no killer for the same reason.
         """
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
 
         npc.at_damage(1, attacker=npc)
 
@@ -82,7 +82,7 @@ class TestLastAttackerRecord(EvenniaTest):
 
     def test_unattributed_damage_does_not_clear_an_existing_record(self):
         """Poison or fall damage mid-fight must not make a monster forget."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.at_damage(1, attacker=self.char1)
 
         npc.at_damage(1, attacker=None)
@@ -97,7 +97,7 @@ class TestAggressiveMeleeBehavior(EvenniaTest):
 
     def _handler_for_a_bitten_npc(self):
         """An NPC that has been hit once by char1."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         npc.at_damage(1, attacker=self.char1)
         handler = ensure_combat_handler(npc)
 
@@ -112,7 +112,7 @@ class TestAggressiveMeleeBehavior(EvenniaTest):
 
     def test_an_unhit_npc_does_nothing(self):
         """Purely reactive. Unprovoked aggro is a separate trigger."""
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         handler = ensure_combat_handler(npc)
 
         self.assertIsNone(aggressive_melee(handler))
@@ -138,8 +138,8 @@ class TestAggressiveMeleeBehavior(EvenniaTest):
         char1 would leave the row standing and the test would prove nothing
         about this code path.
         """
-        npc = spawn_mutant_raider(self.room1)
-        attacker = spawn_mutant_raider(self.room2)
+        npc = spawn_npc("mutant_raider", self.room1)
+        attacker = spawn_npc("mutant_raider", self.room2)
         npc.at_damage(1, attacker=attacker)
         handler = ensure_combat_handler(npc)
 
@@ -162,7 +162,7 @@ class TestControllerSeam(EvenniaTest):
         self.assertIsNone(handler.ndb.pending_action)
 
     def test_an_unknown_behavior_key_is_logged_and_survives(self):
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         # The ROW is the answer only for an NPC that names no definition, so
         # the key is cleared to reach it. See behavior_key_for.
         setattr(npc.db, NPC_KEY_ATTR, None)
@@ -183,12 +183,12 @@ class TestControllerSeam(EvenniaTest):
         already standing in the world would keep fighting the old way with
         nothing to say why.
         """
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         setattr(npc.db, AI_BEHAVIOR_ATTR, "no_such_behavior")
 
         definition = NPC_DB[getattr(npc.db, NPC_KEY_ATTR)]
 
-        self.assertEqual(behavior_key_for(npc), definition.ai_behavior)
+        self.assertEqual(behavior_key_for(npc), definition.combat.ai_behavior)
 
     def test_a_raising_behavior_is_caught_and_logged(self):
         """The gotcha this whole seam is shaped around.
@@ -197,7 +197,7 @@ class TestControllerSeam(EvenniaTest):
         in a behaviour would present as an NPC that silently stopped fighting
         with nothing in the log saying why.
         """
-        npc = spawn_mutant_raider(self.room1)
+        npc = spawn_npc("mutant_raider", self.room1)
         handler = ensure_combat_handler(npc)
         handler.init_runtime_state()
 
@@ -223,7 +223,7 @@ class TestRetaliationOverTicks(EvenniaTest):
         # Both sides need to outlast the exchange: the point of these tests is
         # the CADENCE, and a combatant dying partway through would end the
         # fight and hide a stalled AI behind a legitimate teardown.
-        self.npc = spawn_mutant_raider(self.room1)
+        self.npc = spawn_npc("mutant_raider", self.room1)
         self.npc.db.max_hp = 500
         self.npc.hp = 500
 

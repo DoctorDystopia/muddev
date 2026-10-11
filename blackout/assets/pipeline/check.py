@@ -13,6 +13,7 @@ Description: Check that the model records, the sources and the served tree
                - a record that does not load, or names a missing source/file
                - a source that fails the license gate, or whose files do not
                  match their sealed hashes
+               - a local source with no .gitignore from seal
                - a served model that is missing, stale (the lock file
                  disagrees), over budget, not from the build, or that uses a
                  glTF extension Godot cannot read
@@ -24,6 +25,8 @@ Description: Check that the model records, the sources and the served tree
              every run, so it cannot be forgotten:
                - a source served under a license exception
                - a source that no record uses
+               - a local source whose files are not on this machine. The
+                 check then skips its file hashes
 
              Needs no Node and no Blender. It reads files only.
 """
@@ -113,10 +116,22 @@ def _check_sources(report: CheckReport, used: set) -> dict:
 
         loaded[source_id] = source
         refusal = sources.gate_problem(source)
-        drift = sources.hash_problems(source)
+        unprotected = sources.gitignore_problem(source)
+        absent = sources.files_absent(source)
+        drift = [] if absent else sources.hash_problems(source)
 
         if refusal:
             report.problems.append("%s: %s" % (source_id, refusal))
+
+        if unprotected:
+            report.problems.append("%s: %s. Run `python -m assets.pipeline "
+                                   "seal %s`" % (source_id, unprotected,
+                                                 source_id))
+
+        if absent:
+            report.warnings.append("%s: the files of this local source are "
+                                   "not on this machine. Its file hashes "
+                                   "were not checked" % source_id)
 
         if source.exception:
             report.warnings.append("%s is served under a license exception: "
@@ -147,6 +162,11 @@ def _check_record_inputs(report, record, loaded) -> bool:
     Module Globals:
         None.
 
+    Methodology:
+        A local source with no files on this machine passes. The served
+        file and the lock file are in git, and _check_served compares them
+        with the hashes in the source record, not with the files.
+
     Author: Nick Hobar
     Creation date: 09/18/2026
     """
@@ -157,6 +177,11 @@ def _check_record_inputs(report, record, loaded) -> bool:
         report.problems.append("%s: no loadable source '%s'"
                                % (where, record.source_id))
         return False
+
+    absent = sources.files_absent(source)
+
+    if absent:
+        return True
 
     wanted = [record.file]
 

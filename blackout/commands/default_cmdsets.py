@@ -25,15 +25,18 @@ from commands.combat_cmds import CombatCmdSet
 from commands.crafting_cmds import CraftingCmdSet
 from commands.drop_cmds import DropCmdSet
 from commands.equipment_cmds import EquipmentCmdSet
+from commands.exterminator_cmds import ExterminatorCmdSet
 from commands.gathering_cmds import GatheringCmdSet
 from commands.graffiti_cmds import GraffitiCmdSet
 from commands.get_cmds import GetCmdSet
 from commands.consumable_cmds import ConsumableCmdSet
 from commands.inventory_cmds import InventoryCmdSet
+from commands.login_cmds import CmdForget, CmdRemember, CmdUnconnectedResume
 from commands.movement_cmds import MovementCmdSet
 from commands.progression_cmds import ProgressionCmdSet
 from commands.quest_cmds import QuestCmdSet
 from commands.read_cmds import ReadCmdSet
+from commands.speech_cmds import SpeechCmdSet
 
 
 class CharacterCmdSet(default_cmds.CharacterCmdSet):
@@ -55,6 +58,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         #
         self.add(ProgressionCmdSet())
         self.add(QuestCmdSet())
+        self.add(ExterminatorCmdSet())
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())
         self.add(ConsumableCmdSet())
@@ -68,6 +72,9 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(CleanupCmdSet())
         self.add(BuildCmdSet())
         self.add(ReadCmdSet())
+        # Replaces Evennia's say by key. Both speech commands reach past
+        # the tile of the speaker (systems/gameplay/speech/).
+        self.add(SpeechCmdSet())
         self.add(GraffitiCmdSet())
         self.add(DisplayCmdSet())
         # The confirm toggle, on the character so the Godot Options button
@@ -100,6 +107,9 @@ class AccountCmdSet(default_cmds.AccountCmdSet):
         # Replaces Evennia's page by key: the same command, with a routing
         # tag on every line and a /reply switch.
         self.add(CmdPage())
+        # The saved login. On the account, so both work OOC and IC.
+        self.add(CmdRemember())
+        self.add(CmdForget())
 
 
 class UnloggedinCmdSet(default_cmds.UnloggedinCmdSet):
@@ -118,6 +128,8 @@ class UnloggedinCmdSet(default_cmds.UnloggedinCmdSet):
         #
         # any commands you add below will overload the default ones.
         #
+        # The login of a saved login. The Godot client sends it by itself.
+        self.add(CmdUnconnectedResume())
 
 
 class SessionCmdSet(default_cmds.SessionCmdSet):

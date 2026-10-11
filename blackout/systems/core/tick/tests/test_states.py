@@ -276,9 +276,9 @@ class TestActionsReportEvents(EvenniaTest):
         character (delete() returns False), so using one would assert this
         against an object that is still very much alive.
         """
-        from typeclasses.npc_combat import spawn_mutant_raider
+        from typeclasses.npc_spawners import spawn_npc
 
-        raider = spawn_mutant_raider(self.room1)
+        raider = spawn_npc("mutant_raider", self.room1)
         action = self._attack(raider)
         deleted = raider.delete()
 

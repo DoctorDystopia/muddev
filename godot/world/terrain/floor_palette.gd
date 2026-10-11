@@ -27,6 +27,9 @@ const COLORS := {
 	"concrete": Color("9a9a94"),
 	"grass": Color("6f8a4a"),
 	"water_bed": Color("4f6a6e"),
+	"roof_sheet_metal": Color("7a6f66"),
+	"roof_tile": Color("8e5a44"),
+	"roof_concrete": Color("85847e"),
 }
 
 ## The colour of a cliff face: a triangle steeper than the walk limit, on any
@@ -42,15 +45,6 @@ const CLIFF_COLOR := Color("5e5249")
 ## to tune.
 const WATER_COLOR := Color("3d6f86")
 
-## The colour of a wall on a tile edge, on any floor type. [WallMeshBuilder]
-## picks it. A plain primitive until the walls get art. A look, for Nick to
-## tune.
-const WALL_COLOR := Color("7b7870")
-
-## The colour of the top of a wall. Lighter than the sides, so the line of a
-## wall reads from the camera above.
-const WALL_TOP_COLOR := Color("a19d93")
-
 ## The colours of the primitive scenery of [PropMeshBuilder]: a ladder, a
 ## flight of stairs, and a hatch. Plain shapes until the climbs get art. A
 ## look, for Nick to tune.
@@ -58,6 +52,15 @@ const LADDER_COLOR := Color("8a5a36")
 const STAIRS_COLOR := Color("8f8b82")
 const HATCH_COLOR := Color("2b2622")
 const HATCH_FRAME_COLOR := Color("6b5a48")
+
+## The colours of the decor primitives (DESIGN-0013 Phase S4). A crate has
+## a darker lid. The table is sheet steel. The lamp post has a warm lamp. A
+## look, for Nick to tune.
+const CRATE_COLOR := Color("7a5a3a")
+const CRATE_LID_COLOR := Color("5e4430")
+const TABLE_COLOR := Color("6f6b63")
+const LAMP_POST_COLOR := Color("3d4147")
+const LAMP_COLOR := Color("ffd27a")
 
 ## How much lighter the top face of a primitive is than its sides, so its
 ## shape reads from the camera above.

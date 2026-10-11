@@ -41,9 +41,24 @@ const BUS := "SFX"
 ## A skill's level rose. Cued from [signal SkillsState.levelled].
 const LEVEL_UP := "level_up"
 
+## The last kill of an Exterminator task. Cued from the server moment of the
+## same name, through [constant _MOMENT_CUES].
+const TASK_COMPLETE := "task_complete"
+
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 ## Cue to clip. Adding a sound is one constant above and one row here.
 const _STREAMS := {
 	LEVEL_UP: preload("res://audio/sfx/level_up.wav"),
+	TASK_COMPLETE: preload("res://audio/sfx/task_complete.wav"),
+}
+
+## Server moment to cue. The server names the moment, and this table decides
+## what it sounds like. The keys come from the generated constants, so a
+## moment that the server renames breaks this file, not the sound. A moment
+## with no row plays nothing.
+const _MOMENT_CUES := {
+	_Const.MOMENT_TASK_COMPLETE: TASK_COMPLETE,
 }
 
 
@@ -68,9 +83,27 @@ func play(cue: String) -> AudioStreamPlayer:
 	return player
 
 
+## Play the cue of one server moment, from [signal MomentFeed.happened].
+## A moment with no cue plays nothing and returns null, as [method play] does.
+func play_moment(moment: String) -> AudioStreamPlayer:
+	var cue := cue_for_moment(moment)
+
+	return play(cue)
+
+
 ## Every cue that has a clip.
 static func cues() -> Array:
 	return _STREAMS.keys()
+
+
+## Every server moment that has a cue.
+static func moments() -> Array:
+	return _MOMENT_CUES.keys()
+
+
+## The cue of one server moment, or "" for a moment with no row.
+static func cue_for_moment(moment: String) -> String:
+	return _MOMENT_CUES.get(moment, "")
 
 
 ## Set the SFX bus from a LINEAR volume, 0.0 to 1.0, as the Options slider

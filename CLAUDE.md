@@ -69,7 +69,7 @@ Inside `blackout/`:
 | `analysis/` | Balance scripts that print tables and draw plots (`show_*.py`). NOT a game system, hence top-level. Nothing in the game imports it |
 | `items/` | `equipment/` and `inventory/` handlers + slot constants |
 | `typeclasses/` | Evennia typeclasses; `mixins.py` holds `CombatEntity` |
-| `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `shop_defs/`, `maps/` |
+| `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `npc_dialogues/`, `shop_defs/`, `maps/` |
 | `commands/` | Command classes and cmdsets |
 | `assets/` | The 3D model pipeline: downloads, model records, the build. See "3D models" |
 | `web/` | Django site + statefeed-adjacent static assets (the served `.glb` model tree, which the pipeline writes) |
@@ -182,8 +182,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3060 tests, ~25 min,
-measured 09/28/2026):
+**Before a merge or a major change**, run the full suite (3460 tests, ~29 min,
+measured 10/09/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -359,10 +359,10 @@ The second row is the sharper lesson. The module was safe to import. It simply
 moved. `SHOPKEEP_DIALOGUE_MODULE` moved with the directories. But every
 shopkeep kept the path that its creation stamped into the row.
 
-`TalkativeNPC.dialogue_module` is now a class attribute. `_dialogue_module_for`
-reads it **before** `db.menu_module`. That order is the fix, not the fallback.
-If the code reads the row first, a stale path shadows the corrected constant
-forever.
+Since 10/09/2026, the `NpcDef` of each NPC names its dialogue.
+`_dialogue_module_for` reads the def, then a class attribute, and only then
+`db.menu_module`. That order is the fix, not the fallback. If the code reads
+the row first, a stale path shadows the corrected path forever.
 
 Where a row is unavoidable, the migration rides the tile sync that the
 operator already runs. `ShopkeepNPC.ensure_cleanup_script` is the model. Also,
@@ -820,6 +820,57 @@ both as before. A node with no options is an ending. Its text goes to the log,
 and the pop-up closes. An open EvMenu wins over a grid pop-up.
 `BlackoutEvMenu.__init__` drops the grid pop-up.
 
+## The saved login
+
+A Godot player with "Remember me" ticked types the password one time on a
+device. `godot/README.md` owns the client half.
+
+| Module | Holds |
+|---|---|
+| `systems/core/login_tokens/store.py` | Issue, verify and revoke login tokens. The one reader of the `login_tokens` Attribute |
+| `commands/login_cmds.py` | `resume` on the connection screen, `remember` and `forget` on the account |
+| `server/conf/serversession.py` | The echo rule: no echo before login |
+
+Four rules:
+
+1. **The server keeps a digest, never the token.** A copy of the database
+   cannot log anyone in.
+2. **A token never goes out as text.** It goes on `CH_LOGIN_TOKEN` to the
+   one session that asked. Text reaches the game log, and a screenshot of
+   the log would carry a key to the account.
+3. **A new password ends every token.** Each record carries a stamp of the
+   password hash. Thus, every path that sets a password ends the tokens:
+   the `password` command, a staff reset, and the web admin. Nothing hooks
+   `set_password`.
+4. **`resume` makes every check of `connect` except the password:** the
+   login throttle, the ban list, and the security log. A token is thus no
+   way around a ban.
+
+## Speech
+
+Each tile is one room. Thus, the Evennia `say` reached one tile only.
+`Character.at_say` now sends each line to every listener in its reach.
+
+| Module | Holds |
+|---|---|
+| `systems/gameplay/speech/constants.py` | The three rules, the reach keys, `SAY_RADIUS`, and the yell lines |
+| `systems/gameplay/speech/hearing.py` | `listeners`: one test for each reach, in a table |
+| `commands/speech_cmds.py` | `say` (a new help text only) and `yell` |
+
+Three rules (Nick, 10/05/2026):
+
+1. **A say reaches each person that the client draws.** `SAY_RADIUS` is
+   `STATEFEED_ENTITY_RADIUS`, on the plane of the speaker. A change of that
+   radius changes the say range too. `test_speech.py` fails if the two
+   sets of rooms differ.
+2. **A yell reaches the area of the speaker, on every plane.**
+3. **A wall does not stop speech.** Only the reach counts.
+
+The listeners come from the connected sessions, not from the contents of
+each room. Most of the contents are scenery. The room of the speaker still
+gets its line from Evennia. Thus, a say on one tile is the same as before.
+A whisper and a call that names its receivers go to Evennia unchanged.
+
 ## 3D models
 
 `blackout/assets/` builds every model the client shows.
@@ -838,19 +889,25 @@ and the pop-up closes. An open EvMenu wins over a grid pop-up.
 - **`python -m assets.pipeline check` runs in the test suite**, through
   `test_model_pipeline.py`. It needs no Node and no Blender.
 
-Four rules:
+Five rules:
 
 1. **Never edit the art in a source.** Put a correction in the record's
    `[fix]`. The build bakes it into the served file.
 2. **A fix corrects the export. A display choice is the client's.** The sword
    that pointed at the camera is a `[fix]`. The corpse skeleton on its back is
    `ModelRegistry.PRESENTATION`.
-3. **The license gate refuses anything but CC0, CC-BY, and art made here.** An
-   `exception` in the source record waives it, and the check prints each one
-   on every run. The OSRS player character and the shopkeeper robot use one
-   today.
+3. **The license gate refuses anything but CC0, CC-BY, art made here, and art
+   that Nick bought.** An `exception` in the source record waives it, and the
+   check prints each one on every run. The OSRS player character and the
+   shopkeeper robot use one today.
 4. **Godot's runtime loader cannot read Draco, meshopt, or quantized meshes.**
    `pipeline/glb.py` owns the list of extensions that it can read.
+5. **The files of a bought pack never go into git.** This repository is
+   public. `LicenseRef-Purchased` needs a local source: `local = true` in the
+   source record, and a `.gitignore` that the seal writes. git keeps the
+   source record and the served `.glb`. Only a machine that holds the files
+   can build that model. The check passes on every other machine and prints a
+   warning. No `exception` waives this rule.
 
 ## The tile grid (DESIGN-0011)
 
@@ -894,6 +951,14 @@ Read the handoff before you continue this work.
 | The primitives: ladder, stairs, hatch | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
 | The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
 | The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
+| The GDScript twin of the step rule, for the `unreachable` note | `godot/addons/blackout_terrain/step_grid.gd` |
+| The Build tab (DESIGN-0013): the tool rules, the room fill, the input, and the hint line | `structure_tools.gd`, `room_fill.gd`, `build_panel.gd`, `build_input.gd`, `tool_hint.gd` in `godot/addons/blackout_terrain/` |
+| Roofs (DESIGN-0013 S2): the roof shapes, the roof floor types, the under-roof rule, and the `roof_walkable` rule | `godot/addons/blackout_terrain/roof_shapes.gd`, `world/floor_types.py`, `TerrainView.under_roof` in `godot/world/terrain/terrain_view.gd`, `world/tile_checks.py` |
+| Wall styles (DESIGN-0013 S3): the style table, chunk file format 2, the wall colours, and the Wall style brush | `world/wall_styles.py`, `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, `godot/world/terrain/wall_palette.gd`, `paint_wall_style` in `structure_tools.gd` |
+| Decor (DESIGN-0013 S4): the `decor` category, the pin rule, the check exemption, the decor primitives, and the Decor tool | `world/object_kinds.py` (`UNPINNED_KINDS`), `TilePlane` in `systems/core/tilegrid/world.py`, `world/tile_checks.py`, `godot/world/terrain/prop_mesh_builder.gd`, `StructureTools.decor` in `structure_tools.gd` |
+| Templates (DESIGN-0013 S5): the template file, the copy and its plan, the tile selection, the Select and Place tools, and "Protect structures" | `structure_template.gd`, `structure_place.gd`, `tile_selection.gd`, `template_input.gd`, `TerrainBrushes.protect` in `godot/addons/blackout_terrain/`, `blackout/world/structures/`, `world/tests/test_structure_templates.py` |
+| The structure workbench (DESIGN-0013 S6): the scene, the scratch directory, the clear, and the check without the world rules | `structure_workbench.tscn`, `TerrainWorld.writes_world` and `clear_workbench`, `TerrainChecks.for_workbench` in `godot/addons/blackout_terrain/` |
+| The wall top that meets the floor of the plane above | `godot/world/terrain/wall_mesh_builder.gd` |
 | The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/terrain_sync_state.gd` |
 | The walk feed (`blackout_walk`), with the run toggle | `systems/interface/statefeed/events.py`, `systems/gameplay/movement/walk.py` |
 | The minimap, and the world map with its feed and `worldmap` | `godot/scenes/minimap/`, `godot/scenes/worldmap/`, `systems/interface/statefeed/worldmap.py`, `world/tile_world_map.py` |
@@ -959,6 +1024,12 @@ pipeline that connects the two:
 1. Export the Godot client here.
 2. Publish it to R2.
 3. Deploy the Worker of the site repo.
+
+The site reads one URL here: `/status.json`, for the status light in its nav
+bar. `systems/interface/serverstatus/status.py` owns it. It is a Twisted
+resource on the web root (`server/conf/web_plugins.py`), not a Django view.
+Evennia's `SharedLoginMiddleware` saves a new session row for each request
+with no cookie, and the Worker that asks sends no cookie.
 
 `deploy/diff_deploy.sh` runs the same pipeline, but each leg runs only when
 its inputs changed. Its records are in `deploy/.deploy_state/`, and git

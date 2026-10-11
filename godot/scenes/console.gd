@@ -157,6 +157,10 @@ var _popup := PopupState.new()
 ## see [XpTrackerState].
 var _xp_tracker := XpTrackerState.new()
 
+## The game moments the server names, such as a finished Exterminator task.
+## It holds no state. [SoundCues] decides what each moment sounds like.
+var _moments := MomentFeed.new()
+
 ## The world: every island's grid, the links, and where you are standing.
 ##
 ## Owned here rather than by the 3D pane, which built its own until 08/28/2026.
@@ -221,6 +225,14 @@ var settings_path := ClientSettings.DEFAULT_PATH
 ## the web is IndexedDB and survives a reload. Made in [method _ready], from
 ## [member settings_path].
 var _settings: ClientSettings
+
+## The file of the saved login. A test sets it before `_ready`, for the reason
+## that it sets [member settings_path].
+var saved_login_path := SavedLogin.DEFAULT_PATH
+
+## The login token of this device. Made in [method _ready], from
+## [member saved_login_path]. See [SavedLogin].
+var _saved_login: SavedLogin
 
 ## What the game sounds like. A Node because every cue is a player it parents.
 ## Cues hang off MODEL signals, never off a line of text -- see [SoundCues].
@@ -441,6 +453,12 @@ func _ready() -> void:
 	_login.bind(_char)
 	_login.command_requested.connect(Evennia.command)
 
+	# The saved login. Read before the socket opens, so the form knows at the
+	# first subscription whether it can log in by itself.
+	_saved_login = SavedLogin.new(saved_login_path)
+	_saved_login.load_from_disk()
+	_login.bind_saved_login(_saved_login)
+
 	# Login and logout move the hint as well. The login form hides on the
 	# same fact, so the hint and the form cannot disagree.
 	_char.changed.connect(_refresh_input_hint)
@@ -495,6 +513,11 @@ func _ready() -> void:
 	add_child(_sounds)
 	_skills.levelled.connect(func(_skill_key: String, _level: int):
 		_sounds.play(SoundCues.LEVEL_UP))
+
+	# The server names a moment, such as `task_complete`. SoundCues maps it to
+	# a clip. Off the moment, not the "task complete" line in the log, for the
+	# reason the level-up gives.
+	_moments.happened.connect(_sounds.play_moment)
 
 	# The roster as well as the tracker, for the level-up line: SkillsState is
 	# the one owner of "a level rose", and the jingle above already hangs off it.
@@ -690,6 +713,7 @@ func _on_opened() -> void:
 ## see [method CharState.reset].
 func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_note("disconnected (%d) %s" % [code, reason])
+	_login.session_ended(code)
 	_char.reset()
 	_quest_log.reset()
 	_skills.reset()
@@ -1099,6 +1123,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 		if _xp_tracker.ingest(channel, _payload):
 			return
 
+		if _moments.ingest(channel, _payload):
+			return
+
 		if _world_state.ingest(channel, _payload):
 			return
 
@@ -1106,6 +1133,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _world_map.ingest(channel, _payload):
+			return
+
+		if _saved_login.ingest(channel, _payload):
 			return
 
 		if not _channels.has(channel):
@@ -1127,6 +1157,10 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 		return
 
 	_note("subscribed: %d channels" % _channels.size())
+
+	# A confirmed subscription proves that the Server takes input now. The
+	# form sends `resume` here if this device holds a saved login.
+	_login.server_ready()
 
 
 ## The CLIENT talking, rather than the game.

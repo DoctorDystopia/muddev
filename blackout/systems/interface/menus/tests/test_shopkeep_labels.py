@@ -15,7 +15,7 @@ Pure functions: no Django, no DB.
 
 from unittest import TestCase
 
-from systems.interface.menus.npc_dialogues.npc_shopkeep import (
+from world.npc_dialogues.shopkeep import (
     BUY_PRICE_ATTR,
     SELL_PRICE_ATTR,
     _find_entry_by_display,

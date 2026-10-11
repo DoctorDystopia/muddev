@@ -3,7 +3,8 @@ extends RefCounted
 ## One chunk file: read it, check it, and write it in the one canonical layout.
 ##
 ## The GDScript twin of `blackout/systems/core/tilegrid/chunkfile.py`. That
-## module's docstring defines format 1. DESIGN-0011 section 6.2 is the design.
+## module's docstring defines format 1 and format 2. DESIGN-0011 section 6.2
+## is the design, and DESIGN-0013 section 6.4 adds the wall styles.
 ## The Godot editor (Phase 3) writes chunk files through [method to_text], and
 ## the client (Phase 5) reads them through [method parse_text].
 ##
@@ -23,12 +24,22 @@ extends RefCounted
 ##
 ## Godot's JSON parser cannot tell 3 from 3.0. So an integral float counts as
 ## an int, and the Python reader accepts the same.
+##
+## ## The wall styles (format 2)
+##
+## A file of format 1 reads as [code]TILE_DEFAULT_WALL_STYLE[/code] on every
+## tile. The writer writes format 2 only when a tile has another style. The
+## reader refuses a file of format 2 whose every tile has the default style.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
-## The keys of a chunk file, in the order that the writer writes them.
+## The keys of a chunk file of format 2, in the order that the writer writes
+## them.
 const KEYS := ["format", "chunk", "plane", "size", "floor_names", "area_names",
-	"heights", "floors", "flags", "areas", "objects"]
+	"heights", "floors", "flags", "areas", "wall_names", "walls", "objects"]
+
+## The two keys of the wall style layer. A file of format 1 has neither.
+const WALL_STYLE_KEYS := ["wall_names", "walls"]
 
 ## The keys of one object, in the order that the writer writes them.
 const OBJECT_KEYS := ["kind", "x", "y", "rotation"]
@@ -56,6 +67,11 @@ var heights := PackedInt32Array()
 var floors := PackedInt32Array()
 var flags := PackedInt32Array()
 var areas := PackedInt32Array()
+
+## The wall style of each tile, as an index into [member wall_names]. Empty
+## reads as the default style on every tile.
+var wall_names := PackedStringArray([_Const.TILE_DEFAULT_WALL_STYLE])
+var walls := PackedInt32Array()
 
 ## Each object is `{kind, x, y, rotation, text}`, at LOCAL tile coordinates.
 ## The text is "" for an object that carries none.
@@ -86,17 +102,32 @@ static func blank(chunk_x: int, chunk_y: int, chunk_plane: int = 0) -> ChunkFile
 	result.floors.resize(tiles)
 	result.flags.resize(tiles)
 	result.areas.resize(tiles)
+	result.walls.resize(tiles)
 
 	return result
 
 
-## Remove each floor name and area name that no tile uses, and renumber the
-## grids. The editor calls this before a save, so a painted-over name does not
-## stay in the file. The order of the names that stay does not change. If no
-## tile uses any name, the first name stays, because a list may not be empty.
+## Remove each floor name, area name, and wall style name that no tile uses,
+## and renumber the grids. The editor calls this before a save, so a
+## painted-over name does not stay in the file. The order of the names that
+## stay does not change. If no tile uses any name, the first name stays,
+## because a list may not be empty.
 func compact_names() -> void:
 	floor_names = _compacted(floor_names, floors)
 	area_names = _compacted(area_names, areas)
+	fill_walls()
+	wall_names = _compacted(wall_names, walls)
+
+
+## Give a chunk with no wall grid the default style on every tile. A chunk
+## that [method blank] or a reader made has its grid already.
+func fill_walls() -> void:
+	if walls.size() == _Const.CHUNK_SIZE * _Const.CHUNK_SIZE:
+		return
+
+	wall_names = PackedStringArray([_Const.TILE_DEFAULT_WALL_STYLE])
+	walls = PackedInt32Array()
+	walls.resize(_Const.CHUNK_SIZE * _Const.CHUNK_SIZE)
 
 
 ## Return the used names of `names`, and renumber `grid` in place to match.
@@ -159,7 +190,8 @@ static func read_file(path: String) -> ChunkFile:
 ## 1. The keys, the format, the size, the chunk, and the plane.
 ## 2. The two name lists.
 ## 3. Each grid: its shape, its range, and its indexes.
-## 4. The objects.
+## 4. The wall style layer of format 2.
+## 5. The objects.
 static func from_dict(data: Variant) -> ChunkFile:
 	var result := ChunkFile.new()
 
@@ -167,7 +199,8 @@ static func from_dict(data: Variant) -> ChunkFile:
 		result.error = "a chunk file must hold one JSON object"
 		return result
 
-	result._read_header(data)
+	var version := result._read_header(data)
+
 	result.floor_names = result._names(data.get("floor_names"), "floor_names")
 	result.area_names = result._names(data.get("area_names"), "area_names")
 	result.heights = result._grid(data.get("heights"),
@@ -180,6 +213,7 @@ static func from_dict(data: Variant) -> ChunkFile:
 	result._check_flag_bits()
 	result.areas = result._grid(data.get("areas"), _Const.CHUNK_SIZE, 0,
 		result.area_names.size() - 1, "areas")
+	result._read_walls(data, version)
 	result._read_objects(data.get("objects"))
 
 	return result
@@ -212,19 +246,23 @@ func _int_in(value: Variant, low: int, high: int, what: String) -> int:
 	return number
 
 
-func _read_header(data: Dictionary) -> void:
+## Check the keys and the scalar fields. Returns the format.
+func _read_header(data: Dictionary) -> int:
 	var keys := data.keys()
-	var expected := KEYS.duplicate()
+	var expected := _expected_keys(data)
 
 	keys.sort()
 	expected.sort()
 
 	if keys != expected:
 		_fail("keys wrong: %s" % str(keys))
-		return
+		return 0
 
-	if _as_int(data["format"], "format") != _Const.CHUNK_FORMAT_VERSION:
-		_fail("format is not %d" % _Const.CHUNK_FORMAT_VERSION)
+	var version := _as_int(data["format"], "format")
+
+	if version not in [_Const.CHUNK_FORMAT_PLAIN_WALLS, _Const.CHUNK_FORMAT_VERSION]:
+		_fail("format is not %d or %d" % [_Const.CHUNK_FORMAT_PLAIN_WALLS,
+			_Const.CHUNK_FORMAT_VERSION])
 
 	if _as_int(data["size"], "size") != _Const.CHUNK_SIZE:
 		_fail("size is not %d" % _Const.CHUNK_SIZE)
@@ -233,11 +271,44 @@ func _read_header(data: Dictionary) -> void:
 
 	if not (chunk is Array) or chunk.size() != 2:
 		_fail("chunk must be [cx, cy]")
-		return
+		return version
 
 	cx = _as_int(chunk[0], "chunk x")
 	cy = _as_int(chunk[1], "chunk y")
 	plane = _int_in(data["plane"], 0, _Const.CHUNK_PLANE_MAX, "plane")
+
+	return version
+
+
+## The keys that `data` must have: those of format 2 when its format is
+## [code]CHUNK_FORMAT_VERSION[/code], else those of format 1. A file with any
+## other format then fails the format check. The Python `_expected_keys` has
+## the same rule.
+static func _expected_keys(data: Dictionary) -> Array:
+	var expected := KEYS.duplicate()
+
+	if data.get("format") is bool or data.get("format") != _Const.CHUNK_FORMAT_VERSION:
+		for key: String in WALL_STYLE_KEYS:
+			expected.erase(key)
+
+	return expected
+
+
+## The wall style layer. A file of format 1 gives the default style on every
+## tile. A file of format 2 must give one tile another style, so each chunk
+## has one canonical text.
+func _read_walls(data: Dictionary, version: int) -> void:
+	if version != _Const.CHUNK_FORMAT_VERSION or not error.is_empty():
+		fill_walls()
+		return
+
+	wall_names = _names(data.get("wall_names"), "wall_names")
+	walls = _grid(data.get("walls"), _Const.CHUNK_SIZE, 0, wall_names.size() - 1,
+		"walls")
+
+	if error.is_empty() and not has_wall_styles():
+		_fail("every tile has the wall style %s, so the file must be format %d"
+			% [_Const.TILE_DEFAULT_WALL_STYLE, _Const.CHUNK_FORMAT_PLAIN_WALLS])
 
 
 func _names(value: Variant, what: String) -> PackedStringArray:
@@ -417,6 +488,30 @@ func area_name(lx: int, ly: int) -> String:
 	return area_names[areas[ly * _Const.CHUNK_SIZE + lx]]
 
 
+## The wall style name of a local tile. A chunk with no wall grid has the
+## default style on every tile.
+func wall_style_name(lx: int, ly: int) -> String:
+	if walls.is_empty():
+		return _Const.TILE_DEFAULT_WALL_STYLE
+
+	return wall_names[walls[ly * _Const.CHUNK_SIZE + lx]]
+
+
+## True when a tile has a wall style other than the default. The writer then
+## writes format 2. The Python `has_wall_styles` has the same rule.
+func has_wall_styles() -> bool:
+	var used := {}
+
+	for index: int in walls:
+		used[index] = true
+
+	for index: int in used:
+		if wall_names[index] != _Const.TILE_DEFAULT_WALL_STYLE:
+			return true
+
+	return false
+
+
 ## Each object as `{kind, x, y, rotation, text}` at WORLD tile coordinates.
 func global_objects() -> Array[Dictionary]:
 	var placed: Array[Dictionary] = []
@@ -447,12 +542,17 @@ static func world_directory() -> String:
 
 # ─── Writing ─────────────────────────────────────────────────────────────────
 
-## The canonical text. The Python `to_text` writes the same bytes.
+## The canonical text. The Python `to_text` writes the same bytes. The wall
+## style layer, and format 2, only when a tile has a style other than the
+## default. Else the text is format 1.
 func to_text() -> String:
 	var size: int = _Const.CHUNK_SIZE
+	var styled := has_wall_styles()
+	var version: int = _Const.CHUNK_FORMAT_VERSION if styled \
+		else _Const.CHUNK_FORMAT_PLAIN_WALLS
 	var lines := PackedStringArray([
 		"{",
-		'%s"format": %d,' % [_INDENT, _Const.CHUNK_FORMAT_VERSION],
+		'%s"format": %d,' % [_INDENT, version],
 		'%s"chunk": [%d,%d],' % [_INDENT, cx, cy],
 		'%s"plane": %d,' % [_INDENT, plane],
 		'%s"size": %d,' % [_INDENT, size],
@@ -465,6 +565,11 @@ func to_text() -> String:
 	lines.append_array(_grid_lines("floors", floors, size))
 	lines.append_array(_grid_lines("flags", flags, size))
 	lines.append_array(_grid_lines("areas", areas, size))
+
+	if styled:
+		lines.append('%s"wall_names": %s,' % [_INDENT, _name_list_text(wall_names)])
+		lines.append_array(_grid_lines("walls", walls, size))
+
 	lines.append_array(_object_lines())
 	lines.append("}")
 
@@ -552,16 +657,24 @@ func semantic_dump() -> String:
 		"floors " + " ".join(floor_names),
 		"areas " + " ".join(area_names),
 	])
+	var styled := has_wall_styles()
+
+	if styled:
+		lines.append("walls " + " ".join(wall_names))
 
 	for ly: int in size:
 		for lx: int in size:
 			var corners := corner_heights(lx, ly)
-
-			lines.append("tile %d %d %d %d %d %d %d %d %s %s" % [
+			var line := "tile %d %d %d %d %d %d %d %d %s %s" % [
 				origin_x + lx, origin_y + ly,
 				corners[0], corners[1], corners[2], corners[3],
 				tile_height(lx, ly), flags[ly * size + lx],
-				floor_name(lx, ly), area_name(lx, ly)])
+				floor_name(lx, ly), area_name(lx, ly)]
+
+			if styled:
+				line += " " + wall_style_name(lx, ly)
+
+			lines.append(line)
 
 	for thing: Dictionary in global_objects():
 		var line := "object %s %d %d %d" % [thing["kind"], thing["x"],

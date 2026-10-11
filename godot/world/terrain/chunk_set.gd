@@ -24,6 +24,11 @@ extends RefCounted
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
+## The plane of the chunks in this set. A set holds one plane. The terrain
+## editor holds one set for each plane, and [TerrainEdit] keys each change on
+## this value (DESIGN-0013 Phase S0).
+var plane := 0
+
 ## Chunk coordinate (Vector2i) to [ChunkFile].
 var _chunks := {}
 
@@ -69,6 +74,12 @@ func dirty_coords() -> Array[Vector2i]:
 
 func mark_clean(chunk_coord: Vector2i) -> void:
 	_dirty.erase(chunk_coord)
+
+
+## True when the chunk at `chunk_coord` changed since the last
+## [method mark_clean].
+func is_dirty(chunk_coord: Vector2i) -> bool:
+	return _dirty.has(chunk_coord)
 
 
 # ─── Addressing ─────────────────────────────────────────────────────────────
@@ -246,6 +257,34 @@ func set_area(tile: Vector2i, area_name: String) -> void:
 
 	if chunk.areas[_tile_index(tile)] != index:
 		chunk.areas[_tile_index(tile)] = index
+		_dirty[chunk_of_tile(tile)] = true
+
+
+## The wall style name of a tile (DESIGN-0013 section 6.4). Empty when it is
+## not loaded.
+func get_wall_style(tile: Vector2i) -> String:
+	var chunk := _tile_chunk(tile)
+
+	if chunk == null:
+		return ""
+
+	var local := local_of(tile, chunk_of_tile(tile))
+
+	return chunk.wall_style_name(local.x, local.y)
+
+
+func set_wall_style(tile: Vector2i, style: String) -> void:
+	var chunk := _tile_chunk(tile)
+
+	if chunk == null:
+		return
+
+	chunk.fill_walls()
+
+	var index := _name_index(chunk.wall_names, style)
+
+	if chunk.walls[_tile_index(tile)] != index:
+		chunk.walls[_tile_index(tile)] = index
 		_dirty[chunk_of_tile(tile)] = true
 
 

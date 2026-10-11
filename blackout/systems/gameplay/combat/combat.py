@@ -41,7 +41,8 @@ COMBAT_HANDLER_KEY = "blackout_combat_handler"
 _QUEUEABLE_ACTION_KINDS = frozenset({"attack", "approach", "hold", "flee", "wield"})
 from .protocols import Combatant, XpEarner
 from .rules.context import ActionContext, read_skill_levels
-from .rules.contributors import collect_contributors
+from .rules.contributors import collect_contributors, merge_contributors
+from systems.gameplay.exterminator.buffs import active_buffs
 from .rules.pipeline import resolve_action
 from systems.interface.statefeed import constants as feed_const
 
@@ -615,8 +616,13 @@ class ActionAttack(_Action):
         awards = _plan_style_xp(attacker, style, dmg)
         xp_text = xp_awards.format_xp_suffix(awards)
 
+        # One read for the three lines, so the attacker, the defender and the
+        # room all see the same max hit mark.
+        max_hit = result.shown_max_hit()
+
         attacker.msg(
-            (combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text),
+            (combat_msg.format_outgoing_hit(attacker, target, dmg, xp_text,
+                                            max_hit=max_hit),
              _MSG_COMBAT,
             )
         )
@@ -629,7 +635,8 @@ class ActionAttack(_Action):
 
         target.msg(
             (
-                combat_msg.format_incoming_hit(attacker, target, dmg),
+                combat_msg.format_incoming_hit(attacker, target, dmg,
+                                               max_hit=max_hit),
                 _MSG_COMBAT,
             )
         )
@@ -641,7 +648,9 @@ class ActionAttack(_Action):
         )
 
         if room is not None:
-            third_party = combat_msg.format_third_party_hit(attacker, target, dmg)
+            third_party = combat_msg.format_third_party_hit(
+                attacker, target, dmg, max_hit=max_hit
+            )
             room.msg_contents((third_party, _MSG_COMBAT), exclude=(attacker, target))
 
         # Pay the XP before the damage so a level-up line reads next to the
@@ -694,6 +703,14 @@ class ActionAttack(_Action):
             weapon_data.get("combat_stat_bonuses") or const.UNARMED_DEFAULT_COMBAT_STATS
         )
 
+        # Exterminator buffs join each side here, not the active_rules cache.
+        # That cache follows the equipment. A buff follows the target. The
+        # buffs of each side test the OTHER side (DESIGN-0012).
+        attacker_buffs = active_buffs(attacker, target)
+        defender_buffs = active_buffs(target, attacker)
+        gear_rules = handler.active_rules()
+        target_rules = collect_contributors(target)
+
         return ActionContext(
             attacker=attacker,
             defender=target,
@@ -706,8 +723,8 @@ class ActionAttack(_Action):
             attacker_levels=read_skill_levels(attacker),
             defender_levels=read_skill_levels(target),
             stance_boost=style.get("weapon_style_level_boost") or {},
-            attacker_rules=handler.active_rules(),
-            defender_rules=collect_contributors(target),
+            attacker_rules=merge_contributors(gear_rules, attacker_buffs),
+            defender_rules=merge_contributors(target_rules, defender_buffs),
         )
 
     def _land_backfire(self, context, result) -> bool:

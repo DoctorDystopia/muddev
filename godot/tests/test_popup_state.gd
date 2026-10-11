@@ -27,6 +27,13 @@ func _ready() -> void:
 	_a_grid_is_not_a_menu()
 	_timers_are_read_and_count_down()
 	_a_pop_up_with_no_timers_has_no_panel()
+	_the_vault_fields_are_read()
+	_the_main_view_groups_rows_by_tab()
+	_a_tab_view_shows_only_its_tab()
+	_a_search_covers_every_tab_in_one_group()
+	_a_grid_with_no_tabs_is_not_filtered()
+	_a_drop_fills_the_server_template()
+	_a_text_action_substitutes_the_text()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -73,6 +80,56 @@ static func bank_payload() -> Dictionary:
 				"label": "Set the quantity to how many?"}, "active": false},
 		],
 		"close_command": "popup close",
+	}
+
+
+## One vault row in the wire shape: a name, its tab, and its withdraw action.
+static func vault_row(slot: int, row_name: String, tab: int,
+		placeholder: bool = false) -> Dictionary:
+	var actions: Array = [{"label": "Withdraw 1", "command": "withdraw %s 1" % row_name}]
+
+	if placeholder:
+		actions = [{"label": "Placeholder", "command": ""},
+			{"label": "Release", "command": "bank release %s" % row_name}]
+
+	return {"id": float(slot + 1), "slot": float(slot), "name": row_name,
+		"asset": "", "family": "material", "quantity": 0.0 if placeholder else 3.0,
+		"enabled": not placeholder, "tab": float(tab), "drag_key": row_name,
+		"placeholder": placeholder, "actions": actions}
+
+
+## A tabbed vault in the main view: two slots in tab 1, one in tab 2 (a
+## placeholder), and one in the main tab, in the order the server sends.
+static func vault_payload(view: int = 0) -> Dictionary:
+	var rename := {"label": "Rename", "command": "", "template": "bank name 1 = {text}",
+		"input": {"kind": "text", "min": 1.0, "max": 18.0, "label": "Name this tab:"}}
+
+	return {
+		"open": true, "key": "bank", "title": "Bank Vault", "status": "Vault 4/100",
+		"grids": [
+			{"key": "vault", "title": "Vault", "slots_total": 4.0,
+			 "items": [
+				vault_row(0, "iron ore", 1), vault_row(1, "coal", 1),
+				vault_row(2, "gold bar", 2, true), vault_row(3, "rusty knife", 0),
+			 ],
+			 "tabs": [
+				{"index": 0.0, "label": "All", "title": "Main tab", "asset": "",
+				 "family": "", "active": view == 0, "drop_key": "0",
+				 "actions": [{"label": "View", "command": "bank view 0"}]},
+				{"index": 1.0, "label": "", "title": "Tab 1", "asset": "iron_ore",
+				 "family": "material", "active": view == 1, "drop_key": "1",
+				 "actions": [{"label": "View", "command": "bank view 1"}, rename]},
+				{"index": 2.0, "label": "Bars", "title": "Tab 2: Bars", "asset": "",
+				 "family": "", "active": view == 2, "drop_key": "2",
+				 "actions": [{"label": "View", "command": "bank view 2"}]},
+				{"index": 3.0, "label": "+", "title": "New tab", "asset": "",
+				 "family": "", "active": false, "drop_key": "new", "actions": []},
+			 ],
+			 "view": float(view), "searchable": true,
+			 "drag": {"onto_slot": "bank swap {source} = {target}",
+				"onto_tab": "bank move {source} = {target}"}},
+		],
+		"quantity": [], "actions": [], "close_command": "popup close",
 	}
 
 
@@ -293,6 +350,87 @@ func _a_pop_up_with_no_timers_has_no_panel() -> void:
 	state.ingest(_Const.CH_CHAR_POPUP, bank_payload())
 
 	_expect(not state.has_timers(), "a bank has no side panel")
+
+
+func _names_of(group: Array) -> Array:
+	return group.map(func(row: Dictionary) -> String: return str(row["name"]))
+
+
+func _the_vault_fields_are_read() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(1))
+	var grid: Dictionary = state.grids[0]
+	var row := state.row_at(0, 2)
+
+	_expect(grid["view"] == 1, "the viewed tab becomes an int")
+	_expect((grid["tabs"] as Array).size() == 4, "every tab button is read")
+	_expect(grid["searchable"] == true, "the search flag is read")
+	_expect(row["tab"] == 2 and row["placeholder"] == true,
+		"a row keeps its tab, as an int, and its placeholder flag")
+
+
+func _the_main_view_groups_rows_by_tab() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(0))
+	var groups := state.row_groups(0, "")
+
+	_expect(groups.size() == 3, "one group for each tab in the main view")
+	_expect(_names_of(groups[0]) == ["iron ore", "coal"],
+		"each group keeps the server's order")
+
+
+func _a_tab_view_shows_only_its_tab() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(1))
+	var groups := state.row_groups(0, "")
+
+	_expect(groups.size() == 1 and _names_of(groups[0]) == ["iron ore", "coal"],
+		"a tab view shows that tab only")
+
+
+func _a_search_covers_every_tab_in_one_group() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(1))
+	var groups := state.row_groups(0, " O")
+
+	_expect(groups.size() == 1, "the matches make one group")
+	_expect(_names_of(groups[0]) == ["iron ore", "coal", "gold bar"],
+		"a search reaches past the viewed tab and ignores case")
+
+
+func _a_grid_with_no_tabs_is_not_filtered() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, bank_payload())
+
+	_expect(not state.is_filtered(0), "a grid with no tabs draws every slot")
+	_expect(state.row_groups(0, "dust").is_empty(), "and has no groups")
+
+
+func _a_drop_fills_the_server_template() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(0))
+
+	_expect(state.drop_command(0, "onto_slot", "coal", "iron ore")
+		== "bank swap coal = iron ore", "a drop on a slot fills the swap")
+	_expect(state.drop_command(0, "onto_tab", "coal", "new")
+		== "bank move coal = new", "a drop on a tab fills the move")
+	_expect(state.drop_command(0, "onto_slot", "coal", "coal").is_empty(),
+		"a drop on itself asks for nothing")
+	_expect(state.drop_command(0, "onto_moon", "coal", "1").is_empty(),
+		"a kind the server did not name asks for nothing")
+
+
+func _a_text_action_substitutes_the_text() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(0))
+	var rename: Dictionary = (state.grids[0]["tabs"][1]["actions"] as Array)[1]
+
+	_expect(not ServerAction.text_prompt(rename).is_empty(), "a text action asks for text")
+	_expect(ServerAction.prompt(rename).is_empty(), "and never for an amount")
+	_expect(ServerAction.command_with_text(rename, "  Ores ") == "bank name 1 = Ores",
+		"the typed text goes where the server put the token")
+	_expect(ServerAction.command_with_text(rename, "   ").is_empty(),
+		"empty text sends nothing")
 
 
 func _expect(condition: bool, what: String) -> void:

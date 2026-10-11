@@ -1,0 +1,13 @@
+source = "voxedit_egyptian_priest"
+file   = "Egyptian_Priest_Gltf.gltf"
+
+[fix]
+# The VoxEdit export faces -Z.
+rotate = [0, 180, 0]
+# Voxel art: each texel is one face colour of a voxel.
+filter = "nearest"
+
+[output]
+# About 130 animations, 22 MB of keyframes. The client plays none. The rest
+# pose of the file is the first frame of its Idle animation.
+animations = false

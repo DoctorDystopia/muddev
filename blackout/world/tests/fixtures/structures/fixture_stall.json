@@ -1,0 +1,71 @@
+{
+  "format": 1,
+  "key": "fixture_stall",
+  "size": [3,2],
+  "floor_names": ["concrete","sand","void"],
+  "area_names": ["oasis"],
+  "wall_names": ["plain","brick"],
+  "planes": [
+    {
+      "plane": 0,
+      "cover": [
+        [1,1,1],
+        [1,1,1]
+      ],
+      "heights": [
+        [0,0,0,1],
+        [0,0,0,1],
+        [0,0,0,1]
+      ],
+      "floors": [
+        [0,0,0],
+        [0,1,0]
+      ],
+      "flags": [
+        [48,16,24],
+        [36,4,12]
+      ],
+      "areas": [
+        [0,0,0],
+        [0,0,0]
+      ],
+      "walls": [
+        [1,1,1],
+        [1,0,1]
+      ]
+    },
+    {
+      "plane": 1,
+      "cover": [
+        [0,1,1],
+        [0,1,1]
+      ],
+      "heights": [
+        [32,32,32,33],
+        [32,32,32,33],
+        [32,32,32,33]
+      ],
+      "floors": [
+        [2,0,0],
+        [2,0,0]
+      ],
+      "flags": [
+        [1,0,0],
+        [1,0,0]
+      ],
+      "areas": [
+        [0,0,0],
+        [0,0,0]
+      ],
+      "walls": [
+        [0,0,0],
+        [0,0,0]
+      ]
+    }
+  ],
+  "objects": [
+    {"kind":"crate","x":1,"y":0,"plane":0,"rotation":1},
+    {"kind":"signpost","x":0,"y":1,"plane":0,"rotation":0,"text":"Stall"},
+    {"kind":"table","x":2,"y":1,"plane":1,"rotation":3}
+  ]
+}
