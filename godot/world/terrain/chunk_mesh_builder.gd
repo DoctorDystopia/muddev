@@ -17,7 +17,7 @@ extends RefCounted
 ##    The edge rule keeps the seam between two chunks closed.
 ## 5. A void tile ([constant _Const.TILE_VOID_FLOOR], Phase 7b) gets no
 ##    triangle. It is a gap in a plane above the ground.
-## 6. A roof floor type ([code]TILE_ROOF_FLOOR_TYPES[/code], DESIGN-0013
+## 6. A roof floor type ([method TileTables.is_roof], DESIGN-0013
 ##    section 6.2) never draws in the cliff colour. A roof is steeper than a
 ##    walk on purpose, and no walk reaches it.
 ##
@@ -260,7 +260,7 @@ static func _roof_indices(chunk: ChunkFile) -> Dictionary:
 	var found := {}
 
 	for index: int in chunk.floor_names.size():
-		if _Const.TILE_ROOF_FLOOR_TYPES.has(chunk.floor_names[index]):
+		if TileTables.is_roof(chunk.floor_names[index]):
 			found[index] = true
 
 	return found
@@ -325,7 +325,7 @@ static func is_cliff_face(heights: PackedInt32Array,
 static func _face_color(base: Color, heights: PackedInt32Array,
 		corners: PackedInt32Array) -> Color:
 	if is_cliff_face(heights, corners):
-		return FloorPalette.CLIFF_COLOR
+		return FloorPalette.cliff()
 
 	return base
 

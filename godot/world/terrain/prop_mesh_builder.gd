@@ -4,7 +4,7 @@ extends RefCounted
 ## object whose scenery key is a primitive.
 ##
 ## The server names the scenery of each object kind
-## ([code]OBJECT_KIND_SCENERY[/code]). A key in
+## ([method TileTables.scenery_of]). A key in
 ## [code]SCENERY_PRIMITIVES[/code] has no model record yet, so this class
 ## draws it: a ladder, a flight of stairs, a hatch, or a decor shape. When
 ## the art arrives,
@@ -23,8 +23,12 @@ extends RefCounted
 ##
 ## - A ladder stands at the back edge of its tile. A climber stands in front
 ##   of it.
-## - A flight of stairs rises toward the front. The bottom step is at the back
-##   edge.
+## - A flight of stairs rises toward the front, over the tiles in front of
+##   its tile. The run of its kind gives the tiles
+##   ([method TileTables.climb_run]). The bottom step is at the front edge of
+##   its tile. A climber stands on that tile, at the foot of the flight.
+## - The top of a flight is two newel posts at the back edge of its tile,
+##   one at each side of the flight below.
 ## - A hatch has its handle on the front edge.
 ## - A crate, a table, and a lamp post are decor (DESIGN-0013 Phase S4). A
 ##   crate and a table stand on the centre of the tile. A table is wider
@@ -40,8 +44,8 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Every primitive that this class draws with its own shape.
 const SHAPES := [_Const.SCENERY_LADDER, _Const.SCENERY_STAIRS,
-	_Const.SCENERY_HATCH, _Const.SCENERY_CRATE, _Const.SCENERY_TABLE,
-	_Const.SCENERY_LAMP_POST]
+	_Const.SCENERY_HATCH, _Const.SCENERY_STAIRS_TOP, _Const.SCENERY_CRATE,
+	_Const.SCENERY_TABLE, _Const.SCENERY_LAMP_POST]
 
 ## How high a ladder and a flight of stairs rise: one plane. The terrain
 ## editor starts a new plane 32 height steps up (TerrainWorld.NEW_PLANE_RISE),
@@ -61,9 +65,16 @@ const RUNG_SIZE := 0.04
 const RUNG_GAP := 0.28
 const LADDER_BACK := 0.38
 
-## The stairs: the number of steps, and the width of a step.
-const STEP_COUNT := 8
+## The stairs: the steps on each tile of the run, and the width of a step. A
+## stairs primitive on a kind with no run draws a flight of one tile.
+const STEPS_PER_TILE := 4
 const STAIRS_WIDTH := 0.8
+const FLIGHT_MIN := 1
+
+## The newel posts at the top of a flight: the side and the height of a
+## post.
+const NEWEL_SIZE := 0.1
+const NEWEL_HEIGHT := 0.9
 
 ## The hatch: the side of the door, the width and the height of the frame,
 ## how far the door sits over the ground, and the size of the handle.
@@ -114,11 +125,12 @@ class _Surface:
 	var colors := PackedColorArray()
 
 
-## Where one shape stands: the ground point of the tile centre, and the turn
-## of its object.
+## Where one shape stands: the ground point of the tile centre, the turn of
+## its object, and the run of its kind.
 class _Place:
 	var origin: Vector3
 	var basis: Basis
+	var run := 0
 
 
 ## The primitive mesh of one chunk. A chunk with no primitive gives a mesh
@@ -151,12 +163,44 @@ static func build(chunk: ChunkFile) -> ArrayMesh:
 ## The primitive of an object kind, or "" when its scenery is a model or it
 ## has none.
 static func primitive_of(kind: String) -> String:
-	var key: String = _Const.OBJECT_KIND_SCENERY.get(kind, "")
+	var key: String = TileTables.scenery_of(kind)
 
 	if key in _Const.SCENERY_PRIMITIVES:
 		return key
 
 	return ""
+
+
+## The top of each step tile of each flight on `chunks`, as world tile to
+## world height, for [method TerrainPicking.ray_hit]. The top of a tile is
+## the top of its highest step. The client picks with it, so a click on a
+## high step picks the tile of that step. The server gives that tile the
+## climb.
+static func pick_tops(chunks: ChunkSet) -> Dictionary:
+	var tops := {}
+
+	for coord: Vector2i in chunks.chunk_coords():
+		var chunk := chunks.get_chunk(coord)
+
+		for thing: Dictionary in chunk.objects:
+			if primitive_of(thing["kind"]) == _Const.SCENERY_STAIRS:
+				_add_flight_tops(chunk, thing, tops)
+
+	return tops
+
+
+static func _add_flight_tops(chunk: ChunkFile, thing: Dictionary, tops: Dictionary) -> void:
+	var place := _place(chunk, thing)
+	var run := maxi(place.run, FLIGHT_MIN)
+	var foot := Vector2i(chunk.cx, chunk.cy) * _Const.CHUNK_SIZE \
+		+ Vector2i(thing["x"], thing["y"])
+	var ahead := ClimbRule.facing(thing["rotation"])
+
+	for index: int in range(1, run + 1):
+		var tile := foot + ahead * index
+		var top := place.origin.y + CLIMB_HEIGHT * index / run
+
+		tops[tile] = maxf(tops.get(tile, top), top)
 
 
 ## How many objects of one chunk draw a primitive. For a test.
@@ -182,6 +226,7 @@ static func _place(chunk: ChunkFile, thing: Dictionary) -> _Place:
 	place.origin = Vector3(world_x * ChunkMeshBuilder.TILE_SIZE, ground,
 		-world_y * ChunkMeshBuilder.TILE_SIZE)
 	place.basis = Basis(Vector3.UP, -int(thing["rotation"]) * PI * 0.5)
+	place.run = TileTables.climb_run(thing["kind"])
 
 	return place
 
@@ -193,6 +238,8 @@ static func _add_shape(shape: String, place: _Place, out: _Surface) -> void:
 		_add_stairs(place, out)
 	elif shape == _Const.SCENERY_HATCH:
 		_add_hatch(place, out)
+	elif shape == _Const.SCENERY_STAIRS_TOP:
+		_add_stairs_top(place, out)
 	elif shape == _Const.SCENERY_CRATE:
 		_add_crate(place, out)
 	elif shape == _Const.SCENERY_TABLE:
@@ -214,7 +261,7 @@ static func _add_shape(shape: String, place: _Place, out: _Surface) -> void:
 static func _add_ladder(place: _Place, out: _Surface) -> void:
 	var half_rail := RAIL_SIZE * 0.5
 	var back := LADDER_BACK
-	var color := FloorPalette.LADDER_COLOR
+	var color := FloorPalette.prop("ladder")
 
 	for side: float in [-1.0, 1.0]:
 		var x := side * LADDER_WIDTH * 0.5
@@ -232,29 +279,45 @@ static func _add_ladder(place: _Place, out: _Surface) -> void:
 		height += RUNG_GAP
 
 
-## [constant STEP_COUNT] solid steps from the back edge to the front edge.
+## [constant STEPS_PER_TILE] solid steps for each tile of the run, from the
+## front edge of the tile out. The top step is one plane up.
 static func _add_stairs(place: _Place, out: _Surface) -> void:
-	var depth := ChunkMeshBuilder.TILE_SIZE / STEP_COUNT
-	var rise := CLIMB_HEIGHT / STEP_COUNT
+	var count := maxi(place.run, FLIGHT_MIN) * STEPS_PER_TILE
+	var depth := ChunkMeshBuilder.TILE_SIZE / STEPS_PER_TILE
+	var rise := CLIMB_HEIGHT / count
 	var half_width := STAIRS_WIDTH * 0.5
-	var back := ChunkMeshBuilder.TILE_SIZE * 0.5
+	var front := -ChunkMeshBuilder.TILE_SIZE * 0.5
 
-	for step: int in STEP_COUNT:
-		var near := back - step * depth
+	for step: int in count:
+		var near := front - step * depth
 
 		_add_box(place, Vector3(-half_width, -SINK, near - depth),
 			Vector3(half_width, (step + 1) * rise, near),
-			FloorPalette.STAIRS_COLOR, out)
+			FloorPalette.prop("stairs"), out)
+
+
+## Two newel posts at the back edge of the tile, one at each side of the
+## flight that rises to it from behind.
+static func _add_stairs_top(place: _Place, out: _Surface) -> void:
+	var half := NEWEL_SIZE * 0.5
+	var back := ChunkMeshBuilder.TILE_SIZE * 0.5 - half
+	var color := FloorPalette.prop("stairs")
+
+	for side: float in [-1.0, 1.0]:
+		var x := side * (STAIRS_WIDTH * 0.5 + half)
+
+		_add_box(place, Vector3(x - half, -SINK, back - half),
+			Vector3(x + half, NEWEL_HEIGHT, back + half), color, out)
 
 
 ## A dark door in a frame, with a handle on the front edge.
 static func _add_hatch(place: _Place, out: _Surface) -> void:
 	var half := HATCH_SIZE * 0.5
 	var inner := half - FRAME_WIDTH
-	var frame := FloorPalette.HATCH_FRAME_COLOR
+	var frame := FloorPalette.prop("hatch_frame")
 
 	_add_box(place, Vector3(-inner, -SINK, -inner), Vector3(inner, HATCH_LIFT, inner),
-		FloorPalette.HATCH_COLOR, out)
+		FloorPalette.prop("hatch"), out)
 	_add_box(place, Vector3(-half, -SINK, -half), Vector3(half, FRAME_HEIGHT, -inner),
 		frame, out)
 	_add_box(place, Vector3(-half, -SINK, inner), Vector3(half, FRAME_HEIGHT, half),
@@ -278,9 +341,9 @@ static func _add_crate(place: _Place, out: _Surface) -> void:
 	var lid := half + CRATE_LID_LIP
 
 	_add_box(place, Vector3(-half, -SINK, -half), Vector3(half, body, half),
-		FloorPalette.CRATE_COLOR, out)
+		FloorPalette.prop("crate"), out)
 	_add_box(place, Vector3(-lid, body, -lid), Vector3(lid, CRATE_SIZE, lid),
-		FloorPalette.CRATE_LID_COLOR, out)
+		FloorPalette.prop("crate_lid"), out)
 
 
 ## A flat top on four legs, wider across the front than deep.
@@ -288,7 +351,7 @@ static func _add_table(place: _Place, out: _Surface) -> void:
 	var half_x := TABLE_WIDTH * 0.5
 	var half_z := TABLE_DEPTH * 0.5
 	var under := TABLE_HEIGHT - TABLE_TOP
-	var color := FloorPalette.TABLE_COLOR
+	var color := FloorPalette.prop("table")
 
 	_add_box(place, Vector3(-half_x, under, -half_z), Vector3(half_x, TABLE_HEIGHT, half_z),
 		color, out)
@@ -308,7 +371,7 @@ static func _add_lamp_post(place: _Place, out: _Surface) -> void:
 	var base := LAMP_BASE_SIZE * 0.5
 	var arm := LAMP_ARM_SIZE * 0.5
 	var lamp := LAMP_SIZE * 0.5
-	var color := FloorPalette.LAMP_POST_COLOR
+	var color := FloorPalette.prop("lamp_post")
 	var arm_low := LAMP_HEIGHT - LAMP_ARM_SIZE
 
 	_add_box(place, Vector3(-base, -SINK, -base), Vector3(base, LAMP_BASE_HEIGHT, base),
@@ -318,7 +381,7 @@ static func _add_lamp_post(place: _Place, out: _Surface) -> void:
 	_add_box(place, Vector3(-arm, arm_low, -LAMP_ARM - lamp), Vector3(arm, LAMP_HEIGHT, -pole),
 		color, out)
 	_add_box(place, Vector3(-lamp, arm_low - LAMP_LAMP_HEIGHT, -LAMP_ARM - lamp),
-		Vector3(lamp, arm_low, -LAMP_ARM + lamp), FloorPalette.LAMP_COLOR, out)
+		Vector3(lamp, arm_low, -LAMP_ARM + lamp), FloorPalette.prop("lamp"), out)
 
 
 # ─── Boxes ──────────────────────────────────────────────────────────────────

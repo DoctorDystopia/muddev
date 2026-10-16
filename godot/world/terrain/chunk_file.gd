@@ -55,6 +55,11 @@ const _ROW_INDENT := "    "
 ## game directory is a sibling of `godot/`.
 const GAME_DIRECTORY_FROM_PROJECT := "../blackout"
 
+## The start and the end of the name of a chunk file. The world and the
+## tile sync stamp ask here, so one owner names the files.
+const CHUNK_FILE_PREFIX := "chunk_"
+const CHUNK_FILE_SUFFIX := ".json"
+
 var cx := 0
 var cy := 0
 var plane := 0
@@ -96,8 +101,8 @@ static func blank(chunk_x: int, chunk_y: int, chunk_plane: int = 0) -> ChunkFile
 	result.cx = chunk_x
 	result.cy = chunk_y
 	result.plane = chunk_plane
-	result.floor_names = PackedStringArray([_Const.TILE_DEFAULT_FLOOR])
-	result.area_names = PackedStringArray([_Const.TILE_DEFAULT_AREA])
+	result.floor_names = PackedStringArray([TileTables.default_floor()])
+	result.area_names = PackedStringArray([TileTables.default_area()])
 	result.heights.resize(corners)
 	result.floors.resize(tiles)
 	result.flags.resize(tiles)
@@ -696,3 +701,8 @@ func semantic_digest() -> String:
 	context.update(semantic_dump().to_utf8_buffer())
 
 	return context.finish().hex_encode()
+
+
+## True when `file_name` is the name of a chunk file.
+static func is_chunk_file_name(file_name: String) -> bool:
+	return file_name.begins_with(CHUNK_FILE_PREFIX) and file_name.ends_with(CHUNK_FILE_SUFFIX)

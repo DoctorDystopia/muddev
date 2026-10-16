@@ -1,0 +1,29 @@
+{
+	"format": 1,
+	"rows": [
+		{
+			"key": "plain",
+			"note": "A plain grey wall. Every wall before the wall styles."
+		},
+		{
+			"key": "concrete",
+			"note": "Poured concrete, for a bank or a bunker."
+		},
+		{
+			"key": "brick",
+			"note": "Old red brick, for a shop or a house."
+		},
+		{
+			"key": "sheet_metal",
+			"note": "Corrugated sheet metal, for a shack."
+		},
+		{
+			"key": "chain_link",
+			"note": "A chain-link fence on posts, for a yard."
+		},
+		{
+			"key": "rubble",
+			"note": "A low broken wall, for a ruin."
+		}
+	]
+}

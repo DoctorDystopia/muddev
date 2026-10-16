@@ -69,7 +69,6 @@ const RELATIVE_HEIGHT_MAX: int = _Const.CHUNK_HEIGHT_MAX - _Const.CHUNK_HEIGHT_M
 
 ## Where the templates live, from the Godot project root, as for the chunk
 ## files.
-const GAME_DIRECTORY_FROM_PROJECT := "../blackout"
 
 ## The wall bits after a quarter turn clockwise: N to E, E to S, S to W, and
 ## W to N. And after a mirror on the east-west axis: E and W swap.
@@ -225,7 +224,7 @@ func cover_count() -> int:
 ## The world template directory, as an OS path.
 static func world_directory() -> String:
 	var project := ProjectSettings.globalize_path("res://")
-	var game := project.path_join(GAME_DIRECTORY_FROM_PROJECT)
+	var game := project.path_join(ChunkFile.GAME_DIRECTORY_FROM_PROJECT)
 
 	return game.path_join(_Const.STRUCTURE_DIRECTORY).simplify_path()
 
@@ -675,10 +674,35 @@ static func capture(sets: Dictionary, keys: Dictionary, base_plane: int,
 	result.size = bounds.size
 	result.origin = bounds.position
 	result.base_plane = low_plane
+	result.error = _unloaded_problem(sets, covered, bounds)
+
+	if not result.error.is_empty():
+		return result
+
 	result._capture_layers(sets, covered, bounds, low_plane)
 	result._capture_objects(sets, bounds, low_plane)
 
 	return result
+
+
+## Why the capture refuses: a tile of the bounds on a plane with a covered
+## tile is in no loaded chunk, so the file would hold a blank name. Or "".
+static func _unloaded_problem(sets: Dictionary, covered: Dictionary, bounds: Rect2i) -> String:
+	var planes := {}
+
+	for at: Vector3i in covered:
+		planes[at.z] = true
+
+	for on_plane: int in planes:
+		var chunks: ChunkSet = sets.get(on_plane)
+
+		for y: int in bounds.size.y:
+			for x: int in bounds.size.x:
+				if chunks == null or not chunks.has_tile(bounds.position + Vector2i(x, y)):
+					return "The selection reaches a chunk that is not loaded or did not " \
+						+ "read, on plane %d. Load the block around it first." % on_plane
+
+	return ""
 
 
 ## Each key of `keys` on `base_plane` or above that a template covers.

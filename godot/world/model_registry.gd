@@ -12,9 +12,12 @@ extends RefCounted
 ## name one file (a record's `aliases`), and [ModelLoader] fetches that file
 ## one time.
 ##
-## **HOW each one is shown** — [member PRESENTATION], below, hand-written.
-## Purely the client's own, and CLAUDE.md is explicit that the model registry
-## must never be generated.
+## **HOW each one is shown** — the look file `presentation.json`
+## ([ModelPresentation]) first, and then [member PRESENTATION], below,
+## hand-written (ENG-0011, step L6). Purely the client's own, and CLAUDE.md
+## is explicit that the model registry must never be generated. The Gear tab
+## of the figure workbench writes the file, and a model with no row draws as
+## the table says.
 ##
 ## A correction to a bad EXPORT is not here. Since 09/18/2026 the build bakes
 ## it into the served file: the sword that pointed at the camera, the meat
@@ -102,6 +105,11 @@ const PRESENTATION := {
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.
 var _paths: Dictionary = {}
 
+## The path of the model tree below the origin. [constant MODEL_ROOT] for
+## the game. "/" for a registry whose origin IS the model tree: the figure
+## workbench reads a served tree that is not below a web root.
+var model_root := MODEL_ROOT
+
 ## True once a manifest has been ingested, successfully or not. Distinguishes
 ## "no art for this key" from "we have not been told yet", which decides whether
 ## a caller should bother asking again.
@@ -157,17 +165,17 @@ func url_for(base: String, asset_key: String) -> String:
 	if not has_model(asset_key):
 		return ""
 
-	return base.rstrip("/") + MODEL_ROOT + _paths[asset_key]
+	return base.rstrip("/") + model_root + _paths[asset_key]
 
 
 ## The manifest URL for one origin.
 func manifest_url(base: String) -> String:
-	return base.rstrip("/") + MANIFEST_PATH
+	return base.rstrip("/") + model_root + MANIFEST_PATH.trim_prefix(MODEL_ROOT)
 
 
 ## The credits URL for one origin.
 func credits_url(base: String) -> String:
-	return base.rstrip("/") + CREDITS_PATH
+	return base.rstrip("/") + model_root + CREDITS_PATH.trim_prefix(MODEL_ROOT)
 
 
 ## How this model should be rotated once loaded, in radians.
@@ -202,20 +210,35 @@ func offset_for(asset_key: String) -> Vector3:
 	return entry.get("offset", Vector3.ZERO)
 
 
-## The PRESENTATION entry for one key, or for the file that the key draws.
+## The presentation entry for one key, or for the file that the key draws.
 ##
-## An alias is a second key for the same file, and the pipeline writes the file
-## under its record's own key. The server sends the ITEM key, so without this
-## fallback every new ammunition alias of the clip would need its own entry and
-## would draw full size until someone added it. The key's own entry wins, so
-## two aliases of one file can still differ.
+## An alias is a second key for the same file. The pipeline writes the file
+## under the own key of its record. The server sends the ITEM key. Without
+## this fallback, each new ammunition alias of the clip would need its own
+## entry, and it would draw at full size until someone added one. The own
+## entry of the key wins, so two aliases of one file can differ.
+##
+## For each key, the row of the look file comes first, then the table.
 func _presentation(asset_key: String) -> Dictionary:
-	if PRESENTATION.has(asset_key):
-		return PRESENTATION[asset_key]
+	var own := _entry_of(asset_key)
+
+	if not own.is_empty():
+		return own
 
 	var file_key := str(_paths.get(asset_key, "")).get_file().get_basename()
 
-	return PRESENTATION.get(file_key, {})
+	return _entry_of(file_key)
+
+
+## The entry of one key: the row of `presentation.json`, or the row of
+## [constant PRESENTATION], or an empty dictionary.
+static func _entry_of(asset_key: String) -> Dictionary:
+	var entry := ModelPresentation.entry_of(ModelPresentation.file_row(asset_key))
+
+	if not entry.is_empty():
+		return entry
+
+	return PRESENTATION.get(asset_key, {})
 
 
 ## Every asset key the server has art for. Sorted, so callers that iterate are

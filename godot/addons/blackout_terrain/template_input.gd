@@ -39,8 +39,6 @@ extends RefCounted
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
-const COLOR_SELECTION := Color(0.35, 0.8, 1.0, 1.0)
-const COLOR_OUTLINE_WARNING := Color(1.0, 0.75, 0.2, 1.0)
 
 ## The key of the template that Ctrl+C makes, and of the template of a move.
 const CLIPBOARD_KEY := "clipboard"
@@ -244,10 +242,7 @@ func _select_gesture() -> void:
 
 
 func _drag_rect() -> Rect2i:
-	var low: Vector2i = Vector2i(_anchor).min(_end)
-	var high: Vector2i = Vector2i(_anchor).max(_end)
-
-	return Rect2i(low, high - low + Vector2i.ONE)
+	return StructureTools.rect_between(Vector2i(_anchor), Vector2i(_end))
 
 
 func _delete() -> void:
@@ -484,7 +479,7 @@ func refresh_marks() -> void:
 	if dragging():
 		paths.append(TerrainOverlay.rect_path(_drag_rect()))
 
-	var color := BuildInput.COLOR_REMOVE if _shift and dragging() else COLOR_SELECTION
+	var color := TerrainOverlay.mark("remove" if _shift and dragging() else "selection")
 
 	world.show_outline_layers([], color)
 	world.show_marks(paths, color)
@@ -494,8 +489,8 @@ func _refresh_outline() -> void:
 	var template := _template_now()
 
 	if template == null or _hover == null:
-		world.show_outline_layers([], COLOR_SELECTION)
-		world.show_marks([], COLOR_SELECTION)
+		world.show_outline_layers([], TerrainOverlay.mark("selection"))
+		world.show_marks([], TerrainOverlay.mark("selection"))
 		return
 
 	var origin := _origin(template)
@@ -516,12 +511,12 @@ func _refresh_outline() -> void:
 
 func _plan_color() -> Color:
 	if not _plan["problem"].is_empty():
-		return BuildInput.COLOR_OUTLINE_REFUSED
+		return TerrainOverlay.mark("refused")
 
 	if not _plan["warning"].is_empty():
-		return COLOR_OUTLINE_WARNING
+		return TerrainOverlay.mark("warning")
 
-	return BuildInput.COLOR_OUTLINE
+	return TerrainOverlay.mark("add")
 
 
 ## The lines of the hint after the tool line.

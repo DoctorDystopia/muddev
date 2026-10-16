@@ -13,6 +13,7 @@ extends Node
 ## 4. A noise fill of two neighbours at two times leaves no step at the seam.
 ## 5. Undo returns every value to the value before the stroke.
 ## 6. A pick finds the tile under the mouse, on a hill too.
+## 7. A square brush covers whole tiles, and its ring runs on their edges.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -30,6 +31,9 @@ func _ready() -> void:
 	_a_new_floor_name_joins_the_chunk_list()
 	_height_at_reads_the_drawn_surface()
 	_raise_changes_the_circle_only()
+	_a_square_brush_covers_whole_tiles()
+	_a_square_raise_changes_the_square_only()
+	_the_square_ring_runs_on_the_tile_edges()
 	_flatten_moves_toward_the_target_by_the_strength()
 	_smooth_leaves_flat_ground_alone_and_cuts_a_spike()
 	_ramp_runs_from_one_height_to_the_other()
@@ -165,6 +169,58 @@ func _raise_changes_the_circle_only() -> void:
 
 	_expect(changes.size() > 0, "raise changes some corners")
 	_expect(outside == 0, "raise changes no corner outside the circle")
+
+
+## The side is twice the radius. An odd side centres on the tile under the
+## brush, and an even side on the corner nearest to the brush.
+func _a_square_brush_covers_whole_tiles() -> void:
+	var point := Vector2(20.2, 19.8)
+	var odd := TerrainBrushes.square_rect(point, 1.5)
+	var even := TerrainBrushes.square_rect(point, 1.0)
+	var tiny := TerrainBrushes.square_rect(point, 0.0)
+	var circle := TerrainBrushes.tiles_in_brush(point, 1.5, TerrainBrushes.Shape.CIRCLE)
+
+	_expect(odd == Rect2i(19, 19, 3, 3), "radius 1.5 is 3 x 3 around the tile: %s" % odd)
+	_expect(even == Rect2i(20, 19, 2, 2), "radius 1 is 2 x 2 at the nearest corner: %s" % even)
+	_expect(tiny == Rect2i(20, 20, 1, 1), "radius 0 is the tile under the brush: %s" % tiny)
+	_expect(TerrainBrushes.tiles_in_square(point, 1.5).size() == 9, "3 x 3 gives 9 tiles")
+	_expect(TerrainBrushes.corners_in_square(point, 1.5).size() == 16,
+		"3 x 3 tiles have 4 x 4 corners")
+	_expect(circle == TerrainBrushes.tiles_in_circle(point, 1.5),
+		"a circle brush gives the tiles of the circle")
+
+
+func _a_square_raise_changes_the_square_only() -> void:
+	var chunks := _block(Vector2i(0, 0))
+	var point := Vector2(20.0, 20.0)
+	var radius := 2.5
+	var rect := TerrainBrushes.square_rect(point, radius)
+	var changes := TerrainBrushes.raise(chunks, point, radius, 2,
+		TerrainBrushes.Shape.SQUARE)
+	var outside := 0
+
+	for corner: Vector2i in changes:
+		if corner.x < rect.position.x or corner.x > rect.end.x \
+				or corner.y < rect.position.y or corner.y > rect.end.y:
+			outside += 1
+
+	_expect(changes.size() == (rect.size.x + 1) * (rect.size.y + 1),
+		"a square raise changes every corner of its tiles: %d" % changes.size())
+	_expect(outside == 0, "a square raise changes no corner outside the square")
+
+
+## The ring of a square brush has the size of its tiles, not of the circle.
+func _the_square_ring_runs_on_the_tile_edges() -> void:
+	var chunks := _block(Vector2i(0, 0))
+	var point := Vector2(20.0, 20.0)
+	var rect := TerrainBrushes.square_rect(point, 2.0)
+	var ring := TerrainOverlay.ring_mesh(chunks, point, 2.0, TerrainBrushes.Shape.SQUARE)
+	var box := ring.get_aabb()
+	var west := (rect.position.x - 0.5) * ChunkMeshBuilder.TILE_SIZE
+
+	_expect(is_equal_approx(box.size.x, rect.size.x * ChunkMeshBuilder.TILE_SIZE),
+		"the ring is as wide as the tiles: %s" % box)
+	_expect(is_equal_approx(box.position.x, west), "the ring starts on the west tile edge")
 
 
 func _flatten_moves_toward_the_target_by_the_strength() -> void:

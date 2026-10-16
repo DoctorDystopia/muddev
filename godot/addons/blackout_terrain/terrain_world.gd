@@ -83,7 +83,6 @@ extends Node3D
 
 signal block_loaded
 signal plane_changed
-signal chunks_saved(names: PackedStringArray)
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -101,21 +100,14 @@ const BLOCK_BELOW := 1
 ## tiles (Nick, 09/26/2026). The Build tools use the same rise for a level.
 const NEW_PLANE_RISE := 32
 
-## The colour factor of the ghost of another plane.
-const GHOST_SHADE := Color(0.45, 0.45, 0.5)
-
 ## The chunk directory of the structure workbench (DESIGN-0013 Phase S6). It
 ## is outside the repo, so git never sees a scratch chunk.
 const WORKBENCH_DIRECTORY := "user://structure_workbench"
 
 ## The file name pattern of a chunk file: the prefix and the suffix.
-const CHUNK_FILE_PREFIX := "chunk_"
-const CHUNK_FILE_SUFFIX := ".json"
 
 ## The beacon over a selected object or a finding.
 const BEACON_SIZE := Vector3(0.12, 4.0, 0.12)
-const BEACON_COLOR := Color(1.0, 0.3, 1.0)
-
 ## The nose of an object marker shows its front. These give the side of the
 ## nose over the side of the marker, the colour, and the node name.
 const MARKER_NOSE_SCALE := 0.4
@@ -197,6 +189,23 @@ var chunks: ChunkSet:
 ## Each chunk file of the block that exists but does not read, with the reason.
 var load_errors := PackedStringArray()
 
+## The fields of the environment and of the sun that a preview of an area
+## look writes, and that the end of the preview puts back.
+const _PREVIEW_ENVIRONMENT_FIELDS := ["background_mode", "background_color", "fog_enabled",
+	"fog_mode", "fog_density", "fog_light_color", "fog_depth_begin", "fog_depth_end",
+	"ambient_light_color", "ambient_light_energy"]
+const _PREVIEW_SUN_FIELDS := ["light_color", "light_energy", "rotation"]
+
+## The look that the preview draws, or empty, and the fields of the scene
+## that it replaced.
+var _preview := {}
+var _preview_backup := {}
+
+## Each chunk file that the last [method save_block] could not write. The
+## chunk stays dirty, so the next save tries again. The plugin shows the
+## names in the status box: the Output panel alone is easy to miss.
+var save_errors := PackedStringArray()
+
 ## The object that the Select tool picked: `{tile, kind, rotation, text}`, or
 ## empty.
 var selected := {}
@@ -250,7 +259,7 @@ func _ready() -> void:
 	_ground_material.vertex_color_use_as_albedo = true
 	_ground_material.roughness = 1.0
 	_ghost_material = _ground_material.duplicate()
-	_ghost_material.albedo_color = GHOST_SHADE
+	_ghost_material.albedo_color = TerrainOverlay.mark("ghost")
 	_overlay_material = TerrainOverlay.material()
 	_ring = MeshInstance3D.new()
 	_ring.material_override = _overlay_material
@@ -329,7 +338,7 @@ func _set_plane(new_plane: int) -> void:
 		return
 
 	_plane = new_plane
-	selected = {}
+	clear_selection()
 	refresh_new_chunks()
 	rebuild_all()
 	plane_changed.emit()
@@ -352,7 +361,7 @@ func move_block(centre: Vector2i, new_plane: int) -> void:
 
 	_centre = centre
 	_plane = clamped
-	selected = {}
+	clear_selection()
 
 	if is_inside_tree():
 		load_block()
@@ -422,7 +431,7 @@ static func _directory_key(path: String) -> String:
 
 
 static func _is_chunk_file(file_name: String) -> bool:
-	return file_name.begins_with(CHUNK_FILE_PREFIX) and file_name.ends_with(CHUNK_FILE_SUFFIX)
+	return ChunkFile.is_chunk_file_name(file_name)
 
 
 # ─── The structure workbench ────────────────────────────────────────────────
@@ -444,7 +453,7 @@ func clear_workbench() -> int:
 					and DirAccess.remove_absolute(directory().path_join(file_name)) == OK:
 				deleted += 1
 
-	selected = {}
+	clear_selection()
 
 	if is_inside_tree():
 		load_block()
@@ -622,11 +631,35 @@ func has_unsaved_changes() -> bool:
 	return false
 
 
+## The number of changed chunks that a save writes, for the Save button.
+func unsaved_count() -> int:
+	var count := 0
+
+	for chunk_set: ChunkSet in _planes:
+		count += chunk_set.dirty_coords().size()
+
+	return count
+
+
+## The number of chunk files in the directory of this node, for the
+## confirmation of a clear.
+func chunk_file_count() -> int:
+	var count := 0
+
+	if DirAccess.dir_exists_absolute(directory()):
+		for file_name: String in DirAccess.get_files_at(directory()):
+			if _is_chunk_file(file_name):
+				count += 1
+
+	return count
+
+
 ## Write every changed chunk of every plane to its file. Returns the names of
-## the files.
+## the files. A file that does not write goes into [member save_errors].
 func save_block() -> PackedStringArray:
 	var saved := PackedStringArray()
 
+	save_errors = PackedStringArray()
 	DirAccess.make_dir_recursive_absolute(directory())
 
 	for chunk_set: ChunkSet in _planes:
@@ -641,9 +674,8 @@ func save_block() -> PackedStringArray:
 				_from_file[Vector3i(coord.x, coord.y, chunk_set.plane)] = true
 				saved.append(path.get_file())
 			else:
+				save_errors.append(path.get_file())
 				push_error("Terrain: cannot write %s" % path)
-
-	chunks_saved.emit(saved)
 
 	return saved
 
@@ -700,6 +732,7 @@ func rebuild_all() -> void:
 		for coord: Vector2i in chunk_set.chunk_coords():
 			_rebuild_key(Vector3i(coord.x, coord.y, chunk_set.plane))
 
+	_refresh_visibility()
 	_rebuild_block_outline()
 	_rebuild_links()
 
@@ -714,7 +747,7 @@ func _rebuild_block_outline() -> void:
 	var tiles := BLOCK_SIDE * size
 
 	_block_outline = _mesh_node(TerrainOverlay.outline_mesh(chunks, low, tiles,
-		TerrainOverlay.COLOR_LOCKED), _overlay_material)
+		TerrainOverlay.mark("locked")), _overlay_material)
 
 
 ## Rebuild the view of one chunk of one plane, as (cx, cy, plane).
@@ -729,7 +762,6 @@ func _rebuild_key(key: Vector3i) -> void:
 
 	if key.z == _plane:
 		_views[key] = _edited_view(chunk, coord)
-		_refresh_visibility()
 		return
 
 	var material := _plane_material(key.z)
@@ -766,7 +798,7 @@ func _edited_view(chunk: ChunkFile, coord: Vector2i) -> Dictionary:
 		"areas": _mesh_node(_area_mesh_if_shown(coord), _overlay_material),
 		"border": _mesh_node(TerrainOverlay.outline_mesh(chunks,
 			coord * _Const.CHUNK_SIZE, _Const.CHUNK_SIZE,
-			TerrainOverlay.COLOR_BORDER), _overlay_material),
+			TerrainOverlay.mark("border")), _overlay_material),
 	}
 
 	var nodes := _object_nodes(chunk)
@@ -818,6 +850,8 @@ func queue_rebuild(keys: Array[Vector3i]) -> void:
 
 
 func _process(_delta: float) -> void:
+	_follow_editor_camera()
+
 	if _pending.is_empty():
 		return
 
@@ -826,6 +860,139 @@ func _process(_delta: float) -> void:
 	keys.assign(_pending.keys())
 	_pending.clear()
 	rebuild_many(keys)
+
+
+# ─── The preview of an area look ────────────────────────────────────────────
+
+## Draw `look` with the sun and the environment of the editor scene, as
+## the game draws it: the Look tab, "Preview the area light". An empty
+## look ends the preview, and the scene gets its own sky and sun back.
+##
+## The preview writes into the environment resource and the sun of the
+## scene. Thus, a save with the preview on would store the look as the sky
+## of the scene (10/14/2026). The plugin ends the preview before each save,
+## and it starts the preview again after the save ([method previewed_look]).
+func preview_look(look: Dictionary) -> void:
+	var holder := _scene_environment()
+	var sun := _scene_sun()
+
+	if holder == null or holder.environment == null:
+		return
+
+	if look.is_empty():
+		_end_preview(holder, sun)
+		return
+
+	if _preview.is_empty():
+		_preview_backup = _environment_state(holder.environment, sun)
+
+	_preview = look
+	holder.environment.background_mode = Environment.BG_COLOR
+	holder.environment.fog_enabled = true
+	holder.environment.fog_mode = Environment.FOG_MODE_DEPTH
+	holder.environment.fog_density = AreaEnvironment.FOG_FULL_DENSITY
+	AreaLook.apply_to(holder.environment, sun, look)
+	_follow_editor_camera()
+
+
+## The mark colours changed on the Look tab: the ghost planes, the beacon,
+## the border, and each overlay take the new colours.
+func refresh_mark_colors() -> void:
+	_ghost_material.albedo_color = TerrainOverlay.mark("ghost")
+
+	if _beacon != null and _beacon.material_override is StandardMaterial3D:
+		(_beacon.material_override as StandardMaterial3D).albedo_color = TerrainOverlay.mark("beacon")
+
+	rebuild_all()
+
+## True while a preview is on.
+func previewing() -> bool:
+	return not _preview.is_empty()
+
+
+## A copy of the look that the preview draws, or an empty Dictionary.
+func previewed_look() -> Dictionary:
+	return _preview.duplicate()
+
+
+func _end_preview(holder: WorldEnvironment, sun: DirectionalLight3D) -> void:
+	if _preview.is_empty():
+		return
+
+	_restore_environment(holder.environment, sun, _preview_backup)
+	_preview = {}
+	_preview_backup = {}
+
+
+## The fields of the environment and the sun that a preview writes.
+static func _environment_state(environment: Environment,
+		sun: DirectionalLight3D) -> Dictionary:
+	var state := {}
+
+	for field: String in _PREVIEW_ENVIRONMENT_FIELDS:
+		state[field] = environment.get(field)
+
+	if sun != null:
+		for field: String in _PREVIEW_SUN_FIELDS:
+			state["sun_" + field] = sun.get(field)
+
+	return state
+
+
+static func _restore_environment(environment: Environment, sun: DirectionalLight3D,
+		state: Dictionary) -> void:
+	for field: String in _PREVIEW_ENVIRONMENT_FIELDS:
+		environment.set(field, state[field])
+
+	if sun != null:
+		for field: String in _PREVIEW_SUN_FIELDS:
+			sun.set(field, state["sun_" + field])
+
+
+## Godot measures depth fog from the camera, and the look measures it from
+## the player. In the editor, the point under the middle of the view
+## stands for the player.
+func _follow_editor_camera() -> void:
+	if _preview.is_empty() or not Engine.is_editor_hint():
+		return
+
+	var holder := _scene_environment()
+	var camera := EditorInterface.get_editor_viewport_3d(0).get_camera_3d()
+
+	if holder == null or holder.environment == null or camera == null:
+		return
+
+	var origin := camera.global_position
+	var hit: Variant = TerrainPicking.ray_hit(chunks, origin, -camera.global_transform.basis.z)
+	var arm := 0.0 if hit == null else origin.distance_to(hit)
+	var depth := AreaLook.fog_depth(_preview, arm)
+
+	holder.environment.fog_depth_begin = depth.x
+	holder.environment.fog_depth_end = depth.y
+
+
+## The WorldEnvironment beside this node in the scene, or null.
+func _scene_environment() -> WorldEnvironment:
+	if get_parent() == null:
+		return null
+
+	for child: Node in get_parent().get_children():
+		if child is WorldEnvironment:
+			return child
+
+	return null
+
+
+## The sun beside this node in the scene, or null.
+func _scene_sun() -> DirectionalLight3D:
+	if get_parent() == null:
+		return null
+
+	for child: Node in get_parent().get_children():
+		if child is DirectionalLight3D:
+			return child
+
+	return null
 
 
 ## Redraw these chunks, as (cx, cy, plane), and the chunk under each: its
@@ -842,6 +1009,7 @@ func rebuild_many(keys: Array[Vector3i]) -> void:
 	for key: Vector3i in all:
 		_rebuild_key(key)
 
+	_refresh_visibility()
 	_rebuild_block_outline()
 	_rebuild_links()
 	_check_selection()
@@ -971,16 +1139,6 @@ func markers_of(chunk_coord: Vector2i) -> Array[Node]:
 	return view["objects"].get_children()
 
 
-## The wall mesh that one chunk of `on_plane` draws now, or null. For a test.
-func walls_of(chunk_coord: Vector2i, on_plane: int) -> ArrayMesh:
-	var view: Dictionary = _views.get(Vector3i(chunk_coord.x, chunk_coord.y, on_plane), {})
-
-	if view.is_empty():
-		return null
-
-	return view["walls"].mesh
-
-
 func _free_view(key: Vector3i) -> void:
 	var view: Dictionary = _views.get(key, {})
 
@@ -997,7 +1155,9 @@ func _refresh_visibility() -> void:
 
 
 ## Show the brush ring at `centre`, a point in tile space, or hide it.
-func show_ring(centre: Variant, radius: float) -> void:
+## `shape` is a [enum TerrainBrushes.Shape].
+func show_ring(centre: Variant, radius: float,
+		shape := TerrainBrushes.Shape.CIRCLE) -> void:
 	if _ring == null:
 		return
 
@@ -1005,7 +1165,7 @@ func show_ring(centre: Variant, radius: float) -> void:
 		_ring.visible = false
 		return
 
-	_ring.mesh = TerrainOverlay.ring_mesh(chunks, centre, radius)
+	_ring.mesh = TerrainOverlay.ring_mesh(chunks, centre, radius, shape)
 	_ring.visible = true
 
 
@@ -1022,7 +1182,7 @@ func show_marks(paths: Array, color: Color) -> void:
 
 
 ## Show the outline of a Build plan: the lattice of
-## [method TerrainOverlay.lattice_mesh]. An empty `heights` hides it.
+## [method TerrainOverlay.lattice_layers_mesh]. An empty `heights` hides it.
 func show_outline(heights: Dictionary, color: Color) -> void:
 	if _outline == null:
 		return
@@ -1138,6 +1298,12 @@ func show_beacon(tile: Variant) -> void:
 	_beacon.visible = true
 
 
+## True while the beacon stands on a tile. A test reads it: the beacon must
+## go with the selection on a plane change and on a block move.
+func beacon_shown() -> bool:
+	return _beacon != null and _beacon.visible
+
+
 ## Clear a selection that an undo or a redo took away.
 func _check_selection() -> void:
 	if selected.is_empty():
@@ -1188,7 +1354,8 @@ func selected_link_end() -> Dictionary:
 	if ways.is_empty():
 		return {}
 
-	return {"tile": selected["tile"],
+	return {"tile": ClimbRule.landing(selected["tile"], kind,
+			selected["rotation"], ways[0]),
 		"plane": _plane + _Const.CLIMB_PLANE_STEPS[ways[0]]}
 
 
@@ -1198,7 +1365,7 @@ func _make_beacon() -> MeshInstance3D:
 	var paint := StandardMaterial3D.new()
 
 	box.size = BEACON_SIZE
-	paint.albedo_color = BEACON_COLOR
+	paint.albedo_color = TerrainOverlay.mark("beacon")
 	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	node.mesh = box
 	node.material_override = paint

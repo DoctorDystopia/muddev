@@ -19,6 +19,7 @@ Description: Guards for the four tables that a chunk file names: the floor
              - Every world chunk file names only rows of these tables.
 """
 
+import dataclasses
 import os
 import re
 import unittest
@@ -29,6 +30,7 @@ from systems.core.tilegrid import constants as tile_const
 from systems.interface.statefeed import constants as feed_const
 from typeclasses import spawners
 from world import areas
+from world import decor_kinds
 from world import floor_types
 from world import object_kinds
 from world import tile_checks
@@ -48,6 +50,16 @@ _TABLES: tuple = (
     ("area", areas.AREAS),
     ("wall style", wall_styles.WALL_STYLES),
     ("object kind", object_kinds.OBJECT_KINDS),
+    ("decor kind", decor_kinds.DECOR_KINDS),
+)
+
+# Each table that a table file holds, with its row class. The Tables tab of
+# the terrain editor writes these files (10/14/2026).
+_TABLE_FILES: tuple = (
+    (areas.AREAS, areas.Area),
+    (floor_types.FLOOR_TYPES, floor_types.FloorType),
+    (wall_styles.WALL_STYLES, wall_styles.WallStyle),
+    (decor_kinds.DECOR_KINDS, decor_kinds.DecorKind),
 )
 
 
@@ -72,11 +84,45 @@ class TableShapeTests(unittest.TestCase):
         self.assertEqual(wall_styles.DEFAULT_WALL_STYLE,
                          tile_const.DEFAULT_WALL_STYLE)
 
-    def test_every_wall_style_stands_above_the_ground(self):
+    def test_every_wall_style_has_a_note(self):
+        # The height of a wall left this table on 10/13/2026. It is a look,
+        # and the client palette owns it (godot/world/look/terrain_palette.json).
         for key, style in wall_styles.WALL_STYLES.items():
             with self.subTest(style=key):
-                self.assertIsInstance(style.height, int)
-                self.assertGreater(style.height, 0)
+                self.assertTrue(style.note)
+
+    def test_every_text_field_of_a_table_file_row_is_filled(self):
+        # The Tables tab refuses an empty text. A hand edit gets the same rule.
+        for table, row_class in _TABLE_FILES:
+            texts = [field.name for field in dataclasses.fields(row_class)
+                     if field.type in (str, "str")]
+
+            for key, row in table.items():
+                for name in texts:
+                    with self.subTest(table=row_class.__name__, key=key,
+                                      field=name):
+                        self.assertTrue(getattr(row, name))
+
+    def test_the_void_floor_type_is_a_row(self):
+        # The editor and the client name it as a constant. The Tables tab
+        # never renames or removes it.
+        self.assertIn(floor_types.VOID_FLOOR_TYPE, floor_types.FLOOR_TYPES)
+
+    def test_a_roof_floor_type_exists(self):
+        # The Roof tool of the Build tab starts with the first roof floor.
+        self.assertTrue(floor_types.ROOF_FLOOR_TYPES)
+
+    def test_every_decor_row_is_a_decor_object_kind(self):
+        for key in decor_kinds.DECOR_KINDS:
+            with self.subTest(kind=key):
+                self.assertEqual(object_kinds.OBJECT_KINDS[key].category,
+                                 tile_const.OBJECT_CATEGORY_DECOR)
+
+    def test_no_decor_row_shares_a_key_with_another_kind(self):
+        # A shared key would drop one row from OBJECT_KINDS with no error.
+        keys = [row.key for row in object_kinds._KIND_ROWS]
+
+        self.assertEqual(len(keys), len(set(keys)))
 
 
 class ObjectKindTests(unittest.TestCase):
@@ -152,6 +198,53 @@ class ObjectKindTests(unittest.TestCase):
 
                 for way in kind.climbs:
                     self.assertIn(way, tile_const.CLIMB_PLANE_STEPS)
+
+    def test_only_a_climb_has_a_run(self):
+        # A run is the flight of a staircase (Nick, 10/16/2026).
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            is_climb = kind.category == tile_const.OBJECT_CATEGORY_CLIMB
+
+            with self.subTest(kind=key):
+                self.assertGreaterEqual(kind.run, 0)
+                self.assertTrue(is_climb or not kind.run)
+
+    def test_a_ladder_lands_on_its_own_tile(self):
+        foot = (10, 10)
+
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if kind.run:
+                continue
+
+            for way in kind.climbs:
+                for turn in range(tile_const.ROTATION_COUNT):
+                    with self.subTest(kind=key, way=way, rotation=turn):
+                        self.assertEqual(object_kinds.climb_landing(
+                            kind, foot, turn, way), foot)
+
+    def test_a_flight_lands_past_its_top_step_and_comes_back(self):
+        # The way up lands the run and one tile along the facing. The twin
+        # stands there at the same rotation, and its way down lands on the
+        # foot. A twin with another run would miss the foot.
+        foot = (10, 10)
+        up_suffix = "_" + tile_const.CLIMB_UP
+
+        for key, kind in object_kinds.OBJECT_KINDS.items():
+            if not kind.run or kind.climbs != (tile_const.CLIMB_UP,):
+                continue
+
+            twin_key = key.removesuffix(up_suffix) + "_" + tile_const.CLIMB_DOWN
+            twin = object_kinds.OBJECT_KINDS[twin_key]
+
+            for turn, (step_x, step_y) in enumerate(tile_const.ROTATION_STEPS):
+                with self.subTest(kind=key, rotation=turn):
+                    top = object_kinds.climb_landing(kind, foot, turn,
+                                                     tile_const.CLIMB_UP)
+                    reach = kind.run + 1
+
+                    self.assertEqual(top, (foot[0] + step_x * reach,
+                                           foot[1] + step_y * reach))
+                    self.assertEqual(object_kinds.climb_landing(
+                        twin, top, turn, tile_const.CLIMB_DOWN), foot)
 
     def test_decor_is_scenery_and_nothing_more(self):
         # DESIGN-0013 section 6.5. A decor kind with no scenery draws

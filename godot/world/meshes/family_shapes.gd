@@ -15,6 +15,15 @@ extends RefCounted
 ## rather than branching on it, and [MeshBuilder] reads the parts without
 ## knowing what a weapon is.
 ##
+## ## The file comes first, and the table is the fallback
+##
+## Since 10/13/2026 (ENG-0011, step L5), the design of each family is the
+## look file `families.json` ([FamilyLooks]). The Families tab of the figure
+## workbench writes it. [method parts_for], [method model_for], and
+## [method families] ask the file first. A family with no row in the file
+## draws from the tables below, as before the file existed. Thus, a missing
+## file breaks nothing, and the table below is the start of each row.
+##
 ## ## Why the key space holds two vocabularies
 ##
 ## The keys below are six ITEM FAMILIES (`weapon`, `armor`, ...) and four ASSET
@@ -61,6 +70,15 @@ extends RefCounted
 ##     scale         Vector3, for squashing a primitive out of round
 ##     open          bool, for a cylinder drawn as a shell (armour)
 ##     segments      int, to make a primitive deliberately faceted
+##     rings         int, the second count of a round shape.
+##
+## A SHAPE_PRISM has five more keys. Each one is optional.
+##
+## - `top_width` is a float. The default is the width of `size`.
+## - `top_depth` is a float. The default is the depth of `size`.
+## - `lean_x` is a float. The top face moves this far on X.
+## - `lean_z` is a float. The top face moves this far on Z.
+## - `diamond` is a bool. With it, each axis has a corner and not a side.
 
 ## Server-owned names, generated from `blackout/systems/interface/statefeed/constants.py`.
 ##
@@ -85,6 +103,15 @@ const SHAPE_TORUS := "torus"
 ## a silhouette is doing all the work and detail is not the point. Recorded as a
 ## substitution rather than passed off as a match.
 const SHAPE_FACETED := "faceted"
+
+## A tapered block with flat faces: the shape of a low-poly figure.
+##
+## `size` is the width of the bottom face, the height, and the depth of the
+## bottom face. `segments` is the count of sides. Each face has one normal,
+## so each face has one shade. The figure workbench makes a body, a blade,
+## and a shield from this shape (DESIGN-0014 section 16). No family of
+## [member SHAPES] uses it yet.
+const SHAPE_PRISM := "prism"
 
 ## The families with no art of their own, drawn when the server names one.
 ##
@@ -307,25 +334,58 @@ static func _figure(role: String) -> Array:
 
 ## The parts for a family, or the generic block when it names nothing.
 ##
-## Never empty: a family with no entry is not an error and must not be, because
-## the server is free to name a family this client has never heard of and the
-## answer to that is a plain box, not a gap in the room.
+## The row of the file comes first, then the table. Never empty: a family
+## with no entry is not an error and must not be, because the server is free
+## to name a family this client has never heard of and the answer to that is
+## a plain box, not a gap in the room.
 static func parts_for(family: String) -> Array:
+	var row := file_row(family)
+
+	if not row.is_empty():
+		return FamilyLooks.builder_parts(row)
+
 	return SHAPES.get(family, GENERIC)
 
 
-## Whether this family has a shape of its own.
+## The row of one family in the look file, or an empty dictionary. The
+## file comes from the cache of [LookFile].
+static func file_row(family: String) -> Dictionary:
+	var table: Variant = LookFile.read(FamilyLooks.PATH).get(FamilyLooks.KEY_FAMILIES, {})
+
+	if typeof(table) != TYPE_DICTIONARY:
+		return {}
+
+	var row: Variant = table.get(family, {})
+
+	return row if typeof(row) == TYPE_DICTIONARY and row.has(FamilyLooks.KEY_PARTS) else {}
+
+
+## The family -> asset key table of the look file, or an empty dictionary.
+static func _file_models() -> Dictionary:
+	var table: Variant = LookFile.read(FamilyLooks.PATH).get(FamilyLooks.KEY_MODELS, {})
+
+	return table if typeof(table) == TYPE_DICTIONARY else {}
+
+
+## Whether this family has a shape of its own, in the file or in the table.
 ##
 ## Separate from [method parts_for] because "has one" and "give me one" are
 ## different questions — a caller checking coverage wants the first and would
 ## get a misleading yes from the second.
 static func has_shape(family: String) -> bool:
-	return SHAPES.has(family)
+	var row := file_row(family)
+
+	return not row.is_empty() or SHAPES.has(family)
 
 
-## Every family this table draws. Derived, never restated.
+## Every family that the file or the table draws. Derived, never restated.
 static func families() -> PackedStringArray:
 	var names := PackedStringArray(SHAPES.keys())
+
+	for family: String in LookFile.read(FamilyLooks.PATH).get(FamilyLooks.KEY_FAMILIES, {}):
+		if not family in names and not file_row(family).is_empty():
+			names.append(family)
+
 	names.sort()
 
 	return names
@@ -339,12 +399,23 @@ static func families() -> PackedStringArray:
 ## callers' memory. See [method MeshResolver.resolve_entity] for the ladder that
 ## uses this.
 static func model_for(family: String) -> String:
+	var models := _file_models()
+
+	if typeof(models.get(family)) == TYPE_STRING and not models[family].is_empty():
+		return models[family]
+
 	return str(MODELS.get(family, ""))
 
 
-## Every family standing in a packed model's place. Derived, never restated.
+## Every family standing in a packed model's place, in the file or in the
+## table. Derived, never restated.
 static func modelled_families() -> PackedStringArray:
 	var names := PackedStringArray(MODELS.keys())
+
+	for family: String in _file_models():
+		if not family in names and not model_for(family).is_empty():
+			names.append(family)
+
 	names.sort()
 
 	return names

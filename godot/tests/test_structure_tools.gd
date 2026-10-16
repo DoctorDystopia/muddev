@@ -13,8 +13,10 @@ extends Node
 ##    inner border, and blocks the ring outside when asked.
 ## 3. A doorway clears the wall on both sides of the edge.
 ## 4. A level above floors the plane above, flat at one plane rise.
-## 5. Stairs place a climb pair, and floor a void landing. A second click
-##    stacks no second pair.
+## 5. A ladder places a climb pair on one tile, and floors a void landing.
+##    A second click stacks no second pair. A flight of stairs lands past
+##    its top step, Blocks its steps, and cuts its stairwell above. Shift
+##    takes the pair away and opens the steps again.
 ## 6. The fill of a closed room stops at its walls, and an open one does not.
 ## 7. One gesture is one undo entry, over two planes.
 ## 8. A roof meets the walls at one plane rise, is Blocked, refuses a floor
@@ -41,8 +43,11 @@ func _ready() -> void:
 	_a_doorway_opens_both_sides()
 	_a_level_above_is_flat_at_one_rise()
 	_a_level_above_refuses_the_top_plane()
-	_stairs_place_a_climb_pair_and_floor_the_landing()
+	_a_ladder_places_a_pair_on_one_tile_and_floors_the_landing()
+	_stairs_land_past_the_top_step_and_cut_a_stairwell()
+	_a_flight_that_leaves_the_block_refuses()
 	_every_up_climb_has_a_down_twin()
+	_the_ladder_and_the_stairs_tools_split_the_pairs()
 	_a_closed_room_fills_and_an_open_one_does_not()
 	_one_gesture_undoes_on_both_planes()
 	_live_check_names_a_wall_on_void()
@@ -288,35 +293,111 @@ func _a_level_above_refuses_the_top_plane() -> void:
 		"", false).is_empty(), "no level goes above the top plane")
 
 
-func _stairs_place_a_climb_pair_and_floor_the_landing() -> void:
+func _a_ladder_places_a_pair_on_one_tile_and_floors_the_landing() -> void:
 	var sets := _planes()
 	var tile := Vector2i(7, 7)
-	var pairs := StructureTools.climb_pairs()
+	var pairs := StructureTools.ladder_pairs()
 	var up_kind: String = pairs.keys()[0]
+	var turn := 2
 
-	_expect(StructureTools.stairs(sets, TerrainEdit.new(), 0, tile, up_kind, "concrete",
-		false).is_empty(), "the stairs are placed")
-	_expect(sets[0].objects_at(tile)[0]["kind"] == up_kind, "the way up stands on plane 0")
+	_expect(StructureTools.climb(sets, TerrainEdit.new(), 0, tile, up_kind, turn,
+		"concrete", false).is_empty(), "the ladder is placed")
+	_expect(sets[0].objects_at(tile)[0]["kind"] == up_kind
+		and sets[0].objects_at(tile)[0]["rotation"] == turn,
+		"the way up stands on plane 0, at its turn")
 	_expect(sets[1].objects_at(tile)[0]["kind"] == pairs[up_kind],
-		"its twin stands on plane 1")
+		"its twin stands on the same tile of plane 1")
 	_expect(sets[1].get_floor(tile) == "concrete"
 		and sets[1].get_flags(tile) & _Const.TILE_FLAG_BLOCKED == 0,
 		"the void landing gets an open floor")
 
 	var again := TerrainEdit.new()
 
-	_expect(not StructureTools.stairs(sets, again, 0, tile, up_kind, "", false).is_empty()
+	_expect(not StructureTools.climb(sets, again, 0, tile, up_kind, 0, "", false).is_empty()
 		and again.is_empty(), "a second click refuses, and stacks no second pair")
 	_expect(sets[0].objects_at(tile).size() == 1 and sets[1].objects_at(tile).size() == 1,
 		"one pair stands")
 
-	StructureTools.stairs(sets, TerrainEdit.new(), 0, tile, up_kind, "", true)
+	StructureTools.climb(sets, TerrainEdit.new(), 0, tile, up_kind, 0, "", true)
 	_expect(sets[0].objects_at(tile).is_empty() and sets[1].objects_at(tile).is_empty(),
 		"Shift removes the pair")
 
 
-## The Stairs tool lists the up kinds. Each must have its down twin, so a new
-## climb kind of the server reaches the tool with no edit.
+## A flight that faces east from (7, 7): its steps, its landing past the top
+## step, and the stairwell above. The run comes from the kind, so a new run
+## moves every expected tile.
+func _stairs_land_past_the_top_step_and_cut_a_stairwell() -> void:
+	var sets := _planes()
+	var foot := Vector2i(7, 7)
+	var turn := 1
+	var pairs := StructureTools.stairs_pairs()
+	var up_kind: String = pairs.keys()[0]
+	var run := TileTables.climb_run(up_kind)
+	var flight := ClimbRule.flight_tiles(foot, up_kind, turn, _Const.CLIMB_UP)
+	var landing := ClimbRule.landing(foot, up_kind, turn, _Const.CLIMB_UP)
+	var level := StructureTools.rect_tiles(Rect2i(foot, Vector2i(run + 2, 1)))
+	var edit := TerrainEdit.new()
+
+	StructureTools.level_above(sets, TerrainEdit.new(), 0, level, "concrete", false)
+
+	_expect(flight.size() == run and landing == foot + Vector2i(run + 1, 0),
+		"the flight runs east, and the landing is past its top step")
+	_expect(StructureTools.climb(sets, edit, 0, foot, up_kind, turn, "", false).is_empty(),
+		"the stairs are placed")
+	_expect(sets[0].objects_at(foot)[0]["kind"] == up_kind
+		and sets[1].objects_at(landing)[0]["kind"] == pairs[up_kind]
+		and sets[1].objects_at(landing)[0]["rotation"] == turn,
+		"the way up stands on the foot, and its twin on the landing at the same turn")
+	_expect(sets[1].objects_at(foot).is_empty(), "no twin stands over the foot")
+
+	for tile: Vector2i in flight:
+		_expect(sets[0].get_flags(tile) & _Const.TILE_FLAG_BLOCKED != 0,
+			"step %s is Blocked on plane 0" % tile)
+		_expect(sets[1].get_floor(tile) == _Const.TILE_VOID_FLOOR
+			and sets[1].get_flags(tile) & _Const.TILE_FLAG_BLOCKED != 0,
+			"the stairwell over %s is void and Blocked" % tile)
+
+	_expect(TerrainChecks.check_tiles(sets, edit.tiles()).is_empty(),
+		"the live check finds both ways land: %s" % [TerrainChecks.check_tiles(sets,
+			edit.tiles())])
+	_expect(not StructureTools.climb(sets, TerrainEdit.new(), 0, foot, up_kind, 0, "",
+		false).is_empty(), "a second click refuses, at any turn")
+
+	# A wall line along the north edge of the stairwell, on plane 1. Both
+	# sides are void, but the stairwell is part of the structure.
+	var line := TerrainEdit.new()
+	var north := Vector2i(0, 1)
+
+	StructureTools.wall_line(sets[1], line, flight[0] + north, flight[-1] + north
+		+ Vector2i.RIGHT, false, "", sets[0])
+	_expect(sets[1].get_flags(flight[1]) & _Const.TILE_FLAG_WALL_NORTH != 0
+		and sets[1].get_flags(flight[1] + north) & _Const.TILE_FLAGS_WALLS == 0,
+		"a wall line by the stairwell stands on the stairwell tile")
+	_expect(TerrainChecks.check_tiles(sets, line.tiles()).is_empty(),
+		"and a wall on a stairwell tile is no finding")
+
+	StructureTools.climb(sets, TerrainEdit.new(), 0, foot, up_kind, 0, "", true)
+	_expect(sets[0].objects_at(foot).is_empty() and sets[1].objects_at(landing).is_empty(),
+		"Shift removes the pair by the turn of the way up")
+	_expect(sets[0].get_flags(flight[0]) & _Const.TILE_FLAG_BLOCKED == 0,
+		"and opens the steps again")
+
+
+func _a_flight_that_leaves_the_block_refuses() -> void:
+	var sets := _planes()
+	var up_kind: String = StructureTools.stairs_pairs().keys()[0]
+	var edge: int = 2 * _Const.CHUNK_SIZE - 2
+	var edit := TerrainEdit.new()
+
+	_expect(not StructureTools.climb(sets, edit, 0, Vector2i(edge, 5), up_kind, 1, "",
+		false).is_empty() and edit.is_empty(),
+		"a flight past the loaded block refuses, and changes nothing")
+	_expect(StructureTools.climb(sets, TerrainEdit.new(), 0, Vector2i(edge, 5), up_kind, 3,
+		"", false).is_empty(), "the same foot turned west builds")
+
+
+## Each tool lists the up kinds. Each must have its down twin, so a new
+## climb kind of the server reaches a tool with no edit.
 func _every_up_climb_has_a_down_twin() -> void:
 	var pairs := StructureTools.climb_pairs()
 
@@ -325,6 +406,28 @@ func _every_up_climb_has_a_down_twin() -> void:
 	for kind: String in _Const.OBJECT_KIND_CLIMBS:
 		if _Const.OBJECT_KIND_CLIMBS[kind] == [_Const.CLIMB_UP]:
 			_expect(pairs.has(kind), "%s has a twin that leads down" % kind)
+
+
+## A pair with no run is a ladder, and a pair with a run is stairs. Each
+## pair goes to one tool. A twin has the run of its up kind, so the way down
+## lands on the foot.
+func _the_ladder_and_the_stairs_tools_split_the_pairs() -> void:
+	var ladders := StructureTools.ladder_pairs()
+	var stairs := StructureTools.stairs_pairs()
+
+	_expect(not ladders.is_empty() and not stairs.is_empty(),
+		"the server names a ladder and a flight")
+	_expect(ladders.size() + stairs.size() == StructureTools.climb_pairs().size(),
+		"each pair goes to one tool")
+
+	for kind: String in stairs:
+		var twin: String = stairs[kind]
+
+		for turn: int in _Const.CHUNK_ROTATION_COUNT:
+			var top := ClimbRule.landing(Vector2i.ZERO, kind, turn, _Const.CLIMB_UP)
+
+			_expect(ClimbRule.landing(top, twin, turn, _Const.CLIMB_DOWN)
+				== Vector2i.ZERO, "%s at turn %d comes back to its foot" % [twin, turn])
 
 
 # ─── Fill and undo ──────────────────────────────────────────────────────────
@@ -643,9 +746,9 @@ func _the_build_gestures_drive_a_world() -> void:
 	input.commit = func(_edit: TerrainEdit, label: String) -> void: labels.append(label)
 
 	_drag_a_room(input, panel, world)
-	_click_a_level_and_stairs(input, panel, world)
+	_click_a_level_and_a_ladder(input, panel, world)
 
-	_expect(labels == ["Room 4 x 3", "Level above, 12 tiles", "Stairs"],
+	_expect(labels == ["Room 4 x 3", "Level above, 12 tiles", "Ladder"],
 		"each gesture is one entry: %s" % [labels])
 
 	input.on_key(_key(KEY_PAGEUP))
@@ -662,6 +765,9 @@ func _the_build_gestures_drive_a_world() -> void:
 	_click_decor(input, panel, world)
 	_expect(labels.size() == 6 and labels[5] == "Decor " + panel.decor_kind(),
 		"the decor is one entry: %s" % [labels])
+	_click_stairs(input, panel, world)
+	_expect(labels.size() == 7 and labels[6] == "Stairs",
+		"the stairs are one entry: %s" % [labels])
 	_a_save_writes_the_styles_in_format_two(world)
 
 	world.queue_free()
@@ -758,7 +864,7 @@ func _drag_a_room(input: BuildInput, panel: BuildPanel, world: TerrainWorld) -> 
 	_expect(not input.dragging(), "Esc cancels a drag")
 
 
-func _click_a_level_and_stairs(input: BuildInput, panel: BuildPanel,
+func _click_a_level_and_a_ladder(input: BuildInput, panel: BuildPanel,
 		world: TerrainWorld) -> void:
 	panel.select_tool(BuildPanel.Tool.LEVEL_ABOVE)
 	input.on_press(Vector2(4.0, 4.0), false, false)
@@ -767,11 +873,32 @@ func _click_a_level_and_stairs(input: BuildInput, panel: BuildPanel,
 	_expect(world.chunks_on(1).get_floor(Vector2i(5, 4)) != _Const.TILE_VOID_FLOOR,
 		"a click inside the room floors the level above")
 
-	panel.select_tool(BuildPanel.Tool.STAIRS)
+	panel.select_tool(BuildPanel.Tool.LADDER)
 	input.on_press(Vector2(4.0, 4.0), false, false)
 
 	_expect(world.chunks_on(1).objects_at(Vector2i(4, 4)).size() == 1,
-		"a click places the stairs and their twin above")
+		"a click places the ladder and its twin on the same tile above")
+
+
+## R turns the next flight, and a click on open ground places it. Its twin
+## stands past the top step on plane 1. The panel starts at the turn of the
+## settings file of the author, so the expected turn counts from that start.
+func _click_stairs(input: BuildInput, panel: BuildPanel, world: TerrainWorld) -> void:
+	var foot := Vector2i(20, 10)
+	var turn := (panel.climb_turn() + 1) % BuildPanel.FACING_NAMES.size()
+
+	panel.select_tool(BuildPanel.Tool.STAIRS)
+	_expect(input.on_key(_key(KEY_R)), "R is a key of the Stairs tool")
+	_expect("to the %s" % BuildPanel.FACING_NAMES[turn] in input.hint(),
+		"the hint names the turn of the flight")
+	input.on_press(Vector2(20.0, 10.0), false, false)
+
+	var landing := ClimbRule.landing(foot, panel.climb_kind(), turn,
+		_Const.CLIMB_UP)
+	var twin: Array[Dictionary] = world.chunks_on(1).objects_at(landing)
+
+	_expect(twin.size() == 1 and twin[0]["rotation"] == turn,
+		"a click places the twin past the top step, at the turn: %s" % [twin])
 
 
 ## On plane 1, a click inside the level roofs it on plane 2. R turns the

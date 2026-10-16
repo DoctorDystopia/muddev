@@ -41,7 +41,7 @@ extends Node3D
 ##
 ## A chunk object whose kind stands nothing up on the server is not an entity,
 ## so no `room_players` row draws it. The server names a model for such a kind
-## in [code]OBJECT_KIND_SCENERY[/code], and this node stands that model on the
+## through [method TileTables.scenery_of], and this node stands that model on the
 ## tile, in a "Scenery" child. The transition pad is the first. The pick
 ## ignores scenery, as it ignores the ground mesh: a click on the pad is a
 ## click on its tile.
@@ -323,7 +323,7 @@ func _place_scenery(key: Vector3i) -> void:
 	node.add_child(holder)
 
 	for thing: Dictionary in chunk.objects:
-		var asset_key: String = _Const.OBJECT_KIND_SCENERY.get(thing["kind"], "")
+		var asset_key: String = TileTables.scenery_of(thing["kind"])
 
 		# The "Props" child draws a primitive. No model record has its key.
 		if asset_key in _Const.SCENERY_PRIMITIVES:
@@ -380,7 +380,7 @@ func _on_art_arrived(asset_key: String) -> void:
 		var chunk: ChunkFile = _built[key]
 
 		for thing: Dictionary in chunk.objects:
-			if _Const.OBJECT_KIND_SCENERY.get(thing["kind"], "") == asset_key:
+			if TileTables.scenery_of(thing["kind"]) == asset_key:
 				_place_scenery(key)
 				break
 

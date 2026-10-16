@@ -1,0 +1,100 @@
+{
+	"colors": {
+		"cloth_grey": {
+			"color": "55565d"
+		},
+		"cloth_pale": {
+			"color": "dfdfda"
+		},
+		"cloth_red": {
+			"color": "8e1b1b"
+		},
+		"copper": {
+			"color": "b87333"
+		},
+		"copper_dark": {
+			"color": "7a4a22"
+		},
+		"gem": {
+			"color": "7fb3ff"
+		},
+		"generic": {
+			"color": "7a8894"
+		},
+		"gold": {
+			"color": "f0c674"
+		},
+		"hair_grey": {
+			"color": "d6d6dc"
+		},
+		"iron": {
+			"color": "7c8088"
+		},
+		"iron_dark": {
+			"color": "4d5058"
+		},
+		"leather_grey": {
+			"color": "77777c"
+		},
+		"leather_olive": {
+			"color": "6f6316"
+		},
+		"linen": {
+			"color": "ececf0"
+		},
+		"rust": {
+			"color": "9c5a35"
+		},
+		"shadow": {
+			"color": "2a2420"
+		},
+		"skin": {
+			"color": "e3b48c"
+		},
+		"steel": {
+			"color": "b9c6d2"
+		},
+		"stone": {
+			"color": "8a8f98"
+		},
+		"wood": {
+			"color": "6b4b32"
+		}
+	},
+	"finishes": {
+		"gem": {
+			"metalness": 0.2,
+			"roughness": 0.1
+		},
+		"matte": {
+			"metalness": 0.05,
+			"roughness": 0.85
+		},
+		"metal": {
+			"metalness": 0.65,
+			"roughness": 0.35
+		},
+		"panel": {
+			"metalness": 0.1,
+			"roughness": 0.4
+		}
+	},
+	"format": 1,
+	"roles": {
+		"belt": "cloth_red",
+		"boot_cuff": "leather_olive",
+		"boots": "leather_grey",
+		"cloth": "rust",
+		"detail": "gold",
+		"eyes": "shadow",
+		"gap": "shadow",
+		"hair": "hair_grey",
+		"leather": "wood",
+		"metal": "iron",
+		"shirt": "cloth_grey",
+		"skin": "skin",
+		"trim": "iron_dark",
+		"trousers": "cloth_pale",
+		"wristband": "linen"
+	}
+}

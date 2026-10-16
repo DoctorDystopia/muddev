@@ -26,6 +26,21 @@ SOURCES_DIR: str = os.path.join(ASSETS_DIR, "sources")
 # One model record for each served model: models/<family>/<asset_key>.toml.
 MODELS_DIR: str = os.path.join(ASSETS_DIR, "models")
 
+# The figure workbench writes the figure files (DESIGN-0014):
+#   figure/rigs/<body_type>.json   one rig
+#   figure/looks/<asset_key>.json  one worn look
+#   figure/clips/<source_id>.json  one clip list
+#   figure/palette.json            the palette.
+#
+# A clip list names the clips that the workbench takes from one source. The
+# palette gives each named color of a worn look its color.
+FIGURE_DIR: str = os.path.join(ASSETS_DIR, "figure")
+FIGURE_RIGS_DIR: str = os.path.join(FIGURE_DIR, "rigs")
+FIGURE_LOOKS_DIR: str = os.path.join(FIGURE_DIR, "looks")
+FIGURE_CLIPS_DIR: str = os.path.join(FIGURE_DIR, "clips")
+FIGURE_PALETTE_PATH: str = os.path.join(FIGURE_DIR, "palette.json")
+FIGURE_FILE_SUFFIX: str = ".json"
+
 # Scratch space for the build. Gitignored. Safe to delete at any time.
 BUILD_DIR: str = os.path.join(ASSETS_DIR, ".build")
 
@@ -41,6 +56,11 @@ BLENDER_SCRIPT: str = os.path.join(ASSETS_DIR, "pipeline", "blender_ingest.py")
 SERVED_DIR: str = os.path.join(
     GAME_DIR, "web", "static", "webclient", "models")
 CLIENT_MANIFEST_PATH: str = os.path.join(SERVED_DIR, "manifest.json")
+
+# The figure set: each rig, each worn look, and the palette in one served
+# file. The build writes it from FIGURE_RIGS_DIR, FIGURE_LOOKS_DIR, and
+# FIGURE_PALETTE_PATH (figure.py).
+FIGURE_SET_PATH: str = os.path.join(SERVED_DIR, "figure.json")
 CREDITS_MARKDOWN_PATH: str = os.path.join(SERVED_DIR, "CREDITS.md")
 CREDITS_JSON_PATH: str = os.path.join(SERVED_DIR, "credits.json")
 

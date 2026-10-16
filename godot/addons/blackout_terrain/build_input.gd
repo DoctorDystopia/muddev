@@ -14,7 +14,8 @@ extends RefCounted
 ## | Room | Drag a rectangle | Remove the walls in the rectangle |
 ## | Doorway | Click a wall edge | Put the wall back |
 ## | Level above | Click inside a room, or drag a rectangle | Set the tiles back to void |
-## | Stairs | Click a tile | Remove the pair |
+## | Ladder | Click a tile. R turns the next one | Remove the pair |
+## | Stairs | Click the tile at the foot. R turns the next one | Remove the pair |
 ## | Roof | Click inside a room, or drag a rectangle | Remove the roof |
 ## | Wall style | Drag the brush ring over walls | Paint the default style |
 ## | Decor | Click a tile, again and again. R turns the next one | Remove the decor on the tile |
@@ -27,7 +28,9 @@ extends RefCounted
 ## into the options: the tile of the wall slab under the mouse, else the
 ## tile of the ground ([method TerrainPicking.wall_hit]). While the Roof tool is on, R and Shift+R turn the ridge,
 ## and [ and ] step the pitch. While the Wall style tool is on, [ and ] step
-## the radius of the brush.
+## the radius of the brush. While the Decor, the Ladder, or the Stairs tool
+## is on, R and Shift+R turn the next one. The mark of a flight covers its
+## foot, its steps, and its landing.
 ##
 ## The Wall style brush paints as the mouse moves, as the Paint brushes do.
 ## The release puts the stroke in the history as one entry. Esc undoes the
@@ -49,13 +52,6 @@ extends RefCounted
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
-const COLOR_ADD := Color(0.3, 1.0, 0.45, 1.0)
-const COLOR_REMOVE := Color(1.0, 0.4, 0.3, 1.0)
-
-## The outline of a plan that a release builds, and of one that it refuses.
-const COLOR_OUTLINE := Color(0.3, 1.0, 0.45, 1.0)
-const COLOR_OUTLINE_REFUSED := Color(1.0, 0.25, 0.2, 1.0)
-
 ## The hint of each tool: the gesture and what Shift does.
 const _TOOL_HINTS := {
 	BuildPanel.Tool.WALL_LINE: "drag along tile edges. Shift removes walls",
@@ -63,7 +59,9 @@ const _TOOL_HINTS := {
 	BuildPanel.Tool.DOORWAY: "click a wall edge. Shift puts the wall back",
 	BuildPanel.Tool.LEVEL_ABOVE:
 		"click inside a room, or drag a rectangle. Shift sets it back to void",
-	BuildPanel.Tool.STAIRS: "click a tile. Shift removes the pair",
+	BuildPanel.Tool.LADDER: "click a tile. Shift removes the pair. R turns the next one",
+	BuildPanel.Tool.STAIRS: "click the tile at the foot. Shift removes the pair. "
+		+ "R turns the next one",
 	BuildPanel.Tool.ROOF: "click inside a room, or drag a rectangle. "
 		+ "Shift removes the roof. R turns. [ and ] step the pitch",
 	BuildPanel.Tool.WALL_STYLE: "drag over walls to paint their style. "
@@ -77,17 +75,21 @@ const _TOOL_HINTS := {
 		+ "Alt and a click replace the objects. Esc ends",
 }
 
-## The front edge of a tile at each rotation, as a wall bit. The front of an
-## object faces this edge, and the mark of the Decor tool shows it.
-const _FRONT_EDGES := [_Const.TILE_FLAG_WALL_NORTH, _Const.TILE_FLAG_WALL_EAST,
-	_Const.TILE_FLAG_WALL_SOUTH, _Const.TILE_FLAG_WALL_WEST]
-
 ## The tools that use the wall style of the options. The hint line names it.
 const _STYLE_TOOLS := [BuildPanel.Tool.WALL_LINE, BuildPanel.Tool.ROOM,
 	BuildPanel.Tool.WALL_STYLE]
 
-var world: TerrainWorld
-var panel: BuildPanel
+## The tools that place a climb pair.
+const _CLIMB_TOOLS := [BuildPanel.Tool.LADDER, BuildPanel.Tool.STAIRS]
+
+var world: TerrainWorld:
+	set(value):
+		world = value
+		templates.world = value
+var panel: BuildPanel:
+	set(value):
+		panel = value
+		templates.panel = value
 
 ## Put one finished edit in the editor history: `(edit, label) -> void`.
 var commit: Callable
@@ -117,6 +119,12 @@ var _target_of := []
 ## the edit grows while the mouse is down. Null when no stroke is on.
 var _stroke: TerrainEdit = null
 
+## The chunks that were unsaved before the stroke, as (cx, cy, plane) keys.
+## A cancel puts the chunks of the stroke back, and a chunk that was clean
+## before must be clean after, or the next save writes a file with no
+## change in it.
+var _dirty_before := {}
+
 ## The Select and the Place tools.
 var templates := TemplateInput.new()
 
@@ -126,11 +134,9 @@ func _init() -> void:
 	templates.say = func(text: String) -> void: _note = text
 
 
-## [member templates], with the world and the panel of this input.
+## [member templates]. The setters of [member world] and [member panel]
+## give it the same world and panel.
 func _templates() -> TemplateInput:
-	templates.world = world
-	templates.panel = panel
-
 	return templates
 
 
@@ -138,9 +144,16 @@ func _template_tool() -> bool:
 	return TemplateInput.handles(panel.current_tool())
 
 
-## "Save the selection as a template". Returns the status line.
+## "Save as template". Returns the status line.
 func save_template(template_key: String) -> String:
 	return _templates().save_template(template_key)
+
+
+## True when a template file with `template_key` exists, so a save would
+## replace it. The plugin asks first.
+func template_exists(template_key: String) -> bool:
+	return FileAccess.file_exists(StructureTemplate.path_for(_templates().directory(),
+		template_key))
 
 
 ## "Reload the templates": read the template directory again.
@@ -150,6 +163,28 @@ func reload_templates() -> void:
 
 func dragging() -> bool:
 	return _anchor != null
+
+
+## The unsaved chunks of every plane, as (cx, cy, plane) keys.
+func _dirty_keys() -> Dictionary:
+	var keys := {}
+	var sets: Dictionary = world.plane_sets()
+
+	for on_plane: int in sets:
+		for coord: Vector2i in sets[on_plane].dirty_coords():
+			keys[Vector3i(coord.x, coord.y, on_plane)] = true
+
+	return keys
+
+
+## Mark each chunk of `edit` clean again when it was clean before the
+## stroke. A replay back restores every value, but a write marks its chunk.
+func _clean_untouched(edit: TerrainEdit) -> void:
+	var sets: Dictionary = world.plane_sets()
+
+	for key: Vector3i in edit.chunk_keys():
+		if not _dirty_before.has(key) and sets.has(key.z):
+			sets[key.z].mark_clean(Vector2i(key.x, key.y))
 
 
 ## A choice of the Build tab changed. The plugin connects this to
@@ -163,11 +198,13 @@ func on_panel_changed() -> void:
 func cancel() -> void:
 	if _stroke != null:
 		_stroke.replay_planes(world.plane_sets(), false)
+		_clean_untouched(_stroke)
 		world.queue_rebuild(_stroke.chunk_keys())
 		_stroke = null
 
 	_anchor = null
 	_end = null
+	_target_of = []
 	_templates().cancel()
 	_refresh_marks()
 
@@ -208,6 +245,9 @@ func on_press(point: Variant, shift: bool, alt: bool, wall: Variant = null,
 
 	_shift = shift
 	_note = ""
+	# A new gesture finds its roof rectangle again. The walls can have
+	# changed since the last one: a doorway, an undo, a Shift Wall line.
+	_target_of = []
 
 	if _template_tool():
 		return _templates().on_press(point, shift, ctrl, alt)
@@ -222,13 +262,14 @@ func on_press(point: Variant, shift: bool, alt: bool, wall: Variant = null,
 	match panel.current_tool():
 		BuildPanel.Tool.DOORWAY:
 			_doorway(point)
-		BuildPanel.Tool.STAIRS:
-			_stairs(ChunkSet.tile_at(point))
+		BuildPanel.Tool.LADDER, BuildPanel.Tool.STAIRS:
+			_climb(ChunkSet.tile_at(point))
 		BuildPanel.Tool.DECOR:
 			_decor(ChunkSet.tile_at(point))
 		BuildPanel.Tool.WALL_STYLE:
 			_anchor = _drag_point(point)
 			_end = _anchor
+			_dirty_before = _dirty_keys()
 			_stroke = TerrainEdit.for_world(world)
 			_dab(point)
 		_:
@@ -292,9 +333,12 @@ func on_key(event: InputEventKey) -> bool:
 
 
 ## R, Shift+R, [, and ] while the Roof tool is on, [ and ] while the Wall
-## style tool is on, and R and Shift+R while the Decor tool is on. Returns
-## true when the tool uses the key. Any other tool leaves them to Godot.
+## style tool is on, and R and Shift+R while the Decor, the Ladder, or the
+## Stairs tool is on. Returns true when the tool uses the key. Any other tool
+## leaves them to Godot.
 func _on_tool_key(event: InputEventKey) -> bool:
+	var turn := -1 if event.shift_pressed else 1
+
 	match panel.current_tool():
 		BuildPanel.Tool.ROOF:
 			if not _on_roof_key(event):
@@ -306,7 +350,12 @@ func _on_tool_key(event: InputEventKey) -> bool:
 			if event.keycode != KEY_R:
 				return false
 
-			panel.turn_decor(-1 if event.shift_pressed else 1)
+			panel.turn_decor(turn)
+		BuildPanel.Tool.LADDER, BuildPanel.Tool.STAIRS:
+			if event.keycode != KEY_R:
+				return false
+
+			panel.turn_climb(turn)
 		_:
 			return false
 
@@ -367,6 +416,9 @@ func hint() -> String:
 	if panel.current_tool() == BuildPanel.Tool.DECOR:
 		line += "\nDecor: %s." % panel.decor_summary()
 
+	if panel.current_tool() in _CLIMB_TOOLS:
+		line += "\nClimb: %s." % panel.climb_summary()
+
 	var problem := _outline_problem()
 
 	if not problem.is_empty():
@@ -398,6 +450,11 @@ func readout() -> String:
 			panel.brush_radius(), world.plane]
 
 	var rect := drag_rect()
+
+	if panel.current_tool() == BuildPanel.Tool.LEVEL_ABOVE:
+		return "%d x %d tiles, floor on plane %d" % [rect.size.x, rect.size.y,
+			world.plane + 1]
+
 	var base := StructureTools.base_height(world.chunks,
 		StructureTools.rect_corners(rect), panel.room_options().base)
 
@@ -420,10 +477,7 @@ func _roof_readout() -> String:
 
 ## The rectangle of tiles between the anchor and the end of a drag.
 func drag_rect() -> Rect2i:
-	var low: Vector2i = Vector2i(_anchor).min(_end)
-	var high: Vector2i = Vector2i(_anchor).max(_end)
-
-	return Rect2i(low, high - low + Vector2i.ONE)
+	return StructureTools.rect_between(Vector2i(_anchor), Vector2i(_end))
 
 
 # ─── The tools ──────────────────────────────────────────────────────────────
@@ -440,7 +494,7 @@ func _wall_line() -> void:
 	var count := StructureTools.line_edges(_anchor, _end).size()
 
 	_finish(edit, StructureTools.wall_line(world.chunks, edit, _anchor, _end, _shift,
-		panel.wall_style()), "Wall line, %d edges" % count)
+		panel.wall_style(), world.chunks_on(world.plane - 1)), "Wall line, %d edges" % count)
 
 
 func _room() -> void:
@@ -484,14 +538,16 @@ func _doorway(point: Vector2) -> void:
 		"Doorway")
 
 
-func _stairs(tile: Vector2i) -> void:
+## A click places the climb pair of the options at `tile`, or with Shift
+## removes the pair there. The Ladder and the Stairs tools share it.
+func _climb(tile: Vector2i) -> void:
 	world.refresh_new_chunks()
 
 	var edit := TerrainEdit.for_world(world)
-	var problem := StructureTools.stairs(world.plane_sets(), edit, world.plane, tile,
-		panel.climb_kind(), panel.floor_name(), _shift)
+	var problem := StructureTools.climb(world.plane_sets(), edit, world.plane, tile,
+		panel.climb_kind(), panel.climb_turn(), panel.floor_name(), _shift)
 
-	_finish(edit, problem, "Stairs")
+	_finish(edit, problem, panel.tool_name())
 
 
 ## A click places the decor of the options on `tile`, or with Shift removes
@@ -571,7 +627,7 @@ func _shows_outline() -> bool:
 ## Draw the plan of the Roof tool, or hide the outline.
 func _refresh_outline() -> void:
 	var heights := {}
-	var color := COLOR_OUTLINE
+	var color := TerrainOverlay.mark("add")
 
 	if _shows_outline() and _roof_target()["problem"].is_empty():
 		var plan := StructureTools.roof_plan(world.plane_sets(), world.plane,
@@ -580,7 +636,7 @@ func _refresh_outline() -> void:
 		heights = plan["heights"]
 
 		if not plan["problem"].is_empty():
-			color = COLOR_OUTLINE_REFUSED
+			color = TerrainOverlay.mark("refused")
 
 	world.show_outline(heights, color)
 
@@ -678,11 +734,11 @@ func _refresh_marks() -> void:
 		_templates().refresh_marks()
 		return
 
-	var color := COLOR_REMOVE if _shift else COLOR_ADD
+	var color := TerrainOverlay.mark("remove" if _shift else "add")
 
 	# A refused roof marks its rectangle in the colour of its red outline.
 	if not _outline_problem().is_empty():
-		color = COLOR_OUTLINE_REFUSED
+		color = TerrainOverlay.mark("refused")
 
 	world.show_marks(_mark_paths(), color)
 	_refresh_outline()
@@ -718,6 +774,24 @@ func _mark_paths() -> Array:
 
 	# The Decor tool marks the edge that the front of the next decor faces.
 	if panel.current_tool() == BuildPanel.Tool.DECOR and not _shift:
-		paths.append(TerrainOverlay.edge_path(tile, _FRONT_EDGES[panel.decor_turn()]))
+		paths.append(TerrainOverlay.edge_path(tile, StructureTools.EDGES[panel.decor_turn()][0]))
+
+	if panel.current_tool() in _CLIMB_TOOLS and not _shift:
+		paths.append_array(_climb_paths(tile))
+
+	return paths
+
+
+## The marks of the next climb at `tile`: the edge that its front faces.
+## A flight also marks the tiles from its foot to its landing.
+func _climb_paths(tile: Vector2i) -> Array:
+	var kind := panel.climb_kind()
+	var turn := panel.climb_turn()
+	var paths := [TerrainOverlay.edge_path(tile, StructureTools.EDGES[turn][0])]
+
+	if TileTables.climb_run(kind) > 0:
+		var landing := ClimbRule.landing(tile, kind, turn, _Const.CLIMB_UP)
+
+		paths.append(TerrainOverlay.rect_path(StructureTools.rect_between(tile, landing)))
 
 	return paths

@@ -1,6 +1,7 @@
 [
 ["climb_landing", 11, 10, 0],
 ["climb_landing", 12, 10, 0],
+["climb_landing", 16, 10, 0],
 ["climb_landing", 10, 10, 1],
 ["object_unwalkable", 3, 3, 0],
 ["respawn_count", 1, 1, 0],
@@ -14,6 +15,7 @@
 ["unreachable", 50, 50, 0],
 ["unreachable", 56, 56, 0],
 ["unreachable", 12, 10, 1],
+["unreachable", 16, 10, 1],
 ["unreachable", 30, 30, 1],
 ["void_open", 30, 30, 1],
 ["wall_on_void", 31, 31, 1]

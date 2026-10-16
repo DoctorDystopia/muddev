@@ -20,6 +20,10 @@ var _failures := 0
 ## is the mistake that actually happens when transcribing a table.
 const BOX_TOLERANCE := 0.35
 
+## The most that a normal of a mesh differs from the normal that the
+## builder gave it. A mesh packs each normal into fewer bits.
+const NORMAL_LOSS := 0.01
+
 
 func _ready() -> void:
 	_the_table_was_actually_found()
@@ -36,6 +40,7 @@ func _ready() -> void:
 	_every_family_model_names_an_asset_key()
 	_a_family_with_no_model_says_so()
 	_art_redraws_the_entities_it_actually_draws()
+	_a_prism_is_a_tapered_block_with_flat_faces()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -82,6 +87,7 @@ func _every_part_is_well_formed() -> void:
 		FamilyShapes.SHAPE_BOX, FamilyShapes.SHAPE_SPHERE,
 		FamilyShapes.SHAPE_CYLINDER, FamilyShapes.SHAPE_CONE,
 		FamilyShapes.SHAPE_TORUS, FamilyShapes.SHAPE_FACETED,
+		FamilyShapes.SHAPE_PRISM,
 	]
 
 	for family: String in FamilyShapes.families():
@@ -136,6 +142,73 @@ func _every_family_fits_the_unit_box() -> void:
 			% [family, size.x, size.y, size.z])
 
 		node.free()
+
+
+## The prism of a low-poly figure (DESIGN-0014 section 16): its size, its
+## taper, its lean, and the one normal of each face.
+func _a_prism_is_a_tapered_block_with_flat_faces() -> void:
+	var size := Vector3(0.2, 0.4, 0.1)
+	var plain := {"shape": FamilyShapes.SHAPE_PRISM, "size": size, "segments": 4,
+		"color": MeshPalette.STEEL}
+	var block := _prism_mesh(plain)
+	var faces := block.get_faces()
+	var normals: PackedVector3Array = block.surface_get_arrays(0)[Mesh.ARRAY_NORMAL]
+	var flat := true
+
+	_expect(block.get_aabb().size.is_equal_approx(size),
+		"a prism with no top size is a block of its size: %s" % [block.get_aabb().size])
+	_expect(block.get_aabb().get_center().is_zero_approx(), "the middle of a prism is its origin")
+	# Four sides of two triangles, and two faces of four triangles.
+	_expect(faces.size() / 3 == 16, "a block of four sides has 16 triangles: %d" % (faces.size() / 3))
+
+	for corner in range(0, faces.size(), 3):
+		var face := (faces[corner + 2] - faces[corner]).cross(faces[corner + 1] - faces[corner])
+		var middle := (faces[corner] + faces[corner + 1] + faces[corner + 2]) / 3.0
+
+		# A mesh keeps each normal in a packed form, with a small loss.
+		for vertex in 3:
+			flat = flat and normals[corner + vertex].distance_to(face.normalized()) < NORMAL_LOSS
+
+		flat = flat and face.dot(middle) > 0.0
+
+	_expect(flat, "each triangle has one normal, and it points out of the prism")
+
+	var taper := plain.duplicate()
+
+	taper.merge({"top_width": 0.1, "top_depth": 0.0, "lean_x": 0.3})
+
+	var wedge := _prism_mesh(taper).get_aabb()
+
+	_expect(is_equal_approx(wedge.position.x, -0.1) and is_equal_approx(wedge.end.x, 0.35),
+		"the top face has its own width, and the lean moves it: %s" % [wedge])
+
+	var point := plain.duplicate()
+
+	point.merge({"top_width": 0.0, "top_depth": 0.0})
+	# The four triangles of the top face have no area.
+	_expect(_prism_mesh(point).get_faces().size() / 3 == 8,
+		"a prism that ends in a point has no top face")
+
+	var diamond := plain.duplicate()
+
+	diamond.merge({"diamond": true})
+
+	var corner_on_axis := false
+
+	for vertex: Vector3 in _prism_mesh(diamond).get_faces():
+		corner_on_axis = corner_on_axis or vertex.is_equal_approx(Vector3(0.1, -0.2, 0.0))
+
+	_expect(corner_on_axis and _prism_mesh(diamond).get_aabb().size.is_equal_approx(size),
+		"a diamond has a corner on each axis, and it keeps its size")
+
+
+func _prism_mesh(part: Dictionary) -> ArrayMesh:
+	var instance := MeshBuilder.build_part(part)
+	var mesh := instance.mesh as ArrayMesh
+
+	instance.free()
+
+	return mesh
 
 
 ## A family with no entry is not an error. The server is free to name one this

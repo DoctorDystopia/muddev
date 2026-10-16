@@ -3,7 +3,7 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/18/2026
 Description: The generated files beside the served models: the client
-             manifest, credits.json and CREDITS.md.
+             manifest, credits.json, CREDITS.md and figure.json.
 
              Nobody edits these by hand. The build writes them from the model
              records and the source records, and the check fails when the
@@ -20,12 +20,15 @@ Description: The generated files beside the served models: the client
              follows the work, so the Godot client shows credits.json in the
              Options pane. CREDITS.md is the same list for a person who reads
              the repository or the served tree.
+
+             THE FIGURE SET (figure.json) holds each rig and each worn look
+             of the figure workbench. figure.py renders it.
 """
 
 import json
 import os
 
-from assets.pipeline import licenses, paths, records, sources
+from assets.pipeline import figure, licenses, paths, records, sources
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -236,11 +239,12 @@ def render_all() -> dict:
 
     Exit/Returns:
         Returns {absolute path: file text}. Raises records.RecordError or
-        sources.SourceError for a bad record.
+        sources.SourceError for a bad record, and figure.FigureError for a
+        figure file that does not read.
 
     Module Globals:
         paths.CLIENT_MANIFEST_PATH, paths.CREDITS_JSON_PATH,
-        paths.CREDITS_MARKDOWN_PATH read.
+        paths.CREDITS_MARKDOWN_PATH, paths.FIGURE_SET_PATH read.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
@@ -251,10 +255,12 @@ def render_all() -> dict:
     manifest_text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
     credits_text = json.dumps(credits, indent=2, ensure_ascii=False) + "\n"
     markdown_text = render_markdown(credits)
+    figure_text = figure.render_figure_set()
 
     return {paths.CLIENT_MANIFEST_PATH: manifest_text,
             paths.CREDITS_JSON_PATH: credits_text,
-            paths.CREDITS_MARKDOWN_PATH: markdown_text}
+            paths.CREDITS_MARKDOWN_PATH: markdown_text,
+            paths.FIGURE_SET_PATH: figure_text}
 
 
 def write_all() -> list:

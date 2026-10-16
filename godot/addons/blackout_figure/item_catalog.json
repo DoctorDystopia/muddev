@@ -1,0 +1,519 @@
+{
+	"format": 1,
+	"items": [
+		{
+			"family": "weapon",
+			"key": "bit_blade",
+			"name": "bit-blade",
+			"slot": "main_hand",
+			"tier": 3,
+			"tool_type": "gadget"
+		},
+		{
+			"family": "weapon",
+			"key": "broken_bit_blade",
+			"name": "broken bit-blade",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "gadget"
+		},
+		{
+			"family": "crafting_material",
+			"key": "copper_arrow",
+			"name": "copper arrow",
+			"slot": "ammo",
+			"tier": 1,
+			"tool_type": "ammo"
+		},
+		{
+			"family": "crafting_tool",
+			"key": "copper_axe",
+			"name": "copper axe",
+			"slot": "main_hand",
+			"tier": 2,
+			"tool_type": "axe"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_battleaxe",
+			"name": "copper battleaxe",
+			"slot": "main_hand",
+			"tier": 2,
+			"tool_type": "battleaxe"
+		},
+		{
+			"family": "armor",
+			"key": "copper_boots",
+			"name": "copper boots",
+			"slot": "feet",
+			"tier": 2,
+			"tool_type": "boots"
+		},
+		{
+			"family": "armor",
+			"key": "copper_chainbody",
+			"name": "copper chainbody",
+			"slot": "body",
+			"tier": 2,
+			"tool_type": "chainbody"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_dagger",
+			"name": "copper dagger",
+			"slot": "main_hand",
+			"tier": 2,
+			"tool_type": "dagger"
+		},
+		{
+			"family": "armor",
+			"key": "copper_great_helm",
+			"name": "copper great helm",
+			"slot": "head",
+			"tier": 2,
+			"tool_type": "helmet"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_greatsword",
+			"name": "copper greatsword",
+			"slot": "two_hands",
+			"tier": 2,
+			"tool_type": "greatsword"
+		},
+		{
+			"family": "armor",
+			"key": "copper_hide_cape",
+			"name": "copper hide cape",
+			"slot": "back",
+			"tier": 2,
+			"tool_type": "cape"
+		},
+		{
+			"family": "armor",
+			"key": "copper_platelegs",
+			"name": "copper platelegs",
+			"slot": "legs",
+			"tier": 2,
+			"tool_type": "platelegs"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_scimitar",
+			"name": "copper scimitar",
+			"slot": "main_hand",
+			"tier": 2,
+			"tool_type": "scimitar"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_shortbow",
+			"name": "copper shortbow",
+			"slot": "two_hands",
+			"tier": 2,
+			"tool_type": "bow"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_shortsword",
+			"name": "copper shortsword",
+			"slot": "main_hand",
+			"tier": 2,
+			"tool_type": "shortsword"
+		},
+		{
+			"family": "weapon",
+			"key": "copper_spear",
+			"name": "copper spear",
+			"slot": "two_hands",
+			"tier": 2,
+			"tool_type": "spear"
+		},
+		{
+			"family": "armor",
+			"key": "copper_square_shield",
+			"name": "copper square shield",
+			"slot": "off_hand",
+			"tier": 2,
+			"tool_type": "square_shield"
+		},
+		{
+			"family": "jewellery",
+			"key": "glass_cannon_amulet",
+			"name": "Glass Cannon amulet",
+			"slot": "neck",
+			"tier": 0,
+			"tool_type": ""
+		},
+		{
+			"family": "crafting_tool",
+			"key": "hammer",
+			"name": "hammer",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "hammer"
+		},
+		{
+			"family": "weapon",
+			"key": "legendary_bit_blade",
+			"name": "0x7F",
+			"slot": "main_hand",
+			"tier": 12,
+			"tool_type": "gadget"
+		},
+		{
+			"family": "weapon",
+			"key": "malfunctioning_gizmo",
+			"name": "malfunctioning gizmo",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "gadget"
+		},
+		{
+			"family": "weapon",
+			"key": "mk2_bit_blade",
+			"name": "MK.II bit-blade",
+			"slot": "main_hand",
+			"tier": 6,
+			"tool_type": "gadget"
+		},
+		{
+			"family": "crafting_material",
+			"key": "rusty_scrap_arrow",
+			"name": "rusty scrap arrow",
+			"slot": "ammo",
+			"tier": 0,
+			"tool_type": "ammo"
+		},
+		{
+			"family": "crafting_tool",
+			"key": "rusty_scrap_axe",
+			"name": "rusty scrap axe",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "axe"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_battleaxe",
+			"name": "rusty scrap battleaxe",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "battleaxe"
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_boots",
+			"name": "rusty scrap boots",
+			"slot": "feet",
+			"tier": 0,
+			"tool_type": "boots"
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_chainbody",
+			"name": "rusty scrap chainbody",
+			"slot": "body",
+			"tier": 0,
+			"tool_type": "chainbody"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_dagger",
+			"name": "rusty scrap dagger",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "dagger"
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_great_helm",
+			"name": "rusty scrap great helm",
+			"slot": "head",
+			"tier": 0,
+			"tool_type": "helmet"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_greatsword",
+			"name": "rusty scrap greatsword",
+			"slot": "two_hands",
+			"tier": 0,
+			"tool_type": "greatsword"
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_hide_cape",
+			"name": "rusty scrap hide cape",
+			"slot": "back",
+			"tier": 0,
+			"tool_type": "cape"
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_platelegs",
+			"name": "rusty scrap platelegs",
+			"slot": "legs",
+			"tier": 0,
+			"tool_type": "platelegs"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_scimitar",
+			"name": "rusty scrap scimitar",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "scimitar"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_shortbow",
+			"name": "rusty scrap shortbow",
+			"slot": "two_hands",
+			"tier": 0,
+			"tool_type": "bow"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_shortsword",
+			"name": "rusty scrap shortsword",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "shortsword"
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_spear",
+			"name": "rusty scrap spear",
+			"slot": "two_hands",
+			"tier": 0,
+			"tool_type": "spear"
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_square_shield",
+			"name": "rusty scrap square shield",
+			"slot": "off_hand",
+			"tier": 0,
+			"tool_type": "square_shield"
+		},
+		{
+			"family": "crafting_material",
+			"key": "scrap_arrow",
+			"name": "scrap arrow",
+			"slot": "ammo",
+			"tier": 0,
+			"tool_type": "ammo"
+		},
+		{
+			"family": "crafting_tool",
+			"key": "scrap_axe",
+			"name": "scrap axe",
+			"slot": "main_hand",
+			"tier": 1,
+			"tool_type": "axe"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_battleaxe",
+			"name": "scrap battleaxe",
+			"slot": "main_hand",
+			"tier": 1,
+			"tool_type": "battleaxe"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_boots",
+			"name": "scrap boots",
+			"slot": "feet",
+			"tier": 1,
+			"tool_type": "boots"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_chainbody",
+			"name": "scrap chainbody",
+			"slot": "body",
+			"tier": 1,
+			"tool_type": "chainbody"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_dagger",
+			"name": "scrap dagger",
+			"slot": "main_hand",
+			"tier": 1,
+			"tool_type": "dagger"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_great_helm",
+			"name": "scrap great helm",
+			"slot": "head",
+			"tier": 1,
+			"tool_type": "helmet"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_greatsword",
+			"name": "scrap greatsword",
+			"slot": "two_hands",
+			"tier": 1,
+			"tool_type": "greatsword"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_hide_cape",
+			"name": "scrap hide cape",
+			"slot": "back",
+			"tier": 1,
+			"tool_type": "cape"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_platelegs",
+			"name": "scrap platelegs",
+			"slot": "legs",
+			"tier": 1,
+			"tool_type": "platelegs"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_scimitar",
+			"name": "scrap scimitar",
+			"slot": "main_hand",
+			"tier": 1,
+			"tool_type": "scimitar"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_shortbow",
+			"name": "scrap shortbow",
+			"slot": "two_hands",
+			"tier": 1,
+			"tool_type": "bow"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_shortsword",
+			"name": "scrap shortsword",
+			"slot": "main_hand",
+			"tier": 1,
+			"tool_type": "shortsword"
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_spear",
+			"name": "scrap spear",
+			"slot": "two_hands",
+			"tier": 1,
+			"tool_type": "spear"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_square_shield",
+			"name": "scrap square shield",
+			"slot": "off_hand",
+			"tier": 1,
+			"tool_type": "square_shield"
+		},
+		{
+			"family": "weapon",
+			"key": "toy_sword",
+			"name": "Toy Sword",
+			"slot": "main_hand",
+			"tier": 0,
+			"tool_type": "gadget"
+		}
+	],
+	"npcs": [],
+	"slots": [
+		{
+			"clears": [
+				"two_hands"
+			],
+			"key": "main_hand",
+			"label": "Main Hand"
+		},
+		{
+			"clears": [
+				"two_hands"
+			],
+			"key": "off_hand",
+			"label": "Off Hand"
+		},
+		{
+			"clears": [
+				"main_hand",
+				"off_hand"
+			],
+			"key": "two_hands",
+			"label": "Two Hands"
+		},
+		{
+			"clears": [],
+			"key": "head",
+			"label": "Head"
+		},
+		{
+			"clears": [],
+			"key": "body",
+			"label": "Body"
+		},
+		{
+			"clears": [],
+			"key": "legs",
+			"label": "Legs"
+		},
+		{
+			"clears": [],
+			"key": "feet",
+			"label": "Feet"
+		},
+		{
+			"clears": [],
+			"key": "back",
+			"label": "Back"
+		},
+		{
+			"clears": [],
+			"key": "neck",
+			"label": "Neck"
+		},
+		{
+			"clears": [],
+			"key": "main_hand_finger",
+			"label": "Main Hand Finger"
+		},
+		{
+			"clears": [],
+			"key": "off_hand_finger",
+			"label": "Off Hand Finger"
+		},
+		{
+			"clears": [],
+			"key": "ammo",
+			"label": "Ammo"
+		}
+	],
+	"tool_types": [
+		"ammo",
+		"axe",
+		"battleaxe",
+		"boots",
+		"bow",
+		"cape",
+		"chainbody",
+		"dagger",
+		"gadget",
+		"generic",
+		"greatsword",
+		"hammer",
+		"helmet",
+		"platelegs",
+		"scimitar",
+		"shortsword",
+		"spear",
+		"square_shield"
+	]
+}

@@ -1,0 +1,29 @@
+{
+	"format": 1,
+	"rows": [
+		{
+			"desc": "sand...everywhere.",
+			"key": "oasis",
+			"name": "Oasis",
+			"note": "The Oasis is the wastes of the Sahara"
+		},
+		{
+			"desc": "sand...everywhere.",
+			"key": "oasis_outskirts",
+			"name": "Oasis Outskirts",
+			"note": "The dunes around the Oasis."
+		},
+		{
+			"desc": "sand...everywhere.",
+			"key": "azm_plains",
+			"name": "Azm Plains",
+			"note": "The Azm plains."
+		},
+		{
+			"desc": "The small settlement of Al Wasta. I wonder where it gets its name...",
+			"key": "al_wasta",
+			"name": "Al Wasta",
+			"note": "the small settlement of Al Wasta"
+		}
+	]
+}

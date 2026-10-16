@@ -1,0 +1,534 @@
+{
+	"bones": [
+		{
+			"name": "Root",
+			"parent": "",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "Hips",
+			"parent": "Root",
+			"position": [
+				0.0,
+				0.75,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "Spine",
+			"parent": "Hips",
+			"position": [
+				0.0,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "Chest",
+			"parent": "Spine",
+			"position": [
+				0.0,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "UpperChest",
+			"parent": "Chest",
+			"position": [
+				0.0,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "Neck",
+			"parent": "UpperChest",
+			"position": [
+				0.0,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "Head",
+			"parent": "Neck",
+			"position": [
+				0.0,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "LeftShoulder",
+			"parent": "UpperChest",
+			"position": [
+				0.05,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.5,
+				0.5,
+				0.5,
+				-0.5
+			]
+		},
+		{
+			"name": "LeftUpperArm",
+			"parent": "LeftShoulder",
+			"position": [
+				0.0,
+				0.115,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				1.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "LeftLowerArm",
+			"parent": "LeftUpperArm",
+			"position": [
+				0.0,
+				0.195,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				-0.70711,
+				0.0,
+				0.70711
+			]
+		},
+		{
+			"name": "LeftHand",
+			"parent": "LeftLowerArm",
+			"position": [
+				0.0,
+				0.19,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.70711,
+				0.0,
+				0.70711
+			]
+		},
+		{
+			"name": "RightShoulder",
+			"parent": "UpperChest",
+			"position": [
+				-0.05,
+				0.1,
+				0.0
+			],
+			"rotation": [
+				0.5,
+				-0.5,
+				-0.5,
+				-0.5
+			]
+		},
+		{
+			"name": "RightUpperArm",
+			"parent": "RightShoulder",
+			"position": [
+				0.0,
+				0.115,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				1.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "RightLowerArm",
+			"parent": "RightUpperArm",
+			"position": [
+				0.0,
+				0.195,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.70711,
+				0.0,
+				0.70711
+			]
+		},
+		{
+			"name": "RightHand",
+			"parent": "RightLowerArm",
+			"position": [
+				0.0,
+				0.19,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				-0.70711,
+				0.0,
+				0.70711
+			]
+		},
+		{
+			"name": "LeftUpperLeg",
+			"parent": "Hips",
+			"position": [
+				0.1,
+				0.0,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				1.0,
+				0.0
+			]
+		},
+		{
+			"name": "LeftLowerLeg",
+			"parent": "LeftUpperLeg",
+			"position": [
+				0.0,
+				0.375,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				1.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "LeftFoot",
+			"parent": "LeftLowerLeg",
+			"position": [
+				0.0,
+				0.375,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.70711,
+				-0.70711,
+				0.0
+			]
+		},
+		{
+			"name": "LeftToes",
+			"parent": "LeftFoot",
+			"position": [
+				0.0,
+				0.15,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				1.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "RightUpperLeg",
+			"parent": "Hips",
+			"position": [
+				-0.1,
+				0.0,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				1.0,
+				0.0
+			]
+		},
+		{
+			"name": "RightLowerLeg",
+			"parent": "RightUpperLeg",
+			"position": [
+				0.0,
+				0.375,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				1.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "RightFoot",
+			"parent": "RightLowerLeg",
+			"position": [
+				0.0,
+				0.375,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.70711,
+				-0.70711,
+				0.0
+			]
+		},
+		{
+			"name": "RightToes",
+			"parent": "RightFoot",
+			"position": [
+				0.0,
+				0.15,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				1.0,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "hand_r",
+			"parent": "RightHand",
+			"position": [
+				0.0,
+				0.07,
+				0.0
+			],
+			"rotation": [
+				0.70711,
+				0.70711,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "hand_l",
+			"parent": "LeftHand",
+			"position": [
+				0.0,
+				0.07,
+				0.0
+			],
+			"rotation": [
+				0.70711,
+				-0.70711,
+				0.0,
+				0.0
+			]
+		},
+		{
+			"name": "head_top",
+			"parent": "Head",
+			"position": [
+				0.0,
+				0.14,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "back",
+			"parent": "UpperChest",
+			"position": [
+				0.0,
+				0.0,
+				-0.12
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "neck_front",
+			"parent": "Neck",
+			"position": [
+				0.0,
+				0.0,
+				0.07
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "finger_r",
+			"parent": "RightHand",
+			"position": [
+				0.0,
+				0.1,
+				0.02
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "finger_l",
+			"parent": "LeftHand",
+			"position": [
+				0.0,
+				0.1,
+				0.02
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		},
+		{
+			"name": "hip_r",
+			"parent": "Hips",
+			"position": [
+				-0.13,
+				0.0,
+				0.0
+			],
+			"rotation": [
+				0.0,
+				0.0,
+				0.0,
+				1.0
+			]
+		}
+	],
+	"format": 1,
+	"key": "body_1",
+	"regions": {
+		"arms": [
+			"LeftShoulder",
+			"LeftUpperArm",
+			"LeftLowerArm",
+			"RightShoulder",
+			"RightUpperArm",
+			"RightLowerArm"
+		],
+		"feet": [
+			"LeftFoot",
+			"LeftToes",
+			"RightFoot",
+			"RightToes"
+		],
+		"hair": [
+			"head_top"
+		],
+		"hands": [
+			"LeftHand",
+			"RightHand"
+		],
+		"head": [
+			"Neck",
+			"Head"
+		],
+		"legs": [
+			"LeftUpperLeg",
+			"LeftLowerLeg",
+			"RightUpperLeg",
+			"RightLowerLeg"
+		],
+		"torso": [
+			"Hips",
+			"Spine",
+			"Chest",
+			"UpperChest"
+		]
+	},
+	"slots": {
+		"ammo": "hip_r",
+		"back": "back",
+		"body": "UpperChest",
+		"feet": "RightFoot",
+		"head": "Head",
+		"legs": "Hips",
+		"main_hand": "hand_r",
+		"main_hand_finger": "finger_r",
+		"neck": "neck_front",
+		"off_hand": "hand_l",
+		"off_hand_finger": "finger_l",
+		"two_hands": "hand_r"
+	},
+	"sockets": [
+		"hand_r",
+		"hand_l",
+		"head_top",
+		"back",
+		"neck_front",
+		"finger_r",
+		"finger_l",
+		"hip_r"
+	]
+}

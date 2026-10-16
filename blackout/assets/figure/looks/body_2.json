@@ -1,0 +1,1294 @@
+{
+	"colors": {
+		"belt": "cloth_red",
+		"boot_cuff": "leather_olive",
+		"boots": "leather_grey",
+		"eyes": "shadow",
+		"hair": "hair_grey",
+		"shirt": "cloth_grey",
+		"skin": "skin",
+		"trousers": "cloth_pale",
+		"wristband": "linen"
+	},
+	"format": 1,
+	"key": "body_2",
+	"parts": [
+		{
+			"bone": "Hips",
+			"name": "hips",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "legs",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "trousers",
+					"offset": [
+						0.0,
+						-0.02,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.153,
+						0.14,
+						0.0945
+					],
+					"top_depth": 0.126,
+					"top_width": 0.1935
+				}
+			]
+		},
+		{
+			"bone": "Hips",
+			"name": "belt",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "torso",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "belt",
+					"offset": [
+						0.0,
+						0.0625,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.2016,
+						0.035,
+						0.1332
+					]
+				}
+			]
+		},
+		{
+			"bone": "Spine",
+			"name": "spine",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "torso",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "shirt",
+					"offset": [
+						0.0,
+						0.04,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.189,
+						0.14,
+						0.1215
+					],
+					"top_depth": 0.1395,
+					"top_width": 0.225
+				}
+			]
+		},
+		{
+			"bone": "Chest",
+			"name": "chest",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "torso",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "shirt",
+					"offset": [
+						0.0,
+						0.05,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.225,
+						0.12,
+						0.1395
+					],
+					"top_depth": 0.1548,
+					"top_width": 0.27
+				}
+			]
+		},
+		{
+			"bone": "UpperChest",
+			"name": "upper_chest",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "torso",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "shirt",
+					"offset": [
+						0.0,
+						0.0525,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.27,
+						0.125,
+						0.1548
+					],
+					"top_depth": 0.144,
+					"top_width": 0.297
+				},
+				{
+					"color": "shirt",
+					"offset": [
+						0.0,
+						0.135,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.297,
+						0.04,
+						0.144
+					],
+					"top_depth": 0.09,
+					"top_width": 0.117
+				}
+			]
+		},
+		{
+			"bone": "Neck",
+			"name": "neck",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "head",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.055,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0675,
+						0.11,
+						0.072
+					],
+					"top_depth": 0.0675,
+					"top_width": 0.063
+				}
+			]
+		},
+		{
+			"bone": "Head",
+			"name": "head",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "head",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"lean_z": -0.0108,
+					"offset": [
+						0.0,
+						0.0075,
+						0.0108
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.0765,
+						0.085,
+						0.09
+					],
+					"top_depth": 0.1485,
+					"top_width": 0.135
+				},
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.1,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.135,
+						0.1,
+						0.1485
+					],
+					"top_depth": 0.144,
+					"top_width": 0.126
+				},
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.1675,
+						0.0
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.126,
+						0.035,
+						0.144
+					],
+					"top_depth": 0.09,
+					"top_width": 0.072
+				},
+				{
+					"color": "skin",
+					"lean_z": -0.0018,
+					"offset": [
+						0.0,
+						0.0675,
+						0.0702
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0306,
+						0.045,
+						0.027
+					],
+					"top_depth": 0.0108,
+					"top_width": 0.0126
+				},
+				{
+					"color": "eyes",
+					"offset": [
+						0.0198,
+						0.095,
+						0.06625
+					],
+					"rotation": [
+						-1.5708,
+						-3.14159,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.018,
+						0.0245,
+						0.0108
+					]
+				},
+				{
+					"color": "eyes",
+					"offset": [
+						-0.0198,
+						0.095,
+						0.06625
+					],
+					"rotation": [
+						-1.5708,
+						-3.14159,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.018,
+						0.0245,
+						0.0108
+					]
+				},
+				{
+					"color": "hair",
+					"offset": [
+						0.0198,
+						0.112,
+						0.06675
+					],
+					"rotation": [
+						-1.5708,
+						-3.14159,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0234,
+						0.0255,
+						0.0072
+					]
+				},
+				{
+					"color": "hair",
+					"offset": [
+						-0.0198,
+						0.112,
+						0.06675
+					],
+					"rotation": [
+						-1.5708,
+						-3.14159,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0234,
+						0.0255,
+						0.0072
+					]
+				}
+			]
+		},
+		{
+			"bone": "head_top",
+			"name": "hair",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "hair",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "hair",
+					"lean_z": -0.0054,
+					"offset": [
+						0.0,
+						0.025,
+						-0.0126
+					],
+					"segments": 8,
+					"shape": "prism",
+					"size": [
+						0.1485,
+						0.08,
+						0.171
+					],
+					"top_depth": 0.108,
+					"top_width": 0.09
+				},
+				{
+					"color": "hair",
+					"lean_z": 0.009,
+					"offset": [
+						0.0,
+						-0.06,
+						-0.054
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.1125,
+						0.14,
+						0.054
+					],
+					"top_depth": 0.081,
+					"top_width": 0.1485
+				}
+			]
+		},
+		{
+			"bone": "LeftUpperArm",
+			"name": "sleeve_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "torso",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "shirt",
+					"offset": [
+						0.0,
+						0.0425,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						-1.5708,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.09,
+						0.125,
+						0.1215
+					],
+					"top_depth": 0.117,
+					"top_width": 0.1035
+				}
+			]
+		},
+		{
+			"bone": "RightUpperArm",
+			"name": "sleeve_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "torso",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "shirt",
+					"offset": [
+						0.0,
+						0.0425,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						1.5708,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.09,
+						0.125,
+						0.1215
+					],
+					"top_depth": 0.117,
+					"top_width": 0.1035
+				}
+			]
+		},
+		{
+			"bone": "LeftUpperArm",
+			"name": "upper_arm_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "arms",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.09763,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						-1.5708,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0765,
+						0.19525,
+						0.081
+					],
+					"top_depth": 0.072,
+					"top_width": 0.0675
+				}
+			]
+		},
+		{
+			"bone": "RightUpperArm",
+			"name": "upper_arm_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "arms",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.09763,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						1.5708,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0765,
+						0.19525,
+						0.081
+					],
+					"top_depth": 0.072,
+					"top_width": 0.0675
+				}
+			]
+		},
+		{
+			"bone": "LeftLowerArm",
+			"name": "lower_arm_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "arms",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.08525,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0792,
+						0.2005,
+						0.0828
+					],
+					"top_depth": 0.0558,
+					"top_width": 0.0522
+				},
+				{
+					"color": "wristband",
+					"offset": [
+						0.0,
+						0.154,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.063,
+						0.047,
+						0.0666
+					],
+					"top_depth": 0.063,
+					"top_width": 0.0594
+				}
+			]
+		},
+		{
+			"bone": "RightLowerArm",
+			"name": "lower_arm_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "arms",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.08525,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0792,
+						0.2005,
+						0.0828
+					],
+					"top_depth": 0.0558,
+					"top_width": 0.0522
+				},
+				{
+					"color": "wristband",
+					"offset": [
+						0.0,
+						0.154,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.063,
+						0.047,
+						0.0666
+					],
+					"top_depth": 0.063,
+					"top_width": 0.0594
+				}
+			]
+		},
+		{
+			"bone": "LeftHand",
+			"name": "hand_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "hands",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.02,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						-1.5708,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.036,
+						0.06,
+						0.0558
+					],
+					"top_depth": 0.072,
+					"top_width": 0.0414
+				},
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.0775,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						-1.5708,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0414,
+						0.055,
+						0.072
+					],
+					"top_depth": 0.0495,
+					"top_width": 0.0234
+				}
+			]
+		},
+		{
+			"bone": "RightHand",
+			"name": "hand_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "hands",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.02,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						1.5708,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.036,
+						0.06,
+						0.0558
+					],
+					"top_depth": 0.072,
+					"top_width": 0.0414
+				},
+				{
+					"color": "skin",
+					"offset": [
+						0.0,
+						0.0775,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						1.5708,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0414,
+						0.055,
+						0.072
+					],
+					"top_depth": 0.0495,
+					"top_width": 0.0234
+				}
+			]
+		},
+		{
+			"bone": "LeftUpperLeg",
+			"name": "upper_leg_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "legs",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "trousers",
+					"offset": [
+						0.0,
+						0.17063,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.1035,
+						0.40125,
+						0.1215
+					],
+					"top_depth": 0.0945,
+					"top_width": 0.0855
+				}
+			]
+		},
+		{
+			"bone": "RightUpperLeg",
+			"name": "upper_leg_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "legs",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "trousers",
+					"offset": [
+						0.0,
+						0.17063,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.1035,
+						0.40125,
+						0.1215
+					],
+					"top_depth": 0.0945,
+					"top_width": 0.0855
+				}
+			]
+		},
+		{
+			"bone": "LeftLowerLeg",
+			"name": "lower_leg_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "legs",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "trousers",
+					"offset": [
+						0.0,
+						0.08312,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						3.14159,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.09,
+						0.20625,
+						0.099
+					],
+					"top_depth": 0.081,
+					"top_width": 0.0765
+				}
+			]
+		},
+		{
+			"bone": "RightLowerLeg",
+			"name": "lower_leg_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "legs",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "trousers",
+					"offset": [
+						0.0,
+						0.08312,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						3.14159,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.09,
+						0.20625,
+						0.099
+					],
+					"top_depth": 0.081,
+					"top_width": 0.0765
+				}
+			]
+		},
+		{
+			"bone": "LeftLowerLeg",
+			"name": "boot_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "feet",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "boot_cuff",
+					"offset": [
+						0.0,
+						0.18875,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						3.14159,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.108,
+						0.065,
+						0.1152
+					],
+					"top_depth": 0.09,
+					"top_width": 0.0855
+				},
+				{
+					"color": "boots",
+					"offset": [
+						0.0,
+						0.28125,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						3.14159,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0765,
+						0.15,
+						0.081
+					],
+					"top_depth": 0.0765,
+					"top_width": 0.0675
+				}
+			]
+		},
+		{
+			"bone": "RightLowerLeg",
+			"name": "boot_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "feet",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "boot_cuff",
+					"offset": [
+						0.0,
+						0.18875,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						3.14159,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.108,
+						0.065,
+						0.1152
+					],
+					"top_depth": 0.09,
+					"top_width": 0.0855
+				},
+				{
+					"color": "boots",
+					"offset": [
+						0.0,
+						0.28125,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						3.14159,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.0765,
+						0.15,
+						0.081
+					],
+					"top_depth": 0.0765,
+					"top_width": 0.0675
+				}
+			]
+		},
+		{
+			"bone": "LeftFoot",
+			"name": "foot_l",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "feet",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "boots",
+					"lean_z": -0.0162,
+					"offset": [
+						0.0,
+						0.05375,
+						0.0324
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0792,
+						0.2175,
+						0.0648
+					],
+					"top_depth": 0.0324,
+					"top_width": 0.0675
+				}
+			]
+		},
+		{
+			"bone": "RightFoot",
+			"name": "foot_r",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "feet",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "boots",
+					"lean_z": -0.0162,
+					"offset": [
+						0.0,
+						0.05375,
+						0.0324
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0792,
+						0.2175,
+						0.0648
+					],
+					"top_depth": 0.0324,
+					"top_width": 0.0675
+				}
+			]
+		}
+	]
+}

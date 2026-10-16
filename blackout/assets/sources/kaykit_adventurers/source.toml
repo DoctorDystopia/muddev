@@ -1,0 +1,11 @@
+title     = "KayKit Character Pack: Adventurers 1.0 (the Knight)"
+author    = "Kay Lousberg"
+url       = "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0"
+site      = "github"
+license   = "CC0-1.0"
+retrieved = 2026-10-12
+notes     = "One file of the pack: Characters/gltf/Knight.glb, at commit 672074b. No model record uses it. The figure workbench takes clips from it (blackout/assets/figure/clips/kaykit_adventurers.json, DESIGN-0014 Phase W2). LICENSE.txt is the license file of the pack."
+
+[files]
+"Knight.glb" = "sha256:60428e3abc09ba83e595d256e3af8c5c976b46cdae599f0802fc82b4a3445168"
+"LICENSE.txt" = "sha256:ae322141814056dda0deea7540d74c41d87aee1da319977cd1bd84ee5a923629"

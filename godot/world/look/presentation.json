@@ -1,0 +1,122 @@
+{
+	"format": 1,
+	"models": {
+		"big_mutant": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 2.1,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"copper_pole": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.9,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"corpse_skeleton": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.0,
+			"turn": [
+				-90.0,
+				0.0,
+				0.0
+			]
+		},
+		"floating_eye": {
+			"offset": [
+				0.0,
+				0.16,
+				0.0
+			],
+			"scale": 1.0,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"heavy_machine_gun_clip": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 0.4,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"lone_android": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 2.0,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"metal_pole": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.6,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"mutant_giant": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.6,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"rusty_pole": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.6,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		}
+	}
+}

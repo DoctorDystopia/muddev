@@ -74,7 +74,9 @@ RULE_RESPAWN_COUNT: str = "respawn_count"
 RULE_SIGN_TEXT: str = "sign_text"
 
 # A void tile carries a wall bit. No wall draws on a void tile, and no walker
-# stands beside it. A Build tool or a hand edit left it there.
+# stands beside it. A Build tool or a hand edit left it there. A stairwell
+# tile is no finding: the wall of the upper room stands over the opening
+# (Nick, 10/16/2026).
 RULE_WALL_ON_VOID: str = "wall_on_void"
 
 # A pocket of walkable tiles that no walk from the respawn point reaches,
@@ -109,6 +111,14 @@ NOTE_RULES: tuple = (RULE_UNREACHABLE,)
 
 # The eight steps of a walker, as (dx, dy).
 _STEPS: tuple = tuple(tile_const.DIRECTION_OFFSETS.values())
+
+# The plane of the stairwell of each climb way, from the plane of the climb
+# object. A way up has its steps below the stairwell. A way down stands
+# beside it, on the landing.
+_WELL_PLANE_OFFSETS: dict = {
+    tile_const.CLIMB_UP: 1,
+    tile_const.CLIMB_DOWN: 0,
+}
 
 
 @dataclass(frozen=True, order=True)
@@ -145,7 +155,7 @@ def _walkable(grids: dict, plane: int, x: int, y: int) -> bool:
 
 
 def _check_object(grids: dict, plane: int, kind_key: str, x: int,
-                  y: int, text: str) -> list:
+                  y: int, rotation: int, text: str) -> list:
     """Return the findings of one placed object."""
     kind = object_kinds.OBJECT_KINDS.get(kind_key)
     where = f"{kind_key} at ({x}, {y}) plane {plane}"
@@ -173,20 +183,23 @@ def _check_object(grids: dict, plane: int, kind_key: str, x: int,
 
     for way in kind.climbs:
         landing = plane + tile_const.CLIMB_PLANE_STEPS[way]
+        target = object_kinds.climb_landing(kind, (x, y), rotation, way)
 
-        if not _walkable(grids, landing, x, y):
+        if not _walkable(grids, landing, *target):
             found.append(Finding(RULE_CLIMB_LANDING, plane, y, x,
                                  f"{where}: climb {way} lands on no open "
-                                 f"tile of plane {landing}"))
+                                 f"tile at {target} of plane {landing}"))
 
     return found
 
 
 def _floor_findings(floor: str, flags: int, plane: int, x: int,
-                    y: int) -> list:
+                    y: int, in_well: bool = False) -> list:
     """
     Return the findings of one tile by its floor: a void tile with no Blocked
-    flag or with a wall bit, and a roof tile with no Blocked flag.
+    flag or with a wall bit, and a roof tile with no Blocked flag. A
+    stairwell tile may carry a wall: the wall of the upper room stands over
+    the opening (Nick, 10/16/2026).
     """
     where = f"{floor} at ({x}, {y}) plane {plane}"
     blocked = flags & tile_const.FLAG_BLOCKED
@@ -197,7 +210,7 @@ def _floor_findings(floor: str, flags: int, plane: int, x: int,
             found.append(Finding(RULE_VOID_OPEN, plane, y, x,
                                  f"{where} is not Blocked"))
 
-        if flags & tile_const.FLAGS_WALLS:
+        if flags & tile_const.FLAGS_WALLS and not in_well:
             found.append(Finding(RULE_WALL_ON_VOID, plane, y, x,
                                  f"{where} carries a wall"))
 
@@ -208,19 +221,47 @@ def _floor_findings(floor: str, flags: int, plane: int, x: int,
     return found
 
 
-def _check_floors(chunk_file) -> list:
-    """Return the findings of _floor_findings for each tile of a file."""
+def _check_floors(chunk_file, wells: set) -> list:
+    """
+    Return the findings of _floor_findings for each tile of a file. `wells`
+    holds (plane, x, y) of each stairwell tile (`_stairwells`).
+    """
     size = tile_const.CHUNK_SIZE
     names = chunk_file.floor_names
+    plane = chunk_file.plane
     found = []
 
     for index, floor in enumerate(chunk_file.floors):
         x = chunk_file.cx * size + index % size
         y = chunk_file.cy * size + index // size
         found.extend(_floor_findings(names[floor], chunk_file.flags[index],
-                                     chunk_file.plane, x, y))
+                                     plane, x, y, (plane, x, y) in wells))
 
     return found
+
+
+def _stairwells(chunk_files: list) -> set:
+    """
+    Return (plane, x, y) of each stairwell tile: the tiles over the steps of
+    a flight (Nick, 10/16/2026). A way up gives them on the plane above it,
+    and a way down on its own plane. The GDScript twin is
+    `ClimbRule.stairwell_tiles`.
+    """
+    wells = set()
+
+    for chunk_file in chunk_files:
+        for kind_key, x, y, rotation in chunk_file.global_objects():
+            kind = object_kinds.OBJECT_KINDS.get(kind_key)
+
+            if kind is None:
+                continue
+
+            for way in kind.climbs:
+                plane = chunk_file.plane + _WELL_PLANE_OFFSETS[way]
+                wells.update((plane, *tile) for tile in object_kinds.flight_tiles(
+                    kind, (x, y), rotation, way))
+
+    return wells
 
 
 def _walkable_tiles(chunk_files: list) -> list:
@@ -248,14 +289,15 @@ def _links(chunk_files: list, grids: dict) -> dict:
     for chunk_file in chunk_files:
         plane = chunk_file.plane
 
-        for kind_key, x, y, _text in chunk_file.global_texts():
+        for kind_key, x, y, rotation in chunk_file.global_objects():
             kind = object_kinds.OBJECT_KINDS.get(kind_key)
 
             if kind is None:
                 continue
 
             ends = [(plane, *kind.target)] if kind.target else []
-            ends += [(plane + tile_const.CLIMB_PLANE_STEPS[way], x, y)
+            ends += [(plane + tile_const.CLIMB_PLANE_STEPS[way],
+                      *object_kinds.climb_landing(kind, (x, y), rotation, way))
                      for way in kind.climbs]
             links.setdefault((plane, x, y), []).extend(
                 end for end in ends if _walkable(grids, *end))
@@ -388,15 +430,18 @@ def check_world(chunk_files: list) -> list:
     """
     planes = {chunk_file.plane for chunk_file in chunk_files}
     grids = {plane: chunkfile.build_grid(chunk_files, plane) for plane in planes}
+    wells = _stairwells(chunk_files)
     found = []
     respawns = []
 
     for chunk_file in chunk_files:
-        found.extend(_check_floors(chunk_file))
+        found.extend(_check_floors(chunk_file, wells))
 
-        for kind_key, x, y, text in chunk_file.global_texts():
+        placed = zip(chunk_file.global_objects(), chunk_file.global_texts())
+
+        for (kind_key, x, y, rotation), (_kind, _x, _y, text) in placed:
             found.extend(_check_object(grids, chunk_file.plane, kind_key, x, y,
-                                       text))
+                                       rotation, text))
 
             if kind_key == object_kinds.RESPAWN_KIND:
                 respawns.append((chunk_file.plane, x, y))

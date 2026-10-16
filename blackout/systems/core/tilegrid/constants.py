@@ -89,6 +89,11 @@ HEIGHT_MAX: int = 32767
 # An object turns in quarter turns, 0 to 3, as an OSRS object does.
 ROTATION_COUNT: int = 4
 
+# The tile step that the front of an object faces at each rotation: north,
+# east, south, west. The turn is clockwise from above. A flight of stairs
+# runs this way.
+ROTATION_STEPS: tuple = ((0, 1), (1, 0), (0, -1), (-1, 0))
+
 # The attribute that holds the rotation of the chunk object that stood an
 # entity up. The tile sync writes it. The respawn queue keeps it. The
 # statefeed sends it as the facing of the entity. At 0 the entity faces north.
@@ -123,6 +128,14 @@ CHUNK_DIRECTORY: str = "world/chunks"
 STRUCTURE_DIRECTORY: str = "world/structures"
 STRUCTURE_FILE_SUFFIX: str = ".json"
 STRUCTURE_FORMAT_VERSION: int = 1
+
+# The table files, from the game directory (10/14/2026). One file holds the
+# rows of one table: `areas.json`, `floor_types.json`, `wall_styles.json`,
+# and `decor_kinds.json`. `world/table_file.py` reads them, and the Tables
+# tab of the terrain editor writes them.
+TABLE_DIRECTORY: str = "world/tables"
+TABLE_FILE_SUFFIX: str = ".json"
+TABLE_FORMAT_VERSION: int = 1
 
 # The tile sync stamp, from the game directory: a digest of each chunk file at
 # the last `sync_tile_objects.py --apply` (`syncstamp.py`). It describes the
@@ -180,14 +193,16 @@ OBJECT_TEXT_CATEGORY: str = OBJECT_CATEGORY_SIGN
 # `godot/world/terrain/prop_mesh_builder.gd` draws each one. The rotation of
 # the object turns the shape.
 #
-# A ladder and a flight of stairs rise one plane. The top of a climb that
-# only leads down is a hatch: a framed opening in the floor.
+# A ladder and a flight of stairs rise one plane. The top of a ladder is a
+# hatch: a framed opening in the floor. The top of a flight is two newel
+# posts at the edge of the stairwell.
 #
 # The crate, the table, and the lamp post are the first decor (DESIGN-0013
 # Phase S4). They let the Decor tool work before the art exists.
 SCENERY_LADDER: str = "ladder"
 SCENERY_STAIRS: str = "stairs"
 SCENERY_HATCH: str = "hatch"
+SCENERY_STAIRS_TOP: str = "stairs_top"
 SCENERY_CRATE: str = "crate"
 SCENERY_TABLE: str = "table"
 SCENERY_LAMP_POST: str = "lamp_post"
@@ -196,15 +211,21 @@ SCENERY_PRIMITIVES: tuple = (
     SCENERY_LADDER,
     SCENERY_STAIRS,
     SCENERY_HATCH,
+    SCENERY_STAIRS_TOP,
     SCENERY_CRATE,
     SCENERY_TABLE,
     SCENERY_LAMP_POST,
 )
 
 # ─── Climbing (Phase 7) ──────────────────────────────────────────────────────
-# A climb object (a ladder, stairs) moves a walker who stands on its tile to
-# the same tile one plane up or down (Nick, 09/26/2026). Each climb kind lists
-# its directions. The words are the words that a player types after `climb`.
+# A climb object (a ladder, stairs) moves a walker who stands on its tile one
+# plane up or down. Each climb kind lists its directions. The words are the
+# words that a player types after `climb`.
+#
+# A ladder lands on the same tile (Nick, 09/26/2026). A flight of stairs
+# runs over the tiles in front of its object, and lands on the tile past its
+# top step (Nick, 10/16/2026). `world/object_kinds.py` gives each climb kind
+# its run, and `object_kinds.climb_landing` owns the rule.
 CLIMB_UP: str = "up"
 CLIMB_DOWN: str = "down"
 
@@ -213,6 +234,11 @@ CLIMB_PLANE_STEPS: dict = {
     CLIMB_UP: 1,
     CLIMB_DOWN: -1,
 }
+
+# The tiles of one flight of stairs. The terrain editor puts a new plane 32
+# height steps up, which is two tiles of height. Thus three tiles of run give
+# a slope of about 34 degrees (Nick, 10/16/2026).
+STAIRS_RUN: int = 3
 
 # ─── Directions ──────────────────────────────────────────────────────────────
 # Y grows to the north, as on the xyzgrid maps. A name is the word a player

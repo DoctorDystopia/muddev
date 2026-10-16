@@ -138,7 +138,8 @@ class TileActionsTests(unittest.TestCase):
 
     def test_the_map_stays_small(self):
         """The own tile and at most eight steps. A far tile is the client's
-        TILE_WALK_TEMPLATE, never an entry here."""
+        TILE_WALK_TEMPLATE, never an entry here. Only a climb in the feed
+        radius adds more, and this world has none (`test_tile_planes`)."""
         actions = serializers.tile_actions(_room(*_START))
 
         self.assertLessEqual(len(actions), 9)

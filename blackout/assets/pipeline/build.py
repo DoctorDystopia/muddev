@@ -171,6 +171,7 @@ def _job(record, source, input_path, output_path) -> dict:
             "texture": texture, "fix": fix, "max_texture_edge": edge,
             "texture_format": record.texture_format,
             "animations": record.animations,
+            "color_roles": record.color_roles,
             "allowed_extensions": sorted(glb.GODOT_RUNTIME_EXTENSIONS)}
 
 

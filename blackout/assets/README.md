@@ -9,6 +9,7 @@ assets/
 ├── sources/<source_id>/                 one download, exactly as it arrived
 │   └── source.toml                      author, URL, license, file hashes
 ├── models/<family>/<asset_key>.toml     one served model = one model record
+├── figure/                              the rigs, the worn looks, the clip lists and the palette
 ├── pipeline/                            the build (python -m assets.pipeline)
 ├── build.lock.json                      what each served model was built from
 ├── package.json, package-lock.json      the Node half of the build
@@ -127,6 +128,89 @@ every exception on every run, and the credits box marks it as "License not
 confirmed". Two sources use an exception today: the OSRS player character and
 the shopkeeper robot. Replace both before a public release.
 
+## A source for clips
+
+A source can hold a rig with clips, and no model record. The figure
+workbench of the Godot project takes clips from it through a clip list:
+`figure/clips/<source_id>.json`. The file name is the source id.
+`godot/README.md` gives the steps.
+
+The same rules hold for such a source. Fetch it, fill in the source record,
+and seal it. The check counts a source that a clip list names as a used
+source. `test_figure_files.py` fails on a clip list whose source does not
+pass the license gate. `kaykit_adventurers` is the first one.
+
+## A figure model
+
+A figure model is a model whose nodes are parts of a figure: a helm, a
+chainbody, a head of hair. Nick makes it in a modeler, over the reference
+body that the figure workbench exports. `godot/README.md` gives those steps.
+
+One command does steps 1 to 4 of "Add a model" for such a file, with no
+`TODO` to replace. The import button of the figure workbench runs it, so the
+author needs no terminal:
+
+```bash
+../evenv/Scripts/python.exe -m assets.pipeline figure-model items copper_great_helm C:/art/helm.glb --author "Nick Hobar"
+```
+
+| It writes | With |
+|---|---|
+| `sources/blackout_<model_key>/` | The file, as `<model_key>.<suffix>`, and a source record with `LicenseRef-Blackout-Owned` |
+| `models/<family>/<model_key>.toml` | `color_roles = true` |
+| The served `.glb`, `build.lock.json`, and the generated files | The build of that one model |
+
+The rules of the command:
+
+- **The family is `items` for the model of an item.** The inventory then
+  draws the same file. Use `figure` for a model that is no item: a body, a
+  head of hair.
+- **A second import of one key puts the new file in the place of the old
+  file.** The source of an import is art of Blackout, and a new export is a
+  new download. The model record keeps each line but its `file` line, so a
+  `[fix]` stays.
+- **It refuses a key that another model record has**, as a file name or as
+  an alias. Take the key out of that record first.
+- **It refuses a source that is not `LicenseRef-Blackout-Owned`.** It never
+  writes over a download.
+- **The file must be in figure space:** the feet at the origin, +Y up, the
+  face to +Z. The figure workbench does not put a figure model in the unit
+  box.
+
+`[output] color_roles = true` keeps the name of each material. In a figure
+model, the name of a material is a color role of a worn look. The build
+joins two materials that differ in the name only, and this field stops
+that.
+
+## The figure set
+
+The figure workbench writes one file for each rig and for each worn look,
+into `figure/rigs/` and `figure/looks/`. It writes one palette file also,
+`figure/palette.json`: the color and the finish of each named color that a
+worn look names. The build puts the content of each one into one served
+file, `figure.json`, beside the served models. The client makes one fetch
+for all of them, and a new worn look needs no client export.
+
+A tier is a worn look with a `base` and no part: the copper helm takes the
+parts of the scrap helm, and it names only its own colors. With no palette
+file, `figure.json` has an empty palette, and the client takes each named
+color from its own start table.
+
+`test_figure_files.py` checks the names of these files. Each color that a
+look or a color role names must be in the palette. No two bases name each
+other. Each stance of `godot/world/figure/stances.json` names a tool type
+of the server, and each clip of it is a clip file.
+
+`figure.json` is a generated file, as `manifest.json` is. Never edit it by
+hand. The check fails on a stale one. A save in the figure workbench writes
+it again. After a change to a figure file with another tool, run:
+
+```bash
+../evenv/Scripts/python.exe -m assets.pipeline figure-set
+```
+
+That command needs no Node, and it builds no model.
+
 ## The model record
 
 The file name is the asset key, and the directory is the family.
@@ -150,6 +234,7 @@ filter = "nearest"                        # for pixel art and palettes
 max_texture_edge = 256                    # below the family budget
 texture_format   = "webp"                 # for photo textures only
 animations       = false                  # drop every animation
+color_roles      = true                   # keep the name of each material
 ```
 
 | Field | Use it when |
@@ -161,6 +246,7 @@ animations       = false                  # drop every animation
 | `[fix] opaque` | A material says it is transparent, but the model must be solid |
 | `[fix] filter` | The texture is pixel art or a palette. `nearest` also resizes with the nearest kernel |
 | `[output] animations` | The file carries animations that the client does not play, and they put it over budget. `false` drops all of them. The model keeps its rest pose |
+| `[output] color_roles` | The model is a figure model. `true` keeps the name of each material. See "A figure model" |
 
 **A fix corrects the EXPORT.** A display choice is the client's own and stays
 in `ModelRegistry.PRESENTATION`. Two examples: the corpse skeleton lies on its
@@ -181,8 +267,8 @@ glTF and Godot 4 use these conventions. A model that faces another way needs a
 | 3. Validate | Khronos glTF Validator | An error stops the model |
 | 4. Budget | `pipeline/budgets.py` | Bytes, triangles and texture edge. Over budget stops the model |
 
-Then it writes `manifest.json`, `credits.json` and `CREDITS.md` beside the
-served models, and `build.lock.json` here. A second build with no change does
+Then it writes `manifest.json`, `credits.json`, `CREDITS.md` and
+`figure.json` beside the served models, and `build.lock.json` here. A second build with no change does
 no work. `--force` builds again anyway. The same inputs give the same bytes.
 
 The build removes a glTF extension that Godot cannot read at runtime, if the
@@ -215,7 +301,9 @@ runs it in the test suite. It fails on:
 - a served model that is stale, over budget, not from the build, or uses an
   extension that Godot cannot read
 - a `.glb` in the served tree that no record builds
-- a stale `manifest.json`, `credits.json` or `CREDITS.md`
+- a stale `manifest.json`, `credits.json`, `CREDITS.md` or `figure.json`
+- a rig or a worn look that is not valid JSON, or whose key is not its file
+  name
 
 It warns about each license exception, each source that no record uses, and
 each local source whose files are not on the machine.

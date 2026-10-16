@@ -141,28 +141,12 @@ func _follow_arm() -> void:
 		sun.directional_shadow_max_distance = depth.y
 
 
-## Write one look to the environment and the sun. The fog distances are not
-## here, because [method _follow_arm] owns them.
+## Write one look to the environment and the sun, through
+## [method AreaLook.apply_to], which the preview of the terrain editor uses
+## too. The fog distances are not here, because [method _follow_arm] owns
+## them.
 func _apply_look(look: Dictionary) -> void:
-	var fog_color: Color = look["fog_color"]
-
-	environment.fog_light_color = fog_color
-	environment.background_color = fog_color
-	environment.ambient_light_color = look["ambient_color"]
-	environment.ambient_light_energy = look["ambient_energy"]
-
+	AreaLook.apply_to(environment, sun, look)
 	# The fog distances change with the look too. Clear the record, so the
 	# next frame writes them.
 	_fog_written = Vector2(-1.0, -1.0)
-
-	if sun == null:
-		return
-
-	var elevation := deg_to_rad(float(look["sun_elevation"]))
-	var azimuth := deg_to_rad(float(look["sun_azimuth"]))
-
-	sun.light_color = look["sun_color"]
-	sun.light_energy = look["sun_energy"]
-	# A light shines down its own -Z. A negative pitch points it at the ground,
-	# and the yaw turns it about the vertical axis.
-	sun.rotation = Vector3(-elevation, azimuth, 0.0)

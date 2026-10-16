@@ -1,0 +1,56 @@
+{
+	"cliff": "5e5249",
+	"floors": {
+		"asphalt": "3a3c40",
+		"concrete": "9a9a94",
+		"dirt": "8a6a4a",
+		"grass": "6f8a4a",
+		"gravel": "8d8a82",
+		"roof_concrete": "85847e",
+		"roof_sheet_metal": "7a6f66",
+		"roof_tile": "8e5a44",
+		"rubble": "6e6660",
+		"sand": "c2a06b",
+		"water_bed": "4f6a6e"
+	},
+	"format": 1,
+	"props": {
+		"crate": "7a5a3a",
+		"crate_lid": "5e4430",
+		"hatch": "2b2622",
+		"hatch_frame": "6b5a48",
+		"ladder": "8a5a36",
+		"lamp": "ffd27a",
+		"lamp_post": "3d4147",
+		"stairs": "8f8b82",
+		"table": "6f6b63"
+	},
+	"wall_top_lighten": 0.25,
+	"walls": {
+		"brick": {
+			"color": "8c4f3c",
+			"height": 24.0
+		},
+		"chain_link": {
+			"color": "8e9398",
+			"height": 18.0
+		},
+		"concrete": {
+			"color": "a3a098",
+			"height": 24.0
+		},
+		"plain": {
+			"color": "7b7870",
+			"height": 12.0
+		},
+		"rubble": {
+			"color": "6e6660",
+			"height": 6.0
+		},
+		"sheet_metal": {
+			"color": "6a7176",
+			"height": 20.0
+		}
+	},
+	"water": "3d6f86"
+}

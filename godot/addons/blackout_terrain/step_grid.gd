@@ -28,21 +28,21 @@ const STEPS: Array[Vector2i] = [Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, 0),
 	Vector2i(1, -1), Vector2i(0, -1), Vector2i(-1, -1), Vector2i(-1, 0),
 	Vector2i(-1, 1)]
 
-## The wall bit that stops a cardinal step out of a tile, by offset.
-const _WALL_LEAVING := {
-	Vector2i(0, 1): _Const.TILE_FLAG_WALL_NORTH,
-	Vector2i(1, 0): _Const.TILE_FLAG_WALL_EAST,
-	Vector2i(0, -1): _Const.TILE_FLAG_WALL_SOUTH,
-	Vector2i(-1, 0): _Const.TILE_FLAG_WALL_WEST,
-}
+## The wall bit that stops a cardinal step out of a tile, by offset, and
+## the bit of the tile across that stops a step into it. Both come from
+## [constant StructureTools.EDGES], the one owner of the four edges.
+static var _wall_leaving := _edge_bits(0)
+static var _wall_entering := _edge_bits(2)
 
-## The wall bit that stops a cardinal step into a tile, by offset.
-const _WALL_ENTERING := {
-	Vector2i(0, 1): _Const.TILE_FLAG_WALL_SOUTH,
-	Vector2i(1, 0): _Const.TILE_FLAG_WALL_WEST,
-	Vector2i(0, -1): _Const.TILE_FLAG_WALL_NORTH,
-	Vector2i(-1, 0): _Const.TILE_FLAG_WALL_EAST,
-}
+
+## Offset to the wall bit in column `column` of [constant StructureTools.EDGES].
+static func _edge_bits(column: int) -> Dictionary:
+	var bits := {}
+
+	for edge: Array in StructureTools.EDGES:
+		bits[edge[1]] = edge[column]
+
+	return bits
 
 var plane := 0
 
@@ -170,7 +170,7 @@ func can_step(start: Vector2i, end: Vector2i) -> bool:
 func _open_edge(from: Vector2i, to: Vector2i) -> bool:
 	var offset := to - from
 
-	if _flags[index_of(from)] & _WALL_LEAVING[offset]:
+	if _flags[index_of(from)] & _wall_leaving[offset]:
 		return false
 
-	return not _flags[index_of(to)] & _WALL_ENTERING[offset]
+	return not _flags[index_of(to)] & _wall_entering[offset]

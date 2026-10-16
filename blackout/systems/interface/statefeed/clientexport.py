@@ -53,8 +53,10 @@ import os as _os
 from systems.core.tick import constants as tick_const
 from systems.core.tilegrid import constants as tile_const
 from world import areas as area_table
+from world import decor_kinds as decor_table
 from world import floor_types as floor_table
 from world import object_kinds as kind_table
+from world import table_file
 from world import tile_checks
 from world import wall_styles as wall_table
 
@@ -354,6 +356,10 @@ _TILE_GRID_EXPORTS: tuple = (
     ("STRUCTURE_DIRECTORY", tile_const.STRUCTURE_DIRECTORY),
     ("STRUCTURE_FILE_SUFFIX", tile_const.STRUCTURE_FILE_SUFFIX),
     ("STRUCTURE_FORMAT_VERSION", tile_const.STRUCTURE_FORMAT_VERSION),
+    # The table files (10/14/2026). The terrain editor reads and writes them.
+    ("TILE_TABLE_DIRECTORY", tile_const.TABLE_DIRECTORY),
+    ("TILE_TABLE_FILE_SUFFIX", tile_const.TABLE_FILE_SUFFIX),
+    ("TILE_TABLE_FORMAT", tile_const.TABLE_FORMAT_VERSION),
     ("TILE_SYNC_STAMP_FILE", tile_const.SYNC_STAMP_FILE),
     ("CHUNK_STREAM_RADIUS", tile_const.STREAM_RADIUS_CHUNKS),
     ("TILE_WORLD_Z", tile_const.WORLD_Z),
@@ -381,6 +387,7 @@ _TILE_GRID_EXPORTS: tuple = (
     ("SCENERY_LADDER", tile_const.SCENERY_LADDER),
     ("SCENERY_STAIRS", tile_const.SCENERY_STAIRS),
     ("SCENERY_HATCH", tile_const.SCENERY_HATCH),
+    ("SCENERY_STAIRS_TOP", tile_const.SCENERY_STAIRS_TOP),
     ("SCENERY_CRATE", tile_const.SCENERY_CRATE),
     ("SCENERY_TABLE", tile_const.SCENERY_TABLE),
     ("SCENERY_LAMP_POST", tile_const.SCENERY_LAMP_POST),
@@ -438,6 +445,12 @@ _TILE_GRID_MAP_EXPORTS: tuple = (
     ("OBJECT_KIND_CLIMBS", tuple((key, kind.climbs)
                                  for key, kind in kind_table.OBJECT_KINDS.items()
                                  if kind.climbs)),
+    # The tiles of each flight of stairs. The client draws the flight over
+    # them, and the editor finds the landing (Nick, 10/16/2026).
+    ("OBJECT_KIND_CLIMB_RUNS", tuple((key, kind.run)
+                                     for key, kind in kind_table.OBJECT_KINDS.items()
+                                     if kind.run)),
+    ("CHUNK_ROTATION_STEPS", tuple(enumerate(tile_const.ROTATION_STEPS))),
     ("OBJECT_KIND_SCENERY", tuple((key, kind.scenery)
                                   for key, kind in kind_table.OBJECT_KINDS.items()
                                   if kind.scenery)),
@@ -446,10 +459,15 @@ _TILE_GRID_MAP_EXPORTS: tuple = (
                                   for key, kind in kind_table.OBJECT_KINDS.items()
                                   if kind.preview)),
     ("CLIMB_PLANE_STEPS", tuple(tile_const.CLIMB_PLANE_STEPS.items())),
-    # The height of a wall with nothing above it, in height steps, for each
-    # wall style. The client draws the wall at this height.
-    ("TILE_WALL_STYLE_HEIGHTS", tuple((key, style.height)
-                                      for key, style in wall_table.WALL_STYLES.items())),
+    # Each table file, and the fields of its rows in the order of the row
+    # class. The Tables tab of the terrain editor builds its form from it.
+    ("TILE_TABLE_FIELDS", tuple(
+        (module.TABLE_NAME, table_file.field_names(row_class))
+        for module, row_class in (
+            (area_table, area_table.Area),
+            (floor_table, floor_table.FloorType),
+            (wall_table, wall_table.WallStyle),
+            (decor_table, decor_table.DecorKind)))),
 )
 
 _LANGUAGE_GD: str = "gd"

@@ -18,8 +18,10 @@ Description: Check that the model records, the sources and the served tree
                  disagrees), over budget, not from the build, or that uses a
                  glTF extension Godot cannot read
                - a .glb in the served tree that no record builds
-               - a generated file (manifest, credits) that differs from a
-                 fresh render
+               - a generated file (manifest, credits, figure.json) that
+                 differs from a fresh render
+               - a rig or a worn look that is not valid JSON, or whose key
+                 is not its file name
 
              A WARNING does not fail the check, and the check prints it on
              every run, so it cannot be forgotten:
@@ -36,8 +38,8 @@ import hashlib
 import os
 from dataclasses import dataclass, field
 
-from assets.pipeline import (budgets, build, glb, outputs, paths, records,
-                             sources)
+from assets.pipeline import (budgets, build, figure, glb, outputs, paths,
+                             records, sources)
 
 
 # ─── Public constant definitions ─────────────────────────────────────────────
@@ -93,7 +95,7 @@ def _check_sources(report: CheckReport, used: set) -> dict:
     Purpose: Check every source record, and return the ones that load.
 
     Entry:
-        used holds the source ids that some record names.
+        used holds the source ids that a model record or a clip list names.
 
     Exit/Returns:
         Returns {source_id: Source} for each source that loads. Adds problems
@@ -143,10 +145,37 @@ def _check_sources(report: CheckReport, used: set) -> dict:
                                    % (source_id, line, source_id))
 
         if source_id not in used:
-            report.warnings.append("%s: no model record uses this source"
-                                   % source_id)
+            report.warnings.append("%s: no model record and no clip list "
+                                   "uses this source" % source_id)
 
     return loaded
+
+
+def _clip_list_sources() -> set:
+    """
+    Purpose: Name each source that a clip list of the figure workbench uses.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a set of source ids. A clip list is
+        figure/clips/<source_id>.json, so the file name is the source id.
+        With no clip directory, the set is empty.
+
+    Module Globals:
+        paths.FIGURE_CLIPS_DIR, paths.FIGURE_FILE_SUFFIX read.
+
+    Author: Nick Hobar
+    Creation date: 10/12/2026
+    """
+    if not os.path.isdir(paths.FIGURE_CLIPS_DIR):
+        return set()
+
+    suffix = paths.FIGURE_FILE_SUFFIX
+    names = os.listdir(paths.FIGURE_CLIPS_DIR)
+
+    return {name[:-len(suffix)] for name in names if name.endswith(suffix)}
 
 
 def _check_record_inputs(report, record, loaded) -> bool:
@@ -328,7 +357,8 @@ def run_check() -> CheckReport:
         1. Load the records. If one fails, report it and stop, because every
            later check reads the records.
         2. Check the sources, the inputs and the served file of each record.
-        3. Look for orphaned .glb files and stale generated files.
+        3. Look for orphaned .glb files and stale generated files. A figure
+           file that does not read is a problem of this step.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
@@ -345,6 +375,7 @@ def run_check() -> CheckReport:
         report.problems.append("no model records under assets/models/")
 
     used = {record.source_id for record in all_records}
+    used.update(_clip_list_sources())
     loaded = _check_sources(report, used)
     lock = build.read_lock()
 
@@ -356,7 +387,12 @@ def run_check() -> CheckReport:
 
     _check_orphans(report, all_records)
 
-    if report.ok:
+    if not report.ok:
+        return report
+
+    try:
         _check_generated(report)
+    except figure.FigureError as problem:
+        report.problems.append(str(problem))
 
     return report

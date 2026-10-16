@@ -38,8 +38,14 @@ const _WALL_SIDES := [
 
 
 ## The world position where the ray first meets the ground, or null.
+##
+## `tops` maps a tile to the world height of the top of the scenery on it
+## ([method PropMeshBuilder.pick_tops]). The ray meets that tile at that
+## height, as at a box over the whole tile. Thus a click on a high step of a
+## flight picks the tile of that step, not the ground past it. The editor
+## gives no tops: a brush reaches the ground under the steps.
 static func ray_hit(chunks: ChunkSet, origin: Vector3,
-		direction: Vector3) -> Variant:
+		direction: Vector3, tops: Dictionary = {}) -> Variant:
 	var ray := direction.normalized()
 	var previous := origin
 	var travelled := 0.0
@@ -48,10 +54,10 @@ static func ray_hit(chunks: ChunkSet, origin: Vector3,
 		travelled += MARCH_STEP
 
 		var point := origin + ray * travelled
-		var below := _is_below_ground(chunks, point)
+		var below := _is_below_ground(chunks, point, tops)
 
 		if below:
-			return _bisect(chunks, previous, point)
+			return _bisect(chunks, previous, point, tops)
 
 		previous = point
 
@@ -123,9 +129,11 @@ static func _rise(chunks: ChunkSet, above: ChunkSet, tile: Vector2i, at: Vector2
 		return WallMeshBuilder.DOWN_HEIGHT
 
 	var ground := chunks.height_at(at) * ChunkMeshBuilder.HEIGHT_STEP
+	var covered := above != null and above.has_tile(tile) \
+		and (above.get_floor(tile) != _Const.TILE_VOID_FLOOR
+			or ClimbRule.is_stairwell(chunks, above, tile))
 
-	if above != null and above.has_tile(tile) \
-			and above.get_floor(tile) != _Const.TILE_VOID_FLOOR:
+	if covered:
 		return maxf(above.height_at(at) * ChunkMeshBuilder.HEIGHT_STEP - ground,
 			WallMeshBuilder.MIN_HEIGHT)
 
@@ -144,20 +152,28 @@ static func _ground_y(chunks: ChunkSet, world: Vector3) -> float:
 	return height * ChunkMeshBuilder.HEIGHT_STEP
 
 
-static func _is_below_ground(chunks: ChunkSet, world: Vector3) -> bool:
+static func _is_below_ground(chunks: ChunkSet, world: Vector3,
+		tops: Dictionary = {}) -> bool:
 	var ground := _ground_y(chunks, world)
 
-	return not is_nan(ground) and world.y <= ground
+	if is_nan(ground):
+		return false
+
+	if not tops.is_empty():
+		ground = maxf(ground, tops.get(ChunkSet.tile_at(tile_point(world)), ground))
+
+	return world.y <= ground
 
 
-static func _bisect(chunks: ChunkSet, above: Vector3, below: Vector3) -> Vector3:
+static func _bisect(chunks: ChunkSet, above: Vector3, below: Vector3,
+		tops: Dictionary = {}) -> Vector3:
 	var high := above
 	var low := below
 
 	for round_index: int in BISECT_ROUNDS:
 		var middle := (high + low) * 0.5
 
-		if _is_below_ground(chunks, middle):
+		if _is_below_ground(chunks, middle, tops):
 			low = middle
 		else:
 			high = middle

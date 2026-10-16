@@ -24,11 +24,72 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 ## A radius under this still reaches the corners of the tile under the brush.
 const MIN_RADIUS := 0.75
 
+## The shapes of a brush. The radius of a circle is the radius of a square:
+## the half of its side.
+enum Shape { CIRCLE, SQUARE }
+
+## The names of [enum Shape], in its order.
+const SHAPE_NAMES := ["Circle", "Square"]
+
 
 ## World corner `corner` as a point in tile space. It is the southwest corner
 ## of world tile `corner`.
 static func corner_point(corner: Vector2i) -> Vector2:
 	return Vector2(corner.x - 0.5, corner.y - 0.5)
+
+
+## Every world corner under a brush of `shape` at `centre`.
+static func corners_in_brush(centre: Vector2, radius: float,
+		shape: int) -> Array[Vector2i]:
+	if shape == Shape.SQUARE:
+		return corners_in_square(centre, radius)
+
+	return corners_in_circle(centre, radius)
+
+
+## Every world tile under a brush of `shape` at `centre`.
+static func tiles_in_brush(centre: Vector2, radius: float,
+		shape: int) -> Array[Vector2i]:
+	if shape == Shape.SQUARE:
+		return tiles_in_square(centre, radius)
+
+	return tiles_in_circle(centre, radius)
+
+
+## The tiles of a square brush at `centre`. The side is `radius` * 2 tiles,
+## and one tile at least. The edges lie on tile edges. An odd side centres on
+## the tile under the brush, and an even side on the corner nearest to it.
+static func square_rect(centre: Vector2, radius: float) -> Rect2i:
+	var side := maxi(1, roundi(radius * 2.0))
+	var offset := side * 0.5 - 0.5
+	var low := ChunkSet.tile_at(centre - Vector2(offset, offset))
+
+	return Rect2i(low, Vector2i(side, side))
+
+
+## Every world corner of the tiles of [method square_rect]: the corners on
+## its outline and inside it.
+static func corners_in_square(centre: Vector2, radius: float) -> Array[Vector2i]:
+	var rect := square_rect(centre, radius)
+	var found: Array[Vector2i] = []
+
+	for y: int in range(rect.position.y, rect.end.y + 1):
+		for x: int in range(rect.position.x, rect.end.x + 1):
+			found.append(Vector2i(x, y))
+
+	return found
+
+
+## Every world tile of [method square_rect].
+static func tiles_in_square(centre: Vector2, radius: float) -> Array[Vector2i]:
+	var rect := square_rect(centre, radius)
+	var found: Array[Vector2i] = []
+
+	for y: int in range(rect.position.y, rect.end.y):
+		for x: int in range(rect.position.x, rect.end.x):
+			found.append(Vector2i(x, y))
+
+	return found
 
 
 ## Every world corner within `radius` of `centre`, a point in tile space.
@@ -68,26 +129,26 @@ static func tiles_in_circle(centre: Vector2, radius: float) -> Array[Vector2i]:
 	return found
 
 
-## Raise every corner in the circle by `amount` steps. A negative amount
+## Raise every corner under the brush by `amount` steps. A negative amount
 ## lowers it.
 static func raise(chunks: ChunkSet, centre: Vector2, radius: float,
-		amount: int) -> Dictionary:
+		amount: int, shape := Shape.CIRCLE) -> Dictionary:
 	var changes := {}
 
-	for corner: Vector2i in corners_in_circle(centre, radius):
+	for corner: Vector2i in corners_in_brush(centre, radius, shape):
 		if chunks.corner_is_editable(corner):
 			changes[corner] = chunks.get_corner(corner) + amount
 
 	return changes
 
 
-## Move every corner in the circle toward `target`, by at most `strength`
+## Move every corner under the brush toward `target`, by at most `strength`
 ## steps.
 static func flatten(chunks: ChunkSet, centre: Vector2, radius: float,
-		target: int, strength: int) -> Dictionary:
+		target: int, strength: int, shape := Shape.CIRCLE) -> Dictionary:
 	var changes := {}
 
-	for corner: Vector2i in corners_in_circle(centre, radius):
+	for corner: Vector2i in corners_in_brush(centre, radius, shape):
 		if chunks.corner_is_editable(corner):
 			var height := chunks.get_corner(corner)
 			var moved := _toward(height, target, strength)
@@ -98,13 +159,14 @@ static func flatten(chunks: ChunkSet, centre: Vector2, radius: float,
 	return changes
 
 
-## Set every corner in the circle to the rounded mean of the nine corners
+## Set every corner under the brush to the rounded mean of the nine corners
 ## around it. All reads happen before any write, so the order of the corners
 ## does not change the result.
-static func smooth(chunks: ChunkSet, centre: Vector2, radius: float) -> Dictionary:
+static func smooth(chunks: ChunkSet, centre: Vector2, radius: float,
+		shape := Shape.CIRCLE) -> Dictionary:
 	var changes := {}
 
-	for corner: Vector2i in corners_in_circle(centre, radius):
+	for corner: Vector2i in corners_in_brush(centre, radius, shape):
 		if not chunks.corner_is_editable(corner):
 			continue
 
@@ -168,13 +230,14 @@ static func noise_height(noise: Noise, corner: Vector2i, amplitude: int) -> int:
 	return roundi(value * amplitude)
 
 
-## Move every corner in the circle toward its noise height, by at most
+## Move every corner under the brush toward its noise height, by at most
 ## `strength` steps.
 static func noise_brush(chunks: ChunkSet, centre: Vector2, radius: float,
-		noise: Noise, amplitude: int, strength: int) -> Dictionary:
+		noise: Noise, amplitude: int, strength: int,
+		shape := Shape.CIRCLE) -> Dictionary:
 	var changes := {}
 
-	for corner: Vector2i in corners_in_circle(centre, radius):
+	for corner: Vector2i in corners_in_brush(centre, radius, shape):
 		if chunks.corner_is_editable(corner):
 			var height := chunks.get_corner(corner)
 			var target := noise_height(noise, corner, amplitude)
@@ -272,4 +335,4 @@ static func _touches_structure(chunks: ChunkSet, above: ChunkSet, corner: Vector
 ## True for a floor that a walker never stands on: the void, and a roof.
 static func _closes_tile(floor_name: String) -> bool:
 	return floor_name == _Const.TILE_VOID_FLOOR \
-		or _Const.TILE_ROOF_FLOOR_TYPES.has(floor_name)
+		or TileTables.is_roof(floor_name)

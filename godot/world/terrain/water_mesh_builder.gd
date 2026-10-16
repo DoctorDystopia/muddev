@@ -85,7 +85,7 @@ static func _add_tile(chunk: ChunkFile, lx: int, ly: int,
 	var nw := Vector3(west, y, north)
 	var ne := Vector3(east, y, north)
 	var amount := ChunkMeshBuilder.hash_unit(world_x, world_y, _SALT_SHADE) * 2.0 - 1.0
-	var color := FloorPalette.shade(FloorPalette.WATER_COLOR, amount)
+	var color := FloorPalette.shade(FloorPalette.water(), amount)
 
 	# Clockwise seen from above is the front in Godot.
 	for corner: Vector3 in [sw, nw, ne, sw, ne, se]:

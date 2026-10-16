@@ -18,18 +18,55 @@ const WALL_HEIGHT := 0.6
 ## The inset of a wall mark from the tile edge, in tiles.
 const WALL_INSET := 0.06
 
-const COLOR_BLOCKED := Color(0.9, 0.2, 0.2, 0.45)
-const COLOR_WATER := Color(0.2, 0.45, 0.95, 0.5)
-const COLOR_WALL := Color(1.0, 0.85, 0.2, 0.85)
-const COLOR_BORDER := Color(1.0, 1.0, 1.0, 0.6)
-const COLOR_LOCKED := Color(0.9, 0.25, 0.25, 0.9)
-const COLOR_RING := Color(0.2, 1.0, 0.8, 1.0)
+## The colour of each mark, by key. The Look tab of the editor can change
+## each one for the session ([method set_marks]), and [method mark] gives
+## the colour of the moment. These are the defaults.
+const MARK_DEFAULTS := {
+	"blocked": Color(0.9, 0.2, 0.2, 0.45),
+	"water": Color(0.2, 0.45, 0.95, 0.5),
+	"wall": Color(1.0, 0.85, 0.2, 0.85),
+	"border": Color(1.0, 1.0, 1.0, 0.6),
+	"locked": Color(0.9, 0.25, 0.25, 0.9),
+	"ring": Color(0.2, 1.0, 0.8, 1.0),
+	"add": Color(0.3, 1.0, 0.45, 1.0),
+	"remove": Color(1.0, 0.4, 0.3, 1.0),
+	"refused": Color(1.0, 0.25, 0.2, 1.0),
+	"warning": Color(1.0, 0.75, 0.2, 1.0),
+	"selection": Color(0.35, 0.8, 1.0, 1.0),
+	"beacon": Color(1.0, 0.3, 1.0),
+	"ghost": Color(0.45, 0.45, 0.5),
+}
+
+## What each mark key means, for the Look tab and the legend.
+const MARK_NAMES := {
+	"blocked": "Blocked tile",
+	"water": "Water tile",
+	"wall": "Wall",
+	"border": "Chunk border",
+	"locked": "Locked edge",
+	"ring": "Brush ring",
+	"add": "Build: add",
+	"remove": "Build: remove",
+	"refused": "Build: refused",
+	"warning": "Build: warning",
+	"selection": "Tile selection",
+	"beacon": "Selection beacon",
+	"ghost": "Ghost plane",
+}
+
+## The key of the colour of an object category in [method set_marks].
+const CATEGORY_KEY := "category:"
+
 const AREA_ALPHA := 0.35
+
+## The colours that the author changed: key to colour.
+static var _marks := {}
 
 ## The size of an object marker, in tiles.
 const MARKER_SIZE := 0.45
 
-## Object category to marker colour.
+## Object category to marker colour: the defaults. [method category_color]
+## gives the colour of the moment.
 const CATEGORY_COLORS := {
 	_Const.OBJECT_CATEGORY_FACILITY: Color("9d7bd8"),
 	_Const.OBJECT_CATEGORY_GATHERING: Color("7ac74f"),
@@ -51,6 +88,24 @@ const LINK_ARC_SEGMENTS := 16
 const LINK_STUB := 2.5
 
 const COLOR_UNKNOWN_KIND := Color(1.0, 0.0, 1.0)
+
+
+## The colour of the mark `key`: the author's, else the default.
+static func mark(key: String) -> Color:
+	return _marks.get(key, MARK_DEFAULTS.get(key, COLOR_UNKNOWN_KIND))
+
+
+## The colour of the marker of an object category: the author's, else the
+## default, else magenta for a category that nothing names.
+static func category_color(category: String) -> Color:
+	return _marks.get(CATEGORY_KEY + category,
+		CATEGORY_COLORS.get(category, COLOR_UNKNOWN_KIND))
+
+
+## Give the marks the colours of `colors`: mark key or category key to
+## colour. A key that is not there goes back to its default.
+static func set_marks(colors: Dictionary) -> void:
+	_marks = colors.duplicate()
 
 ## The number of segments in the brush ring.
 const RING_SEGMENTS := 48
@@ -118,9 +173,9 @@ static func flag_mesh(chunks: ChunkSet, chunk_coord: Vector2i) -> ArrayMesh:
 static func _add_flag_marks(tool: SurfaceTool, chunks: ChunkSet, tile: Vector2i,
 		flags: int) -> void:
 	if flags & _Const.TILE_FLAG_BLOCKED:
-		_add_tile_quad(tool, chunks, tile, COLOR_BLOCKED)
+		_add_tile_quad(tool, chunks, tile, mark("blocked"))
 	elif flags & _Const.TILE_FLAG_WATER:
-		_add_tile_quad(tool, chunks, tile, COLOR_WATER)
+		_add_tile_quad(tool, chunks, tile, mark("water"))
 
 	for wall: Array in _WALLS:
 		if flags & wall[0]:
@@ -176,7 +231,7 @@ static func _add_wall(tool: SurfaceTool, chunks: ChunkSet, tile: Vector2i,
 	var high_b := low_b + Vector3.UP * WALL_HEIGHT
 
 	for corner: Vector3 in [low_a, low_b, high_b, low_a, high_b, high_a]:
-		tool.set_color(COLOR_WALL)
+		tool.set_color(mark("wall"))
 		tool.add_vertex(corner)
 
 
@@ -242,10 +297,6 @@ static func _add_draped_line(tool: SurfaceTool, chunks: ChunkSet, a: Vector2,
 ## map. Corner (x, y) is the south-west
 ## corner of tile (x, y). The Roof tool draws its plan with it before the
 ## release.
-static func lattice_mesh(heights: Dictionary, color: Color) -> ArrayMesh:
-	return lattice_layers_mesh([heights], color)
-
-
 ## One lattice for each map of `layers`, in one mesh. The Place tool draws
 ## the planes of a template copy with it: one map for each plane.
 static func lattice_layers_mesh(layers: Array, color: Color) -> ArrayMesh:
@@ -298,8 +349,16 @@ static func edge_path(tile: Vector2i, bit: int) -> Array:
 	return []
 
 
-## The brush ring at `centre`, a point in tile space, as a line loop.
-static func ring_mesh(chunks: ChunkSet, centre: Vector2, radius: float) -> ArrayMesh:
+## The brush ring at `centre`, a point in tile space, as a line loop. A
+## square brush gives the outline of its tiles
+## ([method TerrainBrushes.square_rect]).
+static func ring_mesh(chunks: ChunkSet, centre: Vector2, radius: float,
+		shape := TerrainBrushes.Shape.CIRCLE) -> ArrayMesh:
+	if shape == TerrainBrushes.Shape.SQUARE:
+		var rect := TerrainBrushes.square_rect(centre, radius)
+
+		return path_mesh(chunks, [rect_path(rect)], mark("ring"))
+
 	var tool := SurfaceTool.new()
 	var reach := maxf(radius, 0.5)
 
@@ -311,9 +370,9 @@ static func ring_mesh(chunks: ChunkSet, centre: Vector2, radius: float) -> Array
 		var a := centre + Vector2(cos(angle_a), sin(angle_a)) * reach
 		var b := centre + Vector2(cos(angle_b), sin(angle_b)) * reach
 
-		tool.set_color(COLOR_RING)
+		tool.set_color(mark("ring"))
 		tool.add_vertex(ground_point(chunks, a, LIFT * 3.0))
-		tool.set_color(COLOR_RING)
+		tool.set_color(mark("ring"))
 		tool.add_vertex(ground_point(chunks, b, LIFT * 3.0))
 
 	return tool.commit()
@@ -328,8 +387,9 @@ static func has_link(kind: String) -> bool:
 
 ## The lines of every link of `linked` (`{tile, kind, rotation}` each). A
 ## transition draws an arc to its target when the target is loaded, and a
-## stub toward it when not. A climb draws a post up or down, as far as the
-## next plane starts ([constant TerrainWorld.NEW_PLANE_RISE]).
+## stub toward it when not. A climb draws a line up or down to its landing,
+## as far as the next plane starts ([constant TerrainWorld.NEW_PLANE_RISE]).
+## A ladder draws a post. A flight draws a slope over its steps.
 static func link_mesh(chunks: ChunkSet, linked: Array[Dictionary],
 		_plane: int) -> ArrayMesh:
 	var tool := SurfaceTool.new()
@@ -362,10 +422,9 @@ static func link_labels(chunks: ChunkSet, thing: Dictionary,
 
 	for way: String in _Const.OBJECT_KIND_CLIMBS.get(kind, []):
 		var step: int = _Const.CLIMB_PLANE_STEPS[way]
-		var top := start + Vector3.UP * _climb_height() * step
 
-		labels.append(_label("%s -> plane %d" % [way, plane + step], top,
-			kind_color(kind)))
+		labels.append(_label("%s -> plane %d" % [way, plane + step],
+			_climb_end(chunks, thing, way), kind_color(kind)))
 
 	return labels
 
@@ -382,11 +441,23 @@ static func _link_segments(chunks: ChunkSet, thing: Dictionary) -> Array:
 			Vector2i(target[0], target[1])))
 
 	for way: String in _Const.OBJECT_KIND_CLIMBS.get(kind, []):
-		var step: int = _Const.CLIMB_PLANE_STEPS[way]
-
-		segments.append([start, start + Vector3.UP * _climb_height() * step])
+		segments.append([start, _climb_end(chunks, thing, way)])
 
 	return segments
+
+
+## The end of the link of one climb way: over its landing, one plane rise
+## from the start. A ladder ends over its own tile. A flight ends over the
+## tile past its top step.
+static func _climb_end(chunks: ChunkSet, thing: Dictionary, way: String) -> Vector3:
+	var start := _link_start(chunks, thing["tile"])
+	var landing := ClimbRule.landing(thing["tile"], thing["kind"],
+		thing["rotation"], way)
+	var over := Vector3(landing.x * ChunkMeshBuilder.TILE_SIZE, start.y,
+		-landing.y * ChunkMeshBuilder.TILE_SIZE)
+	var step: int = _Const.CLIMB_PLANE_STEPS[way]
+
+	return over + Vector3.UP * _climb_height() * step
 
 
 static func _transition_segments(chunks: ChunkSet, tile: Vector2i,
@@ -439,6 +510,6 @@ static func _label(text: String, at: Vector3, color: Color) -> Label3D:
 
 ## The colour of the marker of an object kind.
 static func kind_color(kind: String) -> Color:
-	var category: String = _Const.OBJECT_KINDS.get(kind, "")
+	var category: String = TileTables.object_category(kind)
 
-	return CATEGORY_COLORS.get(category, COLOR_UNKNOWN_KIND)
+	return category_color(category)

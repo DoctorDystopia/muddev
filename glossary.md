@@ -183,6 +183,61 @@ model file is never a recipe.
 | served tree | `web/static/webclient/models/`, the files the client fetches | model tree, static models |
 | credits box | the box in the Godot client that the Options pane opens | credits pop-up, credits window |
 
+## Figures
+
+DESIGN-0014 named these on 10/12/2026. The figure workbench uses the first
+of them since Phase W1: figure, rig, socket, region, part, worn look, and
+shape list. Phase W2 added clip list, grip, and probe, and it uses clip.
+Phase W3 added item catalog, outfit, and outfit bar, and it uses slot shape
+and color role. The low-poly look of 10/12/2026 added prism. Phase W4 added
+figure space, figure model, reference body, hide list, fit, and figure set.
+Phase W5 (10/13/2026) added palette, named color, tier, base, stance table,
+clip set, and action, and it uses stance. Phase W6 (10/13/2026) added kit
+part, kit group, kit, budget, and budget line. It uses finding and note as
+the terrain checks do, for a figure file in place of a tile. The game does
+not draw a figure yet.
+
+| Use | For | Not |
+|---|---|---|
+| figure | a humanoid that the client builds from a rig, a body, and a worn record | avatar model, character mesh, doll |
+| figure workbench | the editor plugin and its scene that make rigs, worn looks, and stances (`godot/addons/blackout_figure/`) | character editor, gear editor, character creator |
+| rig | the bones, the sockets, the regions, and the slot table of one body type | skeleton file, armature |
+| socket | a bone of the rig that carries gear and no body part | attach point, mount, anchor |
+| region | a named group of bones whose body parts a worn item can hide | body group, geoset, body slot |
+| part | one rigid mesh on one bone of a figure | piece, segment, attachment |
+| worn look | the file that says how one asset key dresses a figure | attach data, gear config, item model |
+| worn record | the map from slot to asset key that the server sends for one character | appearance block, outfit payload |
+| shape list | a part made of plain shapes in the workbench, in the vocabulary of `FamilyShapes` | primitive (the scenery noun), proxy mesh |
+| slot shape | the worn look that a slot draws for an item with no worn look | placeholder, default model |
+| clip | one animation of the rig | anim, animation file, action |
+| stance | the clip set that a `tool_type` selects | animation set, weapon pose |
+| color role | the name of a surface that a worn look gives a color to | material slot, tint channel |
+| clip list | the file that names the clips that the figure workbench takes from one source (`blackout/assets/figure/clips/<source_id>.json`) | animation import config, retarget recipe |
+| grip | the rest rotation of a hand socket: a held item has its length along +Y of the socket | hand offset, weapon rotation |
+| probe | the test item that the clearance check of the figure workbench holds in each hand | test sword, dummy weapon |
+| item catalog | the generated file that gives the figure workbench each item with a slot, and each slot (`godot/addons/blackout_figure/item_catalog.json`) | item table, gear list, item export |
+| outfit | the worn record of the figure workbench: the item that each stand wears in each slot | loadout, preview gear, test outfit |
+| outfit bar | the part of the Figure dock with one cell for each slot of the outfit | slot bar, gear bar, paper doll |
+| prism | the shape of a shape list that is a tapered block with flat faces (`SHAPE_PRISM`). The bodies and the slot shapes use it | block, frustum, low-poly mesh |
+| figure space | the space of a figure and of a figure model: the feet at the origin, +Y up, the face to +Z | model space, rig space |
+| figure model | a served model whose nodes are parts of a figure, in figure space. Its record has `color_roles = true` | worn mesh, gear model, attachment model |
+| reference body | the `.glb` file of one figure in its rest pose. An author models a part over it | template body, base mesh, mannequin export |
+| hide list | the regions that one worn look hides on each other look of a figure (`hides`) | mask list, hidden slots |
+| fit | the place that a worn look gives one part on one body type only (`fit`) | override, body offset, variant |
+| figure set | the generated file that serves each rig, each worn look, and the palette to the client (`figure.json`) | figure bundle, look database |
+| palette | the file that gives each named color of a figure its color and its finish, and each color role its named color (`blackout/assets/figure/palette.json`) | color table, theme, swatch file |
+| named color | one entry of the palette: a name, a color, and a finish. A worn look gives a color role a named color | swatch, tint, material color |
+| tier | a worn look with a `base`: it draws the parts of that look, with its own colors | variant, recolor, skin |
+| base | the worn look whose parts a tier draws (`base`) | parent look, template look |
+| stance table | the file that gives each tool type its clip set (`godot/world/figure/stances.json`) | animation table, stance config |
+| clip set | the clip of each action, for one stance or for a figure with no stance | animation set, clip group |
+| action | what a figure does, as the key of one clip in a clip set: `idle`, `walk`, `run`, `attack` | animation state, move, pose name |
+| kit part | a worn look that is one choice of a character and no item: a hair shape, a head, a beard. Its file has a `kit` key | cosmetic, style, hair model |
+| kit group | the name that the kit parts of one choice share: `hair`, `beard`. A character has one kit part of each kit group, or none | kit slot, style category |
+| kit | the kit parts of one character: kit group -> the key of a kit part | appearance, style set, cosmetics |
+| budget | a limit that the author sets in the figure workbench: the triangles of a worn look or of a body, and the triangles and the draws of a dressed figure | cap, quota, poly limit |
+| budget line | the line of the Figure dock that gives the draws and the triangles of the dressed figure against the budget | cost line, status line, stats bar |
+
 ## Terrain
 
 DESIGN-0011 named these on 09/23/2026. "Tile" keeps its meaning from the
@@ -193,11 +248,17 @@ a room.
 |---|---|---|
 | tile grid | the world-wide grid of heights, floor types, and walk flags | heightmap, world grid, terrain grid |
 | chunk | a 64 x 64 part of the tile grid, stored in one chunk file | map square, region, sector |
+| look file | one JSON file under `godot/world/look/` that holds a look of the game, with a client table as its fallback (`LookFile`) | look table, theme file, style file |
+| fallback table | the client table of a look reader, for a key with no row in its look file. An example is `AreaLook.LOOKS`. A rename on the Tables tab renames its row too (`SourceTable`) | default table, backup table |
+| table file | one JSON file under `blackout/world/tables/` that holds the rows of one server table: the areas, the floor types, the wall styles, or the decor kinds. `world/table_file.py` reads it, and `TileTables` is its GDScript reader | data file, table JSON, registry file |
+| Tables tab | the tab of the terrain editor that adds, saves, renames, and removes a row of a table file (`tables_panel.gd`, `TableEdits`) | table editor, rows tab, database tab |
+| session file | the choices of an author between two sessions, outside the repo: `user://blackout_terrain_session.cfg` or `user://blackout_figure_session.cfg` | options file, settings file, preferences |
+| paint values strip | the Floor, Area, and Wall lists above the tabs of the terrain editor, which the Paint tab and the Build tab share | paint bar, value strip |
 | chunk file | the file that holds one chunk. The editor writes it, and the server reads it | map file, chunk data |
 | height step | the integer unit of a corner height | height unit, elevation level |
-| floor type | the named ground on a tile, for example `sand` | ground type, underlay, terrain |
+| floor type | the named ground on a tile, for example `sand`. A row of `world/tables/floor_types.json` | ground type, underlay, terrain |
 | walk flag | a bit that limits movement on a tile or across an edge | collision flag, blocker |
-| area | a named part of the world. The client picks fog and light by area | zone, biome, region |
+| area | a named part of the world, a row of `world/tables/areas.json`. The client picks fog and light by area | zone, biome, region |
 | plane | one level in a stack, for example a second floor | floor, level, layer, storey |
 | tile room | a `TileRoom`: the Evennia room at a tile of the tile grid, which exists only while something stands there | sparse room, grid room |
 | pool | the empty tile rooms that wait for the next step (`TileRooms`) | cache, free list |
@@ -222,15 +283,20 @@ a room.
 | cliff face | a triangle of the ground mesh that is steeper than the walk limit. The client draws it in the cliff colour | rock face, slope face |
 | line of sight (short: sight) | a clear line for a shot between two tiles: no wall and no Blocked tile stops it (`tilegrid/sight.py`) | LOS, visibility, line of fire |
 | sweep | the pass that gives each empty tile room with no pin back to the pool (`tilegrid/sweep.py`) | reaper, cleanup, garbage collection |
-| climb | an object kind (a ladder or stairs) that moves a walker on its tile one plane up or down. Also the command that does it | ladder link, stair portal, teleport |
+| climb | an object kind (a ladder or stairs) that moves a walker on its tile one plane up or down. Also the command that does it. A ladder lands on the same tile. A flight lands past its top step | ladder link, stair portal, teleport |
+| flight | the steps of a staircase: the run of its climb kind, in tiles, in front of the foot (`STAIRS_RUN`). The steps are Blocked | staircase span, stair run |
+| foot | the tile of the way up of a flight. A walker stands on it to climb | base, bottom tile, stair start |
+| landing | the tile where a climb puts the walker. For a flight, the tile past the top step, where its twin stands | arrival, top tile, exit tile |
+| stairwell | the void tiles on the plane above a flight, so the floor above does not cover the steps. A wall under a stairwell tile rises to the plane above, and a wall on one is legal | stair hole, opening, shaft |
 | void | the floor type `void`: a tile with no floor, on plane 1 and up. It is always Blocked, and the client draws no ground on it | hole, gap, empty tile |
 | hide roofs | the client setting that hides every plane above the plane of the player while the player is under a roof | roof toggle, x-ray |
 | content check | one rule of `world/tile_checks.py` over the chunk files of a world, for example "a transition lands on an open tile". The terrain editor runs the same rules as "Check world" | validation, world lint, world test |
 | finding | one content check that fails, at one tile | error, issue, violation |
 | wall | a walk flag on one edge of a tile. No step and no shot crosses that edge. The client draws a slab on the edge (`WallMeshBuilder`) | fence, barrier, edge block |
 | scenery | the model that the client stands on the tile of an object kind with no spawner, for example the teleporter pad of a transition. The `scenery` of the kind row names it | prop, decoration, tile prop |
-| primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, `hatch`, and the decor shapes `crate`, `table`, and `lamp_post`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
-| hatch | the primitive on the tile of a climb that only leads down: a framed opening in the floor | trapdoor, stairwell, hole |
+| primitive | a scenery key with no model record yet, in `SCENERY_PRIMITIVES`: `ladder`, `stairs`, `hatch`, `stairs_top`, and the decor shapes `crate`, `table`, and `lamp_post`. `PropMeshBuilder` draws it as plain boxes until art arrives | placeholder, stub mesh, proxy |
+| hatch | the primitive on the tile of a ladder that only leads down: a framed opening in the floor | trapdoor, hole |
+| newel post | one of the two posts of the primitive `stairs_top`, on the landing of a flight, at the edge of the stairwell | banister, rail post |
 | rotation | the quarter turns of a placed object in a chunk file, 0 to 3, clockwise from north. The Turn action of the terrain editor adds one | orientation, heading, angle |
 | facing | the rotation of the chunk object that stood an entity up. The tile sync writes it on the entity (`FACING_ATTR`), and the statefeed sends it | direction, yaw, heading |
 | preview | the asset key and the family of the entity that an object kind stands up. Only the terrain editor reads it, to draw the model on the tile | editor model, thumbnail |
@@ -241,13 +307,13 @@ a room.
 | structure | a building or a wall that the Build tools make from walls, floor types, planes, climbs, and roofs (DESIGN-0013) | building object, WMO, prefab |
 | structure editor | the Build tab of the terrain editor | building editor, construction mode |
 | wall top | the top edge of a wall: the corners of the plane above where that tile has a floor, else the height of its wall style | wall cap, wall height |
-| wall style | the look of the walls of one tile, a row of `world/wall_styles.py`. It sets the colour and the height with nothing above. A chunk file of format 2 holds it | wall type, wall material, wall skin |
+| wall style | the look of the walls of one tile, a row of `world/tables/wall_styles.json`. It sets the colour and the height with nothing above. A chunk file of format 2 holds it | wall type, wall material, wall skin |
 | format 2 | the chunk file format with the wall style layer (`wall_names`, `walls`). The writer writes it only when a tile has a style other than `plain` | wall format, v2 |
 | note | a content check result that warns and does not fail a test. `unreachable` gives a note | warning, soft finding |
 | live check | the cheap content rules that the Build tab runs on the tiles of each gesture | instant check, validation |
 | hint line | the line at the bottom of the 3D view that names the Build tool, its gesture, each modifier, and each toggle | status bar, tooltip |
 | roof | the tiles of a plane above a structure that carry a roof floor type and the Blocked flag. The Roof tool shapes their corner heights | roof object, roof mesh, ceiling |
-| roof floor type | a floor type with `roof` set, in `world/floor_types.py`. The client draws no cliff colour on it | roof tile, roof material |
+| roof floor type | a floor type with `roof` set, in `world/tables/floor_types.json`. The client draws no cliff colour on it | roof tile, roof material |
 | roof shape | the rule that gives the corner heights of a roof: flat, shed, gable, hip, or pyramid (`roof_shapes.gd`) | roof type, roof style |
 | eave | the edge of a roof. The roof meets the walls one plane rise above the base, and the overhang hangs lower | roof edge, roof lip |
 | under a roof | a player whose tile has a floor that is not void on some plane above. "Hide roofs" hides the planes above only then | indoors, inside, covered |
@@ -261,7 +327,7 @@ a room.
 | clipboard | the template that Ctrl+C makes from the tile selection. It lives in the editor only, until "Save as template" writes it | buffer, copy store |
 | structure workbench | the terrain editor scene on scratch chunk files outside the repo, `structure_workbench.tscn`. The author builds a template there, away from the world (DESIGN-0013 Phase S6). The crafting facility keeps the word "workbench" | workbench, sandbox, prefab mode, test map |
 | protect structures | the Paint tab toggle that stops a sculpt from changing a corner of a tile with a wall or with a floor above it | lock walls, freeze buildings |
-| decor | an object kind of the category `decor`: scenery that pins no tile room and may stand on a Blocked tile. A tile holds one decor. The Decor tool of the Build tab places it (DESIGN-0013 section 6.5) | prop, furniture, clutter |
+| decor | an object kind of the category `decor`, a row of `world/tables/decor_kinds.json`: scenery that pins no tile room and may stand on a Blocked tile. A tile holds one decor. The Decor tool of the Build tab places it (DESIGN-0013 section 6.5) | prop, furniture, clutter |
 
 ## Maps
 

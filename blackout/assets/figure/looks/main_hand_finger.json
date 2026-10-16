@@ -1,0 +1,51 @@
+{
+	"colors": {
+		"metal": "gold"
+	},
+	"format": 1,
+	"key": "main_hand_finger",
+	"parts": [
+		{
+			"bone": "finger_r",
+			"name": "item",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "metal",
+					"offset": [
+						0.0,
+						-0.03,
+						-0.02
+					],
+					"rotation": [
+						0.0,
+						1.5708,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.052,
+						0.016,
+						0.086
+					]
+				}
+			]
+		}
+	]
+}

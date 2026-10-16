@@ -18,6 +18,9 @@ const PADDING := 8.0
 ## The offset of the readout from the cursor, in pixels.
 const READOUT_OFFSET := Vector2(18.0, -12.0)
 
+## The space around the readout, in pixels.
+const READOUT_PAD := Vector2(4.0, 2.0)
+
 const BAR_COLOR := Color(0.0, 0.0, 0.0, 0.65)
 const TEXT_COLOR := Color(1.0, 1.0, 1.0)
 const READOUT_COLOR := Color(0.6, 1.0, 0.7)
@@ -47,7 +50,7 @@ static func draw(overlay: Control, hint: String, readout: String, mouse: Vector2
 	var width := font.get_string_size(readout, HORIZONTAL_ALIGNMENT_LEFT, -1.0,
 		FONT_SIZE).x
 
-	overlay.draw_rect(Rect2(at - Vector2(4.0, font.get_ascent(FONT_SIZE) + 2.0),
-		Vector2(width + 8.0, line_height + 4.0)), BAR_COLOR)
+	overlay.draw_rect(Rect2(at - Vector2(READOUT_PAD.x, font.get_ascent(FONT_SIZE) + READOUT_PAD.y),
+		Vector2(width + READOUT_PAD.x * 2.0, line_height + READOUT_PAD.y * 2.0)), BAR_COLOR)
 	overlay.draw_string(font, at, readout, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE,
 		READOUT_COLOR)

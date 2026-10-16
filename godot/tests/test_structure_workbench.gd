@@ -20,6 +20,9 @@ extends Node
 ##    clear refuses such a node. No case calls the clear on the world: a
 ##    fault in the guard would then delete the world chunk files.
 ## 6. "Check world" there leaves out the rules of a whole world.
+## 7. The end of a preview of an area look gives the scene its own sky and
+##    sun back. The plugin ends the preview this way before each save
+##    (10/14/2026). The scene is not saved.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -40,6 +43,7 @@ func _ready() -> void:
 	_a_path_resolves_and_compares()
 	_the_workbench_builds_saves_and_clears()
 	_the_check_leaves_out_the_world_rules()
+	_a_preview_ends_with_the_own_sky()
 	_remove_scratch(_scratch)
 
 	if _failures > 0:
@@ -94,6 +98,28 @@ func _a_path_resolves_and_compares() -> void:
 			"Windows ignores the case")
 
 	world.free()
+
+
+func _a_preview_ends_with_the_own_sky() -> void:
+	var root := (load(WORKBENCH_SCENE) as PackedScene).instantiate()
+	var world := root.get_node("TerrainWorld") as TerrainWorld
+	var environment := (root.get_node("WorldEnvironment") as WorldEnvironment).environment
+	var sun := root.get_node("Sun") as DirectionalLight3D
+	var own := [environment.background_mode, environment.fog_enabled,
+		environment.ambient_light_color, sun.light_color, sun.rotation]
+	var look := AreaLook.look_for(AreaLook.LOOKS.keys()[0])
+
+	world.preview_look(look)
+	_expect(world.previewing() and environment.fog_enabled, "the preview turns the fog on")
+	_expect(world.previewed_look() == look, "the world gives the look of the preview")
+	_expect(sun.light_color == look["sun_color"], "the preview colours the sun")
+	world.preview_look({})
+	_expect(not world.previewing() and world.previewed_look().is_empty(),
+		"the preview ends")
+	_expect([environment.background_mode, environment.fog_enabled,
+		environment.ambient_light_color, sun.light_color, sun.rotation] == own,
+		"the end of the preview gives the scene its own sky and sun")
+	root.free()
 
 
 func _the_workbench_builds_saves_and_clears() -> void:

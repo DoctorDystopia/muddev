@@ -26,6 +26,9 @@ func _ready() -> void:
 	_a_ladder_and_stairs_rise_one_plane_and_a_hatch_stays_flat()
 	_a_ladder_stands_at_the_back_of_its_turned_tile()
 	_stairs_rise_toward_the_front()
+	_a_flight_runs_over_the_tiles_in_front_of_its_foot()
+	_the_top_of_a_flight_stands_at_its_back_edge()
+	_a_click_on_a_high_step_picks_that_step()
 	_a_shape_stands_on_the_ground_of_its_tile()
 	_every_face_points_along_its_normal()
 	_each_decor_kind_draws_its_primitive()
@@ -108,6 +111,59 @@ func _stairs_rise_toward_the_front() -> void:
 
 		_expect(Vector2(top.x, top.z).dot(Vector2(front.x, front.z)) > 0.25,
 			"at rotation %d the top step is at the front" % rotation)
+
+
+## Nick, 10/16/2026. The bottom step starts at the front edge of the tile of
+## the foot. The flight covers the run of its kind.
+func _a_flight_runs_over_the_tiles_in_front_of_its_foot() -> void:
+	var kind := _kind_of(_Const.SCENERY_STAIRS)
+	var run := TileTables.climb_run(kind)
+	var flight := _bounds(kind, 0)
+	var near := _CENTRE.z - ChunkMeshBuilder.TILE_SIZE * 0.5
+
+	_expect(run > 0, "the kind of the stairs primitive has a run")
+	_expect(is_equal_approx(flight.end.z, near),
+		"the bottom step starts at the front edge of the tile of the foot")
+	_expect(is_equal_approx(flight.position.z, near - run * ChunkMeshBuilder.TILE_SIZE),
+		"the top step ends %d tiles in front" % run)
+
+
+## A ray at the top step of a flight, from the south and above. The ground
+## alone gives a tile past the flight. With the step tops, the ray meets
+## the top step, and the server gives that tile the climb.
+func _a_click_on_a_high_step_picks_that_step() -> void:
+	var kind := _kind_of(_Const.SCENERY_STAIRS)
+	var chunk := ChunkFile.blank(0, 0)
+	var chunks := ChunkSet.new()
+
+	chunk.objects.append(_thing(kind, 0))
+	chunks.add(chunk)
+
+	var steps := ClimbRule.flight_tiles(_TILE, kind, 0, _Const.CLIMB_UP)
+	var top_step: Vector2i = steps[-1]
+	var aim := Vector3(top_step.x, PropMeshBuilder.CLIMB_HEIGHT - 0.1, -top_step.y)
+	var origin := aim + Vector3(0.0, 6.0, 6.0)
+	var tops := PropMeshBuilder.pick_tops(chunks)
+	var on_steps: Variant = TerrainPicking.ray_hit(chunks, origin, aim - origin, tops)
+	var on_ground: Variant = TerrainPicking.ray_hit(chunks, origin, aim - origin)
+
+	_expect(tops.size() == steps.size(), "each step tile has a top")
+	_expect(on_steps != null and ChunkSet.tile_at(TerrainPicking.tile_point(on_steps))
+		== top_step, "a ray at the top step picks the tile of the top step")
+	_expect(on_ground != null and ChunkSet.tile_at(TerrainPicking.tile_point(on_ground))
+		!= top_step, "the ground alone picks a tile past it")
+
+
+## The newel posts stand at the back edge: the side of the stairwell.
+func _the_top_of_a_flight_stands_at_its_back_edge() -> void:
+	var kind := _kind_of(_Const.SCENERY_STAIRS_TOP)
+
+	for rotation: int in _Const.CHUNK_ROTATION_COUNT:
+		var middle := _bounds(kind, rotation).get_center() - _CENTRE
+		var back := Basis(Vector3.UP, -rotation * PI * 0.5) * Vector3.BACK
+
+		_expect(Vector2(middle.x, middle.z).dot(Vector2(back.x, back.z)) > 0.4,
+			"at rotation %d the newel posts stand at the back edge" % rotation)
 
 
 func _a_shape_stands_on_the_ground_of_its_tile() -> void:

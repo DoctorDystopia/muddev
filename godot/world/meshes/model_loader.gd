@@ -480,10 +480,23 @@ func _fail_url(url: String, why: String) -> void:
 		_fail(asset_key, why)
 
 
-## Bytes to a scene, normalised into the unit box and oriented.
-func _build(asset_key: String, body: PackedByteArray) -> Node3D:
+## Bytes to a scene as the file has it: no unit box, no orientation, and no
+## wrapper. Null for bytes that are no glTF.
+##
+## [method _build] makes a model of the mesh ladder from this scene. A part
+## of a figure draws the scene as it is, because the space of its file is
+## the space of the figure ([FigureModels]).
+##
+## With `keep_root`, each root node of the file is a child of a new root.
+## Thus, the place of a node below the root is its place in the file. With
+## no `keep_root`, Godot makes the one root node of a file the root of the
+## scene.
+static func raw_scene(body: PackedByteArray, keep_root := false) -> Node3D:
 	var document := GLTFDocument.new()
 	var state := GLTFState.new()
+
+	if keep_root:
+		document.root_node_mode = GLTFDocument.ROOT_NODE_MODE_KEEP_ROOT
 
 	# Embed each texture as it is. The default EXTRACTS a texture to a file
 	# beside the source. A buffer has no source path, so Godot warns one time
@@ -506,6 +519,16 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 	# MeshInstance3D nodes and skips this.
 	if Engine.is_editor_hint():
 		_convert_importer_meshes(scene)
+
+	return scene
+
+
+## Bytes to a scene, normalised into the unit box and oriented.
+func _build(asset_key: String, body: PackedByteArray) -> Node3D:
+	var scene := raw_scene(body)
+
+	if scene == null:
+		return null
 
 	# WRAPPED, and this is load-bearing. The normalise below writes `scale` and
 	# `position`, and every caller then sets `scale` on what it was handed --

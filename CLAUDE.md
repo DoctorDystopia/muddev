@@ -69,7 +69,7 @@ Inside `blackout/`:
 | `analysis/` | Balance scripts that print tables and draw plots (`show_*.py`). NOT a game system, hence top-level. Nothing in the game imports it |
 | `items/` | `equipment/` and `inventory/` handlers + slot constants |
 | `typeclasses/` | Evennia typeclasses; `mixins.py` holds `CombatEntity` |
-| `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `npc_dialogues/`, `shop_defs/`, `maps/` |
+| `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `npc_dialogues/`, `shop_defs/`, `maps/`, and `tables/` (the table files of the tile grid) |
 | `commands/` | Command classes and cmdsets |
 | `assets/` | The 3D model pipeline: downloads, model records, the build. See "3D models" |
 | `web/` | Django site + statefeed-adjacent static assets (the served `.glb` model tree, which the pipeline writes) |
@@ -182,8 +182,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3460 tests, ~29 min,
-measured 10/09/2026):
+**Before a merge or a major change**, run the full suite (3560 tests, ~30 min,
+measured 10/16/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -512,6 +512,12 @@ nothing generates them.
 The asymmetry is deliberate. **A client key that names nothing is a bug. A
 server fact with no client entry is fine.** Each table documents a fallback,
 so new content must never require a client edit.
+
+Since 10/13/2026 the design of `AreaLook.LOOKS` and of `FloorPalette.COLORS`
+is a JSON look file under `godot/world/look/`, and the table is its
+fallback. The Look tab of the terrain editor writes the file, and the same
+guard reads the file as JSON (`LookFileTests`). The rule above holds for the
+file too.
 
 The guard found a bug at once. `SKILL_CATEGORY_COLORS` shipped with a `General`
 entry. `General` is the default category of `BaseSkill`, and no skill declares
@@ -930,6 +936,7 @@ Read the handoff before you continue this work.
 | Chunk file, GDScript | `godot/world/terrain/chunk_file.gd` |
 | World chunk files | `blackout/world/chunks/` |
 | Floor types, areas, object kinds | `world/floor_types.py`, `world/areas.py`, `world/object_kinds.py` |
+| The table files (10/14/2026): the rows of the areas, floor types, wall styles, and decor kinds, their two readers, the Tables tab, and the export from the editor | `blackout/world/tables/` with its README, `world/table_file.py`, `world/decor_kinds.py`, `godot/world/terrain/tile_tables.gd`, and `tables_panel.gd`, `table_edits.gd`, `source_table.gd`, `client_export.gd` in `godot/addons/blackout_terrain/` |
 | Chunk mesh, `surface_height`, the chunk set, picking | `godot/world/terrain/` |
 | The terrain editor | `godot/addons/blackout_terrain/` |
 | Spike measurements | `profiling/scenarios/tilegrid.py` |
@@ -948,13 +955,16 @@ Read the handoff before you continue this work.
 | Planes in the client, and "Hide roofs" | `godot/world/world_state.gd`, `godot/world/terrain/terrain_view.gd` |
 | The water surface | `godot/world/terrain/water_mesh_builder.gd` |
 | The walls, and the scenery of a chunk object | `godot/world/terrain/wall_mesh_builder.gd`, `terrain_view.gd`, `scenery` in `world/object_kinds.py` |
-| The primitives: ladder, stairs, hatch | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
+| The primitives: ladder, stairs, hatch, the top of a flight | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
+| Ladders and stairs (10/16/2026): the run of a flight, the landing past the top step, the stairwell, the click that climbs, and the Ladder and Stairs tools | `climb_landing` and `flight_tiles` in `world/object_kinds.py`, and their twin `godot/world/terrain/climb_rule.gd`. `STAIRS_RUN` and `ROTATION_STEPS` in `systems/core/tilegrid/constants.py`, `climb_target` in `world/tile_travel.py`, `_add_tile_world_climbs` in `systems/interface/statefeed/serializers.py`, `StructureTools.climb` |
 | The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
 | The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
 | The GDScript twin of the step rule, for the `unreachable` note | `godot/addons/blackout_terrain/step_grid.gd` |
 | The Build tab (DESIGN-0013): the tool rules, the room fill, the input, and the hint line | `structure_tools.gd`, `room_fill.gd`, `build_panel.gd`, `build_input.gd`, `tool_hint.gd` in `godot/addons/blackout_terrain/` |
 | Roofs (DESIGN-0013 S2): the roof shapes, the roof floor types, the under-roof rule, and the `roof_walkable` rule | `godot/addons/blackout_terrain/roof_shapes.gd`, `world/floor_types.py`, `TerrainView.under_roof` in `godot/world/terrain/terrain_view.gd`, `world/tile_checks.py` |
-| Wall styles (DESIGN-0013 S3): the style table, chunk file format 2, the wall colours, and the Wall style brush | `world/wall_styles.py`, `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, `godot/world/terrain/wall_palette.gd`, `paint_wall_style` in `structure_tools.gd` |
+| Wall styles (DESIGN-0013 S3): the style table, chunk file format 2, the wall colours and heights, and the Wall style brush | `world/wall_styles.py`, `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, `godot/world/look/terrain_palette.json` with `godot/world/terrain/wall_palette.gd` as the fallback, `paint_wall_style` in `structure_tools.gd` |
+| The look files (10/13/2026): the terrain palette, the area looks, the editor marks, and the Look tab | `godot/world/look/` (`look_file.gd`, `terrain_palette.gd`, the JSON files), `godot/world/area_look.gd`, `godot/addons/blackout_terrain/look_panel.gd`, `LookFileTests` in `test_client_constants.py` |
+| The session file of each editor: the choices of the author between sessions, outside the repo | `godot/addons/blackout_terrain/terrain_session.gd` (`user://blackout_terrain_session.cfg`), `FigureDock` (`user://blackout_figure_session.cfg`) |
 | Decor (DESIGN-0013 S4): the `decor` category, the pin rule, the check exemption, the decor primitives, and the Decor tool | `world/object_kinds.py` (`UNPINNED_KINDS`), `TilePlane` in `systems/core/tilegrid/world.py`, `world/tile_checks.py`, `godot/world/terrain/prop_mesh_builder.gd`, `StructureTools.decor` in `structure_tools.gd` |
 | Templates (DESIGN-0013 S5): the template file, the copy and its plan, the tile selection, the Select and Place tools, and "Protect structures" | `structure_template.gd`, `structure_place.gd`, `tile_selection.gd`, `template_input.gd`, `TerrainBrushes.protect` in `godot/addons/blackout_terrain/`, `blackout/world/structures/`, `world/tests/test_structure_templates.py` |
 | The structure workbench (DESIGN-0013 S6): the scene, the scratch directory, the clear, and the check without the world rules | `structure_workbench.tscn`, `TerrainWorld.writes_world` and `clear_workbench`, `TerrainChecks.for_workbench` in `godot/addons/blackout_terrain/` |
@@ -963,7 +973,7 @@ Read the handoff before you continue this work.
 | The walk feed (`blackout_walk`), with the run toggle | `systems/interface/statefeed/events.py`, `systems/gameplay/movement/walk.py` |
 | The minimap, and the world map with its feed and `worldmap` | `godot/scenes/minimap/`, `godot/scenes/worldmap/`, `systems/interface/statefeed/worldmap.py`, `world/tile_world_map.py` |
 
-Nine rules:
+Ten rules:
 
 - **A tile room stores no fact about its tile.** The pool moves a room to
   another tile. Thus, a name, a sign label, or a reference to "the room where
@@ -1002,6 +1012,14 @@ Nine rules:
   A click on the next tile sends `goto (x,y)`, not a direction word, so a run
   never moves it two tiles. A test moves the walkers with
   `walk.advance_all()` and calls `walk.forget_all()` in `tearDown`.
+- **A table that an author grows is a table file** (Nick, 10/14/2026). The
+  areas, the floor types, the wall styles, and the decor kinds are JSON in
+  `blackout/world/tables/`. The Tables tab of the terrain editor adds,
+  saves, renames, and removes a row. Then it runs the client export. The
+  editor reads the files through `TileTables`. The game reads the generated
+  constants, because it must read what its server reads. A test must not
+  name a row by its literal key. Derive the key from the table, so that a
+  rename on the tab breaks no test.
 
 ## The website
 

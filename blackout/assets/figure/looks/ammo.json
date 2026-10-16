@@ -1,0 +1,68 @@
+{
+	"colors": {
+		"leather": "wood",
+		"trim": "linen"
+	},
+	"format": 1,
+	"key": "ammo",
+	"parts": [
+		{
+			"bone": "hip_r",
+			"name": "item",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "leather",
+					"lean_z": -0.07,
+					"offset": [
+						-0.02,
+						0.0,
+						-0.03
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.06,
+						0.28,
+						0.06
+					],
+					"top_depth": 0.08,
+					"top_width": 0.08
+				},
+				{
+					"color": "trim",
+					"lean_z": -0.015,
+					"offset": [
+						-0.02,
+						0.17,
+						-0.1
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.05,
+						0.06,
+						0.05
+					],
+					"top_depth": 0.06,
+					"top_width": 0.06
+				}
+			]
+		}
+	]
+}

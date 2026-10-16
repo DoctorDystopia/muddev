@@ -402,9 +402,12 @@ async function build(jobPath) {
 
     await dropBlackEmission(document);
 
+    // dedup() joins two materials that differ in the name only. In a figure
+    // model the name of a material is a color role, so a record with
+    // `color_roles = true` keeps each name.
     await document.transform(
         prune({ keepAttributes: false, keepLeaves: false }),
-        dedup(),
+        dedup({ keepUniqueNames: job.color_roles === true }),
         weld(),
         unpartition(),
     );

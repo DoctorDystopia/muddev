@@ -1,0 +1,158 @@
+{
+  "a click selects the part of a tier": true,
+  "a free color leaves": true,
+  "a new color role": "generic",
+  "a new named color": [
+    true,
+    "brass"
+  ],
+  "a remove of a color that a look names": "1 look(s) name the color copper: copper_great_helm. Give each one another color first.",
+  "a remove of the look that a tier names": "1 look(s) take the parts of rusty_scrap_great_helm: copper_great_helm. Remove each one first, or copy a look into it.",
+  "copper in the palette after the drag": "d08848",
+  "copper_great_helm: lines of the file": 9,
+  "copper_great_helm: parts in the part editor": 0,
+  "copper_great_helm: status after the tier button": "Make copper_great_helm a tier of rusty_scrap_great_helm.",
+  "copper_great_helm: the color labels": [
+    "gap",
+    "* metal",
+    "* trim"
+  ],
+  "copper_great_helm: the cost": "24 part(s), 43 draw(s), 1016 triangle(s)",
+  "copper_great_helm: the figure shows, after": "look",
+  "copper_great_helm: the figure shows, before": "slot_shape",
+  "copper_great_helm: the file": "{\n\t\"base\": \"rusty_scrap_great_helm\",\n\t\"colors\": {\n\t\t\"metal\": \"copper\",\n\t\t\"trim\": \"copper_dark\"\n\t},\n\t\"format\": 1,\n\t\"key\": \"copper_great_helm\"\n}\n",
+  "copper_great_helm: the metal on the two stands": [
+    "b87333",
+    "b87333"
+  ],
+  "copper_great_helm: the note": "copper_great_helm is a tier of rusty_scrap_great_helm. It has the parts of that look, so select the row of that look to change a part.",
+  "copper_great_helm: the row": "copper great helm   head   worn look, a tier of rusty_scrap_great_helm",
+  "copper_great_helm: the trim on body_1": "7a4a22",
+  "dock status after the save": "Saved 6 figure file(s): looks/copper_great_helm.json, looks/head.json, looks/rusty_scrap_great_helm.json, looks/scrap_great_helm.json, palette.json, stances.json\nWrote the served figure.json again.",
+  "errors of the served figure set": [],
+  "hair parts of the body that show below the copper helm": [],
+  "lines of the slot shape file": 148,
+  "one undo brings the color of before the drag back": true,
+  "redo brings the stance back": true,
+  "redo gives it again": {
+    "metal": "copper",
+    "trim": "copper_dark"
+  },
+  "rows of the stance table": 4,
+  "rusty_scrap_great_helm: lines of the file": 8,
+  "rusty_scrap_great_helm: parts in the part editor": 0,
+  "rusty_scrap_great_helm: status after the tier button": "Make rusty_scrap_great_helm a tier of head.",
+  "rusty_scrap_great_helm: the color labels": [
+    "gap",
+    "* metal",
+    "trim"
+  ],
+  "rusty_scrap_great_helm: the cost": "24 part(s), 43 draw(s), 1016 triangle(s)",
+  "rusty_scrap_great_helm: the figure shows, after": "look",
+  "rusty_scrap_great_helm: the figure shows, before": "slot_shape",
+  "rusty_scrap_great_helm: the file": "{\n\t\"base\": \"head\",\n\t\"colors\": {\n\t\t\"metal\": \"rust\"\n\t},\n\t\"format\": 1,\n\t\"key\": \"rusty_scrap_great_helm\"\n}\n",
+  "rusty_scrap_great_helm: the metal on the two stands": [
+    "9c5a35",
+    "9c5a35"
+  ],
+  "rusty_scrap_great_helm: the note": "rusty_scrap_great_helm is a tier of head. It has the parts of that look, so select the row of that look to change a part.",
+  "rusty_scrap_great_helm: the row": "rusty scrap great helm   head   worn look, a tier of head",
+  "rusty_scrap_great_helm: the trim on body_1": "4d5058",
+  "scene save": 0,
+  "scrap_great_helm: lines of the file": 8,
+  "scrap_great_helm: parts in the part editor": 0,
+  "scrap_great_helm: status after the tier button": "Make scrap_great_helm a tier of head.",
+  "scrap_great_helm: the color labels": [
+    "gap",
+    "* metal",
+    "trim"
+  ],
+  "scrap_great_helm: the cost": "24 part(s), 43 draw(s), 1016 triangle(s)",
+  "scrap_great_helm: the figure shows, after": "look",
+  "scrap_great_helm: the figure shows, before": "slot_shape",
+  "scrap_great_helm: the file": "{\n\t\"base\": \"head\",\n\t\"colors\": {\n\t\t\"metal\": \"iron\"\n\t},\n\t\"format\": 1,\n\t\"key\": \"scrap_great_helm\"\n}\n",
+  "scrap_great_helm: the metal on the two stands": [
+    "7c8088",
+    "7c8088"
+  ],
+  "scrap_great_helm: the note": "scrap_great_helm is a tier of head. It has the parts of that look, so select the row of that look to change a part.",
+  "scrap_great_helm: the row": "scrap great helm   head   worn look, a tier of head",
+  "scrap_great_helm: the trim on body_1": "4d5058",
+  "status after the finish": "Set the finish of the color copper.",
+  "status after the new role": "Set the color of the color role glow.",
+  "status after the stance": "Set the clip of walk in the stance of greatsword.",
+  "store errors": [],
+  "the Colors tab: rows, role rows, rows of the character": [
+    20,
+    15,
+    9
+  ],
+  "the Gear tab goes to the row of the tier": "copper_great_helm",
+  "the body file stays": true,
+  "the colors of the character": {
+    "hair": "rust"
+  },
+  "the default clip set at the start": {
+    "idle": "idle",
+    "walk": "walk"
+  },
+  "the finish of copper in the file": "metal",
+  "the first choice of the walk list": "(of the default clip set: walk)",
+  "the gizmo moves the part of the tier": "(0.361673, 0.0, 0.0)",
+  "the hair after the colors go": "d6d6dc",
+  "the hair before": "d6d6dc",
+  "the hair box of the copper helm: ticked, and the author cannot change it": [
+    true,
+    true
+  ],
+  "the hair on the two stands": [
+    "9c5a35",
+    "9c5a35"
+  ],
+  "the look stays": true,
+  "the material cache of the builder is a table in the editor": true,
+  "the metal of the copper helm after the drag": "d08848",
+  "the metallic value of the copper helm": 0.649999976158142,
+  "the move is in the slot shape": true,
+  "the options file keeps the colors": {
+    "hair": "rust"
+  },
+  "the palette at the start": "20 color(s), 15 role(s)",
+  "the palette button with a palette": true,
+  "the palette file has the metal finish": true,
+  "the part follows on the other stand": true,
+  "the picker shows copper": "b87333",
+  "the play button plays": [
+    true,
+    "idle"
+  ],
+  "the row of copper after the drag": "copper   #d08848   matte",
+  "the row of the stance list": "greatsword  (has a stance)",
+  "the run button with no clip": true,
+  "the saved scene holds no skeleton": true,
+  "the served figure set has each tier": {
+    "copper_great_helm": true,
+    "rusty_scrap_great_helm": true,
+    "scrap_great_helm": true
+  },
+  "the served figure set has the palette": true,
+  "the stance file": "{\n\t\"default\": {\n\t\t\"idle\": \"idle\",\n\t\t\"walk\": \"walk\"\n\t},\n\t\"format\": 1,\n\t\"stances\": {\n\t\t\"greatsword\": {\n\t\t\t\"walk\": \"idle\"\n\t\t}\n\t}\n}\n",
+  "the stance list after the outfit holds a greatsword": "greatsword",
+  "the stance list keeps its choice": "greatsword",
+  "the stance note, after": "The outfit takes the stance of greatsword.",
+  "the stance note, before": "The outfit takes the default clip set.",
+  "the stance of a greatsword": {
+    "walk": "idle"
+  },
+  "the two tier files stay": true,
+  "the users line of copper": "copper: 1 look(s) name it (copper_great_helm). 0 color role(s) have it.",
+  "the workbench writes its repository": true,
+  "undo 1 did something": true,
+  "undo 2 did something": true,
+  "undo 3 did something": true,
+  "undo takes the stance away": true,
+  "undo takes the trim of the copper helm back": {
+    "metal": "copper"
+  },
+  "unsaved after the save": false
+}

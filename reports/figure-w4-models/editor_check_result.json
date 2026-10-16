@@ -1,0 +1,116 @@
+{
+  "a click selects the part on body_2": true,
+  "a row with no look has no hide list to change": true,
+  "an empty fit box takes the row away": true,
+  "body parts of body_1 that still show in a hidden region": [],
+  "body parts of body_2 that still show in a hidden region": [],
+  "cost with the chainbody": "33 part(s), 54 draw(s), 1344 triangle(s)",
+  "dock status after the save": "Saved 1 figure file(s): looks/scrap_chainbody.json\nWrote the served figure.json again.",
+  "hide boxes": 7,
+  "nodes of the reference body, parts of the body": [
+    24,
+    24
+  ],
+  "nodes that draw their model, on the two stands": 18,
+  "parts before and after the hide list": [
+    33,
+    23
+  ],
+  "parts before and after the import": [
+    24,
+    33
+  ],
+  "python": "C:/Users/NickR/AppData/Local/Temp/claude/C--Users-NickR-source-repos-muddev/cb409f5b-27e3-433e-98e4-03a9718f9928/scratchpad/w4/evenv/Scripts/python.exe",
+  "redo brings the look back": true,
+  "scene save": 0,
+  "seconds for the import": 0.614,
+  "status after the fit from the bone lengths": "6 part(s) have a fit on body_2, from the bone lengths of body_1.",
+  "status after the hide list": "Hide the region torso.",
+  "status after the import": "9 part(s) of scrap_chainbody come from the model scrap_chainbody, on the rig body_1: body_spine on Spine, body_chest on Chest, body_upper_chest on UpperChest, body_pauldron_l on LeftUpperArm, body_upper_arm_l on LeftUpperArm, body_pauldron_r on RightUpperArm, body_upper_arm_r on RightUpperArm, body_lower_arm_l on LeftLowerArm, body_lower_arm_r on RightLowerArm.",
+  "status after the reference body": "Wrote the reference body of body_1 to C:/Users/NickR/AppData/Local/Temp/claude/C--Users-NickR-source-repos-muddev/cb409f5b-27e3-433e-98e4-03a9718f9928/scratchpad/w4/reference_body_1.glb.",
+  "store errors": [],
+  "the art file is there": true,
+  "the bone of each part": {
+    "body_chest": "Chest",
+    "body_lower_arm_l": "LeftLowerArm",
+    "body_lower_arm_r": "RightLowerArm",
+    "body_pauldron_l": "LeftUpperArm",
+    "body_pauldron_r": "RightUpperArm",
+    "body_spine": "Spine",
+    "body_upper_arm_l": "LeftUpperArm",
+    "body_upper_arm_r": "RightUpperArm",
+    "body_upper_chest": "UpperChest"
+  },
+  "the boxes after the redo": [
+    "arms",
+    "torso"
+  ],
+  "the clip plays": true,
+  "the fit box is ticked for the fitted part": true,
+  "the fit rows of body_2": {
+    "body_lower_arm_l": [
+      1.0,
+      0.95,
+      1.0
+    ],
+    "body_lower_arm_r": [
+      1.0,
+      0.95,
+      1.0
+    ],
+    "body_pauldron_l": [
+      1.0,
+      0.95,
+      1.0
+    ],
+    "body_pauldron_r": [
+      1.0,
+      0.95,
+      1.0
+    ],
+    "body_upper_arm_l": [
+      1.0,
+      0.95,
+      1.0
+    ],
+    "body_upper_arm_r": [
+      1.0,
+      0.95,
+      1.0
+    ]
+  },
+  "the gizmo moves the part on body_2": "(0.0, 0.266518, 0.0)",
+  "the hide list of the look": [
+    "arms",
+    "torso"
+  ],
+  "the look is in the store": true,
+  "the model line": "Model scrap_chainbody, node body__spine. Color roles: metal.",
+  "the models of the look": [
+    "scrap_chainbody"
+  ],
+  "the move is in the fit row": true,
+  "the options file keeps the author": "Editor Check",
+  "the part keeps its place on body_1": true,
+  "the pipeline is there": true,
+  "the reference body is a file": true,
+  "the reference body reads as a model": true,
+  "the row draws": "slot_shape",
+  "the save box starts with": "reference_body_1.glb",
+  "the saved look file": 3948,
+  "the saved scene holds no skeleton": true,
+  "the served figure set has the look": true,
+  "the served model is a file": true,
+  "the stand shows the look of the item": "look",
+  "the two stands place the fitted part differently": true,
+  "the workbench writes its repository": true,
+  "undo brings the row back": true,
+  "undo of: ": true,
+  "undo of: Figure: hide the region arms": true,
+  "undo of: Translate": true,
+  "undo shows one region again": [
+    "arms"
+  ],
+  "undo takes the look away": true,
+  "unsaved after the save": false
+}

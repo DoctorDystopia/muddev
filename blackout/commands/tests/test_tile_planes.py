@@ -24,7 +24,9 @@ from systems.core.tilegrid.world import TileWorld, set_world
 from systems.gameplay.combat import reach
 from systems.gameplay.movement import walk
 from systems.interface.statefeed import neighbourhood
+from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import serializers
+from world import object_kinds
 from world import tile_travel
 
 
@@ -43,6 +45,18 @@ _CORRIDOR_END = (13, 10)
 
 # A ladder up whose landing on plane 1 is blocked.
 _DEAD_LADDER = (20, 20)
+
+# A flight of stairs that faces east (Nick, 10/16/2026). Its top stands on
+# the one open tile of plane 1 past its top step. The tile over its foot has
+# the Blocked flag, so a climb to the same tile cannot pass.
+_FLIGHT_FOOT = (30, 10)
+_FLIGHT_TURN = 1
+_FLIGHT_TOP = object_kinds.climb_landing(
+    object_kinds.OBJECT_KINDS["stairs_up"], _FLIGHT_FOOT, _FLIGHT_TURN,
+    tile_const.CLIMB_UP)
+
+# An open tile of plane 0 near the flight, inside the feed radius.
+_NEAR_FLIGHT = (26, 12)
 
 # A tile of plane 0 with nothing to climb.
 _PLAIN = (5, 5)
@@ -75,9 +89,12 @@ def _world() -> TileWorld:
     ground = _chunk(_GROUND, None, [
         chunkfile.ChunkObject("ladder_up", *_LADDER),
         chunkfile.ChunkObject("ladder_up", *_DEAD_LADDER),
+        chunkfile.ChunkObject("stairs_up", *_FLIGHT_FOOT, rotation=_FLIGHT_TURN),
     ])
-    upper = _chunk(_UPPER, _CORRIDOR,
-                   [chunkfile.ChunkObject("ladder_down", *_LADDER)])
+    upper = _chunk(_UPPER, _CORRIDOR + [_FLIGHT_TOP], [
+        chunkfile.ChunkObject("ladder_down", *_LADDER),
+        chunkfile.ChunkObject("stairs_down", *_FLIGHT_TOP, rotation=_FLIGHT_TURN),
+    ])
     world = TileWorld([ground, upper])
     world.load_rooms()
 
@@ -169,6 +186,82 @@ class ClimbTests(_PlaneTestBase):
 
         self.assertEqual(self._where(), (_DEAD_LADDER, _GROUND))
         self.assertIn("blocked", self._said())
+
+
+class StairsTests(_PlaneTestBase):
+
+    def setUp(self):
+        super().setUp()
+        movement.place(self.world.rooms, self.char1, *_FLIGHT_FOOT, quiet=True)
+
+    def test_climb_up_a_flight_lands_past_its_top_step(self):
+        self.char1.execute_cmd("climb up")
+
+        self.assertEqual(self._where(), (_FLIGHT_TOP, _UPPER))
+
+    def test_climb_down_a_flight_returns_to_its_foot(self):
+        self._go_up()
+        self.char1.execute_cmd("climb down")
+
+        self.assertEqual(self._where(), (_FLIGHT_FOOT, _GROUND))
+
+    def test_the_tile_action_at_the_foot_is_the_climb(self):
+        actions = serializers.tile_actions(self.char1.location)
+        mine = actions[serializers.tile_key(*_FLIGHT_FOOT)]
+
+        self.assertEqual(mine["command"], "climb " + tile_const.CLIMB_UP)
+
+    def test_a_click_on_a_step_walks_to_the_foot_and_climbs(self):
+        # A step is Blocked, so only this action makes it clickable.
+        movement.place(self.world.rooms, self.char1, *_NEAR_FLIGHT, quiet=True)
+        actions = serializers.tile_actions(self.char1.location)
+        kind = object_kinds.OBJECT_KINDS["stairs_up"]
+        steps = object_kinds.flight_tiles(kind, _FLIGHT_FOOT, _FLIGHT_TURN,
+                                          tile_const.CLIMB_UP)
+        command = feed_const.ENTITY_APPROACH_TEMPLATE.format(
+            x=_FLIGHT_FOOT[0], y=_FLIGHT_FOOT[1],
+            command="climb " + tile_const.CLIMB_UP)
+
+        self.assertTrue(steps)
+
+        for cell in [_FLIGHT_FOOT] + steps:
+            with self.subTest(tile=cell):
+                action = actions[serializers.tile_key(*cell)]
+
+                self.assertEqual(action["command"], command)
+                self.assertEqual(action["kind"], feed_const.TILE_ACTION_KIND_WALK)
+
+    def test_the_click_walks_and_climbs_on_the_tick(self):
+        movement.place(self.world.rooms, self.char1, *_NEAR_FLIGHT, quiet=True)
+        actions = serializers.tile_actions(self.char1.location)
+        kind = object_kinds.OBJECT_KINDS["stairs_up"]
+        top_step = object_kinds.flight_tiles(kind, _FLIGHT_FOOT, _FLIGHT_TURN,
+                                             tile_const.CLIMB_UP)[-1]
+
+        self.char1.execute_cmd(actions[serializers.tile_key(*top_step)]["command"])
+        _walk_out()
+
+        self.assertEqual(self._where(), (_FLIGHT_TOP, _UPPER))
+
+    def test_a_click_on_the_stairwell_climbs_down(self):
+        self._go_up()
+        actions = serializers.tile_actions(self.char1.location)
+        kind = object_kinds.OBJECT_KINDS["stairs_down"]
+        well = object_kinds.flight_tiles(kind, _FLIGHT_TOP, _FLIGHT_TURN,
+                                         tile_const.CLIMB_DOWN)
+
+        for cell in [_FLIGHT_TOP] + well:
+            with self.subTest(tile=cell):
+                self.assertEqual(actions[serializers.tile_key(*cell)]["command"],
+                                 "climb " + tile_const.CLIMB_DOWN)
+
+    def test_a_click_on_a_far_ladder_walks_and_climbs(self):
+        movement.place(self.world.rooms, self.char1, *_PLAIN, quiet=True)
+        actions = serializers.tile_actions(self.char1.location)
+        command = feed_const.ENTITY_APPROACH_TEMPLATE.format(
+            x=_LADDER[0], y=_LADDER[1], command="climb " + tile_const.CLIMB_UP)
+
+        self.assertEqual(actions[serializers.tile_key(*_LADDER)]["command"], command)
 
 
 class WalkOnAPlaneTests(_PlaneTestBase):

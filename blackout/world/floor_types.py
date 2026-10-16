@@ -7,11 +7,19 @@ Description: The floor types of the tile grid, one row for each type.
              A floor type is the named ground on a tile, for example `sand`.
              A chunk file stores an index into its own `floor_names` list, and
              every name in that list must be a key here. The Godot editor
-             paints from this list, through the generated constants.
+             paints from this list.
+
+             THE ROWS ARE DATA. They live in `world/tables/floor_types.json`
+             (10/14/2026), and `world/table_file.py` reads them. The Tables
+             tab of the terrain editor adds, edits, renames, and removes a
+             row, and then runs the client export. The order counts: the
+             world map sends the index of a floor type in this table.
 
              A floor type is a server fact. What it LOOKS like is the client's
-             own: `godot/world/terrain/floor_palette.gd` gives each name a
-             colour and has a fallback, so a new row needs no client edit.
+             own: `godot/world/look/terrain_palette.json`, with
+             `godot/world/terrain/floor_palette.gd` as its fallback, gives each
+             name a colour. A name with no colour gets a hashed hue, so a new
+             row needs no client edit.
 
              A floor type sets no walk rule. Water, walls, and blocked tiles
              are walk flags. Thus, a `water_bed` tile with no water flag is
@@ -31,11 +39,12 @@ Description: The floor types of the tile grid, one row for each type.
              tile with no Blocked flag. The client draws no cliff colour on a
              roof, so a steep roof keeps its own colour.
 
-             DESIGN-0011 sections 6.2 and 6.3. A starter list: Nick renames,
-             adds, or removes rows.
+             DESIGN-0011 sections 6.2 and 6.3.
 """
 
 from dataclasses import dataclass
+
+from world import table_file
 
 
 @dataclass(frozen=True)
@@ -47,22 +56,12 @@ class FloorType:
     roof: bool = False
 
 
+# The name of the table file, with no suffix.
+TABLE_NAME: str = "floor_types"
+
 # The first row is the floor of a new chunk. The editor fills a new chunk with
 # it, so it must be the most common ground of the world.
-_FLOOR_ROWS: tuple = (
-    FloorType("sand", "Loose desert sand. The ground of a new chunk."),
-    FloorType("dirt", "Packed earth, for a path through sand or scrub."),
-    FloorType("gravel", "Loose stones, for a quarry or a worn track."),
-    FloorType("rubble", "Broken concrete and brick from a fallen building."),
-    FloorType("asphalt", "An old road surface, cracked."),
-    FloorType("concrete", "A slab floor, a yard, or a plaza."),
-    FloorType("grass", "Scrub or grass, near water."),
-    FloorType("water_bed", "The ground under shallow water. Add the water flag."),
-    FloorType("roof_sheet_metal", "Corrugated sheet metal, rusted.", roof=True),
-    FloorType("roof_tile", "Clay roof tiles, for an old house.", roof=True),
-    FloorType("roof_concrete", "A flat concrete roof slab.", roof=True),
-    FloorType("void", "No floor: a gap in plane 1 and up. Always Blocked."),
-)
+_FLOOR_ROWS: tuple = table_file.read_rows(TABLE_NAME, FloorType)
 
 # key -> FloorType, in the order of _FLOOR_ROWS.
 FLOOR_TYPES: dict = {row.key: row for row in _FLOOR_ROWS}

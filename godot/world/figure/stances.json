@@ -1,0 +1,8 @@
+{
+	"default": {
+		"idle": "idle",
+		"walk": "walk"
+	},
+	"format": 1,
+	"stances": {}
+}

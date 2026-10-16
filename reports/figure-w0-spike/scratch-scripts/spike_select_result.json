@@ -1,0 +1,12 @@
+{
+  "click selects owned": true,
+  "click selects unowned": false,
+  "code selects owned": true,
+  "code selects unowned": true,
+  "editor scale": 1.0,
+  "gizmo moves owned": true,
+  "gizmo moves unowned": true,
+  "owned moved by": "(0.295423, 0.0, 0.0)",
+  "unowned moved by": "(0.445789, 0.0, 0.0)",
+  "version": "4.7.2-stable (official)"
+}

@@ -304,7 +304,7 @@ func _a_chunk_of_void_builds_an_empty_mesh() -> void:
 
 
 func _near_cliff_color(color: Color) -> bool:
-	var cliff := FloorPalette.CLIFF_COLOR
+	var cliff := FloorPalette.cliff()
 	var tolerance := FloorPalette.FACET_SHADE + _EPSILON
 
 	return absf(color.r - cliff.r) <= tolerance \

@@ -979,10 +979,15 @@ func _walk_towards(cell: Vector2i) -> void:
 ## plane misses the tile under the cursor on a hill (DESIGN-0011 section 6.6).
 ## The march reads the height grid, so the ground needs no collision shape. A
 ## miss gives the tile of the observer, and a click there looks.
+##
+## The march also meets the steps of each flight of stairs at their drawn
+## height ([method PropMeshBuilder.pick_tops]). Thus a click on a high step
+## picks that step, and the server gives it the climb.
 func _cell_under(screen_point: Vector2) -> Vector2i:
 	var origin := _camera.project_ray_origin(screen_point)
 	var direction := _camera.project_ray_normal(screen_point)
-	var hit: Variant = TerrainPicking.ray_hit(_state.chunks, origin, direction)
+	var tops := PropMeshBuilder.pick_tops(_state.chunks)
+	var hit: Variant = TerrainPicking.ray_hit(_state.chunks, origin, direction, tops)
 
 	if hit == null:
 		return _state.current_cell

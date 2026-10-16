@@ -7,7 +7,7 @@ extends RefCounted
 ## The server names the model of each kind. A kind that stands up an entity
 ## names it in [code]OBJECT_KIND_PREVIEW[/code]: the asset key and the family
 ## that the statefeed sends for that entity. A kind with scenery names it in
-## [code]OBJECT_KIND_SCENERY[/code]. A primitive draws through
+## [method TileTables.scenery_of]. A primitive draws through
 ## [PropMeshBuilder], so it is not a model here.
 ##
 ## ## The same model as the game
@@ -69,7 +69,7 @@ static func has_model(kind: String) -> bool:
 	if _Const.OBJECT_KIND_PREVIEW.has(kind):
 		return true
 
-	var scenery: String = _Const.OBJECT_KIND_SCENERY.get(kind, "")
+	var scenery: String = TileTables.scenery_of(kind)
 
 	return not scenery.is_empty() and not scenery in _Const.SCENERY_PRIMITIVES
 
@@ -91,7 +91,7 @@ func stand(chunks: ChunkSet, thing: Dictionary) -> Node3D:
 		model = _resolver.resolve_entity(preview[0], preview[1])
 		size = EntityPool.ENTITY_SCALE
 	else:
-		model = _resolver.resolve_scenery(_Const.OBJECT_KIND_SCENERY[kind])
+		model = _resolver.resolve_scenery(TileTables.scenery_of(kind))
 
 	if model == null:
 		return null

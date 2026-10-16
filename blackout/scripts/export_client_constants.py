@@ -16,8 +16,13 @@ Description: Write the generated client constant modules to disk.
              because CLAUDE.md marks this whole directory import-unsafe and one
              safe file does not change how the directory should be treated.
 
+             It also writes the item catalog of the figure workbench
+             (systems/interface/statefeed/figure_catalog.py), which renders
+             the items of ITEM_DB that a character can equip.
+
              Run it after changing any exported name in
-             systems/interface/statefeed/constants.py:
+             systems/interface/statefeed/constants.py, or an ItemDef with a
+             use_slot:
 
                  python scripts/export_client_constants.py
 
@@ -180,9 +185,54 @@ def _relative(path) -> str:
         return path
 
 
+def _targets():
+    """
+    Purpose: Render every generated file.
+
+    Entry:
+        None.
+
+    Exit/Returns:
+        A list of (path, text) pairs, or None when a language has no
+        destination. Writes nothing.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Render each language clientexport declares and look up its
+        destination. A language with no destination is a loud failure rather
+        than a skip, because it means a client was added to the renderer and
+        nobody said where its file goes. Then add the item catalog of the
+        figure workbench, which has one destination and no language.
+
+    Notes/References:
+        Iterates clientexport.languages() rather than the path table, so the
+        renderer stays the authority on what can be rendered.
+    """
+    from systems.interface.statefeed import clientexport, figure_catalog
+
+    outputs = clientexport.output_paths()
+    targets = []
+
+    for language in clientexport.languages():
+        path = outputs.get(language)
+
+        if path is None:
+            print("No output path for language %r; add one to _OUTPUTS."
+                  % language)
+            return None
+
+        targets.append((path, clientexport.render(language)))
+
+    targets.append((figure_catalog.output_path(), figure_catalog.render()))
+
+    return targets
+
+
 def _export(check_only) -> int:
     """
-    Purpose: Render every language and either write it or compare it.
+    Purpose: Render every generated file and either write it or compare it.
 
     Entry:
         check_only - True to compare and report without writing.
@@ -195,30 +245,18 @@ def _export(check_only) -> int:
         None
 
     Methodology:
-        Render each language clientexport declares, look up its destination,
-        and compare against what is on disk. A language with no destination is
-        a loud failure rather than a skip, because it means a client was added
-        to the renderer and nobody said where its file goes.
+        Compare each target of _targets against what is on disk.
 
     Notes/References:
-        Iterates clientexport.languages() rather than the path table, so the
-        renderer stays the authority on what can be rendered.
+        None
     """
-    from systems.interface.statefeed import clientexport
-
-    outputs = clientexport.output_paths()
+    targets = _targets()
     stale = []
 
-    for language in clientexport.languages():
-        path = outputs.get(language)
+    if targets is None:
+        return 1
 
-        if path is None:
-            print("No output path for language %r; add one to _OUTPUTS."
-                  % language)
-            return 1
-
-        rendered = clientexport.render(language)
-
+    for path, rendered in targets:
         if _read_existing(path) == rendered:
             print("  current  %s" % _relative(path))
             continue

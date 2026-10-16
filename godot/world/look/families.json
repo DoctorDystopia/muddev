@@ -1,0 +1,693 @@
+{
+	"families": {
+		"armor": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "steel",
+							"finish": "metal",
+							"height": 0.5,
+							"open": true,
+							"radius": 0.26,
+							"radius_top": 0.3,
+							"scale": [
+								1.0,
+								1.0,
+								0.55
+							],
+							"segments": 12,
+							"shape": "cylinder"
+						},
+						{
+							"color": "rust",
+							"finish": "metal",
+							"inner": 0.115,
+							"offset": [
+								0.0,
+								0.26,
+								0.0
+							],
+							"outer": 0.185,
+							"rotation": [
+								1.5708,
+								0.0,
+								0.0
+							],
+							"scale": [
+								1.0,
+								1.0,
+								0.55
+							],
+							"shape": "torus"
+						}
+					]
+				}
+			]
+		},
+		"character": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "character",
+							"offset": [
+								0.0,
+								0.36,
+								0.0
+							],
+							"radius": 0.15,
+							"segments": 10,
+							"shape": "sphere"
+						},
+						{
+							"color": "character",
+							"height": 0.46,
+							"radius": 0.2,
+							"radius_top": 0.12,
+							"segments": 10,
+							"shape": "cylinder"
+						},
+						{
+							"color": "character",
+							"height": 0.24,
+							"offset": [
+								0.0,
+								-0.35,
+								0.0
+							],
+							"radius": 0.24,
+							"radius_top": 0.2,
+							"segments": 10,
+							"shape": "cylinder"
+						}
+					]
+				}
+			]
+		},
+		"crafting_material": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "stone",
+							"radius": 0.26,
+							"rotation": [
+								0.4,
+								0.8,
+								0.2
+							],
+							"segments": 6,
+							"shape": "faceted"
+						},
+						{
+							"color": "rust",
+							"offset": [
+								0.22,
+								-0.18,
+								0.1
+							],
+							"radius": 0.14,
+							"rotation": [
+								0.9,
+								0.3,
+								0.5
+							],
+							"segments": 6,
+							"shape": "faceted"
+						}
+					]
+				}
+			]
+		},
+		"crafting_tool": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "wood",
+							"height": 0.62,
+							"offset": [
+								0.0,
+								-0.08,
+								0.0
+							],
+							"radius": 0.04,
+							"segments": 8,
+							"shape": "cylinder"
+						},
+						{
+							"color": "steel",
+							"finish": "metal",
+							"offset": [
+								0.0,
+								0.26,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.34,
+								0.15,
+								0.15
+							]
+						}
+					]
+				}
+			]
+		},
+		"currency": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "gold",
+							"finish": "metal",
+							"height": 0.045,
+							"offset": [
+								0.0,
+								-0.06,
+								0.0
+							],
+							"radius": 0.22,
+							"segments": 18,
+							"shape": "cylinder"
+						},
+						{
+							"color": "gold",
+							"finish": "metal",
+							"height": 0.045,
+							"radius": 0.22,
+							"rotation": [
+								0.0,
+								0.4,
+								0.0
+							],
+							"segments": 18,
+							"shape": "cylinder"
+						},
+						{
+							"color": "gold",
+							"finish": "metal",
+							"height": 0.045,
+							"offset": [
+								0.0,
+								0.09,
+								0.0
+							],
+							"radius": 0.22,
+							"rotation": [
+								0.0,
+								0.8,
+								0.0
+							],
+							"segments": 18,
+							"shape": "cylinder"
+						}
+					]
+				}
+			]
+		},
+		"gatherable": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "stone",
+							"offset": [
+								0.0,
+								-0.2,
+								0.0
+							],
+							"radius": 0.3,
+							"rotation": [
+								0.5,
+								0.3,
+								0.2
+							],
+							"segments": 6,
+							"shape": "faceted"
+						},
+						{
+							"color": "gatherable",
+							"height": 0.4,
+							"offset": [
+								0.0,
+								0.22,
+								0.0
+							],
+							"radius": 0.09,
+							"rotation": [
+								0.0,
+								0.0,
+								0.16
+							],
+							"segments": 6,
+							"shape": "cone"
+						},
+						{
+							"color": "gatherable",
+							"height": 0.4,
+							"offset": [
+								0.17,
+								0.05,
+								-0.08
+							],
+							"radius": 0.09,
+							"rotation": [
+								0.0,
+								0.0,
+								-0.5
+							],
+							"scale": [
+								0.62,
+								0.62,
+								0.62
+							],
+							"segments": 6,
+							"shape": "cone"
+						}
+					]
+				}
+			]
+		},
+		"jewellery": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "gold",
+							"finish": "metal",
+							"inner": 0.195,
+							"outer": 0.285,
+							"shape": "torus"
+						},
+						{
+							"color": "gem",
+							"finish": "gem",
+							"offset": [
+								0.3,
+								0.0,
+								0.0
+							],
+							"radius": 0.1,
+							"segments": 4,
+							"shape": "faceted"
+						}
+					]
+				}
+			]
+		},
+		"npc": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "npc",
+							"offset": [
+								0.0,
+								0.36,
+								0.0
+							],
+							"radius": 0.15,
+							"segments": 10,
+							"shape": "sphere"
+						},
+						{
+							"color": "npc",
+							"height": 0.46,
+							"radius": 0.2,
+							"radius_top": 0.12,
+							"segments": 10,
+							"shape": "cylinder"
+						},
+						{
+							"color": "npc",
+							"height": 0.24,
+							"offset": [
+								0.0,
+								-0.35,
+								0.0
+							],
+							"radius": 0.24,
+							"radius_top": 0.2,
+							"segments": 10,
+							"shape": "cylinder"
+						}
+					]
+				}
+			]
+		},
+		"sign": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "rust",
+							"finish": "metal",
+							"height": 0.6,
+							"offset": [
+								0.0,
+								-0.2,
+								0.0
+							],
+							"radius": 0.035,
+							"segments": 8,
+							"shape": "cylinder"
+						},
+						{
+							"color": "steel",
+							"finish": "metal",
+							"offset": [
+								0.0,
+								0.26,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.62,
+								0.36,
+								0.04
+							]
+						}
+					]
+				}
+			]
+		},
+		"station": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "station",
+							"offset": [
+								0.0,
+								-0.26,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.46,
+								0.34,
+								0.34
+							]
+						},
+						{
+							"color": "station",
+							"finish": "metal",
+							"offset": [
+								0.0,
+								0.12,
+								0.04
+							],
+							"rotation": [
+								-0.34,
+								0.0,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.42,
+								0.38,
+								0.07
+							]
+						},
+						{
+							"color": "panel",
+							"finish": "panel",
+							"offset": [
+								0.0,
+								0.14,
+								0.11
+							],
+							"rotation": [
+								-0.34,
+								0.0,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.3,
+								0.24,
+								0.02
+							]
+						}
+					]
+				}
+			]
+		},
+		"weapon": {
+			"parts": [
+				{
+					"bone": "root",
+					"name": "shape",
+					"position": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"region": "",
+					"rotation": [
+						0.0,
+						0.0,
+						0.0
+					],
+					"scale": [
+						1.0,
+						1.0,
+						1.0
+					],
+					"shapes": [
+						{
+							"color": "steel",
+							"finish": "metal",
+							"offset": [
+								0.0,
+								0.2,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.11,
+								0.66,
+								0.03
+							]
+						},
+						{
+							"color": "rust",
+							"finish": "metal",
+							"offset": [
+								0.0,
+								-0.14,
+								0.0
+							],
+							"shape": "box",
+							"size": [
+								0.34,
+								0.06,
+								0.06
+							]
+						},
+						{
+							"color": "wood",
+							"height": 0.26,
+							"offset": [
+								0.0,
+								-0.3,
+								0.0
+							],
+							"radius": 0.045,
+							"radius_top": 0.035,
+							"segments": 8,
+							"shape": "cylinder"
+						}
+					]
+				}
+			]
+		}
+	},
+	"format": 1,
+	"models": {
+		"corpse": "corpse_skeleton",
+		"food": "food_meat"
+	}
+}

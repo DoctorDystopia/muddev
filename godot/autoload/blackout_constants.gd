@@ -121,6 +121,9 @@ const CHUNK_DIRECTORY := "world/chunks"
 const STRUCTURE_DIRECTORY := "world/structures"
 const STRUCTURE_FILE_SUFFIX := ".json"
 const STRUCTURE_FORMAT_VERSION := 1
+const TILE_TABLE_DIRECTORY := "world/tables"
+const TILE_TABLE_FILE_SUFFIX := ".json"
+const TILE_TABLE_FORMAT := 1
 const TILE_SYNC_STAMP_FILE := "server/tile_sync_state.json"
 const CHUNK_STREAM_RADIUS := 1
 const TILE_WORLD_Z := "tile_world"
@@ -147,6 +150,7 @@ const OBJECT_SIGNPOST_KIND := "signpost"
 const SCENERY_LADDER := "ladder"
 const SCENERY_STAIRS := "stairs"
 const SCENERY_HATCH := "hatch"
+const SCENERY_STAIRS_TOP := "stairs_top"
 const SCENERY_CRATE := "crate"
 const SCENERY_TABLE := "table"
 const SCENERY_LAMP_POST := "lamp_post"
@@ -174,12 +178,12 @@ const TILE_CHECK_ROOF_WALKABLE := "roof_walkable"
 # the order of each table under world/.
 const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void"]
 const TILE_ROOF_FLOOR_TYPES := ["roof_sheet_metal", "roof_tile", "roof_concrete"]
-const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains"]
+const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta"]
 const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_link", "rubble"]
 const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "landmark", "npc", "sign", "transition"]
 const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable"]
 const TILE_CHECK_NOTE_RULES := ["unreachable"]
-const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch", "crate", "table", "lamp_post"]
+const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch", "stairs_top", "crate", "table", "lamp_post"]
 const OBJECT_KINDS := {
 	"bank": "facility",
 	"foundry_furnace": "facility",
@@ -228,6 +232,16 @@ const OBJECT_KIND_CLIMBS := {
 	"stairs_up": ["up"],
 	"stairs_down": ["down"],
 }
+const OBJECT_KIND_CLIMB_RUNS := {
+	"stairs_up": 3,
+	"stairs_down": 3,
+}
+const CHUNK_ROTATION_STEPS := {
+	0: [0, 1],
+	1: [1, 0],
+	2: [0, -1],
+	3: [-1, 0],
+}
 const OBJECT_KIND_SCENERY := {
 	"transition_oasis_to_outskirts": "map_transition",
 	"transition_outskirts_to_oasis": "map_transition",
@@ -237,7 +251,7 @@ const OBJECT_KIND_SCENERY := {
 	"ladder_down": "hatch",
 	"ladder_both": "ladder",
 	"stairs_up": "stairs",
-	"stairs_down": "hatch",
+	"stairs_down": "stairs_top",
 	"crate": "crate",
 	"table": "table",
 	"lamp_post": "lamp_post",
@@ -268,13 +282,11 @@ const CLIMB_PLANE_STEPS := {
 	"up": 1,
 	"down": -1,
 }
-const TILE_WALL_STYLE_HEIGHTS := {
-	"plain": 12,
-	"concrete": 24,
-	"brick": 24,
-	"sheet_metal": 20,
-	"chain_link": 18,
-	"rubble": 6,
+const TILE_TABLE_FIELDS := {
+	"areas": ["key", "note", "name", "desc"],
+	"floor_types": ["key", "note", "roof"],
+	"wall_styles": ["key", "note"],
+	"decor_kinds": ["key", "note", "scenery"],
 }
 
 # Everything else.

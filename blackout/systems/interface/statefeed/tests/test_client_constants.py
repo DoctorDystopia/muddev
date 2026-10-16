@@ -38,6 +38,7 @@ Description: Drift guards for the facts the Godot client retypes.
              "skipped everything" from reading as "passed".
 """
 
+import json
 import os
 import re
 import unittest
@@ -915,3 +916,124 @@ class GeneratedConstantsTests(unittest.TestCase):
                     "%s is out of date with systems/interface/statefeed/constants.py. "
                     "Run:\n    python scripts/export_client_constants.py"
                     % os.path.basename(path))
+
+
+# ─── The look files ─────────────────────────────────────────────────────────
+#
+# Since 10/13/2026 the design of each look is a JSON file under
+# godot/world/look/, and the GDScript tables above are its fallback. The Look
+# tab of the terrain editor writes the files. The same rule holds: a key that
+# names no server fact is dead configuration, and a server fact with no key is
+# fine.
+
+_LOOK_DIRECTORY = os.path.join(_REPO_ROOT, "godot", "world", "look")
+_TERRAIN_PALETTE_PATH = os.path.join(_LOOK_DIRECTORY, "terrain_palette.json")
+_AREA_LOOKS_PATH = os.path.join(_LOOK_DIRECTORY, "area_looks.json")
+
+# The family shapes (ENG-0011, step L5) and the model presentation (step L6).
+# The Families tab and the Gear tab of the figure workbench write them.
+_FAMILIES_PATH = os.path.join(_LOOK_DIRECTORY, "families.json")
+_PRESENTATION_PATH = os.path.join(_LOOK_DIRECTORY, "presentation.json")
+
+# Each family that the server can send in the `family` field of an entity:
+# the item families, and the asset kinds that `_mesh_family` gives as they
+# are. The same list as `_sendable_families` in godot/tests/test_family_shapes.gd.
+_SENDABLE_FAMILIES: frozenset = frozenset(const.ITEM_FAMILIES) | frozenset((
+    const.ASSET_KIND_ITEM, const.ASSET_KIND_NPC, const.ASSET_KIND_CHARACTER,
+    const.ASSET_KIND_ROOM, const.ASSET_KIND_STATION, const.ASSET_KIND_GATHERABLE,
+    const.ASSET_KIND_CORPSE, const.ASSET_KIND_SIGN, const.ITEM_FAMILY_GENERIC))
+
+
+def _read_look_file(path):
+    """Return the parsed look file at `path`, or None when it is not here."""
+    if not os.path.exists(path):
+        return None
+
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+class LookFileTests(unittest.TestCase):
+    """Each key of a look file names a real floor type, wall style, or area."""
+
+    def test_the_terrain_palette_names_real_floor_types_and_wall_styles(self):
+        palette = _read_look_file(_TERRAIN_PALETTE_PATH)
+
+        if palette is None:
+            self.skipTest("no terrain palette file")
+
+        for name in palette.get("floors", {}):
+            with self.subTest(floor=name):
+                self.assertIn(name, _floor_table.FLOOR_TYPES)
+
+        for name, row in palette.get("walls", {}).items():
+            with self.subTest(style=name):
+                self.assertIn(name, _wall_table.WALL_STYLES)
+                self.assertIsInstance(row.get("height"), (int, float))
+                self.assertGreater(row.get("height"), 0)
+
+    def test_the_area_looks_name_real_areas(self):
+        looks = _read_look_file(_AREA_LOOKS_PATH)
+
+        if looks is None:
+            self.skipTest("no area looks file")
+
+        for name in looks.get("areas", {}):
+            with self.subTest(area=name):
+                self.assertIn(name, _area_table.AREAS)
+
+    def test_the_family_shapes_name_real_families_and_real_models(self):
+        """
+        A family key that the server never sends is a shape that nothing
+        draws. A model key with no record is art that the family never gets:
+        the family keeps its procedural shape, as ClientFamilyModelTests
+        says of the table.
+        """
+        families = _read_look_file(_FAMILIES_PATH)
+
+        if families is None:
+            self.skipTest("no family file")
+
+        known = _packed_asset_keys()
+
+        for name, row in families.get("families", {}).items():
+            with self.subTest(family=name):
+                self.assertIn(name, _SENDABLE_FAMILIES)
+                self.assertIsInstance(row.get("parts"), list)
+                self.assertTrue(row.get("parts"))
+
+        for name, asset_key in families.get("models", {}).items():
+            with self.subTest(family=name, asset_key=asset_key):
+                self.assertIn(name, _SENDABLE_FAMILIES)
+                self.assertIn(asset_key, known)
+
+    def test_the_presentation_names_real_models(self):
+        """
+        A presentation row for a key with no record is a display choice that
+        nothing reads. An alias of a record counts: the registry reads the
+        row of the alias before the row of its file.
+        """
+        presentation = _read_look_file(_PRESENTATION_PATH)
+
+        if presentation is None:
+            self.skipTest("no presentation file")
+
+        known = _packed_asset_keys()
+
+        for asset_key, row in presentation.get("models", {}).items():
+            with self.subTest(asset_key=asset_key):
+                self.assertIn(asset_key, known)
+                self.assertIsInstance(row, dict)
+
+                if "scale" in row:
+                    self.assertGreater(row["scale"], 0)
+
+    def test_the_look_files_are_here(self):
+        """
+        The vacuity guard. The checks above skip a file that is not here, so
+        a moved directory would turn them green while they check nothing.
+        """
+        for path in (_TERRAIN_PALETTE_PATH, _AREA_LOOKS_PATH, _FAMILIES_PATH,
+                     _PRESENTATION_PATH):
+            with self.subTest(path=os.path.basename(path)):
+                self.assertTrue(os.path.exists(path), path)

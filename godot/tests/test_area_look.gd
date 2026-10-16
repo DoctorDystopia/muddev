@@ -10,9 +10,10 @@ extends Node
 
 var _failures := 0
 
-## Two areas with rows, and one with none.
-const FIRST_AREA := "oasis"
-const SECOND_AREA := "azm_plains"
+## Two areas with rows of the fallback table, and one with none. The first
+## two come from the table, so a rename on the Tables tab breaks no case.
+var FIRST_AREA: String = AreaLook.LOOKS.keys()[0]
+var SECOND_AREA: String = AreaLook.LOOKS.keys()[-1]
 const NO_SUCH_AREA := "no_such_area"
 
 ## A camera arm length, in world units. Any value that is not zero shows that

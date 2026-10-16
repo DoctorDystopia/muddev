@@ -17,20 +17,37 @@ their findings with it.
 
 To change the fixture, change this module, then run from `blackout/`:
 
-    ../evenv/Scripts/python.exe -m world.tests.check_fixture_builder
+    DJANGO_SETTINGS_MODULE=server.conf.settings ../evenv/Scripts/python.exe
+        -c "import django; django.setup();
+            from world.tests import check_fixture_builder as b; b.write_fixtures()"
 
-Then run `test_terrain_checks.tscn` in Godot.
+Type it as one line. `object_kinds` imports the statefeed constants, and
+their package imports Evennia, so Django must start first. Then run
+`test_terrain_checks.tscn` in Godot.
+
+Every name of a table file comes from its table, in the order of the table:
+the area, the floor types, the roof, and the decor kind (10/14/2026). The
+Tables tab of the terrain editor renames a key in these files in place.
+Thus, a rename gives the same files as a fresh build.
 
 The fixture world
 -----------------
 | File | Holds |
 |---|---|
 | chunk_0_0_p0.json | Sand, a few Blocked tiles, two respawn points, one object that breaks each object rule, decor on a Blocked tile, and three closed pockets |
-| chunk_0_0_p1.json | Void and Blocked, but two concrete tiles, one void tile with no Blocked flag, one void tile with a wall, and two roof tiles |
+| chunk_0_0_p1.json | Void and Blocked, but two tiles of the default floor, one void tile with no Blocked flag, one void tile with a wall, and two roof tiles |
 
 Every rule gives at least one finding. Every good case gives none. The good
 cases are a ladder that lands, the down way of a ladder, a sign with words,
-a roof tile with the Blocked flag, and decor on a Blocked tile.
+a roof tile with the Blocked flag, decor on a Blocked tile, and a flight of
+stairs whose two ways land.
+
+The two flights test the landing ahead of `climb_landing` in both
+languages (Nick, 10/16/2026). The good flight faces north. The tile over
+its foot is void, so a check that looks on the same tile fails it. The bad
+flight faces east. The tile over its foot is open, but its landing is void.
+A wall on the stairwell of the good flight tests the stairwell exception of
+`wall_on_void`.
 
 The open roof tile is north of the open void tile, so one step joins the
 two. Thus they make one `unreachable` pocket, not two.
@@ -46,6 +63,8 @@ import os
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as const
 from systems.core.tilegrid import syncstamp
+from world import areas
+from world import decor_kinds
 from world import floor_types
 from world import object_kinds
 from world import tile_checks
@@ -63,6 +82,23 @@ EXPECTED_FILE: str = "expected.json"
 # digest in the two languages.
 STAMP_FILE: str = "sync_stamp.json"
 
+# The two flights of stairs: the tile of each foot, and its rotation. The
+# landing comes from the rule, so a new run of the kind moves it.
+FLIGHT_KIND: str = "stairs_up"
+GOOD_FLIGHT_FOOT: tuple = (14, 10)
+GOOD_FLIGHT_TURN: int = 0
+BAD_FLIGHT_FOOT: tuple = (16, 10)
+BAD_FLIGHT_TURN: int = 1
+GOOD_FLIGHT_LANDING: tuple = object_kinds.climb_landing(
+    object_kinds.OBJECT_KINDS[FLIGHT_KIND], GOOD_FLIGHT_FOOT, GOOD_FLIGHT_TURN,
+    const.CLIMB_UP)
+
+# A stairwell tile of the good flight on plane 1: the tile over its top
+# step. It carries a wall, as the wall of an upper room over the opening.
+GOOD_FLIGHT_WELL: tuple = object_kinds.flight_tiles(
+    object_kinds.OBJECT_KINDS[FLIGHT_KIND], GOOD_FLIGHT_FOOT, GOOD_FLIGHT_TURN,
+    const.CLIMB_UP)[-1]
+
 # (rule, x, y, plane) of each finding, sorted as check_world sorts them.
 EXPECTED: list = sorted([
     (tile_checks.RULE_UNKNOWN_KIND, 20, 20, 0),
@@ -71,6 +107,7 @@ EXPECTED: list = sorted([
     (tile_checks.RULE_CLIMB_LANDING, 11, 10, 0),
     (tile_checks.RULE_CLIMB_LANDING, 12, 10, 0),
     (tile_checks.RULE_CLIMB_LANDING, 10, 10, 1),
+    (tile_checks.RULE_CLIMB_LANDING, *BAD_FLIGHT_FOOT, 0),
     (tile_checks.RULE_VOID_OPEN, 30, 30, 1),
     (tile_checks.RULE_RESPAWN_COUNT, 1, 1, 0),
     (tile_checks.RULE_RESPAWN_COUNT, 2, 1, 0),
@@ -83,9 +120,11 @@ EXPECTED: list = sorted([
     (tile_checks.RULE_UNREACHABLE, 50, 50, 0),
     (tile_checks.RULE_UNREACHABLE, 56, 56, 0),
     # Plane 1: the down ladder of plane 0 at (12, 10) leads no one up, and
-    # the open void tile is walkable.
+    # the open void tile is walkable. The bad flight lands past its top step,
+    # so it leads no one to the open tile over its foot.
     (tile_checks.RULE_UNREACHABLE, 12, 10, 1),
     (tile_checks.RULE_UNREACHABLE, 30, 30, 1),
+    (tile_checks.RULE_UNREACHABLE, *BAD_FLIGHT_FOOT, 1),
 ], key=lambda row: (row[0], row[3], row[2], row[1]))
 
 # The 2 x 2 room of the wall pocket: its south-west tile.
@@ -101,7 +140,7 @@ SLOPE_POCKET_HEIGHT: int = const.WALK_LIMIT * 3
 
 # A decor kind on a Blocked tile. The `object_unwalkable` rule exempts decor,
 # so it gives no finding. The first decor kind of the table.
-DECOR_KIND: str = sorted(object_kinds.UNPINNED_KINDS)[0]
+DECOR_KIND: str = next(iter(decor_kinds.DECOR_KINDS))
 DECOR_ON_BLOCKED: tuple = (4, 3)
 
 
@@ -112,7 +151,8 @@ def _blank(plane: int, floor_names: list) -> chunkfile.ChunkFile:
 
     return chunkfile.ChunkFile(
         cx=0, cy=0, plane=plane, floor_names=floor_names,
-        area_names=["oasis"], heights=[0] * const.CORNERS_PER_SIDE ** 2,
+        area_names=[areas.DEFAULT_AREA],
+        heights=[0] * const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tiles, flags=[0] * tiles, areas=[0] * tiles)
 
 
@@ -142,7 +182,7 @@ def _add_pockets(ground: chunkfile.ChunkFile) -> None:
 
 def _ground() -> chunkfile.ChunkFile:
     """Plane 0. Each object sits at its tile of EXPECTED, or is good."""
-    ground = _blank(0, ["sand"])
+    ground = _blank(0, [floor_types.DEFAULT_FLOOR_TYPE])
     ground.flags[_index(3, 3)] = const.FLAG_BLOCKED
     ground.flags[_index(*DECOR_ON_BLOCKED)] = const.FLAG_BLOCKED
     _add_pockets(ground)
@@ -153,12 +193,18 @@ def _ground() -> chunkfile.ChunkFile:
         chunkfile.ChunkObject("bank", 3, 3),
         # Its target (72, 10) is in chunk (1, 0), which this world lacks.
         chunkfile.ChunkObject("transition_oasis_to_outskirts", 5, 5),
-        # Lands on concrete of plane 1: good.
+        # Lands on a floor of plane 1: good.
         chunkfile.ChunkObject("ladder_up", 10, 10),
         # Lands on void of plane 1.
         chunkfile.ChunkObject("ladder_up", 11, 10),
         # Leads under plane 0.
         chunkfile.ChunkObject("ladder_down", 12, 10),
+        # Lands past its top step, on a floor of plane 1: good.
+        chunkfile.ChunkObject(FLIGHT_KIND, *GOOD_FLIGHT_FOOT,
+                              rotation=GOOD_FLIGHT_TURN),
+        # Lands past its top step, on void of plane 1.
+        chunkfile.ChunkObject(FLIGHT_KIND, *BAD_FLIGHT_FOOT,
+                              rotation=BAD_FLIGHT_TURN),
         chunkfile.ChunkObject("no_such_kind", 20, 20),
         # A sign with no words.
         chunkfile.ChunkObject(object_kinds.SIGNPOST_KIND, 22, 20),
@@ -177,10 +223,11 @@ def _ground() -> chunkfile.ChunkFile:
 def _upper() -> chunkfile.ChunkFile:
     """Plane 1: void and Blocked, but floors, roofs, and one open void tile."""
     roof = floor_types.ROOF_FLOOR_TYPES[0]
-    upper = _blank(1, [floor_types.VOID_FLOOR_TYPE, "concrete", roof])
+    upper = _blank(1, [floor_types.VOID_FLOOR_TYPE,
+                       floor_types.DEFAULT_FLOOR_TYPE, roof])
     upper.flags = [const.FLAG_BLOCKED] * len(upper.flags)
 
-    for x, y in ((10, 10), (12, 10)):
+    for x, y in ((10, 10), (12, 10), GOOD_FLIGHT_LANDING, BAD_FLIGHT_FOOT):
         upper.floors[_index(x, y)] = 1
         upper.flags[_index(x, y)] = 0
 
@@ -190,8 +237,15 @@ def _upper() -> chunkfile.ChunkFile:
     upper.floors[_index(34, 34)] = 2
     upper.flags[_index(30, 30)] = 0
     upper.flags[_index(31, 31)] = const.FLAG_BLOCKED | const.FLAG_WALL_NORTH
+    # A wall on the stairwell of the good flight: void, but no finding.
+    upper.flags[_index(*GOOD_FLIGHT_WELL)] |= const.FLAG_WALL_EAST
     # Down lands on plane 0, up on plane 2, which has no file.
-    upper.objects = [chunkfile.ChunkObject("ladder_both", 10, 10)]
+    upper.objects = [
+        chunkfile.ChunkObject("ladder_both", 10, 10),
+        # The twin of the good flight. Down lands on its foot: good.
+        chunkfile.ChunkObject("stairs_down", *GOOD_FLIGHT_LANDING,
+                              rotation=GOOD_FLIGHT_TURN),
+    ]
 
     return upper
 

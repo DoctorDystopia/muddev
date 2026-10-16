@@ -1,0 +1,49 @@
+{
+	"areas": {
+		"al_wasta": {
+			"ambient_color": "596b80",
+			"ambient_energy": 0.6,
+			"fog_begin": 20.0,
+			"fog_color": "b89572",
+			"fog_end": 30.0,
+			"sun_azimuth": 30.0,
+			"sun_color": "ffffff",
+			"sun_elevation": 70.0,
+			"sun_energy": 1.05
+		},
+		"azm_plains": {
+			"ambient_color": "4f5c5e",
+			"ambient_energy": 0.7,
+			"fog_begin": 20.0,
+			"fog_color": "7d8a86",
+			"fog_end": 30.0,
+			"sun_azimuth": -30.0,
+			"sun_color": "dfe8e0",
+			"sun_elevation": 50.0,
+			"sun_energy": 0.8
+		},
+		"oasis": {
+			"ambient_color": "7a6a5a",
+			"ambient_energy": 0.6,
+			"fog_begin": 20.0,
+			"fog_color": "b89572",
+			"fog_end": 32.0,
+			"sun_azimuth": 30.0,
+			"sun_color": "ffe2b0",
+			"sun_elevation": 55.0,
+			"sun_energy": 1.1
+		},
+		"oasis_outskirts": {
+			"ambient_color": "6a5040",
+			"ambient_energy": 0.6,
+			"fog_begin": 20.0,
+			"fog_color": "a8744a",
+			"fog_end": 26.0,
+			"sun_azimuth": 45.0,
+			"sun_color": "ffc98a",
+			"sun_elevation": 40.0,
+			"sun_energy": 1.0
+		}
+	},
+	"format": 1
+}

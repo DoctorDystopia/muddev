@@ -1271,6 +1271,11 @@ def tile_actions(room) -> dict:
         The step rule decides the steps (`_add_tile_world_steps`). A tile
         room has no exit objects.
 
+        The one exception is a climb in the feed radius
+        (`_add_tile_world_climbs`). A click on a ladder or on a step must
+        climb, and a step is Blocked, so no walk template fits it. A climb
+        adds its own tile and the tiles of its flight: a few entries.
+
     Notes/References:
         The xyzgrid version read the exits of the room, and it named the
         transition node of another map. Both went in DESIGN-0011 Phase 4b.
@@ -1289,17 +1294,24 @@ def tile_actions(room) -> dict:
     }
 
     _add_tile_world_steps(here, actions)
-    _add_tile_world_climb(here, actions)
+    _add_tile_world_climbs(here, actions)
 
     return actions
 
 
-def _add_tile_world_climb(here, actions: dict) -> None:
+def _add_tile_world_climbs(here, actions: dict) -> None:
     """
-    Replace the `look` of the tile of the observer with a climb, when a
-    ladder or stairs stand there. The kind is a step: a climb moves the
-    player and ends a tracked walk. A tile with two ways (a ladder_both)
-    offers the first. `climb` alone asks which way.
+    Give the climb to each tile of each ladder and flight of stairs near the
+    observer (Nick, 10/16/2026). As in OSRS, a click on a ladder or on any
+    step of a flight climbs it. The tiles of a climb are its own tile and its
+    flight (`object_kinds.flight_tiles`): the steps under a way up, or the
+    stairwell over them for a way down.
+
+    From another tile, the action walks to the tile of the climb and then
+    climbs. On that tile, it is the climb alone, in the place of `look`, and
+    its kind is a step: a climb moves the player and ends a tracked walk. A
+    tile with two ways (a ladder_both) offers the first. `climb` alone asks
+    which way.
     """
     from systems.core.tilegrid.planes import plane_of_z
 
@@ -1307,17 +1319,36 @@ def _add_tile_world_climb(here, actions: dict) -> None:
         return
 
     from systems.core.tilegrid.world import get_world
+    from world import object_kinds
     from world import tile_travel
 
     view = get_world().plane_for_z(here[2])
-    ways = tile_travel.climb_directions(view, (here[0], here[1]))
+    observer = (here[0], here[1])
+    radius = const.STATEFEED_ENTITY_RADIUS
 
-    if not ways:
-        return
+    for kind, tile, rotation in tile_travel.climbs_near(view, observer, radius):
+        way = kind.climbs[0]
+        action = _climb_action(observer, tile, way)
+        cells = [tile] + object_kinds.flight_tiles(kind, tile, rotation, way)
 
-    command = const.TILE_COMMAND_CLIMB_TEMPLATE.format(way=ways[0])
-    actions[tile_key(here[0], here[1])] = tile_action(
-        command, const.TILE_ACTION_KIND_STEP)
+        for x, y in cells:
+            actions[tile_key(x, y)] = action
+
+
+def _climb_action(observer: tuple, tile: tuple, way: str) -> dict:
+    """
+    Return the action of a climb `way` on `tile`: the climb alone for an
+    observer on that tile, else the walk to it and then the climb.
+    """
+    climb = const.TILE_COMMAND_CLIMB_TEMPLATE.format(way=way)
+
+    if observer == tile:
+        return tile_action(climb, const.TILE_ACTION_KIND_STEP)
+
+    command = const.ENTITY_APPROACH_TEMPLATE.format(x=tile[0], y=tile[1],
+                                                   command=climb)
+
+    return tile_action(command, const.TILE_ACTION_KIND_WALK)
 
 
 def _add_tile_world_steps(here, actions: dict) -> None:

@@ -126,6 +126,14 @@ Creates 15 rusty metal chunks in your inventory.
 
 1. Add an `ItemDef` entry in `world/item_defs/<category>.py` (for example, `materials.py` or `tools.py`).
 2. Restart or reload the server. The new item appears in `ITEM_DB` automatically.
+3. For an item with a `use_slot`, write the item catalog of the figure
+   workbench again. `test_figure_files.py` fails on a stale catalog. Do the
+   same after a change to the `outfit` of an `NpcDef`, or to a skill map of
+   `items/equipment/skill_requirements.py`.
+
+```bash
+python scripts/export_client_constants.py
+```
 
 ```python
 # world/item_defs/materials.py — example entry
@@ -487,7 +495,7 @@ on. `systems/gameplay/movement/walk.py` owns the walk.
 > run                  # turn run on or off
 > run on
 > run off
-> climb up             # a ladder or stairs on your tile
+> climb up             # a ladder on your tile, or stairs at their foot
 ```
 
 In the Godot client, hold a movement key to walk (WASD with QEZC, or HJKL
@@ -1401,7 +1409,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3460 tests, ~29 minutes** (measured 10/09/2026). Run it before a merge, or
+**3560 tests, ~30 minutes** (measured 10/16/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

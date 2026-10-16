@@ -32,6 +32,12 @@ extends RefCounted
 ## end wall under a gable roof thus fills itself, with no data. A top under
 ## the ground of its own wall stays [constant MIN_HEIGHT] over it.
 ##
+## A stairwell tile counts as a floor here (Nick, 10/16/2026). The Stairs
+## tool makes the tiles over a flight void, so the floor above does not
+## cover the steps. A wall beside the steps still rises to the plane above,
+## not to its style height. Else it looks like a hole in the wall.
+## [ClimbRule] finds the stairwell.
+##
 ## ## The wall style (DESIGN-0013 section 6.4)
 ##
 ## Each tile has one wall style: a server fact in the chunk file. The style
@@ -83,6 +89,8 @@ static func build(chunk: ChunkFile, above: ChunkFile = null,
 		down: bool = false) -> ArrayMesh:
 	var size: int = _Const.CHUNK_SIZE
 	var out := _Surface.new()
+	var origin := Vector2i(chunk.cx, chunk.cy) * size
+	var wells := _stairwell(chunk, above)
 
 	for ly: int in size:
 		for lx: int in size:
@@ -93,7 +101,9 @@ static func build(chunk: ChunkFile, above: ChunkFile = null,
 
 			var style := chunk.wall_style_name(lx, ly)
 			var height := DOWN_HEIGHT if down else height_of(style)
-			var ceiling := above if not down and _has_floor(above, ly * size + lx) else null
+			var covered := _has_floor(above, ly * size + lx) \
+				or wells.has(origin + Vector2i(lx, ly))
+			var ceiling := above if not down and covered else null
 
 			for wall: Array in _WALLS:
 				if flag & wall[0]:
@@ -116,14 +126,11 @@ static func build(chunk: ChunkFile, above: ChunkFile = null,
 
 
 ## The height of a wall of `style` over the ground, in world units, when no
-## floor is above it. A style with no height draws at the height of the
-## default style. A figure is about one unit tall
+## floor is above it. [WallPalette] owns the steps: the look file, then its
+## table. A figure is about one unit tall
 ## ([constant EntityPool.ENTITY_SCALE]).
 static func height_of(style: String) -> float:
-	var heights: Dictionary = _Const.TILE_WALL_STYLE_HEIGHTS
-	var steps: int = heights.get(style, heights[_Const.TILE_DEFAULT_WALL_STYLE])
-
-	return steps * ChunkMeshBuilder.HEIGHT_STEP
+	return WallPalette.height_steps(style) * ChunkMeshBuilder.HEIGHT_STEP
 
 
 ## How many walls one chunk has. For a test.
@@ -144,6 +151,21 @@ static func _has_floor(above: ChunkFile, index: int) -> bool:
 		return false
 
 	return above.floor_names[above.floors[index]] != _Const.TILE_VOID_FLOOR
+
+
+## The world tiles of `chunk` under a stairwell of `above`: the steps of a
+## way up on `chunk`, and the tiles behind a way down on `above`. Both
+## chunks have the same coordinates, so the two sources cover a flight that
+## crosses a chunk edge. With no chunk above, no wall meets a floor.
+static func _stairwell(chunk: ChunkFile, above: ChunkFile) -> Dictionary:
+	if above == null:
+		return {}
+
+	var wells := ClimbRule.stairwell_tiles(chunk, false)
+
+	wells.merge(ClimbRule.stairwell_tiles(above, true))
+
+	return wells
 
 
 ## Add the five faces of one slab: two sides, two ends, and the top. `wall`

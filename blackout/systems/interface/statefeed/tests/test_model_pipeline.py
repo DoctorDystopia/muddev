@@ -166,6 +166,33 @@ class ModelRecordTests(unittest.TestCase):
 
         self.assertEqual(record.keys, ("k", "a", "b"))
 
+    def test_a_record_keeps_its_color_roles_only_when_it_says_so(self):
+        """
+        The build joins two materials that differ in the name only. Only a
+        figure model has color roles in its material names. Thus, the
+        default keeps each other served model as it was before the field.
+        """
+        bodies = {"": False, "[output]\ncolor_roles = true\n": True}
+
+        for body, expected in bodies.items():
+            with self.subTest(body=body):
+                with tempfile.TemporaryDirectory() as folder:
+                    path = _write_record(
+                        folder, "items", "k",
+                        'source = "s"\nfile = "f.glb"\n' + body)
+                    record = records.load_record(path)
+
+                self.assertIs(record.color_roles, expected)
+
+    def test_color_roles_that_is_not_true_or_false_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(
+                folder, "items", "k",
+                'source = "s"\nfile = "f.glb"\n[output]\ncolor_roles = "yes"\n')
+
+            with self.assertRaises(records.RecordError):
+                records.load_record(path)
+
 
 class ManifestTests(unittest.TestCase):
     """The manifest a graphical client fetches to learn which keys have art."""

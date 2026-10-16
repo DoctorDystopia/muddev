@@ -1,0 +1,65 @@
+{
+	"format": 1,
+	"rows": [
+		{
+			"key": "sand",
+			"note": "Loose desert sand. The ground of a new chunk.",
+			"roof": false
+		},
+		{
+			"key": "dirt",
+			"note": "Packed earth, for a path through sand or scrub.",
+			"roof": false
+		},
+		{
+			"key": "gravel",
+			"note": "Loose stones, for a quarry or a worn track.",
+			"roof": false
+		},
+		{
+			"key": "rubble",
+			"note": "Broken concrete and brick from a fallen building.",
+			"roof": false
+		},
+		{
+			"key": "asphalt",
+			"note": "An old road surface, cracked.",
+			"roof": false
+		},
+		{
+			"key": "concrete",
+			"note": "A slab floor, a yard, or a plaza.",
+			"roof": false
+		},
+		{
+			"key": "grass",
+			"note": "Scrub or grass, near water.",
+			"roof": false
+		},
+		{
+			"key": "water_bed",
+			"note": "The ground under shallow water. Add the water flag.",
+			"roof": false
+		},
+		{
+			"key": "roof_sheet_metal",
+			"note": "Corrugated sheet metal, rusted.",
+			"roof": true
+		},
+		{
+			"key": "roof_tile",
+			"note": "Clay roof tiles, for an old house.",
+			"roof": true
+		},
+		{
+			"key": "roof_concrete",
+			"note": "A flat concrete roof slab.",
+			"roof": true
+		},
+		{
+			"key": "void",
+			"note": "No floor: a gap in plane 1 and up. Always Blocked.",
+			"roof": false
+		}
+	]
+}

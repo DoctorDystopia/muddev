@@ -1,0 +1,37 @@
+{
+	"bones": {
+		"Chest": "chest",
+		"Head": "head",
+		"Hips": "hips",
+		"LeftFoot": "foot.l",
+		"LeftHand": "hand.l",
+		"LeftLowerArm": "lowerarm.l",
+		"LeftLowerLeg": "lowerleg.l",
+		"LeftToes": "toes.l",
+		"LeftUpperArm": "upperarm.l",
+		"LeftUpperLeg": "upperleg.l",
+		"RightFoot": "foot.r",
+		"RightHand": "hand.r",
+		"RightLowerArm": "lowerarm.r",
+		"RightLowerLeg": "lowerleg.r",
+		"RightToes": "toes.r",
+		"RightUpperArm": "upperarm.r",
+		"RightUpperLeg": "upperleg.r",
+		"Root": "root",
+		"Spine": "spine"
+	},
+	"clips": {
+		"idle": {
+			"from": "Idle",
+			"loop": true
+		},
+		"walk": {
+			"from": "Walking_B",
+			"loop": true
+		}
+	},
+	"file": "Knight.glb",
+	"format": 1,
+	"key": "kaykit_adventurers",
+	"skeleton": "Rig/Skeleton3D"
+}

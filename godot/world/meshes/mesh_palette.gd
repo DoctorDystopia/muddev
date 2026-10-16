@@ -38,8 +38,44 @@ const STATION := "station"
 const GATHERABLE := "gatherable"
 const PANEL := "panel"
 
+## The materials of a figure (DESIGN-0014 section 16): the skin, the hair,
+## the default clothes of a body, and the plate of worn armor. A worn look
+## gives a color role one of these names, or one of the names above.
+##
+## These are the start colors of a figure. The palette file of the figure
+## workbench is the design ([FigurePalette]): a new palette takes each color
+## from here, and the author then changes it there. A named color that the
+## palette does not have still draws with the color of this table.
+const SKIN := "skin"
+const HAIR_GREY := "hair_grey"
+const CLOTH_GREY := "cloth_grey"
+const CLOTH_PALE := "cloth_pale"
+const CLOTH_RED := "cloth_red"
+const LEATHER_GREY := "leather_grey"
+const LEATHER_OLIVE := "leather_olive"
+const LINEN := "linen"
+const SHADOW := "shadow"
+const IRON := "iron"
+const IRON_DARK := "iron_dark"
+const COPPER := "copper"
+const COPPER_DARK := "copper_dark"
+
 ## Role to colour. Hex strings, matching `blackout_meshes.js` exactly.
 const COLORS := {
+	COPPER: "b87333",
+	COPPER_DARK: "7a4a22",
+	SKIN: "e3b48c",
+	HAIR_GREY: "d6d6dc",
+	CLOTH_GREY: "55565d",
+	CLOTH_PALE: "dfdfda",
+	CLOTH_RED: "8e1b1b",
+	LEATHER_GREY: "77777c",
+	LEATHER_OLIVE: "6f6316",
+	LINEN: "ececf0",
+	SHADOW: "2a2420",
+	IRON: "7c8088",
+	IRON_DARK: "4d5058",
+
 	STEEL: "b9c6d2",
 	RUST: "9c5a35",
 	GOLD: "f0c674",

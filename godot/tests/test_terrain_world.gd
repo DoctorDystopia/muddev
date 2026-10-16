@@ -56,6 +56,7 @@ func _ready() -> void:
 	_the_world_files_put_the_block_over_the_disk(world)
 	_a_jump_loads_the_block_of_the_tile(world)
 	_a_selection_knows_its_link_and_an_undo_clears_it(world)
+	_a_plane_change_hides_the_beacon(world)
 	_a_sign_keeps_its_words_and_its_marker_shows_its_turn(world)
 	_an_entity_kind_draws_its_model_turned(world)
 	_a_new_chunk_takes_the_edge_of_a_saved_neighbour(world)
@@ -311,9 +312,36 @@ func _a_selection_knows_its_link_and_an_undo_clears_it(world: TerrainWorld) -> v
 	_expect(world.selected_link_end() == {"tile": ladder, "plane": 1},
 		"a ladder up leads to the same tile of plane 1")
 
+	world.select(ladder, "stairs_up", 1)
+
+	_expect(world.selected_link_end() == {"tile": ClimbRule.landing(ladder,
+		"stairs_up", 1, _Const.CLIMB_UP), "plane": 1},
+		"a flight up leads past its top step on plane 1")
+
+	world.select(ladder, "ladder_up", 0)
 	world.replay_edit(edit, false)
 
 	_expect(world.selected.is_empty(), "an undo that removes the object clears it")
+
+
+## A plane change drops the selection. The beacon must go with it. Until
+## 10/13/2026 it stood on the old tile while the dock said "Nothing selected".
+func _a_plane_change_hides_the_beacon(world: TerrainWorld) -> void:
+	var ladder := Vector2i(5, 5) * _Const.CHUNK_SIZE + Vector2i(2, 2)
+	var edit := TerrainEdit.for_world(world)
+
+	edit.add_object(world.chunks, ladder, "ladder_up", 0)
+	world.select(ladder, "ladder_up", 0)
+
+	_expect(world.beacon_shown(), "a selection shows the beacon")
+
+	world.move_block(world.centre_chunk, 1)
+
+	_expect(world.selected.is_empty() and not world.beacon_shown(),
+		"a plane change hides the beacon with the selection")
+
+	world.move_block(world.centre_chunk, 0)
+	world.replay_edit(edit, false)
 
 
 func _a_sign_keeps_its_words_and_its_marker_shows_its_turn(world: TerrainWorld) -> void:

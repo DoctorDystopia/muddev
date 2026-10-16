@@ -34,11 +34,12 @@ const FIXTURES_FROM_GAME := "world/tests/fixtures/checks"
 ## findings, sorted by rule, plane, y, and x. Empty means the world is good.
 static func check_world(chunk_files: Array[ChunkFile]) -> Array[Dictionary]:
 	var planes := _plane_sets(chunk_files)
+	var wells := _stairwells(chunk_files)
 	var found: Array[Dictionary] = []
 	var respawns: Array[Vector3i] = []
 
 	for chunk: ChunkFile in chunk_files:
-		found.append_array(_check_floors(chunk))
+		found.append_array(_check_floors(chunk, wells.get(chunk.plane, {})))
 
 		for thing: Dictionary in chunk.global_objects():
 			found.append_array(_check_object(planes, chunk.plane, thing))
@@ -85,7 +86,7 @@ static func is_note(finding: Dictionary) -> bool:
 ## True when an object of `kind` carries text: the words of a signpost. The
 ## sign text rule and the editor both ask here.
 static func takes_text(kind: String) -> bool:
-	return _Const.OBJECT_KINDS.get(kind, "") == _Const.OBJECT_TEXT_CATEGORY
+	return TileTables.object_category(kind) == _Const.OBJECT_TEXT_CATEGORY
 
 
 # ─── The rules ───────────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ static func _check_object(planes: Dictionary, plane: int,
 	var where := "%s at %s plane %d" % [kind, tile, plane]
 	var found: Array[Dictionary] = []
 
-	if not _Const.OBJECT_KINDS.has(kind):
+	if not TileTables.object_kinds().has(kind):
 		found.append(_finding(_Const.TILE_CHECK_UNKNOWN_KIND, tile, plane,
 			where + ": no such object kind"))
 		return found
@@ -130,7 +131,7 @@ static func _check_object(planes: Dictionary, plane: int,
 			where + ": " + problem))
 
 	# A decor kind may stand on a Blocked tile (DESIGN-0013 section 6.5).
-	var is_decor: bool = _Const.OBJECT_KINDS[kind] == _Const.OBJECT_CATEGORY_DECOR
+	var is_decor := StructureTools.is_decor(kind)
 
 	if not is_decor and not _walkable(planes, plane, tile):
 		found.append(_finding(_Const.TILE_CHECK_OBJECT_UNWALKABLE, tile, plane,
@@ -145,17 +146,36 @@ static func _check_object(planes: Dictionary, plane: int,
 
 	for way: String in _Const.OBJECT_KIND_CLIMBS.get(kind, []):
 		var landing: int = plane + _Const.CLIMB_PLANE_STEPS[way]
+		var top := ClimbRule.landing(tile, kind, thing["rotation"], way)
 
-		if not _walkable(planes, landing, tile):
+		if not _walkable(planes, landing, top):
 			found.append(_finding(_Const.TILE_CHECK_CLIMB_LANDING, tile, plane,
-				where + ": climb %s lands on no open tile of plane %d" % [way, landing]))
+				where + ": climb %s lands on no open tile at %s of plane %d"
+				% [way, top, landing]))
 
 	return found
 
 
 ## The findings of [method _floor_findings] for each tile of a file that is
 ## void or a roof. Every other floor gives none.
-static func _check_floors(chunk: ChunkFile) -> Array[Dictionary]:
+## Plane to the stairwell tiles of that plane, as a Dictionary of world
+## tiles ([method ClimbRule.stairwell_tiles]). A way up gives them on the
+## plane above it, and a way down on its own plane.
+static func _stairwells(chunk_files: Array[ChunkFile]) -> Dictionary:
+	var wells := {}
+
+	for chunk: ChunkFile in chunk_files:
+		for plane: int in [chunk.plane, chunk.plane + 1]:
+			if not wells.has(plane):
+				wells[plane] = {}
+
+		wells[chunk.plane].merge(ClimbRule.stairwell_tiles(chunk, true))
+		wells[chunk.plane + 1].merge(ClimbRule.stairwell_tiles(chunk, false))
+
+	return wells
+
+
+static func _check_floors(chunk: ChunkFile, wells: Dictionary) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	var size: int = _Const.CHUNK_SIZE
 
@@ -163,7 +183,7 @@ static func _check_floors(chunk: ChunkFile) -> Array[Dictionary]:
 		var floor_name := chunk.floor_names[chunk.floors[index]]
 
 		if floor_name != _Const.TILE_VOID_FLOOR \
-				and not _Const.TILE_ROOF_FLOOR_TYPES.has(floor_name):
+				and not TileTables.is_roof(floor_name):
 			continue
 
 		@warning_ignore("integer_division")
@@ -171,15 +191,16 @@ static func _check_floors(chunk: ChunkFile) -> Array[Dictionary]:
 			chunk.cy * size + index / size)
 
 		found.append_array(_floor_findings(floor_name, tile, chunk.plane,
-			chunk.flags[index]))
+			chunk.flags[index], wells.has(tile)))
 
 	return found
 
 
 ## The findings of one tile by its floor: a void tile that is open or has a
-## wall, and a roof tile that is open.
+## wall, and a roof tile that is open. A stairwell tile may carry a wall:
+## the wall of the upper room stands over the opening (Nick, 10/16/2026).
 static func _floor_findings(floor_name: String, tile: Vector2i, plane: int,
-		flags: int) -> Array[Dictionary]:
+		flags: int, in_well: bool = false) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	var where := "%s at %s plane %d" % [floor_name, tile, plane]
 	var blocked := flags & _Const.TILE_FLAG_BLOCKED != 0
@@ -189,11 +210,11 @@ static func _floor_findings(floor_name: String, tile: Vector2i, plane: int,
 			found.append(_finding(_Const.TILE_CHECK_VOID_OPEN, tile, plane,
 				where + " is not Blocked"))
 
-		if flags & _Const.TILE_FLAGS_WALLS:
+		if flags & _Const.TILE_FLAGS_WALLS and not in_well:
 			found.append(_finding(_Const.TILE_CHECK_WALL_ON_VOID, tile, plane,
 				where + " carries a wall"))
 
-	if _Const.TILE_ROOF_FLOOR_TYPES.has(floor_name) and not blocked:
+	if TileTables.is_roof(floor_name) and not blocked:
 		found.append(_finding(_Const.TILE_CHECK_ROOF_WALKABLE, tile, plane,
 			where + " is a roof, but is not Blocked"))
 
@@ -202,9 +223,10 @@ static func _floor_findings(floor_name: String, tile: Vector2i, plane: int,
 
 ## The cheap rules on the tiles of one Build gesture, as `(x, y, plane)`:
 ## the floor rules on each tile, and the object rules on each object of the
-## tile and of the same tile one plane up and down, since a climb lands
+## tile and of the same tile one plane up and down, since a ladder lands
 ## there. `sets` maps a plane to its [ChunkSet]. The live check of the
-## Build tab (DESIGN-0013 section 6.7). "Check world" runs every rule.
+## Build tab (DESIGN-0013 section 6.7). "Check world" runs every rule. It
+## also finds a flight whose landing an edit closed, from tiles away.
 static func check_tiles(sets: Dictionary, tiles: Array[Vector3i]) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	var objects := {}
@@ -216,8 +238,10 @@ static func check_tiles(sets: Dictionary, tiles: Array[Vector3i]) -> Array[Dicti
 		if chunks == null or not chunks.has_tile(tile):
 			continue
 
+		var in_well := ClimbRule.is_stairwell(sets.get(point.z - 1), chunks, tile)
+
 		found.append_array(_floor_findings(chunks.get_floor(tile), tile, point.z,
-			chunks.get_flags(tile)))
+			chunks.get_flags(tile), in_well))
 
 		for step: int in [-1, 0, 1]:
 			objects[point + Vector3i(0, 0, step)] = true
@@ -230,7 +254,7 @@ static func check_tiles(sets: Dictionary, tiles: Array[Vector3i]) -> Array[Dicti
 
 		for thing: Dictionary in chunks.objects_at(Vector2i(point.x, point.y)):
 			var placed := {"kind": thing["kind"], "x": point.x, "y": point.y,
-				"text": thing["text"]}
+				"rotation": thing["rotation"], "text": thing["text"]}
 
 			found.append_array(_check_object(sets, point.z, placed))
 
@@ -320,7 +344,11 @@ static func _links(chunk_files: Array[ChunkFile], planes: Dictionary) -> Diction
 				ends.append(Vector3i(target[0], target[1], chunk.plane))
 
 			for way: String in _Const.OBJECT_KIND_CLIMBS.get(thing["kind"], []):
-				ends.append(Vector3i(tile.x, tile.y, chunk.plane + _Const.CLIMB_PLANE_STEPS[way]))
+				var landing := ClimbRule.landing(tile, thing["kind"],
+					thing["rotation"], way)
+
+				ends.append(Vector3i(landing.x, landing.y,
+					chunk.plane + _Const.CLIMB_PLANE_STEPS[way]))
 
 			for end: Vector3i in ends:
 				if _walkable(planes, end.z, Vector2i(end.x, end.y)):

@@ -255,6 +255,37 @@ keys of the two tables are the generated constants, not string literals. Thus,
 a family renamed on the server breaks the file loudly. It does not silently
 draw every weapon as a box.
 
+**The look files come first, and the tables are the fallback** (ENG-0011,
+steps L4 to L6, 10/13/2026). Three looks of the mesh ladder are data files
+that the figure workbench writes:
+
+| File | Holds | Reader | Fallback |
+|---|---|---|---|
+| `blackout/assets/figure/palette.json` | Each named color, each color role, and each finish | `FigurePalette` | `MeshPalette.COLORS` and `MeshPalette.FINISHES` |
+| `world/look/families.json` | The parts of each family with no art, and the model of a family | `FamilyLooks`, through `FamilyShapes` | `FamilyShapes.SHAPES` and `MODELS` |
+| `world/look/presentation.json` | The offset, the turn, and the scale of each served model | `ModelPresentation`, through `ModelRegistry` | `ModelRegistry.PRESENTATION` |
+
+A key with no row draws as before the file existed. Thus, a missing file
+breaks nothing, and new content never needs a client edit. The Python guard
+in `test_client_constants.py` checks that each key names a server family or
+a model record.
+
+`MeshBuilder` draws each part with the active palette,
+`FigurePalette.active`. The color of a part is a color role or a named
+color. The `roles` table gives the role its named color, and the named
+color gives its color and its finish. A part with no finish takes the
+finish of its named color. The figure workbench puts the palette of its
+store there, so a change on the Colors tab reaches each family shape at one
+time. With no active palette, each name comes from `MeshPalette`. The game
+sets no active palette yet, because it does not read the figure set yet.
+
+A family row of `families.json` is a worn look with one bone, `root`. The
+part editor of the figure workbench edits it as it edits a worn look.
+`FamilyLooks.builder_parts` gives `MeshBuilder` the flat list, with the
+place of each part in its shapes. A row of `presentation.json` holds the
+turn in degrees, because the author types it. `ModelPresentation.entry_of`
+gives the registry its radians.
+
 > **On the web, the page's own origin must serve the art.** `wss://` is exempt
 > from CORS. An HTTP fetch for a `.glb` is not, and
 > `game.playblackout.io/static/webclient/models/` serves no
@@ -377,7 +408,7 @@ tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
 | The water | `world/terrain/water_mesh_builder.gd` | A flat surface on each water tile, at the height of its highest corner. The editor draws it with the same class |
 | The walls | `world/terrain/wall_mesh_builder.gd`, `wall_palette.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. The wall style of the tile gives its colour and its height. A plain primitive until the walls get art. The editor draws it with the same class |
 | The scenery | `TerrainView._place_scenery` | The model that `OBJECT_KIND_SCENERY` names for a chunk object, on the centre of its tile. The server names the model in `world/object_kinds.py`. The transition pad is the first. No art, no model |
-| The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, or a hatch, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. The editor draws it with the same class |
+| The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, a hatch, or the newel posts at the top of a flight, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. A flight rises over the run of its kind, in front of its tile. The editor draws it with the same class |
 | The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
 | The pick | `WorldView._cell_under` | `TerrainPicking.ray_hit` on the height grid. No collision shape |
 | The area look | `WorldView._place_marker` | The area of the tile under the player, from its chunk, goes to `AreaEnvironment` |
@@ -1319,33 +1350,63 @@ To use it:
 
 1. Open `res://addons/blackout_terrain/terrain_editor.tscn`.
 2. Select the `TerrainWorld` node. The Terrain panel opens on the right.
-3. On the **World** tab, set the centre chunk and the plane. Click
-   **Load block**.
-4. On the **Paint** tab, pick a brush. Drag with the left button. Shift
-   reverses the brush.
+3. In the block strip, set the centre chunk and the plane. Click **Load**.
+   The four pan buttons move the block one chunk. **Go to tile** loads the
+   block of a tile and puts the beacon on it.
+4. On the **Paint** tab, click a tool, or press its number key. Drag with
+   the left button. Shift lowers with the Raise brush, clears the flags with
+   the Flags brush, and picks the floor or the area under the mouse with
+   those two brushes. The hint line at the bottom of the 3D view names the
+   tool, its values, and the keys.
 5. Click **Check world** on the **World** tab. Fix each finding.
-6. Press Ctrl+S. The plugin writes each changed chunk to
+6. Press Ctrl+S, or click **Save** in the file strip. The button counts
+   the changed chunks. The plugin writes each changed chunk to
    `blackout/world/chunks/`.
 7. Stop the server, run `scripts/sync_tile_objects.py --apply` from
    `blackout/`, and start the server. The World tab names each chunk file
    that changed since the last sync.
 
-The panel has four tabs:
+Three strips sit above the tabs:
+
+| Strip | Holds |
+|---|---|
+| File | **Save (N changed)**, **Revert** (reads the chunk files again, after a question that counts the unsaved chunks), **Open workbench** or **Open world**, and in the workbench **Clear workbench** |
+| Block | The centre chunk, **Load**, the four pan buttons, the plane, **Go to tile**, and **Walls down (V)** |
+| Paint values | The **Floor**, the **Area**, and the **Wall** style that the tools of the Paint tab and of the Build tab write. One list for each, so a pick from either tab lands here. **(keep)** leaves the floor or the area of each tile: the Room and the Place tool use it, and the Floor brush and the Area brush paint nothing with it. **New** beside each list opens the Tables tab on its table |
+
+The panel has six tabs:
 
 | Tab | Holds |
 |---|---|
-| Paint | The tool, the brush size and strength, the floor, the area, the object kind and rotation, the flags, the noise, and **Protect structures** |
-| Objects | The selected object with **Turn**, **Delete**, **Set kind to the Object choice**, and **Follow link**. A list of every object in the block. A click on a row selects it. **Show decor in the list** off keeps the decor out of the list |
-| World | The centre chunk and the plane, load and save, the marks to show, how the planes above show, **Check world** and its findings, and the state of the tile sync |
-| Build | The structure tools (DESIGN-0013): Wall line, Room, Doorway, Level above, Stairs, Roof, Wall style, Decor, Select, and Place, with their options. See "The Build tab" below |
+| Paint | The tool row, and the options of the current tool only: the radius, the brush shape, the strength, the flags, the object kind and rotation, the sign text, the noise, and **Protect structures** |
+| Build | The structure tools (DESIGN-0013): Wall line, Room, Doorway, Level above, Ladder, Stairs, Roof, Wall style, Decor, Select tiles, and Place, with the options of the current tool only. See "The Build tab" below |
+| Objects | The selected object with its **Kind**, **Rotation**, and **Sign text** fields (a change applies at once), **Turn**, **Turn back**, **Delete**, and **Follow link**. A filter, and a list of every object in the block. A click on a row selects it, and the Paint tool stays. **Show decor** off keeps the decor out of the list |
+| World | The **Block** report (the load errors and the seam faults, kept until the next load), the marks to show with a legend, how the planes above show, **Check world** and its findings, and the state of the tile sync |
+| Look | The colour of each floor type, the cliff, the water, and each prop, the colour and the height of each wall style, the fog and the light of each area with **Preview the area light**, and the colours of the editor marks. See "The Look tab" below |
+| Tables | The rows of the areas, the floor types, the wall styles, and the decor kinds: **New row**, **Save row**, **Rename row**, **Remove row**, and **Read files again**. See "The Tables tab" below |
 
-The **Select** tool picks an object on a click. A second click on the same
-tile picks the next object there. A drag moves the selected object to another
-tile. A tall magenta beacon marks the selection, or the tile of a finding.
+The **Shape** of the Paint brush is a circle or a square. The side of a
+square is twice the radius, and its edges lie on the tile edges. An odd side
+centres on the tile under the mouse, and an even side on the nearest corner.
+The ring shows the tiles of the square. The Ramp has no shape, because it
+reads the radius as the half of its width.
+
+The **Pick object** tool of the Paint tab picks an object on a click. A
+second click on the same tile picks the next object there. A drag moves the
+selected object to another tile. A tall magenta beacon marks the selection,
+or the tile of a finding.
 
 **Follow link** loads the block where the selected object leads: the target
 of a transition, or the same tile one plane up or down for a climb. A click
-on a finding loads its block and plane in the same way.
+on a finding loads its block and plane in the same way. With unsaved chunks,
+a move to another block asks first: the move saves the chunks and drops the
+undo history.
+
+The keys of the 3D view work on every tab. Page Up and Page Down change the
+plane. V toggles "Walls down". The bracket keys step the radius of the Paint
+brush, or the pitch and the brush of the Build tools. The number keys 1 to 9
+and 0 pick a tool of the tab that shows. Esc drops a drag, a half-made ramp,
+and the selection.
 
 The rules that the editor keeps:
 
@@ -1374,6 +1435,10 @@ The rules that the editor keeps:
   integer heights, because the server cannot run Godot's noise. The seed, the
   frequency, and the amplitude persist in `terrain_editor.cfg`, beside the
   plugin, so every author gets the same noise.
+- **Every other choice is in the session file**, outside the repo:
+  `user://blackout_terrain_session.cfg`. The tool, the Build options, the
+  paint values, the marks to show, and the colours of the editor marks live
+  there. Thus a session leaves no modified file in git.
 - **A new chunk above the ground starts from the chunk below.** Its heights
   are those below plus 32 height steps (two tiles). Every tile is `void` and
   Blocked, and the areas are those below. A floor paint on a void tile clears
@@ -1383,7 +1448,13 @@ The rules that the editor keeps:
 - **A move of the block clears the undo history.** The move saves the old
   block first. Thus, an undo after the move would write into a chunk that is
   not loaded. `TerrainWorld.replay_edit` also refuses an edit of another
-  block.
+  block. With unsaved chunks, the plugin asks before the move, and the
+  status names the files that the move saved.
+- **A chunk file that does not write shows first in the status box**, in
+  capitals, and it stays unsaved. The Output panel alone is easy to miss.
+- **Ctrl+S reaches the last edited world.** Godot gives the plugin no world
+  while another node is selected, for example the sun. The plugin keeps the
+  last one, so the save and the close prompt still see its unsaved chunks.
 - **Check world runs the rules of the server.** `terrain_checks.gd` is the
   twin of `blackout/world/tile_checks.py`. Each transition and each climb
   lands on an open tile. Each object stands on a walkable tile. Each void
@@ -1406,31 +1477,58 @@ facts, so the server reads nothing new. `structure_tools.gd`,
 `room_fill.gd`, and `roof_shapes.gd` hold the rules.
 `test_structure_tools.tscn` and `test_roof_shapes.tscn` test them.
 
+The tab shows the options of the current tool only. The hint line names
+the state of the rest.
+
 | Tool | Gesture | Shift |
 |---|---|---|
 | Wall line | Drag along tile edges, on one axis | Remove the walls under the line |
 | Room | Drag a rectangle: the levelled ground, the floor, the area, and walls on the inner edges of the border | Remove the walls in the rectangle |
 | Doorway | Click a wall edge. The wall goes from both sides | Put the wall back |
 | Level above | Click inside a closed room, or drag a rectangle. The plane above gets a floor, flat at the highest corner plus 32 steps | Set the tiles back to void and Blocked |
-| Stairs | Click a tile. The climb goes on this plane and its twin on the plane above. A void landing gets a floor. A tile with the pair refuses a second pair | Remove the pair |
+| Ladder | Click a tile. The ladder goes straight up: the climb goes on this plane and its twin on the same tile of the plane above. A void landing gets a floor. A tile with the pair refuses a second pair. R and Shift+R turn the next one | Remove the pair |
+| Stairs | Click the tile at the foot. The flight rises over the 3 tiles in front of the foot. Its twin goes on the plane above, on the tile past the top step. The steps get Blocked, and the plane above gets a void stairwell over them. A void landing gets a floor. R and Shift+R turn the next one | Remove the pair, and open the steps again. The stairwell stays void |
 | Roof | Click inside a closed rectangle room, or drag a rectangle. The plane above gets the roof floor type, Blocked, and the corner heights of the roof shape over the room and its overhang | Set the roof tiles back to void and Blocked |
 | Wall style | Drag the brush ring over walls. Each tile with a wall bit under the ring takes the wall style | Paint the default style, `plain` |
 | Decor | Click a tile, again and again. The decor of the options goes on the tile at the next turn. R and Shift+R turn the next one | Remove the decor on the tile |
-| Select | Drag a rectangle, or click inside a room. Ctrl adds to the tile selection | Take tiles out of the tile selection |
+| Select tiles | Drag a rectangle, or click inside a room. Ctrl adds to the tile selection | Take tiles out of the tile selection |
 | Place | Click to write a copy of the template of the options. R turns it, F mirrors it | none. Alt and a click replace the objects on its tiles |
 
 Alt and a click take the floor, the area, and the wall style of a tile into
-the options. On a tile with decor, they also take its kind and its turn. Esc cancels a drag. Page Up and Page Down change the edited
-plane. V toggles "Walls down", which draws each wall low, so the author
-sees into a room.
+the paint values strip. On a tile with decor, they also take its kind and
+its turn. Esc cancels a drag. "Walls down" in the block strip, or V, draws
+each wall low, so the author sees into a room.
+
+**Ladders and stairs** (Nick, 10/16/2026). A ladder goes straight up. A
+flight of stairs goes up over tiles. A walker stands on the tile at the
+foot and types `climb up`, and lands past the top step on the plane above.
+`climb down` on that tile goes back to the foot. The run of the climb kind
+gives the tiles of the flight (`STAIRS_RUN`, 3). The rotation of the
+object gives the way. Both objects of a flight carry the same rotation. The
+mark of the Stairs tool covers the foot, the steps, and the landing. A
+flight that leaves the loaded block refuses, and the hint line says to turn
+it. The session file keeps the tool by name, so a new tool can go anywhere
+in the row.
+
+In the game, a click on a ladder, on the foot, or on any step walks to the
+climb and climbs it. The server sends that action for each tile of each
+climb near the player. The steps are Blocked, so no walk command fits
+them. The pick meets each step at its drawn height
+(`PropMeshBuilder.pick_tops`). Thus a click on a high step picks that step,
+not the ground past it. A wall beside the steps rises to the plane above,
+and a wall on a stairwell tile is legal. `ClimbRule`
+(`world/terrain/climb_rule.gd`) owns the landing, the steps, and the
+stairwell for the client, the editor, and the checks.
 
 **Wall styles.** A wall style is the look of the walls of one tile:
 `plain`, `concrete`, `brick`, and so on (DESIGN-0013 section 6.4). The rows
-are in `blackout/world/wall_styles.py`, and each row gives a height for a
-wall with nothing above it. `plain` stays 0.75 units tall, and `rubble` is a
-low ruin wall. The colours are the client's own, in
-`world/terrain/wall_palette.gd`. A style with no colour there draws in the
-colour of `plain`, so a new style needs no client edit.
+are in `blackout/world/tables/wall_styles.json`, and the Tables tab edits
+them. The colour and the height of each
+style are the client's own, in `world/look/terrain_palette.json`, with
+`world/terrain/wall_palette.gd` as the fallback. The Look tab edits them.
+`plain` starts 0.75 units tall, and `rubble` is a low ruin wall. A style
+with no row anywhere draws in the colour and at the height of `plain`, so a
+new style needs no client edit.
 
 The Wall line and the Room put the wall style of the options on each tile
 that gets a wall bit. The Wall style brush paints the style on the walls
@@ -1466,8 +1564,8 @@ through it. Decor pins no tile room, and the tile sync stands nothing up
 for it. Until a model record takes the key, `PropMeshBuilder` draws a
 plain shape.
 
-**Select, Move, and Delete.** The Select tool of the Build tab holds a tile
-selection, not an object. With "Select every plane" on, a gesture takes the
+**Select, Move, and Delete.** The Select tiles tool of the Build tab holds
+a tile selection, not an object. With "Select every plane" on, a gesture takes the
 edited plane and each plane above it. A click inside a room then takes the
 room, its level, and its roof with the overhang. The keys:
 
@@ -1482,8 +1580,8 @@ room, its level, and its roof with the overhang. The keys:
 **Templates and the Place tool.** A template is a saved structure in
 `blackout/world/structures/<key>.json` (DESIGN-0013 section 6.6).
 `blackout/world/structures/README.md` gives the format. Type a key and
-click "Save the selection as a template". The Place tool then lists it,
-after the row of the clipboard. A copy is plain facts in the chunk files,
+click "Save as template". A key that a template has asks first: the old
+file goes. The Place tool then lists it, after the row of the clipboard. A copy is plain facts in the chunk files,
 and nothing links it to its template.
 
 The outline of the Place tool follows the mouse, centred on it. Green
@@ -1498,14 +1596,14 @@ stall of a market row. `structure_template.gd`, `structure_place.gd`,
 `tile_selection.gd`, and `template_input.gd` hold the rules, and
 `test_structure_template.tscn` tests them.
 
-**Protect structures.** With this box on the Paint tab, a sculpt, a ramp,
-and a noise fill skip each corner of a tile with a wall or with a floor
-above it. The author then shapes the hills around a town, and the floors
-stay flat.
+**Protect structures.** With this box on the Paint tab, under each sculpt
+tool, a sculpt, a ramp, and a noise fill skip each corner of a tile with a
+wall or with a floor above it. The author then shapes the hills around a
+town, and the floors stay flat.
 
 **The structure workbench.** Open
 `res://addons/blackout_terrain/structure_workbench.tscn`, or click "Open
-the structure workbench" on the World tab (DESIGN-0013 Phase S6). It is the
+workbench" in the file strip (DESIGN-0013 Phase S6). It is the
 terrain editor on scratch chunk files in `user://structure_workbench`,
 outside the repo. The ground starts flat and blank. Every tool works as in
 the world. Build a structure, select it, and save it as a template. The
@@ -1515,16 +1613,91 @@ workbench, edit the copy, and save it again with the same key.
 
 - "Check world" in the workbench leaves out `respawn_count` and
   `unreachable`. A scratch world holds no respawn point.
-- "Clear the structure workbench" deletes the scratch chunk files after a
-  confirmation, and the ground is blank again. The templates stay. The
+- "Clear workbench" deletes the scratch chunk files after a question that
+  counts them, and the ground is blank again. The templates stay. The
   button refuses the world chunk files.
-- "Open the terrain editor" goes back. Save the chunks first: the button
-  refuses a switch with unsaved chunks.
+- "Open world" goes back. With unsaved chunks, it asks to save them first.
 
 The hint line at the bottom of the 3D view names the tool, its gesture, each
-modifier, and each toggle. A size readout follows the cursor during a drag.
-After each gesture, the live check runs the cheap rules on the changed tiles.
-The hint line names the first finding.
+modifier, and each toggle, on every tab. A size readout follows the cursor
+during a drag. After each gesture, the live check runs the cheap rules on
+the changed tiles. The hint line names the first finding, and the findings
+list of the World tab says that its rows can be old.
+
+### The Look tab
+
+Since 10/13/2026 the look of the terrain is data, not code. Each table of
+the client keeps its old values as the fallback, and a JSON file under
+`world/look/` is the design:
+
+| File | Holds | Fallback |
+|---|---|---|
+| `terrain_palette.json` | The colour of each floor type, the cliff, the water, and each prop. The colour and the height of each wall style, in height steps. The wall top lighten | `world/terrain/floor_palette.gd`, `wall_palette.gd` |
+| `area_looks.json` | The nine fields of the fog and the light of each area | `world/area_look.gd` |
+
+`world/look/look_file.gd` reads and writes them, with a cache, so a mesh
+build pays for no file read. A key with no row draws as before the file
+existed. Thus a new floor type, wall style, or area needs no edit anywhere
+on the client, and a missing file breaks nothing. The Python guard
+(`LookFileTests` in `test_client_constants.py`) fails on a key that names
+no server fact.
+
+The Look tab edits the two files. Each picker and each field writes the
+file a short moment after the last change of a drag, and the block draws
+again, so the author sees the colour on the ground. "Preview the area
+light" applies the fog and the light of the chosen area to the sun and the
+environment of the editor scene, through the same routine that the game
+uses (`AreaLook.apply_to`). The preview writes into the sky and the sun of
+the scene. Thus, the plugin ends it before each save (`_apply_changes`), and
+starts it again on the next frame. A save with the preview on stored the
+look as the sky of the scene until 10/14/2026. "Reset colours" and "Reset
+area" take the rows out of the file after a question.
+
+The colours of the editor marks are the last section of the tab: the
+Blocked and water tiles, the walls, the borders, the brush ring, the Build
+outlines, the beacon, the ghost planes, and the marker of each object
+category. A player never sees them, so they are no look file. They are the
+author's, in the session file, and "Reset marks" gives the defaults back.
+
+### The Tables tab
+
+Since 10/14/2026 the areas, the floor types, the wall styles, and the decor
+kinds are table files under `blackout/world/tables/`. That directory has a
+README with the format and the steps. The Tables tab edits the four files.
+Nick chose JSON tables, a New button for the four tables, and a rename and
+a removal too.
+
+| Button | Does |
+|---|---|
+| **New row** | Adds the fields as a new row at the end of the table. The key must be new and a legal chunk file name, and each text needs a word. A decor kind needs a scenery: a primitive or a served model |
+| **Save row** | Writes the fields to the selected row. The key stays |
+| **Rename row** | Gives the selected row the key of the Key field. It asks first and counts the files. It saves the unsaved chunks. Then it writes the new key into each file that names the old key: the chunk files, the templates, the look rows, and the fallback rows. The block then reads again |
+| **Remove row** | Takes out the selected row when no chunk file, unsaved chunk, or template uses it. Its look rows and fallback rows go too |
+| **Read files again** | Reads the table files again, after an edit outside Godot |
+
+Some rows stay. The first row of the areas, the floor types, and the wall
+styles is the default of a new chunk. A rename of it is legal, and a
+removal is not. `void` and `plain` keep their keys, because the client and the chunk
+file format name them. The last roof floor type stays a roof for the Roof
+tool.
+
+The class `TableEdits` owns these rules. The class `SourceTable` changes a
+row of a fallback table of the client, for example `AreaLook.LOOKS`. The
+Python guard fails on a client key that names nothing.
+
+After each change, every list of the dock reads the tables again. The
+block draws again. Then the class `ClientExport` runs the client export and
+the check fixture builder on a thread. The status box gives the result. The
+server reads a new row after a restart.
+
+**Two sources.** The class `TileTables` (`world/terrain/tile_tables.gd`) is
+the one GDScript reader of the four tables. In the editor it reads the
+table files. Thus, a new row shows at once, with no export and no reload.
+The game reads the generated constants, because it must read what its
+server reads. For example, the world map sends a floor type as its index in
+`TILE_FLOOR_TYPES`. Thus, deploy the client again after a change of a
+table. The test `test_tile_tables.tscn` tests the reader, the rules, and
+the form, on copies under `user://`.
 
 "Block outside" sets Blocked on the ring of tiles around a room, for a
 dungeon. A ring tile with a wall bit is part of another room, and it stays
@@ -1542,6 +1715,568 @@ open.
 The brushes follow the workflow of Low Poly Terrain Builder (MIT). None of its
 code is here: its Delaunay mesh cannot give a floor colour to one tile or put a
 wall on a tile edge.
+
+## The figure workbench writes figure files, not scenes
+
+DESIGN-0014. The figure workbench is an editor plugin in
+`addons/blackout_figure/`, a sibling of the terrain editor. `project.godot`
+enables it, and the web export excludes the directory. It makes the rigs and
+the bodies of the figures. Phase W1 (10/12/2026) built the Rig tab and the
+Body tab. Phase W2 (10/12/2026) built the clips and the Clips tab. Phase W3
+(10/12/2026) built the Gear tab, the outfit bar, and the slot shapes. The
+bodies and the slot shapes have the low-poly look since 10/12/2026
+(DESIGN-0014 section 16). Phase W4 (10/12/2026) built the model parts, the
+reference body, the hide list, the fit of a body type, and the figure set.
+Phase W5 (10/13/2026) built the palette, the Colors tab, the tiers, and the
+stance table. Phase W6 (10/13/2026) built the checks, the Check tab, the
+budget line, the kit parts, and the list of the NPC defs. It also gave the
+author more tools: the other side of a part, a copy of a part, the rotation
+of a socket, the regions of a rig, and a new name for a color. The plan of
+DESIGN-0014 has no phase left. The game does not draw a figure yet. The
+look layer of ENG-0011 (10/13/2026) added the finishes of the palette, the
+Families tab, and the presentation fields of the Gear tab.
+
+To use it:
+
+1. Open `res://addons/blackout_figure/figure_workbench.tscn`, or click
+   **Open workbench** on the Figure dock.
+2. Select the `FigureWorkbench` node. A mannequin of each body type stands
+   on the floor.
+3. Click a part in the 3D view. Move it with the Godot tools: W moves, E
+   turns, and R scales. The hint line at the bottom of the 3D view names
+   the selected part, its look, its bone, and the body type.
+4. On the **Rig** tab, select a bone and change its position. The mark on
+   the bone is a node: W moves it in the 3D view, and the move goes into
+   the rig of that stand. The mirror box applies to the fields only. On
+   the **Body** tab, change a part and its shape list.
+5. On the **Clips** tab, select a clip. Click **Play** in the play bar
+   above the tabs. Each body type plays the same clip, on every tab.
+   **Show a held item in each hand** shows if a clip puts an item through
+   the body.
+6. Press Ctrl+S, or click **Save** in the top strip. The plugin writes
+   each changed file to `blackout/assets/figure/`.
+
+The top strip is the first row of the dock. **Save** says how many files
+are unsaved, for example "Save (3 changed)". **Revert** reads each figure
+file again. It asks first, and the question names each unsaved file. With
+no unsaved file, it asks nothing. The terrain editor has the same strip.
+
+Each button says a verb and an object. The full sentence is in its
+tooltip. A button that cannot apply is off, and its tooltip gives the
+reason: a button that needs a row, the socket rotation of a bone of the
+body, or a build that runs now.
+
+The **Body** tab and the **Gear** tab fold their sections: Look, Colors,
+Hides, Model, Kit, and Parts. Parts starts open. The session file keeps
+the state of each fold.
+
+To give an item a worn look:
+
+1. On the **Gear** tab, pick the row of the item. Each body type then wears
+   the item. An item with no worn look shows the slot shape of its slot.
+   The text field above the list keeps the rows with the typed text, with
+   no regard to the case.
+2. Click **New look**. The item gets a copy of the slot shape of its slot
+   as its own look.
+3. Change the parts, the shape list, and the colors, as on the Body tab. A
+   click on the item in the 3D view selects its part.
+4. Use the **outfit bar** above the tabs to put an item in each other slot.
+   Look for a part that goes through another part.
+5. Press Ctrl+S. The look is `blackout/assets/figure/looks/<item key>.json`.
+
+**Copy look** gives the row the parts and the colors of another look. A tier
+is a legal source. The list names it "key (a tier of base)", and the copy
+takes the look that the tier draws. **Only the rows with no worn look**
+lists the items that still show a slot shape.
+
+To give an item a model from a modeler (Phase W4):
+
+1. Select the body type that you model over. Use the outfit bar to dress
+   the figure in each item that the new part must fit over.
+2. On the **Body** tab, click **Export reference body**, and save the
+   `.glb` file.
+3. Open the file in a modeler. Model the part where it sits on the body: a
+   helm over the head, a chainbody over the torso and the arms. Do not move
+   the body. Keep the feet at the origin, +Y up, and the face to +Z.
+4. Make one object for each bone that the item must follow. A chainbody is a
+   torso object and two arm objects. Give each material the name of a color
+   role: `metal`, `trim`, `cloth`.
+5. Export only the new objects, as one `.glb` file.
+6. On the **Gear** tab, pick the row of the item. Type the author of the
+   file, and click **Import model**. The model pipeline builds the model
+   on a thread. The status box says "Building ..." until it ends, and the
+   button is off. The editor stays usable.
+7. Look at the parts in the part editor. Each object is one part, on the
+   bone with the name of the object, or on the nearest bone. Change a bone
+   there if it is wrong. The part stays where it is.
+8. Tick each region that the item covers in **Regions that the look hides on
+   each other look**. A chainbody hides `torso` and `arms`.
+9. Select the other body type, and click **Fit from bone lengths**. Play
+   each clip, and look at each body type.
+10. Press Ctrl+S.
+
+The import writes four things in the game directory: the source
+`assets/sources/blackout_<key>/`, the model record
+`assets/models/<family>/<key>.toml`, the served `.glb`, and
+`assets/build.lock.json`. An undo takes the parts out of the look. It does
+not remove those files. `blackout/assets/README.md` has the rules of the
+command.
+
+The import refuses a key that another model has. An item key can be an alias
+in the record of another model, as `rusty_scrap_arrow` is. Take the key out
+of that record first. Or type another key in the model field, and the item
+keeps its old model in the inventory.
+
+**Parts from model** does step 7 for a model that the served tree has
+already. It also reads the served tree again after a build
+in a terminal.
+
+To change the fit of one part on one body type:
+
+1. Select the body type on the dock, and select the part.
+2. Tick **Own place on this body type (the fit)**. The part does not move.
+3. Move the part with the Godot tools on the stand of that body type, or
+   change the place fields. The other body type keeps its place.
+
+To make a tier of an item (Phase W5):
+
+1. Give one item of the set its worn look, as above. The slot shape of the
+   slot can be that look also.
+2. On the **Gear** tab, pick the row of the next tier.
+3. Select the look with the parts in the list below **Copy the parts and
+   the colors of this look**.
+4. Click **Make tier**. The row then draws the parts of that look. Its file
+   holds a `base` and no part.
+5. Pick a color for a color role in the color table. A `*` marks each role
+   with a color of its own. The first choice of a list gives the role the
+   color of the base again.
+6. Press Ctrl+S.
+
+The color table of a look has one row for each color role that the look can
+give a color to: the roles of its shapes, and the material names of its
+model. On a look with no base, the first choice of a list is the color of
+the palette. Each list shows a mark in the color of each row.
+
+A tier can be the base of another tier. To change a part of a tier, select
+the row of the look that has the parts, or move the part in the 3D view.
+The change shows on each tier. A look stays while a tier names it as its
+base.
+
+To change a color of each look that names it (Phase W5):
+
+1. On the **Colors** tab, pick the named color in the list. The line below
+   the finish names each look and each color role that has it.
+2. Click the color bar, and pick a color. Each stand shows the change. One
+   drag is one undo entry.
+3. Select a finish in the list. A shape with a finish of its own keeps it.
+4. Press Ctrl+S. The file is `blackout/assets/figure/palette.json`.
+
+The table **Colors of the character on the stands** gives a color role one
+named color over each look: a skin color, a hair color. It changes no
+figure file.
+
+The **Finishes** section of the Colors tab lists each finish of the palette
+(ENG-0011, step L4). A finish is a metalness and a roughness. Pick one to
+change its two numbers in the spin boxes. **New finish** adds one with the
+name in the field. **Remove finish** refuses while a named color has the
+finish. The matte finish stays, because a color with no finish has it. A
+finish that the file does not have comes from `MeshPalette.FINISHES`, so an
+old palette file reads.
+
+To change the shape of a family with no art (ENG-0011, step L5):
+
+1. On the **Families** tab, pick the family. The list has each item family
+   of the server, each family of `families.json`, and each family of
+   `FamilyShapes.SHAPES`. A row says where its shape comes from: the file,
+   the table, or nothing. The family shows on the stand at the right of the
+   figures, as the game draws it.
+2. A family with no row has a note. Click **New shape from the fallback**.
+   The family gets a row with the parts that it draws now.
+3. Change the parts and the shape list in the part editor below, as on the
+   Body tab. A family shape has one bone, `root`, and no fit. The stand
+   draws each change at once.
+4. Type an asset key in the model field and click **Set model** to give the
+   whole family a served model. An empty field takes the model out.
+
+**Remove shape** takes the row out, and the family draws its table again.
+The file is `world/look/families.json`, a look file of the client. It
+writes on each change, as the Look tab of the terrain editor writes. Save
+and Revert concern the figure files only. Each change is one undo entry.
+
+To change how the game shows a served model (ENG-0011, step L6):
+
+1. On the **Gear** tab, pick the row of the item. The row needs a served
+   model: the model that its look names, or a model with the key of the
+   row. The model shows on the stand at the right, with its presentation.
+2. Open the **Model** fold. Change the offset, the turn in degrees, or the
+   scale. The stand draws each change at once. One drag is one undo entry.
+
+The file is `world/look/presentation.json`. It writes on each change. A
+model with no row draws as `ModelRegistry.PRESENTATION` says.
+
+To give a tool type a stance (Phase W5):
+
+1. Use the outfit bar to put the item in the hand of the figure. The stance
+   list of the **Clips** tab goes to the tool type of that item.
+2. Pick a clip for each action whose clip differs from the default clip
+   set. The first choice of a list is the clip of the default clip set.
+3. Click **Play** on a row to see the clip of that action on each stand.
+4. Press Ctrl+S. The file is `world/figure/stances.json`.
+
+To give a stance an action that the table does not have, type the name of
+the action below the stance table. Select a clip in the clip list, and
+click **Add action**.
+
+To check the figure files (Phase W6):
+
+1. On the **Check** tab, click **Check the figure files**. One check of the
+   files of 10/13/2026 takes 0.2 seconds.
+2. Read the list. A finding is a fault. A note is no fault: an item with no
+   worn look gives a note, because its slot shape draws.
+3. Click a row. The dock shows the file of the finding in its tab, with the
+   part, the bone, or the clip selected.
+4. Correct the fault, and click **Check the figure files** again.
+
+The **Budgets** fields below the list set four limits: the triangles of a
+worn look of each slot, the triangles of a body, and the triangles and the
+draws of a dressed figure. The slot table gives one slot its own number.
+The line below the body type list is the budget line. It gives the draws
+and the triangles of the dressed figure against the budget, and it says
+when one is over. The budgets are an option of the workbench, in
+`figure_editor.cfg`. They are no figure file.
+
+The check also runs by itself, half a second after the last change of a
+file. The list of the Check tab thus never goes stale. The status box
+keeps the status of the change.
+
+To make a kit part: a hair shape, a head, a beard (Phase W6):
+
+1. On the **Body** tab, select the bone in the list above **Add a part on
+   this bone**. Use `head_top` for a hair shape.
+2. Type a key and a kit group below **Kit of the figure on the stands**, for
+   example `hair_short` and `hair`.
+3. Click **New kit part**. Each stand wears the kit part, and the part
+   editor shows it. It starts with one prism, and it hides the region of
+   its bone.
+4. Change the parts and the shape list, as for a body. Tick each region of
+   the body that the kit part takes the place of.
+5. Press Ctrl+S. The file is `blackout/assets/figure/looks/<key>.json`,
+   with a `kit` key.
+
+**The part editor shows** goes back to the body. **Kit of the figure on the
+stands** picks the kit part of each kit group, or the body as it is. It
+changes no file.
+
+To make the two sides of a figure the same (Phase W6):
+
+1. Change one part, for example `sleeve_l`.
+2. Select it, and click **Mirror part**. The part `sleeve_r` then is the
+   mirror picture, on the bone of the other side.
+3. On the **Rig** tab, tick **Move the bone of the other side also** before
+   you change a position. The bone of the other side follows.
+
+**Copy part** and **Copy shape** make a second one at the same place.
+
+To change the grip of a hand socket (Phase W6):
+
+1. On the **Rig** tab, select the socket: `hand_r` or `hand_l`.
+2. Change the three rotation fields. A held item has its length along +Y of
+   the socket.
+3. Do the same on the other body type, if it must have the same grip.
+
+Only a socket takes a rotation. Each body type shares the rest rotation of
+each bone of the body, so one clip moves each of them.
+
+To change a region of a rig (Phase W6):
+
+1. On the **Rig** tab, type the name of a new region, and click **Add
+   region**.
+2. Select a bone, and pick its region in the list. A new part on that bone
+   starts in that region.
+3. To remove a region, select a bone of it, and click **Remove region**. A
+   region that a look names stays.
+
+To give a named color a new name (Phase W6): on the **Colors** tab, select
+the color, type the new name, and click **Rename color**. The palette and
+each look that names the color change in one undo entry.
+
+To dress the figure as an NPC def (Phase W6): pick the NPC def in the list
+below **Take each item off**. The list has each `NpcDef` with an `outfit`.
+The server owns the outfit, so the workbench only shows it. To give an NPC
+an outfit, add `outfit={WieldLocation.HEAD: "<item key>"}` to its `NpcDef`,
+and run `python scripts/export_client_constants.py` in `blackout/`.
+
+To add a clip from a source that has a clip list:
+
+1. On the **Clips** tab, select the clip list. Click **List source clips**.
+   The import step runs on a thread, and the list of the clips of the
+   source fills. It writes no clip file. Then select the clip of the
+   source.
+2. Type the name of the clip in the game, and tick the loop box for a clip
+   such as a walk.
+3. Click **Put clip in list**, then **Build the clips**. The question names
+   each clip file that the build writes over. The build runs on a thread,
+   and one build takes about 3 seconds for each clip list.
+4. Press Ctrl+S to save the clip list.
+
+| File | Holds |
+|---|---|
+| `blackout/assets/figure/rigs/<body_type>.json` | One rig: the bones, the sockets, the regions, and the slot table |
+| `blackout/assets/figure/looks/<key>.json` | One worn look. The key is an item key, a slot for a slot shape, or a body type for a body. A kit part has its own key, and a `kit` group |
+| `blackout/assets/figure/clips/<source_id>.json` | One clip list: the clips that the workbench takes from one source of `blackout/assets/sources/` |
+| `blackout/assets/figure/palette.json` | The palette: each named color with its color and its finish, and the named color of each color role |
+| `world/figure/clips/<clip>.res` | One clip. The file name is the clip name. The game export holds these files |
+| `world/figure/stances.json` | The stance table: the default clip set, and the clip set of each tool type |
+| `world/figure/figure_palette.gd` | `FigurePalette`: the reader and the writer of the palette, and the color of a color role on a figure |
+| `world/figure/figure_stances.gd` | `FigureStances`: the reader and the writer of the stance table, and the clip of one action |
+| `world/figure/figure_rig.gd`, `figure_look.gd`, `figure_json.gd` | The readers and the writers. The game and the workbench use the same classes |
+| `world/figure/figure_builder.gd` | `FigureBuilder`: one figure from a rig and a list of worn looks |
+| `world/figure/figure_clips.gd` | `FigureClips`: the clip library, the player of a figure, and the pose of one moment of a clip |
+| `world/figure/figure_outfit.gd` | `FigureOutfit`: the worn looks of a figure for a worn record. It picks the worn look, the slot shape, or the family shape of each item |
+| `world/figure/figure_models.gd` | `FigureModels`: the mesh and the place of each node of each figure model. It does not put a model in the unit box |
+| `world/figure/figure_set.gd` | `FigureSet`: the reader of the served `figure.json` |
+| `blackout/web/static/webclient/models/figure.json` | The figure set: each rig, each worn look, and the palette in one served file. Generated, so never edit it by hand |
+| `addons/blackout_figure/figure_reference.gd` | `FigureReference`: the reference body file |
+| `addons/blackout_figure/figure_pipeline.gd` | `FigurePipeline`: starts `python -m assets.pipeline` of the game directory |
+| `addons/blackout_figure/figure_job.gd` | `FigureJob`: one pipeline run on a thread, polled from `_process` |
+| `addons/blackout_figure/play_bar.gd` | `FigurePlayBar`: Play, Pause, Rest pose, the time slider, and the speed, in the top bar of the dock |
+| `addons/blackout_figure/figure_editor.cfg` | The budgets: the one option that git tracks |
+| `user://blackout_figure_session.cfg` | The session of the dock: the body type, the outfit, the colors and the kit of the character, the author, and the folds. Git tracks none of it |
+| `addons/blackout_figure/item_catalog.json` | The item catalog: each item with a slot, each slot, each tool type of the server, and each NPC def with an outfit. Generated, so never edit it by hand |
+| `addons/blackout_figure/figure_checks.gd` | `FigureChecks`: the content rules of the figure files, and the budgets |
+| `addons/blackout_figure/check_panel.gd` | `FigureCheckPanel`: the Check tab |
+| `addons/blackout_figure/figure_shapes.gd` | `FigureShapes`: the part rows of a new body and of each new slot shape. A start for the author, not the design |
+| `addons/blackout_figure/edits/` | The edit rules, one script for each file that a rule changes: `FigureRigEdits`, `FigurePartEdits`, `FigureShapeEdits`, `FigureLookEdits`, `FigurePaletteEdits`, and `FigureClipEdits`. Each rule changes a copy of the content and returns the reason for a refusal, or "". `figure_edits.gd` keeps `FigureEdits` as a forwarder, for the tests only |
+| `addons/blackout_figure/handlers/` | The handlers of each tab of the dock, one script for each tab, plus `FigureHistory` (the undo seam: one entry for one file, or for several files) and `FigureHandlerContext` (what a handler may reach of the plugin). `figure_plugin.gd` keeps the editor contract only: the dock, the selection, the hint, the save, the jobs, and the refresh of each tab |
+| `addons/blackout_figure/` | The plugin, the dock, the store, the edit rules, the catalog reader, the clip build, and the clearance check. The editor only |
+
+The rules that the workbench keeps:
+
+- **The scene holds no figure.** The workbench makes each node of a stand at
+  load, and the node has no owner. The figure files are the only store.
+- **What the author sees is what the player sees.** The stands come from
+  `FigureBuilder`, the class that the game uses.
+- **A part is one rigid mesh on one bone.** It has no weights and no skin.
+  Its node sits below the `BoneAttachment3D` of its bone.
+- **A click selects a part by code.** The editor does not select a node
+  with no owner on a click. The plugin finds the part below the mouse with
+  `FigurePicking`, and it selects that node. The Godot gizmo then moves it.
+- **A refresh keeps each node.** `FigureBuilder.refresh` changes a figure in
+  place. The undo entry of a gizmo names the node, so a new node for each
+  change would break that entry.
+- **The node is the place of a part while a gizmo moves it.**
+  `FigureWorkbench.sync_from_nodes` reads each part node each frame, and it
+  writes a moved one into its worn look. An undo of the editor moves the
+  node back, and the same routine writes the old place. The bone mark of
+  the Rig tab goes the same way: a moved mark writes the position of the
+  bone on its parent into the rig of its stand.
+- **A change from the dock is one undo entry of the plugin.** It gives the
+  old or the new content of one file to `FigureWorkbench.put`. A field that
+  the author drags makes one entry.
+- **The same content gives the same bytes.** `FigureJson` sorts the keys,
+  keeps five digits of each number, and writes a count as an integer. A
+  parsed JSON number is a float, so a reader that keeps `1.0` for `format`
+  changes the file on each save.
+- **A file is unsaved only while its text differs from the disk.** An undo
+  back to the saved content leaves nothing to save.
+- **A file that does not read stays out of the store.** The status box names
+  it, and the store refuses new content for its key. A save thus never
+  writes over it.
+- **A fault does not stop a figure.** A part on a bone that the rig does not
+  have draws nothing, and each other part draws.
+- **A look hides a region of each other look, not of itself.** The parts of
+  a chainbody take the place of the torso that it hides.
+- **A check finds what a figure hides.** A fault does not stop a figure, so
+  nothing reports it in the 3D view. `FigureChecks.run` has one rule for
+  each such fault. `test_figure_checks.tscn` runs it on a fixture with one
+  fault for each rule, and on the figure files of the repository.
+- **The check of the server names is in two places on purpose.** The item
+  catalog gives the workbench each item, each slot, and each tool type. The
+  Check tab thus shows a wrong name at once. `test_figure_files.py` owns
+  the same rules in the Python suite.
+- **A kit part is a worn look with a kit group.** The kit groups are the
+  groups that a look names, so no table lists them. `FigureOutfit.looks_for`
+  puts the kit of a character after the body. The server names a kit part
+  by its key only.
+- **A change of one name in several files is one step.**
+  `FigureWorkbench.put_many` gives each file its content, and the stands
+  then draw one time. With one `put` for each file, a stand draws a name
+  that one file does not have yet.
+- **Each body type has the same bones and the same rest rotations.** Only the
+  positions differ. One clip then moves each body type.
+- **A shape of a figure has low counts.** With no `segments` and no `rings`,
+  a shape gets the defaults of `FigureLook`. The web export pays for each
+  draw and each triangle of a crowd.
+- **A figure is made of prisms.** A prism is a tapered block with flat
+  faces: `SHAPE_PRISM` of `MeshBuilder`. Each face has one shade, and each
+  shape is matte. A body, a blade, and a shield use this one shape.
+- **The look file is the design. The table is a start.** `FigureShapes` has
+  the part rows of a new body and of each new slot shape. A look file holds
+  plain shapes, and the author changes each one on the Body tab or the Gear
+  tab. Two buttons write a table again and drop each change of the author:
+  **New body**, and **New look** on the row of a slot shape.
+- **The default clothes of a body are color roles of the body.** A sleeve is
+  in the `torso` region, the hips part is in the `legs` region, and a boot
+  is in the `feet` region. A worn look that hides a region thus hides the
+  clothes there.
+- **The slot shape of a body slot hides its regions.** The `body`, `legs`,
+  `feet`, and `head` slot shapes take the place of the body parts below
+  them. `FigureShapes.SLOT_HIDES` names the regions.
+- **A new rig has wide shoulders and short arms.** `FigureRigEdits.ARM_PLACES`
+  gives the place of each arm bone, in place of the humanoid profile.
+- **The slot names come from the server.** The slot table of a rig has one
+  row for each `WieldLocation` value. `test_figure_files.py` compares the
+  two, because GDScript cannot import the enum.
+- **One clip is one file.** `FigureClips.library()` reads each file of
+  `world/figure/clips/`. No table names a clip.
+- **A clip finds its skeleton by a unique name.** Each track has the path
+  `%GeneralSkeleton:<bone>`, as the retarget of the Godot editor import
+  writes it. `FigureBuilder` makes the figure node the owner of the
+  skeleton, and `FigureClips.player_of` puts the player on the figure node.
+- **A clip holds a rotation for each bone, and one position: the hips.**
+  The hips position is a part of the hips height.
+  `FigureRig.motion_scale()` is that height, so one clip puts the hips of
+  each body type at the correct height.
+- **The clip build bakes each clip to the rig of the figure.** The retarget
+  of the editor import renames the bones. A source rig can lack a bone of
+  the figure, and a rotation then lands on the wrong parent. The KayKit rig
+  has no shoulder, and its arms crossed the chest. `clip_extract.gd` copies
+  each turn in the space of the skeleton.
+- **The game project never holds a clip source.** The build copies the
+  source file into a temporary project in the cache directory of the OS,
+  and it starts Godot two times on that project.
+- **A build writes over a clip that a clip list names.** To keep a change
+  from the Godot animation editor, take the clip out of its clip list.
+- **A held item has its length along +Y of the hand socket.** The rest
+  rotation of each hand socket is the grip. A blade then points forward
+  when the arm hangs, and not down through the leg.
+- **A clip must hold an item clear of the body.** `FigureClearance` holds a
+  probe in each hand, 0.9 units long, and it measures the gap to each body
+  part through the clip. `test_figure_clips.tscn` fails on a clip of the
+  repository with a gap below zero.
+- **A skeleton outside the scene tree gives an old global pose.** A reader
+  of `FigureClips.pose` uses `FigureClips.global_pose`.
+- **An item draws from one of three sources, in a fixed order.**
+  `FigureOutfit` takes the worn look of the item, then the slot shape of its
+  slot, then the family shape of `FamilyShapes`. The game and the workbench
+  use that class. Thus, a new item draws with no worn look and no client
+  edit.
+- **The key of a worn look says what it is.** An item key is the look of an
+  item. A slot is a slot shape. A body type is a body. `test_figure_files.py`
+  refuses each other key, and it refuses an item with the key of a slot.
+- **The server owns the item catalog.** `export_client_constants.py` renders
+  `item_catalog.json` from `ITEM_DB` and the slot constants. Run it after a
+  change to an `ItemDef` with a `use_slot`. A test fails on a stale file.
+- **The outfit is no figure file.** It is the worn record of the workbench.
+  A save does not write it, and it makes no undo entry. The dock keeps it in
+  the session file.
+- **The session is no file of the repository.** The dock keeps the selected
+  body type, the outfit, the colors and the kit of the character, the
+  author of the last model import, and the fold state of each section in
+  `user://blackout_figure_session.cfg`. Git tracks none of it. Only the
+  budgets stay in `addons/blackout_figure/figure_editor.cfg`, because a
+  budget is a rule that the team shares. A test sets `persist` to false, so
+  it writes no file of either kind.
+- **A pipeline run never freezes the editor.** The model import, the clip
+  build, "List source clips", and the served `figure.json` after a save run
+  on a thread (`FigureJob`). The plugin polls the job from `_process`. One
+  job runs at a time, and the button that started it is off until it ends.
+  Each routine that a job runs stays a plain routine, so a headless test
+  calls it with no thread.
+- **An empty selection keeps the dock alive.** The plugin selects the
+  workbench node again when the selection goes empty. When another node is
+  selected, the status box says what to select.
+- **An item empties each slot that it clears.** The catalog carries
+  `SLOT_CONFLICTS` of the server, so the outfit bar holds only an outfit
+  that a character can wear.
+- **One part editor serves each worn look.** `FigurePartsPanel` is in the
+  Body tab and in the Gear tab. Each handler of the plugin gets the look of
+  its tab.
+- **One worn look shows on each stand.** A part of it has one node on each
+  stand. `sync_from_nodes` finds each moved node before it writes. If not,
+  the node that did not move writes its old place back.
+- **A label in a grid does not wrap.** A label that wraps has no least
+  width, and a `GridContainer` gives it the width of one letter. Use
+  `FigureFields.cell_label` there.
+- **The file of a figure model is in figure space.** The feet are at the
+  origin, +Y is up, and the face is to +Z. `FigureModels` keeps the size and
+  the place of each node. `ModelLoader` puts each other model in the unit
+  box, and a part must skip that step.
+- **One node with a mesh is one part.** `FigurePartEdits.parts_from_model` makes
+  the parts. The place of a part on its bone is the place of its node in
+  the file, seen from the rest pose of that bone.
+- **A look names a model by its asset key, and a node by its name.** It
+  holds no path. The manifest gives the file.
+- **A shape list draws until its model is in hand.** A part can have the
+  two. A part whose model or node is not there draws its shape list.
+- **The name of a material is a color role.** A role of the color table of
+  the look gets a palette color. Each other surface keeps the material of
+  the model. One color role must be one material in the modeler: the glTF
+  writer of Godot gives a second material with one name a number.
+- **One look serves each body type, and a fit row is the exception.**
+  `FigureLook.place_of` gives the place of a part on one body type. A move
+  on a stand goes into the fit row when the part has one for that body
+  type. If not, it goes into the part.
+- **The import uses the rig of the selected body type.** Select the body
+  type whose reference body the model was made over. The fit from the bone
+  lengths then takes the lengths of the other body type as the start.
+- **A save writes the served `figure.json` again.** The plugin runs
+  `python -m assets.pipeline figure-set` after a save of a rig or of a worn
+  look. The check of the model pipeline fails on a stale file.
+- **In the editor, the glTF writer leaves out a node with no owner.** The
+  reference body gives each node the root as its owner. No headless test
+  runs as the editor, so `test_figure_models.tscn` holds the owner.
+- **A drag in the 3D view with no part below it clears the selection.** The
+  plugin then selects the `FigureWorkbench` node again, so the dock stays
+  alive. A click on no part does the same.
+- **An outfit holds no two items that clear each other.**
+  `FigureCatalog.valid_outfit` puts each entry in through `wear`, in the
+  order of the slots. A saved outfit or an NPC outfit thus cannot hold two
+  hands and a main hand. The later slot of the order wins.
+- **A color has three names, in a fixed order.** A shape names a color
+  role. A look gives the role a named color. The palette gives the named
+  color its color and its finish. `FigurePalette.named_for` takes the color
+  of the figure, then the color of the look, then the color of the role in
+  the palette, then the role itself as a named color.
+- **The palette file is the design. `MeshPalette` is the start.** A new
+  palette takes each color from `MeshPalette`. A named color that the
+  palette does not have still draws with the color of that table, so a
+  family shape keeps its colors.
+- **A finish belongs to a named color.** A shape with a `finish` key keeps
+  that finish. Each other shape, and each surface of a model, has the
+  finish of its named color. A new palette is matte.
+- **A tier has a base and no part.** `FigureLook.resolved` gives the look
+  that a figure draws: the parts and the fit of the last base, the colors
+  of the tier over the colors of each base, and each hidden region of each
+  base. `FigureOutfit` gives the builder only such looks.
+- **A tier can hide more, not less.** A region that a base hides stays
+  hidden. Its box on the Gear tab has a tick that the author cannot change.
+- **A move of a part of a tier goes into the look with the parts.**
+  `FigureWorkbench.parts_owner` names that look. Each tier of it follows.
+- **A tier whose base is not there draws no part.** The figure still draws.
+  The note of the Gear tab gives the reason, and `test_figure_files.py`
+  fails on such a file of the repository.
+- **The colors of the character are no figure file.** They go to the
+  builder as its `figure_colors`, over the color table of each look. The
+  game gives the skin and the hair of a character the same way. The dock
+  keeps the table of the workbench in the session file.
+- **A stance names only what differs.** `FigureStances.clip_for` takes the
+  clip of the stance, then the clip of the default clip set. An action with
+  no clip leaves the figure in its rest pose.
+- **The first worn item with a stance decides.** `FigureStances.stance_of`
+  takes the tool type of each worn item, in the order of the slots. No slot
+  name is in GDScript for this rule.
+- **The tool types come from the server.** The item catalog carries the
+  `tool_type` of each item. `test_figure_files.py` compares each key of the
+  stance table with the tool types of the server, and each clip name with
+  the clip files.
+- **The stance table is beside the clips, not beside the looks.** It names
+  clip files, and the export holds the two. The store of the workbench
+  takes its path from the clip directory.
+- **The editor runs no static initializer of a script with no `@tool`.**
+  `FigureBuilder` had an empty palette in a static variable, and that
+  variable was null in the editor. No headless test shows this. Make such a
+  value in a routine, or give the script `@tool`, as `FamilyShapes` has.
 
 ## Running
 
@@ -1597,8 +2332,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All seventy-one tests are headless and exit non-zero on failure.
-Sixty-eight need nothing running (counted 10/08/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All seventy-nine tests are headless and exit non-zero on failure.
+Seventy-six need nothing running (counted 10/12/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -1727,6 +2462,57 @@ directory, and it never touches a world file:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_terrain_editing.tscn
+```
+
+Eight tests cover the figure workbench, and none needs anything running.
+`test_figure_rig.tscn` and `test_figure_look.tscn` read each file, write it,
+and compare the bytes. They also give each bad file that the readers refuse.
+`test_figure_builder.tscn` covers the figure: each part on its bone, the
+hide list, and the nodes that a refresh keeps. `test_figure_edits.tscn`
+covers the rules of the Rig tab and the Body tab.
+`test_figure_workbench.tscn` covers the store, the stands, the pick, and a
+part that a gizmo moved. It writes only into a scratch directory under
+`user://`, and it reads the figure files of the repository.
+`test_figure_dock.tscn` covers the signals of the dock:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_workbench.tscn
+```
+
+`test_figure_clips.tscn` covers the clips: the player, the pose of one
+moment, the clip list, the clearance check, and the clips of the workbench.
+It also reads each clip of the repository. Each one must move only bones of
+each rig, and it must hold an item clear of the body.
+`test_figure_clip_import.tscn` runs the clip build. It starts Godot again
+for each build, so one run takes about 9 seconds. The `T-Pose` clip of the
+source must give the rest pose of a figure, and each clip file of the
+repository must have the bytes of a new build:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_clip_import.tscn
+```
+
+`test_figure_models.tscn` covers Phase W4: the reference body, the parts of
+a model, the color roles of a model, the fit of a body type, and the figure
+set. A reference body goes out as a file and comes back as a model, and
+each part must sit where its author made it. A chainbody model must hide
+the torso and the arms on each body type, through each clip of the
+repository. It also reads the served `figure.json`, which must hold each
+rig and each worn look of the repository:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_models.tscn
+```
+
+`test_figure_palette.tscn` covers Phase W5: the palette, the colors of a
+figure, and the tiers. Three tiers of one item must draw from one slot shape
+and three small files. It also reads the palette of the repository, which
+must hold each color that a look names. `test_figure_stances.tscn` covers
+the stance table. Each clip that the stance table of the repository names
+must be a clip file:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_palette.tscn
 ```
 
 `test_terrain_view.tscn` covers the ground of the client: one mesh for each
@@ -2392,7 +3178,7 @@ To add a sound:
 | `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds, with its water, walls, and scenery. |
 | `world/terrain/wall_mesh_builder.gd` | The wall slabs of one chunk. The editor uses it too. |
 | `world/terrain/wall_palette.gd` | The colour of each wall style. A style with no row draws in the colour of `plain`. |
-| `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, hatches, and the decor shapes. The editor uses it too. |
+| `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, hatches, the tops of flights, and the decor shapes. The editor uses it too. |
 | `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
 | `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
 | `world/meshes/mesh_palette.gd` | Colors and finishes. One owner for both. |
@@ -2400,6 +3186,7 @@ To add a sound:
 | `world/meshes/mesh_builder.gd` | Part data to a Node3D. Knows no family names. |
 | `world/meshes/model_loader.gd` | The only file that knows HTTP and glTF exist. |
 | `world/meshes/mesh_resolver.gd` | The mesh ladder. The only thing panes call. |
+| `world/figure/` | The rig reader, the worn look reader, and `FigureBuilder`. The figure workbench uses them. The game does not draw a figure yet. |
 | `world/inventory_state.gd` | Carried grid and worn slots. |
 | `scenes/inventory/inventory_view.gd` | Draws the grid and the paper doll; turns a gesture into a command. |
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |

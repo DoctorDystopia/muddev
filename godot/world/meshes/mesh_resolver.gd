@@ -124,8 +124,17 @@ func _init(registry: ModelRegistry, origin: String) -> void:
 ## A resolver that reads the served model tree under `directory`, the
 ## directory that holds `static/`. It is not in the tree, so the caller calls
 ## [method free_models] and then frees it.
-static func from_directory(directory: String) -> MeshResolver:
-	var resolver := MeshResolver.new(ModelRegistry.new(), directory)
+##
+## `model_root` is the path of the model tree below `directory`. The figure
+## workbench gives "/" and the model tree itself, because its scratch tree
+## is below no web root.
+static func from_directory(directory: String,
+		model_root := ModelRegistry.MODEL_ROOT) -> MeshResolver:
+	var registry := ModelRegistry.new()
+
+	registry.model_root = model_root
+
+	var resolver := MeshResolver.new(registry, directory)
 
 	resolver._local = true
 	resolver._loader.read_local_manifest()

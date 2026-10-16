@@ -12,8 +12,8 @@ Description: The command line of the model pipeline. Run it from blackout/:
 
 import sys
 
-from assets.pipeline import (budgets, build, check, fetch, glb, outputs,
-                             paths, picocad, records, sources)
+from assets.pipeline import (budgets, build, check, fetch, figure, glb,
+                             outputs, paths, picocad, records, sources)
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -29,6 +29,10 @@ _USAGE: str = """python -m assets.pipeline <command>
   fetch file <path> <source_id>     copy a downloaded file or folder as a source
   inspect <asset_key>               print what one served model holds
   budgets                           print the family budgets
+  figure-set                        write figure.json from the figure files
+  figure-model <family> <model_key> <file> [--author <name>]
+                                    bring in and build one model of Blackout's
+                                    own art, for the parts of a figure
 
 assets/README.md is the procedure."""
 
@@ -37,6 +41,8 @@ _EXIT_FAILED: int = 1
 _EXIT_USAGE: int = 2
 _FORCE_FLAG: str = "--force"
 _ALL_FLAG: str = "--all"
+_AUTHOR_FLAG: str = "--author"
+_FIGURE_MODEL_ARGUMENTS: int = 3
 _BYTES_PER_KIB: int = 1024
 
 
@@ -293,6 +299,70 @@ def _command_budgets(_arguments: list) -> int:
     return _EXIT_OK
 
 
+def _command_figure_set(_arguments: list) -> int:
+    """
+    Purpose: Write figure.json from the figure files.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns ok. A figure file that does not read raises
+        figure.FigureError, and main prints it.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The figure workbench runs this command after it saves a figure file.
+        It needs no Node, and it reads no model.
+
+    Author: Nick Hobar
+    Creation date: 10/12/2026
+    """
+    written = figure.write_figure_set()
+    print("  wrote %s" % written)
+
+    return _EXIT_OK
+
+
+def _command_figure_model(arguments: list) -> int:
+    """
+    Purpose: Bring in one model of Blackout's own art, and build it.
+
+    Entry:
+        arguments is [family, model_key, file], with an optional
+        --author <name> at any place.
+
+    Exit/Returns:
+        Returns the exit status of the build of that model.
+
+    Module Globals:
+        _AUTHOR_FLAG, _FIGURE_MODEL_ARGUMENTS read.
+
+    Author: Nick Hobar
+    Creation date: 10/12/2026
+    """
+    plain = list(arguments)
+    author = figure.DEFAULT_AUTHOR
+
+    if _AUTHOR_FLAG in plain[:-1]:
+        at = plain.index(_AUTHOR_FLAG)
+        author = plain[at + 1]
+        del plain[at:at + 2]
+
+    if len(plain) != _FIGURE_MODEL_ARGUMENTS:
+        print(_USAGE)
+        return _EXIT_USAGE
+
+    family, model_key, filename = plain
+    written = figure.import_model(family, model_key, filename, author)
+    print("  wrote %s" % written)
+    status = _command_build([model_key])
+
+    return status
+
+
 _COMMANDS: dict = {
     "build": _command_build,
     "check": _command_check,
@@ -301,6 +371,8 @@ _COMMANDS: dict = {
     "fetch": _command_fetch,
     "inspect": _command_inspect,
     "budgets": _command_budgets,
+    "figure-set": _command_figure_set,
+    "figure-model": _command_figure_model,
 }
 
 
@@ -332,8 +404,8 @@ def main(argv: list) -> int:
 
     try:
         status = command(arguments[1:])
-    except (records.RecordError, sources.SourceError,
-            fetch.FetchError) as problem:
+    except (records.RecordError, sources.SourceError, fetch.FetchError,
+            figure.FigureError) as problem:
         print("  %s" % problem)
         status = _EXIT_FAILED
 

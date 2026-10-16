@@ -260,6 +260,10 @@ class NpcDef:
         shop_key names a ShopDef in world/shop_defs. A shopkeep needs one.
         preceptor_key names a PreceptorDef. A Preceptor needs one.
         combat is the combat block. None means that the NPC cannot fight.
+        outfit is the gear that the client shows on the NPC: a dict of
+        WieldLocation -> the key of an ItemDef. None means that the NPC
+        shows no gear. The outfit is a look, not a rule. Combat reads the
+        combat block, never the outfit.
 
     Exit/Returns:
         Not applicable. A dataclass.
@@ -277,9 +281,13 @@ class NpcDef:
 
     Notes/References:
         world/tests/test_npc_database.py checks the rules of each entry.
+        The figure workbench shows each outfit (DESIGN-0014 decision 8).
+        The module figure_catalog.py exports the outfits.
+        The test test_figure_files.py checks each slot and each item.
 
     Author: Nick Hobar
     Creation date: 07/30/2026. One def for every NPC: 10/09/2026.
+    The outfit: 10/13/2026.
     """
 
     key: str
@@ -291,6 +299,7 @@ class NpcDef:
     shop_key: str | None = None
     preceptor_key: str | None = None
     combat: NpcCombat | None = None
+    outfit: dict | None = None
 
 
     def resolved_typeclass(self) -> str:

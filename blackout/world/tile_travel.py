@@ -18,7 +18,7 @@ from systems.core.tilegrid import movement
 from systems.core.tilegrid.planes import plane_of_z
 from systems.core.tilegrid.world import get_world
 from world import tile_text
-from world.object_kinds import OBJECT_KINDS
+from world.object_kinds import OBJECT_KINDS, climb_landing
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -270,6 +270,40 @@ def _landing(tile: tuple, plane: int):
     return landing
 
 
+def climbs_near(view, tile: tuple, radius: int) -> list:
+    """
+    Return (kind, tile, rotation) of each climb object on the plane `view`
+    within `radius` tiles of `tile` on both axes. The kind is an ObjectKind.
+    """
+    found = []
+
+    for key, x, y, rotation in view.placed_objects():
+        kind = OBJECT_KINDS.get(key)
+
+        if kind is None or not kind.climbs:
+            continue
+
+        if max(abs(x - tile[0]), abs(y - tile[1])) <= radius:
+            found.append((kind, (x, y), rotation))
+
+    return found
+
+
+def climb_target(view, tile: tuple, way: str) -> tuple:
+    """
+    Return the tile (x, y) where the first climb object of a tile that goes
+    `way` lands. A ladder lands on the same tile. A flight of stairs lands
+    past its top step. `object_kinds.climb_landing` owns the rule.
+    """
+    for key, rotation, _text in view.placed_at(tile[0], tile[1]):
+        kind = OBJECT_KINDS.get(key)
+
+        if kind is not None and way in kind.climbs:
+            return climb_landing(kind, tile, rotation, way)
+
+    return (tile[0], tile[1])
+
+
 def climb(mover, direction: str = "") -> tuple:
     """
     Purpose: Move a walker up or down one plane, by the climb object on its
@@ -289,15 +323,17 @@ def climb(mover, direction: str = "") -> tuple:
     Methodology:
         1. Read the climb directions of the tile.
         2. Pick the direction, or refuse.
-        3. The landing is the same tile, one plane up or down. It must be a
-           loaded tile that a walker may stand on.
+        3. Find the landing, one plane up or down (`climb_target`): the same
+           tile for a ladder, the tile past the top step for stairs. It
+           must be a loaded tile that a walker may stand on.
         4. Place the mover there, and give back the room behind.
 
     Notes/References:
         The vault rule of Phase 7: stand on the tile, land on the same tile
-        (Nick, 09/26/2026). `commands/tile_movement.py:CmdClimb` calls this.
-        `movement.place` gives back only a room of the landing plane, so
-        this gives back the room of the old plane itself.
+        (Nick, 09/26/2026). Stairs land ahead (Nick, 10/16/2026).
+        `commands/tile_movement.py:CmdClimb` calls this. `movement.place`
+        gives back only a room of the landing plane, so this gives back the
+        room of the old plane itself.
 
     Author: Nick Hobar
     Creation date: 09/26/2026
@@ -313,14 +349,15 @@ def climb(mover, direction: str = "") -> tuple:
     if refusal:
         return (refusal, "")
 
-    landing = _landing(tile, view.plane + tile_const.CLIMB_PLANE_STEPS[way])
+    target = climb_target(view, tile, way)
+    landing = _landing(target, view.plane + tile_const.CLIMB_PLANE_STEPS[way])
 
     if landing is None:
         return (CLIMB_BLOCKED, "")
 
     source = mover.location
 
-    if not movement.place(landing.rooms, mover, tile[0], tile[1]):
+    if not movement.place(landing.rooms, mover, target[0], target[1]):
         return (CLIMB_MOVE_REFUSED, "")
 
     view.rooms.release(source)

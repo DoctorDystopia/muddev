@@ -2,12 +2,12 @@
 class_name StructureTools
 extends RefCounted
 ## The edits of the Build tools of the terrain editor (DESIGN-0013 section
-## 6.7): Wall line, Room, Doorway, Level above, Stairs, Roof, Wall style, and
-## Decor.
+## 6.7): Wall line, Room, Doorway, Level above, Ladder, Stairs, Roof, Wall
+## style, and Decor.
 ##
 ## A structure is tile grid facts, not a scene. A wall is a wall flag. A room
 ## is floor types inside walls. An upper level is floor tiles on the plane
-## above. Stairs are a climb pair. A roof is the ground of the plane above:
+## above. A ladder and stairs are a climb pair. A roof is the ground of the plane above:
 ## a roof floor type, the Blocked flag, and the corner heights of
 ## [RoofShapes]. Each function here writes those facts
 ## through a [TerrainEdit], so one gesture is one undo entry, and the server
@@ -40,6 +40,18 @@ extends RefCounted
 ## wall bit. The Wall style brush paints a style on each tile with a wall bit
 ## under the brush. A removal keeps the style: a style on a tile with no wall
 ## bit is legal, and nothing draws it.
+##
+## ## Ladders and stairs (Nick, 10/16/2026)
+##
+## A ladder goes straight up: the pair stands on one tile of two planes. A
+## flight of stairs runs over the tiles in front of its foot. The way up
+## stands on the foot. Its twin stands on the plane above, on the tile past
+## the top step, at the same rotation. The flight is Blocked on the plane of
+## the foot, and void on the plane above, so the floor above does not cover
+## the steps. The run of the kind gives the tiles of the flight. Thus one
+## [method climb] serves both tools. [ClimbRule] owns the landing and the
+## tiles of a flight. A stairwell tile is part of the structure. Thus the
+## Wall line puts a wall on the stairwell side of an edge.
 ##
 ## ## Decor (DESIGN-0013 section 6.5)
 ##
@@ -102,7 +114,7 @@ class RoofOptions:
 	var turn := 0
 
 	## A roof floor type, a row of [code]TILE_ROOF_FLOOR_TYPES[/code].
-	var floor_name: String = _Const.TILE_ROOF_FLOOR_TYPES[0]
+	var floor_name: String = TileTables.roof_floor_types()[0]
 
 
 # ─── Edges ──────────────────────────────────────────────────────────────────
@@ -140,6 +152,14 @@ static func corner_at(point: Vector2) -> Vector2i:
 	return Vector2i(roundi(point.x + 0.5), roundi(point.y + 0.5))
 
 
+## The rectangle of tiles between two tiles of a drag, both inside it.
+static func rect_between(first: Vector2i, second: Vector2i) -> Rect2i:
+	var low := first.min(second)
+	var high := first.max(second)
+
+	return Rect2i(low, high - low + Vector2i.ONE)
+
+
 ## The end of a wall line from `start`, kept to the axis of the larger move.
 static func snap_line(start: Vector2i, end: Vector2i) -> Vector2i:
 	var move := end - start
@@ -171,9 +191,11 @@ static func line_edges(start: Vector2i, end: Vector2i) -> Array:
 
 ## Draw walls along a line of corners, or with `remove` clear them on both
 ## sides. `style` is the wall style of each wall, or "" to keep the style of
-## each tile. Returns the problem, or "".
+## each tile. `below` is the plane under `chunks`, or null. A stairwell tile
+## over a flight on it counts as part of the structure, not as void.
+## Returns the problem, or "".
 static func wall_line(chunks: ChunkSet, edit: TerrainEdit, start: Vector2i,
-		end: Vector2i, remove: bool, style: String = "") -> String:
+		end: Vector2i, remove: bool, style: String = "", below: ChunkSet = null) -> String:
 	var edges := line_edges(start, end)
 
 	if edges.is_empty():
@@ -183,19 +205,19 @@ static func wall_line(chunks: ChunkSet, edit: TerrainEdit, start: Vector2i,
 		if remove:
 			_clear_edge(chunks, edit, edge[0], edge[1])
 		else:
-			_set_edge(chunks, edit, edge[0], edge[1], style)
+			_set_edge(chunks, below, edit, edge[0], edge[1], style)
 
 	return ""
 
 
-## Put a wall on the edge, on the side that is not void, in `style`. See the
-## class comment.
-static func _set_edge(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i,
-		bit: int, style: String) -> void:
+## Put a wall on the edge, on the side that is not void, in `style`. A
+## stairwell tile is not void here. See the class comment.
+static func _set_edge(chunks: ChunkSet, below: ChunkSet, edit: TerrainEdit,
+		tile: Vector2i, bit: int, style: String) -> void:
 	var other := across(tile, bit)
 	var side := [tile, bit]
 
-	if _is_void(chunks, tile) and not _is_void(chunks, other[0]):
+	if _bare_void(chunks, below, tile) and not _bare_void(chunks, below, other[0]):
 		side = other
 
 	if not chunks.has_tile(side[0]):
@@ -225,6 +247,11 @@ static func _clear_edge(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i,
 
 static func _is_void(chunks: ChunkSet, tile: Vector2i) -> bool:
 	return chunks.get_floor(tile) == _Const.TILE_VOID_FLOOR
+
+
+## True when `tile` is void and no stairwell: no structure stands there.
+static func _bare_void(chunks: ChunkSet, below: ChunkSet, tile: Vector2i) -> bool:
+	return _is_void(chunks, tile) and not ClimbRule.is_stairwell(below, chunks, tile)
 
 
 ## Open a doorway: clear the wall on both sides of the edge. With
@@ -411,7 +438,7 @@ static func base_height(chunks: ChunkSet, corners: Array[Vector2i], base: Base) 
 	return heights.max()
 
 
-# ─── Level above and Stairs ─────────────────────────────────────────────────
+# ─── Level above ────────────────────────────────────────────────────────────
 
 ## Floor `tiles` on the plane above `plane`, flat at the highest corner of
 ## the tiles plus one plane rise. An empty `floor_name` takes the floor of
@@ -447,7 +474,7 @@ static func level_above(sets: Dictionary, edit: TerrainEdit, plane: int,
 			floor_here = below.get_floor(tile)
 
 		if floor_here == _Const.TILE_VOID_FLOOR:
-			floor_here = _Const.TILE_DEFAULT_FLOOR
+			floor_here = TileTables.default_floor()
 
 		paint_floor(above, edit, tile, floor_here)
 
@@ -481,6 +508,8 @@ static func _flat_changes(chunks: ChunkSet, corners: Array[Vector2i],
 	return changes
 
 
+# ─── Ladder and Stairs ──────────────────────────────────────────────────────
+
 ## Up kind to down kind: each climb kind that leads only up, and the kind
 ## that leads only down from the plane above. The pair shares a name: the
 ## up kind ends in "_up", and its twin ends in "_down".
@@ -501,64 +530,167 @@ static func climb_pairs() -> Dictionary:
 	return pairs
 
 
-## Place the climb pair on `tile`: `up_kind` on `plane` and its twin on the
-## plane above. A void landing gets a floor first, flat at one plane rise.
-## A tile that holds the pair refuses. With `remove`, take the pair away.
-static func stairs(sets: Dictionary, edit: TerrainEdit, plane: int, tile: Vector2i,
-		up_kind: String, floor_name: String, remove: bool) -> String:
+## The pairs of the Ladder tool: each pair whose kinds have no run.
+static func ladder_pairs() -> Dictionary:
+	return _pairs_by_run(false)
+
+
+## The pairs of the Stairs tool: each pair whose kinds have a run.
+static func stairs_pairs() -> Dictionary:
+	return _pairs_by_run(true)
+
+
+static func _pairs_by_run(flight: bool) -> Dictionary:
+	var all := climb_pairs()
+	var pairs := {}
+
+	for kind: String in all:
+		if (TileTables.climb_run(kind) > 0) == flight:
+			pairs[kind] = all[kind]
+
+	return pairs
+
+
+## Place the climb pair of `up_kind` at `foot` on `plane`, turned to
+## `rotation`. The way up stands on the foot. Its twin stands at the
+## landing on the plane above ([method ClimbRule.landing]). A void landing gets
+## a floor first, flat at one plane rise. A flight cuts its stairwell: each
+## tile of the flight becomes Blocked on `plane`, and void on the plane
+## above. Returns the problem, or "".
+##
+## A foot that holds the way up keeps its turn, and a half pair gets its
+## twin. A whole pair refuses. With `remove`, see [method _remove_climb].
+static func climb(sets: Dictionary, edit: TerrainEdit, plane: int, foot: Vector2i,
+		up_kind: String, rotation: int, floor_name: String, remove: bool) -> String:
 	var below: ChunkSet = sets.get(plane)
 	var above: ChunkSet = sets.get(plane + 1)
 	var down_kind: String = climb_pairs().get(up_kind, "")
 
 	if above == null:
-		return "Plane %d is the top plane. No stairs lead above it." % plane
+		return "Plane %d is the top plane. No climb leads above it." % plane
 
 	if down_kind.is_empty():
 		return "%s has no twin that leads down." % up_kind
 
 	if remove:
-		_remove_kind(below, edit, tile, up_kind)
-		_remove_kind(above, edit, tile, down_kind)
-		return ""
+		return _remove_climb(below, above, edit, foot, up_kind, down_kind)
 
-	var has_up := _has_kind(below, tile, up_kind)
-	var has_down := _has_kind(above, tile, down_kind)
+	var standing := _thing_of_kind(below, foot, up_kind)
+	var turn: int = standing.get("rotation", rotation)
+	var landing := ClimbRule.landing(foot, up_kind, turn, _Const.CLIMB_UP)
+	var flight := ClimbRule.flight_tiles(foot, up_kind, turn, _Const.CLIMB_UP)
+	var problem := _climb_refusal(below, above, foot, landing, flight)
 
-	if has_up and has_down:
-		return "A %s already stands on %s. Shift removes it." % [up_kind, tile]
+	if not problem.is_empty():
+		return problem
 
-	if _is_void(above, tile):
-		var tiles: Array[Vector2i] = [tile]
+	var has_down := not _thing_of_kind(above, landing, down_kind).is_empty()
+
+	if not standing.is_empty() and has_down:
+		return "A %s already stands on %s. Shift removes it." % [up_kind, foot]
+
+	if _is_void(above, landing):
+		var tiles: Array[Vector2i] = [landing]
 
 		level_above(sets, edit, plane, tiles, floor_name, false)
 
+	_cut_stairwell(below, above, edit, flight)
+
 	# A second click must not stack a second pair. A half pair gets its twin.
-	if not has_up:
-		edit.add_object(below, tile, up_kind, 0)
+	if standing.is_empty():
+		edit.add_object(below, foot, up_kind, turn)
 
 	if not has_down:
-		edit.add_object(above, tile, down_kind, 0)
+		edit.add_object(above, landing, down_kind, turn)
 
 	return ""
 
 
-static func _has_kind(chunks: ChunkSet, tile: Vector2i, kind: String) -> bool:
+## The reason that no climb goes on `foot`, or "": a tile of the pair or of
+## the flight outside the loaded chunks.
+static func _climb_refusal(below: ChunkSet, above: ChunkSet, foot: Vector2i,
+		landing: Vector2i, flight: Array[Vector2i]) -> String:
+	if not below.has_tile(foot):
+		return "No loaded chunk holds %s." % foot
+
+	if not above.has_tile(landing):
+		return "The landing %s is outside the loaded block. Turn the stairs." % landing
+
+	for tile: Vector2i in flight:
+		if not below.has_tile(tile) or not above.has_tile(tile):
+			return "The flight leaves the loaded block at %s. Turn the stairs." % tile
+
+	return ""
+
+
+## Block each tile of `flight` on `below`, and make it void on `above`. A
+## void tile gets the Blocked flag from [method paint_floor].
+static func _cut_stairwell(below: ChunkSet, above: ChunkSet, edit: TerrainEdit,
+		flight: Array[Vector2i]) -> void:
+	for tile: Vector2i in flight:
+		var flags := below.get_flags(tile)
+
+		if not flags & _Const.TILE_FLAG_BLOCKED:
+			edit.apply_flags(below, tile, flags | _Const.TILE_FLAG_BLOCKED)
+
+		if not _is_void(above, tile):
+			paint_floor(above, edit, tile, _Const.TILE_VOID_FLOOR)
+
+
+## Take the pair of `up_kind` at `foot` away: the way up, and its twin at
+## the landing of the turn of the way up. The flight opens on `below` again.
+## The stairwell above stays void, because the floor that it cut is gone. A
+## foot with no way up takes away a twin on the same tile only, as for a
+## ladder. Returns the problem, or "".
+static func _remove_climb(below: ChunkSet, above: ChunkSet, edit: TerrainEdit,
+		foot: Vector2i, up_kind: String, down_kind: String) -> String:
+	var standing := _thing_of_kind(below, foot, up_kind)
+	var turn: int = standing.get("rotation", 0)
+	var landing := ClimbRule.landing(foot, up_kind, turn, _Const.CLIMB_UP)
+	var twin := _thing_of_kind(above, landing, down_kind)
+
+	if standing.is_empty() and twin.is_empty():
+		return "No %s stands on %s." % [up_kind, foot]
+
+	if not standing.is_empty():
+		_remove_thing(below, edit, foot, standing)
+
+		for tile: Vector2i in ClimbRule.flight_tiles(foot, up_kind, turn, _Const.CLIMB_UP):
+			var flags := below.get_flags(tile)
+
+			if flags & _Const.TILE_FLAG_BLOCKED:
+				edit.apply_flags(below, tile, flags & ~_Const.TILE_FLAG_BLOCKED)
+
+	if not twin.is_empty():
+		_remove_thing(above, edit, landing, twin)
+
+	return ""
+
+
+## The first object of `kind` on `tile` as `{kind, rotation, text}`, or an
+## empty Dictionary.
+static func _thing_of_kind(chunks: ChunkSet, tile: Vector2i, kind: String) -> Dictionary:
 	for thing: Dictionary in chunks.objects_at(tile):
 		if thing["kind"] == kind:
-			return true
+			return thing
 
-	return false
+	return {}
 
 
 # ─── Decor ──────────────────────────────────────────────────────────────────
+
+## True when `kind` is a decor kind of the server table. The one owner of
+## the test: the dock, the checks, and the tools ask here. The table is
+## [TileTables], so a decor kind of the Tables tab counts at once.
+static func is_decor(kind: String) -> bool:
+	return TileTables.is_decor(kind)
+
 
 ## Every decor kind, in the order of the server table.
 static func decor_kinds() -> Array[String]:
 	var kinds: Array[String] = []
 
-	for kind: String in _Const.OBJECT_KINDS:
-		if _Const.OBJECT_KINDS[kind] == _Const.OBJECT_CATEGORY_DECOR:
-			kinds.append(kind)
+	kinds.assign(Array(TileTables.decor_kinds()))
 
 	return kinds
 
@@ -566,7 +698,7 @@ static func decor_kinds() -> Array[String]:
 ## The decor on `tile` as `{kind, rotation, text}`, or an empty Dictionary.
 static func decor_at(chunks: ChunkSet, tile: Vector2i) -> Dictionary:
 	for thing: Dictionary in chunks.objects_at(tile):
-		if _Const.OBJECT_KINDS.get(thing["kind"], "") == _Const.OBJECT_CATEGORY_DECOR:
+		if is_decor(thing["kind"]):
 			return thing
 
 	return {}
@@ -609,15 +741,6 @@ static func decor(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i, kind: Str
 static func _remove_thing(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i,
 		thing: Dictionary) -> void:
 	edit.remove_object(chunks, tile, thing["kind"], thing["rotation"], thing["text"])
-
-
-## Remove the first object of `kind` on `tile`, at any rotation.
-static func _remove_kind(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i,
-		kind: String) -> void:
-	for thing: Dictionary in chunks.objects_at(tile):
-		if thing["kind"] == kind:
-			edit.remove_object(chunks, tile, kind, thing["rotation"], thing["text"])
-			return
 
 
 # ─── Roof ───────────────────────────────────────────────────────────────────
@@ -685,7 +808,7 @@ static func _roof_refusal(above: ChunkSet, roof_rect: Rect2i) -> String:
 		var floor_here := above.get_floor(tile)
 
 		if floor_here != _Const.TILE_VOID_FLOOR \
-				and not _Const.TILE_ROOF_FLOOR_TYPES.has(floor_here):
+				and not TileTables.is_roof(floor_here):
 			return "Plane %d has a %s floor at %s. Edit plane %d to roof that level." \
 				% [above.plane, floor_here, tile, above.plane]
 
@@ -751,7 +874,7 @@ static func _remove_roof(above: ChunkSet, edit: TerrainEdit, roof_rect: Rect2i) 
 
 	for tile: Vector2i in rect_tiles(roof_rect):
 		if above.has_tile(tile) \
-				and _Const.TILE_ROOF_FLOOR_TYPES.has(above.get_floor(tile)):
+				and TileTables.is_roof(above.get_floor(tile)):
 			paint_floor(above, edit, tile, _Const.TILE_VOID_FLOOR)
 			removed += 1
 

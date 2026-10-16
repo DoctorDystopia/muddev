@@ -29,6 +29,7 @@ Description: Model records. One served model, one file:
                  max_texture_edge = 256
                  texture_format   = "webp"
                  animations       = false
+                 color_roles      = true
 
              ALIASES. More asset keys that draw the same model. The build
              writes ONE file, and the manifest points every alias at it. Before
@@ -40,6 +41,11 @@ Description: Model records. One served model, one file:
              The build bakes each correction into the served file. A DISPLAY
              choice (the corpse skeleton on its back, the eye lifted to look
              level) is the client's own and stays in ModelRegistry.PRESENTATION.
+
+             COLOR ROLES. In a figure model, the name of each material is a
+             color role of a worn look (DESIGN-0014). The build joins two
+             materials that differ in the name only. `color_roles = true`
+             keeps each name.
 """
 
 import os
@@ -78,7 +84,8 @@ class ModelRecord:
     rotate is (x, y, z) in degrees, or None. texture_image is a path relative
     to the source directory, or "". max_texture_edge is 0 when the family
     budget decides it. animations is False when the served file must carry
-    no animation.
+    no animation. color_roles is True when the build must keep the name of
+    each material.
     """
 
     asset_key: str
@@ -96,6 +103,7 @@ class ModelRecord:
     max_texture_edge: int = 0
     texture_format: str = TEXTURE_FORMAT_PNG
     animations: bool = True
+    color_roles: bool = False
 
     @property
     def keys(self) -> tuple:
@@ -110,7 +118,7 @@ _TOP_FIELDS: frozenset = frozenset(
 _TEXTURE_FIELDS: frozenset = frozenset(("image", "roughness"))
 _FIX_FIELDS: frozenset = frozenset(("rotate", "opaque", "filter"))
 _OUTPUT_FIELDS: frozenset = frozenset(
-    ("max_texture_edge", "texture_format", "animations"))
+    ("max_texture_edge", "texture_format", "animations", "color_roles"))
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -189,9 +197,9 @@ def _read_output(where: str, output: dict) -> dict:
         output is the parsed table, possibly empty.
 
     Exit/Returns:
-        Returns {"max_texture_edge", "texture_format", "animations"}. An
-        edge of 0 means that the family budget decides. Raises RecordError
-        for a bad value.
+        Returns {"max_texture_edge", "texture_format", "animations",
+        "color_roles"}. An edge of 0 means that the family budget decides.
+        Raises RecordError for a bad value.
 
     Module Globals:
         TEXTURE_FORMATS, TEXTURE_FORMAT_PNG read.
@@ -203,6 +211,7 @@ def _read_output(where: str, output: dict) -> dict:
     edge = output.get("max_texture_edge", 0)
     texture_format = output.get("texture_format", TEXTURE_FORMAT_PNG)
     animations = output.get("animations", True)
+    color_roles = output.get("color_roles", False)
 
     if not isinstance(edge, int) or edge < 0:
         raise RecordError("%s: max_texture_edge must be a whole number"
@@ -215,8 +224,11 @@ def _read_output(where: str, output: dict) -> dict:
     if not isinstance(animations, bool):
         raise RecordError("%s: animations must be true or false" % where)
 
+    if not isinstance(color_roles, bool):
+        raise RecordError("%s: color_roles must be true or false" % where)
+
     return {"max_texture_edge": edge, "texture_format": texture_format,
-            "animations": animations}
+            "animations": animations, "color_roles": color_roles}
 
 
 def _read_texture(where: str, texture: dict) -> dict:

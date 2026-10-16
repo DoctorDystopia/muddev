@@ -44,10 +44,16 @@ Description: The object kinds of the tile grid, one row for each kind.
              Like every chunk object, it pins its tile.
 
              A CLIMB kind is a ladder or stairs (Phase 7). A walker who
-             stands on its tile types `climb up` or `climb down`, and lands
-             on the same tile one plane up or down. A few kinds serve every
-             placement, because the landing needs no target in the row (Nick,
-             09/26/2026). Like a landmark, it stands nothing up.
+             stands on its tile types `climb up` or `climb down`, and goes
+             one plane up or down. Like a landmark, a climb stands nothing
+             up.
+
+             A ladder lands on the same tile (Nick, 09/26/2026). A flight of
+             stairs has a `run` of tiles. It rises over the tiles in front of
+             its object, and lands on the tile past its top step (Nick,
+             10/16/2026). The object turns to give the way. Thus a few kinds
+             serve every placement, with no target in the row.
+             `climb_landing` owns the rule.
 
              SCENERY. A kind that stands nothing up is not an entity, so no
              `room_players` row tells the client what to draw. Its `scenery`
@@ -62,8 +68,10 @@ Description: The object kinds of the tile grid, one row for each kind.
 
              DECOR is scenery and nothing more: a crate, a table, a lamp
              post (DESIGN-0013 section 6.5, decision 5). It has no spawner,
-             no name, and no text. Two rules differ from the other
-             categories. It pins no tile room (`UNPINNED_KINDS`), because
+             no name, and no text. Its rows are data in
+             `world/tables/decor_kinds.json` (`world/decor_kinds.py`), so the
+             Tables tab of the terrain editor adds one. Each one comes after
+             the rows here. Two rules differ from the other categories. It pins no tile room (`UNPINNED_KINDS`), because
              200 crates must not pin 200 rooms. It may stand on a Blocked
              tile, so an author can stop a walk through a table. The tile
              sync stands nothing up for it, as for a landmark.
@@ -76,9 +84,9 @@ Description: The object kinds of the tile grid, one row for each kind.
              `room_players` row. `world/tests/test_object_kind_preview.py`
              stands up each kind and checks the key.
 
-             This module imports only two constant modules, which import
-             nothing. `clientexport.py` reads it, and a typeclass import
-             here loads Evennia into the exporter.
+             This module imports two constant modules and the decor table,
+             and none of them imports Evennia. `clientexport.py` reads it,
+             and a typeclass import here loads Evennia into the exporter.
 
              DESIGN-0011 sections 6.2 and 6.3.
 """
@@ -87,6 +95,7 @@ from dataclasses import dataclass
 
 from systems.core.tilegrid import constants as tile_const
 from systems.interface.statefeed import constants as feed_const
+from world import decor_kinds
 
 
 @dataclass(frozen=True)
@@ -98,10 +107,12 @@ class ObjectKind:
     The `name` and the `desc` are the room texts of a tile that holds this
     kind. The `target` is the world tile (x, y) of a transition, or () for
     every other kind. The `climbs` are the directions of a climb kind
-    (CLIMB_UP, CLIMB_DOWN), or () for every other kind. The `scenery` is the
-    model asset key or the primitive that the client stands on the tile, or
-    "" for nothing. The `preview` is (asset key, family) of the entity that
-    the kind stands up, or () for a kind that stands up nothing.
+    (CLIMB_UP, CLIMB_DOWN), or () for every other kind. The `run` is the
+    tiles of a flight of stairs, or 0 for a ladder and every other kind. The
+    `scenery` is the model asset key or the primitive that the client stands
+    on the tile, or "" for nothing. The `preview` is (asset key, family) of
+    the entity that the kind stands up, or () for a kind that stands up
+    nothing.
     """
 
     key: str
@@ -111,6 +122,7 @@ class ObjectKind:
     desc: str = ""
     target: tuple = ()
     climbs: tuple = ()
+    run: int = 0
     scenery: str = ""
     preview: tuple = ()
 
@@ -147,6 +159,9 @@ TRANSITION_SCENERY: str = "map_transition"
 _UP = (tile_const.CLIMB_UP,)
 _DOWN = (tile_const.CLIMB_DOWN,)
 _BOTH = (tile_const.CLIMB_UP, tile_const.CLIMB_DOWN)
+
+# The landing of a flight is the first tile past its top step.
+_PAST_THE_TOP: int = 1
 
 
 def _named(key: str, category: str, spawner: str, desc: str,
@@ -259,9 +274,10 @@ _KIND_ROWS: tuple = (
                target=(73, 8), scenery=TRANSITION_SCENERY),
 
     # Ladders and stairs (Phase 7). Generic: every placement shares a kind,
-    # because a climb lands on the same tile one plane up or down.
-    # A way up draws the ladder or the stairs. A way down draws a hatch. The
-    # ladder or the stairs of the plane below reach up to that hatch.
+    # because the tile and the rotation of the object give the landing.
+    # A ladder leads to the same tile, and its top is a hatch. A flight of
+    # stairs rises over STAIRS_RUN tiles in front of its foot. Its top
+    # stands past the top step, at the same rotation (Nick, 10/16/2026).
     ObjectKind("ladder_up", _CLIMB, name="Ladder",
                desc="A ladder leads up.", climbs=_UP,
                scenery=tile_const.SCENERY_LADDER),
@@ -273,16 +289,17 @@ _KIND_ROWS: tuple = (
                scenery=tile_const.SCENERY_LADDER),
     ObjectKind("stairs_up", _CLIMB, name="Staircase",
                desc="A staircase leads up.", climbs=_UP,
-               scenery=tile_const.SCENERY_STAIRS),
+               run=tile_const.STAIRS_RUN, scenery=tile_const.SCENERY_STAIRS),
     ObjectKind("stairs_down", _CLIMB, name="Staircase",
                desc="A staircase leads down.", climbs=_DOWN,
-               scenery=tile_const.SCENERY_HATCH),
+               run=tile_const.STAIRS_RUN,
+               scenery=tile_const.SCENERY_STAIRS_TOP),
 
-    # Decor (DESIGN-0013 Phase S4). Scenery only: the primitives draw each
-    # one until a model record takes the same key.
-    ObjectKind("crate", _DECOR, scenery=tile_const.SCENERY_CRATE),
-    ObjectKind("table", _DECOR, scenery=tile_const.SCENERY_TABLE),
-    ObjectKind("lamp_post", _DECOR, scenery=tile_const.SCENERY_LAMP_POST),
+) + tuple(
+    # Decor (DESIGN-0013 Phase S4). Scenery only. The rows are data in
+    # world/tables/decor_kinds.json (Nick, 10/14/2026), last in the table.
+    ObjectKind(row.key, _DECOR, scenery=row.scenery)
+    for row in decor_kinds.DECOR_KINDS.values()
 )
 
 # key -> ObjectKind, in the order of _KIND_ROWS.
@@ -292,3 +309,72 @@ OBJECT_KINDS: dict = {row.key: row for row in _KIND_ROWS}
 # `TilePlane` pins the tile of each other placed object.
 UNPINNED_KINDS: frozenset = frozenset(
     key for key, row in OBJECT_KINDS.items() if row.category == _DECOR)
+
+
+def climb_landing(kind: ObjectKind, tile: tuple, rotation: int,
+                  way: str) -> tuple:
+    """
+    Purpose: Give the tile where a climb lands, one plane up or down.
+
+    Entry:
+        kind     - the ObjectKind of the climb object.
+        tile     - the (x, y) of the object.
+        rotation - the rotation of the object, 0 to ROTATION_COUNT - 1.
+        way      - CLIMB_UP or CLIMB_DOWN, a way of the kind.
+
+    Exit/Returns:
+        The (x, y) of the landing, on the plane of the way.
+
+    Module Globals:
+        tile_const.ROTATION_STEPS, tile_const.CLIMB_PLANE_STEPS read.
+
+    Methodology:
+        1. A kind with no run is a ladder. It lands on its own tile.
+        2. A flight lands `run` + 1 tiles away: past its top step. A climb
+           up goes along the facing of the object. A climb down goes back
+           the same distance, because both objects of a flight share one
+           rotation.
+
+    Notes/References:
+        Nick, 10/16/2026. `world/tile_travel.py:climb` moves a walker by it,
+        and `world/tile_checks.py` checks each landing with it. The GDScript
+        twin is `ClimbRule.landing` (`godot/world/terrain/climb_rule.gd`).
+        The parity fixture of the
+        checks holds a flight, so the two cannot differ.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    if not kind.run:
+        return (tile[0], tile[1])
+
+    reach = kind.run + _PAST_THE_TOP
+    step_x, step_y = _way_step(rotation, way)
+
+    return (tile[0] + step_x * reach, tile[1] + step_y * reach)
+
+
+def flight_tiles(kind: ObjectKind, tile: tuple, rotation: int,
+                 way: str) -> list:
+    """
+    Return the (x, y) of each tile between a climb object and its landing,
+    from the object out. For a way up, they are the steps. For a way down,
+    they are the stairwell over the steps. A ladder has none. A click on one
+    of them takes the climb (`serializers._add_tile_world_climbs`).
+    """
+    step_x, step_y = _way_step(rotation, way)
+
+    return [(tile[0] + step_x * index, tile[1] + step_y * index)
+            for index in range(1, kind.run + 1)]
+
+
+def _way_step(rotation: int, way: str) -> tuple:
+    """
+    Return the tile step (dx, dy) of a climb `way` from an object at
+    `rotation`: along its facing for a climb up, against it for a climb down.
+    """
+    turn = rotation % tile_const.ROTATION_COUNT
+    step_x, step_y = tile_const.ROTATION_STEPS[turn]
+    sign = tile_const.CLIMB_PLANE_STEPS[way]
+
+    return (step_x * sign, step_y * sign)

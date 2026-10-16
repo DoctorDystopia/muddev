@@ -107,8 +107,8 @@ func _house(sets: Dictionary) -> Rect2i:
 	StructureTools.roof(sets, edit, 1, rect, roof, false)
 	StructureTools.decor(sets[0], edit, Vector2i(12, 11), StructureTools.decor_kinds()[0], 1,
 		false)
-	StructureTools.stairs(sets, edit, 0, Vector2i(10, 10), StructureTools.climb_pairs().keys()[0],
-		"", false)
+	StructureTools.climb(sets, edit, 0, Vector2i(10, 10), StructureTools.ladder_pairs().keys()[0],
+		0, "", false)
 
 	return rect
 
@@ -169,6 +169,9 @@ func _a_turn_and_a_mirror_move_each_fact() -> void:
 
 
 func _the_reader_refuses_a_bad_template() -> void:
+	# The kind comes from the fixture, so a rename on the Tables tab breaks
+	# no case.
+	var kind: String = StructureTemplate.parse_text(_fixture_text()).objects[0]["kind"]
 	var cases := {
 		"an object on a tile with no cover":
 			['"x":1,"y":0,"plane":0', '"x":0,"y":0,"plane":1'],
@@ -176,7 +179,7 @@ func _the_reader_refuses_a_bad_template() -> void:
 		"an index past its name list": ['[0,1,0]', '[0,3,0]'],
 		"a format that is not 1": ['"format": 1', '"format": 2'],
 		"a key that is not a name": ['"fixture_stall"', '"Fixture Stall"'],
-		"an object kind that is not a name": ['"crate"', '"Crate"'],
+		"an object kind that is not a name": ['"%s"' % kind, '"%s"' % kind.to_upper()],
 	}
 
 	for what: String in cases:

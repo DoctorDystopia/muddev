@@ -26,6 +26,8 @@ func _ready() -> void:
 	_every_face_points_out_of_its_slab()
 	_a_wall_under_a_floor_meets_it()
 	_a_wall_under_void_keeps_its_height()
+	_a_wall_beside_a_flight_meets_the_plane_above()
+	_a_wall_under_the_stairwell_of_a_landing_meets_it()
 	_walls_down_draws_low()
 	_each_style_draws_at_its_own_height()
 	_a_style_colours_its_walls()
@@ -180,6 +182,52 @@ func _a_wall_under_void_keeps_its_height() -> void:
 		"a void tile above leaves the height of the wall style")
 
 
+## Nick, 10/16/2026. The Stairs tool makes the tiles over a flight void. A
+## wall beside the steps rises to the plane above all the same, and a wall
+## away from the flight keeps the height of its style.
+func _a_wall_beside_a_flight_meets_the_plane_above() -> void:
+	var kinds := _flight_kinds()
+	var size: int = _Const.CHUNK_SIZE
+	var foot := Vector2i(5, 5)
+	var step := ClimbRule.flight_tiles(foot, kinds[0], 0, _Const.CLIMB_UP)[1]
+	var chunk := ChunkFile.blank(0, 0)
+	var above := TerrainWorld.upper_chunk(chunk, 1)
+	var rise := TerrainWorld.NEW_PLANE_RISE * ChunkMeshBuilder.HEIGHT_STEP
+
+	chunk.objects.append({"kind": kinds[0], "x": foot.x, "y": foot.y, "rotation": 0,
+		"text": ""})
+	chunk.flags[step.y * size + step.x] = _Const.TILE_FLAG_WALL_EAST
+
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk, above)), rise),
+		"a wall beside a step meets the plane above over the stairwell")
+
+	chunk.flags[step.y * size + step.x] = 0
+	chunk.flags[20 * size + 20] = _Const.TILE_FLAG_WALL_EAST
+
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk, above)),
+		WallMeshBuilder.height_of(_Const.TILE_DEFAULT_WALL_STYLE)),
+		"a wall away from the flight keeps the height of its style")
+
+
+## A flight whose foot is in the next chunk: the way down on the plane
+## above names the stairwell.
+func _a_wall_under_the_stairwell_of_a_landing_meets_it() -> void:
+	var kinds := _flight_kinds()
+	var size: int = _Const.CHUNK_SIZE
+	var top := Vector2i(10, 10)
+	var well := ClimbRule.flight_tiles(top, kinds[1], 1, _Const.CLIMB_DOWN)[0]
+	var chunk := ChunkFile.blank(0, 0)
+	var above := TerrainWorld.upper_chunk(chunk, 1)
+
+	above.objects.append({"kind": kinds[1], "x": top.x, "y": top.y, "rotation": 1,
+		"text": ""})
+	chunk.flags[well.y * size + well.x] = _Const.TILE_FLAG_WALL_NORTH
+
+	_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk, above)),
+		TerrainWorld.NEW_PLANE_RISE * ChunkMeshBuilder.HEIGHT_STEP),
+		"a wall under the stairwell behind a way down meets the plane above")
+
+
 func _walls_down_draws_low() -> void:
 	var chunk := ChunkFile.blank(0, 0)
 	var above := TerrainWorld.upper_chunk(chunk, 1)
@@ -199,7 +247,7 @@ func _walls_down_draws_low() -> void:
 func _each_style_draws_at_its_own_height() -> void:
 	for style: String in _Const.TILE_WALL_STYLES:
 		var chunk := _styled_chunk(style)
-		var steps: int = _Const.TILE_WALL_STYLE_HEIGHTS[style]
+		var steps: int = WallPalette.height_steps(style)
 
 		_expect(is_equal_approx(_top(WallMeshBuilder.build(chunk)),
 			steps * ChunkMeshBuilder.HEIGHT_STEP),
@@ -242,6 +290,23 @@ func _a_style_with_no_wall_bit_draws_nothing() -> void:
 
 
 # ─── Private helpers ─────────────────────────────────────────────────────────
+
+## The way up and the way down of a flight: `[up kind, down kind]`, from the
+## generated constants, so a renamed kind breaks no test.
+func _flight_kinds() -> Array[String]:
+	var kinds: Array[String] = ["", ""]
+
+	for kind: String in _Const.OBJECT_KIND_CLIMB_RUNS:
+		if _Const.OBJECT_KIND_CLIMBS[kind] == [_Const.CLIMB_UP]:
+			kinds[0] = kind
+		elif _Const.OBJECT_KIND_CLIMBS[kind] == [_Const.CLIMB_DOWN]:
+			kinds[1] = kind
+
+	_expect(not kinds[0].is_empty() and not kinds[1].is_empty(),
+		"the server names a flight with a way up and a way down")
+
+	return kinds
+
 
 func _vertices(chunk: ChunkFile) -> PackedVector3Array:
 	return _vertices_of(WallMeshBuilder.build(chunk))

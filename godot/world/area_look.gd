@@ -1,3 +1,4 @@
+@tool
 class_name AreaLook
 extends RefCounted
 ## The fog and the light of each area: one row for each area, and a fallback.
@@ -5,6 +6,14 @@ extends RefCounted
 ## DESIGN-0011 section 6.7 sets the rules. Fog is a look, so the client owns
 ## this table. The server says which area the player is in. This file says what
 ## that area looks like. 117 HD's `environments.json` uses the same split.
+##
+## ## The look file, and the fallback
+##
+## Since 10/13/2026 the design is `res://world/look/area_looks.json`, and
+## the Look tab of the terrain editor writes it, with a preview of the
+## light in the editor. [method look_for] asks the file first, then
+## [constant LOOKS], then [constant FALLBACK]. The tables here are the
+## fallback and the start of a new file.
 ##
 ## ## The area of the player
 ##
@@ -16,10 +25,11 @@ extends RefCounted
 ## ## The guard
 ##
 ## `blackout/systems/interface/statefeed/tests/test_client_constants.py` reads
-## this file as TEXT. It fails when a key names no area. An area with no row is
-## fine, because it gets [constant FALLBACK]. Thus, new content never needs a
-## client edit. Keep each row key at one tab of indent, on its own line, with
-## its opening brace. The test finds the keys by that shape.
+## this file as TEXT, and the look file as JSON. It fails when a key names
+## no area. An area with no row is fine, because it gets [constant FALLBACK].
+## Thus, new content never needs a client edit. Keep each row key at one tab
+## of indent, on its own line, with its opening brace. The test finds the
+## keys by that shape.
 ##
 ## ## The fields
 ##
@@ -37,6 +47,13 @@ extends RefCounted
 ## | `ambient_color`, `ambient_energy` | The light that has no direction |
 ##
 ## A RefCounted with only static members. Nothing makes an instance of it.
+
+const PATH := LookFile.DIRECTORY + "/area_looks.json"
+
+const KEY_AREAS := "areas"
+
+## The fields that hold a colour. The file stores them as hex text.
+const COLOR_FIELDS := ["fog_color", "sun_color", "ambient_color"]
 
 ## The look of an area that has no row. It is also the look before the first
 ## chunk arrives.
@@ -56,7 +73,7 @@ const FALLBACK := {
 	"ambient_energy": 0.6,
 }
 
-## One row for each area. The first values are proposals, for Nick to tune.
+## One row for each area: the start of the look file.
 const LOOKS := {
 	# The town at the water. A warm sand haze under a high sun, like the
 	# Necropolis reference.
@@ -104,11 +121,86 @@ const LOOKS := {
 const _ANGLE_FIELDS := ["sun_azimuth"]
 
 
-## The look of one area. An area with no row gets [constant FALLBACK].
+## The look of one area: the look file, then [constant LOOKS], then
+## [constant FALLBACK]. A row of the file with a field missing takes that
+## field from the table row, or from the fallback.
 static func look_for(area: String) -> Dictionary:
-	var row: Dictionary = LOOKS.get(area, FALLBACK)
+	var base: Dictionary = LOOKS.get(area, FALLBACK)
+	var row := _file_row(area)
+	var look := {}
 
-	return row.duplicate()
+	for field: String in FALLBACK:
+		look[field] = _field_of(row, field, base[field])
+
+	return look
+
+
+## True when the look file has a row for `area`.
+static func has_file_row(area: String) -> bool:
+	return not _file_row(area).is_empty()
+
+
+## Write the look of `area` into the look file. The Look tab of the terrain
+## editor calls it after each change.
+static func save_look(area: String, look: Dictionary) -> Error:
+	var content := LookFile.read(PATH).duplicate(true)
+	var areas: Variant = content.get(KEY_AREAS, {})
+	var row := {}
+
+	if typeof(areas) != TYPE_DICTIONARY:
+		areas = {}
+
+	for field: String in FALLBACK:
+		var value: Variant = look.get(field, FALLBACK[field])
+
+		row[field] = LookFile.hex_of(value) if value is Color else float(value)
+
+	areas[area] = row
+	content["format"] = LookFile.FORMAT
+	content[KEY_AREAS] = areas
+
+	return LookFile.write(PATH, content)
+
+
+## Take the row of `area` out of the look file. The area then draws its
+## table row, or the fallback.
+static func reset_look(area: String) -> Error:
+	var content := LookFile.read(PATH).duplicate(true)
+	var areas: Variant = content.get(KEY_AREAS, {})
+
+	if typeof(areas) == TYPE_DICTIONARY:
+		areas.erase(area)
+
+	content["format"] = LookFile.FORMAT
+	content[KEY_AREAS] = areas
+
+	return LookFile.write(PATH, content)
+
+
+## Write `look` to an environment and a sun. [AreaEnvironment] and the
+## preview of the terrain editor share it, so the two cannot draw one row
+## differently. The fog distances are not here: they move with the camera,
+## and [method fog_depth] gives them.
+static func apply_to(environment: Environment, sun: DirectionalLight3D,
+		look: Dictionary) -> void:
+	var fog_color: Color = look["fog_color"]
+
+	environment.fog_light_color = fog_color
+	environment.background_color = fog_color
+	environment.ambient_light_color = look["ambient_color"]
+	environment.ambient_light_energy = look["ambient_energy"]
+
+	if sun == null:
+		return
+
+	var elevation := deg_to_rad(float(look["sun_elevation"]))
+	var azimuth := deg_to_rad(float(look["sun_azimuth"]))
+
+	sun.light_color = look["sun_color"]
+	sun.light_energy = look["sun_energy"]
+	# A light shines down its own -Z. A negative pitch points it at the ground,
+	# and the yaw turns it about the vertical axis.
+	sun.rotation = Vector3(-elevation, azimuth, 0.0)
 
 
 ## A look part of the way from one look to another.
@@ -136,6 +228,32 @@ static func fog_depth(look: Dictionary, arm_length: float) -> Vector2:
 	var end: float = arm_length + float(look["fog_end"])
 
 	return Vector2(begin, end)
+
+
+## The row of `area` in the look file, or an empty dictionary.
+static func _file_row(area: String) -> Dictionary:
+	var areas: Variant = LookFile.read(PATH).get(KEY_AREAS, {})
+
+	if typeof(areas) != TYPE_DICTIONARY:
+		return {}
+
+	var row: Variant = areas.get(area, {})
+
+	return row if typeof(row) == TYPE_DICTIONARY else {}
+
+
+## One field of a file row as the look holds it: a colour from hex text, a
+## number as a float. `fallback` for a field that is missing or wrong.
+static func _field_of(row: Dictionary, field: String, fallback: Variant) -> Variant:
+	if not row.has(field):
+		return fallback
+
+	if field in COLOR_FIELDS:
+		return LookFile.color_of(row[field], fallback)
+
+	var value: Variant = row[field]
+
+	return float(value) if typeof(value) in [TYPE_INT, TYPE_FLOAT] else fallback
 
 
 static func _blend_field(field: String, from: Variant, to: Variant,

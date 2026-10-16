@@ -1,0 +1,20 @@
+{
+	"format": 1,
+	"rows": [
+		{
+			"key": "crate",
+			"note": "A wooden crate, for a store room or a yard.",
+			"scenery": "crate"
+		},
+		{
+			"key": "table",
+			"note": "A plain table, for a room or a stall.",
+			"scenery": "table"
+		},
+		{
+			"key": "lamp_post",
+			"note": "A street lamp on a post.",
+			"scenery": "lamp_post"
+		}
+	]
+}
