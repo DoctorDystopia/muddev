@@ -4,7 +4,7 @@
 #
 # Order: check/regenerate client constants -> either a map rebuild (which
 # reloads Evennia itself) or a plain evennia reload/reboot -> Godot export ->
-# publish to R2 -> deploy the site -> verify both origins answer.
+# publish to R2 -> build and deploy the site -> verify both origins answer.
 #
 # Read deploy/README.md before changing this. This script is the terse,
 # runnable version of that doc's "full pipeline" section, not a replacement
@@ -113,7 +113,9 @@ if [ "$DO_GODOT" -eq 1 ]; then
             run bash "$REPO_ROOT/deploy/webexport/publish.sh"
         fi
 
-        ( cd "$SITE_DIR" && run npx wrangler deploy )
+        # `npm run deploy` is `astro build && wrangler deploy`. A bare
+        # `wrangler deploy` sends the dist/ of the last build, not the source.
+        ( cd "$SITE_DIR" && run npm run deploy )
     fi
 else
     step "3/4 Godot client -- skipped (--skip-godot)"

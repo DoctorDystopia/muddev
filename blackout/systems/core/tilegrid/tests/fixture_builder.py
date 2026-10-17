@@ -23,7 +23,7 @@ Every feature that a reader can get wrong, in four files:
 
 | File | Covers |
 |---|---|
-| chunk_-1_2_p0.json | Negative chunk x, every flag bit, negative heights, three floors, two areas, objects in all four rotations, one object with text |
+| chunk_-1_2_p0.json | Negative chunk x, every flag bit, negative heights, three floors, two areas. Objects in all four rotations. One object with text. One with a full look. One with the auto variant alone |
 | chunk_0_2_p0.json | The east neighbour of the first. Its west edge corners equal the first's east edge, so the seam matches |
 | chunk_0_0_p1.json | Plane 1, one floor, one area, no objects |
 | chunk_3_-2_p0.json | Format 2. Three wall styles, and the default style is not first. Some tiles have a style and no wall bit |
@@ -67,6 +67,16 @@ _FLAG_CHOICES = (0, 0, 0, 0, const.FLAG_BLOCKED, const.FLAG_WATER,
 # `[`, `]`, `{`, `}`, `~`, and inner spaces.
 _SIGN_TEXT = "Bank #2: 'Oasis' [east] {open} ~ !"
 
+# The look of one object: every key (10/16/2026). Each axis list holds a
+# negative number. Thus, a reader that drops a sign fails.
+_FULL_LOOK = {const.LOOK_VARIANT_KEY: "rusty_pole_bent",
+              const.LOOK_SCALE_KEY: 135,
+              const.LOOK_TURN_KEY: [-5, 30, 0],
+              const.LOOK_OFFSET_KEY: [25, 0, -40]}
+
+# The look of a second object: the auto variant and nothing else.
+_ANY_LOOK = {const.LOOK_VARIANT_KEY: const.LOOK_VARIANT_ANY}
+
 _WEST_CHUNK = (-1, 2)
 _EAST_CHUNK = (0, 2)
 _UPPER_CHUNK = (0, 0)
@@ -96,7 +106,11 @@ def _west_chunk(rng) -> chunkfile.ChunkFile:
     objects = [chunkfile.ChunkObject("rendering_cooker", 12, 40, 0),
                chunkfile.ChunkObject("desert_anvil", 0, 63, 1),
                chunkfile.ChunkObject("npc_spawn_raider", 63, 0, 2),
-               chunkfile.ChunkObject("sign", 31, 7, 3, text=_SIGN_TEXT)]
+               chunkfile.ChunkObject("sign", 31, 7, 3, text=_SIGN_TEXT),
+               chunkfile.ChunkObject("rusty_pole", 20, 21, 2,
+                                     look=dict(_FULL_LOOK)),
+               chunkfile.ChunkObject("rusty_pole", 22, 21, 0,
+                                     look=dict(_ANY_LOOK))]
 
     return chunkfile.ChunkFile(
         cx=_WEST_CHUNK[0], cy=_WEST_CHUNK[1], plane=0,

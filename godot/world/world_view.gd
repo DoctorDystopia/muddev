@@ -167,6 +167,14 @@ var _facing_z := ""
 ## `talk:tester: 0/True` at players.
 var _char: CharState
 
+## The figure set. The console binds it. Until then it is null, and the
+## avatar comes from the mesh ladder of its asset key.
+var _figures: FigureLibrary
+
+## What the avatar draws: the text of [method _avatar_look_now] when it was
+## built.
+var _avatar_look := ""
+
 ## The square on the tile under the cursor. It shows only on a tile that a
 ## click acts on.
 var _hover_mark: MeshInstance3D
@@ -291,6 +299,10 @@ func _draw_avatar() -> void:
 	# has landed. _redraw_avatar applies the drawn yaw when the figure arrives.
 	if _avatar != null:
 		_avatar.rotation.y = _avatar_yaw_drawn
+		# A figure walks while it slides to its tile, and idles on it. Each
+		# other node has no clip, and the call does nothing for it.
+		FigureLibrary.play(_avatar, FigureStances.ACTION_WALK
+			if _animator.is_travelling() else FigureStances.ACTION_IDLE)
 
 
 ## Give the pane its mesh source. Called by the console, which owns it.
@@ -377,20 +389,24 @@ func bind_char(state: CharState) -> void:
 ## the SERVER has you; this is where you are DRAWN, and telling the two apart
 ## is what lets the walk be animated without the client ever claiming to be
 ## somewhere the server does not have you.
+##
+## Only a change of the look builds the avatar again (DESIGN-0014 section
+## 20). CharState emits `changed` on each HP message too. A figure in the
+## middle of a clip must not start again at each hit.
 func _redraw_avatar() -> void:
 	if _meshes == null:
+		return
+
+	var look := _avatar_look_now()
+
+	if _avatar != null and look == _avatar_look:
 		return
 
 	if _avatar != null:
 		_avatar.queue_free()
 
-	var asset := "" if _char == null else _char.asset
-	var family := Const.FAMILY_CHARACTER
-
-	if _char != null and not _char.family.is_empty():
-		family = _char.family
-
-	_avatar = _meshes.resolve_entity(asset, family)
+	_avatar_look = look
+	_avatar = _build_avatar()
 	_avatar.scale = Vector3.ONE * AVATAR_SCALE
 	# Rests on the tile by measurement, like everything standing beside it, and
 	# stands in the ring slot the pool reserved -- which is the middle of the
@@ -407,6 +423,52 @@ func _redraw_avatar() -> void:
 	# middle of a turn should carry on turning, not finish it instantly.
 	_avatar.rotation.y = _avatar_yaw_drawn
 	_avatar_root.add_child(_avatar)
+
+
+## The node of the avatar. It is the figure of the observer when the server
+## sent a body type and the figure set is in hand. In each other case, it
+## comes from the mesh ladder of the asset key.
+func _build_avatar() -> Node3D:
+	if _figures != null and _char != null and not _char.body_type.is_empty():
+		var figure := _figures.build(_char.body_type, _char.figure_colors)
+
+		if figure != null:
+			return figure
+
+	var asset := "" if _char == null else _char.asset
+	var family := Const.FAMILY_CHARACTER
+
+	if _char != null and not _char.family.is_empty():
+		family = _char.family
+
+	return _meshes.resolve_entity(asset, family)
+
+
+## One text for what the avatar draws now. A change of the text builds the
+## avatar again.
+func _avatar_look_now() -> String:
+	if _char == null:
+		return ""
+
+	var figure_ready := _figures != null and _figures.has_set()
+	var figure_look := FigureLibrary.look_key(_char.body_type, _char.figure_colors)
+
+	return "%s|%s|%s|%s" % [_char.asset, _char.family, figure_look, figure_ready]
+
+
+## Take the figure library. Called by the console, which owns it. The pool
+## draws each other figure from the same library.
+func bind_figures(library: FigureLibrary) -> void:
+	_figures = library
+	_figures.changed.connect(_on_figures_changed)
+	_entities.bind_figures(library)
+	_redraw_avatar()
+
+
+## The figure set or the model of a part arrived: build the avatar again.
+func _on_figures_changed() -> void:
+	_avatar_look = ""
+	_redraw_avatar()
 
 
 ## Take the slot [EntityPool] left for the observer in their tile's ring.
@@ -458,6 +520,7 @@ func _on_entity_marks(origins: Array) -> void:
 ## nothing else here waits for a model.
 func _on_art_arrived(asset_key: String) -> void:
 	if _char != null and _char.asset == asset_key:
+		_avatar_look = ""
 		_redraw_avatar()
 
 

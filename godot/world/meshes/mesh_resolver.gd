@@ -156,8 +156,14 @@ func free_models() -> void:
 ## nobody has drawn both still put something clickable in the room. That
 ## degradation is the whole reason content can be added to the game without
 ## waiting on art.
-func resolve_entity(asset_key: String, family: String) -> Node3D:
-	var model := _art_for(asset_key)
+##
+## `look` is the look of the chunk object that stood the entity up, and
+## `seed` names its tile for the auto variant (10/16/2026). The variant of
+## the look draws first. A variant with no art falls to the base, and only
+## then to the family.
+func resolve_entity(asset_key: String, family: String, look: Dictionary = {},
+		seed: String = "") -> Node3D:
+	var model := _variant_art_for(asset_key, look, seed)
 
 	if model != null:
 		return model
@@ -183,8 +189,27 @@ func resolve_entity(asset_key: String, family: String) -> Node3D:
 ## a prop ON a tile that has art and NOTHING on one that does not, because a
 ## generic block on every unmodelled tile is scenery nobody asked for — every
 ## tile in the game would sprout a grey cube.
-func resolve_scenery(asset_key: String) -> Node3D:
-	return _art_for(asset_key)
+##
+## `look` and `seed` pick a variant, as for [method resolve_entity].
+func resolve_scenery(asset_key: String, look: Dictionary = {}, seed: String = "") -> Node3D:
+	return _variant_art_for(asset_key, look, seed)
+
+
+## The variant keys of one base model. See [method ModelRegistry.variants_of].
+func variants_of(asset_key: String) -> PackedStringArray:
+	return _registry.variants_of(asset_key)
+
+
+## The art of the variant that a look picks, or of the base when the
+## variant has none, or null.
+func _variant_art_for(asset_key: String, look: Dictionary, seed: String) -> Node3D:
+	var key := _registry.variant_for(asset_key, ObjectLook.variant_of(look), seed)
+	var model := _art_for(key)
+
+	if model == null and key != asset_key:
+		model = _art_for(asset_key)
+
+	return model
 
 
 ## Whether this key could ever have art, without fetching it.
@@ -214,7 +239,44 @@ func redraws_for(asset_key: String, family: String, arrived_key: String) -> bool
 	if asset_key == arrived_key:
 		return true
 
+	# A variant of the model arrived (10/16/2026). The row that picked it
+	# drew the base until now.
+	if _registry.variants_of(asset_key).has(arrived_key):
+		return true
+
 	return FamilyShapes.model_for(family) == arrived_key
+
+
+## Start the fetch of one model, if it is not in hand. [signal refreshed]
+## names the key when the file arrives. For [FigureLibrary], which asks for
+## the model of a part before any entity draws it.
+func want(asset_key: String) -> void:
+	if _local or _loader.is_loaded(asset_key) or not _loader.can_load(asset_key):
+		return
+
+	_loader.request(asset_key)
+
+
+## True after the first manifest fetch ended, with success or not.
+func has_manifest() -> bool:
+	return _manifest_settled
+
+
+## Fetch the manifest again. A model that a new build added then gets a
+## path, and [signal manifest_ready] says so. A key already in hand stays.
+## For [FigureLibrary]: a figure set can name a model that is newer than
+## the manifest of the start of the run.
+func refresh_manifest() -> void:
+	if _local:
+		return
+
+	_loader.fetch_manifest()
+
+
+## The bytes of the file of one model, or an empty array before the file
+## arrived. See [method ModelLoader.body_of].
+func model_body(asset_key: String) -> PackedByteArray:
+	return _loader.body_of(asset_key)
 
 
 ## How much art work is still outstanding: fetches in the air, models waiting
@@ -287,6 +349,11 @@ func bind_warmer(warmer: ShaderWarmer) -> void:
 ## that already has the document in hand.
 func ingest_manifest(document: Variant) -> int:
 	return _registry.ingest_manifest(document)
+
+
+## Fold in a variant map directly, without fetching. For tests.
+func ingest_variants(document: Variant) -> int:
+	return _registry.ingest_variants(document)
 
 
 # ─── Private ─────────────────────────────────────────────────────────────────

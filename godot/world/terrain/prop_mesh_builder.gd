@@ -125,12 +125,18 @@ class _Surface:
 	var colors := PackedColorArray()
 
 
-## Where one shape stands: the ground point of the tile centre, the turn of
-## its object, and the run of its kind.
+## Where one shape stands. The origin is the ground point of the tile
+## centre, with the nudge of its look. The basis is the turn of its object,
+## with the tilt and the scale of its look. The run is that of its kind.
 class _Place:
 	var origin: Vector3
 	var basis: Basis
 	var run := 0
+
+	## The direction of a local normal under the basis, with the scale
+	## taken out.
+	func normal(local: Vector3) -> Vector3:
+		return (basis * local).normalized()
 
 
 ## The primitive mesh of one chunk. A chunk with no primitive gives a mesh
@@ -222,10 +228,16 @@ static func _place(chunk: ChunkFile, thing: Dictionary) -> _Place:
 	var ground := ChunkMeshBuilder.surface_height(chunk, lx + 0.5, ly + 0.5) \
 		* ChunkMeshBuilder.HEIGHT_STEP
 	var place := _Place.new()
+	var look: Dictionary = thing.get("look", {})
+
+	# A shape faces -Z as built, so it turns by -rotation. The tilt of the
+	# look rides on that turn. The scale of the look sizes the shape about
+	# the ground point (10/16/2026).
+	var turn := ObjectLook.turn_of(look) + Vector3(0.0, -int(thing["rotation"]) * PI * 0.5, 0.0)
 
 	place.origin = Vector3(world_x * ChunkMeshBuilder.TILE_SIZE, ground,
-		-world_y * ChunkMeshBuilder.TILE_SIZE)
-	place.basis = Basis(Vector3.UP, -int(thing["rotation"]) * PI * 0.5)
+		-world_y * ChunkMeshBuilder.TILE_SIZE) + ObjectLook.offset_of(look)
+	place.basis = Basis.from_euler(turn).scaled(Vector3.ONE * ObjectLook.scale_of(look))
 	place.run = TileTables.climb_run(thing["kind"])
 
 	return place
@@ -401,12 +413,13 @@ static func _add_box(place: _Place, low: Vector3, high: Vector3, color: Color,
 	var top := color.lightened(FloorPalette.PROP_TOP_LIGHTEN)
 
 	# Each face: its four corner indexes in ring order, and its local normal.
-	_add_quad(corners, [0, 1, 3, 2], place.basis * Vector3.FORWARD, color, out)
-	_add_quad(corners, [4, 5, 7, 6], place.basis * Vector3.BACK, color, out)
-	_add_quad(corners, [0, 2, 6, 4], place.basis * Vector3.LEFT, color, out)
-	_add_quad(corners, [1, 3, 7, 5], place.basis * Vector3.RIGHT, color, out)
-	_add_quad(corners, [0, 1, 5, 4], Vector3.DOWN, color, out)
-	_add_quad(corners, [2, 3, 7, 6], Vector3.UP, top, out)
+	# The top and the bottom turn with the tilt too.
+	_add_quad(corners, [0, 1, 3, 2], place.normal(Vector3.FORWARD), color, out)
+	_add_quad(corners, [4, 5, 7, 6], place.normal(Vector3.BACK), color, out)
+	_add_quad(corners, [0, 2, 6, 4], place.normal(Vector3.LEFT), color, out)
+	_add_quad(corners, [1, 3, 7, 5], place.normal(Vector3.RIGHT), color, out)
+	_add_quad(corners, [0, 1, 5, 4], place.normal(Vector3.DOWN), color, out)
+	_add_quad(corners, [2, 3, 7, 6], place.normal(Vector3.UP), top, out)
 
 
 ## Add a quad as two triangles, each with its front along `outward`. As in

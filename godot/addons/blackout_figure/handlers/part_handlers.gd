@@ -37,6 +37,70 @@ func connect_panel(panel: FigurePartsPanel, look_of: Callable) -> void:
 	panel.shape_requested.connect(_on_shape_requested.bind(look_of))
 	panel.shape_removed.connect(_on_shape_removed.bind(look_of))
 	panel.shape_edited.connect(_on_shape_edited.bind(look_of))
+	panel.part_model_import_requested.connect(_on_part_model_import.bind(look_of))
+	panel.part_model_requested.connect(_on_part_model_requested.bind(look_of))
+	panel.part_model_cleared.connect(_on_part_model_cleared.bind(look_of))
+
+
+# ─── The model of one part (DESIGN-0014 section 20) ─────────────────────────
+
+## "Import model for part": run the model pipeline on the file, on the job
+## of the plugin. When it ends, the selected part takes a node of the built
+## model, and each other part stays. The model is in the `figure` family,
+## or in `items` when its key is an item.
+func _on_part_model_import(part_name: String, model_key: String, path: String,
+		look_of: Callable) -> void:
+	var bench := _context.bench()
+	var problem := FigurePartEdits.NO_PART if part_name.is_empty() \
+		else FigureGearHandlers.import_problem(bench, model_key)
+
+	if bench == null or not problem.is_empty():
+		_context.status(problem)
+		return
+
+	var look_key: String = look_of.call()
+	var author := _context.dock().saved_author()
+
+	_context.start_job(FigureGearHandlers.JOB_MODEL % model_key,
+		FigurePipeline.import_model.bind(FigureGearHandlers.model_family(bench, model_key),
+			model_key, path, author),
+		func(result: Dictionary) -> void:
+			if not result["ok"]:
+				_context.status(FigureGearHandlers.import_failure(path, result))
+				return
+
+			_give_part_model(look_key, part_name, model_key))
+
+
+## "Part from served model": the selected part takes a node of a model that
+## the served tree has already.
+func _on_part_model_requested(part_name: String, model_key: String,
+		look_of: Callable) -> void:
+	_give_part_model(look_of.call(), part_name, model_key)
+
+
+func _on_part_model_cleared(part_name: String, look_of: Callable) -> void:
+	_change_look(look_of.call(), "take the model away from the part " + part_name,
+		func(look: Dictionary) -> String:
+			return FigurePartEdits.clear_part_model(look, part_name))
+
+
+## Give one part of one look a node of a served model, as one undo entry.
+## The place comes from the rig of the look: the selected body type.
+func _give_part_model(look_key: String, part_name: String, model_key: String) -> void:
+	var bench := _context.bench()
+
+	if bench == null:
+		return
+
+	bench.reload_models()
+
+	var rig := _rig_of_look(look_key)
+
+	_change_look(look_key, "give the part %s the model %s" % [part_name, model_key],
+		func(look: Dictionary) -> String:
+			return FigurePartEdits.part_from_model(look, rig, part_name, model_key,
+				bench.models))
 
 
 func _on_part_chosen(part_name: String, look_of: Callable) -> void:
@@ -71,7 +135,7 @@ func _on_part_copied(part_name: String, panel: FigurePartsPanel, look_of: Callab
 
 	_change_look(look_of.call(), "copy the part " + part_name, func(look: Dictionary) -> String:
 		made.append(FigurePartEdits.duplicate_part(look, part_name))
-		return "" if not made[0].is_empty() else "Select a part first.")
+		return "" if not made[0].is_empty() else FigurePartEdits.NO_PART)
 
 	if not made.is_empty() and not made[0].is_empty():
 		panel.select_part(made[0])
@@ -209,7 +273,7 @@ func _on_shape_requested(part_name: String, kind: String, look_of: Callable) -> 
 	_change_look(look_of.call(), "add a %s to the part %s" % [kind, part_name],
 		func(look: Dictionary) -> String:
 			if FigureShapeEdits.add_shape(look, part_name, kind) < 0:
-				return "Select a part first."
+				return FigurePartEdits.NO_PART
 
 			return "")
 

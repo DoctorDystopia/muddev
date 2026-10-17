@@ -66,6 +66,13 @@ signal shape_requested(part_name: String, kind: String)
 signal shape_removed(part_name: String, shape_index: int)
 signal shape_edited(part_name: String, shape_index: int, field: String, value: Variant)
 
+## The model of one part (DESIGN-0014 section 20). "Import model for part"
+## sends the file. "Part from served model" uses a model that the served
+## tree has. "Shape list again" takes the model away.
+signal part_model_import_requested(part_name: String, model_key: String, path: String)
+signal part_model_requested(part_name: String, model_key: String)
+signal part_model_cleared(part_name: String)
+
 const PART_LIST_HEIGHT := 200.0
 const SHAPE_LIST_HEIGHT := 90.0
 
@@ -86,12 +93,14 @@ const FIT_ALL_TEXT := "Fit each part from the bone lengths"
 ## What the model line says for a part with no model.
 const NO_MODEL := "The part draws its shape list."
 
+const PART_IMPORT_TITLE := "Import a model file for the selected part"
+
 ## The title of the fold that holds the part editor. The dock keeps the fold
 ## state by this title.
 const FOLD_PARTS := "Parts"
 
 ## What the tooltip of a control says when it needs a part.
-const NEEDS_PART := "Select a part first."
+const NEEDS_PART := FigurePartEdits.NO_PART
 
 ## False on the Body tab: the fit controls do not show.
 var fit_controls := true:
@@ -109,6 +118,11 @@ var _column := VBoxContainer.new()
 
 var _parts := ItemList.new()
 var _model_line := Label.new()
+var _part_model_key := LineEdit.new()
+var _part_dialog := FileDialog.new()
+var _import_part: Button
+var _use_model: Button
+var _clear_model: Button
 var _fit := CheckBox.new()
 var _fit_all: Button
 var _remove_part: Button
@@ -233,6 +247,7 @@ func _build_part_rows() -> void:
 	_column.add_child(FigureFields.label("Parts (name, bone, region)"))
 	_column.add_child(_parts)
 	_column.add_child(_model_line)
+	_build_model_rows()
 	_column.add_child(_new_bone)
 	_column.add_child(FigureFields.button("Add part", func() -> void:
 		part_requested.emit(FigureFields.text_of(_new_bone)),
@@ -247,6 +262,46 @@ func _build_part_rows() -> void:
 	_column.add_child(_remove_part)
 	_column.add_child(_copy_part)
 	_column.add_child(_mirror_part)
+
+
+## The model of the selected part (DESIGN-0014 section 20): a model file
+## for this part only, the served model for this part, or the shape list
+## again. The field gives the asset key of the model. An empty field gives
+## [method part_model_key].
+func _build_model_rows() -> void:
+	_part_model_key.placeholder_text = "The asset key of the model of the part. " \
+		+ "Empty for <look>_<part>"
+	_part_dialog.title = PART_IMPORT_TITLE
+	_part_dialog.access = FileDialog.ACCESS_FILESYSTEM
+	_part_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_part_dialog.filters = PackedStringArray(FigureGearPanel.IMPORT_FILTERS)
+	_part_dialog.file_selected.connect(func(path: String) -> void:
+		part_model_import_requested.emit(_selected, part_model_key(), path))
+	add_child(_part_dialog)
+	_import_part = FigureFields.button("Import model for part", func() -> void:
+		_part_dialog.popup_centered_ratio(),
+		"Import a model file for the selected part only. Each other part stays.")
+	_use_model = FigureFields.button("Part from served model", func() -> void:
+		part_model_requested.emit(_selected, part_model_key()),
+		"Give the selected part a node of the served model of the field.")
+	_clear_model = FigureFields.button("Shape list again", func() -> void:
+		part_model_cleared.emit(_selected),
+		"Take the model away from the selected part. Its shape list draws.")
+
+	for control: Control in [FigureFields.label("Model of the selected part"),
+			_part_model_key, _import_part, _use_model, _clear_model]:
+		_column.add_child(control)
+
+
+## The asset key of the model of the selected part: the text of the field,
+## or `<look key>_<part name>`.
+func part_model_key() -> String:
+	var typed := _part_model_key.text.strip_edges()
+
+	if not typed.is_empty() or _look == null or _selected.is_empty():
+		return typed
+
+	return "%s_%s" % [_look.key(), _selected]
 
 
 ## A new name goes out on Enter, and also when the field loses the focus
@@ -316,7 +371,7 @@ func _build_shape_rows() -> void:
 ## reason in its tooltip.
 func _enable_part_buttons() -> void:
 	for button: Button in [_remove_part, _copy_part, _mirror_part, _add_shape, _remove_shape,
-			_copy_shape]:
+			_copy_shape, _import_part, _use_model, _clear_model]:
 		FigureFields.enable(button, not _selected.is_empty(), NEEDS_PART)
 
 

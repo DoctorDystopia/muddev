@@ -56,14 +56,6 @@ Options pane.
 - License: Made for Blackout
 - Models: `metal_pole`
 
-## OSRS player model (test export)
-
-- Author: Jagex
-- Source: https://oldschool.runescape.com
-- License: License not confirmed
-- Models: `player_character`
-- **License not confirmed.** See the source record for the reason.
-
 ## PSX Low Poly Skeleton
 
 - Author: Puck (puszke)

@@ -164,6 +164,8 @@ func _ready() -> void:
 	_a_changed_look_builds_the_node_again()
 	_a_facing_turns_the_model()
 	_a_new_facing_builds_the_node_again()
+	_a_look_scales_tilts_and_nudges_the_model()
+	_a_new_look_builds_the_node_again()
 	_a_first_sighting_rises_out_of_the_fog()
 	_a_changed_look_does_not_rise_again()
 	_a_figure_still_in_view_does_not_rise_again()
@@ -613,6 +615,56 @@ func _a_new_facing_builds_the_node_again() -> void:
 	_expect(after != before, "a new facing builds a new node")
 	_expect(after != null and is_equal_approx(after.rotation.y,
 			TerrainView.model_yaw(3)), "and the new node faces the new way")
+	_pool.replace_all([])
+
+
+## The look of a chunk object scales the model and tilts it over its facing.
+## The nudge moves its slot (10/16/2026). A row with no look draws the
+## model as it comes.
+func _a_look_scales_tilts_and_nudges_the_model() -> void:
+	var styled := RAIDER.duplicate()
+
+	styled[_Const.ENTITY_FACING_KEY] = 1.0
+	styled[_Const.ENTITY_LOOK_KEY] = {_Const.LOOK_SCALE_KEY: 150.0,
+		_Const.LOOK_TURN_KEY: [0.0, 0.0, 30.0], _Const.LOOK_OFFSET_KEY: [50.0, 0.0, 0.0]}
+	_pool.replace_all([RAIDER])
+
+	var plain := _node_for(20743)
+	var plain_x := plain.position.x
+
+	_pool.replace_all([styled])
+
+	var node := _node_for(20743)
+
+	_expect(node != null and is_equal_approx(node.scale.y, EntityPool.ENTITY_SCALE * 1.5),
+		"a scale of 150 draws the model at one and a half")
+	_expect(node != null and is_equal_approx(node.rotation.y, TerrainView.model_yaw(1))
+		and is_equal_approx(node.rotation.z, deg_to_rad(30.0)),
+		"the tilt rides on the facing")
+	_expect(node != null and is_equal_approx(node.position.x,
+		plain_x + 0.5 * ChunkMeshBuilder.TILE_SIZE), "a nudge of 50 moves the slot half a tile")
+	_pool.replace_all([])
+
+
+## A new look on a held entity must redraw it. Thus, the look is part of
+## the fields that the node is built from.
+func _a_new_look_builds_the_node_again() -> void:
+	var styled := RAIDER.duplicate()
+
+	styled[_Const.ENTITY_LOOK_KEY] = {_Const.LOOK_SCALE_KEY: 120.0}
+	_pool.replace_all([styled])
+
+	var before := _node_for(20743)
+	var again := RAIDER.duplicate()
+
+	again[_Const.ENTITY_LOOK_KEY] = {_Const.LOOK_SCALE_KEY: 200.0}
+	_pool.add(again)
+
+	var after := _node_for(20743)
+
+	_expect(after != before, "a new look builds a new node")
+	_expect(after != null and is_equal_approx(after.scale.y, EntityPool.ENTITY_SCALE * 2.0),
+		"and the new node has the new scale")
 	_pool.replace_all([])
 
 

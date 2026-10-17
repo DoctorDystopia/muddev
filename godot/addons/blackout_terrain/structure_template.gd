@@ -23,7 +23,7 @@ extends RefCounted
 ## size         [W, H] tiles
 ## floor_names, area_names, wall_names
 ## planes       [{plane, cover, heights, floors, flags, areas, walls}, ...]
-## objects      [{kind, x, y, plane, rotation, text}, ...]
+## objects      [{kind, x, y, plane, rotation, text, look}, ...]
 ## ```
 ##
 ## - `plane` is relative: 0 is the plane where the Place tool writes it. The
@@ -32,8 +32,8 @@ extends RefCounted
 ##   a covered tile. The other tiles of the footprint keep their facts.
 ## - `heights` is (W + 1) x (H + 1) corners, in height steps above the base:
 ##   the lowest corner of a covered tile of plane 0.
-## - An object stands on a covered tile. `text` is optional, as in a chunk
-##   file.
+## - An object stands on a covered tile. `text` and `look` are optional, as
+##   in a chunk file.
 ##
 ## ## Cover
 ##
@@ -507,13 +507,15 @@ func _read_object(item: Variant, index: int) -> Dictionary:
 	var keys: Array = item.keys()
 	var expected := OBJECT_KEYS.duplicate()
 
-	keys.erase(ChunkFile.OBJECT_TEXT_KEY)
+	for optional: String in ChunkFile.OBJECT_OPTIONAL_KEYS:
+		keys.erase(optional)
+
 	keys.sort()
 	expected.sort()
 
 	if keys != expected:
 		_fail("object %d must have exactly the keys %s, and may have %s"
-			% [index, OBJECT_KEYS, ChunkFile.OBJECT_TEXT_KEY])
+			% [index, OBJECT_KEYS, ChunkFile.OBJECT_OPTIONAL_KEYS])
 		return {}
 
 	var thing := {
@@ -524,6 +526,7 @@ func _read_object(item: Variant, index: int) -> Dictionary:
 		"rotation": _int_in(item["rotation"], 0, _Const.CHUNK_ROTATION_COUNT - 1,
 			"object %d rotation" % index),
 		"text": _object_text(item, index),
+		"look": _object_look(item, index),
 	}
 
 	_check_object_place(thing, item["kind"], index)
@@ -547,6 +550,20 @@ func _check_object_place(thing: Dictionary, kind: Variant, index: int) -> void:
 
 	if error.is_empty() and layer.cover[tile_index(Vector2i(thing["x"], thing["y"]))] != 1:
 		_fail("object %d stands on a tile that the template does not cover" % index)
+
+
+## The look of an object, or `{}`. The rule is that of the chunk file.
+func _object_look(item: Dictionary, index: int) -> Dictionary:
+	if not item.has(ChunkFile.OBJECT_LOOK_KEY):
+		return {}
+
+	var problem := ChunkFile.look_problem(item[ChunkFile.OBJECT_LOOK_KEY])
+
+	if not problem.is_empty():
+		_fail("object %d look: %s" % [index, problem])
+		return {}
+
+	return ChunkFile.normal_look(item[ChunkFile.OBJECT_LOOK_KEY])
 
 
 func _object_text(item: Dictionary, index: int) -> String:
@@ -636,13 +653,10 @@ func _object_lines() -> PackedStringArray:
 	for index: int in objects.size():
 		var thing: Dictionary = objects[index]
 		var comma := "," if index < objects.size() - 1 else ""
-		var text: String = thing["text"]
-		var words := "" if text.is_empty() \
-			else ',"%s":"%s"' % [ChunkFile.OBJECT_TEXT_KEY, text]
-
 		lines.append(_INDENT.repeat(2)
 			+ '{"kind":"%s","x":%d,"y":%d,"plane":%d,"rotation":%d%s}' % [thing["kind"],
-				thing["x"], thing["y"], thing["plane"], thing["rotation"], words]
+				thing["x"], thing["y"], thing["plane"], thing["rotation"],
+				ChunkFile.optional_text(thing)]
 			+ comma)
 
 	lines.append(_INDENT + "]")
@@ -808,7 +822,7 @@ func _capture_objects(sets: Dictionary, bounds: Rect2i, low_plane: int) -> void:
 			for thing: Dictionary in chunks.objects_at(bounds.position + tile):
 				objects.append({"kind": thing["kind"], "x": tile.x, "y": tile.y,
 					"plane": layer.plane, "rotation": thing["rotation"],
-					"text": thing["text"]})
+					"text": thing["text"], "look": thing["look"]})
 
 
 # ─── Turn and mirror ────────────────────────────────────────────────────────
@@ -860,9 +874,11 @@ func _remapped(new_size: Vector2i, tile_map: Callable, corner_map: Callable,
 	for thing: Dictionary in objects:
 		var moved: Vector2i = tile_map.call(Vector2i(thing["x"], thing["y"]))
 
+		# The look goes as it is. The tilt rides on the rotation, which the
+		# map turns. The nudge stays in the frame of the tile.
 		result.objects.append({"kind": thing["kind"], "x": moved.x, "y": moved.y,
 			"plane": thing["plane"], "rotation": rotation_map.call(thing["rotation"]),
-			"text": thing["text"]})
+			"text": thing["text"], "look": thing["look"].duplicate(true)})
 
 	return result
 

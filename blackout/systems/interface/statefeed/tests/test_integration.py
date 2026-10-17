@@ -24,7 +24,8 @@ from unittest import mock
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
-from systems.core.tilegrid.constants import FACING_ATTR, ROTATION_COUNT
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.constants import FACING_ATTR, LOOK_ATTR, ROTATION_COUNT
 from systems.gameplay.banking.handler import BankHandler
 from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.combat.combat import ensure_combat_handler
@@ -203,6 +204,32 @@ class TestEntitySerialisation(EvenniaTest):
 
                 self.assertNotIn(const.ENTITY_FACING_KEY, body)
 
+    def test_an_entity_with_a_look_sends_it_as_the_chunk_file_holds_it(self):
+        # The tile sync writes the look. The client applies it to the model.
+        look = {tile_const.LOOK_VARIANT_KEY: tile_const.LOOK_VARIANT_ANY,
+                tile_const.LOOK_SCALE_KEY: 150,
+                tile_const.LOOK_TURN_KEY: [0, 45, 0]}
+        self.obj1.attributes.add(LOOK_ATTR, look)
+
+        body = serializers.serialize_entity(self.obj1)
+
+        self.assertEqual(body[const.ENTITY_LOOK_KEY], look)
+
+    def test_an_entity_with_no_look_sends_no_look_field(self):
+        body = serializers.serialize_entity(self.obj1)
+
+        self.assertNotIn(const.ENTITY_LOOK_KEY, body)
+
+    def test_a_look_that_the_chunk_file_would_refuse_is_not_sent(self):
+        for bad in ({}, "big", {"size": 2},
+                    {tile_const.LOOK_SCALE_KEY: tile_const.LOOK_SCALE_UNIT}):
+            with self.subTest(bad=bad):
+                self.obj1.attributes.add(LOOK_ATTR, bad)
+
+                body = serializers.serialize_entity(self.obj1)
+
+                self.assertNotIn(const.ENTITY_LOOK_KEY, body)
+
     def test_a_combatant_carries_health(self):
         npc = spawn_npc("mutant_raider", self.room1)
 
@@ -280,6 +307,20 @@ class TestCharAvatarChannel(EvenniaTest):
         avatar = recorder.of_type(CharAvatarPayload)[-1]
         self.assertEqual(avatar.asset, seen_by_others["asset"])
         self.assertEqual(avatar.family, seen_by_others["family"])
+        # The figure too (DESIGN-0014 section 20): one body type and one set
+        # of colors, whoever draws the character.
+        self.assertEqual(avatar.body_type, seen_by_others[const.ENTITY_BODY_TYPE_KEY])
+        self.assertEqual(avatar.figure_colors,
+                         seen_by_others.get(const.ENTITY_FIGURE_COLORS_KEY, {}))
+
+    def test_a_player_row_names_a_body_type_and_an_npc_row_does_not(self):
+        """The client builds a figure for a row with a body type, and only
+        a player character has one."""
+        player_row = serializers.serialize_entity(self.char1)
+        object_row = serializers.serialize_entity(self.obj1)
+
+        self.assertTrue(player_row[const.ENTITY_BODY_TYPE_KEY])
+        self.assertNotIn(const.ENTITY_BODY_TYPE_KEY, object_row)
 
     def test_a_missing_observer_is_absorbed(self):
         # Every observer-facing emitter in the feed tolerates None; a session
@@ -294,7 +335,13 @@ class TestCharAvatarChannel(EvenniaTest):
         avatar = recorder.of_type(CharAvatarPayload)[-1]
 
         for key, value in avatar.to_dict().items():
-            self.assertIsInstance(value, (int, str), msg=key)
+            # The figure colors are the one table: color role -> named color.
+            if isinstance(value, dict):
+                for role, color in value.items():
+                    self.assertIsInstance(role, str, msg=key)
+                    self.assertIsInstance(color, str, msg=key)
+            else:
+                self.assertIsInstance(value, (int, str), msg=key)
 
     def test_a_full_resync_includes_the_avatar(self):
         # The wiring half. The payload being correct is worth nothing if the

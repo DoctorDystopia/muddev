@@ -47,7 +47,7 @@ edge.
 | `size` | `[W, H]`, in tiles |
 | `floor_names`, `area_names`, `wall_names` | The names that the grids index |
 | `planes` | One entry for each plane with a covered tile, lowest first |
-| `objects` | `{kind, x, y, plane, rotation}`, and `text` for a sign |
+| `objects` | `{kind, x, y, plane, rotation}`, and `text` for a sign, and `look` for an object with a look (10/16/2026). A turn of the template keeps the look as it is |
 
 Each entry of `planes` holds:
 

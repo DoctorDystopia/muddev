@@ -915,6 +915,23 @@ ENTITY_SPENT_KEY: str = "spent"
 # the client draws the model as it comes, as it did before this field.
 ENTITY_FACING_KEY: str = "facing"
 
+# The payload key that holds the look of an entity: the variant, the scale,
+# the tilt, and the nudge of its chunk object (10/16/2026). The value is the
+# `look` of that object, as the chunk file holds it. Present only on an
+# entity that the tile sync stood up with a look. ABSENT means that the
+# client draws the base model as it comes. The client reads it beside the
+# facing, and the facing stays its own field.
+ENTITY_LOOK_KEY: str = "look"
+
+# The payload keys of the figure of a player character (DESIGN-0014 section
+# 20). The row of each player character carries its body type, and the
+# client then builds a figure of that body type from the figure set. The
+# figure colors (color role -> named color) are present only when the
+# character has a color of its own. ABSENT means that each role takes the
+# color of the palette. Neither key is on the row of an NPC or an item.
+ENTITY_BODY_TYPE_KEY: str = "body_type"
+ENTITY_FIGURE_COLORS_KEY: str = "figure_colors"
+
 
 
 # ─── World labels ────────────────────────────────────────────────────────────

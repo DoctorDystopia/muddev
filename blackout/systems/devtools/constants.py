@@ -94,7 +94,12 @@ ACTION_INSPECT: str = "inspect"
 # cannot show whether a player was silenced.
 ACTION_ERASE: str = "erase"
 
+# A new body type or a new figure color for a character (DESIGN-0014 section
+# 20). One verb for the two, and the detail names the fact that changed.
+ACTION_FIGURE: str = "figure"
+
 MODERATOR_ACTIONS: frozenset = frozenset((
+    ACTION_FIGURE,
     ACTION_SPAWN,
     ACTION_SPAWN_NPC,
     ACTION_CLEAR,

@@ -41,6 +41,7 @@ func _ready() -> void:
 	_the_writer_picks_the_format_from_the_wall_styles()
 	_an_integral_float_counts_as_an_int()
 	_objects_are_local_and_the_reader_adds_the_offset()
+	_a_look_reads_as_ints_and_writes_one_text()
 	_the_file_name_follows_the_template()
 
 	if _failures > 0:
@@ -131,6 +132,31 @@ func _every_invalid_case_is_refused() -> void:
 		d["objects"][0]["text"] = "Bank\n")
 	_refuses("object_text_too_long", func(d: Dictionary) -> void:
 		d["objects"][0]["text"] = "x".repeat(_Const.CHUNK_TEXT_MAX_CHARS + 1))
+	# The look of an object (10/16/2026).
+	_refuses("object_look_not_table", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = 7)
+	_refuses("object_look_empty", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {})
+	_refuses("object_look_unknown_key", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {"size": 2})
+	_refuses("object_look_variant_not_string", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_VARIANT_KEY: 3})
+	_refuses("object_look_bad_variant", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_VARIANT_KEY: "Bad Name"})
+	_refuses("object_look_default_scale", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_SCALE_KEY: _Const.LOOK_SCALE_UNIT})
+	_refuses("object_look_scale_too_large", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_SCALE_KEY: _Const.LOOK_SCALE_MAX + 1})
+	_refuses("object_look_turn_not_three", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_TURN_KEY: [0, 90]})
+	_refuses("object_look_turn_zero", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_TURN_KEY: [0, 0, 0]})
+	_refuses("object_look_turn_too_far", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_TURN_KEY: [0, _Const.LOOK_TURN_MAX + 1, 0]})
+	_refuses("object_look_offset_fraction", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_OFFSET_KEY: [0, 0.5, 0]})
+	_refuses("object_look_offset_too_far", func(d: Dictionary) -> void:
+		d["objects"][0]["look"] = {_Const.LOOK_OFFSET_KEY: [-_Const.LOOK_OFFSET_MAX - 1, 0, 0]})
 	# Format 2, the wall styles (DESIGN-0013 section 6.4).
 	_refuses("format_one_with_walls", func(d: Dictionary) -> void:
 		_with_walls(d, ["brick"], 0)
@@ -252,6 +278,34 @@ func _objects_are_local_and_the_reader_adds_the_offset() -> void:
 		"a world x is the chunk origin plus the local x")
 	_expect(placed["y"] == chunk.cy * size + local["y"],
 		"a world y is the chunk origin plus the local y")
+
+
+## The fixture holds one look with every key and one with the auto variant.
+## A float from the parser reads as an int. The text keeps the order of the
+## keys, as the Python writer does.
+func _a_look_reads_as_ints_and_writes_one_text() -> void:
+	var chunk := ChunkFile.from_dict(_base.duplicate(true))
+	var full := {}
+	var any_count := 0
+
+	for thing: Dictionary in chunk.objects:
+		var look: Dictionary = thing["look"]
+
+		if look.size() == ChunkFile.LOOK_KEYS.size():
+			full = look
+
+		if look.get(_Const.LOOK_VARIANT_KEY, "") == _Const.LOOK_VARIANT_ANY:
+			any_count += 1
+
+	_expect(not full.is_empty(), "one object of the fixture holds a full look")
+	_expect(any_count == 1, "one object of the fixture holds the auto variant alone")
+	_expect(full.get(_Const.LOOK_SCALE_KEY) is int, "the scale of a look reads as an int")
+	_expect(full.keys() == ChunkFile.LOOK_KEYS, "a look keeps the order of LOOK_KEYS")
+	_expect(ChunkFile.normal_look(JSON.parse_string(ChunkFile.look_text(full))) == full,
+		"look_text writes JSON that reads back to the look")
+	_expect(ChunkFile.look_problem(full).is_empty(), "the full look passes look_problem")
+	_expect(not ChunkFile.look_problem({_Const.LOOK_SCALE_KEY: _Const.LOOK_SCALE_UNIT}).is_empty(),
+		"a scale at the unit is refused")
 
 
 func _the_file_name_follows_the_template() -> void:

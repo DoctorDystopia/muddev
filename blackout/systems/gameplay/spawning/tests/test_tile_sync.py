@@ -60,7 +60,7 @@ _SIGN_TURN = 1
 def _chunk(objects: list) -> chunkfile.ChunkFile:
     """
     One chunk file with these (kind, x, y, text) objects. A fifth item gives
-    the rotation of an object.
+    the rotation of an object, and a sixth its look.
     """
     tile_count = _SIZE * _SIZE
 
@@ -69,9 +69,11 @@ def _chunk(objects: list) -> chunkfile.ChunkFile:
         heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
         floors=[0] * tile_count, flags=[0] * tile_count,
         areas=[0] * tile_count,
-        objects=[chunkfile.ChunkObject(kind, x, y, turn[0] if turn else 0,
-                                       text=text)
-                 for kind, x, y, text, *turn in objects])
+        objects=[chunkfile.ChunkObject(kind, x, y, rest[0] if rest else 0,
+                                       text=text,
+                                       look=dict(rest[1]) if len(rest) > 1
+                                       else {})
+                 for kind, x, y, text, *rest in objects])
 
 
 def _world(objects: list) -> TileWorld:
@@ -91,13 +93,30 @@ def _placed(words: str = _WORDS, facility_turn: int = 0, sign_turn: int = 0):
 
 def _facings(room) -> dict:
     """Return "sign" and "facility" -> the facing of that entity in `room`."""
+    return _stamps(room, tile_const.FACING_ATTR)
+
+
+def _looks(room) -> dict:
+    """Return "sign" and "facility" -> the look of that entity in `room`."""
+    return _stamps(room, tile_const.LOOK_ATTR)
+
+
+def _stamps(room, attribute: str) -> dict:
+    """Return "sign" and "facility" -> an attribute of that entity."""
     found = {}
 
     for thing in room.contents:
         role = "sign" if getattr(thing, "world_label", "") else "facility"
-        found[role] = thing.attributes.get(tile_const.FACING_ATTR)
+        found[role] = thing.attributes.get(attribute)
 
     return found
+
+
+# The look of the facility, a full one, so a dropped key shows.
+_FACILITY_LOOK = {tile_const.LOOK_VARIANT_KEY: tile_const.LOOK_VARIANT_ANY,
+                  tile_const.LOOK_SCALE_KEY: 120,
+                  tile_const.LOOK_TURN_KEY: [0, 15, 0],
+                  tile_const.LOOK_OFFSET_KEY: [10, 0, -10]}
 
 
 def _verbs(actions) -> dict:
@@ -233,6 +252,40 @@ class TileSyncTests(EvenniaTestCase):
         self.assertEqual(set(room.contents), before)
         self.assertEqual(_facings(room)["facility"], _FACILITY_TURN)
 
+    def test_apply_gives_each_entity_the_look_of_its_object(self):
+        placed = [(_FACILITY, *_FACILITY_TILE, "", 0, _FACILITY_LOOK),
+                  (_SIGN, *_FACILITY_TILE, _WORDS)]
+        world = _world(placed)
+        tile_sync.apply(world, tile_sync.plan(world))
+        room = world.rooms.room_at(*_FACILITY_TILE)
+
+        self.assertEqual(_looks(room), {"facility": _FACILITY_LOOK,
+                                        "sign": None})
+
+    def test_a_look_alone_is_a_refresh_that_restyles_the_entity(self):
+        # A look edit in the editor changes no kind, so nothing may be
+        # demolished. A look taken away leaves no attribute behind.
+        world = _world(_placed())
+        tile_sync.apply(world, tile_sync.plan(world))
+        before = set(world.rooms.room_at(*_FACILITY_TILE).contents)
+        styled = _world([(_FACILITY, *_FACILITY_TILE, "", 0, _FACILITY_LOOK),
+                         (_SIGN, *_FACILITY_TILE, _WORDS)])
+        actions = tile_sync.plan(styled)
+        destroyed = tile_sync.apply(styled, actions)
+        room = styled.rooms.room_at(*_FACILITY_TILE)
+
+        self.assertEqual(_verbs(actions),
+                         {_FACILITY_TILE: tile_sync.VERB_REFRESH})
+        self.assertEqual(destroyed, 0)
+        self.assertEqual(set(room.contents), before)
+        self.assertEqual(_looks(room)["facility"], _FACILITY_LOOK)
+
+        plain = _world(_placed())
+        tile_sync.apply(plain, tile_sync.plan(plain))
+
+        self.assertEqual(_looks(plain.rooms.room_at(*_FACILITY_TILE)),
+                         {"facility": None, "sign": None})
+
     def test_an_action_with_no_facings_stamps_nothing(self):
         world = _world(_placed())
         actions = [tile_sync.TileAction(action.tile, action.verb, action.kinds,
@@ -243,6 +296,7 @@ class TileSyncTests(EvenniaTestCase):
 
         self.assertTrue(room.contents)
         self.assertEqual(_facings(room), {"facility": None, "sign": None})
+        self.assertEqual(_looks(room), {"facility": None, "sign": None})
 
 
 class DecorTests(EvenniaTestCase):

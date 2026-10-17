@@ -194,6 +194,81 @@ class ModelRecordTests(unittest.TestCase):
                 records.load_record(path)
 
 
+class VariantRecordTests(unittest.TestCase):
+    """A variant is a record of its own that names its base (10/16/2026)."""
+
+    @staticmethod
+    def _record(asset_key: str, variant_of: str = "",
+                aliases: tuple = ()) -> records.ModelRecord:
+        return records.ModelRecord(
+            asset_key=asset_key, family="props", record_path=asset_key,
+            source_id="s", file="f.glb", aliases=aliases,
+            variant_of=variant_of)
+
+    def test_a_record_reads_its_variant_of(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(
+                folder, "props", "pole_bent",
+                'source = "s"\nfile = "f.glb"\nvariant_of = "pole"\n')
+            record = records.load_record(path)
+
+        self.assertEqual(record.variant_of, "pole")
+
+    def test_a_record_cannot_be_a_variant_of_itself(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = _write_record(
+                folder, "props", "pole",
+                'source = "s"\nfile = "f.glb"\nvariant_of = "pole"\n')
+
+            with self.assertRaises(records.RecordError):
+                records.load_record(path)
+
+    def test_the_base_must_be_a_record_of_its_own(self):
+        # An alias is no base: the client groups the variants under the key
+        # of the file.
+        loaded = [self._record("pole", aliases=("old_pole",)),
+                  self._record("pole_bent", variant_of="old_pole")]
+
+        with self.assertRaises(records.RecordError) as caught:
+            records._check_variants(loaded)
+
+        self.assertIn("old_pole", str(caught.exception))
+
+    def test_a_variant_of_a_variant_is_refused(self):
+        loaded = [self._record("pole"),
+                  self._record("pole_bent", variant_of="pole"),
+                  self._record("pole_rusted", variant_of="pole_bent")]
+
+        with self.assertRaises(records.RecordError) as caught:
+            records._check_variants(loaded)
+
+        self.assertIn("pole_bent", str(caught.exception))
+
+    def test_variants_group_under_their_base_in_key_order(self):
+        loaded = [self._record("pole"),
+                  self._record("pole_rusted", variant_of="pole"),
+                  self._record("pole_bent", variant_of="pole"),
+                  self._record("crate")]
+
+        self.assertEqual(records.variants_of(loaded),
+                         {"pole": ["pole_bent", "pole_rusted"]})
+
+    def test_the_served_variant_map_is_the_committed_file(self):
+        # The same relationship as the manifest: the file in git is what a
+        # fresh render gives. The check covers it too, through render_all.
+        rendered = outputs.render_variants(records.load_all())
+
+        with open(paths.CLIENT_VARIANTS_PATH, "r", encoding="utf-8") as handle:
+            committed = json.load(handle)
+
+        self.assertEqual(committed, rendered)
+
+        for base, keys in rendered.items():
+            with self.subTest(base=base):
+                self.assertTrue(keys)
+                self.assertNotIn(base, keys)
+
+
 class ManifestTests(unittest.TestCase):
     """The manifest a graphical client fetches to learn which keys have art."""
 

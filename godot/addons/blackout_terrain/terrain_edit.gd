@@ -37,7 +37,7 @@ const LAYER_WALL_STYLES := "walls"
 var _layers := {}
 
 ## Each object change, in order:
-## `[added (bool), tile, kind, rotation, text, plane]`.
+## `[added (bool), tile, kind, rotation, text, plane, look]`.
 var _objects: Array = []
 
 ## The centre chunk of the block of this edit.
@@ -161,15 +161,15 @@ func apply_wall_style(chunks: ChunkSet, tile: Vector2i, style: String) -> void:
 
 
 func add_object(chunks: ChunkSet, tile: Vector2i, kind: String,
-		rotation: int, text: String = "") -> void:
-	_objects.append([true, tile, kind, rotation, text, chunks.plane])
-	chunks.add_object(tile, kind, rotation, text)
+		rotation: int, text: String = "", look: Dictionary = {}) -> void:
+	_objects.append([true, tile, kind, rotation, text, chunks.plane, look.duplicate(true)])
+	chunks.add_object(tile, kind, rotation, text, look)
 
 
 func remove_object(chunks: ChunkSet, tile: Vector2i, kind: String,
-		rotation: int, text: String = "") -> void:
-	if chunks.remove_object(tile, kind, rotation, text):
-		_objects.append([false, tile, kind, rotation, text, chunks.plane])
+		rotation: int, text: String = "", look: Dictionary = {}) -> void:
+	if chunks.remove_object(tile, kind, rotation, text, look):
+		_objects.append([false, tile, kind, rotation, text, chunks.plane, look.duplicate(true)])
 
 
 static func _key(at: Vector2i, chunks: ChunkSet) -> Vector3i:
@@ -242,6 +242,6 @@ func _replay_objects(sets: Dictionary, forward: bool) -> void:
 			continue
 
 		if change[0] == forward:
-			chunks.add_object(change[1], change[2], change[3], change[4])
+			chunks.add_object(change[1], change[2], change[3], change[4], change[6])
 		else:
-			chunks.remove_object(change[1], change[2], change[3], change[4])
+			chunks.remove_object(change[1], change[2], change[3], change[4], change[6])

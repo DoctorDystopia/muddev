@@ -528,11 +528,10 @@ def emit_avatar(observer, force: bool = False) -> int:
         three keys are picked off the result; the rest is dropped because
         char_vitals and room_info already carry it. See CharAvatarPayload.
 
-        Sent on resync only, which is every login, every reconnect and every
-        server reload. That is the whole schedule this fact has today: a
-        character's asset key is fixed for its lifetime. When appearance
-        becomes mutable, whatever sets it calls this, and nothing else here
-        changes.
+        Sent on resync: each login, each reconnect, and each server reload.
+        Since 10/16/2026 the body type and the figure colors also go (the
+        two keys of a player row). They change, so each writer in
+        systems/gameplay/figure/character_figure.py calls this also.
 
     Notes/References:
         emit_room_contents excludes the observer from their own entity list,
@@ -549,6 +548,8 @@ def emit_avatar(observer, force: bool = False) -> int:
         entity_id=body["id"],
         asset=body["asset"],
         family=body["family"],
+        body_type=body.get(const.ENTITY_BODY_TYPE_KEY, ""),
+        figure_colors=body.get(const.ENTITY_FIGURE_COLORS_KEY, {}),
     )
 
     return emit(observer, payload, force=force)

@@ -73,6 +73,9 @@ _BAD_NUMBER = "Enter a whole number between {minimum} and {maximum}."
 
 _BACK_TO_EGG = "Back to the egg"
 
+# The first choice of the color list: the role takes the palette color again.
+_PALETTE_CHOICE = "The palette color (no color of their own)"
+
 # Quest screens.
 _QUEST_LIST_ROW = "{quest_key}  ({status})"
 _QUEST_DETAIL_TITLE = f"{TITLE_COLOR}{{title}}{RESET_COLOR}"
@@ -631,6 +634,8 @@ def start(caller, **kwargs):
         {"desc": "Bring target to me", "goto": _goto_bring_here},
         {"desc": "Grant XP", "goto": "node_xp_skill"},
         {"desc": "Set a skill level", "goto": "node_level_skill"},
+        {"desc": "Set the body type", "goto": "node_body_type"},
+        {"desc": "Set a figure color", "goto": "node_color_role"},
         {"desc": "Quests", "goto": "node_quest"},
         {"desc": "Boot or ban an account", "goto": "node_account"},
         {"desc": "Change target", "goto": "node_target"},
@@ -845,6 +850,43 @@ def node_teleport_player(caller, raw_string="", **kwargs):
     )
 
     return rendered
+
+
+def node_body_type(caller, **kwargs):
+    """List each body type, one for each rig of the figure workbench."""
+    keys = dev_actions.body_types()
+    text = f"{_HEADING}\n\nGive {_target(caller).key} which body type?"
+    options = _key_options(keys, _goto_body_type, "body_type")
+    options.append(back_option(_BACK_TO_EGG, "start"))
+
+    return text, tuple(options)
+
+
+def node_color_role(caller, **kwargs):
+    """List each color role that a character owns."""
+    keys = dev_actions.color_roles()
+    text = f"{_HEADING}\n\nChange which color of {_target(caller).key}?"
+    options = _key_options(keys, "node_color_value", "role")
+    options.append(back_option(_BACK_TO_EGG, "start"))
+
+    return text, tuple(options)
+
+
+def node_color_value(caller, **kwargs):
+    """List each named color of the palette, after the palette's own choice."""
+    role = kwargs.get("role", "")
+    text = f"{_HEADING}\n\nWhich color for {role}?"
+    palette_option = {"desc": _PALETTE_CHOICE,
+                      "goto": (_goto_figure_color, {"role": role, "color": ""})}
+    options = [palette_option]
+
+    for color in dev_actions.named_colors():
+        options.append({"desc": color,
+                        "goto": (_goto_figure_color, {"role": role, "color": color})})
+
+    options.append(back_option("Back to the color roles", "node_color_role"))
+
+    return text, tuple(options)
 
 
 def node_xp_skill(caller, **kwargs):
@@ -1180,6 +1222,26 @@ def _goto_erase(caller, raw_string, **kwargs) -> str:
     """Destroy everything the target has written, after the confirmation."""
     target = _target(caller)
     _succeeded, message = dev_actions.erase_graffiti(caller, target)
+    _report(caller, message)
+
+    return "start"
+
+
+def _goto_body_type(caller, raw_string, **kwargs) -> str:
+    """Give the target the chosen body type and return to the root."""
+    target = _target(caller)
+    _succeeded, message = dev_actions.set_body_type(
+        caller, target, kwargs.get("body_type", ""))
+    _report(caller, message)
+
+    return "start"
+
+
+def _goto_figure_color(caller, raw_string, **kwargs) -> str:
+    """Give one color role of the target the chosen color, then the root."""
+    target = _target(caller)
+    _succeeded, message = dev_actions.set_figure_color(
+        caller, target, kwargs.get("role", ""), kwargs.get("color", ""))
     _report(caller, message)
 
     return "start"

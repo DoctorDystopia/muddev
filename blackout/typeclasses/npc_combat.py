@@ -246,11 +246,12 @@ class HostileNPC(NpcDefined, Unpocketable, CombatEntity, ObjectParent, DefaultOb
             try:
                 # Local import: avoids a typeclasses <-> systems import cycle
                 # at load_all_spawners() time, matching the style below.
-                from systems.core.tilegrid.constants import FACING_ATTR
+                from systems.core.tilegrid.constants import FACING_ATTR, LOOK_ATTR
                 from systems.gameplay.spawning.respawn import schedule_respawn
 
                 schedule_respawn(npc_key, room, respawn_seconds,
-                                 facing=self.attributes.get(FACING_ATTR))
+                                 facing=self.attributes.get(FACING_ATTR),
+                                 look=self.attributes.get(LOOK_ATTR))
             except Exception:
                 # A broken respawn queue must never block the death itself. If
                 # delete() were skipped the corpse would linger at 0 hp, the

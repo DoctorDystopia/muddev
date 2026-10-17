@@ -25,11 +25,30 @@ A JSON object with these keys, in this order::
     flags        CHUNK_SIZE rows of CHUNK_SIZE walk flag ints
     areas        CHUNK_SIZE rows of CHUNK_SIZE area indexes
     objects      [{"kind", "x", "y", "rotation"}, ...]. An object may also
-                 have "text": the words of a signpost (09/27/2026)
+                 have "text": the words of a signpost (09/27/2026). It may
+                 also have "look": the variant, the scale, the tilt, and
+                 the nudge of that one placement (10/16/2026)
 
 An object without text writes the same bytes as before the text key, so no
 file of format 1 needed a rewrite. The text follows CHUNK_TEXT_PATTERN, so no
 text needs a JSON escape, as for a name.
+
+The look (10/16/2026)
+---------------------
+A `look` is a table with at most the keys of LOOK_KEYS, in that order::
+
+    variant   "*", or the asset key of a variant of the model of the kind
+    scale     an int in LOOK_SCALE_MIN..LOOK_SCALE_MAX, percent. Not 100
+    turn      [x, y, z] ints in degrees, each in -LOOK_TURN_MAX..LOOK_TURN_MAX.
+              Not all zero
+    offset    [x, y, z] ints in hundredths of a tile, each in
+              -LOOK_OFFSET_MAX..LOOK_OFFSET_MAX. Not all zero
+
+The reader refuses an empty look, a key at its default, and an unknown key.
+Thus, each object has one text, as with the text key. `look_problem` holds
+the rule. The statefeed asks it before it sends a look. The server reads no
+value of a look for a rule. It stores the look. The tile sync gives it to
+the entity that the object stands up.
 
 Format 2: the wall styles (10/09/2026)
 --------------------------------------
@@ -97,9 +116,17 @@ PLAIN_WALL_FILE_KEYS: tuple = tuple(key for key in CHUNK_FILE_KEYS
 # The keys of one object, in the order that the writer writes them.
 OBJECT_KEYS: tuple = ("kind", "x", "y", "rotation")
 
-# The key of the optional text of an object. The writer writes it last, and
-# only when the text is not empty.
+# The key of the optional text of an object. The writer writes it after the
+# four keys, and only when the text is not empty.
 OBJECT_TEXT_KEY: str = "text"
+
+# The key of the optional look of an object. The writer writes it last, and
+# only when the look holds a key. The name lives in the constants, because
+# the client reads it off the statefeed too.
+OBJECT_LOOK_KEY: str = const.OBJECT_LOOK_KEY
+
+# The two optional keys of an object.
+OBJECT_OPTIONAL_KEYS: tuple = (OBJECT_TEXT_KEY, OBJECT_LOOK_KEY)
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -127,7 +154,9 @@ class ChunkFileError(ValueError):
 class ChunkObject:
     """
     One placed object, at local tile coordinates. The `text` is the words of
-    a signpost, or "" for an object that carries none.
+    a signpost, or "" for an object that carries none. The `look` is the
+    table of the module docstring, or {} for an object that draws the base
+    model as it comes.
     """
 
     kind: str
@@ -135,6 +164,7 @@ class ChunkObject:
     y: int
     rotation: int = 0
     text: str = ""
+    look: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -332,7 +362,8 @@ def _objects(value) -> list:
     for index, item in enumerate(value):
         if not isinstance(item, dict) or not _has_object_keys(item):
             _fail("object %d must have exactly the keys %s, and may have %s",
-                  index, ", ".join(OBJECT_KEYS), OBJECT_TEXT_KEY)
+                  index, ", ".join(OBJECT_KEYS),
+                  " and ".join(OBJECT_OPTIONAL_KEYS))
 
         kind = item["kind"]
 
@@ -345,17 +376,95 @@ def _objects(value) -> list:
             y=_int_in(item["y"], 0, last, "object %d y" % index),
             rotation=_int_in(item["rotation"], 0, const.ROTATION_COUNT - 1,
                              "object %d rotation" % index),
-            text=_object_text_value(item, index)))
+            text=_object_text_value(item, index),
+            look=_object_look_value(item, index)))
 
     return found
 
 
 def _has_object_keys(item: dict) -> bool:
-    """Return True if an object has OBJECT_KEYS, and at most the text too."""
-    keys = set(item)
-    keys.discard(OBJECT_TEXT_KEY)
+    """
+    Return True if an object has OBJECT_KEYS, and at most the text and the
+    look too.
+    """
+    keys = set(item) - set(OBJECT_OPTIONAL_KEYS)
 
     return keys == set(OBJECT_KEYS)
+
+
+def _object_look_value(item: dict, index: int) -> dict:
+    """
+    Return the look of an object, or {}. A look key that is present must
+    pass `look_problem`. The GDScript `_object_look` has the same rule.
+    """
+    if OBJECT_LOOK_KEY not in item:
+        return {}
+
+    problem = look_problem(item[OBJECT_LOOK_KEY])
+
+    if problem:
+        _fail("object %d look: %s", index, problem)
+
+    return normal_look(item[OBJECT_LOOK_KEY])
+
+
+def _int_or_none(value):
+    """Return `value` as an int, as `_as_int` does, or None."""
+    try:
+        return _as_int(value, "look")
+    except ChunkFileError:
+        return None
+
+
+def _axes_problem(value, limit: int, what: str) -> str:
+    """
+    Return why `value` is no [x, y, z] of ints in -limit..limit, or "". All
+    zeros is the default, and the default is refused.
+    """
+    if not isinstance(value, list) or len(value) != const.LOOK_AXES:
+        return "%s must be [x, y, z]" % what
+
+    numbers = [_int_or_none(item) for item in value]
+
+    if any(number is None for number in numbers):
+        return "%s must hold three integers" % what
+
+    if any(abs(number) > limit for number in numbers):
+        return "%s must stay in -%d..%d" % (what, limit, limit)
+
+    if not any(numbers):
+        return "%s of zeros is the default. Leave the key out" % what
+
+    return ""
+
+
+def _variant_problem(value) -> str:
+    """Return why `value` is no variant of a look, or ""."""
+    if not isinstance(value, str):
+        return "the variant must be a string"
+
+    if value == const.LOOK_VARIANT_ANY or _NAME_RE.fullmatch(value):
+        return ""
+
+    return "the variant %r is neither %s nor a name" % (
+        value, const.LOOK_VARIANT_ANY)
+
+
+def _scale_problem(value) -> str:
+    """Return why `value` is no scale of a look, or ""."""
+    number = _int_or_none(value)
+
+    if number is None:
+        return "the scale must be an integer"
+
+    if number < const.LOOK_SCALE_MIN or number > const.LOOK_SCALE_MAX:
+        return "the scale must stay in %d..%d" % (const.LOOK_SCALE_MIN,
+                                                  const.LOOK_SCALE_MAX)
+
+    if number == const.LOOK_SCALE_UNIT:
+        return "a scale of %d is the default. Leave the key out" % number
+
+    return ""
 
 
 def _object_text_value(item: dict, index: int) -> str:
@@ -478,17 +587,133 @@ def _name_list_text(names: list) -> str:
 
 
 def _object_text(thing: ChunkObject) -> str:
-    """Return one object as one line. The text key comes last, if any."""
+    """
+    Return one object as one line. The text key comes after the four keys.
+    The look key comes last. Each one is there only when the object has it.
+    """
     words = ""
 
     if thing.text:
         words = ',"%s":"%s"' % (OBJECT_TEXT_KEY, thing.text)
 
+    if thing.look:
+        words += ',"%s":%s' % (OBJECT_LOOK_KEY, look_text(thing.look))
+
     return '{"kind":"%s","x":%d,"y":%d,"rotation":%d%s}' % (
         thing.kind, thing.x, thing.y, thing.rotation, words)
 
 
+def _axes_text(values: list) -> str:
+    """Return [x, y, z] as the writer writes it: no spaces."""
+    return "[" + ",".join("%d" % number for number in values) + "]"
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
+
+def look_problem(value) -> str:
+    """
+    Purpose: Say why `value` is no look of a chunk object.
+
+    Entry:
+        value - anything. A look is a dict with at most the keys of
+                LOOK_KEYS, as the module docstring gives them.
+
+    Exit/Returns:
+        A reason, or "" for a look. An integral float counts as an int, as
+        in the rest of the reader.
+
+    Module Globals:
+        const.LOOK_KEYS and the look ranges read.
+
+    Methodology:
+        One test for each key, in the order of LOOK_KEYS. The first problem
+        wins. A key at its default is a problem, so each look has one text.
+
+    Notes/References:
+        The reader refuses what this refuses. The statefeed sends no look
+        that this refuses, so a bad attribute never reaches a client.
+        `ChunkFile.look_problem` in `chunk_file.gd` is the GDScript twin.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    if not isinstance(value, dict):
+        return "a look must be a table"
+
+    if not value:
+        return "a look must hold a key. Leave an empty look out"
+
+    unknown = sorted(set(value) - set(const.LOOK_KEYS))
+
+    if unknown:
+        return "the key %s is not one of %s" % (unknown[0],
+                                               ", ".join(const.LOOK_KEYS))
+
+    problem = ""
+
+    if const.LOOK_VARIANT_KEY in value:
+        problem = _variant_problem(value[const.LOOK_VARIANT_KEY])
+
+    if not problem and const.LOOK_SCALE_KEY in value:
+        problem = _scale_problem(value[const.LOOK_SCALE_KEY])
+
+    if not problem and const.LOOK_TURN_KEY in value:
+        problem = _axes_problem(value[const.LOOK_TURN_KEY],
+                                const.LOOK_TURN_MAX, "the turn")
+
+    if not problem and const.LOOK_OFFSET_KEY in value:
+        problem = _axes_problem(value[const.LOOK_OFFSET_KEY],
+                                const.LOOK_OFFSET_MAX, "the offset")
+
+    return problem
+
+
+def normal_look(value: dict) -> dict:
+    """
+    Return a look that `look_problem` accepts with each number as an int,
+    and its keys in the order of LOOK_KEYS. The reader stores this form.
+    """
+    look = {}
+
+    for key in const.LOOK_KEYS:
+        if key not in value:
+            continue
+
+        item = value[key]
+
+        if isinstance(item, list):
+            look[key] = [_as_int(number, key) for number in item]
+        elif isinstance(item, str):
+            look[key] = item
+        else:
+            look[key] = _as_int(item, key)
+
+    return look
+
+
+def look_text(look: dict) -> str:
+    """
+    Return a look as the writer writes it: one JSON object with its keys in
+    the order of LOOK_KEYS, and no spaces. The GDScript `look_text` writes
+    the same bytes. The editor matches two objects by this text.
+    """
+    parts = []
+
+    for key in const.LOOK_KEYS:
+        if key not in look:
+            continue
+
+        item = look[key]
+
+        if isinstance(item, list):
+            parts.append('"%s":%s' % (key, _axes_text(item)))
+        elif isinstance(item, str):
+            parts.append('"%s":"%s"' % (key, item))
+        else:
+            parts.append('"%s":%d' % (key, item))
+
+    return "{" + ",".join(parts) + "}"
+
 
 def chunk_file_name(cx: int, cy: int, plane: int) -> str:
     """Return the file name of the chunk at (cx, cy) on a plane."""
@@ -834,6 +1059,9 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
 
         if thing.text:
             line += " " + thing.text
+
+        if thing.look:
+            line += " " + look_text(thing.look)
 
         lines.append(line)
 

@@ -22,6 +22,9 @@ from evennia.utils import logger
 from items.equipment.constants import MAX_INVENTORY_SLOTS
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid.world import get_world
+from systems.gameplay.figure import character_figure
+from systems.gameplay.figure import constants as figure_const
+from systems.gameplay.figure import figure_files
 from systems.gameplay.graffiti import service as graffiti_service
 from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
@@ -971,6 +974,130 @@ def _move_to_room(actor, target, room, detail: str) -> tuple:
     message = dev_constants.MSG_TELEPORT_DONE.format(target=target.key, room=name)
 
     return True, message
+
+
+# ─── Appearance ──────────────────────────────────────────────────────────────
+
+def body_types() -> list:
+    """
+    Purpose: Name each body type that a character can have.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a sorted list of body type keys: one for each rig.
+
+    Module Globals:
+        None.
+
+    Notes/References:
+        systems/gameplay/figure/figure_files.py reads the rig files on
+        each call, so a new rig from the figure workbench reaches this list.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    found = figure_files.body_types()
+
+    return found
+
+
+def color_roles() -> list:
+    """
+    Purpose: Name each color role that a character owns.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns the color roles, in the order of their constant.
+
+    Module Globals:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    roles = list(figure_const.CHARACTER_COLOR_ROLES)
+
+    return roles
+
+
+def named_colors() -> list:
+    """
+    Purpose: Name each color of the palette that a color role can have.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a sorted list of named colors.
+
+    Module Globals:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    found = figure_files.named_colors()
+
+    return found
+
+
+def set_body_type(actor, target, body_type: str) -> tuple:
+    """
+    Purpose: Give a character another body type.
+
+    Entry:
+        actor is the moderator. target is the Character. body_type is the
+        key of a rig.
+
+    Exit/Returns:
+        Returns (succeeded, message) from the writer of the figure.
+
+    Module Globals:
+        dev_constants.ACTION_FIGURE read.
+
+    Methodology:
+        character_figure.set_body_type owns the rule and the send to each client.
+        This effect adds the audit line only, for a change that landed.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    succeeded, message = character_figure.set_body_type(target, body_type)
+
+    if succeeded:
+        _audit(actor, dev_constants.ACTION_FIGURE, target, f"body_type = {body_type}")
+
+    return succeeded, message
+
+
+def set_figure_color(actor, target, role: str, color: str) -> tuple:
+    """
+    Purpose: Give one color role of a character a named color, or give the
+             role back to the palette.
+
+    Entry:
+        actor is the moderator. target is the Character. role is a color
+        role of a character. color is a named color, or "" for the palette.
+
+    Exit/Returns:
+        Returns (succeeded, message) from the writer of the figure.
+
+    Module Globals:
+        dev_constants.ACTION_FIGURE read.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    succeeded, message = character_figure.set_figure_color(target, role, color)
+
+    if succeeded:
+        _audit(actor, dev_constants.ACTION_FIGURE, target, f"{role} = {color!r}")
+
+    return succeeded, message
 
 
 # ─── Progression ─────────────────────────────────────────────────────────────

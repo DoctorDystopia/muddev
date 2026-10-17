@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/test_figure_part_model.gd" id="1_part_model"]
+
+[node name="TestFigurePartModel" type="Node"]
+script = ExtResource("1_part_model")

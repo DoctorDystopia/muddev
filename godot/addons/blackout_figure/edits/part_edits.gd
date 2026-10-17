@@ -53,6 +53,13 @@ const NODE_PART_PREFIX := "part_"
 const COPY_SUFFIX := "_copy"
 const MIRROR_SUFFIX := "_mirror"
 
+## The reason of a refusal that needs a selected part. The part editor
+## shows it as the tooltip of each button that needs one.
+const NO_PART := "Select a part first."
+
+## The reason of a refusal when a model has no node to give.
+const NO_MESH_NODE := "The model %s has no node with a mesh, or it is not in the served tree."
+
 
 # ─── The Body tab: parts ────────────────────────────────────────────────────
 
@@ -477,8 +484,7 @@ static func parts_from_model(look: Dictionary, rig: FigureRig, model_key: String
 	var taken := PackedStringArray()
 
 	if nodes.is_empty():
-		return "The model %s has no node with a mesh, or it is not in the served tree." \
-			% model_key
+		return NO_MESH_NODE % model_key
 
 	for node_name: String in nodes:
 		var part_name := unique_name(_part_name_of(node_name), taken)
@@ -510,6 +516,88 @@ static func parts_from_model(look: Dictionary, rig: FigureRig, model_key: String
 				_drop_fit_row(look, body_key, fitted["part"])
 
 	return ""
+
+
+## Give ONE part of a look the node of a served model (DESIGN-0014 section
+## 20). Each other part of the look stays as it is. This is how a part of a
+## body takes a model from a modeler: the head from Blender, and each other
+## body part from its shape list.
+##
+## The part keeps its name, its bone, its region, and its shape list. The
+## shape list draws again when the model is not in hand. Its place comes
+## from the place of the node in the file, seen from the rest of its bone
+## on `rig`, so the part sits where the author made it. The place goes
+## where a gizmo move goes ([method set_part_place]): into the fit row of
+## the part on that body type when it has one, else into the part. Returns
+## "" or the reason for a refusal.
+static func part_from_model(look: Dictionary, rig: FigureRig, part_name: String,
+		model_key: String, models: FigureModels) -> String:
+	var index := part_index(look, part_name)
+
+	if index < 0:
+		return NO_PART
+
+	var row: Dictionary = look["parts"][index]
+	var node_name := node_for_part(models, model_key, row)
+
+	if node_name.is_empty():
+		return _no_node_reason(models, model_key, row)
+
+	row["model"] = model_key
+	row["node"] = node_name
+
+	return set_part_place(look, part_name, rig.global_rest_of(row["bone"]).affine_inverse()
+		* models.node_place(model_key, node_name), rig.key())
+
+
+## Take the model away from one part. The part draws its shape list again,
+## at the place that it has.
+static func clear_part_model(look: Dictionary, part_name: String) -> String:
+	var index := part_index(look, part_name)
+
+	if index < 0:
+		return NO_PART
+
+	var row: Dictionary = look["parts"][index]
+
+	if not row.has("model"):
+		return "The part %s has no model." % part_name
+
+	row.erase("model")
+	row.erase("node")
+
+	return ""
+
+
+## The node of a model that one part takes, or "". The node with the name
+## of the part comes first, then the node with the name of its bone. A
+## model with one node gives that node to any part.
+##
+## A node of a reference body has the name `<look>__<part>`
+## ([FigureReference]). Only the text after the last `__` counts, so an
+## author can change one node of the reference body and keep its name.
+static func node_for_part(models: FigureModels, model_key: String, row: Dictionary) -> String:
+	var nodes := models.node_names(model_key)
+
+	for wanted: String in [str(row.get("name", "")), str(row.get("bone", ""))]:
+		for node_name: String in nodes:
+			var own := node_name.get_slice(FigureBuilder.NAME_JOIN,
+				node_name.get_slice_count(FigureBuilder.NAME_JOIN) - 1)
+
+			if own.to_snake_case() == wanted.to_snake_case():
+				return node_name
+
+	return nodes[0] if nodes.size() == 1 else ""
+
+
+static func _no_node_reason(models: FigureModels, model_key: String, row: Dictionary) -> String:
+	var nodes := models.node_names(model_key)
+
+	if nodes.is_empty():
+		return NO_MESH_NODE % model_key
+
+	return "The model %s has %d nodes (%s). Name one node %s or %s." % [model_key,
+		nodes.size(), ", ".join(nodes), row.get("name", ""), row.get("bone", "")]
 
 
 ## The bone of a new part for one node of a model. A node with the name of

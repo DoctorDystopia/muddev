@@ -324,10 +324,12 @@ static func _write_tile(chunks: ChunkSet, edit: TerrainEdit, template: Structure
 		edit.apply_area(chunks, at, template.area_names[layer.areas[index]])
 
 	for thing: Dictionary in chunks.objects_at(at):
-		edit.remove_object(chunks, at, thing["kind"], thing["rotation"], thing["text"])
+		edit.remove_object(chunks, at, thing["kind"], thing["rotation"], thing["text"],
+			thing["look"])
 
 	for thing: Dictionary in template.objects_at(tile, layer.plane):
-		edit.add_object(chunks, at, thing["kind"], thing["rotation"], thing["text"])
+		edit.add_object(chunks, at, thing["kind"], thing["rotation"], thing["text"],
+			thing["look"])
 
 
 # ─── Delete ─────────────────────────────────────────────────────────────────
@@ -357,7 +359,8 @@ static func clear(sets: Dictionary, edit: TerrainEdit, keys: Dictionary) -> int:
 
 static func _clear_tile(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i) -> void:
 	for thing: Dictionary in chunks.objects_at(tile):
-		edit.remove_object(chunks, tile, thing["kind"], thing["rotation"], thing["text"])
+		edit.remove_object(chunks, tile, thing["kind"], thing["rotation"], thing["text"],
+			thing["look"])
 
 	if chunks.get_wall_style(tile) != _Const.TILE_DEFAULT_WALL_STYLE:
 		edit.apply_wall_style(chunks, tile, _Const.TILE_DEFAULT_WALL_STYLE)

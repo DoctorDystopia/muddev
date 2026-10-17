@@ -394,6 +394,40 @@ gives the registry its radians.
 > model.** It comes from `servers/rendering/dummy/`, which only exists under
 > `--headless`, and does not happen in a real renderer. Noise, not a leak.
 
+### A variant and a look (10/16/2026)
+
+Fifty rusty poles were fifty copies of one model. Now a model can have
+**model variants**, and each chunk object can carry a **look**. Nick chose
+the four rules on 10/16/2026.
+
+- **A variant is one more model record** with `variant_of = "rusty_pole"`
+  (`blackout/assets/README.md`, "Variants"). The build serves it under its
+  own key and writes `variants.json` beside the manifest. `ModelLoader`
+  fetches the map after the manifest, and `manifest_ready` waits for it. A
+  row drawn before the map arrived would draw the base and never draw again.
+- **A look is four facts on one chunk object:** `variant`, `scale` in percent,
+  `turn` in degrees on three axes, and `offset` in hundredths of a tile.
+  `ChunkFile.look_problem` is the rule, the same as the Python reader. The
+  server stores the look and sends it on the row of the entity
+  (`ENTITY_LOOK_KEY`). It reads no value of it for a rule.
+- **`ObjectLook` applies a look** in the three places that draw a chunk object:
+  `EntityPool` for an entity, `TerrainView` for scenery, and `TerrainModels`
+  in the editor. `PropMeshBuilder` reads the same facts for a primitive, so a
+  crate tilts too. The tilt rides on the quarter turn of the rotation. The
+  nudge stays in the frame of the tile.
+- **`ModelRegistry.variant_for` picks the key.** No variant gives the base. A
+  key gives that variant. The auto variant `*` gives the base or one variant,
+  from `StableHash` of the tile for scenery and of the id for an entity. A key
+  that is no variant of the base gives the base, so a stale chunk file never
+  hides a thing. `MeshResolver.redraws_for` counts a variant that arrives as
+  art for its base.
+
+In the editor, the **Variant** list of the Paint tab sets the variant of a
+new object. The Objects tab edits every fact of the look of the selected
+object. A field at its default leaves its key out, so the chunk file holds
+one text for each look. `TerrainWorld.variants_for` reads the served tree
+of the repo for the lists, with "Show models" on or off.
+
 ## The ground is the tile world
 
 Since DESIGN-0011 Phase 5 (09/25/2026), the 3D pane draws the chunks of the
@@ -1378,9 +1412,9 @@ The panel has six tabs:
 
 | Tab | Holds |
 |---|---|
-| Paint | The tool row, and the options of the current tool only: the radius, the brush shape, the strength, the flags, the object kind and rotation, the sign text, the noise, and **Protect structures** |
+| Paint | The tool row, and the options of the current tool only: the radius, the brush shape, the strength, the flags, the object kind, rotation, and variant, the sign text, the noise, and **Protect structures** |
 | Build | The structure tools (DESIGN-0013): Wall line, Room, Doorway, Level above, Ladder, Stairs, Roof, Wall style, Decor, Select tiles, and Place, with the options of the current tool only. See "The Build tab" below |
-| Objects | The selected object with its **Kind**, **Rotation**, and **Sign text** fields (a change applies at once), **Turn**, **Turn back**, **Delete**, and **Follow link**. A filter, and a list of every object in the block. A click on a row selects it, and the Paint tool stays. **Show decor** off keeps the decor out of the list |
+| Objects | The selected object with its **Kind**, **Rotation**, **Sign text**, **Variant**, **Scale**, **Tilt**, and **Nudge** fields (a change applies at once), **Turn**, **Turn back**, **Delete**, and **Follow link**. A filter, and a list of every object in the block. A click on a row selects it, and the Paint tool stays. **Show decor** off keeps the decor out of the list. See "A variant and a look" |
 | World | The **Block** report (the load errors and the seam faults, kept until the next load), the marks to show with a legend, how the planes above show, **Check world** and its findings, and the state of the tile sync |
 | Look | The colour of each floor type, the cliff, the water, and each prop, the colour and the height of each wall style, the fog and the light of each area with **Preview the area light**, and the colours of the editor marks. See "The Look tab" below |
 | Tables | The rows of the areas, the floor types, the wall styles, and the decor kinds: **New row**, **Save row**, **Rename row**, **Remove row**, and **Read files again**. See "The Tables tab" below |
@@ -1732,9 +1766,13 @@ stance table. Phase W6 (10/13/2026) built the checks, the Check tab, the
 budget line, the kit parts, and the list of the NPC defs. It also gave the
 author more tools: the other side of a part, a copy of a part, the rotation
 of a socket, the regions of a rig, and a new name for a color. The plan of
-DESIGN-0014 has no phase left. The game does not draw a figure yet. The
-look layer of ENG-0011 (10/13/2026) added the finishes of the palette, the
-Families tab, and the presentation fields of the Gear tab.
+DESIGN-0014 has no phase left. The look layer of ENG-0011 (10/13/2026) added
+the finishes of the palette, the Families tab, and the presentation fields
+of the Gear tab. Since 10/16/2026 the game draws each player character as
+the figure (DESIGN-0014 section 20). See "The game draws each player as the
+figure" below. The short guides for an author are
+`blackout/assets/figure/README.md` (a figure) and
+`blackout/assets/figure/EQUIPMENT.md` (equipment).
 
 To use it:
 
@@ -1830,6 +1868,27 @@ keeps its old model in the inventory.
 **Parts from model** does step 7 for a model that the served tree has
 already. It also reads the served tree again after a build
 in a terminal.
+
+To give ONE part a model from a modeler, the body included (10/16/2026):
+
+1. On the **Body** tab or the **Gear** tab, select the part: the head, the
+   hair, a sleeve.
+2. Click **Export reference body** on the Body tab, and model the new part
+   over the old one in the modeler. Keep its place. Give the object the
+   name of the part (`head`) or of its bone (`Head`). A node of the
+   reference body keeps its name, so a changed node of that file works too.
+3. Give each material the name of a color role: `skin`, `eyes`, `hair`.
+4. Save the file as a `.blend` file, or export it as a `.glb` file.
+5. In the part editor, type a model key, or leave the field empty for
+   `<look>_<part>` (`body_1_head`). Click **Import model for part**, and
+   pick the file.
+6. The part draws the node of the model. Each other part of the look stays
+   as it was. Press Ctrl+S.
+
+**Part from served model** does step 5 for a model that the served tree has
+already. **Shape list again** takes the model away from the part. The part
+keeps its shape list, and the shape list draws while the model is not in
+hand.
 
 To change the fit of one part on one body type:
 
@@ -2277,6 +2336,56 @@ The rules that the workbench keeps:
   `FigureBuilder` had an empty palette in a static variable, and that
   variable was null in the editor. No headless test shows this. Make such a
   value in a routine, or give the script `@tool`, as `FamilyShapes` has.
+
+## The game draws each player as the figure
+
+Since 10/16/2026 the client draws each player character through
+`FigureBuilder`, from the `figure.json` that the figure workbench writes
+(DESIGN-0014 section 20). What the author sees on a stand is what a player
+sees.
+
+| Part | Where |
+|---|---|
+| The figure set, the models of the parts, and the build of one figure | `world/figure/figure_library.gd` (`FigureLibrary`) |
+| The avatar | `world/world_view.gd`, `_build_avatar` |
+| Each other player | `world/entity_pool.gd`, `_figure_for` |
+| The body type and the figure colors of the observer | `world/char_state.gd` |
+
+The server names, the client draws. The row of a player character carries
+`body_type`, and `figure_colors` when the character has a color of its own.
+A row with a body type draws a figure. Each other row draws its asset key,
+as before. The client never picks a body type.
+
+The rules:
+
+- **The client fetches `figure.json` at its start and at each
+  `char_avatar`.** The server sends `char_avatar` at each login, each
+  reconnect, and each server reload. A figure set that names a model that
+  the manifest does not know makes the client fetch the manifest again.
+- **Until the figure set arrives, a player draws the family shape of the
+  character.** The arrival draws each figure again.
+- **The avatar builds again on a change of its look only.** An HP message
+  does not build it again, so a clip goes on.
+- **A figure walks while it slides to its tile, and it idles on its
+  tile.** The clips come from the default clip set of
+  `world/figure/stances.json`. A figure of the pool turns to its step.
+- **Each figure has its own materials,** so a hit flash lights one figure.
+- **A figure knows its box** (`ModelLoader.BOUNDS_META`): the feet at the
+  origin, the top of the head at `FigureLibrary.FIGURE_HEIGHT`.
+
+To see a save of the workbench in the local game:
+
+1. Press Ctrl+S in the workbench. The plugin writes `figure.json` again.
+2. Run `evennia reload` from `blackout/`. The client fetches the new file
+   and draws the figures again. The three steps took about 11 seconds on
+   10/16/2026.
+
+For the public game, run `deploy/webexport/publish.sh --changed-only`. A
+player sees the change at the next login, reconnect, or page load.
+
+The cost: one figure is about 195 draw calls. On ANGLE, 11 figures take
+3.8 ms of each frame, and 50 take 16.8 ms. `tests/figure_crowd_bench.tscn`
+measures it. A crowd needs the shared version of DESIGN-0014 section 12.4.
 
 ## Running
 
@@ -3186,7 +3295,7 @@ To add a sound:
 | `world/meshes/mesh_builder.gd` | Part data to a Node3D. Knows no family names. |
 | `world/meshes/model_loader.gd` | The only file that knows HTTP and glTF exist. |
 | `world/meshes/mesh_resolver.gd` | The mesh ladder. The only thing panes call. |
-| `world/figure/` | The rig reader, the worn look reader, and `FigureBuilder`. The figure workbench uses them. The game does not draw a figure yet. |
+| `world/figure/` | The rig reader, the worn look reader, `FigureBuilder`, and `FigureLibrary`. The figure workbench and the game use them. |
 | `world/inventory_state.gd` | Carried grid and worn slots. |
 | `scenes/inventory/inventory_view.gd` | Draws the grid and the paper doll; turns a gesture into a command. |
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |

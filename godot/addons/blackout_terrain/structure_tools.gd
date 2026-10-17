@@ -740,7 +740,8 @@ static func decor(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i, kind: Str
 
 static func _remove_thing(chunks: ChunkSet, edit: TerrainEdit, tile: Vector2i,
 		thing: Dictionary) -> void:
-	edit.remove_object(chunks, tile, thing["kind"], thing["rotation"], thing["text"])
+	edit.remove_object(chunks, tile, thing["kind"], thing["rotation"], thing["text"],
+		thing["look"])
 
 
 # ─── Roof ───────────────────────────────────────────────────────────────────

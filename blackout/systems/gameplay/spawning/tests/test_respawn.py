@@ -22,7 +22,8 @@ from evennia.scripts.models import ScriptDB
 from evennia.utils.dbserialize import dbserialize, dbunserialize
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
-from systems.core.tilegrid.constants import FACING_ATTR
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid.constants import FACING_ATTR, LOOK_ATTR
 from systems.gameplay.spawning.respawn import (
     RESPAWN_MANAGER_KEY,
     RESPAWN_SWEEP_SECONDS,
@@ -293,6 +294,28 @@ class TestHostileNpcDeathPath(EvenniaTest):
         raider = _raiders_in(self.room1)[0]
 
         self.assertEqual(raider.attributes.get(FACING_ATTR), _TURN)
+
+    def test_a_respawn_keeps_the_look_of_the_dead_npc(self):
+        # The look of the chunk object goes the way of the facing
+        # (10/16/2026). An NPC with none gets none.
+        manager = get_respawn_manager()
+        look = {tile_const.LOOK_SCALE_KEY: 150}
+        npc = spawn_npc("mutant_raider", self.room1)
+        npc.attributes.add(LOOK_ATTR, look)
+
+        npc.at_damage(99, attacker=self.char1)
+        due_at = manager.db.respawn_queue[0]["due_at"]
+        manager.sweep(now=due_at)
+        raider = _raiders_in(self.room1)[0]
+
+        self.assertEqual(raider.attributes.get(LOOK_ATTR), look)
+
+        raider.at_damage(99, attacker=self.char1)
+        due_at = manager.db.respawn_queue[0]["due_at"]
+        manager.sweep(now=due_at)
+
+        self.assertEqual(_raiders_in(self.room1)[0].attributes.get(LOOK_ATTR),
+                         look)
 
     def test_a_respawn_of_an_npc_with_no_facing_gets_none(self):
         manager = get_respawn_manager()

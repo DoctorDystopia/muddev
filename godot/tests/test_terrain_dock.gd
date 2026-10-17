@@ -17,6 +17,10 @@ extends Node
 ##    object send one edit.
 ## 5. The Save button counts the changed chunks, the findings label says
 ##    when the rows are old, and the block report keeps its lines.
+## 6. The look fields of the selected object send a look with no key at its
+##    default (10/16/2026).
+
+const _Const := preload("res://autoload/blackout_constants.gd")
 
 var _failures := 0
 var _sent := []
@@ -50,8 +54,9 @@ func _expect(condition: bool, what: String) -> void:
 
 
 func _record(sent: Signal, name_of: String) -> void:
-	sent.connect(func(a: Variant = null, b: Variant = null, c: Variant = null) -> void:
-		_sent.append([name_of, a, b, c]))
+	sent.connect(func(a: Variant = null, b: Variant = null, c: Variant = null,
+			d: Variant = null) -> void:
+		_sent.append([name_of, a, b, c, d]))
 
 
 func _the_tabs_and_the_paint_hint(dock: TerrainDock) -> void:
@@ -199,6 +204,39 @@ func _the_object_list_filters_and_the_fields_send_an_edit(dock: TerrainDock) -> 
 
 	_expect(_sent.size() == 1 and _sent[0][1] == "ladder_up" and _sent[0][2] == 2,
 		"a changed rotation sends the kind and the rotation: %s" % [_sent])
+	_expect(_sent.size() == 1 and _sent[0][4] == {},
+		"a selection with no look sends an empty look: %s" % [_sent])
+
+	# The look fields (10/16/2026). A scale off the unit joins the look. A
+	# scale back at the unit leaves it out again.
+	_sent.clear()
+
+	var scale: SpinBox = _find_suffixed(dock, "%")
+
+	_expect(scale != null, "the Objects tab has the scale field")
+
+	if scale != null:
+		scale.value = 150
+		_expect(_sent.size() == 1 and _sent[0][4] == {_Const.LOOK_SCALE_KEY: 150},
+			"a scale of 150 sends a look with the scale: %s" % [_sent])
+		_sent.clear()
+		scale.value = _Const.LOOK_SCALE_UNIT
+		_expect(_sent.size() == 1 and _sent[0][4] == {},
+			"a scale at the unit sends a look with no scale: %s" % [_sent])
+
+
+## The number field of `root` whose suffix is `suffix`, or null.
+func _find_suffixed(root: Node, suffix: String) -> SpinBox:
+	for child: Node in root.get_children():
+		if child is SpinBox and child.suffix == suffix:
+			return child
+
+		var found := _find_suffixed(child, suffix)
+
+		if found != null:
+			return found
+
+	return null
 
 
 ## The rotation field of `type` with `value`. The Paint tab has a rotation

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/figure_crowd_bench.gd" id="1_crowd"]
+
+[node name="FigureCrowdBench" type="Node3D"]
+script = ExtResource("1_crowd")

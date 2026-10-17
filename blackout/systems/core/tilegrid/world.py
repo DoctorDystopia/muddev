@@ -113,12 +113,13 @@ class TilePlane:
             for thing in chunk_file.objects:
                 tile = (origin_x + thing.x, origin_y + thing.y)
                 self._objects.setdefault(tile, []).append(
-                    (thing.kind, thing.rotation, thing.text))
+                    (thing.kind, thing.rotation, thing.text, thing.look))
 
         # A tile with a placed object keeps its room (TileRooms.pin). A tile
         # that holds only unpinned kinds does not.
         self.rooms.pin(tile for tile, placed in self._objects.items()
-                       if any(kind not in unpinned for kind, _r, _t in placed))
+                       if any(placed_kind not in unpinned
+                              for placed_kind, *_rest in placed))
 
     @property
     def world_z(self) -> str:
@@ -156,7 +157,7 @@ class TilePlane:
     def kinds_at(self, x: int, y: int) -> list:
         """Return the object kinds placed on a tile, in file order."""
         placed = self._objects.get((x, y), ())
-        kinds = [kind for kind, _rotation, _text in placed]
+        kinds = [kind for kind, *_rest in placed]
 
         return kinds
 
@@ -166,15 +167,16 @@ class TilePlane:
         The text is "" for an object that carries none.
         """
         placed = self._objects.get((x, y), ())
-        texts = [(kind, text) for kind, _rotation, text in placed]
+        texts = [(kind, text) for kind, _rotation, text, _look in placed]
 
         return texts
 
     def placed_at(self, x: int, y: int) -> list:
         """
-        Return (kind, rotation, text) of each object placed on a tile, in
-        file order. The tile sync gives the rotation to the entity that a
-        kind stands up.
+        Return (kind, rotation, text, look) of each object placed on a tile,
+        in file order. The tile sync gives the rotation and the look to the
+        entity that a kind stands up. The look is {} for an object with
+        none.
         """
         placed = self._objects.get((x, y), ())
 
@@ -185,7 +187,7 @@ class TilePlane:
         found = []
 
         for (x, y), placed in sorted(self._objects.items()):
-            for kind, rotation, _text in placed:
+            for kind, rotation, *_rest in placed:
                 found.append((kind, x, y, rotation))
 
         return found

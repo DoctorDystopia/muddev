@@ -18,8 +18,8 @@
 #                 the Web preset                          exists
 #   R2 publish    the export + the model tree            always, and publish.sh
 #                                                         uploads only changed files
-#   site deploy   worker/, wrangler.jsonc, dist/ of      it changed
-#                 playblackout-site
+#   site deploy   the sources of playblackout-site,      they changed. The leg
+#                 minus docs/ and README.md               builds dist/ first
 #
 # The tile sync stops Evennia, and it demolishes the contents of each changed
 # tile. The script prints the changed chunk files before it starts.
@@ -149,10 +149,14 @@ godot_excludes() {
          }' "$REPO_ROOT/godot/export_presets.cfg"
 }
 
+# The sources of the site, tracked and untracked: the worker, the Astro pages,
+# public/, and the config. Not dist/: the deploy builds it from these. A list
+# of dist/ sees no change until someone builds by hand.
 site_list() {
     ( cd "$SITE_DIR" \
-        && find worker dist wrangler.jsonc -type f -print0 2>/dev/null \
-        | sort -z | xargs -0 -r sha256sum ) || true
+        && git ls-files -co --exclude-standard -z -- . \
+            ":(exclude)docs" ":(exclude)README.md" ":(exclude).gitignore" \
+        | xargs -0 -r sha256sum 2>/dev/null ) | sort -k 2 || true
 }
 
 # Print each changed path of a leg. Return 0 if the leg has a change.
@@ -307,12 +311,13 @@ else
     write_record godot
 
     # The worker reads each R2 object on each request. Thus, a new object
-    # needs no site deploy. Only a change to the worker or to dist/ does.
+    # needs no site deploy. Only a change to the site sources does.
+    # `npm run deploy` is `astro build && wrangler deploy`.
     if leg_changed site; then
-        ( cd "$SITE_DIR" && run npx wrangler deploy )
+        ( cd "$SITE_DIR" && run npm run deploy )
         write_record site
     else
-        echo "site deploy: worker, wrangler.jsonc, and dist/ unchanged, skipped"
+        echo "site deploy: site sources unchanged, skipped"
     fi
 fi
 

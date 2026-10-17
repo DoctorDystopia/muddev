@@ -248,6 +248,12 @@ _SCALAR_EXPORTS: tuple = (
     ("ENTITY_SPENT_KEY", const.ENTITY_SPENT_KEY),
     # The key a client reads to turn the model of an entity.
     ("ENTITY_FACING_KEY", const.ENTITY_FACING_KEY),
+    # The key a client reads to apply the look of a chunk object to the
+    # model of an entity.
+    ("ENTITY_LOOK_KEY", const.ENTITY_LOOK_KEY),
+    # The keys a client reads to build the figure of a player character.
+    ("ENTITY_BODY_TYPE_KEY", const.ENTITY_BODY_TYPE_KEY),
+    ("ENTITY_FIGURE_COLORS_KEY", const.ENTITY_FIGURE_COLORS_KEY),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the
@@ -351,6 +357,21 @@ _TILE_GRID_EXPORTS: tuple = (
     ("CHUNK_NAME_PATTERN", tile_const.CHUNK_NAME_PATTERN),
     ("CHUNK_TEXT_PATTERN", tile_const.CHUNK_TEXT_PATTERN),
     ("CHUNK_TEXT_MAX_CHARS", tile_const.CHUNK_TEXT_MAX_CHARS),
+    # The look of one chunk object (10/16/2026). Both chunk file readers,
+    # the entity pool, the scenery, and the terrain editor read these.
+    ("OBJECT_LOOK_KEY", tile_const.OBJECT_LOOK_KEY),
+    ("LOOK_VARIANT_KEY", tile_const.LOOK_VARIANT_KEY),
+    ("LOOK_SCALE_KEY", tile_const.LOOK_SCALE_KEY),
+    ("LOOK_TURN_KEY", tile_const.LOOK_TURN_KEY),
+    ("LOOK_OFFSET_KEY", tile_const.LOOK_OFFSET_KEY),
+    ("LOOK_VARIANT_ANY", tile_const.LOOK_VARIANT_ANY),
+    ("LOOK_SCALE_UNIT", tile_const.LOOK_SCALE_UNIT),
+    ("LOOK_SCALE_MIN", tile_const.LOOK_SCALE_MIN),
+    ("LOOK_SCALE_MAX", tile_const.LOOK_SCALE_MAX),
+    ("LOOK_TURN_MAX", tile_const.LOOK_TURN_MAX),
+    ("LOOK_OFFSET_UNIT", tile_const.LOOK_OFFSET_UNIT),
+    ("LOOK_OFFSET_MAX", tile_const.LOOK_OFFSET_MAX),
+    ("LOOK_AXES", tile_const.LOOK_AXES),
     ("CHUNK_FILE_TEMPLATE", tile_const.CHUNK_FILE_TEMPLATE),
     ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
     ("STRUCTURE_DIRECTORY", tile_const.STRUCTURE_DIRECTORY),

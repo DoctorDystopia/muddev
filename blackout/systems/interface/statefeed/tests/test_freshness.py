@@ -30,6 +30,9 @@ from evennia.utils import create
 from evennia.utils.test_resources import EvenniaTest
 
 from systems.core.stat_tracker import constants as stat_constants
+from systems.gameplay.figure import character_figure
+from systems.gameplay.figure import constants as figure_const
+from systems.gameplay.figure import figure_files
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.interface.statefeed import buffer
@@ -369,3 +372,94 @@ class TestTaskPopupFollowsTheTask(_FreshnessTest):
         self.assertTrue(bodies)
         self.assertEqual(bodies[-1]["status"], expected)
         self.assertEqual(bodies[-1]["grids"], [])
+
+
+class TestFigureFollowsTheAppearance(_FreshnessTest):
+    """The figure of a player: its body type and its figure colors.
+
+    Two readers draw it. The owner reads char_avatar, and each other player
+    reads the entity row. Each write of the two facts must reach both
+    (DESIGN-0014 section 20). The writers are the two routines of
+    character_figure.py, so these cases drive them and nothing else.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.area_sent = []
+
+        patcher = mock.patch.object(events, "emit_to_area", side_effect=self._record_area)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _record_area(self, rooms, payload, exclude=()):
+        """Stand in for emit_to_area(), keeping the channel and the body."""
+        self.area_sent.append((payload.channel, payload.to_dict()))
+
+        return 0
+
+    def _rows_for_observers(self) -> list:
+        return [body["entity"] for channel, body in self.area_sent
+                if channel == const.CHANNEL_ROOM_PLAYER_ADD]
+
+    def _other_body_type(self) -> str:
+        """A body type with a rig that the character does not have yet."""
+        current = character_figure.body_type_of(self.char1)
+        others = [key for key in figure_files.body_types() if key != current]
+
+        if not others:
+            self.skipTest("the figure files have one rig only")
+
+        return others[0]
+
+    def _a_named_color(self) -> str:
+        colors = figure_files.named_colors()
+
+        if not colors:
+            self.skipTest("the palette has no named color")
+
+        return colors[0]
+
+    def test_a_body_type_reaches_the_owner(self):
+        body_type = self._other_body_type()
+
+        character_figure.set_body_type(self.char1, body_type)
+
+        bodies = self._bodies(const.CHANNEL_CHAR_AVATAR)
+        self.assertTrue(bodies)
+        self.assertEqual(bodies[-1]["body_type"], body_type)
+
+    def test_a_body_type_reaches_each_observer(self):
+        body_type = self._other_body_type()
+
+        character_figure.set_body_type(self.char1, body_type)
+
+        rows = self._rows_for_observers()
+        self.assertTrue(rows)
+        self.assertEqual(rows[-1][const.ENTITY_BODY_TYPE_KEY], body_type)
+
+    def test_a_figure_color_reaches_the_owner_and_each_observer(self):
+        role = figure_const.CHARACTER_COLOR_ROLES[0]
+        color = self._a_named_color()
+
+        character_figure.set_figure_color(self.char1, role, color)
+
+        avatar = self._bodies(const.CHANNEL_CHAR_AVATAR)[-1]
+        row = self._rows_for_observers()[-1]
+        self.assertEqual(avatar["figure_colors"], {role: color})
+        self.assertEqual(row[const.ENTITY_FIGURE_COLORS_KEY], {role: color})
+
+    def test_a_color_given_back_to_the_palette_leaves_the_row(self):
+        role = figure_const.CHARACTER_COLOR_ROLES[0]
+
+        character_figure.set_figure_color(self.char1, role, self._a_named_color())
+        character_figure.set_figure_color(self.char1, role, figure_const.PALETTE_COLOR)
+
+        row = self._rows_for_observers()[-1]
+        self.assertNotIn(const.ENTITY_FIGURE_COLORS_KEY, row)
+
+    def test_a_refused_body_type_sends_nothing(self):
+        succeeded, _message = character_figure.set_body_type(self.char1, "no_such_body_type")
+
+        self.assertFalse(succeeded)
+        self.assertEqual(self._bodies(const.CHANNEL_CHAR_AVATAR), [])
+        self.assertEqual(self._rows_for_observers(), [])

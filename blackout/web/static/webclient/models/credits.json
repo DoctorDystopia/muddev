@@ -97,17 +97,6 @@
     ]
   },
   {
-    "title": "OSRS player model (test export)",
-    "author": "Jagex",
-    "url": "https://oldschool.runescape.com",
-    "license": "License not confirmed",
-    "license_url": "",
-    "confirmed": false,
-    "models": [
-      "player_character"
-    ]
-  },
-  {
     "title": "PSX Low Poly Skeleton",
     "author": "Puck (puszke)",
     "url": "https://puszke.itch.io/psx-low-poly-skeleton",

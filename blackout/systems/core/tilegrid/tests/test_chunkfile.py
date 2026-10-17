@@ -179,6 +179,28 @@ INVALID_CASES: dict = {
     "object_text_line_break": _set_object("text", "Bank\n"),
     "object_text_too_long": _set_object(
         "text", "x" * (const.CHUNK_TEXT_MAX_CHARS + 1)),
+    # The look of an object (10/16/2026).
+    "object_look_not_table": _set_object("look", 7),
+    "object_look_empty": _set_object("look", {}),
+    "object_look_unknown_key": _set_object("look", {"size": 2}),
+    "object_look_variant_not_string": _set_object(
+        "look", {const.LOOK_VARIANT_KEY: 3}),
+    "object_look_bad_variant": _set_object(
+        "look", {const.LOOK_VARIANT_KEY: "Bad Name"}),
+    "object_look_default_scale": _set_object(
+        "look", {const.LOOK_SCALE_KEY: const.LOOK_SCALE_UNIT}),
+    "object_look_scale_too_large": _set_object(
+        "look", {const.LOOK_SCALE_KEY: const.LOOK_SCALE_MAX + 1}),
+    "object_look_turn_not_three": _set_object(
+        "look", {const.LOOK_TURN_KEY: [0, 90]}),
+    "object_look_turn_zero": _set_object(
+        "look", {const.LOOK_TURN_KEY: [0, 0, 0]}),
+    "object_look_turn_too_far": _set_object(
+        "look", {const.LOOK_TURN_KEY: [0, const.LOOK_TURN_MAX + 1, 0]}),
+    "object_look_offset_fraction": _set_object(
+        "look", {const.LOOK_OFFSET_KEY: [0, 0.5, 0]}),
+    "object_look_offset_too_far": _set_object(
+        "look", {const.LOOK_OFFSET_KEY: [-const.LOOK_OFFSET_MAX - 1, 0, 0]}),
     # Format 2, the wall styles (DESIGN-0013 section 6.4).
     "format_one_with_walls": _plain_walls_in_format_one,
     "format_two_without_walls": _set("format", const.CHUNK_FORMAT_VERSION),
@@ -300,6 +322,55 @@ class MeaningTests(unittest.TestCase):
                                  thing.text)
                 self.assertEqual(chunkfile.OBJECT_TEXT_KEY in item,
                                  bool(thing.text))
+
+    def test_an_object_look_reads_and_an_object_without_look_has_none(self):
+        # The writer writes the look key only for an object with a look.
+        # Thus, a file with no look is the same bytes as before the key.
+        written = json.loads(chunkfile.to_text(self.chunk_file))["objects"]
+        looks = [thing.look for thing in self.chunk_file.objects]
+
+        self.assertIn({}, looks)
+        self.assertTrue(any(looks))
+
+        for thing, item in zip(self.chunk_file.objects, written):
+            with self.subTest(kind=thing.kind):
+                self.assertEqual(item.get(chunkfile.OBJECT_LOOK_KEY, {}),
+                                 thing.look)
+                self.assertEqual(chunkfile.OBJECT_LOOK_KEY in item,
+                                 bool(thing.look))
+
+    def test_a_full_look_keeps_every_key_in_order(self):
+        # The fixture holds one look with every key. The writer keeps the
+        # order of LOOK_KEYS, so two writers give one text.
+        full = [thing.look for thing in self.chunk_file.objects
+                if len(thing.look) == len(const.LOOK_KEYS)]
+
+        self.assertEqual(len(full), 1)
+        self.assertEqual(tuple(full[0]), const.LOOK_KEYS)
+        self.assertEqual(json.loads(chunkfile.look_text(full[0])), full[0])
+
+    def test_an_integral_float_in_a_look_reads_as_an_int(self):
+        # Godot's JSON parser gives floats. The two readers must agree.
+        data = _fixture_dict(_BASE_FIXTURE)
+        data["objects"][0]["look"] = {const.LOOK_SCALE_KEY: 120.0,
+                                      const.LOOK_OFFSET_KEY: [0.0, 10.0, 0.0]}
+
+        look = chunkfile.from_dict(data).objects[0].look
+
+        self.assertEqual(look, {const.LOOK_SCALE_KEY: 120,
+                                const.LOOK_OFFSET_KEY: [0, 10, 0]})
+        self.assertIs(type(look[const.LOOK_SCALE_KEY]), int)
+
+    def test_look_problem_accepts_each_fixture_look_and_names_a_fault(self):
+        for thing in self.chunk_file.objects:
+            if thing.look:
+                with self.subTest(kind=thing.kind):
+                    self.assertEqual(chunkfile.look_problem(thing.look), "")
+
+        self.assertIn("default", chunkfile.look_problem(
+            {const.LOOK_SCALE_KEY: const.LOOK_SCALE_UNIT}))
+        self.assertIn(const.LOOK_VARIANT_ANY, chunkfile.look_problem(
+            {const.LOOK_VARIANT_KEY: "Bad Name"}))
 
     def test_the_grid_reads_the_file_at_world_coordinates(self):
         grid = chunkfile.build_grid([self.chunk_file])

@@ -129,7 +129,7 @@ and are served by `playblackout-site/worker/index.ts`. Two steps, in this order:
 ```
 
 ```bash
-cd ../playblackout-site && npx wrangler deploy
+cd ../playblackout-site && npm run deploy    # astro build, then wrangler deploy
 ```
 
 **`--changed-only` uploads only the files that changed.** Each upload writes

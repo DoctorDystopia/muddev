@@ -37,6 +37,7 @@ func _ready() -> void:
 	_an_area_row_wins_field_by_field()
 	_a_family_row_wins_over_the_table()
 	_a_presentation_row_wins_over_the_table()
+	_a_variant_choice_picks_a_served_key()
 	_the_repository_files_read()
 
 	if _failures > 0:
@@ -189,6 +190,35 @@ func _a_presentation_row_wins_over_the_table() -> void:
 			== ModelRegistry.PRESENTATION["corpse_skeleton"]["rotation"],
 		"a file with no row gives the table back")
 	LookFile.forget(ModelPresentation.PATH)
+
+
+## The variant choice of a look picks a served key (10/16/2026): the base
+## for none, the variant for its key, the base or a variant for the auto
+## variant, and the base for a key that is no variant of the base.
+func _a_variant_choice_picks_a_served_key() -> void:
+	var registry := ModelRegistry.new()
+
+	registry.ingest_manifest({"pole": "props/pole.glb", "pole_bent": "props/pole_bent.glb",
+		"pole_short": "props/pole_short.glb", "crate": "props/crate.glb"})
+	_expect(registry.ingest_variants({"pole": ["pole_bent", "pole_short"], "bad": 7}) == 1,
+		"a variant map reads its lists and drops a row that is no list")
+	_expect(registry.variant_for("pole", "", "1,2,0") == "pole", "no choice gives the base")
+	_expect(registry.variant_for("pole", "pole_bent", "1,2,0") == "pole_bent",
+		"a variant key gives that variant")
+	_expect(registry.variant_for("pole", "crate", "1,2,0") == "pole",
+		"a key that is no variant of the base gives the base")
+	_expect(registry.variant_for("crate", _Const.LOOK_VARIANT_ANY, "1,2,0") == "crate",
+		"the auto variant of a model with no variant gives the base")
+
+	var picked := {}
+
+	for x: int in 60:
+		picked[registry.variant_for("pole", _Const.LOOK_VARIANT_ANY, "%d,0,0" % x)] = true
+
+	_expect(picked.size() == 3, "the auto variant reaches the base and each variant: %s" % [picked])
+	_expect(registry.variant_for("pole", _Const.LOOK_VARIANT_ANY, "7,0,0")
+		== registry.variant_for("pole", _Const.LOOK_VARIANT_ANY, "7,0,0"),
+		"one seed gives one key")
 
 
 func _the_repository_files_read() -> void:

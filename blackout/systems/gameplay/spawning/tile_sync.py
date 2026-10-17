@@ -39,13 +39,18 @@ The four verbs
 | changed | The kinds differ from the record | Demolish the contents, then stand up each kind. Write the record |
 | removed | A record, but the chunk file places nothing | Demolish the contents. Delete the record. Unpin and release the room |
 
-The facing
-----------
+The facing and the look
+-----------------------
 Each spawner returns the entity on its tile: a new one, or the one that
 stands. The sync writes the rotation of the chunk object on that entity
 (`FACING_ATTR`), and the statefeed sends it. A turn in the terrain editor
 changes no kind, so the tile plans as a refresh. The refresh writes the new
 facing and demolishes nothing. The record holds no rotation for this reason.
+
+The look of the chunk object (its variant, scale, tilt, and nudge,
+10/16/2026) goes the same way, in `LOOK_ATTR`. A refresh writes the new
+look. An object that lost its look takes the attribute away. Thus, a look
+edit in the editor never demolishes a tile.
 
 "Demolish" is `teardown.demolish_contents`, the rule that a deleted xyzgrid
 tile follows today. It spares player characters at every level. A changed
@@ -83,7 +88,8 @@ class TileAction:
     """
     One tile of a plan: its verb, its kinds now, its kinds before, and the
     plane of the tile (DESIGN-0011 Phase 7). The `facings` hold the rotation
-    of each entry of `kinds`, in the same order.
+    of each entry of `kinds`, in the same order. The `looks` hold the look
+    of each entry, in the same order, {} for an object with none.
     """
 
     tile: tuple
@@ -92,6 +98,7 @@ class TileAction:
     previous: tuple
     plane: int = tile_const.GROUND_PLANE
     facings: tuple = ()
+    looks: tuple = ()
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -138,15 +145,16 @@ def _same_shapes(kinds: tuple, previous: tuple) -> bool:
 
 def _standing(world, x: int, y: int) -> tuple:
     """
-    Return (entries, facings) of the kinds on a tile that stand something
-    up, in file order. The facing of an entry is the rotation of its chunk
-    object. A name that is not a row is left to
-    `world/tests/test_tile_content.py`.
+    Return (entries, facings, looks) of the kinds on a tile that stand
+    something up, in file order. The facing of an entry is the rotation of
+    its chunk object, and the look is its look. A name that is not a row is
+    left to `world/tests/test_tile_content.py`.
     """
     entries = []
     facings = []
+    looks = []
 
-    for key, rotation, text in world.placed_at(x, y):
+    for key, rotation, text, look in world.placed_at(x, y):
         kind = OBJECT_KINDS.get(key)
 
         if kind is None or not _stands_something(kind):
@@ -154,8 +162,9 @@ def _standing(world, x: int, y: int) -> tuple:
 
         entries.append(_entry(key, text))
         facings.append(rotation)
+        looks.append(look)
 
-    return tuple(entries), tuple(facings)
+    return tuple(entries), tuple(facings), tuple(looks)
 
 
 def _records(world) -> dict:
@@ -171,12 +180,13 @@ def _records(world) -> dict:
     return found
 
 
-def _stand_up(room, entry: str, facing) -> None:
+def _stand_up(room, entry: str, facing, look=None) -> None:
     """
     Run the spawner of one kind list entry in a room, or stand its sign.
-    Then give the entity on the tile its facing. Each spawner is idempotent.
-    A sign with no words stands nothing, and `world/tile_checks.py` reports
-    it.
+    Then give the entity on the tile its facing and its look. Each spawner
+    is idempotent. A sign with no words stands nothing, and
+    `world/tile_checks.py` reports it. A look of {} takes the attribute
+    away. A look of None leaves it as it is.
     """
     from typeclasses.signs import place_signpost
     from typeclasses.spawners import SPAWNER_REGISTRY, load_all_spawners
@@ -192,8 +202,16 @@ def _stand_up(room, entry: str, facing) -> None:
     elif _is_sign(kind):
         standing = place_signpost(room, text)
 
-    if standing is not None and facing is not None:
+    if standing is None:
+        return
+
+    if facing is not None:
         standing.attributes.add(tile_const.FACING_ATTR, facing)
+
+    if look:
+        standing.attributes.add(tile_const.LOOK_ATTR, dict(look))
+    elif look is not None:
+        standing.attributes.remove(tile_const.LOOK_ATTR)
 
 
 def _demolish(room) -> int:
@@ -208,14 +226,16 @@ def _demolish(room) -> int:
     return teardown.demolish_contents(room)
 
 
-def _stand_up_all(room, kinds: tuple, facings: tuple) -> None:
+def _stand_up_all(room, kinds: tuple, facings: tuple, looks: tuple) -> None:
     """
     Stand up each kind list entry, and record the list on the room. An entry
     with no facing (a TileAction built with none) keeps the facing it has.
+    The same holds for the look.
     """
     for index, entry in enumerate(kinds):
         facing = facings[index] if index < len(facings) else None
-        _stand_up(room, entry, facing)
+        look = looks[index] if index < len(looks) else None
+        _stand_up(room, entry, facing, look)
 
     room.attributes.add(TILE_KINDS_ATTR, list(kinds))
 
@@ -260,7 +280,7 @@ def _plan_plane(view) -> list:
     placed = {(x, y) for _kind, x, y, _rotation in view.placed_objects()}
 
     for tile in sorted(placed | set(records)):
-        kinds, facings = _standing(view, *tile)
+        kinds, facings, looks = _standing(view, *tile)
         previous = records.get(tile, (None, ()))[1]
 
         if not kinds and tile not in records:
@@ -276,7 +296,7 @@ def _plan_plane(view) -> list:
             verb = VERB_CHANGED
 
         actions.append(TileAction(tile, verb, kinds, previous, view.plane,
-                                  facings))
+                                  facings, looks))
 
     return actions
 
@@ -323,6 +343,6 @@ def apply(world, actions: list) -> int:
         if action.verb == VERB_CHANGED:
             destroyed += _demolish(room)
 
-        _stand_up_all(room, action.kinds, action.facings)
+        _stand_up_all(room, action.kinds, action.facings, action.looks)
 
     return destroyed

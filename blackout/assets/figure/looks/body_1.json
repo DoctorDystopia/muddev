@@ -35,16 +35,18 @@
 			"shapes": [
 				{
 					"color": "trousers",
+					"diamond": true,
 					"offset": [
 						0.0,
 						-0.02,
 						0.0
 					],
-					"segments": 8,
+					"rings": 1,
+					"segments": 20,
 					"shape": "prism",
 					"size": [
-						0.17,
-						0.14,
+						0.29,
+						0.2,
 						0.105
 					],
 					"top_depth": 0.14,
@@ -298,7 +300,7 @@
 						0.1
 					],
 					"top_depth": 0.165,
-					"top_width": 0.15
+					"top_width": 0.17
 				},
 				{
 					"color": "skin",
@@ -310,12 +312,12 @@
 					"segments": 8,
 					"shape": "prism",
 					"size": [
-						0.15,
+						0.17,
 						0.1,
 						0.165
 					],
 					"top_depth": 0.16,
-					"top_width": 0.14
+					"top_width": 0.15
 				},
 				{
 					"color": "skin",
@@ -327,7 +329,7 @@
 					"segments": 8,
 					"shape": "prism",
 					"size": [
-						0.14,
+						0.15,
 						0.035,
 						0.16
 					],

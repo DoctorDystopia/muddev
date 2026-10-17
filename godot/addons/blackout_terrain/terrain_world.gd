@@ -1261,7 +1261,7 @@ func objects_in_block() -> Array[Dictionary]:
 		for thing: Dictionary in chunks.get_chunk(coord).global_objects():
 			found.append({"tile": Vector2i(thing["x"], thing["y"]),
 				"kind": thing["kind"], "rotation": thing["rotation"],
-				"text": thing["text"]})
+				"text": thing["text"], "look": thing["look"]})
 
 	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if a["tile"].y != b["tile"].y:
@@ -1273,9 +1273,27 @@ func objects_in_block() -> Array[Dictionary]:
 
 
 ## Select one object. The beacon marks its tile.
-func select(tile: Vector2i, kind: String, turn: int, text: String = "") -> void:
-	selected = {"tile": tile, "kind": kind, "rotation": turn, "text": text}
+func select(tile: Vector2i, kind: String, turn: int, text: String = "",
+		look: Dictionary = {}) -> void:
+	selected = {"tile": tile, "kind": kind, "rotation": turn, "text": text,
+		"look": look.duplicate(true)}
 	show_beacon(tile)
+
+
+## Select one object of [method ChunkSet.objects_at] on `tile`.
+func select_thing(tile: Vector2i, thing: Dictionary) -> void:
+	select(tile, thing["kind"], thing["rotation"], thing["text"], thing["look"])
+
+
+## The variant keys of the model of a kind, from the served tree of the
+## repo. For the Variant lists of the dock (10/16/2026). The models load on
+## the first ask, with "Show models" on or off: the list needs the variant
+## map only.
+func variants_for(kind: String) -> PackedStringArray:
+	if _models == null:
+		_models = TerrainModels.for_repo()
+
+	return _models.variants_for(kind)
 
 
 func clear_selection() -> void:
@@ -1310,9 +1328,7 @@ func _check_selection() -> void:
 		return
 
 	for thing: Dictionary in chunks.objects_at(selected["tile"]):
-		if thing["kind"] == selected["kind"] \
-				and thing["rotation"] == selected["rotation"] \
-				and thing["text"] == selected["text"]:
+		if ChunkSet.same_object(thing, selected):
 			return
 
 	clear_selection()
@@ -1334,7 +1350,7 @@ func jump_to(tile: Vector2i, on_plane: int) -> void:
 		show_beacon(tile)
 		return
 
-	select(tile, here[0]["kind"], here[0]["rotation"], here[0]["text"])
+	select_thing(tile, here[0])
 
 
 ## Where the selected object leads: `{tile, plane}`, or empty when it does

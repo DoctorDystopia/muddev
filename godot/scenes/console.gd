@@ -204,6 +204,11 @@ var _chat_modes := ChatModes.new()
 ## meshes too.
 var _meshes: MeshResolver
 
+## The figure set: the rigs, the bodies, and the palette of the figure of each
+## player character (DESIGN-0014 section 20). Owned here for the reason the
+## resolver is: the avatar and the pool draw from one set.
+var _figures: FigureLibrary
+
 ## Whether the player can actually play yet. A model like the others, and the
 ## veil that draws it is a view -- so the rule ("a body, a place, a map, and the
 ## art gone quiet") can be tested with no scene, no socket and no clock.
@@ -350,6 +355,15 @@ func _ready() -> void:
 	# came to own db.active_quests.
 	_world.bind_char(_char)
 	_world.bind_meshes(_meshes)
+
+	# The figure set of each player character (DESIGN-0014 section 20). It
+	# comes from the origin of the models, and it asks the same resolver for
+	# the model of a part. The world pane and its pool draw each figure.
+	_figures = FigureLibrary.new()
+	_figures.bind(_meshes, registry.figure_url(asset_origin))
+	add_child(_figures)
+	_char.avatar_received.connect(_figures.fetch)
+	_world.bind_figures(_figures)
 	_world.bind_world(_world_state)
 	_world.bind_entities(_roster)
 
@@ -422,6 +436,7 @@ func _ready() -> void:
 	# After both panes are bound, so the manifest landing finds consumers ready
 	# rather than arriving at a pane that has not been given the resolver yet.
 	_meshes.start()
+	_figures.fetch()
 
 	# After _meshes, _char and _world_state all exist, and added to the tree
 	# because it owns a Timer -- the same reason MeshResolver is a Node.

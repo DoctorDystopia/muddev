@@ -50,7 +50,7 @@ signal revert_requested
 signal noise_fill_requested
 signal overlays_changed
 signal selection_action(action: String)
-signal selection_edited(kind: String, rotation: int, text: String)
+signal selection_edited(kind: String, rotation: int, text: String, look: Dictionary)
 signal object_chosen(thing: Dictionary)
 signal check_requested
 signal finding_chosen(finding: Dictionary)
@@ -194,6 +194,7 @@ var _strength := SpinBox.new()
 var _kind := OptionButton.new()
 var _rotation := SpinBox.new()
 var _text := LineEdit.new()
+var _variant := OptionButton.new()
 var _flag_boxes: Array[CheckBox] = []
 var _seed := SpinBox.new()
 var _frequency := SpinBox.new()
@@ -208,7 +209,22 @@ var _follow := Button.new()
 var _sel_kind := OptionButton.new()
 var _sel_rotation := SpinBox.new()
 var _sel_text := LineEdit.new()
+var _sel_variant := OptionButton.new()
+var _sel_scale := SpinBox.new()
+var _sel_turn: HBoxContainer
+var _sel_offset: HBoxContainer
 var _sel_rows: Array[Control] = []
+
+## The variant keys of the model of a kind: `func(kind: String) ->
+## PackedStringArray`. The plugin gives it, from the served tree of the
+## repo. Empty until then, so each Variant list offers Base and Any only.
+var variants_for: Callable = func(_kind: String) -> PackedStringArray:
+	return PackedStringArray()
+
+## The first two rows of a Variant list: the base model, and the auto
+## variant. [method _variant_choice] turns a row back into the look value.
+const VARIANT_BASE := "Base"
+const VARIANT_ANY := "Any (by tile)"
 var _filter := LineEdit.new()
 var _objects := ItemList.new()
 var _show_decor := CheckBox.new()
@@ -324,6 +340,48 @@ func object_text() -> String:
 	return _text.text.strip_edges()
 
 
+## The look of a new object: its variant choice, or `{}` for the base.
+func object_look() -> Dictionary:
+	return _look_with_variant({}, _variant)
+
+
+## Fill a Variant list for `kind`: Base, Any, then each variant of the
+## model of the kind. A list that has the chosen row keeps it.
+func _refill_variants(list: OptionButton, kind: String) -> void:
+	var names := [VARIANT_BASE, VARIANT_ANY]
+
+	names.append_array(variants_for.call(kind))
+	_Fields.refill(list, names)
+
+
+## `look` with the variant of a Variant list in it, or with none for Base.
+static func _look_with_variant(look: Dictionary, list: OptionButton) -> Dictionary:
+	var out := look.duplicate(true)
+	var choice := _Fields.text_of(list)
+
+	out.erase(_Const.LOOK_VARIANT_KEY)
+
+	if choice == VARIANT_ANY:
+		out[_Const.LOOK_VARIANT_KEY] = _Const.LOOK_VARIANT_ANY
+	elif choice != VARIANT_BASE and not choice.is_empty():
+		out[_Const.LOOK_VARIANT_KEY] = choice
+
+	return out
+
+
+## The row of a Variant list for the variant of a look.
+static func _variant_row(look: Dictionary) -> String:
+	var choice: String = look.get(_Const.LOOK_VARIANT_KEY, "")
+
+	if choice.is_empty():
+		return VARIANT_BASE
+
+	if choice == _Const.LOOK_VARIANT_ANY:
+		return VARIANT_ANY
+
+	return choice
+
+
 ## The OR of every checked flag.
 func flag_bits() -> int:
 	var bits := 0
@@ -408,6 +466,8 @@ func refresh_tables(rename := {}, select := "") -> void:
 	_tables.refresh(rename, select)
 	_Fields.refill(_kind, TileTables.object_kinds().keys(), follow)
 	_Fields.refill(_sel_kind, TileTables.object_kinds().keys(), follow)
+	_refill_variants(_variant, kind())
+	_refill_variants(_sel_variant, _Fields.text_of(_sel_kind))
 
 
 ## True while the Build tab shows.
@@ -503,12 +563,18 @@ func set_objects(things: Array[Dictionary]) -> void:
 		_objects.set_item_custom_fg_color(row, TerrainOverlay.kind_color(thing["kind"]))
 
 
-## One row of the object list.
+## One row of the object list. A look shows as its text, so a filter on
+## a variant key or on "scale" finds the row.
 static func describe_object(thing: Dictionary) -> String:
 	var line := "%s  %s  r%d" % [thing["kind"], thing["tile"], thing["rotation"]]
 
 	if not thing["text"].is_empty():
 		line += "  \"%s\"" % thing["text"]
+
+	var look: Dictionary = thing.get("look", {})
+
+	if not look.is_empty():
+		line += "  " + ChunkFile.look_text(look)
 
 	return line
 
@@ -552,11 +618,18 @@ func set_selection(selected: Dictionary, link_end: Dictionary) -> void:
 	if not link_end.is_empty():
 		_selection.text += ". Leads to %s on plane %d" % [link_end["tile"], link_end["plane"]]
 
+	var look: Dictionary = selected.get("look", {})
+
 	_filling = true
 	_Fields.select_text(_sel_kind, selected["kind"])
 	_sel_rotation.set_value_no_signal(selected["rotation"])
 	_sel_text.text = selected["text"]
 	_sel_text.editable = TerrainChecks.takes_text(selected["kind"])
+	_refill_variants(_sel_variant, selected["kind"])
+	_Fields.select_text(_sel_variant, _variant_row(look))
+	_sel_scale.set_value_no_signal(look.get(_Const.LOOK_SCALE_KEY, _Const.LOOK_SCALE_UNIT))
+	_Fields.set_axes(_sel_turn, look.get(_Const.LOOK_TURN_KEY, [0, 0, 0]))
+	_Fields.set_axes(_sel_offset, look.get(_Const.LOOK_OFFSET_KEY, [0, 0, 0]))
 	_filling = false
 
 
@@ -730,6 +803,11 @@ func _build_object_option_rows() -> void:
 	_text.max_length = _Const.CHUNK_TEXT_MAX_CHARS
 	_text.placeholder_text = "The words of a new %s" % _Const.OBJECT_SIGNPOST_KIND
 	_option_row([Tool.OBJECT], "Sign text", _text, "A sign kind takes these words.")
+	_refill_variants(_variant, kind())
+	_kind.item_selected.connect(func(_index: int) -> void: _refill_variants(_variant, kind()))
+	_option_row([Tool.OBJECT], "Variant", _variant,
+		"The model that a new object draws: the base, any variant by a hash of the tile, "
+		+ "or one variant. The Objects tab edits the rest of the look.")
 
 
 func _build_flag_rows() -> void:
@@ -808,11 +886,13 @@ func _build_object_rows() -> void:
 	set_selection({}, {})
 
 
-## The kind, the rotation, and the text of the selected object. A change
-## sends [signal selection_edited] at once.
+## The kind, the rotation, the text, and the look of the selected object. A
+## change sends [signal selection_edited] at once.
 func _build_selection_fields() -> void:
 	_Fields.fill(_sel_kind, TileTables.object_kinds().keys())
-	_sel_kind.item_selected.connect(func(_index: int) -> void: _send_selection())
+	_sel_kind.item_selected.connect(func(_index: int) -> void:
+		_refill_variants(_sel_variant, _Fields.text_of(_sel_kind))
+		_send_selection())
 	_sel_rows.append(_Fields.row(_page, "Kind", _sel_kind))
 	_sel_rows.append(_sel_kind)
 	_Fields.spin(_sel_rotation, 0.0, _Const.CHUNK_ROTATION_COUNT - 1, 1.0, 0.0)
@@ -826,12 +906,58 @@ func _build_selection_fields() -> void:
 	_sel_rows.append(_Fields.row(_page, "Sign text", _sel_text,
 		"The words of a sign. Enter applies them."))
 	_sel_rows.append(_sel_text)
+	_build_look_fields()
+
+
+## The look of the selected object (10/16/2026): its variant, its scale in
+## percent, its tilt in degrees, and its nudge in hundredths of a tile. A
+## field at its default leaves its key out of the look.
+func _build_look_fields() -> void:
+	_sel_variant.item_selected.connect(func(_index: int) -> void: _send_selection())
+	_sel_rows.append(_Fields.row(_page, "Variant", _sel_variant,
+		"The model this object draws: the base, any variant by a hash of the tile, "
+		+ "or one variant."))
+	_sel_rows.append(_sel_variant)
+	_Fields.spin(_sel_scale, _Const.LOOK_SCALE_MIN, _Const.LOOK_SCALE_MAX, 1.0,
+		_Const.LOOK_SCALE_UNIT)
+	_sel_scale.suffix = "%"
+	_sel_scale.value_changed.connect(func(_value: float) -> void: _send_selection())
+	_sel_rows.append(_Fields.row(_page, "Scale", _sel_scale,
+		"Percent of the normal size. %d is the normal size." % _Const.LOOK_SCALE_UNIT))
+	_sel_rows.append(_sel_scale)
+	_sel_turn = _Fields.axes_row(_Const.LOOK_TURN_MAX, _send_selection)
+	_sel_rows.append(_Fields.row(_page, "Tilt", _sel_turn,
+		"Degrees on each axis, over the rotation. x leans forward, y turns, z leans to the side."))
+	_sel_rows.append(_sel_turn)
+	_sel_offset = _Fields.axes_row(_Const.LOOK_OFFSET_MAX, _send_selection)
+	_sel_rows.append(_Fields.row(_page, "Nudge", _sel_offset,
+		"Hundredths of a tile: x east, y up, z north. The nudge does not turn with the object."))
+	_sel_rows.append(_sel_offset)
+
+
+## The look that the fields show, with each key at its default left out.
+func _selection_look() -> Dictionary:
+	var look := _look_with_variant({}, _sel_variant)
+	var scale := int(_sel_scale.value)
+	var turn := _Fields.axes_of(_sel_turn)
+	var offset := _Fields.axes_of(_sel_offset)
+
+	if scale != _Const.LOOK_SCALE_UNIT:
+		look[_Const.LOOK_SCALE_KEY] = scale
+
+	if turn.any(func(number: int) -> bool: return number != 0):
+		look[_Const.LOOK_TURN_KEY] = turn
+
+	if offset.any(func(number: int) -> bool: return number != 0):
+		look[_Const.LOOK_OFFSET_KEY] = offset
+
+	return look
 
 
 func _send_selection() -> void:
 	if not _filling:
 		selection_edited.emit(_Fields.text_of(_sel_kind), int(_sel_rotation.value),
-			_sel_text.text.strip_edges())
+			_sel_text.text.strip_edges(), _selection_look())
 
 
 func _build_selection_buttons() -> void:

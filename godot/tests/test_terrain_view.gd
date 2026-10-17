@@ -20,7 +20,8 @@ class _FakeResolver extends MeshResolver:
 	func _init() -> void:
 		super(ModelRegistry.new(), "")
 
-	func resolve_scenery(asset_key: String) -> Node3D:
+	func resolve_scenery(asset_key: String, _look: Dictionary = {},
+			_seed: String = "") -> Node3D:
 		if asset_key.is_empty() or pending.has(asset_key):
 			return null
 

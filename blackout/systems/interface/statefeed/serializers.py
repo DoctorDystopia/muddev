@@ -20,10 +20,14 @@ Description: Turn live Evennia objects into the plain, JSON-safe values the
              carry their map prototype's key.
 """
 
+from collections.abc import Mapping, Sequence
+
 from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
 from evennia.utils import logger
 
-from systems.core.tilegrid.constants import FACING_ATTR, ROTATION_COUNT
+from systems.core.tilegrid import chunkfile
+from systems.core.tilegrid.constants import FACING_ATTR, LOOK_ATTR, ROTATION_COUNT
+from systems.gameplay.figure import character_figure
 
 from . import constants as const
 from . import labels
@@ -720,6 +724,96 @@ def _facing_of(entity):
     return facing
 
 
+def _look_of(entity) -> dict:
+    """
+    Purpose: Read the look that the tile sync gave an entity.
+
+    Entry:
+        entity - a live object. Only an entity that a chunk object with a
+                 look stood up has one.
+
+    Exit/Returns:
+        Returns the look, a dict that `chunkfile.look_problem` accepts, or
+        {}. The caller sends no look field for {}.
+
+    Module Globals:
+        LOOK_ATTR read.
+
+    Methodology:
+        One attribute read, as _facing_of. The chunk file rule decides what
+        goes out, so a hand-set attribute that the reader would refuse never
+        reaches a client. Wrapped, as _facing_of is.
+
+    Notes/References:
+        systems/gameplay/spawning/tile_sync.py writes the attribute.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    try:
+        look = _plain(entity.attributes.get(LOOK_ATTR, default=None))
+    except Exception as exc:
+        logger.log_err(f"_look_of: {entity} look failed: {exc!r}")
+
+        return {}
+
+    if look is None or chunkfile.look_problem(look):
+        return {}
+
+    return chunkfile.normal_look(look)
+
+
+def _plain(value):
+    """
+    Return `value` with each Evennia saver type as its plain type: a dict
+    for a mapping, a list for a sequence. An Attribute hands back a
+    `_SaverDict`, which is no `dict`, and the chunk file rule asks for one.
+    """
+    if isinstance(value, Mapping):
+        return {key: _plain(item) for key, item in value.items()}
+
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        return [_plain(item) for item in value]
+
+    return value
+
+
+def _add_figure_fields(body: dict, entity) -> None:
+    """
+    Purpose: Put the body type and the figure colors of a player character
+             on its row.
+
+    Entry:
+        body   - the row that serialize_entity builds. Changed in place.
+        entity - a player character.
+
+    Exit/Returns:
+        No return value.
+
+    Module Globals:
+        const.ENTITY_BODY_TYPE_KEY and const.ENTITY_FIGURE_COLORS_KEY read.
+
+    Methodology:
+        The body type is on each row of a character, because its presence
+        tells the client to build a figure. The figure colors are on the row
+        only when the character has a color of its own, the rule of each
+        optional field of this row. character_figure.py owns the two reads, and
+        each read gives a default in place of an error.
+
+    Notes/References:
+        DESIGN-0014 section 20. emit_avatar takes the same two fields off
+        this row for the owner.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    body[const.ENTITY_BODY_TYPE_KEY] = character_figure.body_type_of(entity)
+    colors = character_figure.figure_colors_of(entity)
+
+    if colors:
+        body[const.ENTITY_FIGURE_COLORS_KEY] = colors
+
+
 def serialize_entity(entity, coords=(), observer=None) -> dict:
     """
     Purpose: Render one visible entity as a plain dict for a graphical client.
@@ -861,6 +955,17 @@ def serialize_entity(entity, coords=(), observer=None) -> dict:
 
     if facing is not None:
         body[const.ENTITY_FACING_KEY] = facing
+
+    # The same rule for the look of the chunk object (10/16/2026).
+    look = _look_of(entity)
+
+    if look:
+        body[const.ENTITY_LOOK_KEY] = look
+
+    # Sent ONLY on the row of a player character. A row with a body type
+    # gets a figure. Each other row draws its asset key.
+    if kind == const.ASSET_KIND_CHARACTER:
+        _add_figure_fields(body, entity)
 
     max_hp = getattr(entity, "max_hp", None)
 

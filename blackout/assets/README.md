@@ -125,8 +125,9 @@ No `exception` waives that. The check fails on a local source that has no
 
 To serve a source anyway, add an `exception` with the reason. The check prints
 every exception on every run, and the credits box marks it as "License not
-confirmed". Two sources use an exception today: the OSRS player character and
-the shopkeeper robot. Replace both before a public release.
+confirmed". Two sources use an exception today: the shopkeeper robot and the
+machine gun. Replace both before a public release. The OSRS player character
+used one until 10/16/2026, and the figure replaced it.
 
 ## A source for clips
 
@@ -182,6 +183,15 @@ model, the name of a material is a color role of a worn look. The build
 joins two materials that differ in the name only, and this field stops
 that.
 
+Since 10/16/2026 a model can also replace ONE part of any look, the body
+included (DESIGN-0014 section 20). The part editor of the figure workbench
+runs the same command for it: **Import model for part**. Its key is
+`<look>_<part>` by default, for example `body_1_head`, in the family
+`figure`. The part takes the node with its own name or with the name of
+its bone, and each other part of the look stays. A `.blend` file and a
+Blender `.glb` file both went through this path on 10/16/2026, a head and a
+cap of hair for `body_1`. `reports/figure-player/` has the result.
+
 ## The figure set
 
 The figure workbench writes one file for each rig and for each worn look,
@@ -211,15 +221,29 @@ it again. After a change to a figure file with another tool, run:
 
 That command needs no Node, and it builds no model.
 
+The game reads `figure.json` since 10/16/2026: each player character is a
+figure of that file (DESIGN-0014 section 20). The client fetches it from
+the origin of the models at its start and at each `char_avatar`. Thus:
+
+- **Local:** a save in the workbench, then `evennia reload`. The reload
+  copies the static files, and the client fetches the new file.
+- **Public:** a save, then `deploy/webexport/publish.sh --changed-only`. The
+  file and each new model go to R2 with no new client export.
+
+The player model of the Jagex CreatorsKit left the served tree on
+10/16/2026, with its source and its record. No model has the key
+`player_character` now.
+
 ## The model record
 
 The file name is the asset key, and the directory is the family.
 
 ```toml
-source  = "godot_kyle_fuji_food"          # a directory in sources/
-file    = "Models/meat_haunch.glb"        # a file in that source
-aliases = ["mutant_raider_cured_filet"]   # more keys that draw this model
-node    = "center_h"                      # optional: one node of a tileset
+source     = "godot_kyle_fuji_food"          # a directory in sources/
+file       = "Models/meat_haunch.glb"        # a file in that source
+aliases    = ["mutant_raider_cured_filet"]   # more keys that draw this model
+variant_of = "rusty_pole"                    # optional: a second look of that model
+node       = "center_h"                      # optional: one node of a tileset
 
 [texture]                                 # optional
 image     = "Textures/T_protein_atlas_diffuse.png"
@@ -240,6 +264,7 @@ color_roles      = true                   # keep the name of each material
 | Field | Use it when |
 |---|---|
 | `aliases` | Two or more asset keys use one model. The build writes one file, and the client downloads it one time |
+| `variant_of` | The model is a second look of another model: a bent rusty pole beside the straight one. The build writes `variants.json` beside the manifest. A chunk object picks a variant by its key, or lets the client pick one by a hash of its tile. The base must be a record of its own, not an alias, and not a variant itself. See "Variants" |
 | `node` | One file holds many models, for example a tileset. Run a build with a wrong name, and the error lists every node |
 | `[texture]` | The mesh has UVs, but its look is outside the file: a Godot Asset Library pack (the look is in a `.tres`), or an FBX with no image. It replaces every material with one opaque material |
 | `[fix] rotate` | The model faces the wrong way. The rotation is baked into the file |
@@ -252,6 +277,27 @@ color_roles      = true                   # keep the name of each material
 in `ModelRegistry.PRESENTATION`. Two examples: the corpse skeleton lies on its
 back because it stands in for a body, and the floating eye is lifted to look
 level.
+
+### Variants
+
+A variant is one more model record, with `variant_of` set to the key of the
+base (Nick, 10/16/2026). Thus, a variant has its own source, its own fix, and
+its own budget. The build serves it under its own key, and `variants.json`
+lists it under its base:
+
+```json
+{
+  "rusty_pole": ["rusty_pole_bent", "rusty_pole_short"]
+}
+```
+
+A chunk object pins a variant in its `look` (`"variant": "rusty_pole_bent"`),
+or asks for any (`"variant": "*"`). With any, the client picks the base or
+one variant from a hash of the tile, so fifty poles vary with no edits. An
+object with no variant draws the base. A variant key that the client cannot
+fetch draws the base too. The terrain editor lists the variants of the model
+of each kind, so an author never types a key. `world/tests/test_tile_content.py`
+checks each pinned variant of the world against the records.
 
 ### Face +Z, with +Y up
 
@@ -267,8 +313,8 @@ glTF and Godot 4 use these conventions. A model that faces another way needs a
 | 3. Validate | Khronos glTF Validator | An error stops the model |
 | 4. Budget | `pipeline/budgets.py` | Bytes, triangles and texture edge. Over budget stops the model |
 
-Then it writes `manifest.json`, `credits.json`, `CREDITS.md` and
-`figure.json` beside the served models, and `build.lock.json` here. A second build with no change does
+Then it writes `manifest.json`, `variants.json`, `credits.json`, `CREDITS.md`
+and `figure.json` beside the served models, and `build.lock.json` here. A second build with no change does
 no work. `--force` builds again anyway. The same inputs give the same bytes.
 
 The build removes a glTF extension that Godot cannot read at runtime, if the
@@ -301,7 +347,9 @@ runs it in the test suite. It fails on:
 - a served model that is stale, over budget, not from the build, or uses an
   extension that Godot cannot read
 - a `.glb` in the served tree that no record builds
-- a stale `manifest.json`, `credits.json`, `CREDITS.md` or `figure.json`
+- a stale `manifest.json`, `variants.json`, `credits.json`, `CREDITS.md` or
+  `figure.json`
+- a variant whose base is an alias, a variant itself, or no record
 - a rig or a worn look that is not valid JSON, or whose key is not its file
   name
 

@@ -44,11 +44,18 @@ extends RefCounted
 ## simply answers false, so the first snapshot renders generics and sharpens
 ## when the art lands.
 
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 ## Where the served model tree sits, relative to the game's web root.
 const MODEL_ROOT := "/static/webclient/models/"
 
 ## The manifest file inside that tree.
 const MANIFEST_PATH := MODEL_ROOT + "manifest.json"
+
+## The variants of each base model, beside the manifest: base asset key ->
+## the keys of its variants. The model pipeline writes it from the
+## `variant_of` of each model record (10/16/2026).
+const VARIANTS_PATH := MODEL_ROOT + "variants.json"
 
 ## The model credits inside that tree, which [CreditsView] shows. The model
 ## pipeline writes it beside the manifest.
@@ -105,6 +112,10 @@ const PRESENTATION := {
 ## asset_key -> "family/asset_key.glb", straight from the served manifest.
 var _paths: Dictionary = {}
 
+## base asset key -> PackedStringArray of its variant keys, from the served
+## variant map. Empty until [method ingest_variants] runs.
+var _variants: Dictionary = {}
+
 ## The path of the model tree below the origin. [constant MODEL_ROOT] for
 ## the game. "/" for a registry whose origin IS the model tree: the figure
 ## workbench reads a served tree that is not below a web root.
@@ -146,6 +157,71 @@ func ingest_manifest(document: Variant) -> int:
 	return _paths.size()
 
 
+## Fold the served variant map into the registry. Returns the number of
+## base models with a variant. The registry drops a malformed document, as
+## it drops a malformed manifest. A variant is a look. No look blocks a
+## game.
+func ingest_variants(document: Variant) -> int:
+	_variants = {}
+
+	if typeof(document) != TYPE_DICTIONARY:
+		return 0
+
+	for base: Variant in document:
+		var keys: Variant = document[base]
+
+		if typeof(keys) != TYPE_ARRAY:
+			continue
+
+		var found := PackedStringArray()
+
+		for key: Variant in keys:
+			if key is String and not key.is_empty():
+				found.append(key)
+
+		if not found.is_empty():
+			_variants[str(base)] = found
+
+	return _variants.size()
+
+
+## The variant keys of one base model, in the order of the served map.
+## Empty for a model with no variant.
+func variants_of(asset_key: String) -> PackedStringArray:
+	return _variants.get(asset_key, PackedStringArray())
+
+
+## The key to draw for `asset_key` under the variant `choice` of a look
+## (10/16/2026).
+##
+## - "" gives the base.
+## - The key of a variant of the base gives that variant.
+## - [code]LOOK_VARIANT_ANY[/code] gives the base or one variant, from a
+##   hash of `seed`.
+## - A key that is no variant of the base gives the base. Thus, a stale
+##   chunk file never hides a thing.
+##
+## The server names the model. This picks among the looks of that model.
+func variant_for(asset_key: String, choice: String, seed: String) -> String:
+	if choice.is_empty():
+		return asset_key
+
+	var options := variants_of(asset_key)
+
+	if choice == _Const.LOOK_VARIANT_ANY:
+		if options.is_empty():
+			return asset_key
+
+		var index := StableHash.of(seed) % (options.size() + 1)
+
+		return asset_key if index == 0 else options[index - 1]
+
+	if options.has(choice) and has_model(choice):
+		return choice
+
+	return asset_key
+
+
 ## Has the server told us about art for this asset key?
 func has_model(asset_key: String) -> bool:
 	return _paths.has(asset_key)
@@ -173,9 +249,21 @@ func manifest_url(base: String) -> String:
 	return base.rstrip("/") + model_root + MANIFEST_PATH.trim_prefix(MODEL_ROOT)
 
 
+## The variant map URL for one origin.
+func variants_url(base: String) -> String:
+	return base.rstrip("/") + model_root + VARIANTS_PATH.trim_prefix(MODEL_ROOT)
+
+
 ## The credits URL for one origin.
 func credits_url(base: String) -> String:
 	return base.rstrip("/") + model_root + CREDITS_PATH.trim_prefix(MODEL_ROOT)
+
+
+## The URL of the figure set for one origin. The model build writes
+## `figure.json` beside the manifest. Thus, the two share one origin and one
+## model root (DESIGN-0014 section 20).
+func figure_url(base: String) -> String:
+	return base.rstrip("/") + model_root + FigureSet.FILE_NAME
 
 
 ## How this model should be rotated once loaded, in radians.

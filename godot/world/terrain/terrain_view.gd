@@ -329,18 +329,28 @@ func _place_scenery(key: Vector3i) -> void:
 		if asset_key in _Const.SCENERY_PRIMITIVES:
 			continue
 
-		var model := _meshes.resolve_scenery(asset_key)
+		var model := _meshes.resolve_scenery(asset_key, thing.get("look", {}),
+			scenery_seed(chunk, thing))
 
 		if model != null:
 			holder.add_child(model)
 			_stand(model, chunk, thing)
 
 
-## Put a scenery model on the ground of its tile, turned as its object.
+## The seed of the auto variant of one object: its world tile and its plane.
+static func scenery_seed(chunk: ChunkFile, thing: Dictionary) -> String:
+	var tile := Vector2i(chunk.cx, chunk.cy) * _Const.CHUNK_SIZE \
+		+ Vector2i(thing["x"], thing["y"])
+
+	return ObjectLook.seed_of(tile, chunk.plane)
+
+
+## Put a scenery model on the ground of its tile, turned as its object. Its
+## look scales it, tilts it, and nudges it (10/16/2026).
 ##
 ## A normalised model fills the unit box on its LONGEST axis only. The pad is
-## far flatter than it is wide, so the scaled copy is measured to rest it ON
-## the ground, not through it.
+## far flatter than it is wide. Thus, this measures the scaled copy, to rest
+## it ON the ground, not through it.
 static func _stand(model: Node3D, chunk: ChunkFile, thing: Dictionary) -> void:
 	var lx: int = thing["x"]
 	var ly: int = thing["y"]
@@ -348,15 +358,13 @@ static func _stand(model: Node3D, chunk: ChunkFile, thing: Dictionary) -> void:
 	var world_y := chunk.cy * _Const.CHUNK_SIZE + ly
 	var ground := ChunkMeshBuilder.surface_height(chunk, lx + 0.5, ly + 0.5) \
 		* ChunkMeshBuilder.HEIGHT_STEP
+	var look: Dictionary = thing.get("look", {})
 
-	model.scale = Vector3.ONE * SCENERY_SCALE
-
-	var bounds := ModelLoader.bounds_of(model)
+	ObjectLook.apply(model, look, SCENERY_SCALE, model_yaw(int(thing["rotation"])))
 
 	model.position = Vector3(world_x * ChunkMeshBuilder.TILE_SIZE,
-		ground - bounds.position.y * SCENERY_SCALE,
-		-world_y * ChunkMeshBuilder.TILE_SIZE)
-	model.rotation.y = model_yaw(int(thing["rotation"]))
+		ground + ObjectLook.rest_lift(model),
+		-world_y * ChunkMeshBuilder.TILE_SIZE) + ObjectLook.offset_of(look)
 
 
 ## The yaw that turns a model to face `quarter_turns`: quarter turns clockwise
@@ -374,13 +382,14 @@ static func model_yaw(quarter_turns: int) -> float:
 	return PI - quarter_turns * PI * 0.5
 
 
-## Art for a scenery key arrived: stand it on every chunk that names it.
+## Art for a scenery key arrived: stand it on every chunk that names it, or
+## names a model that it is a variant of.
 func _on_art_arrived(asset_key: String) -> void:
 	for key: Vector3i in _nodes:
 		var chunk: ChunkFile = _built[key]
 
 		for thing: Dictionary in chunk.objects:
-			if TileTables.scenery_of(thing["kind"]) == asset_key:
+			if _meshes.redraws_for(TileTables.scenery_of(thing["kind"]), "", asset_key):
 				_place_scenery(key)
 				break
 

@@ -74,9 +74,10 @@ static func has_model(kind: String) -> bool:
 	return not scenery.is_empty() and not scenery in _Const.SCENERY_PRIMITIVES
 
 
-## The model of one object (`{kind, x, y, rotation}` at world tiles), on the
-## ground of its tile and turned as its object. Null for a kind with no
-## model, and for scenery with no served model.
+## The model of one object (`{kind, x, y, rotation, look}` at world tiles),
+## on the ground of its tile, turned as its object, and scaled, tilted, and
+## nudged by its look (10/16/2026). Null for a kind with no model, and for
+## scenery with no served model.
 func stand(chunks: ChunkSet, thing: Dictionary) -> Node3D:
 	var kind: String = thing["kind"]
 
@@ -86,25 +87,46 @@ func stand(chunks: ChunkSet, thing: Dictionary) -> Node3D:
 	var model: Node3D = null
 	var size := TerrainView.SCENERY_SCALE
 	var preview: Array = _Const.OBJECT_KIND_PREVIEW.get(kind, [])
+	var look: Dictionary = thing.get("look", {})
+	var tile := Vector2i(thing["x"], thing["y"])
+	var seed := ObjectLook.seed_of(tile, chunks.plane)
 
 	if not preview.is_empty():
-		model = _resolver.resolve_entity(preview[0], preview[1])
+		model = _resolver.resolve_entity(preview[0], preview[1], look, seed)
 		size = EntityPool.ENTITY_SCALE
 	else:
-		model = _resolver.resolve_scenery(TileTables.scenery_of(kind))
+		model = _resolver.resolve_scenery(TileTables.scenery_of(kind), look, seed)
 
 	if model == null:
 		return null
 
-	var base := TerrainOverlay.ground_point(chunks, Vector2(thing["x"], thing["y"]), 0.0)
+	var base := TerrainOverlay.ground_point(chunks, Vector2(tile), 0.0)
 
-	model.scale = Vector3.ONE * size
-
-	# The bounds leave out the transform of the root, so the lift is the
-	# unscaled bottom times the scale: the rule of EntityPool._rest_offset.
-	var bounds := ModelLoader.bounds_of(model)
-
-	model.position = base + Vector3.UP * (-bounds.position.y * size)
-	model.rotation.y = TerrainView.model_yaw(int(thing["rotation"]))
+	ObjectLook.apply(model, look, size, TerrainView.model_yaw(int(thing["rotation"])))
+	model.position = base + Vector3.UP * ObjectLook.rest_lift(model) + ObjectLook.offset_of(look)
 
 	return model
+
+
+## The model key of a kind: the entity of a kind with a preview, or its
+## scenery model. "" for a kind with no model, and for a primitive.
+static func model_key_of(kind: String) -> String:
+	var preview: Array = _Const.OBJECT_KIND_PREVIEW.get(kind, [])
+
+	if not preview.is_empty():
+		return preview[0]
+
+	var scenery: String = TileTables.scenery_of(kind)
+
+	return "" if scenery in _Const.SCENERY_PRIMITIVES else scenery
+
+
+## The variant keys of the model of a kind, from the served variant map.
+## Empty for a kind with no model, and for a model with no variant.
+func variants_for(kind: String) -> PackedStringArray:
+	var key := model_key_of(kind)
+
+	if _resolver == null or key.is_empty():
+		return PackedStringArray()
+
+	return _resolver.variants_of(key)

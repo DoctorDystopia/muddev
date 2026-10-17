@@ -1162,6 +1162,27 @@ number of objects, so a sign costs no neighbour tile. Then run the tile sync
 The chunk file is the **owner** of the words. The tile sync sets them again
 on each run, so a typo fix is an edit plus a sync, not a destroyed tile.
 
+### The look of a chunk object (10/16/2026)
+
+A chunk object may carry a `look`: a model variant, a scale in percent, a
+tilt in degrees, and a nudge in hundredths of a tile. Thus, fifty rusty
+poles are not fifty copies of one model.
+
+```json
+{"kind":"rusty_pole","x":20,"y":21,"rotation":2,"look":{"variant":"*","scale":135,"turn":[-5,30,0]}}
+```
+
+The terrain editor edits it on the Objects tab. A variant of `*` lets the
+client pick the base model or one of its variants from a hash of the tile.
+A model variant is one more model record with `variant_of`, and the build
+writes `variants.json` beside the manifest (see `assets/README.md`).
+
+The chunk file owns the look, as it owns the words of a sign. The tile sync
+writes it on the entity that the object stands up (`LOOK_ATTR`), and the
+statefeed sends it. A look edit is a refresh, not a destroyed tile. The
+respawn queue keeps the look of a dead NPC, as it keeps the facing. The
+server reads no value of a look for a rule.
+
 ### Player graffiti (`write`)
 
 ```bash
@@ -1409,7 +1430,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3560 tests, ~30 minutes** (measured 10/16/2026). Run it before a merge, or
+**3579 tests, ~32 minutes** (measured 10/16/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

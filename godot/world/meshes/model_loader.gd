@@ -100,6 +100,10 @@ const MIN_EXTENT := 0.0001
 ## literal as a theme variation, and this key is not one.
 const PRESENTATION_SCALE_META := "presentation_scale"
 
+## The metadata key of a node that gives its own box to [method bounds_of],
+## in the space of the node. [FigureLibrary] sets it on each figure.
+const BOUNDS_META := "fixed_bounds"
+
 ## Where this build fetches art from, as an absolute origin — on the web that is
 ## the page's own, which is how the fetch stays same-origin; see
 ## [method ServerEndpoint.asset_origin].
@@ -207,6 +211,18 @@ func is_loaded(asset_key: String) -> bool:
 	return _prototypes.has(asset_key)
 
 
+## The bytes of the file of one key, as the fetch got them. An empty array
+## before the file arrived. This routine never fetches.
+##
+## For [FigureModels]: a part of a figure draws the scene of the file as it
+## is, with no unit box. It thus builds its own scene from the same bytes,
+## and the file costs one fetch for the two readers.
+func body_of(asset_key: String) -> PackedByteArray:
+	var url := _registry.url_for(_origin, asset_key)
+
+	return _bodies.get(url, PackedByteArray())
+
+
 ## A copy of an already-loaded model, or null.
 ##
 ## Synchronous and never fetches. This is what a caller uses when it wants art
@@ -299,7 +315,38 @@ func _finish_manifest(result: int, code: int, body: PackedByteArray) -> void:
 	var document: Variant = JSON.parse_string(body.get_string_from_utf8())
 	var count := _registry.ingest_manifest(document)
 
-	manifest_ready.emit(count)
+	_fetch_variants(count)
+
+
+## Fetch the variant map after the manifest, and only then say that the
+## manifest is ready (10/16/2026). A row drawn before the map arrived would
+## draw the base and never draw again, because no key of its own arrives
+## for it. A map that fails to fetch leaves every model with no variant,
+## which is the look before variants existed.
+func _fetch_variants(count: int) -> void:
+	var url := _registry.variants_url(_origin)
+	var http := new_request()
+
+	add_child(http)
+
+	http.request_completed.connect(
+		func(result: int, code: int, _headers: PackedStringArray,
+				body: PackedByteArray):
+			http.queue_free()
+
+			if result == HTTPRequest.RESULT_SUCCESS and code == 200:
+				_registry.ingest_variants(JSON.parse_string(body.get_string_from_utf8()))
+			else:
+				push_warning("ModelLoader: variants http %d (result %d)" % [code, result])
+
+			manifest_ready.emit(count))
+
+	var err := http.request(url)
+
+	if err != OK:
+		http.queue_free()
+		push_warning("ModelLoader: variants request refused: error %d" % err)
+		manifest_ready.emit(count)
 
 
 ## Ask for a model. The [signal loaded] signal carries the answer.
@@ -348,6 +395,11 @@ func read_local_manifest() -> int:
 
 	if text.is_empty():
 		return 0
+
+	var variants := FileAccess.get_file_as_string(_registry.variants_url(_origin))
+
+	if not variants.is_empty():
+		_registry.ingest_variants(JSON.parse_string(variants))
 
 	return _registry.ingest_manifest(JSON.parse_string(text))
 
@@ -689,6 +741,12 @@ static func presentation_scale(node: Node3D) -> float:
 ## level deep would be measured in the wrong space and a model with a rigged
 ## hierarchy would normalise to the wrong size.
 static func bounds_of(root: Node3D) -> AABB:
+	# A node that knows its own box says so. A figure does: its parts hang on
+	# bone attachments, and an attachment gets its place only in the tree, so
+	# a walk of the transforms here would measure each part at the feet.
+	if root.has_meta(BOUNDS_META):
+		return root.get_meta(BOUNDS_META)
+
 	var bounds := _mesh_bounds(root)
 
 	# SKINNED meshes measure wrong, and badly. A rigged model's vertices are

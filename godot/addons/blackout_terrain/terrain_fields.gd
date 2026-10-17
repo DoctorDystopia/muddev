@@ -7,6 +7,9 @@ extends RefCounted
 ## A button text is a verb and an object, at most four words. The sentence
 ## that explains it goes into the tooltip.
 
+## The prefix of each field of an [method axes_row].
+const AXIS_NAMES := ["x ", "y ", "z "]
+
 
 ## A label over `control`, both as children of `parent`. Returns the label,
 ## so a caller can hide the pair.
@@ -25,6 +28,44 @@ static func row(parent: Control, label_text: String, control: Control,
 	parent.add_child(control)
 
 	return label
+
+
+## A row of three integer fields, x, y, and z, each in -limit..limit.
+## `on_change` runs after each change by the author. For the tilt and the
+## nudge of a look (10/16/2026).
+static func axes_row(limit: int, on_change: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+
+	for axis: String in AXIS_NAMES:
+		var box := SpinBox.new()
+
+		spin(box, -limit, limit, 1.0, 0.0)
+		box.prefix = axis
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.value_changed.connect(func(_value: float) -> void: on_change.call())
+		row.add_child(box)
+
+	return row
+
+
+## The three ints of a row of [method axes_row].
+static func axes_of(row: HBoxContainer) -> Array:
+	var found := []
+
+	for box: SpinBox in row.get_children():
+		found.append(int(box.value))
+
+	return found
+
+
+## Show three ints in a row of [method axes_row]. The row sends no change.
+## A list that is not three numbers shows zeros.
+static func set_axes(row: HBoxContainer, values: Variant) -> void:
+	var numbers: Array = values if values is Array and values.size() == AXIS_NAMES.size() \
+		else [0, 0, 0]
+
+	for axis: int in AXIS_NAMES.size():
+		(row.get_child(axis) as SpinBox).set_value_no_signal(float(numbers[axis]))
 
 
 ## A button with `text`, and `tip` as its tooltip, that calls `action`.

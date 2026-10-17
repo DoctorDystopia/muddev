@@ -40,6 +40,7 @@ func _ready() -> void:
 	_noise_fills_meet_at_the_seam()
 	_undo_restores_the_state_before_the_stroke()
 	_undo_removes_a_placed_object()
+	_a_look_travels_with_its_object()
 	_compact_names_drops_unused_names()
 	_a_ray_from_above_hits_the_tile_under_it()
 	_a_void_paint_blocks_and_a_floor_on_void_opens()
@@ -326,6 +327,43 @@ func _undo_removes_a_placed_object() -> void:
 	edit.replay(chunks, true)
 
 	_expect(chunks.objects_at(tile).size() == 1, "redo places it again")
+
+
+## A placed object keeps its look through the set, the undo log, and a
+## remove by look (10/16/2026). A remove with another look takes nothing.
+func _a_look_travels_with_its_object() -> void:
+	var chunks := _block(Vector2i(0, 0))
+	var edit := TerrainEdit.new()
+	var tile := Vector2i(2, 3)
+	var look := {_Const.LOOK_VARIANT_KEY: _Const.LOOK_VARIANT_ANY,
+		_Const.LOOK_SCALE_KEY: 150, _Const.LOOK_TURN_KEY: [0, 10, 0]}
+
+	edit.add_object(chunks, tile, "bank", 1, "", look)
+
+	var placed := chunks.objects_at(tile)
+
+	_expect(placed.size() == 1 and placed[0]["look"] == look,
+		"objects_at gives the look back")
+	_expect(ChunkSet.same_object(placed[0],
+		{"kind": "bank", "rotation": 1, "text": "", "look": look.duplicate(true)}),
+		"same_object matches by the text of the look")
+
+	edit.remove_object(chunks, tile, "bank", 1, "", {_Const.LOOK_SCALE_KEY: 150})
+	_expect(chunks.objects_at(tile).size() == 1, "another look removes nothing")
+
+	edit.replay(chunks, false)
+	_expect(chunks.objects_at(tile).is_empty(), "undo removes the object with its look")
+
+	edit.replay(chunks, true)
+	_expect(chunks.objects_at(tile).size() == 1
+		and chunks.objects_at(tile)[0]["look"] == look, "redo places it with its look")
+
+	var chunk := chunks.get_chunk(Vector2i(0, 0))
+	var text := chunk.to_text()
+	var again := ChunkFile.parse_text(text)
+
+	_expect(again.error.is_empty() and again.objects.size() == 1
+		and again.objects[0]["look"] == look, "the look reads back from the written chunk")
 
 
 func _compact_names_drops_unused_names() -> void:

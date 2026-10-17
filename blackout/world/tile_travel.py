@@ -295,7 +295,7 @@ def climb_target(view, tile: tuple, way: str) -> tuple:
     `way` lands. A ladder lands on the same tile. A flight of stairs lands
     past its top step. `object_kinds.climb_landing` owns the rule.
     """
-    for key, rotation, _text in view.placed_at(tile[0], tile[1]):
+    for key, rotation, *_rest in view.placed_at(tile[0], tile[1]):
         kind = OBJECT_KINDS.get(key)
 
         if kind is not None and way in kind.climbs:

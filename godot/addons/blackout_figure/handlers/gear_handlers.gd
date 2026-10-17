@@ -30,6 +30,8 @@ const JOB_MODEL := "the model %s"
 const SCRATCH_IMPORT := "This workbench is on a scratch directory, and an import " \
 	+ "writes the repository. Open the workbench of the repository for an import."
 
+const IMPORT_FAILED := "The import of %s did not end well:\n%s"
+
 var _context: FigureHandlerContext
 
 
@@ -204,32 +206,51 @@ func _on_import_requested(key: String, model_key: String, path: String,
 		author: String) -> void:
 	var bench := _context.bench()
 	var problem := "Select a row first." if key.is_empty() \
-		else FigureRigEdits.name_problem(model_key)
+		else import_problem(bench, model_key)
 
 	if bench == null or not problem.is_empty():
 		_context.status(problem)
 		return
 
-	if not bench.writes_repo_figures() or not bench.models_directory.is_empty():
-		_context.status(SCRATCH_IMPORT)
-		return
-
-	var family := FigurePipeline.FAMILY_FIGURE
-
-	if bench.catalog.has_item(model_key):
-		family = FigurePipeline.FAMILY_ITEMS
-
 	_context.dock().save_author(author)
 	_context.start_job(JOB_MODEL % model_key,
-		FigurePipeline.import_model.bind(family, model_key, path, author),
+		FigurePipeline.import_model.bind(model_family(bench, model_key), model_key, path,
+			author),
 		_on_import_done.bind(key, model_key, path))
+
+
+## Why an import cannot run now, or "": the key is no name, or the
+## workbench is on a scratch directory. Each import of the dock asks this,
+## so the two imports refuse the same things.
+static func import_problem(bench: FigureWorkbench, model_key: String) -> String:
+	var problem := FigureRigEdits.name_problem(model_key)
+
+	if bench == null or not problem.is_empty():
+		return problem
+
+	if not bench.writes_repo_figures() or not bench.models_directory.is_empty():
+		return SCRATCH_IMPORT
+
+	return ""
+
+
+## The family of a new model: `items` for the key of an item, else `figure`.
+static func model_family(bench: FigureWorkbench, model_key: String) -> String:
+	if bench.catalog.has_item(model_key):
+		return FigurePipeline.FAMILY_ITEMS
+
+	return FigurePipeline.FAMILY_FIGURE
+
+
+## The status line of a model pipeline run that did not end well.
+static func import_failure(path: String, result: Dictionary) -> String:
+	return IMPORT_FAILED % [path.get_file(), result["output"]]
 
 
 ## The model pipeline ended. A built model gives the look its parts.
 func _on_import_done(result: Dictionary, key: String, model_key: String, path: String) -> void:
 	if not result["ok"]:
-		_context.status("The import of %s did not end well:\n%s" % [path.get_file(),
-			result["output"]])
+		_context.status(import_failure(path, result))
 		return
 
 	var bench := _context.bench()

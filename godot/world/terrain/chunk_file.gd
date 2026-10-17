@@ -45,8 +45,20 @@ const WALL_STYLE_KEYS := ["wall_names", "walls"]
 const OBJECT_KEYS := ["kind", "x", "y", "rotation"]
 
 ## The key of the optional text of an object: the words of a signpost. The
-## writer writes it last, and only when the text is not empty.
+## writer writes it after the four keys, and only when the text is not empty.
 const OBJECT_TEXT_KEY := "text"
+
+## The key of the optional look of an object: its variant, its scale, its
+## tilt, and its nudge (10/16/2026). The writer writes it last, and only when
+## the look holds a key. [method look_problem] gives the rules of a look.
+const OBJECT_LOOK_KEY: String = _Const.OBJECT_LOOK_KEY
+
+## The two optional keys of an object.
+const OBJECT_OPTIONAL_KEYS := [OBJECT_TEXT_KEY, OBJECT_LOOK_KEY]
+
+## The keys of a look, in the order that the writer writes them.
+const LOOK_KEYS: Array = [_Const.LOOK_VARIANT_KEY, _Const.LOOK_SCALE_KEY,
+	_Const.LOOK_TURN_KEY, _Const.LOOK_OFFSET_KEY]
 
 const _INDENT := "  "
 const _ROW_INDENT := "    "
@@ -78,8 +90,9 @@ var areas := PackedInt32Array()
 var wall_names := PackedStringArray([_Const.TILE_DEFAULT_WALL_STYLE])
 var walls := PackedInt32Array()
 
-## Each object is `{kind, x, y, rotation, text}`, at LOCAL tile coordinates.
-## The text is "" for an object that carries none.
+## Each object is `{kind, x, y, rotation, text, look}`, at LOCAL tile
+## coordinates. The text is "" for an object that carries none. The look is
+## `{}` for an object that draws the base model as it comes.
 var objects: Array[Dictionary] = []
 
 ## Empty for a good file. Otherwise the first reason the file was refused.
@@ -389,12 +402,14 @@ func _read_objects(value: Variant) -> void:
 
 		var keys: Array = item.keys()
 
-		keys.erase(OBJECT_TEXT_KEY)
+		for optional: String in OBJECT_OPTIONAL_KEYS:
+			keys.erase(optional)
+
 		keys.sort()
 
 		if keys != expected:
 			_fail("object %d must have exactly the keys %s, and may have %s"
-				% [index, OBJECT_KEYS, OBJECT_TEXT_KEY])
+				% [index, OBJECT_KEYS, OBJECT_OPTIONAL_KEYS])
 			return
 
 		var kind: Variant = item["kind"]
@@ -410,7 +425,23 @@ func _read_objects(value: Variant) -> void:
 			"rotation": _int_in(item["rotation"], 0,
 				_Const.CHUNK_ROTATION_COUNT - 1, "object %d rotation" % index),
 			"text": _object_text(item, index),
+			"look": _object_look(item, index),
 		})
+
+
+## The look of an object, or `{}`. The look must pass [method look_problem].
+## The Python `_object_look_value` has the same rule.
+func _object_look(item: Dictionary, index: int) -> Dictionary:
+	if not item.has(OBJECT_LOOK_KEY):
+		return {}
+
+	var problem := look_problem(item[OBJECT_LOOK_KEY])
+
+	if not problem.is_empty():
+		_fail("object %d look: %s" % [index, problem])
+		return {}
+
+	return normal_look(item[OBJECT_LOOK_KEY])
 
 
 ## The text of an object, or "". The text must match the text pattern and
@@ -449,6 +480,165 @@ static func text_problem(text: String) -> String:
 			_Const.CHUNK_TEXT_MAX_CHARS]
 
 	return ""
+
+
+## Why `value` is no look of an object, or "" when it is one. The Python
+## `look_problem` has the same rule. The parity cases hold the two to it.
+## The reader and the terrain editor both ask here. Thus, the editor never
+## writes a look that the reader refuses.
+##
+## The rule refuses a key at its default: a scale of
+## [code]LOOK_SCALE_UNIT[/code], or a turn or an offset of zeros. Thus, each
+## look has one text.
+static func look_problem(value: Variant) -> String:
+	if not (value is Dictionary):
+		return "a look must be a table"
+
+	if value.is_empty():
+		return "a look must hold a key. Leave an empty look out"
+
+	for key: Variant in value:
+		if not key in LOOK_KEYS:
+			return "the key %s is not one of %s" % [str(key), ", ".join(LOOK_KEYS)]
+
+	var problem := ""
+
+	if value.has(_Const.LOOK_VARIANT_KEY):
+		problem = _variant_problem(value[_Const.LOOK_VARIANT_KEY])
+
+	if problem.is_empty() and value.has(_Const.LOOK_SCALE_KEY):
+		problem = _scale_problem(value[_Const.LOOK_SCALE_KEY])
+
+	if problem.is_empty() and value.has(_Const.LOOK_TURN_KEY):
+		problem = _axes_problem(value[_Const.LOOK_TURN_KEY], _Const.LOOK_TURN_MAX, "the turn")
+
+	if problem.is_empty() and value.has(_Const.LOOK_OFFSET_KEY):
+		problem = _axes_problem(value[_Const.LOOK_OFFSET_KEY], _Const.LOOK_OFFSET_MAX,
+			"the offset")
+
+	return problem
+
+
+static func _variant_problem(value: Variant) -> String:
+	if not (value is String):
+		return "the variant must be a string"
+
+	var pattern := RegEx.create_from_string(_Const.CHUNK_NAME_PATTERN)
+
+	if value == _Const.LOOK_VARIANT_ANY or _whole_match(pattern, value):
+		return ""
+
+	return "the variant \"%s\" is neither %s nor a name" % [value, _Const.LOOK_VARIANT_ANY]
+
+
+static func _scale_problem(value: Variant) -> String:
+	var number: Variant = _int_or_none(value)
+
+	if number == null:
+		return "the scale must be an integer"
+
+	if number < _Const.LOOK_SCALE_MIN or number > _Const.LOOK_SCALE_MAX:
+		return "the scale must stay in %d..%d" % [_Const.LOOK_SCALE_MIN, _Const.LOOK_SCALE_MAX]
+
+	if number == _Const.LOOK_SCALE_UNIT:
+		return "a scale of %d is the default. Leave the key out" % number
+
+	return ""
+
+
+## Why `value` is no [x, y, z] of ints in -limit..limit, or "". All zeros is
+## the default. The rule refuses the default.
+static func _axes_problem(value: Variant, limit: int, what: String) -> String:
+	if not (value is Array) or value.size() != _Const.LOOK_AXES:
+		return "%s must be [x, y, z]" % what
+
+	var any_set := false
+
+	for item: Variant in value:
+		var number: Variant = _int_or_none(item)
+
+		if number == null:
+			return "%s must hold three integers" % what
+
+		if absi(number) > limit:
+			return "%s must stay in -%d..%d" % [what, limit, limit]
+
+		if number != 0:
+			any_set = true
+
+	if not any_set:
+		return "%s of zeros is the default. Leave the key out" % what
+
+	return ""
+
+
+## `value` as an int, or null. A bool is no int. An integral float counts,
+## because Godot's JSON parser gives every number as a float.
+static func _int_or_none(value: Variant) -> Variant:
+	if value is bool:
+		return null
+
+	if value is int:
+		return value
+
+	if value is float and value == floorf(value):
+		return int(value)
+
+	return null
+
+
+## A look that [method look_problem] accepts, in the form that the reader
+## stores: each number as an int, and the keys in the order of
+## [constant LOOK_KEYS].
+static func normal_look(value: Dictionary) -> Dictionary:
+	var look := {}
+
+	for key: String in LOOK_KEYS:
+		if not value.has(key):
+			continue
+
+		var item: Variant = value[key]
+
+		if item is Array:
+			var numbers := []
+
+			for number: Variant in item:
+				numbers.append(_int_or_none(number))
+
+			look[key] = numbers
+		elif item is String:
+			look[key] = item
+		else:
+			look[key] = _int_or_none(item)
+
+	return look
+
+
+## A look as the writer writes it: one JSON object with its keys in the
+## order of [constant LOOK_KEYS], and no spaces. The Python `look_text`
+## writes the same bytes. The editor matches two objects by this text.
+static func look_text(look: Dictionary) -> String:
+	var parts := PackedStringArray()
+
+	for key: String in LOOK_KEYS:
+		if not look.has(key):
+			continue
+
+		var item: Variant = look[key]
+
+		if item is Array:
+			var numbers := PackedStringArray()
+
+			for number: Variant in item:
+				numbers.append("%d" % int(number))
+
+			parts.append('"%s":[%s]' % [key, ",".join(numbers)])
+		elif item is String:
+			parts.append('"%s":"%s"' % [key, item])
+		else:
+			parts.append('"%s":%d' % [key, int(item)])
+
+	return "{" + ",".join(parts) + "}"
 
 
 ## True when `pattern` matches all of `text`. A `$` also matches before a last
@@ -526,7 +716,7 @@ func global_objects() -> Array[Dictionary]:
 	for thing: Dictionary in objects:
 		placed.append({"kind": thing["kind"], "x": origin_x + thing["x"],
 			"y": origin_y + thing["y"], "rotation": thing["rotation"],
-			"text": thing.get("text", "")})
+			"text": thing.get("text", ""), "look": thing.get("look", {})})
 
 	return placed
 
@@ -617,17 +807,28 @@ func _object_lines() -> PackedStringArray:
 	for index: int in objects.size():
 		var thing: Dictionary = objects[index]
 		var comma := "," if index < objects.size() - 1 else ""
-		var text: String = thing.get("text", "")
-		var words := "" if text.is_empty() else ',"%s":"%s"' % [OBJECT_TEXT_KEY, text]
-
 		lines.append(_ROW_INDENT
 			+ '{"kind":"%s","x":%d,"y":%d,"rotation":%d%s}' % [thing["kind"],
-				thing["x"], thing["y"], thing["rotation"], words]
+				thing["x"], thing["y"], thing["rotation"], optional_text(thing)]
 			+ comma)
 
 	lines.append(_INDENT + "]")
 
 	return lines
+
+
+## The text key and the look key of one object line, each only when the
+## object has it: `,"text":"..."` then `,"look":{...}`. The template writer
+## uses the same tail. The Python `_object_text` writes the same bytes.
+static func optional_text(thing: Dictionary) -> String:
+	var text: String = thing.get("text", "")
+	var look: Dictionary = thing.get("look", {})
+	var tail := "" if text.is_empty() else ',"%s":"%s"' % [OBJECT_TEXT_KEY, text]
+
+	if not look.is_empty():
+		tail += ',"%s":%s' % [OBJECT_LOOK_KEY, look_text(look)]
+
+	return tail
 
 
 static func _row_text(row: PackedInt32Array) -> String:
@@ -687,6 +888,9 @@ func semantic_dump() -> String:
 
 		if not thing["text"].is_empty():
 			line += " " + thing["text"]
+
+		if not thing["look"].is_empty():
+			line += " " + look_text(thing["look"])
 
 		lines.append(line)
 

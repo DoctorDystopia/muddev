@@ -30,6 +30,12 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 ## than binding three signals and duplicating the redraw in each.
 signal changed
 
+## Emitted when char_avatar arrives. The server sends it at each login and
+## each reload. It also sends it after a change of the body type or the
+## figure colors. The console then fetches the figure set again (DESIGN-0014
+## section 20). Thus, a reload shows each save of the figure workbench.
+signal avatar_received
+
 ## Your own entity id, from char_avatar.
 ##
 ## This is the field that makes a combat event recognisable as being about YOU.
@@ -41,6 +47,12 @@ var entity_id := 0
 ## Which mesh you are, and which family it belongs to.
 var asset := ""
 var family := ""
+
+## The figure of a player character (DESIGN-0014 section 20): the body type,
+## and color role -> named color. An empty body type means no figure, and
+## the world pane then draws `asset`.
+var body_type := ""
+var figure_colors: Dictionary = {}
 
 var hp := 0
 var max_hp := 0
@@ -66,6 +78,8 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 			entity_id = int(payload.get("entity_id", 0))
 			asset = str(payload.get("asset", ""))
 			family = str(payload.get("family", ""))
+			body_type = str(payload.get("body_type", ""))
+			figure_colors = _text_table(payload.get("figure_colors", {}))
 
 		_Const.CH_CHAR_VITALS:
 			hp = int(payload.get("hp", 0))
@@ -80,6 +94,9 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 			return false
 
 	changed.emit()
+
+	if channel == _Const.CH_CHAR_AVATAR:
+		avatar_received.emit()
 
 	return true
 
@@ -100,6 +117,8 @@ func reset() -> void:
 	entity_id = 0
 	asset = ""
 	family = ""
+	body_type = ""
+	figure_colors = {}
 	hp = 0
 	max_hp = 0
 	in_combat = false
@@ -146,5 +165,19 @@ func _to_int_levels(raw: Variant) -> Dictionary:
 
 	for skill: Variant in raw:
 		converted[str(skill)] = int(raw[skill])
+
+	return converted
+
+
+## A parsed table of texts: the figure colors. A value that is not a table
+## gives an empty table.
+static func _text_table(raw: Variant) -> Dictionary:
+	var converted: Dictionary = {}
+
+	if typeof(raw) != TYPE_DICTIONARY:
+		return converted
+
+	for key: Variant in raw:
+		converted[str(key)] = str(raw[key])
 
 	return converted

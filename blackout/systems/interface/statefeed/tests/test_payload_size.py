@@ -44,6 +44,7 @@ from evennia.utils.test_resources import EvenniaTest
 
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
+from systems.gameplay.figure import constants as figure_const
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import serializers
 from systems.interface.statefeed.payloads import RoomPlayersPayload
@@ -70,6 +71,8 @@ _WORST_CASE_ENTITIES = 1200
 # assumed the short case would under-report exactly when content grew.
 _LONG_NAME = "mutant raider sergeant of the eastern approach"
 _LONG_ASSET = "npc_mutant_raider_sergeant_eastern_variant_b"
+_LONG_BODY_TYPE = "body_type_of_the_eastern_approach"
+_LONG_COLOR = "skin_of_the_eastern_approach_dark"
 
 # How many verbs the worst-case entity affords.
 #
@@ -151,6 +154,11 @@ def _synthetic_entity(index: int) -> dict:
         "coords": [index % 32, index // 32, "oasis_outskirts"],
         "hp": 40,
         "max_hp": 60,
+        # The figure of a player character (DESIGN-0014 section 20). The
+        # ceiling gives each role of a character a color of its own.
+        const.ENTITY_BODY_TYPE_KEY: _LONG_BODY_TYPE,
+        const.ENTITY_FIGURE_COLORS_KEY: {
+            role: _LONG_COLOR for role in figure_const.CHARACTER_COLOR_ROLES},
     }
 
 

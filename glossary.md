@@ -194,8 +194,9 @@ figure space, figure model, reference body, hide list, fit, and figure set.
 Phase W5 (10/13/2026) added palette, named color, tier, base, stance table,
 clip set, and action, and it uses stance. Phase W6 (10/13/2026) added kit
 part, kit group, kit, budget, and budget line. It uses finding and note as
-the terrain checks do, for a figure file in place of a tile. The game does
-not draw a figure yet.
+the terrain checks do, for a figure file in place of a tile. Since
+10/16/2026 the game draws each player character as a figure (DESIGN-0014
+section 20), and that work added body type and figure colors.
 
 | Use | For | Not |
 |---|---|---|
@@ -237,6 +238,8 @@ not draw a figure yet.
 | kit | the kit parts of one character: kit group -> the key of a kit part | appearance, style set, cosmetics |
 | budget | a limit that the author sets in the figure workbench: the triangles of a worn look or of a body, and the triangles and the draws of a dressed figure | cap, quota, poly limit |
 | budget line | the line of the Figure dock that gives the draws and the triangles of the dressed figure against the budget | cost line, status line, stats bar |
+| body type | the key of one rig, and the server fact that names the rig of one player character (`body_type`, default `body_1`) | gender, sex, body model, skeleton type |
+| figure colors | the color table of one player character: color role -> named color, for the roles that a character owns (`figure_colors`) | skin tone setting, tint, character palette |
 
 ## Terrain
 
@@ -299,6 +302,11 @@ a room.
 | newel post | one of the two posts of the primitive `stairs_top`, on the landing of a flight, at the edge of the stairwell | banister, rail post |
 | rotation | the quarter turns of a placed object in a chunk file, 0 to 3, clockwise from north. The Turn action of the terrain editor adds one | orientation, heading, angle |
 | facing | the rotation of the chunk object that stood an entity up. The tile sync writes it on the entity (`FACING_ATTR`), and the statefeed sends it | direction, yaw, heading |
+| look (of a chunk object) | the `look` of one placed object: its variant, its scale, its tilt, and its nudge. The tile sync writes it on the entity (`LOOK_ATTR`), and the statefeed sends it (10/16/2026) | tweak, override, per-object presentation |
+| model variant | a model record with `variant_of`: a second look of a base model, served under its own key. `variants.json` lists it under its base | alternate model, skin, variation |
+| auto variant | the variant choice `*` of a look. The client picks the base or one model variant from a hash of the tile | random variant, any variant |
+| tilt | the `turn` of a look: degrees on three axes, over the rotation of the object | lean, extra rotation |
+| nudge | the `offset` of a look: hundredths of a tile on three axes, in the frame of the tile | shift, displacement |
 | preview | the asset key and the family of the entity that an object kind stands up. Only the terrain editor reads it, to draw the model on the tile | editor model, thumbnail |
 | tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
 | link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |

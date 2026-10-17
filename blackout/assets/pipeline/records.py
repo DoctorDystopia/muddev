@@ -36,6 +36,18 @@ Description: Model records. One served model, one file:
              this, the four cured cuts were four byte-identical files, and a
              player with all four downloaded the same model four times.
 
+             VARIANTS (10/16/2026). A record with `variant_of = "rusty_pole"`
+             is a second look of that model: a bent pole beside the straight
+             one. The build writes it as its own file, under its own key.
+             Then it writes `variants.json` beside the manifest: the base
+             key to the keys of its variants. A chunk object picks one by
+             key, or lets the client pick by a hash of its tile. Nick chose
+             one record for each variant on 10/16/2026, over a file list in
+             the base record, so a variant is a model like any other: its
+             own source, its own fix, its own budget. The base must be a
+             record of its own (not an alias), and not a variant itself.
+             `load_all` refuses both.
+
              [fix] CORRECTS THE EXPORT, and only the export: a sword whose
              blade points at the camera, an eye whose material says alpha 0.
              The build bakes each correction into the served file. A DISPLAY
@@ -85,7 +97,8 @@ class ModelRecord:
     to the source directory, or "". max_texture_edge is 0 when the family
     budget decides it. animations is False when the served file must carry
     no animation. color_roles is True when the build must keep the name of
-    each material.
+    each material. variant_of is the asset key of the base model that this
+    record is a variant of, or "".
     """
 
     asset_key: str
@@ -94,6 +107,7 @@ class ModelRecord:
     source_id: str
     file: str
     aliases: tuple = ()
+    variant_of: str = ""
     node: str = ""
     texture_image: str = ""
     texture_roughness: float = DEFAULT_ROUGHNESS
@@ -114,7 +128,8 @@ class ModelRecord:
 # ─── Private constant definitions ────────────────────────────────────────────
 
 _TOP_FIELDS: frozenset = frozenset(
-    ("source", "file", "aliases", "node", "texture", "fix", "output"))
+    ("source", "file", "aliases", "variant_of", "node", "texture", "fix",
+     "output"))
 _TEXTURE_FIELDS: frozenset = frozenset(("image", "roughness"))
 _FIX_FIELDS: frozenset = frozenset(("rotate", "opaque", "filter"))
 _OUTPUT_FIELDS: frozenset = frozenset(
@@ -300,11 +315,19 @@ def load_record(record_path: str) -> ModelRecord:
     output = _read_output(where, document.get("output", {}))
     texture = _read_texture(where, document.get("texture", {}))
     aliases = tuple(document.get("aliases", ()))
+    variant_of = document.get("variant_of", "")
+
+    if not isinstance(variant_of, str):
+        raise RecordError("%s: variant_of must be an asset key" % where)
+
+    if variant_of == asset_key:
+        raise RecordError("%s: a model cannot be a variant of itself" % where)
 
     return ModelRecord(
         asset_key=asset_key, family=family, record_path=record_path,
         source_id=document["source"], file=document["file"], aliases=aliases,
-        node=document.get("node", ""), **texture, **fix, **output)
+        variant_of=variant_of, node=document.get("node", ""), **texture,
+        **fix, **output)
 
 
 def record_paths() -> list:
@@ -377,4 +400,58 @@ def load_all() -> list:
 
         loaded.append(record)
 
+    _check_variants(loaded)
+
     return loaded
+
+
+def _check_variants(loaded: list) -> None:
+    """
+    Refuse a variant whose base is not a record of its own, or is a variant
+    itself. An alias is no base, because the client groups the variants
+    under the key of the file.
+    """
+    by_key = {record.asset_key: record for record in loaded}
+
+    for record in loaded:
+        if not record.variant_of:
+            continue
+
+        base = by_key.get(record.variant_of)
+
+        if base is None:
+            raise RecordError("%s: variant_of names '%s', which no record has "
+                              "as its own key" % (record.record_path,
+                                                  record.variant_of))
+
+        if base.variant_of:
+            raise RecordError("%s: variant_of names '%s', which is a variant "
+                              "itself" % (record.record_path,
+                                          record.variant_of))
+
+
+def variants_of(all_records: list) -> dict:
+    """
+    Purpose: Group the variants of each base model.
+
+    Entry:
+        all_records holds loaded ModelRecords.
+
+    Exit/Returns:
+        Returns {base asset key: [variant asset keys, sorted]}, with a row
+        only for a base that has a variant. The caller keeps the served
+        records only, so no row names a file that a client cannot fetch.
+
+    Module Globals:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    grouped = {}
+
+    for record in all_records:
+        if record.variant_of:
+            grouped.setdefault(record.variant_of, []).append(record.asset_key)
+
+    return {base: sorted(keys) for base, keys in sorted(grouped.items())}

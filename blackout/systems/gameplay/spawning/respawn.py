@@ -51,7 +51,7 @@ import time
 from evennia.scripts.scripts import DefaultScript
 from evennia.utils import logger
 from systems.core.managers import get_singleton_script, register_manager
-from systems.core.tilegrid.constants import FACING_ATTR
+from systems.core.tilegrid.constants import FACING_ATTR, LOOK_ATTR
 
 # ─── module constants ──────────────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ class BlackoutRespawnManager(DefaultScript):
     # ── scheduling ───────────────────────────────────────────────────────
 
     def schedule(self, npc_key, room, delay_seconds, now=None,
-                 facing=None) -> bool:
+                 facing=None, look=None) -> bool:
         """Queue `npc_key` to reappear in `room` after `delay_seconds`.
 
         Entry:
@@ -178,6 +178,8 @@ class BlackoutRespawnManager(DefaultScript):
             facing        - the facing of the NPC that died, or None. The
                             new NPC gets it, so a respawn keeps the turn
                             that the chunk file gave.
+            look          - the look of the NPC that died, or None. The new
+                            NPC gets it, as with the facing.
 
         Exit/Returns:
             True if an entry was added; False if the request was rejected or
@@ -210,6 +212,9 @@ class BlackoutRespawnManager(DefaultScript):
         # queue has no key, and _spawn reads both the same way.
         if facing is not None:
             entry[FACING_ATTR] = facing
+
+        if look:
+            entry[LOOK_ATTR] = dict(look)
 
         queue.append(entry)
         self._write_queue(queue)
@@ -328,6 +333,11 @@ class BlackoutRespawnManager(DefaultScript):
         if facing is not None:
             npc.attributes.add(FACING_ATTR, facing)
 
+        look = entry.get(LOOK_ATTR)
+
+        if look:
+            npc.attributes.add(LOOK_ATTR, dict(look))
+
         # Announce the arrival, because nothing else will. NpcDef.create goes
         # through create_object(location=...), and Evennia does not fire
         # at_object_receive for that -- only move_to does (CLAUDE.md, "Evennia
@@ -370,10 +380,10 @@ def get_respawn_manager() -> BlackoutRespawnManager:
 
 
 def schedule_respawn(npc_key, room, delay_seconds, now=None,
-                     facing=None) -> bool:
+                     facing=None, look=None) -> bool:
     """Convenience wrapper — the single entry point callers should use."""
     return get_respawn_manager().schedule(npc_key, room, delay_seconds,
-                                          now=now, facing=facing)
+                                          now=now, facing=facing, look=look)
 
 
 @register_manager

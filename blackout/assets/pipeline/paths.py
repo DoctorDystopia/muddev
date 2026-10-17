@@ -57,6 +57,10 @@ SERVED_DIR: str = os.path.join(
     GAME_DIR, "web", "static", "webclient", "models")
 CLIENT_MANIFEST_PATH: str = os.path.join(SERVED_DIR, "manifest.json")
 
+# The variants of each base model (10/16/2026): base asset key -> the keys
+# of its variants. The build writes it from the `variant_of` of each record.
+CLIENT_VARIANTS_PATH: str = os.path.join(SERVED_DIR, "variants.json")
+
 # The figure set: each rig, each worn look, and the palette in one served
 # file. The build writes it from FIGURE_RIGS_DIR, FIGURE_LOOKS_DIR, and
 # FIGURE_PALETTE_PATH (figure.py).

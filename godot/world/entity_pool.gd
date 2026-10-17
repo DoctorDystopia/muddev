@@ -242,6 +242,10 @@ var _tile_origins: Dictionary = {}
 ## every entity on every change.
 var _lift: Dictionary = {}
 
+## int id -> the nudge of the look of its chunk object, in world units. The
+## slot moves by it. Zero for a row with no look (10/16/2026).
+var _nudge: Dictionary = {}
+
 ## int id -> the fields the node of that entity was built from. See
 ## [method _look_of]. A row that arrives with the same look keeps its node.
 var _looks: Dictionary = {}
@@ -276,6 +280,9 @@ var _step := 1.0
 ## room is already to hand when the inventory asks for it.
 var _resolver: MeshResolver
 
+## The figure set, bound by [method bind_figures]. Null until then.
+var _figures: FigureLibrary
+
 
 ## Give the pool its resolver and its placement. Call before the first entity
 ## arrives.
@@ -289,6 +296,15 @@ func bind(resolver: MeshResolver, locate: Callable, step: float) -> void:
 	# it a model fetched on arrival would not appear until something else
 	# happened to change the room.
 	_resolver.refreshed.connect(_on_art_arrived)
+
+
+## Give the pool the figure library. A row with a body type then draws as a
+## figure (DESIGN-0014 section 20). With no library, the row draws its asset
+## key through the mesh ladder, as before.
+func bind_figures(library: FigureLibrary) -> void:
+	_figures = library
+	_figures.changed.connect(_on_figures_changed)
+	_on_figures_changed()
 
 
 ## Place everything again. Call when a chunk lands or goes under them.
@@ -649,9 +665,32 @@ func _process(delta: float) -> void:
 		if animator == null:
 			continue
 
-		_nodes[entity_id].position = animator.advance(delta)
+		var node: Node3D = _nodes[entity_id]
+
+		node.position = animator.advance(delta)
+		_move_figure(node, animator, delta)
 
 	_publish_marks()
+
+
+## A figure turns to its step, walks while it slides, and idles on its tile.
+## Each other node has no clip and keeps the turn that it has.
+##
+## The turn rate is the one of the avatar, so the player and the figure
+## beside them turn by one rule.
+static func _move_figure(node: Node3D, animator: StepAnimator, delta: float) -> void:
+	if FigureLibrary.figure_of(node) == null:
+		return
+
+	var travelling := animator.is_travelling()
+	var heading := animator.target() - animator.drawn()
+
+	if travelling and Vector2(heading.x, heading.z).length() > StepAnimator.ARRIVED:
+		node.rotation.y = rotate_toward(node.rotation.y, atan2(heading.x, heading.z),
+			WorldView.TURN_SPEED * delta)
+
+	FigureLibrary.play(node, FigureStances.ACTION_WALK if travelling
+		else FigureStances.ACTION_IDLE)
 
 
 ## Tell the pane which true tiles to mark, when that set has changed.
@@ -798,6 +837,7 @@ func _sync() -> void:
 				group["origin"], key, ring["first"] + index, ring["occupants"])
 
 			slot.y += _lift.get(entity_id, 0.0)
+			slot += _nudge.get(entity_id, Vector3.ZERO)
 			animators[entity_id] = _aim(entity_id, slot)
 			_tile_of[entity_id] = key
 
@@ -862,6 +902,7 @@ func _drop_node(entity_id: int) -> void:
 	_nodes.erase(entity_id)
 	_looks.erase(entity_id)
 	_lift.erase(entity_id)
+	_nudge.erase(entity_id)
 
 	if _hovered == entity_id:
 		_hovered = 0
@@ -940,6 +981,7 @@ func _node_for_entity(entity_data: Dictionary) -> Node3D:
 	# of the node. A label attached first counts as part of the mesh, and it
 	# lifts the entity off the ground by the height of its own text.
 	_lift[entity_id] = _rest_offset(node)
+	_nudge[entity_id] = ObjectLook.offset_of(_object_look_of(entity_data))
 	_attach_label(node, entity_data)
 	add_child(node)
 
@@ -982,7 +1024,29 @@ static func _look_of(entity_data: Dictionary) -> Array:
 		str(entity_data.get("label", "")),
 		str(entity_data.get("label_kind", "")),
 		str(entity_data.get(_Const.ENTITY_FACING_KEY, "")),
+		ObjectLook.key_of(_object_look_of(entity_data)),
+		_figure_look_of(entity_data),
 	]
+
+
+## The look of the chunk object that stood the entity up, or an empty
+## dictionary. See [ObjectLook].
+static func _object_look_of(entity_data: Dictionary) -> Dictionary:
+	var look: Variant = entity_data.get(_Const.ENTITY_LOOK_KEY, {})
+
+	return look if look is Dictionary else {}
+
+
+## The body type and the figure colors of a row, as one text. "" for a row
+## with no body type.
+static func _figure_look_of(entity_data: Dictionary) -> String:
+	if not entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
+		return ""
+
+	var colors: Variant = entity_data.get(_Const.ENTITY_FIGURE_COLORS_KEY, {})
+
+	return FigureLibrary.look_key(str(entity_data[_Const.ENTITY_BODY_TYPE_KEY]),
+		colors if typeof(colors) == TYPE_DICTIONARY else {})
 
 
 ## One entity's mesh, from the ladder.
@@ -992,18 +1056,54 @@ static func _look_of(entity_data: Dictionary) -> Array:
 ## mesh -- resolve_entity never returns null -- because something unmodelled
 ## still has to be visible and clickable.
 func _build(entity_data: Dictionary) -> Node3D:
-	var node := _resolver.resolve_entity(
-		str(entity_data.get("asset", "")), str(entity_data.get("family", "")))
+	var node := _figure_for(entity_data)
+	var look := _object_look_of(entity_data)
 
-	node.scale = Vector3.ONE * ENTITY_SCALE
+	if node == null:
+		# The id seeds the auto variant: one object keeps one look for as
+		# long as it stands.
+		node = _resolver.resolve_entity(
+			str(entity_data.get("asset", "")), str(entity_data.get("family", "")),
+			look, str(_id_of(entity_data)))
 
 	# The rotation of the chunk object that stood the entity up. A row with
-	# no facing keeps the model as it comes.
+	# no facing keeps the model as it comes. The look scales and tilts it
+	# over that (10/16/2026).
+	var yaw := 0.0
+
 	if entity_data.has(_Const.ENTITY_FACING_KEY):
-		node.rotation.y = TerrainView.model_yaw(
-			int(entity_data[_Const.ENTITY_FACING_KEY]))
+		yaw = TerrainView.model_yaw(int(entity_data[_Const.ENTITY_FACING_KEY]))
+
+	ObjectLook.apply(node, look, ENTITY_SCALE, yaw)
 
 	return node
+
+
+## The figure of a row with a body type, or null. It is null also while the
+## figure set is not in hand. The row then draws through the mesh ladder.
+## When the set arrives, the row draws again as a figure.
+func _figure_for(entity_data: Dictionary) -> Node3D:
+	if _figures == null or not entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
+		return null
+
+	var colors: Variant = entity_data.get(_Const.ENTITY_FIGURE_COLORS_KEY, {})
+
+	return _figures.build(str(entity_data[_Const.ENTITY_BODY_TYPE_KEY]),
+		colors if typeof(colors) == TYPE_DICTIONARY else {})
+
+
+## The figure set or the model of a part arrived. Each row with a body type
+## draws again. A new model does the same for each row of its key.
+func _on_figures_changed() -> void:
+	var redrawn := false
+
+	for entity_data: Dictionary in _entities:
+		if entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
+			_drop_node(_id_of(entity_data))
+			redrawn = true
+
+	if redrawn:
+		_sync()
 
 
 ## Hang the server's text over one entity, when it sent any.
@@ -1113,9 +1213,9 @@ func _slot_position(origin: Vector3, tile: String, index: int,
 ## excludes the root's own transform: that is what makes the number independent
 ## of the scale just applied.
 func _rest_offset(node: Node3D) -> float:
-	var bounds := ModelLoader.bounds_of(node)
-
-	return -bounds.position.y * ENTITY_SCALE
+	# The scale of the node, not ENTITY_SCALE: the look of a chunk object
+	# may have scaled it (10/16/2026).
+	return ObjectLook.rest_lift(node)
 
 
 ## How far out to place a ring of `total` occupants.

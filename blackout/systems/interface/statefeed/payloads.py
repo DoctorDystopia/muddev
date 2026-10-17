@@ -290,11 +290,16 @@ class CharAvatarPayload(_Payload):
     attacker and a target by id, and a client with no id of its own can only
     guess by name.
 
-    DELIBERATELY THREE FIELDS. serialize_entity also reports name, coords, hp
-    and max_hp -- all of which are already on char_vitals or room_info for this
-    observer. Repeating them here would be a second source for a fact that
-    changes on a different schedule, which is the drift char_items_list is
-    written to avoid.
+    The fields are few on purpose. serialize_entity also reports the name,
+    the coords, hp, and max_hp. char_vitals or room_info already carry each
+    one for this observer. A copy here is a second source for one fact, on
+    another schedule. char_items_list avoids that drift too.
+
+    `body_type` and `figure_colors` joined on 10/16/2026 (DESIGN-0014
+    section 20). The client builds the figure of the observer from them, as
+    it builds each other figure from the same two keys of the entity row.
+    `body_type` is "" for an observer that is no player character, and the
+    client then draws `asset`.
     """
 
     channel = const.CHANNEL_CHAR_AVATAR
@@ -302,6 +307,8 @@ class CharAvatarPayload(_Payload):
     entity_id: int = 0
     asset: str = ""
     family: str = ""
+    body_type: str = ""
+    figure_colors: dict = field(default_factory=dict)
 
 
 @dataclass

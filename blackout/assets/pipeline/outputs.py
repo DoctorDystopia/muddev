@@ -173,6 +173,35 @@ def render_manifest(all_records: list) -> dict:
     return dict(sorted(entries.items()))
 
 
+def render_variants(all_records: list) -> dict:
+    """
+    Purpose: Build the client variant map.
+
+    Entry:
+        all_records holds loaded ModelRecords.
+
+    Exit/Returns:
+        Returns {base asset key: [variant asset keys]} for every served
+        variant whose base is served too, sorted by key.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A variant with no served file would send a client to a 404, as a
+        manifest row would. Thus, the map holds the served records only,
+        as the manifest does.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    served = _served_records(all_records)
+    bases = {record.asset_key for record in served}
+
+    return {base: keys for base, keys in records.variants_of(served).items()
+            if base in bases}
+
+
 def render_credits(all_records: list) -> list:
     """
     Purpose: Build the credits list.
@@ -251,13 +280,16 @@ def render_all() -> dict:
     """
     all_records = records.load_all()
     manifest = render_manifest(all_records)
+    variants = render_variants(all_records)
     credits = render_credits(all_records)
     manifest_text = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+    variants_text = json.dumps(variants, indent=2, sort_keys=True) + "\n"
     credits_text = json.dumps(credits, indent=2, ensure_ascii=False) + "\n"
     markdown_text = render_markdown(credits)
     figure_text = figure.render_figure_set()
 
     return {paths.CLIENT_MANIFEST_PATH: manifest_text,
+            paths.CLIENT_VARIANTS_PATH: variants_text,
             paths.CREDITS_JSON_PATH: credits_text,
             paths.CREDITS_MARKDOWN_PATH: markdown_text,
             paths.FIGURE_SET_PATH: figure_text}

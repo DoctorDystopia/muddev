@@ -99,6 +99,43 @@ ROTATION_STEPS: tuple = ((0, 1), (1, 0), (0, -1), (-1, 0))
 # statefeed sends it as the facing of the entity. At 0 the entity faces north.
 FACING_ATTR: str = "facing"
 
+# ─── The look of one object (10/16/2026) ─────────────────────────────────────
+# A chunk object may carry a `look`: a variant, a scale, a tilt, and a nudge
+# for that one placement. Nick chose it on 10/16/2026, so that fifty rusty
+# poles are not fifty copies of one model. The server stores it and sends
+# it, and never reads a value of it for a rule, as with the rotation. The
+# attribute `LOOK_ATTR` holds it on the entity that the tile sync stood up,
+# beside FACING_ATTR, and the respawn queue keeps it too.
+#
+# Every number is an int, so the two chunk file readers write the same
+# bytes. The scale is in percent of the unit box. The tilt is in degrees on
+# the three axes, over the quarter turn of the rotation. The nudge is in
+# hundredths of a tile: x east, y up, z north. A key at its default (a scale
+# of LOOK_SCALE_UNIT, a tilt or a nudge of zeros) is refused, so each look
+# has one text. An object with no look writes the same bytes as before.
+OBJECT_LOOK_KEY: str = "look"
+LOOK_VARIANT_KEY: str = "variant"
+LOOK_SCALE_KEY: str = "scale"
+LOOK_TURN_KEY: str = "turn"
+LOOK_OFFSET_KEY: str = "offset"
+LOOK_KEYS: tuple = (LOOK_VARIANT_KEY, LOOK_SCALE_KEY, LOOK_TURN_KEY,
+                    LOOK_OFFSET_KEY)
+
+# The variant that lets the client pick: a hash of the tile picks the base
+# model or one of its variants. Not a name, so no model record can take it.
+# An object with no variant draws the base model.
+LOOK_VARIANT_ANY: str = "*"
+
+LOOK_SCALE_UNIT: int = 100
+LOOK_SCALE_MIN: int = 10
+LOOK_SCALE_MAX: int = 1000
+LOOK_TURN_MAX: int = 180
+LOOK_OFFSET_UNIT: int = 100
+LOOK_OFFSET_MAX: int = 100
+LOOK_AXES: int = 3
+
+LOOK_ATTR: str = "look"
+
 # A floor name, an area name, and an object kind. Lower case, digits, and
 # underscores. Thus, no name needs a JSON escape, and the two writers cannot
 # escape a name differently.

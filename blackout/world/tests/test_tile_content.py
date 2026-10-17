@@ -356,6 +356,33 @@ class WorldChunkTests(unittest.TestCase):
                                       name=name):
                         self.assertIn(name, table)
 
+    def test_every_pinned_variant_in_the_world_is_a_variant_of_its_model(self):
+        """A look that pins a variant names a model record whose
+        `variant_of` is the model of the kind: the preview of an entity
+        kind, or the scenery of a decor kind (10/16/2026). The auto variant
+        names no record. The editor lists only the real variants, and this
+        catches a hand edit."""
+        by_key = {}
+
+        for path in model_records.record_paths():
+            record = model_records.load_record(path)
+            by_key[record.asset_key] = record
+
+        for chunk in chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY):
+            for thing in chunk.objects:
+                variant = thing.look.get(tile_const.LOOK_VARIANT_KEY, "")
+
+                if not variant or variant == tile_const.LOOK_VARIANT_ANY:
+                    continue
+
+                with self.subTest(chunk=chunk.file_name(), kind=thing.kind,
+                                  variant=variant):
+                    kind = object_kinds.OBJECT_KINDS[thing.kind]
+                    base = kind.preview[0] if kind.preview else kind.scenery
+
+                    self.assertIn(variant, by_key)
+                    self.assertEqual(by_key[variant].variant_of, base)
+
     def test_the_world_passes_every_content_check(self):
         """Each transition and each climb lands on an open tile. Each void
         tile has the Blocked flag. The world has one respawn point. The rules live in

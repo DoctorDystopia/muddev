@@ -182,7 +182,7 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3560 tests, ~30 min,
+**Before a merge or a major change**, run the full suite (3579 tests, ~32 min,
 measured 10/16/2026):
 
 ```bash
@@ -888,6 +888,9 @@ A whisper and a call that names its receivers go to Evennia unchanged.
 - **One served model is one model record:**
   `assets/models/<family>/<asset_key>.toml`. The file name is the asset key,
   and the directory is the family. `aliases` lets several keys share one file.
+  A model variant is one more record with `variant_of` (10/16/2026). The
+  build writes `variants.json` beside the manifest, and a chunk object picks
+  a variant in its `look`.
 - **One command builds everything:** `python -m assets.pipeline build`. Node
   (glTF Transform) optimizes, and Blender converts a source that is not glTF.
   The build writes the served `.glb`, `manifest.json`, `credits.json`,
@@ -958,6 +961,7 @@ Read the handoff before you continue this work.
 | The primitives: ladder, stairs, hatch, the top of a flight | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
 | Ladders and stairs (10/16/2026): the run of a flight, the landing past the top step, the stairwell, the click that climbs, and the Ladder and Stairs tools | `climb_landing` and `flight_tiles` in `world/object_kinds.py`, and their twin `godot/world/terrain/climb_rule.gd`. `STAIRS_RUN` and `ROTATION_STEPS` in `systems/core/tilegrid/constants.py`, `climb_target` in `world/tile_travel.py`, `_add_tile_world_climbs` in `systems/interface/statefeed/serializers.py`, `StructureTools.climb` |
 | The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
+| The look of a chunk object (10/16/2026): its model variant, scale, tilt, and nudge, the model variants, and the Variant, Scale, Tilt, and Nudge fields | `look_problem` and `look_text` in `chunkfile.py` and `chunk_file.gd`, the `LOOK_*` constants in `systems/core/tilegrid/constants.py`, `LOOK_ATTR` in `tile_sync.py` and `respawn.py`, `ENTITY_LOOK_KEY` in `statefeed/serializers.py`, `variant_of` in `assets/pipeline/records.py` with `variants.json`, `godot/world/object_look.gd`, `ModelRegistry.variant_for`, `terrain_dock.gd` |
 | The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
 | The GDScript twin of the step rule, for the `unreachable` note | `godot/addons/blackout_terrain/step_grid.gd` |
 | The Build tab (DESIGN-0013): the tool rules, the room fill, the input, and the hint line | `structure_tools.gd`, `room_fill.gd`, `build_panel.gd`, `build_input.gd`, `tool_hint.gd` in `godot/addons/blackout_terrain/` |

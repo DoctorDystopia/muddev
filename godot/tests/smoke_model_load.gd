@@ -23,8 +23,13 @@ const TIMEOUT_SECONDS := 25.0
 const KNOWN_ASSET := "rusty_scrap_shortsword"
 
 ## The RIGGED one. Carries a skeleton, and is the model whose placement the
-## measurement ladder is most easily wrong about.
-const RIGGED_ASSET := "player_character"
+## measurement ladder is most easily wrong about. The player character was
+## this model until 10/16/2026. A player is now a figure with no skin, and
+## the mutant raider is the one served model with a skin.
+const RIGGED_ASSET := "mutant_raider"
+
+## The family that the server sends with the rigged model.
+const RIGGED_FAMILY := "npc"
 
 ## The one whose export declares itself transparent and is not.
 const TRANSPARENT_ASSET := "floating_eye"
@@ -196,7 +201,7 @@ func _on_refreshed(asset_key: String) -> void:
 	# tier-2 fallback is what a first ask returns.
 	_outstanding = {RIGGED_ASSET: true, TRANSPARENT_ASSET: true}
 
-	var pending := _resolver.resolve_entity(RIGGED_ASSET, "character")
+	var pending := _resolver.resolve_entity(RIGGED_ASSET, RIGGED_FAMILY)
 	pending.free()
 
 	var eye := _resolver.resolve_entity(TRANSPARENT_ASSET, "npc")
@@ -317,7 +322,7 @@ func _a_presentation_scale_sizes_the_world_not_the_cell(asset_key: String) -> vo
 ## figure that stands up straight (measured 09/18/2026). The bug reads 0.17.
 ## [constant UPRIGHT_RATIO] sits between the two, and a pose does not move it.
 func _a_rigged_model_stands_up() -> void:
-	var rigged := _resolver.resolve_entity(RIGGED_ASSET, "character")
+	var rigged := _resolver.resolve_entity(RIGGED_ASSET, RIGGED_FAMILY)
 
 	if rigged == null:
 		_expect(false, "the character model resolves")
@@ -327,8 +332,8 @@ func _a_rigged_model_stands_up() -> void:
 	var mesh_only := _bounds_of(rigged)
 	var uprightness := bounds.size.y / maxf(bounds.size.z, 0.0001)
 
-	print("player_character: bounds_of=(%.3f, %.3f, %.3f)  mesh only=(%.3f, %.3f, %.3f)"
-		% [bounds.size.x, bounds.size.y, bounds.size.z,
+	print("%s: bounds_of=(%.3f, %.3f, %.3f)  mesh only=(%.3f, %.3f, %.3f)"
+		% [RIGGED_ASSET, bounds.size.x, bounds.size.y, bounds.size.z,
 			mesh_only.size.x, mesh_only.size.y, mesh_only.size.z])
 
 	_expect(uprightness > UPRIGHT_RATIO,

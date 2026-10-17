@@ -78,9 +78,13 @@ The pipeline has three steps, always in this order.
 #    on anything the manifest doesn't have)
 ./deploy/webexport/publish.sh          # --dry-run lists the keys first, uploads nothing
 
-# 3. Deploy the site so the worker actually routes the new R2 keys
-cd ../playblackout-site && npx wrangler deploy
+# 3. Build and deploy the site so the worker actually routes the new R2 keys
+cd ../playblackout-site && npm run deploy
 ```
+
+`npm run deploy` is `astro build && wrangler deploy`. A bare
+`npx wrangler deploy` sends the `dist/` of the last build. On 10/16/2026 it
+sent the pages of 10/06 and put the live site 10 days back.
 
 **Always publish before you deploy.** A publish with no deploy leaves the old
 client live. A deploy with no publish 404s `/play`.
@@ -116,7 +120,7 @@ the inputs of a step did not change, treat the step as a no-op.
    instead. `reboot` also restarts the Portal, so expect a brief player
    disconnect that `reload` does not cause.
 4. If `godot/**` changed, or step 1 regenerated `blackout_constants.gd`, run
-   export → `publish.sh` → `wrangler deploy`, in that order (see above).
+   export → `publish.sh` → `npm run deploy`, in that order (see above).
 5. Verify the deploy (below).
 
 ## Deploy only what changed
@@ -142,7 +146,7 @@ run:
 | Reload | The other server code under `blackout/` | It changed |
 | Godot export | `godot/`, minus the `exclude_filter` of the Web preset | It changed, or `webexport/build/` has no export |
 | R2 publish | The export and the model tree | Always. `publish.sh --changed-only` uploads only the files that changed |
-| Site deploy | `worker/`, `wrangler.jsonc`, and `dist/` of `playblackout-site` | One of them changed |
+| Site deploy | The sources of `playblackout-site`, minus `docs/` and `README.md` | One of them changed. The leg builds `dist/` first |
 
 The script prints each changed file before a leg starts. A tile sync stops
 and starts Evennia, so it also does the work of a reboot and a reload. A
@@ -162,9 +166,10 @@ reboot also does the work of a reload.
 
 **The site deploy is not tied to the publish.** The worker reads each R2
 object on each request, and it has no edge cache. Thus, a new R2 object needs
-no `wrangler deploy`. Only a change to the worker, to `wrangler.jsonc`, or to
-`dist/` needs one. Neither script runs `astro build`. Build `dist/` in the
-site repo before a deploy.
+no site deploy. Only a change to the site sources needs one: the worker,
+`wrangler.jsonc`, `src/`, `public/`, or the Astro and npm config. Both scripts
+run `npm run deploy`, which builds `dist/` before `wrangler deploy`. Thus,
+`dist/` is not an input, and you never build it by hand.
 
 ### The records
 
