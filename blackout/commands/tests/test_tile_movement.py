@@ -18,6 +18,8 @@ from systems.core.tilegrid import movement
 from systems.core.tilegrid.world import TileWorld, set_world
 from systems.gameplay.movement import constants as walk_const
 from systems.gameplay.movement import walk
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed_events
 from world import tile_text
 from world.object_kinds import OBJECT_KINDS
 
@@ -158,6 +160,37 @@ class TileMovementTests(EvenniaTest):
 
         self.assertEqual(self._tile(),
                          tuple(OBJECT_KINDS[_TRANSITION].target))
+
+    def _moments(self, *lines) -> list:
+        """Type each line and move one tick. Return the moments sent."""
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            for line in lines:
+                self.char1.execute_cmd(line)
+                _tick()
+
+        return [call.args for call in emitted.call_args_list]
+
+    def test_a_step_onto_a_transition_sends_its_moment(self):
+        """The client plays the transition sound one time."""
+        moments = self._moments("north", "north")
+
+        self.assertEqual(moments,
+                         [(self.char1, feed_const.MOMENT_TRANSITION)])
+
+    def test_a_run_onto_a_transition_sends_its_moment(self):
+        walk.set_running(self.char1, True)
+
+        moments = self._moments("north")
+
+        self.assertEqual(self._tile(),
+                         tuple(OBJECT_KINDS[_TRANSITION].target))
+        self.assertEqual(moments,
+                         [(self.char1, feed_const.MOMENT_TRANSITION)])
+
+    def test_a_step_with_no_transition_sends_no_moment(self):
+        moments = self._moments("west", "west")
+
+        self.assertEqual(moments, [])
 
     def test_goto_a_coordinate_walks_there(self):
         goal = (_START[0] - 3, _START[1] - 5)

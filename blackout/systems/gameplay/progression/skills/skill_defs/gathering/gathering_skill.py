@@ -145,6 +145,14 @@ class GatheringSkill(BaseSkill):
     # The stat_tracker key this skill's harvest totals accumulate under.
     stat_key = None
 
+    # The MOMENT_* name that each gathering attempt sends to the client of
+    # the gatherer, a hit or a miss, or None for no moment. The server names
+    # the moment, and the client decides what it sounds like
+    # (godot/world/sound_cues.gd). The channel makes an attempt every
+    # SWING_TICKS until it stops. Thus, the client hears the work for as long
+    # as it lasts.
+    attempt_moment = None
+
 
 
     def get_unlock_requirements(self, character: object) -> bool:
@@ -780,6 +788,43 @@ class GatheringSkill(BaseSkill):
         return ""
 
 
+    def _send_attempt_moment(self, character: object) -> None:
+        """
+        Purpose: Tell the client of the gatherer that one gathering attempt
+        occurred.
+
+        Entry:
+            character is the gatherer.
+
+        Exit/Returns:
+            No conditions. Never raises.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Every gathering skill shares this one rule. A skill gives only
+            the name, in `attempt_moment`. A skill that names no moment is
+            silent.
+
+            The import is local, as in xp_awards.grant_xp. The registry
+            imports this module while it builds, and the feed reaches the
+            registry.
+
+        Notes/References:
+            events.emit_moment refuses a name that is not in MOMENTS.
+
+        Author: Nick Hobar
+        Creation date: 10/17/2026
+        """
+        if not self.attempt_moment:
+            return
+
+        from systems.interface.statefeed import events as feed
+
+        feed.emit_moment(character, self.attempt_moment)
+
+
     def _has_room_for(self, character: object, item) -> bool:
         """
         Purpose: Whether this character can actually carry one more of this.
@@ -1061,6 +1106,11 @@ class GatheringSkill(BaseSkill):
 
         if chance is None:
             return gather_constants.STOP_REASON_INTERRUPTED
+
+        # Before the roll, so a miss sounds the same as a hit. The player
+        # hears each attempt. An attempt that the checks above refuse is not
+        # an attempt.
+        self._send_attempt_moment(character)
 
         draws = rng or _RNG
         level = character.skills.get_level(self.key)

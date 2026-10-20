@@ -7,10 +7,12 @@ Description: Twitch combat commands — attack, hold, flee, wield.
 
 from evennia import CmdSet, Command
 
+from commands.command import search_in
 from commands.constants import HELP_CATEGORY_COMBAT
 from systems.gameplay.combat import combat_msg, constants as const, pvp, reach, style_options
 from systems.gameplay.combat.protocols import Combatant
 from systems.gameplay.combat.auras.aura_handler import ensure_aura_handler, get_aura_handler_for
+from systems.gameplay.combat.auras import detail as aura_detail
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
 from systems.core.tick import debug as tick_debug
 from systems.gameplay.combat.combat import (
@@ -34,8 +36,16 @@ from systems.interface.statefeed import events as feed
 _MSG_COMBAT = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMBAT}
 
 
-# Argument that switches the active aura off rather than naming one to light.
-AURA_OFF_ARG = "off"
+# The argument that puts the active aura out. Its owner is the combat
+# constants, because the ability detail composes the whole line from it.
+AURA_OFF_ARG = const.AURA_OFF_ARG
+
+# The status word of each ability state in the `aura` listing. A locked
+# row prints its reason instead.
+_AURA_STATUS_TEXT = {
+    feed_const.ABILITY_STATE_ACTIVE: "|gburning|n",
+    feed_const.ABILITY_STATE_READY: "|xready|n",
+}
 
 # Argument that widens @combatrules from "my gear" to "everything registered".
 COMBAT_RULES_ALL_ARG = "all"
@@ -72,16 +82,20 @@ class CmdAttack(Command):
         # stands and wrong for `attack`, which walked an archer onto a raider
         # to fire a shot that was legal from where it stood. See
         # SELF_APPROACHING_VERBS.
-        # use_dbref, so `attack #75931` resolves for an ordinary player. A
-        # name is not an identity: six raiders on one island share one key,
-        # and a click on the third of them asked the player which one they
-        # meant. The client now sends the dbref the server named, and the
-        # candidate list still bounds it -- a dbref outside this radius
-        # resolves to nothing, exactly as a name outside it does.
+        # A dbref, so `attack #75931` resolves for an ordinary player. A
+        # name is not an identity. Six raiders on one island share one key,
+        # and a click on the third of them asked the player which one. The
+        # client now sends the dbref that the server named. The candidate
+        # list bounds it. A dbref outside this radius resolves to nothing,
+        # exactly as a name outside it does.
+        #
+        # `search_in`, not `caller.search` (10/16/2026). Evennia reads a
+        # dbref as a global address and drops the candidate list for it.
+        # Thus, `caller.search` found a raider in any room of the game.
         radius = reach.reach_tiles(combat_profile(caller))
         candidates = reach.search_candidates(caller, const.ENGAGEMENT_RADIUS_TILES)
 
-        target = caller.search(target_name, candidates=candidates, use_dbref=True)
+        target = search_in(caller, target_name, candidates)
         if target is None:
             return
 
@@ -293,30 +307,27 @@ class CmdAura(Command):
         self._ignite(argument)
 
     def _list_auras(self) -> None:
-        """Show every registered aura and mark the one currently burning."""
+        """Show every registered aura and mark the one currently burning.
+
+        The rows come from auras/detail.py, which the ability rail of the
+        Godot client reads too. Thus, the listing and the rail cannot
+        disagree on which aura burns and which one a level locks.
+        """
         caller = self.caller
 
         if not AURA_REGISTRY:
             caller.msg(("You know of no auras.", _MSG_COMBAT))
             return
 
-        handler = get_aura_handler_for(caller)
-        active_aura = handler.get_aura() if handler is not None else None
-        active_key = active_aura.key if active_aura is not None else None
-
         lines = ["|wAuras|n"]
 
-        for aura in AURA_REGISTRY.values():
-            allowed, reason = aura.can_activate(caller)
+        for row in aura_detail.ability_rows(caller):
+            status = _AURA_STATUS_TEXT.get(row["state"], "")
 
-            if aura.key == active_key:
-                status = "|gburning|n"
-            elif allowed:
-                status = "|xready|n"
-            else:
-                status = f"|r{reason}|n"
+            if row["state"] == feed_const.ABILITY_STATE_LOCKED:
+                status = f"|r{row['reason']}|n"
 
-            lines.append(f"  |y{aura.name}|n — {status}")
+            lines.append(f"  |y{row['name']}|n — {status}")
 
         caller.msg(("\n".join(lines), _MSG_COMBAT))
 

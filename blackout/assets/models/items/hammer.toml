@@ -1,0 +1,14 @@
+source = "itch_jordanholmes_blacksmith_tools"
+file   = "Blacksmith Tools.blend"
+# Hammer01 is the cross-peen hammer of a smith. The set has three more:
+# Hammer02 (ball-peen) and two sledges about 1 m long.
+node   = "Hammer01"
+
+[texture]
+# The material of the .blend names no image. The four hammers share this one.
+image = "Textures/Hammers/Hammers_Base_Color.PNG"
+
+[fix]
+# The hammer lies flat with its handle along Z, and it points at the camera
+# in an inventory cell. +90 about X puts the head up and the handle down.
+rotate = [90, 0, 0]

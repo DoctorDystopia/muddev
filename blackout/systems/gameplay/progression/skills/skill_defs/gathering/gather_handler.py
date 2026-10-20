@@ -415,6 +415,9 @@ class GatheringHandler(TickableHandler):
             `is_busy()` like every other tickable, and it is what a future
             "you cannot craft while gathering" check will read.
 
+            Each swing turns the gatherer to the node first (10/20/2026).
+            See _face_node.
+
         Notes/References:
             GatheringSkill.attempt_swing is the other half of this contract.
 
@@ -429,6 +432,8 @@ class GatheringHandler(TickableHandler):
             return
 
         self.ndb.ticks_until_swing = max(0, gather_constants.SWING_TICKS - 1)
+
+        self._face_node(gatherer, node)
 
         try:
             stop_reason = skill.attempt_swing(gatherer, node, self.ndb.wanted)
@@ -445,6 +450,56 @@ class GatheringHandler(TickableHandler):
             return
 
         self.dispatch(states.ActivityEvent.COOLDOWN_EXPIRED)
+
+
+    def _face_node(self, gatherer, node) -> None:
+        """
+        Purpose: Tell the feed that the gatherer turns to the node.
+
+        Entry:
+            gatherer is the owner of this handler, already checked.
+            node is the live node, in the room of the gatherer.
+
+        Exit/Returns:
+            No conditions. Never raises.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            A fight, a talk and a trade send this event. A harvest sends it
+            before each swing. The client turns the gatherer to the node. A
+            node is not a mobile, so it keeps the turn of its chunk file.
+
+            EACH SWING SENDS IT, NOT ONLY THE FIRST. The event holds no
+            state. Three cases miss the first event: a player who comes
+            into view during the channel, a client that connects again,
+            and a ring that moves when a third figure steps onto the tile.
+            Each of them gets the right turn at the next swing. Each swing
+            of a fight turns its attacker for the same reason.
+
+            Sent BEFORE the swing, because a swing can delete its node: a
+            corpse goes with the cut that it gives.
+
+            Guarded on its own, because the feed is a bystander to the
+            harvest. A face event that fails must not end the channel.
+
+            The import is local, as in GatheringSkill._send_attempt_moment.
+            The registry imports this module while it builds, and the feed
+            reaches the registry.
+
+        Notes/References:
+            systems/interface/statefeed/events.py emit_face.
+
+        Author: Nick Hobar
+        Creation date: 10/20/2026
+        """
+        from systems.interface.statefeed import events as feed
+
+        try:
+            feed.emit_face(gatherer, node)
+        except Exception as exc:
+            logger.log_err(f"GatheringHandler._face_node failed: {exc!r}")
 
 
 

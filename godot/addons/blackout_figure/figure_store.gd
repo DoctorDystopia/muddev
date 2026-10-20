@@ -361,6 +361,34 @@ func has_unsaved_changes() -> bool:
 	return not _changed.is_empty()
 
 
+## True when the directory differs from what the store read. A file that
+## another editor wrote counts, and so does a new file or a deleted file.
+## The gear editor and the figure workbench write the same files. Thus, a
+## save in one makes the store of the other stale. This reads each file,
+## and it changes nothing.
+func disk_differs() -> bool:
+	var seen := {}
+
+	for kind: String in KINDS:
+		for file_name: String in _files_of(kind):
+			var key := file_name.trim_suffix(FILE_SUFFIX)
+			var id := _id(kind, key)
+
+			seen[id] = true
+
+			if _unreadable.has(id):
+				continue
+
+			if FileAccess.get_file_as_string(path_of(kind, key)) != _on_disk.get(id, ""):
+				return true
+
+	for id: String in _on_disk:
+		if not seen.has(id):
+			return true
+
+	return false
+
+
 ## The name of each file that differs from the disk ([method name_of]), in
 ## sorted order. The Save button counts them, and the revert question
 ## names them.

@@ -29,6 +29,7 @@ from systems.interface.popups import constants as popup_const
 from .emit import emit, emit_to_area, emit_to_room
 from .payloads import (
     AuraPayload,
+    CharAbilitiesPayload,
     CharAvatarPayload,
     CharChatPayload,
     CharCombatPayload,
@@ -40,6 +41,7 @@ from .payloads import (
     CharSummaryPayload,
     CharVitalsPayload,
     CombatPayload,
+    FacePayload,
     MomentPayload,
     RoomInfoPayload,
     RoomPlayerAddPayload,
@@ -413,6 +415,57 @@ def emit_miss(context) -> int:
 
 
 
+def emit_face(actor, target) -> int:
+    """
+    Purpose: Publish that one entity turns to another, and that one turns
+             back: the start of a fight, a talk, or a trade, and each
+             swing of a harvest.
+
+    Entry:
+        actor  - the entity that starts the exchange.
+        target - the entity it turns to.
+
+    Exit/Returns:
+        Returns the number of sends performed.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Sent to the same people as a swing: the actor, the target, and the
+        room of the target. The payload names the two ids and no
+        direction. The client knows where each one stands, so it turns the
+        two to face each other from those points. A server direction would
+        be a second copy of the two positions, and it could not say which
+        way to face on a shared tile.
+
+        Four call sites. BlackoutCombatHandler.start_combat_state is the
+        one seam that each queued attack passes: the attack command, and
+        the AI of an NPC when it strikes back. CmdTalk and CmdTrade in
+        typeclasses/npcs.py send one when the exchange opens.
+        GatheringHandler._swing sends one before each swing, so the
+        gatherer faces the node (10/20/2026). A node is not a mobile, and
+        the client does not turn it.
+
+    Notes/References:
+        FacePayload documents the fields.
+
+    Author: Nick Hobar
+    Creation date: 10/18/2026
+    """
+    room = getattr(target, "location", None)
+
+    payload = FacePayload(
+        actor_id=actor.id,
+        actor_name=str(actor.key),
+        target_id=target.id,
+        target_name=str(target.key),
+    )
+
+    return _broadcast(payload, actor, target, room)
+
+
+
 def emit_vitals(entity, force: bool = False) -> int:
     """Publish one entity's own health to its own sessions.
 
@@ -529,9 +582,10 @@ def emit_avatar(observer, force: bool = False) -> int:
         char_vitals and room_info already carry it. See CharAvatarPayload.
 
         Sent on resync: each login, each reconnect, and each server reload.
-        Since 10/16/2026 the body type and the figure colors also go (the
-        two keys of a player row). They change, so each writer in
-        systems/gameplay/figure/character_figure.py calls this also.
+        Since 10/16/2026 the three figure keys of a player row also go: the
+        body type, the figure colors, and the worn record. They change.
+        Thus, character_figure.publish calls this on each write of a figure
+        fact, and on each equip and unequip.
 
     Notes/References:
         emit_room_contents excludes the observer from their own entity list,
@@ -550,6 +604,7 @@ def emit_avatar(observer, force: bool = False) -> int:
         family=body["family"],
         body_type=body.get(const.ENTITY_BODY_TYPE_KEY, ""),
         figure_colors=body.get(const.ENTITY_FIGURE_COLORS_KEY, {}),
+        worn=body.get(const.ENTITY_WORN_KEY, {}),
     )
 
     return emit(observer, payload, force=force)
@@ -834,6 +889,58 @@ def emit_combat_options(observer, force: bool = False) -> int:
         return 0
 
     return emit(observer, combat_options_serializer.build_payload(observer),
+                force=force)
+
+
+def emit_abilities(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the abilities of the observer to the observer alone.
+
+    Entry:
+        observer - the puppeted Character.
+        force    - True to bypass rate caps. The channel is uncapped, so
+                   this keeps the resync call shape identical to every
+                   other send.
+
+    Exit/Returns:
+        Returns the number of sends. Zero when nobody subscribes, which is
+        the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the reason emit_summary
+        does it. The build reads the aura handler and the skill level of
+        each aura.
+
+        Only resync and refresh_abilities call this. The state of a row
+        moves two ways. An aura lights or goes out, and emit_aura marks
+        the snapshot stale. A level moves, and _publish_level_change in
+        skills/logic.py marks it. Thus, the rail follows its facts through
+        the emitters of those facts, and no call sits beside a write.
+
+        The routine imports systems.interface.statefeed.abilities inside
+        its body. That module reaches the aura handler, which imports
+        this module.
+
+    Notes/References:
+        systems/interface/statefeed/abilities.py builds the payload from
+        the rows that the telnet `aura` listing prints.
+
+    Author: Nick Hobar
+    Creation date: 10/20/2026
+    """
+    from . import abilities as abilities_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharAbilitiesPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    return emit(observer, abilities_serializer.build_payload(observer),
                 force=force)
 
 
@@ -1639,10 +1746,14 @@ def emit_aura(owner, event: str, aura_key: str, radius: int,
     Author: Nick Hobar
     Creation date: 08/07/2026
     """
-    # The dossier's vitals band names the active aura. A pulse changes nothing
-    # it shows, and fires every few ticks.
+    # The vitals band of the dossier names the active aura, and the ability
+    # rail lights it. A pulse changes nothing that either one shows, and it
+    # fires every few ticks. The rail is MARKED, not built. On a
+    # deactivate, stop_aura deletes the handler after this call. A build at
+    # the drain reads the finished state.
     if event != AURA_EVENT_PULSE:
         refresh_summary(owner)
+        refresh_abilities(owner)
 
     coords = []
 
@@ -1720,6 +1831,24 @@ def refresh_skills(observer) -> bool:
     """
     marked = _mark_stale_if_heard(
         observer, CharSkillsPayload.channel, emit_skills, 0.0
+    )
+
+    return marked
+
+
+
+def refresh_abilities(observer) -> bool:
+    """Mark the ability rows of the observer out of date. See refresh_summary.
+
+    emit_aura calls this when an aura lights or goes out. The level publish
+    in skills/logic.py calls it too, because the lock of a row reads a
+    level. A mark, not a send, for the reason refresh_status gives. The
+    aura handler owns the state of a row. When an aura goes out, stop_aura
+    deletes the handler after the mark, and the build at the drain reads
+    the finished state.
+    """
+    marked = _mark_stale_if_heard(
+        observer, CharAbilitiesPayload.channel, emit_abilities, 0.0
     )
 
     return marked

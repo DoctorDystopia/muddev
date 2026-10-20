@@ -19,12 +19,13 @@ Run from blackout/:
 """
 
 import json
-from unittest import mock
+from unittest import TestCase, mock
 
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaCommandTest
 
 from systems.gameplay.banking import constants as bank_const
+from systems.gameplay.banking.layout import VaultLayout
 from systems.interface.popups import constants as popup_const
 from systems.interface.popups import service
 from systems.interface.popups.popup_defs import bank as bank_popup
@@ -559,3 +560,36 @@ class TestTabs(_BankFixture):
         self._send(switch["command"])
 
         self.assertFalse(self.char1.bank.keeps_placeholders())
+
+
+class TestSectionHeadings(TestCase):
+    """The text over each section of the main view. A layout and no
+    database: the heading reads the tab names and nothing else."""
+
+    def _headings(self, tabs: list, names: list) -> list:
+        layout = VaultLayout(tabs=tabs, names=names)
+        buttons = bank_popup._tab_buttons(layout, {})
+
+        return [button[bank_popup.TAB_HEADING_FIELD] for button in buttons]
+
+    def test_an_unnamed_tab_is_named_by_its_number(self):
+        headings = self._headings([["dust"], ["chunk"]], ["", ""])
+
+        expected = [bank_popup.MAIN_TAB_TITLE,
+                    bank_popup.TAB_TITLE.format(index=bank_const.FIRST_TAB), ""]
+        self.assertEqual(expected, headings)
+
+    def test_a_named_tab_is_named_by_the_player(self):
+        headings = self._headings([["dust"], ["chunk"]], ["Junk", "Ores"])
+
+        self.assertEqual(["Junk", "Ores", ""], headings)
+
+    def test_a_vault_with_no_tab_names_no_section(self):
+        headings = self._headings([["dust"]], [""])
+
+        self.assertEqual(["", ""], headings)
+
+    def test_a_named_main_tab_keeps_its_name_with_no_other_tab(self):
+        headings = self._headings([["dust"]], ["Junk"])
+
+        self.assertEqual("Junk", headings[bank_const.MAIN_TAB])

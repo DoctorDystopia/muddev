@@ -18,7 +18,7 @@ Description: Commands for equipment and inventory management.
 
 
 
-from commands.command import Command
+from commands.command import Command, search_in
 from commands.constants import HELP_CATEGORY_GENERAL
 from commands.inventory_cmds import resolve_carried_item
 from evennia import CmdSet
@@ -36,6 +36,7 @@ _MSG_INVENTORY = {
     feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_INVENTORY}
 
 
+
 # Public constant definitions
 EQUIPMENT_MODULE_PATH = "systems.interface.menus.equipment_menu"
 
@@ -45,8 +46,99 @@ EQUIPMENT_MODULE_PATH = "systems.interface.menus.equipment_menu"
 SLOT_WORD_SEPARATOR: str = " "
 SLOT_VALUE_SEPARATOR: str = "_"
 
+# The first character of a dbref argument. It comes from the template that
+# the feed fills. The Inspect row of the Godot world pane sends
+# `inspect #75931` (Nick, 10/16/2026).
+_DBREF_PREFIX: str = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref="")
+
+# The reach of a dbref inspect, in tiles. It is the reach of the feed: a
+# player can inspect each thing that the client draws, from any distance.
+# SAY_RADIUS makes the same choice. A change of the feed radius changes
+# this reach too.
+_INSPECT_RADIUS: int = feed_const.STATEFEED_ENTITY_RADIUS
+
 
 # ─── Private helper routines ─────────────────────────────────────────────────
+
+def _seen_candidates(caller) -> list:
+    """
+    Purpose: Everything that `caller` can inspect by dbref: each thing that
+             the feed draws, the carried items, and the worn items.
+
+    Entry:
+        caller - the puppeted Character.
+
+    Exit/Returns:
+        Returns a list of live objects. The list can hold `caller`.
+
+    Module Globals:
+        _INSPECT_RADIUS read.
+
+    Methodology:
+        The rooms come from `neighbourhood.visible_rooms`, the same reader
+        that `emit_room_contents` uses. Thus, a player can inspect each
+        thing that the client draws, and the two sets cannot drift. The
+        read is on the plane of the caller. A figure one floor up is not
+        in the list, as in the feed.
+
+        The import is inside the routine, as in `events._visible_rooms`.
+        The neighbourhood module reaches the aura targeting and the tile
+        world. A command module must not import those at import time.
+
+    Notes/References:
+        The worn items stand at location=None, so no room holds them. They
+        go in as candidates, as in _resolve_inspect_target.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    from systems.interface.statefeed import neighbourhood
+
+    found = list(caller.contents)
+    equipment = getattr(caller, "equipment", None)
+
+    if equipment is not None:
+        found.extend(obj for obj in equipment.all() if obj is not None)
+
+    if caller.location is None:
+        return found
+
+    for room in neighbourhood.visible_rooms(caller.location, _INSPECT_RADIUS):
+        found.extend(room.contents)
+
+    return found
+
+
+def _resolve_seen_dbref(caller, text: str):
+    """
+    Purpose: Resolve "#75931" to the one object with that dbref, if the
+             caller sees, carries or wears it.
+
+    Entry:
+        caller - the puppeted Character.
+        text   - a dbref argument, with its prefix.
+
+    Exit/Returns:
+        Returns the object, or None having already messaged the caller.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        `search_in`, not `caller.search`. Evennia reads a dbref as a global
+        address and drops the candidate list for it, so `caller.search`
+        found the object in any room of the game. `search_in` bounds it.
+
+    Notes/References:
+        The refusal names no object, because the player cannot see it.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    return search_in(
+        caller, text, _seen_candidates(caller),
+        nofound_string=f"{ERROR_COLOR}You see nothing like that.{RESET_COLOR}")
+
 
 def _resolve_slot(text: str):
     """Return the WieldLocation `text` names, or None.
@@ -143,8 +235,8 @@ def _resolve_equipped_item(caller, text: str):
 
 def _resolve_inspect_target(caller, text: str):
     """
-    Purpose: Resolve "7", "main hand" or "toy sword" to ONE object the
-    character is carrying or wearing.
+    Purpose: Resolve "#75931", "7", "main hand" or "toy sword" to ONE object
+    that the character sees, carries or wears.
 
     Entry:
         caller - the puppeted Character.
@@ -154,14 +246,21 @@ def _resolve_inspect_target(caller, text: str):
         Returns the object, or None having already messaged the caller.
 
     Module Globals:
-        None.
+        _DBREF_PREFIX read.
 
     Methodology:
-        THREE ADDRESSES IN ONE FIXED ORDER, unambiguous first. A grid number
-        names exactly one slot and an equipment slot names exactly one worn
-        item; only the name form can match more than one thing, so the two
-        forms the pane sends are settled before the ambiguous one is tried.
-        `skills <arg>`'s three-way read is the same shape for the same reason.
+        FOUR ADDRESSES IN ONE FIXED ORDER, unambiguous first. A dbref names
+        one object. A grid number names one slot. An equipment slot names
+        one worn item. Only the name form can match more than one thing.
+        Thus, the three forms that the panes send come before the one that
+        a player types. `skills <arg>` reads its argument in the same shape
+        for the same reason.
+
+        A DBREF REACHES THE WORLD (Nick, 10/16/2026). The world pane sends
+        `inspect #75931` for the Inspect row of every entity. The candidates
+        are what the feed draws: see _seen_candidates. A dbref outside that
+        reach resolves to nothing, exactly as a name outside the room does.
+        Thus, nobody can read a thing that they cannot see.
 
         DIGITS SHORT-CIRCUIT. A digit is never a slot NAME and never an item
         name, so it goes to resolve_carried_item whole -- which owns both "that
@@ -192,6 +291,9 @@ def _resolve_inspect_target(caller, text: str):
     Author: Nick Hobar
     Creation date: 09/11/2026
     """
+    if text.startswith(_DBREF_PREFIX):
+        return _resolve_seen_dbref(caller, text)
+
     if text.isdigit():
         _index, item = resolve_carried_item(caller, text)
 
@@ -294,14 +396,16 @@ class CmdEquipment(Command):
         if item is None:
             return
 
+        # The return value, not `item`: a stack of the worn ammo merges into
+        # the worn stack, and the merge deletes `item`.
         try:
-            caller.equipment.equip(item)
+            worn = caller.equipment.equip(item)
         except EquipmentError as equip_err:
             caller.msg((f"{ERROR_COLOR}{equip_err}{RESET_COLOR}", _MSG_INVENTORY))
             return
 
         caller.msg(
-            (f"{SUCCESS_COLOR}You equip {item.key}.{RESET_COLOR}", _MSG_INVENTORY))
+            (f"{SUCCESS_COLOR}You equip {worn.key}.{RESET_COLOR}", _MSG_INVENTORY))
 
 
 
@@ -388,14 +492,16 @@ class CmdUnequip(Command):
 
 class CmdInspect(Command):
     """
-    read the description of something you are carrying or wearing
+    read the description of something you see, carry or wear
 
     Usage:
       inspect <slot>
       inspect <item name>
+      inspect #<id>
 
     <slot> is an inventory grid number as `inventory` prints it, or an
-    equipment slot name such as 'main hand' or 'body'.
+    equipment slot name such as 'main hand' or 'body'. #<id> names one thing
+    in sight, at any distance, and is what a right click in the world sends.
 
     Note for maintainers: never write a vertical bar in this command's
     player-facing text. Evennia's ANSI parser reads "|i" as a markup code and
@@ -405,6 +511,7 @@ class CmdInspect(Command):
       inspect 7
       inspect main hand
       inspect toy sword
+      inspect #75931
     """
 
     key = "inspect"
@@ -414,11 +521,13 @@ class CmdInspect(Command):
 
     def func(self) -> None:
         """
-        Purpose: Describe ONE carried or worn object, named unambiguously.
+        Purpose: Describe ONE seen, carried or worn object, named
+                 unambiguously.
 
         Entry:
             self.caller is a puppeted Character.
-            self.args names a grid slot, an equipment slot, or an item.
+            self.args names a dbref in sight, a grid slot, an equipment
+            slot or an item.
 
         Exit/Returns:
             No return value. Messages the caller either way.
@@ -457,7 +566,7 @@ class CmdInspect(Command):
         target_text = self.args.strip()
 
         if not target_text:
-            caller.msg(("Usage: inspect <slot or item>", _MSG_INVENTORY))
+            caller.msg(("Usage: inspect <slot, item or #id>", _MSG_INVENTORY))
             return
 
         item = _resolve_inspect_target(caller, target_text)

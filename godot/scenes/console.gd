@@ -116,6 +116,10 @@ const HELD_RESEND_TICKS := 0.5
 ## XP drops, the session tracker and the progress bar, just left of the minimap.
 ## A view of [member _xp_tracker].
 @onready var _xp_hud: XpHudView = %XpHud
+
+## The frame rate of this client and the server tick, as graphs. A view of
+## [member _performance]. Off until Options turns it on.
+@onready var _performance_hud: PerformanceView = %PerformanceHud
 @onready var _choose: ChooseOption = %ChooseOption
 
 var _channels := PackedStringArray()
@@ -145,6 +149,10 @@ var _skills := SkillsState.new()
 ## Combat tab is a view of it.
 var _combat_options := CombatOptionsState.new()
 
+## What you can do: each ability, its state, and the line that fires it. A
+## model like the others. [AbilityRail] is the view of it.
+var _abilities := AbilitiesState.new()
+
 ## What you have taken and how far through it you are. A model like the others.
 var _quest_log := QuestState.new()
 
@@ -160,6 +168,17 @@ var _xp_tracker := XpTrackerState.new()
 ## The game moments the server names, such as a finished Exterminator task.
 ## It holds no state. [SoundCues] decides what each moment sounds like.
 var _moments := MomentFeed.new()
+
+## The frame time of this client and the reading of each server tick. The
+## frames are the client's own reading. The ticks come on `blackout_tick_perf`,
+## the one channel that the console subscribes to on a SETTING: see
+## [method _sync_performance_subscription].
+var _performance := PerformanceState.new()
+
+## Whether the console asked the server for the tick channel. It sends a
+## subscribe or an unsubscribe only when this and the setting differ. Thus,
+## a server that refuses the name cannot start a loop of asks.
+var _performance_requested := false
 
 ## The world: every island's grid, the links, and where you are standing.
 ##
@@ -265,6 +284,10 @@ var _quests: QuestsView
 var _find: FindBar
 var _popup_view: PopupView
 
+## The ability rail over the world pane. Built in code, as the hover bar
+## is, because its contents depend on nothing in the scene.
+var _ability_rail: AbilityRail
+
 ## The model credits box, opened from the Options pane.
 var _credits: CreditsView
 
@@ -364,6 +387,10 @@ func _ready() -> void:
 	add_child(_figures)
 	_char.avatar_received.connect(_figures.fetch)
 	_world.bind_figures(_figures)
+
+	# An item with no served model of its own draws its worn look in the bag
+	# (10/17/2026). The doll and the pop-up take the library below.
+	_inventory.bind_figures(_figures)
 	_world.bind_world(_world_state)
 	_world.bind_entities(_roster)
 
@@ -388,17 +415,6 @@ func _ready() -> void:
 	_minimap.command_requested.connect(Evennia.command)
 	_minimap.world_map_requested.connect(_open_world_map)
 
-	# The world map, over the world pane and over the docks, but UNDER the
-	# right-click menu and the veil. Built in code, as the pop-up is.
-	_world_map_view = WorldMapView.new()
-	_world_map_view.bind(_world_map, _world_state, _settings)
-	_world_pane.add_child(_world_map_view)
-	_world_pane.move_child(_world_map_view, _choose.get_index())
-
-	# A typed `worldmap` opens the map when the index arrives, as the button
-	# does.
-	_world_map.index_arrived.connect(_world_map_view.open)
-
 	# The right-click menu. The 3D pane raises the question and the menu is a
 	# sibling Control over the pane rather than a child of the Node3D, so the
 	# 3D scene stays 3D and the box can be tested with no camera.
@@ -417,6 +433,7 @@ func _ready() -> void:
 	# this screen uses.
 	_popup_view = PopupView.new()
 	_popup_view.bind(_popup, _meshes)
+	_popup_view.bind_figures(_figures)
 
 	# The box the player moved and sized, and the amount box its slots open.
 	# The pane WRITES this one, so it reads the rect here and never again --
@@ -431,7 +448,21 @@ func _ready() -> void:
 	_popup_view.command_requested.connect(Evennia.command)
 	_popup_view.keyboard_released.connect(func(): _set_typing(true))
 
+	# The world map, a floating box as the pop-up is (10/19/2026). UNDER the
+	# dock for the reason of the pop-up: Nick chose the rule of the pop-up, so
+	# the bag and the control panel stay in reach. OVER the pop-up, because
+	# Esc closes the map first. See [WorldMapView].
+	_world_map_view = WorldMapView.new()
+	_world_map_view.bind(_world_map, _world_state, _settings)
+	_world_pane.add_child(_world_map_view)
+	_world_pane.move_child(_world_map_view, _dock.get_index())
+
+	# A typed `worldmap` opens the map when the index arrives, as the button
+	# does.
+	_world_map.index_arrived.connect(_world_map_view.open)
+
 	_build_world_hover()
+	_build_ability_rail()
 
 	# After both panes are bound, so the manifest landing finds consumers ready
 	# rather than arriving at a pane that has not been given the resolver yet.
@@ -498,6 +529,7 @@ func _ready() -> void:
 	# it in either.
 	_equipment = EquipmentView.new()
 	_equipment.bind(_items, _meshes)
+	_equipment.bind_figures(_figures)
 	_equipment.bind_settings(_settings)
 	_panel.add_panel(PanelView.TAB_EQUIPMENT, _equipment)
 
@@ -537,6 +569,7 @@ func _ready() -> void:
 	# The roster as well as the tracker, for the level-up line: SkillsState is
 	# the one owner of "a level rose", and the jingle above already hangs off it.
 	_xp_hud.bind(_xp_tracker, _skills)
+	_performance_hud.bind(_performance)
 
 	_quests = QuestsView.new()
 	_quests.bind(_quest_log)
@@ -634,6 +667,18 @@ func _build_world_hover() -> void:
 	_world_view.mouse_exited.connect(_world.clear_hover)
 
 
+## Put the ability rail over the world pane, beside the vitals.
+##
+## It stands UNDER the pop-up, the right-click menu and the veil, as the
+## hover bar does. Its buttons take the mouse. Its gaps do not.
+func _build_ability_rail() -> void:
+	_ability_rail = AbilityRail.new()
+	_world_pane.add_child(_ability_rail)
+	_world_pane.move_child(_ability_rail, _popup_view.get_index())
+	_ability_rail.bind(_abilities)
+	_ability_rail.command_requested.connect(Evennia.command)
+
+
 ## Give each HUD element to the arranger, and build the layout editor over
 ## the whole console.
 ##
@@ -648,6 +693,8 @@ func _build_layout() -> void:
 		HudElements.XP: _xp_hud,
 		HudElements.VITALS: _world_vitals,
 		HudElements.HOVER: _world_hover,
+		HudElements.PERFORMANCE: _performance_hud,
+		HudElements.ABILITIES: _ability_rail,
 	}
 
 	_arranger = HudArranger.new()
@@ -662,8 +709,8 @@ func _build_layout() -> void:
 
 		_arranger.add_slot(slot)
 
-	# The pop-up opens in the gap between the docks, wherever the player put
-	# them.
+	# The pop-up and the world map open in the gap between the docks, wherever
+	# the player put them.
 	_arranger.placed.connect(_fit_dock_gap)
 
 	# Over everything, the veil and the right-click menu included: the mode
@@ -693,12 +740,14 @@ func _hover_rect(pane: Vector2) -> Rect2:
 	return Rect2(left, pane.y - WORLD_HOVER_MARGIN - height, right - left, height)
 
 
-## Give the pop-up the gap between the two docks. Its first rect opens there.
+## Give each floating box the gap between the two docks. Its first rect opens
+## there.
 func _fit_dock_gap() -> void:
 	var left := _arranger.footprint(HudElements.LOG).end.x
 	var right := _arranger.footprint(HudElements.PANEL).position.x
 
 	_popup_view.set_dock_gap(left, right)
+	_world_map_view.set_dock_gap(left, right)
 
 
 func _on_opened() -> void:
@@ -733,9 +782,15 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_quest_log.reset()
 	_skills.reset()
 	_combat_options.reset()
+	_abilities.reset()
 	_chat_modes.reset()
 	_xp_tracker.reset()
 	_popup.reset()
+	_performance.reset_server()
+
+	# The next session starts with no subscription. The console asks for the
+	# tick channel again after the server announces that it forgot us.
+	_performance_requested = false
 
 	# A new socket is a new Evennia Session at the connection screen, so the
 	# next login has to be waited for again -- including the player's decision
@@ -899,6 +954,17 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# An ability key fires its slot of the rail. The rail sends the command
+	# of the row, the one a telnet player types, or nothing when the row is
+	# locked. Before the movement keys, so a later combination on a letter
+	# wins over the walk. [AbilityKeys] owns the table.
+	var slot := AbilityKeys.slot_for(key)
+
+	if slot != AbilityKeys.NO_SLOT:
+		_ability_rail.press_slot(slot)
+		get_viewport().set_input_as_handled()
+		return
+
 	if not MovementKeys.is_movement_key(key.keycode):
 		return
 
@@ -1044,6 +1110,7 @@ func _apply_settings() -> void:
 	_arranger.set_gate(HudElements.MINIMAP, _settings.show_world)
 	_arranger.set_gate(HudElements.VITALS, _settings.show_world)
 	_arranger.set_gate(HudElements.HOVER, _settings.show_world)
+	_arranger.set_gate(HudElements.ABILITIES, _settings.show_world)
 
 	# BOTH halves of the bag. They were one pane until 09/21/2026, and a setting
 	# that hid the carried grid while leaving the doll in the strip would be a
@@ -1060,12 +1127,45 @@ func _apply_settings() -> void:
 	_arranger.set_gate(HudElements.XP, _settings.show_xp_drops and _settings.show_world)
 	_xp_hud.set_skill_rates_shown(_settings.show_skill_rates)
 
+	# Not gated on the world: a frame rate matters with the diorama off too.
+	# The view records frames only while it is drawn, and the server sends
+	# ticks only while it is asked to.
+	_arranger.set_gate(HudElements.PERFORMANCE, _settings.show_performance)
+	_sync_performance_subscription()
+
 	# With no world behind it, the log takes the full height and the width that
 	# the control panel leaves. The layout is NOT pushed to the arranger here.
 	# The arranger WRITES that setting, and a pane pushed the setting it writes
 	# is how a slider in Options came to collapse the pane it sat in.
 	_arranger.fill_beside(HudElements.LOG,
 		"" if _settings.show_world else HudElements.PANEL)
+
+
+## Ask the server for the tick channel when the performance view is on, and
+## give it back when the view is off.
+##
+## The one setting that becomes a subscription. `blackout_tick_perf` is a
+## message on every tick. Thus, `all` leaves it out, and a client that
+## draws it names it. The console sends nothing before the server confirms
+## a subscription. The socket can be open while the Server still starts,
+## and the server drops a subscribe from that time with no word. The ack
+## after the first `all` calls this.
+##
+## The console sends only when the setting and the last request differ. A
+## server that refuses the name answers with a set that lacks it. A sync
+## that read the set would ask again on every ack.
+func _sync_performance_subscription() -> void:
+	if _channels.is_empty() or _settings == null:
+		return
+
+	var wanted := _settings.show_performance
+
+	if wanted == _performance_requested:
+		return
+
+	_performance_requested = wanted
+	var verb := "blackout_subscribe" if wanted else "blackout_unsubscribe"
+	Evennia.send(verb, [], {"channels": [Const.CH_TICK_PERF]})
 
 
 ## Open the world map. The first time, the client holds no world map yet, so
@@ -1129,6 +1229,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 		if _combat_options.ingest(channel, _payload):
 			return
 
+		if _abilities.ingest(channel, _payload):
+			return
+
 		if _quest_log.ingest(channel, _payload):
 			return
 
@@ -1139,6 +1242,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _moments.ingest(channel, _payload):
+			return
+
+		if _performance.ingest(channel, _payload):
 			return
 
 		if _world_state.ingest(channel, _payload):
@@ -1169,9 +1275,14 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 	if _channels.is_empty():
 		_note("server has no subscription for us; subscribing")
 		Evennia.send("blackout_subscribe", [], {"channels": Const.SUBSCRIBE_ALL})
+		_performance_requested = false
 		return
 
 	_note("subscribed: %d channels" % _channels.size())
+
+	# `all` leaves the tick channel out. A player with the performance view
+	# on asks for it by name, now that the server takes input.
+	_sync_performance_subscription()
 
 	# A confirmed subscription proves that the Server takes input now. The
 	# form sends `resume` here if this device holds a saved login.

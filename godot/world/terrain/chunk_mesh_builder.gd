@@ -20,6 +20,10 @@ extends RefCounted
 ## 6. A roof floor type ([method TileTables.is_roof], DESIGN-0013
 ##    section 6.2) never draws in the cliff colour. A roof is steeper than a
 ##    walk on purpose, and no walk reaches it.
+## 7. The lamps that reach the chunk bake into each vertex (10/18/2026).
+##    [TileLights] gives the colour, and the CUSTOM0 array of the mesh holds
+##    it. [TerrainMaterial] sends it out as emission. The caller collects
+##    the lamps, because they may stand in a neighbour chunk.
 ##
 ## ## The ground surface
 ##
@@ -67,6 +71,7 @@ class _Surface:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var lamp := PackedFloat32Array()
 
 
 # ─── The ground surface ─────────────────────────────────────────────────────
@@ -199,34 +204,32 @@ static func corner_positions(chunk: ChunkFile) -> PackedVector3Array:
 # ─── The mesh ───────────────────────────────────────────────────────────────
 
 ## The mesh of one chunk: two flat-shaded triangles for each tile, coloured
-## by floor type. The chunk must have no [member ChunkFile.error].
-static func build(chunk: ChunkFile) -> ArrayMesh:
-	var arrays := build_arrays(chunk)
+## by floor type. The chunk must have no [member ChunkFile.error]. `lights`
+## is the lamps that reach the chunk, from [method TileLights.collect].
+static func build(chunk: ChunkFile, lights: Array = []) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
-	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 
 	# A chunk of void only has no triangle. Godot refuses an empty surface.
-	if vertices.is_empty():
-		return mesh
-
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	TerrainMaterial.add_surface(mesh, build_arrays(chunk, lights))
 
 	return mesh
 
 
 ## The surface arrays of [method build], for a caller that needs the raw data,
 ## for example a test or a collision shape.
-static func build_arrays(chunk: ChunkFile) -> Array:
+static func build_arrays(chunk: ChunkFile, lights: Array = []) -> Array:
 	var size: int = _Const.CHUNK_SIZE
 	var positions := corner_positions(chunk)
 	var floor_colors := _floor_colors(chunk)
 	var roof_indices := _roof_indices(chunk)
 	var void_index := chunk.floor_names.find(_Const.TILE_VOID_FLOOR)
+	var buckets := TileLights.bucket(chunk, lights)
 	var out := _Surface.new()
 
 	for ly: int in size:
 		for lx: int in size:
-			var floor_index := chunk.floors[ly * size + lx]
+			var index := ly * size + lx
+			var floor_index := chunk.floors[index]
 
 			# A void tile has no floor, so the plane below shows through.
 			if floor_index == void_index:
@@ -234,16 +237,10 @@ static func build_arrays(chunk: ChunkFile) -> Array:
 
 			var base: Color = floor_colors[floor_index]
 
-			_add_tile(chunk, positions, lx, ly, base, roof_indices.has(floor_index), out)
+			_add_tile(chunk, positions, lx, ly, base, roof_indices.has(floor_index),
+				buckets.get(index, []), out)
 
-	var arrays := []
-
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = out.vertices
-	arrays[Mesh.ARRAY_NORMAL] = out.normals
-	arrays[Mesh.ARRAY_COLOR] = out.colors
-
-	return arrays
+	return TerrainMaterial.arrays_of(out.vertices, out.normals, out.colors, out.lamp)
 
 
 static func _floor_colors(chunk: ChunkFile) -> Array[Color]:
@@ -267,9 +264,9 @@ static func _roof_indices(chunk: ChunkFile) -> Dictionary:
 
 
 ## Add the two triangles of local tile (lx, ly) to `out`. A roof tile never
-## takes the cliff colour.
+## takes the cliff colour. `lights` is the lamps that reach the tile.
 static func _add_tile(chunk: ChunkFile, positions: PackedVector3Array, lx: int,
-		ly: int, base: Color, roof: bool, out: _Surface) -> void:
+		ly: int, base: Color, roof: bool, lights: Array, out: _Surface) -> void:
 	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
 	var sw := positions[ly * side + lx]
 	var se := positions[ly * side + lx + 1]
@@ -288,11 +285,11 @@ static func _add_tile(chunk: ChunkFile, positions: PackedVector3Array, lx: int,
 	var second_color := FloorPalette.shade(second_base, second_shade)
 
 	if sw_ne:
-		_add_triangle(sw, se, ne, first_color, out)
-		_add_triangle(sw, ne, nw, second_color, out)
+		_add_triangle(sw, se, ne, first_color, lights, out)
+		_add_triangle(sw, ne, nw, second_color, lights, out)
 	else:
-		_add_triangle(sw, se, nw, first_color, out)
-		_add_triangle(se, ne, nw, second_color, out)
+		_add_triangle(sw, se, nw, first_color, lights, out)
+		_add_triangle(se, ne, nw, second_color, lights, out)
 
 
 ## The corner indices of the two triangles of a tile, as indices into
@@ -332,9 +329,9 @@ static func _face_color(base: Color, heights: PackedInt32Array,
 
 ## Add one triangle, wound so that its front faces up. Godot draws a
 ## clockwise triangle as its front, and then (c - a) x (b - a) points out of
-## the front.
+## the front. Each corner takes the lamp light of `lights` at its place.
 static func _add_triangle(a: Vector3, b: Vector3, c: Vector3, color: Color,
-		out: _Surface) -> void:
+		lights: Array, out: _Surface) -> void:
 	var normal := (c - a).cross(b - a)
 
 	if normal.y < 0.0:
@@ -350,3 +347,4 @@ static func _add_triangle(a: Vector3, b: Vector3, c: Vector3, color: Color,
 		out.vertices.append(corner)
 		out.normals.append(normal)
 		out.colors.append(color)
+		TileLights.append(out.lamp, TileLights.lit(corner, normal, lights))

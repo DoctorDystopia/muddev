@@ -20,6 +20,7 @@ func _ready() -> void:
 	_levels_are_open_and_converted()
 	_is_me_is_false_before_the_avatar_arrives()
 	_changed_fires_once_per_ingest()
+	_the_worn_record_comes_with_the_avatar()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -133,6 +134,23 @@ func _changed_fires_once_per_ingest() -> void:
 	state.ingest("blackout_map", {})
 
 	_expect(counter["n"] == 1, "changed fires for ours and not for others")
+
+
+func _the_worn_record_comes_with_the_avatar() -> void:
+	# The worn record of the observer rides char_avatar (DESIGN-0014 section
+	# 21). An avatar with no worn key wears nothing, and so does a reset.
+	var state := CharState.new()
+	var worn := {"a_slot": "an_item"}
+
+	state.ingest(_Const.CH_CHAR_AVATAR, {"entity_id": 42.0, _Const.ENTITY_WORN_KEY: worn})
+	_expect(state.worn == worn, "the avatar carries the worn record")
+
+	state.ingest(_Const.CH_CHAR_AVATAR, {"entity_id": 42.0})
+	_expect(state.worn.is_empty(), "an avatar with no worn key wears nothing")
+
+	state.ingest(_Const.CH_CHAR_AVATAR, {"entity_id": 42.0, _Const.ENTITY_WORN_KEY: worn})
+	state.reset()
+	_expect(state.worn.is_empty(), "a reset forgets the worn record")
 
 
 # ─── Private helpers ─────────────────────────────────────────────────────────

@@ -92,8 +92,12 @@ static func apply(node: Node3D, look: Dictionary, base_scale: float, yaw: float)
 ## rule of [code]EntityPool._rest_offset[/code], with the scale of the look
 ## in it.
 static func rest_lift(node: Node3D) -> float:
-	var bounds := ModelLoader.bounds_of(node)
+	return lift_of(ModelLoader.bounds_of(node), node)
 
+
+## The same lift from a box that the caller measured. [EntityPool] keeps
+## the box for the pick, so it measures one time and lifts from the copy.
+static func lift_of(bounds: AABB, node: Node3D) -> float:
 	return -bounds.position.y * node.scale.y
 
 

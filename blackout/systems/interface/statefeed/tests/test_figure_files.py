@@ -493,6 +493,27 @@ class WornLookKeyTests(unittest.TestCase):
                 with self.subTest(look=key, part=part["name"]):
                     self.assertIn(part["model"], manifest)
 
+    def test_each_served_place_belongs_to_a_served_model(self):
+        """
+        A `served` row places the served model of its item on the figure
+        (10/17/2026). A row of a key that the manifest does not have places
+        nothing. A row on a bone that no rig has gives the first place, and
+        the author then sees no move.
+        """
+        manifest = outputs.render_manifest(records.load_all())
+        bones = set()
+
+        for rig in _read_files(paths.FIGURE_RIGS_DIR).values():
+            bones.update(bone["name"] for bone in rig["bones"])
+
+        for key, look in self.looks.items():
+            if "served" not in look:
+                continue
+
+            with self.subTest(look=key):
+                self.assertIn(key, manifest)
+                self.assertIn(look["served"]["bone"], bones)
+
     def test_each_fit_names_a_body_type_and_a_part(self):
         """
         A fit row gives one part another place on one body type. A row for

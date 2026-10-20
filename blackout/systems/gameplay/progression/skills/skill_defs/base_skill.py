@@ -32,6 +32,12 @@ class BaseSkill:
     # override; NO_COOLDOWN means the skill is unrestricted.
     cooldown_seconds = NO_COOLDOWN
 
+    # The MOMENT_* name that each finished craft under this skill sends to
+    # the client of the crafter. None sends no moment. The server names the
+    # moment. The client picks its sound in godot/world/sound_cues.gd.
+    # crafting_service.perform_craft sends it.
+    craft_moment = None
+
 
     def cooldown_key(self) -> str:
         """

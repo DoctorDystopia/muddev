@@ -160,6 +160,10 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             # Every chat mode in one message. A join and a leave in one tick
             # must arrive as the list after the leave, which is the newest.
             const.CHANNEL_CHAR_CHAT,
+            # Every ability row in one message. An aura that lights and goes
+            # out in one tick must arrive as the rail after it goes out,
+            # which is the newest.
+            const.CHANNEL_CHAR_ABILITIES,
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,

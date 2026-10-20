@@ -67,6 +67,10 @@ var _meshes: MeshResolver
 ## from it: how big they left the amount box. See [AmountPrompt].
 var _settings: ClientSettings
 
+## The worn looks of the gear editor, or null. A cell draws the look of its
+## item before the mesh ladder. The CONSOLE owns it, as it owns the resolver.
+var _figures: FigureLibrary
+
 
 func _ready() -> void:
 	_heading = Label.new()
@@ -112,6 +116,15 @@ func bind(state: InventoryState, resolver: MeshResolver) -> void:
 	if _meshes != null:
 		_meshes.refreshed.connect(func(_key: String): _rebuild())
 
+	_rebuild()
+
+
+## Take the figure library. A cell then draws the worn look of its item
+## (10/17/2026). The arrival of the figure set or of a model of a part draws
+## the bag again.
+func bind_figures(library: FigureLibrary) -> void:
+	_figures = library
+	_figures.changed.connect(_rebuild)
 	_rebuild()
 
 
@@ -185,7 +198,7 @@ func _dress(cells: Array) -> void:
 			continue
 
 		_stage.place(index, str(row.get("asset", "")),
-			str(row.get("family", "")), _meshes)
+			str(row.get("family", "")), _meshes, _figures)
 		cell.show_art(_stage.texture_for(index))
 
 

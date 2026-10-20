@@ -156,8 +156,10 @@ def node_equip_item(caller: object, **kwargs) -> tuple:
         return text, options
 
     try:
-        caller.equipment.equip(target_item)
-        item_key = target_item.key
+        # The return value, not target_item: a merge into the worn stack
+        # deletes target_item.
+        worn = caller.equipment.equip(target_item)
+        item_key = worn.key
         text = f"{SUCCESS_COLOR}You equip {item_key}.{RESET_COLOR}"
     except EquipmentError as equip_err:
         error_text = str(equip_err)

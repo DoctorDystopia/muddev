@@ -19,6 +19,10 @@ extends Node
 ## 8. A pool row with a body type draws a figure. A row with none draws its
 ##    asset key. A new figure set draws the row again.
 ## 9. A change of the colors of a row is a change of its look.
+## 10. A worn record dresses the figure: the worn look of each item, or the
+##     slot shape for an item with no look. A new worn record is a new look.
+## 11. A served model of a worn item wins over its worn look when it is in
+##     hand (10/17/2026). Until then, the worn look stands in.
 
 const TOLERANCE := 0.001
 
@@ -47,6 +51,9 @@ func _ready() -> void:
 	_a_pool_row_with_a_body_type_is_a_figure()
 	await _two_figures_in_one_parent_both_walk()
 	_new_colors_are_a_new_look()
+	_a_worn_record_dresses_the_figure()
+	_a_new_worn_record_is_a_new_look()
+	_a_served_model_wins_in_the_hand()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -309,3 +316,114 @@ func _new_colors_are_a_new_look() -> void:
 	_expect(first != second, "new colors are a new look")
 	_expect(first == FigureLibrary.look_key("body_1", {}), "the same colors are the same look")
 	_expect(first != FigureLibrary.look_key("body_2", {}), "another body type is a new look")
+
+
+## The key of a look of the served set that dresses an item: neither a rig
+## nor a slot of the rig. "" when the set has no such look.
+func _item_look_key(library: FigureLibrary, rig: FigureRig) -> String:
+	var keys := library.figure_set.looks.keys()
+
+	keys.sort()
+
+	for key: String in keys:
+		if not library.figure_set.rigs.has(key) and not rig.slots().has(key):
+			return key
+
+	return ""
+
+
+## The first slot of the rig that has a slot shape in the served set, or "".
+func _slot_with_a_shape(library: FigureLibrary, rig: FigureRig) -> String:
+	var slots := rig.slots().keys()
+
+	slots.sort()
+
+	for slot: String in slots:
+		if library.figure_set.looks.has(slot):
+			return slot
+
+	return ""
+
+
+## True when the figure has a node for each part of the look.
+func _has_each_part(figure: Node3D, look: FigureLook) -> bool:
+	for row: Dictionary in look.parts():
+		if FigureBuilder.part_node(figure, look.key(), row["name"]) == null:
+			return false
+
+	return not look.parts().is_empty()
+
+
+func _a_worn_record_dresses_the_figure() -> void:
+	var library := _library()
+	var body_type: String = library.figure_set.rigs.keys()[0]
+	var rig: FigureRig = library.figure_set.rigs[body_type]
+	var item_key := _item_look_key(library, rig)
+	var slot := _slot_with_a_shape(library, rig)
+
+	_expect(not item_key.is_empty(), "the served set has the worn look of an item")
+	_expect(not slot.is_empty(), "the served set has a slot shape")
+
+	if item_key.is_empty() or slot.is_empty():
+		library.free()
+		return
+
+	var looks: Dictionary = library.figure_set.looks
+	var item_look: FigureLook = looks[item_key].resolved(looks)
+	var slot_shape: FigureLook = looks[slot].resolved(looks)
+	var bare := library.build(body_type, {})
+	var dressed := library.build(body_type, {}, {slot: item_key})
+	var with_shape := library.build(body_type, {}, {slot: "no_such_item"})
+
+	_expect(not _has_each_part(FigureLibrary.figure_of(bare), item_look),
+		"a figure with no worn record wears no %s" % item_key)
+	_expect(_has_each_part(FigureLibrary.figure_of(dressed), item_look),
+		"a figure with %s in its worn record wears its look" % item_key)
+	_expect(_has_each_part(FigureLibrary.figure_of(with_shape), slot_shape),
+		"an item with no worn look draws the slot shape of %s" % slot)
+	bare.free()
+	dressed.free()
+	with_shape.free()
+	library.free()
+
+
+func _a_new_worn_record_is_a_new_look() -> void:
+	var bare := FigureLibrary.look_key("body_1", {})
+	var armed := FigureLibrary.look_key("body_1", {}, {"main_hand": "a_sword"})
+
+	_expect(bare != armed, "a worn record is a new look")
+	_expect(bare == FigureLibrary.look_key("body_1", {}, {}), "no worn record is the bare look")
+	_expect(armed != FigureLibrary.look_key("body_1", {}, {"main_hand": "an_axe"}),
+		"another item in the slot is a new look")
+
+
+func _a_served_model_wins_in_the_hand() -> void:
+	var library := _library()
+	var body_type: String = library.figure_set.rigs.keys()[0]
+	var rig: FigureRig = library.figure_set.rigs[body_type]
+	var item_key := _item_look_key(library, rig)
+	var slot := _slot_with_a_shape(library, rig)
+
+	if item_key.is_empty() or slot.is_empty():
+		library.free()
+		return
+
+	var looks: Dictionary = library.figure_set.looks
+	var item_look: FigureLook = looks[item_key].resolved(looks)
+	var stand_in := library.build(body_type, {}, {slot: item_key})
+
+	_expect(_has_each_part(FigureLibrary.figure_of(stand_in), item_look),
+		"with no served model in hand, the worn look of %s stands in" % item_key)
+	_expect(library.models.put_buffer(item_key, FigureReference.buffer_of(rig, [item_look])),
+		"the served model of %s arrives" % item_key)
+
+	var held := library.build(body_type, {}, {slot: item_key})
+	var figure := FigureLibrary.figure_of(held)
+	var named := item_key in item_look.model_keys()
+
+	_expect(named or (FigureBuilder.part_node(figure, item_key, FigureLook.SERVED_PART) != null
+		and not _has_each_part(figure, item_look)),
+		"the figure holds the served model of %s, and no part of its worn look" % item_key)
+	stand_in.free()
+	held.free()
+	library.free()

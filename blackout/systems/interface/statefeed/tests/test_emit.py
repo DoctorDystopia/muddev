@@ -100,7 +100,7 @@ class TestSubscriptions(unittest.TestCase):
     def test_subscribe_all_takes_every_known_channel(self):
         accepted = subscriptions.subscribe(self.session, const.SUBSCRIBE_ALL)
 
-        self.assertEqual(accepted, set(const.SUBSCRIBABLE_CHANNELS))
+        self.assertEqual(accepted, set(const.DEFAULT_CHANNELS))
 
     def test_a_bare_string_is_one_channel_not_a_pile_of_letters(self):
         accepted = subscriptions.subscribe(self.session, const.CHANNEL_COMBAT)

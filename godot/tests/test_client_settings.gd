@@ -4,6 +4,8 @@ extends Node
 ##
 ##     godot --headless --path godot res://tests/test_client_settings.tscn
 
+const _Const := preload("res://autoload/blackout_constants.gd")
+
 const TEST_PATH := "user://test_client_settings.cfg"
 
 var _failures := 0
@@ -29,11 +31,13 @@ func _ready() -> void:
 	_the_movement_animation_persists_and_resets()
 	_the_camera_keys_persist_and_reset()
 	_hide_roofs_persists_and_resets()
+	_the_performance_view_persists_and_resets()
 	_the_map_settings_persist_clamp_and_reset()
 	_a_box_the_player_sized_is_remembered()
 	_a_box_size_from_a_bad_file_falls_back()
 	_the_screen_gives_the_first_scale()
 	_the_chat_choices_persist_fence_and_reset()
+	_the_world_map_choices_persist_fence_and_reset()
 
 	_clean()
 
@@ -400,6 +404,25 @@ func _the_camera_keys_persist_and_reset() -> void:
 
 
 ## On by default (Nick, 09/26/2026), as the OSRS setting of the same name.
+func _the_performance_view_persists_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(not s.show_performance, "the performance view is off by default")
+
+	s.set_show_performance(true)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.show_performance, "turning it on persists")
+
+	reloaded.reset()
+	_expect(reloaded.show_performance == ClientSettings.DEFAULT_SHOW_PERFORMANCE,
+		"and reset restores it")
+
+	_clean()
+
+
 func _hide_roofs_persists_and_resets() -> void:
 	_clean()
 	var s := ClientSettings.new(TEST_PATH)
@@ -578,6 +601,53 @@ func _the_chat_choices_persist_fence_and_reset() -> void:
 	back.reset()
 	_expect(back.chat_mode == ClientSettings.DEFAULT_CHAT_MODE
 		and back.chat_hidden_from_all.is_empty(), "reset clears both")
+	_clean()
+
+
+## The three choices of the world map (10/19/2026): its rect, the legend
+## toggle, and the hidden map icons. A bad file gives the shipped map: a
+## centred box, a legend, and every icon.
+func _the_world_map_choices_persist_fence_and_reset() -> void:
+	_clean()
+	var facility: String = _Const.OBJECT_CATEGORY_FACILITY
+	var climb: String = _Const.OBJECT_CATEGORY_CLIMB
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(not s.world_map_rect.has_area() and s.world_map_legend
+		and s.world_map_hidden_icons.is_empty(),
+		"the first map is centred, with a legend and every icon")
+
+	s.set_world_map_rect(Rect2(30, 40, 640, 480))
+	s.set_world_map_legend(false)
+	s.set_world_map_hidden_icons(PackedStringArray([facility, facility, climb]))
+
+	var back := ClientSettings.new(TEST_PATH)
+	back.load_from_disk()
+	_expect(back.world_map_rect == Rect2(30, 40, 640, 480),
+		"the map rect survives a reload")
+	_expect(back.popup_rect == ClientSettings.DEFAULT_POPUP_RECT,
+		"and it is not the rect of the pop-up")
+	_expect(not back.world_map_legend, "the legend toggle survives a reload")
+	_expect(back.world_map_hidden_icons == PackedStringArray([facility, climb]),
+		"and the hidden icons too, each one time")
+
+	var config := ConfigFile.new()
+	config.set_value(ClientSettings.WORLD_MAP_SECTION,
+		ClientSettings.KEY_WORLD_MAP_RECT, "wide")
+	config.set_value(ClientSettings.WORLD_MAP_SECTION,
+		ClientSettings.KEY_WORLD_MAP_HIDDEN, 7)
+	config.save(TEST_PATH)
+
+	var bad := ClientSettings.new(TEST_PATH)
+	bad.load_from_disk()
+	_expect(bad.world_map_rect == ClientSettings.DEFAULT_WORLD_MAP_RECT,
+		"a map rect of the wrong type gives the centred box")
+	_expect(bad.world_map_hidden_icons.is_empty(),
+		"and hidden icons that are not a list give every icon")
+
+	back.reset()
+	_expect(not back.world_map_rect.has_area() and back.world_map_legend
+		and back.world_map_hidden_icons.is_empty(), "reset clears all three")
 	_clean()
 
 

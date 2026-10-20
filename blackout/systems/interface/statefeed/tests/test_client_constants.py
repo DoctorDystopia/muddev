@@ -45,6 +45,7 @@ import unittest
 
 from world import areas as _area_table
 from world import floor_types as _floor_table
+from world import object_kinds as _kind_table
 from world import wall_styles as _wall_table
 
 from .. import clientexport as _clientexport
@@ -930,6 +931,12 @@ _LOOK_DIRECTORY = os.path.join(_REPO_ROOT, "godot", "world", "look")
 _TERRAIN_PALETTE_PATH = os.path.join(_LOOK_DIRECTORY, "terrain_palette.json")
 _AREA_LOOKS_PATH = os.path.join(_LOOK_DIRECTORY, "area_looks.json")
 
+# The light of each scenery key (10/18/2026). The Look tab writes it, and the
+# client bakes it into the meshes of each chunk.
+_LIGHTS_PATH = os.path.join(_LOOK_DIRECTORY, "lights.json")
+_LIGHT_NUMBER_FIELDS = ("energy", "range", "height")
+_HEX_COLOR = re.compile(r"^[0-9a-fA-F]{6}$")
+
 # The family shapes (ENG-0011, step L5) and the model presentation (step L6).
 # The Families tab and the Gear tab of the figure workbench write them.
 _FAMILIES_PATH = os.path.join(_LOOK_DIRECTORY, "families.json")
@@ -981,6 +988,29 @@ class LookFileTests(unittest.TestCase):
         for name in looks.get("areas", {}):
             with self.subTest(area=name):
                 self.assertIn(name, _area_table.AREAS)
+
+    def test_the_lights_name_real_scenery(self):
+        """
+        A light on a scenery key that no object kind names is a light that
+        nothing draws. The scenery keys come from the kinds, so a decor row
+        of the Tables tab counts.
+        """
+        lights = _read_look_file(_LIGHTS_PATH)
+
+        if lights is None:
+            self.skipTest("no lights file")
+
+        scenery = {kind.scenery for kind in _kind_table.OBJECT_KINDS.values()
+                   if kind.scenery}
+
+        for name, row in lights.get("lights", {}).items():
+            with self.subTest(scenery=name):
+                self.assertIn(name, scenery)
+                self.assertRegex(row.get("color", ""), _HEX_COLOR)
+
+                for field in _LIGHT_NUMBER_FIELDS:
+                    self.assertIsInstance(row.get(field), (int, float))
+                    self.assertGreaterEqual(row.get(field), 0)
 
     def test_the_family_shapes_name_real_families_and_real_models(self):
         """
@@ -1034,6 +1064,6 @@ class LookFileTests(unittest.TestCase):
         a moved directory would turn them green while they check nothing.
         """
         for path in (_TERRAIN_PALETTE_PATH, _AREA_LOOKS_PATH, _FAMILIES_PATH,
-                     _PRESENTATION_PATH):
+                     _PRESENTATION_PATH, _LIGHTS_PATH):
             with self.subTest(path=os.path.basename(path)):
                 self.assertTrue(os.path.exists(path), path)

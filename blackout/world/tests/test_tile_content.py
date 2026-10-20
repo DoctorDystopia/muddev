@@ -146,6 +146,15 @@ class ObjectKindTests(unittest.TestCase):
             with self.subTest(kind=key, spawner=kind.spawner):
                 self.assertIn(kind.spawner, spawners.SPAWNER_REGISTRY)
 
+    def test_every_category_has_a_label_and_no_label_is_extra(self):
+        # The legend of the world map names each map icon with its label.
+        self.assertEqual(set(tile_const.OBJECT_CATEGORY_LABELS),
+                         set(tile_const.OBJECT_CATEGORIES))
+
+        for category, label in tile_const.OBJECT_CATEGORY_LABELS.items():
+            with self.subTest(category=category):
+                self.assertTrue(label.strip())
+
     def test_the_text_category_is_a_category(self):
         self.assertIn(tile_const.OBJECT_TEXT_CATEGORY,
                       tile_const.OBJECT_CATEGORIES)

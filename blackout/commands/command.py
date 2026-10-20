@@ -5,7 +5,63 @@ Commands describe the input the account can do to the game.
 
 """
 
+from evennia import ObjectDB
 from evennia.commands.command import Command as BaseCommand
+
+from systems.interface.statefeed import constants as feed_const
+
+# The first character of a dbref argument, from the one template that spells
+# a dbref into a command.
+_DBREF_PREFIX: str = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref="")
+
+
+def search_in(caller, text: str, candidates: list, **kwargs):
+    """
+    Purpose: Find `text` among `candidates` only, for a dbref as for a name.
+
+    Entry:
+        caller     - the searching object, as for `caller.search`.
+        text       - a name, a prefix, or a dbref with its prefix.
+        candidates - the objects that the search may return.
+        kwargs     - the keywords of `caller.search`: `quiet`,
+                     `nofound_string`, `multimatch_string`.
+
+    Exit/Returns:
+        Returns what `caller.search` returns: one object, or None after a
+        message to the caller. Returns a list with `quiet=True`.
+
+    Module Globals:
+        _DBREF_PREFIX read.
+
+    Methodology:
+        `caller.search` drops the candidate list for a dbref.
+        `DefaultObject.get_search_candidates` returns None for one, because
+        Evennia reads a dbref as a global address. Thus,
+        `caller.search("#75931", candidates=...)` finds the object in any
+        room of the game, and a command that trusts the list lets a player
+        name a thing that they cannot see. The manager honours the list:
+        `search_object` returns nothing for a dbref outside it, with
+        `exact=True`, which its dbref branch needs. The result then goes
+        through `handle_search_results`, so the refusal reads as for a name.
+
+        A name goes to `caller.search` unchanged. The list bounds a name
+        there as before.
+
+    Notes/References:
+        CmdAttack (10/16/2026) and CmdInspect use this. Both take the dbref
+        that the Godot world pane sends for a clicked entity. Both bound it
+        to what the player sees.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    if not text.startswith(_DBREF_PREFIX):
+        return caller.search(text, candidates=candidates, **kwargs)
+
+    matches = ObjectDB.objects.search_object(
+        text, candidates=list(candidates), exact=True, use_dbref=True)
+
+    return caller.handle_search_results(text, list(matches), **kwargs)
 
 # from evennia import default_cmds
 

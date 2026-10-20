@@ -179,6 +179,21 @@ static func set_shape_value(look: Dictionary, part_name: String, shape_index: in
 	return ""
 
 
+## Write the place of one shape in the space of its part, from one
+## transform. The place is its offset, its rotation, and its scale. The
+## node of the shape has that transform ([method FigureLook.shape_transform]).
+static func set_shape_place(look: Dictionary, part_name: String, shape_index: int,
+		xform: Transform3D) -> String:
+	var shapes := _shapes(look, part_name)
+
+	if shape_index < 0 or shape_index >= shapes.size():
+		return "The part %s has no shape %d." % [part_name, shape_index]
+
+	FigureLook.set_shape_transform(shapes[shape_index], xform)
+
+	return ""
+
+
 static func _default_vector(field: String) -> Vector3:
 	if field == "scale":
 		return Vector3.ONE

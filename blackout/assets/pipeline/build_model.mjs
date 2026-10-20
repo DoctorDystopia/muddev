@@ -25,8 +25,9 @@ import path from 'node:path';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTTextureWebP } from '@gltf-transform/extensions';
 import {
-    dedup, getBounds, metalRough, prune, unpartition, weld,
+    dedup, getBounds, metalRough, prune, simplify, unpartition, weld,
 } from '@gltf-transform/functions';
+import { MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 import validator from 'gltf-validator';
 
@@ -62,6 +63,12 @@ const WEBP_OPTIONS = { quality: 90, effort: 6 };
 // Image suffix -> MIME type, for an atlas that a record attaches.
 const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
 const VERTICES_PER_TRIANGLE = 3;
+
+// The error limit of a simplify, as a part of the mesh radius. A value of 1
+// sets no limit. Thus, the triangle count of the record decides where the
+// simplify stops. The simplifier collapses the edge of least error first, so
+// the mesh keeps its shape as well as that count lets it.
+const SIMPLIFY_ERROR_LIMIT = 1.0;
 
 // ─── Recipe steps ────────────────────────────────────────────────────────────
 
@@ -264,6 +271,38 @@ async function dropBlackEmission(document) {
     }
 }
 
+/**
+ * Simplify every mesh to at most `maxTriangles` triangles in total, for a
+ * record with `[output] max_triangles`.
+ *
+ * One ratio for each primitive, so each part of the model loses the same
+ * share. A model that is at or below the count stays as it is.
+ *
+ * The caller welds the mesh first. The simplifier collapses an edge only
+ * between vertices that share an index. Then prune() removes the vertex data
+ * that the collapsed triangles used.
+ *
+ * The simplifier can stop above the count, for example at a UV seam that it
+ * must keep. The family budget then refuses the model, with the count.
+ */
+async function simplifyTo(document, maxTriangles) {
+    const triangles = countTriangles(document.getRoot());
+
+    if (!maxTriangles || triangles <= maxTriangles) {
+        return;
+    }
+
+    await MeshoptSimplifier.ready;
+    await document.transform(
+        simplify({
+            simplifier: MeshoptSimplifier,
+            ratio: maxTriangles / triangles,
+            error: SIMPLIFY_ERROR_LIMIT,
+        }),
+        prune({ keepAttributes: false, keepLeaves: false }),
+    );
+}
+
 /** Apply the recipe's [fix] table, in a fixed order. */
 function applyFix(document, fix) {
     if (fix.rotate) {
@@ -334,23 +373,34 @@ function dropUnreadableExtensions(document, allowed) {
 
 // ─── Report ──────────────────────────────────────────────────────────────────
 
-/** Count what one finished document holds, for the budgets and the log. */
-function describe(document) {
-    const root = document.getRoot();
+/** Count the triangles of every mesh. The one rule for the build and the report. */
+function countTriangles(root) {
     let triangles = 0;
-    let vertices = 0;
 
     for (const mesh of root.listMeshes()) {
         for (const primitive of mesh.listPrimitives()) {
-            const position = primitive.getAttribute('POSITION');
             const indices = primitive.getIndices();
+            const position = primitive.getAttribute('POSITION');
             const count = indices ? indices.getCount() : position.getCount();
-
-            vertices += position.getCount();
 
             if (primitive.getMode() === TRIANGLES_MODE) {
                 triangles += Math.floor(count / VERTICES_PER_TRIANGLE);
             }
+        }
+    }
+
+    return triangles;
+}
+
+/** Count what one finished document holds, for the budgets and the log. */
+function describe(document) {
+    const root = document.getRoot();
+    const triangles = countTriangles(root);
+    let vertices = 0;
+
+    for (const mesh of root.listMeshes()) {
+        for (const primitive of mesh.listPrimitives()) {
+            vertices += primitive.getAttribute('POSITION').getCount();
         }
     }
 
@@ -411,6 +461,7 @@ async function build(jobPath) {
         weld(),
         unpartition(),
     );
+    await simplifyTo(document, job.max_triangles);
     await encodeTextures(document, job);
 
     dropUnreadableExtensions(document, job.allowed_extensions);

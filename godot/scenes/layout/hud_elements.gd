@@ -34,6 +34,8 @@ const MINIMAP := "minimap"
 const XP := "xp"
 const VITALS := "vitals"
 const HOVER := "hover"
+const PERFORMANCE := "performance"
+const ABILITIES := "abilities"
 
 ## The floor on each dock, before the minimum of its content. The content
 ## usually wins: a [TabContainer] gives the widest minimum of its tabs.
@@ -88,6 +90,25 @@ const ROWS := {
 	HOVER: {
 		HudSlot.ROW_TITLE: "Hover text",
 		HudSlot.ROW_EDGES: ResizeGrips.LEFT | ResizeGrips.RIGHT,
+		HudSlot.ROW_MIN_OPACITY: WHOLE_FADE_FLOOR,
+	},
+	# Under the vitals, in the top left. Off until Options turns it on, so
+	# the shipped place matters less than that it covers no other element.
+	PERFORMANCE: {
+		HudSlot.ROW_TITLE: "Performance",
+		HudSlot.ROW_ANCHOR: Vector2(0.0, 0.0),
+		HudSlot.ROW_OFFSET: Vector2(8.0, 80.0),
+		HudSlot.ROW_SIZE: Vector2(320.0, 208.0),
+		HudSlot.ROW_MIN_OPACITY: WHOLE_FADE_FLOOR,
+	},
+	# To the right of the vitals, in the top left. One column of toggles.
+	# Eight rows tall, so it ends above the log dock in a 1280 x 720
+	# window. `smoke_console` checks that no two shipped elements overlap.
+	ABILITIES: {
+		HudSlot.ROW_TITLE: "Abilities",
+		HudSlot.ROW_ANCHOR: Vector2(0.0, 0.0),
+		HudSlot.ROW_OFFSET: Vector2(256.0, 8.0),
+		HudSlot.ROW_SIZE: Vector2(160.0, 300.0),
 		HudSlot.ROW_MIN_OPACITY: WHOLE_FADE_FLOOR,
 	},
 }

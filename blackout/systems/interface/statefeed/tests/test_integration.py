@@ -37,11 +37,13 @@ from systems.interface.statefeed.payloads import (
     CharItemsPayload,
     CharVitalsPayload,
     CombatPayload,
+    FacePayload,
 )
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
 from typeclasses.npc_spawners import spawn_npc
 from world.item_database import ITEM_DB
+from world.npc_database import NPC_DB
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -312,6 +314,7 @@ class TestCharAvatarChannel(EvenniaTest):
         self.assertEqual(avatar.body_type, seen_by_others[const.ENTITY_BODY_TYPE_KEY])
         self.assertEqual(avatar.figure_colors,
                          seen_by_others.get(const.ENTITY_FIGURE_COLORS_KEY, {}))
+        self.assertEqual(avatar.worn, seen_by_others.get(const.ENTITY_WORN_KEY, {}))
 
     def test_a_player_row_names_a_body_type_and_an_npc_row_does_not(self):
         """The client builds a figure for a row with a body type, and only
@@ -411,6 +414,138 @@ class TestRoomSerialisation(EvenniaTest):
             ids.append(entry["id"])
 
         self.assertNotIn(self.char1.id, ids)
+
+
+class TestFaceFeed(EvenniaTest):
+    """A fight, a talk and a trade tell the feed who turns to whom."""
+
+    character_typeclass = BlackoutCharacter
+
+    def _attack(self, attacker, target):
+        """Queue one attack, recording what the feed emitted."""
+        ensure_combat_handler(target)
+        handler = ensure_combat_handler(attacker)
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            with mock.patch("systems.interface.statefeed.events.emit_to_room",
+                            return_value=0):
+                handler.queue_action({"kind": "attack", "target": target})
+
+        return recorder
+
+    def _command(self, line: str):
+        """Run one command of char1, recording what the feed emitted.
+
+        The menu launcher is a stub. The event is the thing under test,
+        and an EvMenu on the character is noise beside it.
+        """
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            with mock.patch("systems.interface.statefeed.events.emit_to_room",
+                            return_value=0):
+                with mock.patch("typeclasses.npcs.start_blackout_menu"):
+                    self.char1.execute_cmd(line)
+
+        return recorder
+
+    @staticmethod
+    def _pairs(events) -> set:
+        """The (actor, target) ids that a list of face events name.
+
+        The recorder sees one send for each side, so one face event
+        records two payloads. The pair is what the client reads.
+        """
+        return {(event.actor_id, event.target_id) for event in events}
+
+    def test_a_queued_attack_publishes_a_face_event(self):
+        target = spawn_npc("mutant_raider", self.room1)
+
+        recorder = self._attack(self.char1, target)
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(self.char1.id, target.id)})
+
+    def test_the_face_event_comes_before_any_swing(self):
+        # The client turns the two on the face event, a tick before the
+        # first swing. An event that waited for the tick would turn them
+        # late.
+        target = spawn_npc("mutant_raider", self.room1)
+
+        recorder = self._attack(self.char1, target)
+
+        self.assertTrue(recorder.of_type(FacePayload))
+        self.assertFalse(recorder.of_type(CombatPayload))
+
+    def test_a_striking_back_npc_publishes_its_own_face_event(self):
+        # The AI of an NPC queues through the same seam as the command.
+        npc = spawn_npc("mutant_raider", self.room1)
+
+        recorder = self._attack(npc, self.char1)
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(npc.id, self.char1.id)})
+
+    def test_a_talk_publishes_a_face_event(self):
+        # A preceptor has a dialogue, so the talk opens.
+        npc = spawn_npc("atum_musa", self.room1)
+
+        recorder = self._command("talk")
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(self.char1.id, npc.id)})
+
+    def test_a_talk_with_nothing_to_say_publishes_nothing(self):
+        npc = spawn_npc("atum_musa", self.room1)
+
+        with mock.patch("typeclasses.npcs._dialogue_module_for", return_value=None):
+            recorder = self._command("talk")
+
+        self.assertFalse(recorder.of_type(FacePayload))
+        self.assertIsNotNone(npc.pk)
+
+    def test_a_trade_publishes_a_face_event(self):
+        shopkeep = None
+
+        for npc_def in NPC_DB.values():
+            if npc_def.shop_key is not None:
+                shopkeep = spawn_npc(npc_def.key, self.room1)
+                break
+
+        self.assertIsNotNone(shopkeep, "the NPC database holds no shopkeep")
+
+        recorder = self._command("trade")
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(self.char1.id, shopkeep.id)})
+
+    def test_the_face_event_reaches_both_sides(self):
+        target = spawn_npc("mutant_raider", self.room1)
+        ensure_combat_handler(target)
+        handler = ensure_combat_handler(self.char1)
+        reached = []
+
+        def record(observer, payload, force=False):
+            if isinstance(payload, FacePayload):
+                reached.append(observer)
+            return 1
+
+        with mock.patch("systems.interface.statefeed.events.emit", record):
+            with mock.patch("systems.interface.statefeed.events.emit_to_room",
+                            return_value=0):
+                handler.queue_action({"kind": "attack", "target": target})
+
+        self.assertEqual(reached, [self.char1, target])
+
+    def test_a_start_with_no_target_publishes_nothing(self):
+        handler = ensure_combat_handler(self.char1)
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            handler.start_combat_state()
+
+        self.assertFalse(recorder.of_type(FacePayload))
 
 
 class TestCombatFeed(EvenniaTest):

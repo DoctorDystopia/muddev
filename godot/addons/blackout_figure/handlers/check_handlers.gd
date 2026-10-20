@@ -11,6 +11,9 @@ extends RefCounted
 ## never go stale (ENG-0011, item 13). The plugin owns that timer, and it
 ## calls [method run_checks].
 
+## What the status box says for a finding on the look of an item.
+const GEAR_FINDING_STATUS := "The part %s of the look %s: open the gear editor to change it."
+
 var _context: FigureHandlerContext
 
 ## The handlers of the Rig tab: a finding on a bone selects the bone.
@@ -50,7 +53,7 @@ func run_checks(announce: bool) -> void:
 	var found := bench.run_checks(_context.budgets())
 	var faults := FigureChecks.faults_of(found).size()
 
-	_context.dock().check_panel().set_findings(found)
+	_context.figure_dock().check_panel().set_findings(found)
 
 	if announce:
 		_context.status("The check found %d finding(s) and %d note(s)."
@@ -86,18 +89,18 @@ func _on_finding_chosen(finding: Dictionary) -> void:
 			_show_gear_row(key, "")
 		FigureChecks.KIND_CLIP:
 			_context.show_tab(FigureDock.TAB_CLIPS)
-			_context.dock().clips_panel().select_clip(key)
+			_context.figure_dock().clips_panel().select_clip(key)
 			_clips.on_clip_chosen(key)
 		FigureStore.KIND_STANCES:
 			_context.show_tab(FigureDock.TAB_CLIPS)
-			_context.dock().clips_panel().select_stance(part.get_slice("/", 0))
+			_context.figure_dock().clips_panel().select_stance(part.get_slice("/", 0))
 		FigureStore.KIND_PALETTE:
 			_context.show_tab(FigureDock.TAB_COLORS)
 
 
 ## Show the Rig tab on one body type, with one bone selected.
 func _show_rig_finding(body_key: String, bone: String) -> void:
-	var dock := _context.dock()
+	var dock := _context.figure_dock()
 
 	if dock.active_body() != body_key:
 		dock.select_body(body_key)
@@ -108,11 +111,12 @@ func _show_rig_finding(body_key: String, bone: String) -> void:
 	_rig.on_bone_chosen(dock.rig_panel().selected_bone())
 
 
-## Show the worn look of a finding: a body or a kit part on the Body tab,
-## and each other look on its row of the Gear tab.
+## Show the worn look of a finding: a body or a kit part on the Body tab.
+## Each other look is the work of the gear editor, and the status box says
+## so.
 func _show_look_finding(look_key: String, part: String) -> void:
 	var bench := _context.bench()
-	var dock := _context.dock()
+	var dock := _context.figure_dock()
 	var look: FigureLook = bench.store.looks.get(look_key)
 	var is_body := bench.store.has(FigureStore.KIND_RIG, look_key)
 
@@ -133,19 +137,7 @@ func _show_look_finding(look_key: String, part: String) -> void:
 	_context.select_part(look_key, dock.body_panel().selected_part())
 
 
-## Show one row of the Gear tab, and dress each stand in it. A key that is
-## no row of the item catalog shows no row, and the status box has the
-## finding.
+## A finding on the look of an item: the gear editor changes that look.
+## The status box names the look and the part.
 func _show_gear_row(key: String, part: String) -> void:
-	var gear := _context.dock().gear_panel()
-
-	_context.show_tab(FigureDock.TAB_GEAR)
-	gear.select_row(key)
-
-	if gear.selected_key() != key:
-		return
-
-	_context.bench().wear(gear.selected_slot(), key)
-	gear.parts_panel().select_part(part)
-	_context.refresh_cost()
-	_context.select_part(key, gear.parts_panel().selected_part())
+	_context.status(GEAR_FINDING_STATUS % [part, key])

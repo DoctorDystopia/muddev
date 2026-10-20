@@ -1144,6 +1144,7 @@ func _connect_look_panel() -> void:
 	var look := _dock.look_panel()
 
 	look.palette_changed.connect(_on_palette_changed)
+	look.light_changed.connect(_on_light_changed)
 	look.area_look_changed.connect(_on_area_look_changed)
 	look.preview_changed.connect(_on_preview_changed)
 	look.reset_requested.connect(_on_reset_palette_asked)
@@ -1169,6 +1170,16 @@ func _on_palette_changed() -> void:
 
 	_world.rebuild_all()
 	_dock.set_status("The terrain palette changed: %s." % TerrainPalette.PATH)
+
+
+## The light of a scenery key changed in the file. The block draws again
+## with it, because each mesh carries the light.
+func _on_light_changed(scenery: String) -> void:
+	if _world == null:
+		return
+
+	_world.rebuild_all()
+	_dock.set_status("The light of %s changed: %s." % [scenery, LightLook.PATH])
 
 
 ## The look of `area` changed in the file. A preview of that area follows.

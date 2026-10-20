@@ -127,7 +127,9 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_CHAR_COMBAT", const.CHANNEL_CHAR_COMBAT),
     ("CH_CHAR_POPUP", const.CHANNEL_CHAR_POPUP),
     ("CH_CHAR_CHAT", const.CHANNEL_CHAR_CHAT),
+    ("CH_CHAR_ABILITIES", const.CHANNEL_CHAR_ABILITIES),
     ("CH_COMBAT", const.CHANNEL_COMBAT),
+    ("CH_FACE", const.CHANNEL_FACE),
     ("CH_AURA", const.CHANNEL_AURA),
     ("CH_XP_DROP", const.CHANNEL_XP_DROP),
     ("CH_TILE_CHUNK", const.CHANNEL_TILE_CHUNK),
@@ -135,6 +137,7 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_WORLD_MAP", const.CHANNEL_WORLD_MAP),
     ("CH_WORLD_MAP_CHUNK", const.CHANNEL_WORLD_MAP_CHUNK),
     ("CH_MOMENT", const.CHANNEL_MOMENT),
+    ("CH_TICK_PERF", const.CHANNEL_TICK_PERF),
     ("CH_SUBSCRIBED", const.CHANNEL_SUBSCRIBED_ACK),
     ("CH_LOGIN_TOKEN", const.CHANNEL_LOGIN_TOKEN),
 )
@@ -222,6 +225,11 @@ _TILE_KIND_EXPORTS: tuple = (
 # when the two sets differ.
 _MOMENT_EXPORTS: tuple = (
     ("MOMENT_TASK_COMPLETE", const.MOMENT_TASK_COMPLETE),
+    ("MOMENT_CUT_ATTEMPT", const.MOMENT_CUT_ATTEMPT),
+    ("MOMENT_BUTCHER_ATTEMPT", const.MOMENT_BUTCHER_ATTEMPT),
+    ("MOMENT_METALSMITH_CRAFT", const.MOMENT_METALSMITH_CRAFT),
+    ("MOMENT_FOUNDRY_CRAFT", const.MOMENT_FOUNDRY_CRAFT),
+    ("MOMENT_TRANSITION", const.MOMENT_TRANSITION),
 )
 
 # Single-value exports that are neither a channel nor a vocabulary.
@@ -235,12 +243,24 @@ _SCALAR_EXPORTS: tuple = (
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
     ("ENTITY_APPROACH_TEMPLATE", const.ENTITY_APPROACH_TEMPLATE),
+    # The Inspect row of every entity. The server spells it, and the client
+    # fills in the dbref, as for the approach above.
+    ("ENTITY_INSPECT_TEMPLATE", const.ENTITY_INSPECT_TEMPLATE),
     # The walk to a far tile of the tile world. The server spells it, and the
     # client fills in the tile, as for the approach above. A chunk has 4,096
     # tiles, so no feed can stamp an action on each one.
     ("TILE_WALK_TEMPLATE", const.TILE_COMMAND_GOTO_TEMPLATE),
     # The run toggle. The Run button and its hotkey send it.
     ("RUN_TOGGLE_COMMAND", const.COMMAND_RUN_TOGGLE),
+    # The ability rows of char_abilities: the states, the kinds, and the
+    # keys of the tip block that every row with a tip carries.
+    ("ABILITY_STATE_READY", const.ABILITY_STATE_READY),
+    ("ABILITY_STATE_ACTIVE", const.ABILITY_STATE_ACTIVE),
+    ("ABILITY_STATE_LOCKED", const.ABILITY_STATE_LOCKED),
+    ("ABILITY_KIND_TOGGLE", const.ABILITY_KIND_TOGGLE),
+    ("TIP_KEY", const.TIP_KEY),
+    ("TIP_TITLE_KEY", const.TIP_TITLE_KEY),
+    ("TIP_LINES_KEY", const.TIP_LINES_KEY),
     # The key a client reads to draw a node it has already stripped. Exported
     # for the same reason every other payload key is: a client that retyped
     # it would be free to disagree with the server about the spelling, and
@@ -254,6 +274,7 @@ _SCALAR_EXPORTS: tuple = (
     # The keys a client reads to build the figure of a player character.
     ("ENTITY_BODY_TYPE_KEY", const.ENTITY_BODY_TYPE_KEY),
     ("ENTITY_FIGURE_COLORS_KEY", const.ENTITY_FIGURE_COLORS_KEY),
+    ("ENTITY_WORN_KEY", const.ENTITY_WORN_KEY),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the
@@ -412,6 +433,8 @@ _TILE_GRID_EXPORTS: tuple = (
     ("SCENERY_CRATE", tile_const.SCENERY_CRATE),
     ("SCENERY_TABLE", tile_const.SCENERY_TABLE),
     ("SCENERY_LAMP_POST", tile_const.SCENERY_LAMP_POST),
+    ("SCENERY_OIL_LAMP", tile_const.SCENERY_OIL_LAMP),
+    ("SCENERY_TORCH", tile_const.SCENERY_TORCH),
     ("TILE_DEFAULT_FLOOR", floor_table.DEFAULT_FLOOR_TYPE),
     ("TILE_DEFAULT_AREA", area_table.DEFAULT_AREA),
     # The style of each tile of a chunk file of format 1 (DESIGN-0013).
@@ -460,6 +483,8 @@ _TILE_GRID_LIST_EXPORTS: tuple = (
 _TILE_GRID_MAP_EXPORTS: tuple = (
     ("OBJECT_KINDS", tuple((key, kind.category)
                            for key, kind in kind_table.OBJECT_KINDS.items())),
+    # The legend of the world map names each map icon with these words.
+    ("OBJECT_CATEGORY_LABELS", tuple(tile_const.OBJECT_CATEGORY_LABELS.items())),
     ("OBJECT_KIND_TARGETS", tuple((key, kind.target)
                                   for key, kind in kind_table.OBJECT_KINDS.items()
                                   if kind.target)),

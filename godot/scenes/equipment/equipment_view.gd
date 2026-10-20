@@ -66,6 +66,10 @@ var _meshes: MeshResolver
 ## What the player set. Held only to hand to each cell. See [AmountPrompt].
 var _settings: ClientSettings
 
+## The worn looks of the gear editor, or null. A frame draws the look of its
+## item before the mesh ladder. The CONSOLE owns it.
+var _figures: FigureLibrary
+
 
 ## Built in _init, not _ready.
 ##
@@ -124,6 +128,15 @@ func bind(state: InventoryState, resolver: MeshResolver) -> void:
 	if _meshes != null:
 		_meshes.refreshed.connect(func(_key: String): _rebuild())
 
+	_rebuild()
+
+
+## Take the figure library. A frame then draws the worn look of its item,
+## the look that the figure wears (10/17/2026). The arrival of the figure set
+## or of a model of a part draws the doll again.
+func bind_figures(library: FigureLibrary) -> void:
+	_figures = library
+	_figures.changed.connect(_rebuild)
 	_rebuild()
 
 
@@ -327,7 +340,7 @@ func _dress(cells_made: Array) -> void:
 			continue
 
 		_stage.place(index, str(row.get("asset", "")),
-			str(row.get("family", "")), _meshes)
+			str(row.get("family", "")), _meshes, _figures)
 		cell.show_art(_stage.texture_for(index))
 
 

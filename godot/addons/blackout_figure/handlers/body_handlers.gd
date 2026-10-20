@@ -122,7 +122,7 @@ func _on_kit_requested(key: String, group: String, bone: String) -> void:
 		FigureLookEdits.new_kit_part(key, group, _context.active_rig(), bone,
 			bench.store.palette()),
 		"new kit part %s in the kit group %s" % [key, group])
-	_context.dock().body_panel().edit_kit(key)
+	_context.figure_dock().body_panel().edit_kit(key)
 	bench.set_kit_part(group, key)
 	_context.refresh_panels()
 

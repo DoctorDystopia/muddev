@@ -1,12 +1,12 @@
 @tool
 class_name FigureBodyPanel
-extends FigurePartsPanel
+extends PartEditor
 ## The Body tab of the figure workbench (DESIGN-0014 section 8.6): the
 ## parts of the body of the selected body type, the kit parts, and the
 ## shape list of each part.
 ##
 ## A body is the worn look with the key of its body type. Thus, this tab is
-## the part editor of each worn look ([FigurePartsPanel]), with two more
+## the part editor of each worn look ([PartEditor]), with two more
 ## actions: "New body from the rig", and "Export the reference body". The
 ## second one asks for a file, and the plugin writes the figure of the
 ## selected body type there ([FigureReference]).
@@ -155,7 +155,7 @@ func set_kit_content(body_key: String, looks: Dictionary, kit: Dictionary) -> vo
 	fit_controls = not _edited_kit.is_empty()
 
 
-## Show the worn look of the part editor, as [FigurePartsPanel] does. A kit
+## Show the worn look of the part editor, as [PartEditor] does. A kit
 ## part also shows its hide list: one box for each region of the rig.
 func set_content(rig: FigureRig, look: FigureLook, models: FigureModels = null,
 		palette: FigurePalette = null) -> void:

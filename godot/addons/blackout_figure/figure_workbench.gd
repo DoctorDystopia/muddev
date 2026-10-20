@@ -251,6 +251,10 @@ var _shown_family := ""
 ## entity. Each change makes a new one, so a changed look file reaches it.
 var _resolver: MeshResolver
 
+## Body type -> asset key -> the row of the served part that the stand
+## draws. A moved node of a served model differs from its row.
+var _served_rows := {}
+
 
 func _ready() -> void:
 	set_process(Engine.is_editor_hint())
@@ -326,6 +330,19 @@ func reload() -> void:
 	_sync_stands()
 	reload_clips()
 	reloaded.emit()
+
+
+## Read the directory again when a file of it changed on the disk, and the
+## store has no unsaved change. The gear editor and the figure workbench
+## write the same files, so a save in one makes the other stale. Returns
+## true for a reload.
+func reload_if_changed() -> bool:
+	if store == null or store.has_unsaved_changes() or not store.disk_differs():
+		return false
+
+	reload()
+
+	return true
 
 
 ## Give one figure file new content, and show it. An empty dictionary
@@ -409,7 +426,7 @@ func export_reference(body_key: String, path: String) -> Error:
 		return ERR_DOES_NOT_EXIST
 
 	var looks := FigureOutfit.looks_for(store.rigs[body_key], _outfit, store.looks,
-		catalog.families(), _kit)
+		catalog.families(), _kit, models)
 
 	return FigureReference.export(store.rigs[body_key], looks, path, models,
 		store.palette())
@@ -449,7 +466,7 @@ func source_of(body_key: String, slot: String) -> String:
 		return FigureOutfit.SOURCE_NOTHING
 
 	return FigureOutfit.source_of(store.rigs[body_key], slot, _outfit.get(slot, ""),
-		store.looks)
+		store.looks, models)
 
 
 ## The tool type whose stance the outfit takes, or "" for the default clip
@@ -588,14 +605,42 @@ func part_node(body_key: String, look_key: String, part_name: String) -> Node3D:
 ## The part node that a ray meets first, on any stand, or null. A part of
 ## the probe is no part of a figure file, so the ray goes through it.
 func part_at(origin: Vector3, direction: Vector3) -> Node3D:
+	return FigurePicking.pick(_file_parts(), origin, direction)
+
+
+## The mesh node that a ray meets first, on any stand, or null: the node of
+## one shape of a shape list, or the node of a model. Its parent is the
+## part. [method FigureBuilder.shape_id] tells the two apart.
+func shape_at(origin: Vector3, direction: Vector3) -> MeshInstance3D:
+	return FigurePicking.pick_instance(_file_parts(), origin, direction)
+
+
+## The node of one shape of one part on the stand of one body type, or
+## null.
+func shape_node(body_key: String, look_key: String, part_name: String,
+		shape_index: int) -> MeshInstance3D:
+	var figure := figure_of(body_key)
+
+	if figure == null:
+		return null
+
+	return FigureBuilder.shape_node(figure, look_key, part_name, shape_index)
+
+
+## Each part node of a look that the store has, on each stand, and each
+## node of a served model. A move of a served model makes the look of its
+## item when the store has none.
+func _file_parts() -> Array[Node3D]:
 	var parts: Array[Node3D] = []
 
 	for body_key: String in _stands:
 		for node: Node3D in FigureBuilder.part_nodes(figure_of(body_key)):
-			if store.has(FigureStore.KIND_LOOK, FigureBuilder.part_id(node)[0]):
+			var id := FigureBuilder.part_id(node)
+
+			if store.has(FigureStore.KIND_LOOK, id[0]) or id[1] == FigureLook.SERVED_PART:
 				parts.append(node)
 
-	return FigurePicking.pick(parts, origin, direction)
+	return parts
 
 
 ## The cost of the figure of one body type: `{parts, draws, triangles}`.
@@ -647,10 +692,14 @@ func sync_from_nodes() -> bool:
 	return true
 
 
-## Write the place of each moved part node into its worn look. Returns
-## `[kind, key]` of each look that changed, one time each.
+## Write the place of each moved part node into its worn look, and the
+## place of each moved shape node into its shape. A moved served model goes
+## into the `served` row of the look of its item. Returns `[kind, key]` of
+## each look that changed, one time each.
 func _write_moved_parts() -> Array:
 	var moves := _moved_nodes()
+	var shape_moves := _moved_shapes()
+	var served_moves := _moved_served()
 	var written := {}
 
 	# The store changes only after the search. A part of one look has a node
@@ -660,12 +709,93 @@ func _write_moved_parts() -> Array:
 		if _write_place(move[0], move[1], move[2], move[3]):
 			written[move[0]] = true
 
+	for move: Array in shape_moves:
+		if _write_shape_place(move[0], move[1], move[2], move[3]):
+			written[move[0]] = true
+
+	for move: Array in served_moves:
+		if _write_served_place(move[0], move[1], move[2]):
+			written[move[0]] = true
+
 	var pairs := []
 
 	for look_key: String in written:
 		pairs.append([FigureStore.KIND_LOOK, look_key])
 
 	return pairs
+
+
+## Each shape node whose place differs from its shape, as `[look key, part
+## name, shape index, place]`. A shape has one place on each body type, so
+## the stand does not matter. The look key is that of the look that has the
+## part: for a tier, its last base.
+func _moved_shapes() -> Array:
+	var moves := []
+
+	for body_key: String in _stands:
+		for node: Node3D in FigureBuilder.part_nodes(figure_of(body_key)):
+			var id := FigureBuilder.part_id(node)
+
+			if not store.has(FigureStore.KIND_LOOK, id[0]) or node.get_meta(
+					FigureBuilder.MODEL_META, false):
+				continue
+
+			var look: FigureLook = store.looks[id[0]].resolved(store.looks)
+			var shapes: Array = look.part(id[1]).get("shapes", [])
+
+			for index in mini(shapes.size(), node.get_child_count()):
+				var instance := node.get_child(index) as Node3D
+
+				if instance != null and not _same_place(FigureLook.shape_transform(shapes[index]),
+						instance.transform):
+					moves.append([parts_owner(id[0]), id[1], index, instance.transform])
+
+	return moves
+
+
+## Each node of a served model whose place differs from the row that its
+## stand drew, as `[asset key, bone, place]`. A served place has no fit
+## row, so the stand does not matter.
+func _moved_served() -> Array:
+	var moves := []
+
+	for body_key: String in _stands:
+		var rows: Dictionary = _served_rows.get(body_key, {})
+
+		for node: Node3D in FigureBuilder.part_nodes(figure_of(body_key)):
+			var id := FigureBuilder.part_id(node)
+			var row: Dictionary = rows.get(id[0], {})
+
+			if id[1] == FigureLook.SERVED_PART and not row.is_empty() \
+					and not _same_place(FigureLook.part_transform(row), node.transform):
+				moves.append([id[0], row["bone"], node.transform])
+
+	return moves
+
+
+## Write the place of one moved served model into the look of its item.
+## An item with no look gets one with the `served` row only. Returns false
+## when the store refuses the content.
+func _write_served_place(asset_key: String, bone: String, xform: Transform3D) -> bool:
+	var data := store.data_of(FigureStore.KIND_LOOK, asset_key)
+
+	if data.is_empty():
+		data = {"format": FigureLook.FORMAT, "key": asset_key}
+
+	FigureLookEdits.set_served_place(data, bone, xform)
+
+	return store.put(FigureStore.KIND_LOOK, asset_key, data).is_empty()
+
+
+## Write the place of one moved shape into the store. Returns false when
+## the store refuses the content.
+func _write_shape_place(look_key: String, part_name: String, shape_index: int,
+		xform: Transform3D) -> bool:
+	var data := store.data_of(FigureStore.KIND_LOOK, look_key)
+
+	FigureShapeEdits.set_shape_place(data, part_name, shape_index, xform)
+
+	return store.put(FigureStore.KIND_LOOK, look_key, data).is_empty()
 
 
 ## Write the place of each moved bone mark into the rig of its stand.
@@ -798,11 +928,21 @@ func _sync_stands() -> void:
 		play_clip(_clip, time)
 
 
-## The worn looks of one stand: the body, then the look of each item of the
-## outfit, then the probe when it shows.
+## The worn looks of one stand. The body is first, then each item of the
+## outfit, then the probe when it shows. The row of each served part goes
+## into [member _served_rows].
 func _looks_of(body_key: String) -> Array:
 	var looks := FigureOutfit.looks_for(store.rigs[body_key], _outfit, store.looks,
-		catalog.families(), _kit)
+		catalog.families(), _kit, models)
+	var served := {}
+
+	for look: FigureLook in looks:
+		var row := look.part(FigureLook.SERVED_PART)
+
+		if not row.is_empty():
+			served[look.key()] = row
+
+	_served_rows[body_key] = served
 
 	if show_probe:
 		looks.append(FigureClearance.probe_look(store.rigs[body_key]))

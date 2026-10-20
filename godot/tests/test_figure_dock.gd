@@ -1,59 +1,48 @@
 extends Node
 ## Tests for the panel of the figure workbench (DESIGN-0014 Phases W1 to
-## W3): [FigureDock], [FigureRigPanel], [FigureBodyPanel],
-## [FigureClipsPanel], [FigureGearPanel], and [FigureOutfitBar].
+## W6): [FigureDock], [FigureRigPanel], [FigureBodyPanel],
+## [FigureClipsPanel], [FigureColorsPanel], [FigureFamiliesPanel], and
+## [FigureOutfitBar]. The Gear dock has its own test,
+## `test_gear_dock.tscn`, and the part editor has `test_part_editor.tscn`.
 ##
 ##     godot --headless --path godot res://tests/test_figure_dock.tscn
 ##
 ## Needs nothing running and no editor. The dock does not persist here, so
 ## the test writes no file. The cases:
 ##
-## 1. The dock has the four tabs, and it shows the body types, the cost,
-##    and the line of the selected item.
+## 1. The dock has the six tabs and no Gear tab, and it shows the body
+##    types, the cost, and the line of the selected item.
 ## 2. The Rig tab shows each bone. A selected bone shows its position, and
 ##    a changed field sends the new position.
 ## 3. The Rig tab has one row for each slot, and a new choice sends the slot
 ##    and its bone.
-## 4. The Body tab shows each part. A selected part shows its place, and a
-##    changed field sends the place of the part.
+## 4. The Body tab shows each part in the tree. A selected part shows its
+##    place, and a changed field sends the place of the part.
 ## 5. The Body tab shows the fields of the selected shape, and a changed
 ##    field sends the value as the file holds it.
 ## 6. A panel that shows new content sends no signal.
 ## 7. The Clips tab shows each clip and each clip list. Its play bar and
 ##    its clip form send what the author chose.
-## 8. The Gear tab has one row for each slot shape and for each item. A
-##    row says what the figure shows, and the two filters keep their rows.
-## 9. The Gear tab shows the look of a row, and it sends a picked row, the
-##    look buttons, and the color table.
-## 10. The outfit bar has one cell for each slot. It shows an outfit, and a
-##     cell sends its slot and the chosen key.
-## 11. The Gear tab has one box for each region, and a box sends its region
-##     (Phase W4). The part editor shows the fit and the model of a part,
-##     and it sends a changed fit. The model form sends its row, its model
-##     key, its file, and its author.
-## 12. The Body tab has no fit control, and it sends the file of a
-##     reference body.
-## 13. The Colors tab shows each named color and each color role (Phase
+## 8. The outfit bar has one cell for each slot. It shows an outfit, and a
+##    cell sends its slot and the chosen key.
+## 9. The Body tab has no fit control, and it sends the file of a
+##    reference body.
+## 10. The Colors tab shows each named color and each color role (Phase
 ##     W5). It sends a new color, a finish, a role, and a color of the
 ##     character. A palette with a file has no "New palette" button.
-## 14. The Gear tab shows a tier: the colors of its base, a mark on each
-##     color of its own, and no part. A region that the base hides has a
-##     box that the author cannot change. The tier button sends the row and
-##     the base.
-## 15. The Clips tab shows the stance of each tool type. A clip list sends
+## 11. The Clips tab shows the stance of each tool type. A clip list sends
 ##     its action and its clip, and a play button plays the clip that the
 ##     stance has for its action.
-## 16. The top strip counts the unsaved files on the Save button, and the
+## 12. The top strip counts the unsaved files on the Save button, and the
 ##     revert question names them (ENG-0011). The play bar of the dock
 ##     sends a play, a seek, and nothing for a shown time.
-## 17. The Gear tab keeps the rows with the text of the filter. The copy
-##     list names a tier. A button that needs a row is off, with the
-##     reason in its tooltip.
-## 18. The session goes to the session file, and the budgets go to the
+## 13. The session goes to the session file, and the budgets go to the
 ##     repository file. The folds keep their state.
-## 19. A part rename goes out when the field loses the focus. Each vector
+## 14. A part rename goes out when the field loses the focus. Each vector
 ##     field names its axis. The rotation row of the Rig tab is off for a
 ##     bone of the body.
+## 15. The Families tab lists each family, and it sends a chosen family,
+##     a new row, a removed row, and a model.
 
 const TOLERANCE := 0.0001
 
@@ -79,21 +68,15 @@ func _ready() -> void:
 	_the_body_tab_shows_and_sends_a_part()
 	_the_body_tab_shows_and_sends_a_shape()
 	_the_clips_tab_shows_and_sends_a_clip()
-	_the_gear_tab_shows_each_row()
-	_the_gear_tab_sends_a_row_and_its_look()
 	_the_outfit_bar_shows_and_sends_a_slot()
-	_the_gear_tab_has_the_hide_list_the_fit_and_a_model()
 	_the_body_tab_sends_a_reference_body()
 	_the_colors_tab_shows_and_sends_a_color()
-	_the_gear_tab_shows_a_tier()
 	_the_clips_tab_shows_and_sends_a_stance()
 	_the_top_strip_and_the_play_bar_send()
-	_the_gear_tab_filters_and_names_a_tier()
 	_the_session_and_the_budgets_have_their_files()
 	_a_rename_goes_out_on_a_focus_loss()
 	_the_colors_tab_shows_and_sends_a_finish()
 	_the_families_tab_shows_and_sends_a_family()
-	_the_gear_tab_shows_and_sends_a_presentation()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -129,11 +112,11 @@ func _the_dock_shows_the_body_types() -> void:
 	add_child(dock)
 	_expect(tabs.get_tab_title(0) == FigureDock.TAB_RIG
 		and tabs.get_tab_title(1) == FigureDock.TAB_BODY
-		and tabs.get_tab_title(2) == FigureDock.TAB_GEAR
-		and tabs.get_tab_title(3) == FigureDock.TAB_COLORS
-		and tabs.get_tab_title(4) == FigureDock.TAB_FAMILIES
-		and tabs.get_tab_title(5) == FigureDock.TAB_CLIPS,
-		"the dock has the Rig, Body, Gear, Colors, Families, and Clips tabs")
+		and tabs.get_tab_title(2) == FigureDock.TAB_COLORS
+		and tabs.get_tab_title(3) == FigureDock.TAB_FAMILIES
+		and tabs.get_tab_title(4) == FigureDock.TAB_CLIPS
+		and tabs.get_tab_title(5) == FigureDock.TAB_CHECK and tabs.get_tab_count() == 6,
+		"the dock has the Rig, Body, Colors, Families, Clips, and Check tabs, and no Gear tab")
 	_expect(dock.active_body().is_empty(), "a dock with no rig has no body type")
 
 	dock.set_bodies(PackedStringArray(["body_1", "body_2"]))
@@ -154,8 +137,8 @@ func _the_dock_shows_the_body_types() -> void:
 	_expect(dock._item_line.visible and dock._item_line.text.contains("iron sword"),
 		"the item line shows the selected item")
 	_expect(dock.shown_tab() == FigureDock.TAB_RIG, "the first tab shows at first")
-	dock.show_tab(FigureDock.TAB_GEAR)
-	_expect(dock.shown_tab() == FigureDock.TAB_GEAR and dock.gear_panel() != null
+	dock.show_tab(FigureDock.TAB_CLIPS)
+	_expect(dock.shown_tab() == FigureDock.TAB_CLIPS and dock.clips_panel() != null
 		and dock.outfit_bar() != null, "the dock shows a tab by its title")
 	_expect(dock.saved_outfit().is_empty(), "a dock that does not persist has no saved outfit")
 	dock.queue_free()
@@ -246,7 +229,9 @@ func _the_body_tab_shows_and_sends_a_part() -> void:
 	_record(panel.part_placed, "part_placed")
 	_record(panel.part_region_changed, "part_region_changed")
 	panel.set_content(rig, body)
-	_expect(panel._parts.item_count == body.parts().size(), "the list has one row for each part")
+	_expect(panel.part_count() == body.parts().size()
+		and panel._tree.get_root().get_child_count() == body.parts().size(),
+		"the tree has one row for each part")
 	_expect(panel.selected_part().is_empty(), "no part is selected at first")
 
 	panel.select_part("head")
@@ -273,14 +258,13 @@ func _the_body_tab_shows_and_sends_a_part() -> void:
 	_expect(_sent.size() == 1 and _sent[0][2] == "", "the first region choice is no region")
 
 	_sent.clear()
-	panel._parts.select(0)
-	panel._parts.item_selected.emit(0)
+	panel._tree.get_root().get_child(0).select(PartEditor.COLUMN_NAME)
 	_expect(_sent.size() == 1 and _sent[0][0] == "part_chosen"
 		and _sent[0][1] == body.parts()[0]["name"], "a picked row sends its part")
 
 	_sent.clear()
 	panel.set_content(rig, null)
-	_expect(panel._parts.item_count == 0 and panel.selected_part().is_empty()
+	_expect(panel.part_count() == 0 and panel.selected_part().is_empty()
 		and _sent.is_empty(), "a body type with no body shows no part")
 	panel.queue_free()
 
@@ -303,8 +287,9 @@ func _the_body_tab_shows_and_sends_a_shape() -> void:
 	_record(panel.shape_edited, "shape_edited")
 	panel.set_content(rig, body)
 	panel.select_part("upper_arm_l")
-	_expect(panel._shapes.item_count == 2 and panel.selected_shape() == 0,
-		"the shape list shows each shape, with the first one selected")
+	_expect(panel._tree.get_selected().get_child_count() == 2 and panel.selected_shape() == 0
+		and not panel.shape_row_selected(),
+		"the tree shows each shape below its part, and the grid shows the first one")
 
 	for field: String in FigureEdits.fields_of(limb):
 		_expect(panel._field_controls.has(field), "the shape has a control for %s" % field)
@@ -336,11 +321,11 @@ func _the_body_tab_shows_and_sends_a_shape() -> void:
 		"a count goes out as an integer: %s" % [_sent])
 
 	_sent.clear()
-	panel._shapes.select(1)
-	panel._shapes.item_selected.emit(1)
-	_expect(not panel._field_controls.has("size") and panel._field_controls.has("radius"),
+	panel.select_shape(1)
+	_expect(not panel._field_controls.has("size") and panel._field_controls.has("radius")
+		and panel.shape_row_selected() and panel.selected_shape() == 1,
 		"another shape shows the fields of its kind")
-	_expect(_sent.is_empty(), "a new selection sends nothing")
+	_expect(_sent.is_empty(), "a selection by code sends nothing")
 	panel.queue_free()
 
 
@@ -426,137 +411,6 @@ func _catalog() -> FigureCatalog:
 	]})
 
 
-func _gear_looks(rig: FigureRig) -> Dictionary:
-	var slot_shape := FigureEdits.slot_shape(rig, "main_hand")
-
-	return {"main_hand": slot_shape,
-		SWORD: FigureLook.from_data(FigureEdits.look_from(SWORD, slot_shape))}
-
-
-func _row_of(panel: FigureGearPanel, key: String) -> int:
-	for index in panel._rows.item_count:
-		if panel._rows.get_item_metadata(index) == key:
-			return index
-
-	return -1
-
-
-func _row_text(panel: FigureGearPanel, key: String) -> String:
-	var index := _row_of(panel, key)
-
-	return "" if index < 0 else panel._rows.get_item_text(index)
-
-
-func _the_gear_tab_shows_each_row() -> void:
-	var panel := FigureGearPanel.new()
-	var rig := _rig()
-	var catalog := _catalog()
-
-	add_child(panel)
-	_sent.clear()
-	_record(panel.row_chosen, "row_chosen")
-	panel.set_content(catalog, rig, _gear_looks(rig))
-	_expect(panel._rows.item_count == catalog.slot_keys().size() + catalog.items().size(),
-		"the list has one row for each slot shape and for each item")
-	_expect(_row_text(panel, SWORD).contains("worn look")
-		and _row_text(panel, STICK).contains("slot shape")
-		and _row_text(panel, HELM).contains("family shape"),
-		"an item row says what the figure shows for it")
-	_expect(_row_text(panel, "main_hand").contains("Main Hand")
-		and _row_text(panel, "head").contains("family shape"),
-		"a slot shape row has the label of its slot, and it says when no slot shape exists")
-	_expect(panel.selected_key().is_empty() and panel.edited_look().is_empty()
-		and panel.item_line().is_empty(), "no row is selected at first")
-
-	FigureFields.select_text(panel._slot_filter, "head")
-	panel._slot_filter.item_selected.emit(panel._slot_filter.selected)
-	_expect(panel._rows.item_count == 2 and _row_of(panel, HELM) == 1,
-		"the slot filter keeps the slot shape and the items of one slot")
-	panel._slot_filter.select(0)
-	panel._slot_filter.item_selected.emit(0)
-	panel._missing_only.button_pressed = true
-	_expect(_row_of(panel, SWORD) < 0 and _row_of(panel, "main_hand") < 0
-		and _row_of(panel, STICK) >= 0 and _row_of(panel, "head") >= 0,
-		"the other filter keeps the rows with no worn look")
-
-	panel.select_row(SWORD)
-	_expect(panel.selected_key() == SWORD and _row_of(panel, SWORD) >= 0
-		and not panel._missing_only.button_pressed,
-		"a selected row that the filter hides takes the filter off")
-	_expect(_sent.is_empty(), "a filter and a selection by code send nothing: %s" % [_sent])
-	panel.queue_free()
-
-
-func _the_gear_tab_sends_a_row_and_its_look() -> void:
-	var panel := FigureGearPanel.new()
-	var rig := _rig()
-	var looks := _gear_looks(rig)
-
-	add_child(panel)
-	_sent.clear()
-
-	for pair: Array in [[panel.row_chosen, "row_chosen"], [panel.look_requested, "look"],
-			[panel.look_removed, "removed"], [panel.copy_requested, "copy"],
-			[panel.color_changed, "color"], [panel.color_removed, "no_color"]]:
-		_record(pair[0], pair[1])
-
-	panel.set_content(_catalog(), rig, looks)
-	panel.select_row(SWORD)
-	_expect(panel.edited_look() == SWORD and panel.selected_slot() == "main_hand"
-		and panel.parts_panel()._parts.item_count == looks[SWORD].parts().size(),
-		"a row with a worn look shows the parts of that look")
-	_expect(panel.item_line().contains("iron sword") and panel.item_line().contains("main_hand")
-		and panel.item_line().contains("worn look"),
-		"the item line gives the item, its slot, and what the figure shows")
-	_expect(panel._colors.get_child_count() == looks[SWORD].colors().size() * 2,
-		"the color table has one label and one list for each color role")
-
-	var role: String = (panel._colors.get_child(0) as Label).text
-	var list := panel._colors.get_child(1) as OptionButton
-
-	_expect(FigureFields.text_of(list) == looks[SWORD].colors()[role],
-		"a color list shows the color of its color role")
-	_expect(_sent.is_empty(), "a shown look sends nothing: %s" % [_sent])
-	FigureFields.select_text(list, MeshPalette.GOLD)
-	list.item_selected.emit(list.selected)
-	list.item_selected.emit(0)
-	panel._new_role.text = " glow "
-	panel._add_role.pressed.emit()
-	_expect(_sent == [["color", SWORD, role, MeshPalette.GOLD, null],
-			["no_color", SWORD, role, null, null],
-			["color", SWORD, "glow", MeshPalette.GENERIC, null]],
-		"the color table sends a color, a removed role, and a new role: %s" % [_sent])
-
-	_sent.clear()
-	panel._rows.select(_row_of(panel, STICK))
-	panel._rows.item_selected.emit(_row_of(panel, STICK))
-	_expect(_sent == [["row_chosen", STICK, "main_hand", null, null]],
-		"a picked row sends its key and its slot: %s" % [_sent])
-	_expect(panel.edited_look().is_empty() and panel.parts_panel()._parts.item_count == 0
-		and panel._note.text.contains("slot shape"),
-		"a row with no worn look has no part, and the note says what the figure shows")
-
-	_sent.clear()
-	FigureFields.select_text(panel._copy_from, SWORD)
-	panel._new_look.pressed.emit()
-	panel._copy.pressed.emit()
-	panel._remove_look.pressed.emit()
-	_expect(_sent == [["look", STICK, "main_hand", null, null],
-			["copy", STICK, SWORD, null, null], ["removed", STICK, null, null, null]],
-		"the look buttons send the row: %s" % [_sent])
-
-	_sent.clear()
-	panel._rows.select(_row_of(panel, "head"))
-	panel._rows.item_selected.emit(_row_of(panel, "head"))
-	_expect(_sent == [["row_chosen", "head", "head", null, null]]
-		and panel.item_line().contains("head"),
-		"a slot shape row sends the slot as its key: %s" % [_sent])
-	panel.set_content(null, null, {})
-	_expect(panel._rows.item_count == 0 and panel.selected_key().is_empty(),
-		"no catalog shows no row")
-	panel.queue_free()
-
-
 func _the_outfit_bar_shows_and_sends_a_slot() -> void:
 	var bar := FigureOutfitBar.new()
 	var catalog := _catalog()
@@ -596,93 +450,6 @@ func _the_outfit_bar_shows_and_sends_a_slot() -> void:
 	bar._fold.button_pressed = false
 	_expect(not bar._rows.visible, "the fold hides the cells")
 	bar.queue_free()
-
-
-## The sword look of the test with a model: its parts come from a model
-## that is the look itself, as a reference body. The first part has a fit
-## on the body type of `rig`, and the look hides the hands.
-func _model_look(rig: FigureRig, looks: Dictionary, models: FigureModels) -> FigureLook:
-	var data: Dictionary = looks[SWORD].data.duplicate(true)
-
-	models.put_buffer(SWORD, FigureReference.buffer_of(rig, [looks[SWORD]]))
-	FigureEdits.parts_from_model(data, rig, SWORD, models)
-
-	var part_name: String = data["parts"][0]["name"]
-
-	FigureEdits.set_hide(data, "hands", true)
-	FigureEdits.set_part_fit(data, rig.key(), part_name, true)
-	FigureEdits.set_part_place(data, part_name,
-		Transform3D(Basis.IDENTITY, Vector3(0.0, FIT_HEIGHT, 0.0)), rig.key())
-
-	return FigureLook.from_data(data)
-
-
-func _the_gear_tab_has_the_hide_list_the_fit_and_a_model() -> void:
-	var panel := FigureGearPanel.new()
-	var parts := panel.parts_panel()
-	var rig := _rig()
-	var looks := _gear_looks(rig)
-	var models := FigureModels.new()
-
-	looks[SWORD] = _model_look(rig, looks, models)
-
-	var part_name: String = looks[SWORD].parts()[0]["name"]
-	var regions := rig.regions().keys()
-
-	add_child(panel)
-	_sent.clear()
-
-	for pair: Array in [[panel.hide_changed, "hide"], [panel.import_requested, "import"],
-			[panel.model_parts_requested, "model_parts"], [parts.part_fit_changed, "fit"],
-			[parts.fit_requested, "fit_all"]]:
-		_record(pair[0], pair[1])
-
-	regions.sort()
-	panel.set_content(_catalog(), rig, looks, models)
-	panel.select_row(SWORD)
-	_expect(looks[SWORD].error.is_empty() and panel._hides.get_child_count() == regions.size(),
-		"the hide list has one box for each region of the rig: " + looks[SWORD].error)
-
-	for index in regions.size():
-		var box := panel._hides.get_child(index) as CheckBox
-
-		_expect(box.text == regions[index] and box.button_pressed == (regions[index] == "hands")
-			and not box.disabled, "the box of %s shows the hide list of the look" % regions[index])
-
-	parts.select_part(part_name)
-	_expect(parts._fit.button_pressed and not parts._fit.disabled and parts._fit.visible,
-		"the fit box is ticked for a part with a fit on the body type")
-	_expect(is_equal_approx((parts._place_position.get_child(1) as SpinBox).value, FIT_HEIGHT),
-		"the place fields show the place of the fit")
-	_expect(parts._model_line.text.contains(SWORD)
-		and parts._model_line.text.contains(looks[SWORD].parts()[0]["node"]),
-		"the model line names the model and the node of the part: " + parts._model_line.text)
-	_expect(_sent.is_empty(), "a shown look sends nothing: %s" % [_sent])
-
-	(panel._hides.get_child(0) as CheckBox).button_pressed = true
-	parts._fit.button_pressed = false
-	parts._fit_all.pressed.emit()
-	_expect(_sent == [["hide", SWORD, regions[0], true, null], ["fit", part_name, false, null, null],
-			["fit_all", null, null, null, null]],
-		"a box sends its region, and the fit controls send the part: %s" % [_sent])
-
-	_sent.clear()
-	_expect(panel.model_key() == SWORD and panel._model_key.text.is_empty(),
-		"the model of a row is the key of the row when the field is empty")
-	panel._model_parts.pressed.emit()
-	panel._model_key.text = " other_model "
-	panel._author.text = " An Author "
-	panel._open_dialog.file_selected.emit("C:/art/helm.glb")
-	_expect(_sent == [["model_parts", SWORD, SWORD, null, null],
-			["import", SWORD, "other_model", "C:/art/helm.glb", "An Author"]],
-		"the model form sends its row, its model key, its file, and its author: %s" % [_sent])
-
-	panel.select_row(STICK)
-	_expect((panel._hides.get_child(0) as CheckBox).disabled and parts._fit.disabled,
-		"a row with no worn look has no hide list and no fit to change")
-	panel.select_row("")
-	_expect(panel._import.disabled and panel._model_parts.disabled, "the model form needs a row")
-	panel.queue_free()
 
 
 func _the_body_tab_sends_a_reference_body() -> void:
@@ -858,11 +625,11 @@ func _the_families_tab_shows_and_sends_a_family() -> void:
 	panel.select_family(Const.ITEM_FAMILY_WEAPON)
 	_expect(panel.source_of(Const.ITEM_FAMILY_WEAPON) == FigureFamiliesPanel.SOURCE_FILE
 		and panel.edited_look() == FamilyLooks.LOOK_PREFIX + Const.ITEM_FAMILY_WEAPON
-		and panel._parts.item_count == 1 and not panel._remove_row.disabled,
+		and panel.part_count() == 1 and not panel._remove_row.disabled,
 		"a family with a row shows its part in the part editor")
 	panel.select_family(Const.ITEM_FAMILY_ARMOR)
 	_expect(panel.source_of(Const.ITEM_FAMILY_ARMOR) == FigureFamiliesPanel.SOURCE_TABLE
-		and panel.edited_look().is_empty() and panel._parts.item_count == 0
+		and panel.edited_look().is_empty() and panel.part_count() == 0
 		and panel._remove_row.disabled and not panel._new_row.disabled
 		and panel._family_note.text.contains("table"),
 		"a family of the table shows a note and the new shape button")
@@ -882,134 +649,6 @@ func _the_families_tab_shows_and_sends_a_family() -> void:
 			["no_row", Const.ITEM_FAMILY_ARMOR, null, null, null],
 			["model", Const.ITEM_FAMILY_ARMOR, "meat", null, null]],
 		"the tab sends a chosen family, a new row, a removed row, and a model: %s" % [_sent])
-	panel.queue_free()
-
-
-## The presentation fields of the Gear tab (ENG-0011, step L6): off for a
-## row with no served model, the row of the file for one with a model, and
-## the signal of a changed field.
-func _the_gear_tab_shows_and_sends_a_presentation() -> void:
-	var panel := FigureGearPanel.new()
-	var rig := _rig()
-	var looks := _gear_looks(rig)
-	var presentation := ModelPresentation.from_data({"format": 1, "models": {
-		STICK: {"offset": [0.0, 0.25, 0.0], "turn": [0.0, 90.0, 0.0], "scale": 1.6}}})
-	var models := FigureModels.new()
-
-	add_child(panel)
-	_sent.clear()
-	# The signal has five arguments, one more than the record helper takes.
-	panel.presentation_changed.connect(func(model_key: String, offset: Vector3, turn: Vector3,
-			scale: float, _field: String) -> void:
-		_sent.append(["present", model_key, offset, turn, scale]))
-	_expect(presentation.error.is_empty(), "the presentation of the case reads: "
-		+ presentation.error)
-	panel.set_content(_catalog(), rig, looks, models, null, presentation)
-	panel.select_row(SWORD)
-	_expect(panel.presented_model(SWORD).is_empty() and not panel._present_scale.editable
-		and panel._present_line.text == FigureGearPanel.NO_SERVED_MODEL,
-		"a row with no served model has the fields off")
-
-	models.put_buffer(STICK, FigureReference.buffer_of(rig, [looks[SWORD]]))
-	panel.set_content(_catalog(), rig, looks, models, null, presentation)
-	panel.select_row(STICK)
-	_expect(panel.presented_model(STICK) == STICK and panel._present_scale.editable
-		and is_equal_approx(panel._present_scale.value, 1.6)
-		and FigureFields.vector_of(panel._present_turn).is_equal_approx(Vector3(0.0, 90.0, 0.0)),
-		"a row with a served model shows the row of the file")
-	_expect(_sent.is_empty(), "a shown presentation sends nothing: %s" % [_sent])
-
-	(panel._present_offset.get_child(1) as SpinBox).value = 0.5
-	# The spin box rounds the scale to its step, so the number is near 1.6.
-	_expect(_sent.size() == 1 and _sent[0][1] == STICK
-		and _sent[0][2].is_equal_approx(Vector3(0.0, 0.5, 0.0))
-		and _sent[0][3].is_equal_approx(Vector3(0.0, 90.0, 0.0)) and is_equal_approx(_sent[0][4], 1.6),
-		"a changed field sends the model, the offset, the turn, and the scale: %s" % [_sent])
-	panel.queue_free()
-
-
-## The text of each role label of the color table of a Gear tab.
-func _color_labels(panel: FigureGearPanel) -> Array:
-	var labels := []
-
-	for index in range(0, panel._colors.get_child_count(), 2):
-		labels.append((panel._colors.get_child(index) as Label).text)
-
-	return labels
-
-
-## The box of one region in the hide list of a Gear tab, or null.
-func _hide_box(panel: FigureGearPanel, region: String) -> CheckBox:
-	for child: Node in panel._hides.get_children():
-		if (child as CheckBox).text == region:
-			return child
-
-	return null
-
-
-func _the_gear_tab_shows_a_tier() -> void:
-	var panel := FigureGearPanel.new()
-	var rig := _rig()
-	var looks := _gear_looks(rig)
-	var palette := FigureEdits.new_palette()
-	var sword: Dictionary = looks[SWORD].data.duplicate(true)
-	var own := FigureGearPanel.OWN_MARK + FigureEdits.ROLE_METAL
-
-	FigureEdits.set_hide(sword, "hands", true)
-	looks[SWORD] = FigureLook.from_data(sword)
-	looks[STICK] = FigureLook.from_data({"format": 1, "key": STICK, "base": SWORD,
-		"colors": {FigureEdits.ROLE_METAL: MeshPalette.COPPER}})
-	looks[HELM] = FigureLook.from_data({"format": 1, "key": HELM, "base": "no_such_look"})
-	add_child(panel)
-	_sent.clear()
-
-	for pair: Array in [[panel.tier_requested, "tier"], [panel.color_changed, "color"],
-			[panel.color_removed, "no_color"], [panel.hide_changed, "hide"]]:
-		_record(pair[0], pair[1])
-
-	panel.set_content(_catalog(), rig, looks, null, palette)
-	panel.select_row(SWORD)
-	_expect((panel._colors.get_child(1) as OptionButton).get_item_text(0)
-		== FigureGearPanel.REMOVE_ROLE and not own in _color_labels(panel),
-		"a look with parts has no mark, and the first choice of a list removes the role")
-
-	panel.select_row(STICK)
-
-	var labels := _color_labels(panel)
-	var metal := panel._colors.get_child(labels.find(own) * 2 + 1) as OptionButton
-	var other: int = 0 if labels[0] != own else 1
-	var other_list := panel._colors.get_child(other * 2 + 1) as OptionButton
-
-	_expect(_row_text(panel, STICK).contains("tier of " + SWORD),
-		"the row of a tier names its base")
-	_expect(panel.edited_look() == STICK and panel.parts_panel()._parts.item_count == 0
-		and panel._note.text.contains(SWORD),
-		"a tier shows no part, and the note names the look with the parts")
-	_expect(labels.size() == looks[SWORD].colors().size() and own in labels,
-		"a tier shows each color role of its base, with a mark on its own color")
-	_expect(FigureFields.text_of(metal) == MeshPalette.COPPER
-		and metal.get_item_text(0) == FigureGearPanel.OF_THE_BASE
-		and metal.item_count == palette.colors().size() + 1,
-		"the list of a tier shows its own color, and it offers each color of the palette")
-	_expect(FigureFields.text_of(other_list) == looks[SWORD].colors()[labels[other]],
-		"a color role with no color of the tier shows the color of the base")
-	_expect(_hide_box(panel, "hands").button_pressed and _hide_box(panel, "hands").disabled
-		and not _hide_box(panel, "hair").button_pressed
-		and not _hide_box(panel, "hair").disabled,
-		"a region that the base hides has a ticked box that the author cannot change")
-	_expect(_sent.is_empty(), "a shown tier sends nothing: %s" % [_sent])
-
-	metal.item_selected.emit(0)
-	FigureFields.select_text(panel._copy_from, SWORD)
-	panel._tier.pressed.emit()
-	_expect(_sent == [["no_color", STICK, FigureEdits.ROLE_METAL, null, null],
-			["tier", STICK, SWORD, null, null]],
-		"the first choice gives a role back to the base, and the tier button sends the "
-			+ "row and the base: %s" % [_sent])
-
-	panel.select_row(HELM)
-	_expect(panel._note.text.contains("no_such_look") and panel._note.text.contains("no part"),
-		"the note of a tier with no base says why it draws no part")
 	panel.queue_free()
 
 
@@ -1124,41 +763,9 @@ func _the_top_strip_and_the_play_bar_send() -> void:
 	bar._play.pressed.emit()
 	_expect(_sent == [["seek", 0.5, null, null, null], ["play", 2.0, null, null, null]],
 		"the play bar sends a seek with its time, and a play with its speed: %s" % [_sent])
-	_expect(not dock.folds().is_empty() and dock.folds().has(FigureDock.TAB_GEAR + "/"
-		+ FigureGearPanel.FOLD_LOOK), "the dock names each fold by its tab and its title")
+	_expect(not dock.folds().is_empty() and dock.folds().has(FigureDock.TAB_BODY + "/"
+		+ PartEditor.FOLD_MODEL), "the dock names each fold by its tab and its title")
 	dock.queue_free()
-
-
-func _the_gear_tab_filters_and_names_a_tier() -> void:
-	var panel := FigureGearPanel.new()
-	var rig := _rig()
-	var looks := _gear_looks(rig)
-
-	looks[STICK] = FigureLook.from_data({"format": 1, "key": STICK, "base": SWORD})
-	add_child(panel)
-	panel.set_content(_catalog(), rig, looks)
-	panel._text_filter.text = "HELM"
-	panel._text_filter.text_changed.emit("HELM")
-	_expect(panel._rows.item_count == 1 and _row_of(panel, HELM) == 0,
-		"the filter keeps the rows with its text, with no regard to the case")
-	panel.select_row(SWORD)
-	_expect(panel._text_filter.text.is_empty() and _row_of(panel, SWORD) >= 0,
-		"a selected row that the filter hides clears the filter")
-
-	FigureFields.select_text(panel._copy_from, FigureGearPanel.TIER_ROW % [STICK, SWORD])
-	_expect(panel.copy_source() == STICK, "the copy list names a tier, and it gives the key")
-	_expect(not panel._copy.disabled and not panel._new_look.disabled,
-		"the look buttons are on with a row")
-	panel.select_row("")
-	_expect(panel._copy.disabled and panel._tier.disabled and panel._add_role.disabled
-		and panel._copy.tooltip_text == FigureGearPanel.NEEDS_ROW,
-		"a button that needs a row is off with no row, with the reason")
-	panel.select_row(STICK)
-	_expect(not panel._remove_look.disabled, "the remove button is on for a row with a look")
-	panel.select_row(HELM)
-	_expect(panel._remove_look.disabled and panel._remove_look.tooltip_text.contains("no worn look"),
-		"the remove button is off for a row with no look")
-	panel.queue_free()
 
 
 func _the_session_and_the_budgets_have_their_files() -> void:
@@ -1166,7 +773,7 @@ func _the_session_and_the_budgets_have_their_files() -> void:
 	var scratch := "user://figure_dock_test_%d" % Time.get_ticks_usec()
 	var session := ConfigFile.new()
 	var config := ConfigFile.new()
-	var gear_look := FigureDock.TAB_GEAR + "/" + FigureGearPanel.FOLD_LOOK
+	var gear_look := FigureDock.TAB_BODY + "/" + PartEditor.FOLD_MODEL
 
 	dock.session_path = scratch.path_join("session.cfg")
 	dock.config_path = scratch.path_join("figure_editor.cfg")
@@ -1195,7 +802,7 @@ func _the_session_and_the_budgets_have_their_files() -> void:
 		and dock.fold_states()[gear_look], "a fold takes its state from a table")
 	dock.apply_folds({gear_look: false})
 	_expect(not dock.fold_states()[gear_look], "a fold closes from the table")
-	_expect(dock.fold_states()[FigureDock.TAB_GEAR + "/" + FigurePartsPanel.FOLD_PARTS]
+	_expect(dock.fold_states()[FigureDock.TAB_BODY + "/" + PartEditor.FOLD_PARTS]
 		and not dock.fold_states()[FigureDock.TAB_BODY + "/" + FigureBodyPanel.FOLD_KIT],
 		"the Parts fold starts open, and the Kit fold starts closed")
 	dock.queue_free()
@@ -1227,7 +834,7 @@ func _a_rename_goes_out_on_a_focus_loss() -> void:
 	_expect(panel._remove_part.disabled == false, "the part buttons are on with a part")
 	panel.select_part("")
 	_expect(panel._remove_part.disabled
-		and panel._remove_part.tooltip_text == FigurePartsPanel.NEEDS_PART,
+		and panel._remove_part.tooltip_text == PartEditor.NEEDS_PART,
 		"the part buttons are off with no part, with the reason")
 	_expect(panel._remove_kit.disabled, "the kit button is off while the body shows")
 

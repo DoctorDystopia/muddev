@@ -22,8 +22,12 @@
 		"ladder": "8a5a36",
 		"lamp": "ffd27a",
 		"lamp_post": "3d4147",
+		"oil_lamp": "b08a4a",
+		"oil_lamp_glass": "ffe0a0",
 		"stairs": "8f8b82",
-		"table": "6f6b63"
+		"table": "6f6b63",
+		"torch": "4a4a4e",
+		"torch_flame": "ff9a3a"
 	},
 	"wall_top_lighten": 0.25,
 	"walls": {

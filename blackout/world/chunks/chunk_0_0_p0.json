@@ -317,6 +317,8 @@
     {"kind":"rusty_pole","x":58,"y":3,"rotation":0},
     {"kind":"rusty_pole","x":52,"y":5,"rotation":0},
     {"kind":"shopkeeper_oasis","x":14,"y":3,"rotation":3},
-    {"kind":"bank","x":14,"y":1,"rotation":0}
+    {"kind":"bank","x":14,"y":1,"rotation":0},
+    {"kind":"ladder_up","x":14,"y":0,"rotation":3},
+    {"kind":"lamp_post","x":14,"y":2,"rotation":3}
   ]
 }

@@ -9,6 +9,7 @@ Description: Implementation of the Foundry processing skill.
 
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
+from systems.interface.statefeed import constants as feed_const
 
 
 
@@ -24,3 +25,4 @@ class Foundry(BaseSkill):
     name = "Foundry"
     category = skill_constants.SKILL_CATEGORY_PROCESSING
     description = "Skill in smelting and processing raw gathered materials into usable crafting components."
+    craft_moment = feed_const.MOMENT_FOUNDRY_CRAFT

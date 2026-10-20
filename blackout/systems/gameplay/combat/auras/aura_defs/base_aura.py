@@ -11,6 +11,8 @@ reads radius/cadence off the class and calls damage_for / xp_for / can_activate.
 That keeps "adding an aura" to "adding one file", per the repo convention.
 """
 
+import math
+
 from systems.gameplay.combat import constants as const
 
 
@@ -23,6 +25,17 @@ BASE_AURA_KEY = "base"
 
 # An aura with this unlock level imposes no skill requirement.
 NO_UNLOCK_REQUIREMENT = 0
+
+# A self-burn share that burns nothing.
+NO_SELF_BURN = 0.0
+
+
+# Private constant definitions
+
+# The decimal places that self_burn_for keeps before it rounds up. Far
+# below one HP, and far above the noise of a float product: 0.07 * 100 is
+# 7.000000000000001, and its ceiling is 8.
+_BURN_ROUNDING_DIGITS = 9
 
 
 
@@ -60,6 +73,88 @@ class BaseAura:
     # than being hard-coded in the handler so a future toxin aura stays a
     # one-file change.
     damage_type = const.DAMAGE_TYPE_BURN
+
+    # Share of the max HP of the caster that each pulse burns from the
+    # caster, as a fraction. The burn lands on every pulse, with or without a target,
+    # and it can kill the caster (Nick, 10/20/2026). The `cost` property
+    # turns this number into the tip sentence.
+    self_burn_pct = NO_SELF_BURN
+
+
+    @property
+    def cost(self) -> str:
+        """
+        Purpose: Say what the aura costs the caster, as one sentence for the
+        ability rail and the tip.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            Returns the sentence, or an empty string when the aura costs
+            nothing.
+
+        Module Globals:
+            const.AURA_SELF_BURN_COST_TEMPLATE, NO_SELF_BURN read.
+
+        Methodology:
+            The sentence comes from self_burn_pct, the number that the burn
+            reads. Thus, a retune of the burn changes the tip with it.
+
+        Notes/References:
+            An aura with a cost of another kind sets its own sentence as a
+            class attribute. That attribute hides this property.
+
+        Author: Nick Hobar
+        Creation date: 10/20/2026
+        """
+        if self.self_burn_pct <= NO_SELF_BURN:
+            return ""
+
+        percent = self.self_burn_pct * 100
+        sentence = const.AURA_SELF_BURN_COST_TEMPLATE.format(percent=percent)
+
+        return sentence
+
+
+    def self_burn_for(self, caster: object, carry: float) -> tuple:
+        """
+        Purpose: Compute the burn of one pulse on the caster.
+
+        Entry:
+            caster - an entity exposing max_hp.
+            carry  - what earlier pulses burned over their share, as zero or a
+                     negative fraction. 0.0 on the first pulse.
+
+        Exit/Returns:
+            Returns (burn: int, carry: float). The caller keeps the carry and
+            passes it in on the next pulse. The burn is 0 when self_burn_pct
+            is 0.
+
+        Module Globals:
+            _BURN_ROUNDING_DIGITS read.
+
+        Methodology:
+            The burn rounds UP, and the carry gives the extra back on a later
+            pulse. Thus, the mean burn is exactly self_burn_pct of max HP at
+            every level. A share of 0.5 HP burns 1 HP on every second pulse.
+
+            Up, not down, because the aura pulses at once when it is lit. A
+            burn that rounded down would let a player relight the aura before
+            each pulse and never pay.
+
+        Notes/References:
+            Reads max_hp, not the scaling skill. Max HP is Fortitude today, but
+            a later item that changes max HP changes the burn with it.
+
+        Author: Nick Hobar
+        Creation date: 10/20/2026
+        """
+        max_hp = getattr(caster, "max_hp", 0) or 0
+        owed = round(carry + max_hp * self.self_burn_pct, _BURN_ROUNDING_DIGITS)
+        burn = max(0, math.ceil(owed))
+
+        return burn, owed - burn
 
 
     def damage_for(self, caster: object) -> int:

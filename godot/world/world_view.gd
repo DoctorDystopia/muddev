@@ -74,6 +74,9 @@ const STEP := TILE_SIZE
 ## The ground. See [TerrainView].
 @onready var _terrain: TerrainView = $Terrain
 
+## The real lights on the nearest lamps. See [FigureLights].
+@onready var _figure_lights: FigureLights = $FigureLights
+
 ## YOUR TRUE TILE: the square the server has you standing on.
 ##
 ## It was a placeholder box until 09/20/2026 and the avatar hung off it. It is
@@ -347,6 +350,7 @@ func bind_world(state: WorldState) -> void:
 	# Whatever has already landed. The console binds after the socket is open,
 	# so a chunk that arrived during the handshake is not lost.
 	_terrain.bind(_state)
+	_figure_lights.bind(_state)
 	_place_marker()
 
 
@@ -422,6 +426,9 @@ func _redraw_avatar() -> void:
 	# The DRAWN yaw, not the one being turned to: a model that lands in the
 	# middle of a turn should carry on turning, not finish it instantly.
 	_avatar.rotation.y = _avatar_yaw_drawn
+	# The lamps light the avatar through the entity layer, as they light
+	# every figure of the pool (10/18/2026).
+	FigureLights.mark_entity(_avatar)
 	_avatar_root.add_child(_avatar)
 
 
@@ -430,7 +437,7 @@ func _redraw_avatar() -> void:
 ## comes from the mesh ladder of the asset key.
 func _build_avatar() -> Node3D:
 	if _figures != null and _char != null and not _char.body_type.is_empty():
-		var figure := _figures.build(_char.body_type, _char.figure_colors)
+		var figure := _figures.build(_char.body_type, _char.figure_colors, _char.worn)
 
 		if figure != null:
 			return figure
@@ -451,7 +458,7 @@ func _avatar_look_now() -> String:
 		return ""
 
 	var figure_ready := _figures != null and _figures.has_set()
-	var figure_look := FigureLibrary.look_key(_char.body_type, _char.figure_colors)
+	var figure_look := FigureLibrary.look_key(_char.body_type, _char.figure_colors, _char.worn)
 
 	return "%s|%s|%s|%s" % [_char.asset, _char.family, figure_look, figure_ready]
 
@@ -552,9 +559,65 @@ func _on_channel(channel: String, payload: Dictionary) -> void:
 				_entities.flash(target_id)
 
 			_hitsplats.show_hit(payload, _figure_of(target_id))
+			# Each swing turns the one who swings. A target that fights
+			# back turns on its own swings. A target that does not keeps
+			# the turn of the face event.
+			_face_toward(int(payload.get("attacker_id", 0)), target_id)
+
+		Const.CH_FACE:
+			_on_face(payload)
 
 		Const.CH_AURA:
 			_on_aura(payload)
+
+
+## Two entities turn to face each other (`blackout_face`, 10/18/2026).
+## The server sends it at the start of a fight, a talk, or a trade, and
+## before each swing of a harvest. A player who clicks a raider behind
+## them turns round, and the raider turns to meet them. A player who talks
+## to a preceptor faces it. A gatherer faces the node, and the node keeps
+## its turn.
+##
+## The payload names the two by id and nothing else. Where each one stands
+## is this pane's to know. See [method _face_toward].
+func _on_face(payload: Dictionary) -> void:
+	var actor_id := int(payload.get("actor_id", 0))
+	var target_id := int(payload.get("target_id", 0))
+
+	_face_toward(actor_id, target_id)
+	_face_toward(target_id, actor_id)
+
+
+## Turn the figure of `mover_id` to face the figure of `other_id`.
+##
+## Read from the DRAWN positions, not the tiles. A melee fight stands on
+## one tile, in the slots of its ring. Two tiles would give no direction,
+## and two slots give the right one: the two face each other across the
+## ring. A pair with no gap between them keeps the yaw. So does a pair with
+## a figure this pane does not draw, which a backfire is (the two ids are
+## one).
+##
+## The avatar turns over [member _avatar_yaw], and [method _process] walks
+## it there at [constant TURN_SPEED]. Each other figure turns in the pool,
+## by the same rate. See [method EntityPool.face].
+func _face_toward(mover_id: int, other_id: int) -> void:
+	if mover_id == other_id:
+		return
+
+	var mover := _figure_of(mover_id)
+	var other := _figure_of(other_id)
+
+	if mover == null or other == null:
+		return
+
+	var yaw := yaw_facing(mover.global_position, other.global_position,
+		mover.rotation.y)
+
+	if _char != null and _char.is_me(mover_id):
+		_avatar_yaw = yaw
+		return
+
+	_entities.face(mover_id, yaw)
 
 
 ## The figure of one entity id, or null when this pane draws none.
@@ -659,27 +722,27 @@ func _ground_point(cell: Vector2i, plane: int = -1) -> Variant:
 
 ## Light up whatever a click would act on.
 ##
-## Answers the question the pane could not answer before: entities are a few
-## pixels across and picked by CURSOR DISTANCE rather than by a raycast, so
-## without feedback a player has no way to know which of two adjacent raiders
-## they are about to attack. The rule is deliberately the same one [method
-## _act_on] uses -- entity first, then tile -- so what lights up is exactly what
-## a click would take.
+## Answers the question the pane could not answer before. Two raiders on
+## one tile overlap. Without feedback a player cannot know which one they
+## are about to attack. [method EntityPool.pick] takes the model under the
+## cursor, else the nearest one within [constant PICK_REACH_PIXELS]. The
+## rule is the same one as [method _act_on]: entity first, then tile. Thus,
+## what lights up is what a click would take.
 func _hover_at(screen_point: Vector2) -> void:
 	var entity_id := _entities.pick(_camera, screen_point, PICK_REACH_PIXELS)
 
 	if entity_id != 0:
 		_clear_tile_hover()
 
-		# An entity the server gave no `interact` STOPS the search rather than
-		# falling through to the tile beneath it, which is what _act_on does
-		# too -- so nothing lights and nothing happens. Falling through would
+		# An entity STOPS the search rather than falling through to the tile
+		# beneath it, which is what _act_on does too. Falling through would
 		# mean a cursor aimed at another player lights the ground under them
-		# and a click walks you there.
+		# and a click walks you there. Every entity with a dbref affords
+		# Inspect, so nearly every entity lights.
 		var entity := _entities.entity(entity_id)
-		var affords := _interaction(entity)
+		var affords := not options_for(entity).is_empty()
 
-		_entities.hover(entity_id if not affords.is_empty() else 0)
+		_entities.hover(entity_id if affords else 0)
 		_set_hover_text(entity_hover_text(entity))
 		return
 
@@ -706,8 +769,9 @@ func clear_hover() -> void:
 ##
 ## Static and public so a test can assert the wording with no scene. The words
 ## come from [method ChooseOption.row_text], so the bar and the menu cannot name
-## one action two ways. An entity that affords nothing, such as another player,
-## gives its name alone. A click does nothing there, but the name is still news.
+## one action two ways. An entity that affords nothing, which is one with no
+## dbref, gives its name alone. A click does nothing there, but the name is
+## still news.
 static func entity_hover_text(entity: Dictionary) -> String:
 	var options := options_for(entity)
 
@@ -780,9 +844,18 @@ func _act_on(screen_point: Vector2) -> void:
 	_walk_towards(_cell_under(screen_point))
 
 
+## A left click sends the FIRST row of the menu, which is `interact` whenever
+## the server named a verb, and Inspect otherwise. The hover bar names the
+## same row, so what the bar says is what the click does.
 func _act_on_entity(entity: Dictionary) -> void:
-	var command := approach_command(_interaction(entity), entity,
-		_state.current_cell, _state.current_z, walks_there(entity))
+	var options := options_for(entity)
+
+	if options.is_empty():
+		return
+
+	var first: Dictionary = options[0]
+	var command := approach_command(str(first.get("command", "")), entity,
+		_state.current_cell, _state.current_z, walks_there(first))
 
 	if command.is_empty():
 		return
@@ -845,6 +918,11 @@ func _offer_options(screen_point: Vector2) -> void:
 ## Deduplicates on the command rather than on the label, because two rows that
 ## send the same string are one option however they are worded, and a menu that
 ## lists it twice looks broken.
+##
+## Inspect is the LAST row of every entity (Nick, 10/16/2026), as the OSRS
+## "Examine" row is. The server spells the command in
+## [constant Const.ENTITY_INSPECT_TEMPLATE], and this pane fills in the dbref,
+## as [method approach_command] fills in the tile. See [method inspect_command].
 static func options_for(entity: Dictionary) -> Array:
 	var target := str(entity.get("name", ""))
 	var rows: Array = []
@@ -868,23 +946,50 @@ static func options_for(entity: Dictionary) -> Array:
 			"approach": walks_there(action),
 		})
 
-	if not rows.is_empty():
-		return rows
-
 	var single := _interaction(entity)
-
-	if single.is_empty():
-		return []
 
 	# The fallback row's answer comes off the ENTITY, which is where the
 	# server mirrors the primary verb's -- the same place `interact` itself
 	# comes from.
-	return [{
-		"command": single,
-		"label": "",
-		"target": target,
-		"approach": walks_there(entity),
-	}]
+	if rows.is_empty() and not single.is_empty():
+		seen[single] = true
+		rows.append({
+			"command": single,
+			"label": "",
+			"target": target,
+			"approach": walks_there(entity),
+		})
+
+	var inspect := inspect_command(entity)
+
+	# No label: [method ChooseOption.row_text] words the row from the verb,
+	# as it does for a tile. `approach` is false because the command reads
+	# from where the player stands. The server lists `inspect` in
+	# SELF_APPROACHING_VERBS for the same reason.
+	if not inspect.is_empty() and not seen.has(inspect):
+		rows.append({
+			"command": inspect,
+			"label": "",
+			"target": target,
+			"approach": false,
+		})
+
+	return rows
+
+
+## The command that reads the description of `entity`, or "" when the row
+## carries no dbref.
+##
+## The dbref is the `id` of the row, which every entity carries. The template
+## is the server's, so a rename of the verb on the server reaches this pane
+## through the generated constants with no edit here.
+static func inspect_command(entity: Dictionary) -> String:
+	var dbref := int(entity.get("id", 0))
+
+	if dbref <= 0:
+		return ""
+
+	return Const.ENTITY_INSPECT_TEMPLATE.replace("{dbref}", str(dbref))
 
 
 ## The whole command the server said this entity affords, or "".
@@ -908,9 +1013,9 @@ static func options_for(entity: Dictionary) -> Array:
 ## Every one of those was already correct in the payload. The pane simply was
 ## not reading it.
 ##
-## An empty answer means the entity affords nothing -- another player, or
-## anything the server has not given a verb -- and the pane leaves it unlit and
-## unclickable.
+## An empty answer means the server named no verb of its own for the entity.
+## The entity still affords Inspect, through [method options_for], so a left
+## click on it reads its description and nothing more.
 static func _interaction(entity: Dictionary) -> String:
 	return str(entity.get("interact", ""))
 
@@ -1146,6 +1251,25 @@ static func yaw_towards(from: Vector2i, to: Vector2i, keep: float) -> float:
 		return keep
 
 	return atan2(float(delta.x), float(-delta.y))
+
+
+## Which way to turn a figure at `from` so that it faces `to`. Both points
+## are in world units. The answer is `keep` when the two stand on one point.
+##
+## The twin of [method yaw_towards] for a point instead of a step. The
+## same `atan2(dx, dz)` puts the authored front (+Z) along the line from
+## `from` to `to`. No flip of the Z term here: both points are world
+## positions, and world Z already grows southward.
+##
+## Only the ground plane counts. A foe on the plane above gets a turn
+## along the ground, not a tilt up.
+static func yaw_facing(from: Vector3, to: Vector3, keep: float) -> float:
+	var delta := Vector2(to.x - from.x, to.z - from.z)
+
+	if delta.length() <= StepAnimator.ARRIVED:
+		return keep
+
+	return atan2(delta.x, delta.y)
 
 
 ## Face the way the last step went.

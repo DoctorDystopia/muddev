@@ -195,6 +195,10 @@ def _publish_level_change(obj: object) -> None:
                           skills feed combat level is the combat_level
                           package's business, and a list of them here would
                           be a second copy.
+          char_abilities -- the ability rail. The lock of an ability reads
+                          a skill level, so a level that moves can unlock
+                          one. MARKED stale, for every skill, for the reason
+                          char_combat gives.
 
         Every one checks for a subscriber before building anything, so they
         cost nothing on a server with no graphical client attached.
@@ -225,6 +229,7 @@ def _publish_level_change(obj: object) -> None:
     feed.refresh_summary(obj)
     feed.refresh_skills(obj)
     feed.emit_combat_options(obj)
+    feed.refresh_abilities(obj)
 
 
 

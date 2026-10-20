@@ -169,6 +169,7 @@ def _job(record, source, input_path, output_path) -> dict:
 
     return {"input": input_path, "output": output_path, "node": record.node,
             "texture": texture, "fix": fix, "max_texture_edge": edge,
+            "max_triangles": record.max_triangles,
             "texture_format": record.texture_format,
             "animations": record.animations,
             "color_roles": record.color_roles,

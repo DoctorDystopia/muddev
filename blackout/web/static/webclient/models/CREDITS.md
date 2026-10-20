@@ -28,12 +28,35 @@ Options pane.
 - License: Made for Blackout
 - Models: `copper_pole`
 
+## Copper shortbow
+
+- Author: Nick Hobar
+- Source: https://playblackout.io
+- License: Made for Blackout
+- Models: `copper_shortbow`
+
+## Free Blacksmith Tool Set - PBR Textures included
+
+- Author: JordanHolmes
+- Source: https://jordanholmes.itch.io/free-blacksmith-tool-set-pbr-textures-included
+- License: License not confirmed
+- Models: `anvil`, `hammer`
+- **License not confirmed.** See the source record for the reason.
+
 ## Low Poly Food Asset Pack
 
 - Author: Kyle Fuji
 - Source: https://www.patreon.com/kylefuji
 - License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - Models: `moderator_egg`, `mutant_giant_cured_chuck`, `mutant_giant_cured_fatless_meat`, `mutant_giant_cured_filet`, `mutant_giant_cured_meat_sandwich`, `mutant_giant_cured_prime_meat`, `mutant_giant_prime_cured_meat_sandwich`, `mutant_giant_prime_steak`, `mutant_giant_steak`, `mutant_raider_cured_chuck`, `mutant_raider_cured_fatless_meat`, `mutant_raider_cured_filet`, `mutant_raider_cured_meat_sandwich`, `mutant_raider_cured_prime_meat`, `mutant_raider_prime_cured_meat_sandwich`, `mutant_raider_prime_steak`, `mutant_raider_steak`
+
+## Low Poly Medieval Boiler Machine
+
+- Author: poly.alchemist
+- Source: https://polyalchemist.itch.io/low-poly-medieval-boiler-machine
+- License: License not confirmed
+- Models: `furnace`
+- **License not confirmed.** See the source record for the reason.
 
 ## LOWPO: Goblin Assets
 

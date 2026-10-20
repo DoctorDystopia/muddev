@@ -11,9 +11,13 @@ Description: The one reader and the one writer of the figure of a
              of that body type, with those colors (DESIGN-0014 section 20).
 
              Each write goes through set_body_type or set_figure_color. Both
-             end in _publish, so each write reaches each observer: the owner
+             end in publish, so each write reaches each observer: the owner
              through char_avatar, and each other player in view through the
              entity row. test_freshness.py holds the proof.
+
+             worn_items_of gives the third fact of the figure, the item in
+             each slot. The equipment handler owns that fact and calls
+             publish on each change (DESIGN-0014 section 21).
 
              No character creator exists yet (DESIGN-0014 decision 9). Today
              the moderator egg is the only caller of the two writers.
@@ -25,15 +29,15 @@ from systems.gameplay.figure import constants as const
 from systems.gameplay.figure import figure_files
 
 
-# ─── Private helper routines ─────────────────────────────────────────────────
+# ─── Public routines ─────────────────────────────────────────────────────────
 
-def _publish(character) -> None:
+def publish(character) -> None:
     """
     Purpose: Send the new figure of a character to each client that
              draws it.
 
     Entry:
-        character - the character whose body type or colors changed.
+        character - the character whose body type, colors, or gear changed.
 
     Exit/Returns:
         No return value.
@@ -55,6 +59,10 @@ def _publish(character) -> None:
         Wrapped, because a feed send must never stop a write that already
         happened.
 
+        Three callers: the two writers of this module, and
+        EquipmentHandler._publish, because the worn record is on the same
+        row (DESIGN-0014 section 21).
+
     Notes/References:
         systems/interface/statefeed/events.py owns both emitters.
 
@@ -71,10 +79,53 @@ def _publish(character) -> None:
         if location is not None:
             feed.emit_entity_arrived(location, character)
     except Exception as exc:
-        logger.log_err(f"character_figure._publish: {character} feed send failed: {exc!r}")
+        logger.log_err(f"character_figure.publish: {character} feed send failed: {exc!r}")
 
 
-# ─── Public routines ─────────────────────────────────────────────────────────
+def worn_items_of(character) -> dict:
+    """
+    Purpose: Give the item in each slot of a character: slot value -> item.
+
+    Entry:
+        character - a character, or any object. An object with no equipment
+                    handler wears nothing.
+
+    Exit/Returns:
+        Returns a new dict, slot value (the text of a WieldLocation) -> the
+        equipped object. A slot with no item has no entry. An empty dict for
+        an object that wears nothing.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The statefeed turns each item into its asset key, with the routine
+        that names the art of each entity. This module names no asset key,
+        so the worn record and an item on the ground cannot disagree.
+
+        Reads through getattr, because the statefeed calls this on each row
+        of a character, and a row must never raise into a gameplay path.
+
+    Notes/References:
+        items/equipment/handler.py owns the slots. DESIGN-0014 section 21.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    equipment = getattr(character, "equipment", None)
+    slots = getattr(equipment, "slots", None)
+
+    if not slots:
+        return {}
+
+    worn = {}
+
+    for slot, item in dict(slots).items():
+        if item is not None:
+            worn[str(getattr(slot, "value", slot))] = item
+
+    return worn
+
 
 def body_type_of(character) -> str:
     """
@@ -181,7 +232,7 @@ def set_body_type(character, body_type: str) -> tuple:
         return False, message
 
     character.attributes.add(const.BODY_TYPE_ATTR, body_type)
-    _publish(character)
+    publish(character)
     message = const.MSG_BODY_TYPE_SET.format(target=character.key, body_type=body_type)
 
     return True, message
@@ -235,6 +286,6 @@ def set_figure_color(character, role: str, color: str) -> tuple:
         message = const.MSG_COLOR_SET.format(target=character.key, role=role, color=color)
 
     character.attributes.add(const.FIGURE_COLORS_ATTR, colors)
-    _publish(character)
+    publish(character)
 
     return True, message

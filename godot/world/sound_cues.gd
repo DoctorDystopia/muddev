@@ -45,12 +45,34 @@ const LEVEL_UP := "level_up"
 ## same name, through [constant _MOMENT_CUES].
 const TASK_COMPLETE := "task_complete"
 
+## One gathering attempt at a node, a hit or a miss: one cue for each
+## gathering skill. The server sends the moment of the skill on each attempt
+## of the channel. Thus, the cue repeats until the gathering stops, and the
+## clip itself does not loop.
+const CUT_ATTEMPT := "cut_attempt"
+const BUTCHER_ATTEMPT := "butcher_attempt"
+
+## One finished craft under a skill: one cue for each skill that names a
+## craft moment. A batch makes one item at a time. Thus, the cue repeats
+## until the batch stops.
+const METALSMITH_CRAFT := "metalsmith_craft"
+const FOUNDRY_CRAFT := "foundry_craft"
+
+## A transition tile moved the player to its target tile. The server sends
+## the moment one time for each move, to the player who moved.
+const TRANSITION := "transition"
+
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Cue to clip. Adding a sound is one constant above and one row here.
 const _STREAMS := {
 	LEVEL_UP: preload("res://audio/sfx/level_up.wav"),
 	TASK_COMPLETE: preload("res://audio/sfx/task_complete.wav"),
+	CUT_ATTEMPT: preload("res://audio/sfx/cut_attempt.wav"),
+	BUTCHER_ATTEMPT: preload("res://audio/sfx/butcher_attempt.wav"),
+	METALSMITH_CRAFT: preload("res://audio/sfx/metalsmith_craft.wav"),
+	FOUNDRY_CRAFT: preload("res://audio/sfx/foundry_craft.wav"),
+	TRANSITION: preload("res://audio/sfx/transition.wav"),
 }
 
 ## Server moment to cue. The server names the moment, and this table decides
@@ -59,6 +81,11 @@ const _STREAMS := {
 ## with no row plays nothing.
 const _MOMENT_CUES := {
 	_Const.MOMENT_TASK_COMPLETE: TASK_COMPLETE,
+	_Const.MOMENT_CUT_ATTEMPT: CUT_ATTEMPT,
+	_Const.MOMENT_BUTCHER_ATTEMPT: BUTCHER_ATTEMPT,
+	_Const.MOMENT_METALSMITH_CRAFT: METALSMITH_CRAFT,
+	_Const.MOMENT_FOUNDRY_CRAFT: FOUNDRY_CRAFT,
+	_Const.MOMENT_TRANSITION: TRANSITION,
 }
 
 

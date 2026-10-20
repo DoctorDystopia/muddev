@@ -148,6 +148,11 @@ func _ready() -> void:
 	_hover_lights_one_entity_at_a_time()
 	_hover_never_changes_which_shader_draws_it()
 	_hover_does_not_survive_a_rebuild()
+	_a_ray_through_a_model_picks_it()
+	_a_ray_at_the_side_of_a_model_picks_it()
+	_a_ray_beside_every_model_picks_nothing()
+	_a_ray_down_each_head_of_a_crowd_picks_that_one()
+	_a_pick_survives_a_redraw()
 	_a_lone_thing_is_not_drawn_inside_the_observer()
 	_the_observer_takes_a_slot_in_their_own_ring()
 	_a_ring_leaves_room_between_its_neighbours()
@@ -169,12 +174,18 @@ func _ready() -> void:
 	_a_first_sighting_rises_out_of_the_fog()
 	_a_changed_look_does_not_rise_again()
 	_a_figure_still_in_view_does_not_rise_again()
+	_a_face_turns_a_mobile_at_once_with_the_animation_off()
+	_a_face_on_a_thing_that_cannot_move_does_nothing()
+	_a_face_outlives_a_rebuild_for_a_new_look()
+	_a_face_ends_when_the_entity_leaves()
 
 	# LAST, because each turns the animation back on. See the bind above.
 	_a_moved_entity_is_drawn_where_it_was_not_where_it_is_going()
 	_a_travelling_entity_has_its_true_tile_marked()
 	_two_entities_bound_for_one_tile_ask_for_one_mark()
 	_turning_the_animation_off_lands_everybody()
+	_a_face_walks_the_turn_with_the_animation_on()
+	_a_step_turns_a_mobile_to_its_walk_and_the_face_comes_back()
 
 	# Waits for a flash to run out, so it goes after every case that does not.
 	await _a_flash_during_the_tint_ends_at_the_own_colour()
@@ -521,6 +532,80 @@ func _hover_does_not_survive_a_rebuild() -> void:
 	_pool.hover(20743)
 
 	_expect(_is_lit(_node_for(20743)), "and can be lit again afterwards")
+	_pool.replace_all([])
+
+
+# ─── The pick ────────────────────────────────────────────────────────────────
+
+## Each pixel of a drawn model is clickable (10/20/2026). The ray tier of
+## [method EntityPool.pick] takes no camera, so a test can aim a ray by
+## hand. The screen tier is the old rule, and it needs a camera.
+const RAY_HEIGHT := 5.0
+
+
+func _a_ray_through_a_model_picks_it() -> void:
+	_pool.replace_all([RAIDER])
+
+	var origin := _node_for(20743).global_position + Vector3.UP * RAY_HEIGHT
+
+	_expect(_pool.pick_ray(origin, Vector3.DOWN) == 20743,
+		"a ray down through the raider picks the raider")
+
+
+## The old rule took a point. The side of a model is far from its origin
+## on screen when the camera is near, and this ray meets no origin.
+func _a_ray_at_the_side_of_a_model_picks_it() -> void:
+	_pool.replace_all([RAIDER])
+
+	var origin := _node_for(20743).global_position + Vector3.RIGHT * RAY_HEIGHT
+
+	_expect(_pool.pick_ray(origin, Vector3.LEFT) == 20743,
+		"a ray from the side through the raider picks the raider")
+
+
+func _a_ray_beside_every_model_picks_nothing() -> void:
+	_pool.replace_all([RAIDER, SWORD])
+
+	var origin := Vector3(RAY_HEIGHT, RAY_HEIGHT, RAY_HEIGHT)
+
+	_expect(_pool.pick_ray(origin, Vector3.DOWN) == 0,
+		"a ray past every box picks nothing")
+
+
+## Five on one tile overlap (see [constant EntityPool.ENTITY_SCALE]), so
+## their boxes overlap too. The face in front decides, and from above the
+## face in front of each one is its own head.
+func _a_ray_down_each_head_of_a_crowd_picks_that_one() -> void:
+	var crowd := _crowd(5)
+
+	_pool.replace_all(crowd)
+
+	for entity_data: Dictionary in crowd:
+		var entity_id := int(entity_data["id"])
+		var origin := _node_for(entity_id).global_position + Vector3.UP * RAY_HEIGHT
+		var picked := _pool.pick_ray(origin, Vector3.DOWN)
+
+		_expect(picked == entity_id,
+			"a ray down the head of %d picks it, got %d" % [entity_id, picked])
+
+	_pool.replace_all([])
+
+
+## The faces of a node are cached on the first pick. A redraw frees the
+## node, and a cache that outlived it would test freed meshes.
+func _a_pick_survives_a_redraw() -> void:
+	_pool.replace_all([RAIDER])
+	_pool.pick_ray(_node_for(20743).global_position + Vector3.UP * RAY_HEIGHT,
+		Vector3.DOWN)
+
+	var changed := RAIDER.duplicate()
+	changed["asset"] = "rusty_scrap_shortsword"
+	_pool.replace_all([changed])
+
+	var origin := _node_for(20743).global_position + Vector3.UP * RAY_HEIGHT
+
+	_expect(_pool.pick_ray(origin, Vector3.DOWN) == 20743,
+		"the rebuilt node picks through its new faces")
 	_pool.replace_all([])
 
 
@@ -1002,6 +1087,132 @@ func _turning_the_animation_off_lands_everybody() -> void:
 		"the figure is on its true tile the moment the setting changes")
 	_expect(_marked.is_empty(), "and nothing is marked any more")
 
+	_pool.replace_all([])
+
+
+# ─── Facing a foe ────────────────────────────────────────────────────────────
+
+## A yaw that is not the default and not a quarter turn, so a lost face or
+## a chunk facing in its place shows.
+const FACED := 1.1
+
+## The server names who attacks whom. The pane gives the pool the yaw. With
+## the animation off, the node turns in the same call.
+func _a_face_turns_a_mobile_at_once_with_the_animation_off() -> void:
+	_pool.replace_all([RAIDER])
+	_pool.face(20743, FACED)
+
+	_expect(is_equal_approx(_node_for(20743).rotation.y, FACED),
+		"a face turns the raider at once with the animation off")
+	_pool.replace_all([])
+
+
+## A sign and a sword do not fight, and a chunk object faces the way its
+## file says. The face is for a character and an NPC alone.
+func _a_face_on_a_thing_that_cannot_move_does_nothing() -> void:
+	var turned := SIGN.duplicate()
+
+	turned[_Const.ENTITY_FACING_KEY] = 1.0
+	_pool.replace_all([turned, SWORD])
+	_pool.face(20748, FACED)
+	_pool.face(20744, FACED)
+
+	_expect(is_equal_approx(_node_for(20748).rotation.y, TerrainView.model_yaw(1)),
+		"a face on a sign leaves its chunk facing alone")
+	_expect(is_zero_approx(_node_for(20744).rotation.y),
+		"a face on a sword does nothing")
+	_pool.replace_all([])
+
+
+## A new facing on the row builds the node again. The raider stays in its
+## fight, so the new node faces its foe, not the way the chunk file says.
+func _a_face_outlives_a_rebuild_for_a_new_look() -> void:
+	_pool.replace_all([RAIDER])
+	_pool.face(20743, FACED)
+
+	var before := _node_for(20743)
+	var turned := RAIDER.duplicate()
+
+	turned[_Const.ENTITY_FACING_KEY] = 2.0
+	_pool.add(turned)
+
+	var after := _node_for(20743)
+
+	_expect(after != before, "the new facing builds a new node")
+	_expect(after != null and is_equal_approx(after.rotation.y, FACED),
+		"and the new node still faces its foe")
+	_pool.replace_all([])
+
+
+## A raider that leaves and comes back is a new sighting, with no fight.
+func _a_face_ends_when_the_entity_leaves() -> void:
+	_pool.replace_all([RAIDER])
+	_pool.face(20743, FACED)
+	_pool.replace_all([])
+	_pool.replace_all([RAIDER])
+
+	_expect(is_zero_approx(_node_for(20743).rotation.y),
+		"a raider that left and came back has no face")
+	_pool.replace_all([])
+
+
+## With the animation on, the turn is a walk of the rotation at the rate of
+## the avatar. One frame turns part of the way, and enough frames arrive.
+func _a_face_walks_the_turn_with_the_animation_on() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([RAIDER])
+	_pool.face(20743, FACED)
+
+	var node := _node_for(20743)
+
+	_expect(is_zero_approx(node.rotation.y),
+		"a face with the animation on turns nothing in the call")
+
+	_pool._process(0.02)
+
+	_expect(node.rotation.y > 0.0 and node.rotation.y < FACED,
+		"one frame turns part of the way")
+
+	for _frame: int in 100:
+		_pool._process(0.02)
+
+	_expect(is_equal_approx(node.rotation.y, FACED),
+		"and enough frames turn all of the way")
+
+	_pool.set_animated(false)
+	_pool.replace_all([])
+
+
+## A step takes over while the raider slides, and the face comes back when
+## it stands. An NPC turns to its walk, as the avatar does (10/18/2026).
+func _a_step_turns_a_mobile_to_its_walk_and_the_face_comes_back() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([RAIDER])
+	_pool.face(20743, FACED)
+
+	var node := _node_for(20743)
+
+	for _frame: int in 100:
+		_pool._process(0.02)
+
+	# A step east, in world units: +X.
+	_pool.replace_all([_moved(RAIDER, NEXT_DOOR)])
+
+	for _frame: int in 10:
+		_pool._process(0.02)
+
+	var east := atan2(1.0, 0.0)
+
+	_expect(absf(angle_difference(node.rotation.y, east)) < absf(angle_difference(FACED, east)),
+		"a step turns the raider toward its walk")
+
+	for _frame: int in 200:
+		_pool._process(0.02)
+
+	_expect(is_equal_approx(node.rotation.y, FACED),
+		"and the face comes back when it stands")
+
+	_pool.set_animated(false)
 	_pool.replace_all([])
 
 

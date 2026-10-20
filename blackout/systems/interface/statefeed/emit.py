@@ -262,6 +262,66 @@ def emit(obj, payload, force: bool = False, body=None) -> int:
         return 0
 
 
+def emit_to_sessions(sessions, payload) -> int:
+    """
+    Purpose: Send one payload to the sessions in a group that subscribe to
+             its channel. For a fact of the server, not of an observer.
+
+    Entry:
+        sessions - ServerSessions, usually every connected session.
+        payload  - a payloads._Payload subclass instance.
+
+    Exit/Returns:
+        The number of sessions that got the payload. Never raises.
+
+    Module Globals:
+        const.RESERVED_CHANNEL_NAME read.
+
+    Methodology:
+        emit() walks the sessions of one object. The tick has no object, so
+        this walks a given group instead. The same three rules hold: nothing
+        raises, a session that does not subscribe costs one set lookup, and
+        the reserved name is refused.
+
+        No rate cap and no buffer. The one caller sends after the flush of
+        the tick, and each message is one tick.
+
+        The body renders one time, after the first subscriber is found. A
+        server with no graphical client builds nothing.
+
+    Notes/References:
+        statefeed/performance.py is the one caller.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    channel = payload.channel
+
+    if not channel or channel == const.RESERVED_CHANNEL_NAME:
+        logger.log_err(f"statefeed: refusing to emit on channel {channel!r}.")
+        return 0
+
+    sent = 0
+    body = None
+
+    try:
+        for session in sessions:
+            wants = subscriptions.is_subscribed(session, channel)
+
+            if not wants:
+                continue
+
+            if body is None:
+                body = payload.to_dict()
+
+            session.msg(**{channel: body})
+            sent += 1
+    except Exception:
+        logger.log_trace()
+
+    return sent
+
+
 def emit_to_room(room, payload, exclude=(), body=None) -> int:
     """
     Purpose: Send one payload to every subscribed observer standing in a room.

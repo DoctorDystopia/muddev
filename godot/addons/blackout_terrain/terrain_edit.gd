@@ -57,6 +57,12 @@ func is_empty() -> bool:
 	return _layers.is_empty() and _objects.is_empty()
 
 
+## True when the edit adds or removes an object. The world then redraws the
+## neighbours of each touched chunk too, because a lamp lights them.
+func has_objects() -> bool:
+	return not _objects.is_empty()
+
+
 ## The number of changed corners and tiles, and object changes.
 func size() -> int:
 	var total := _objects.size()

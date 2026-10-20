@@ -11,6 +11,8 @@ Description: Butchery, the corpse it works on, and the parts of the gathering
              adding a third cut is covered the day it is declared.
 """
 
+from unittest import mock
+
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTest
 
@@ -34,6 +36,7 @@ from systems.gameplay.progression.skills.skill_defs.gathering import (
 from systems.gameplay.progression.tests import gathering_support
 from systems.gameplay.spawning.respawn import get_respawn_manager, npc_present
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed_events
 from systems.interface.statefeed import serializers
 from typeclasses.corpses import CORPSE_NPC_KEY_ATTR
 from typeclasses.objects import DefaultObject
@@ -567,6 +570,38 @@ class ButcheryYieldTest(EvenniaCommandTest):
                 for skill_key, amount in taught.items():
                     skill_name = SKILL_REGISTRY[skill_key].name
                     self.assertIn(f"+{amount} {skill_name}", response)
+
+
+    def test_each_attempt_sends_the_butchery_attempt_moment(self):
+        """The client plays the Butchery sound one time for each attempt."""
+        self._set_level(_yields()[0].required_level)
+        skill = SKILL_REGISTRY[_BUTCHERY]()
+
+        # The miss goes first. A hit consumes the corpse.
+        scripts = {
+            "miss": gathering_support.DRAWS_MISS,
+            "hit": gathering_support.DRAWS_YIELD_ONLY,
+        }
+
+        for outcome, draws in scripts.items():
+            with self.subTest(attempt=outcome):
+                with mock.patch.object(feed_events, "emit_moment") as emitted:
+                    gathering_support.swing_once(
+                        self.char1, skill, self.corpse, draws=draws)
+
+                emitted.assert_called_once_with(
+                    self.char1, feed_const.MOMENT_BUTCHER_ATTEMPT)
+
+
+    def test_a_refused_harvest_sends_no_moment(self):
+        top_level = _yields()[-1].required_level
+        locked = _yields()[-1]
+        self._set_level(top_level - 1)
+
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            self._butcher(wanted=locked.item_key)
+
+        emitted.assert_not_called()
 
 
     def test_a_corpse_cannot_be_cut(self):

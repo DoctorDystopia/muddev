@@ -17,6 +17,7 @@ extends RefCounted
 ##     parts    optional: [{name, bone, region, position, rotation, scale,
 ##              shapes, model, node}, ...]
 ##     fit      optional: body type -> [{part, position, rotation, scale}, ...]
+##     served   optional: {bone, position, rotation, scale}
 ##
 ## The writer leaves out an optional key that is empty. A tier of an item is
 ## then a file of a few lines.
@@ -66,6 +67,15 @@ extends RefCounted
 ## its character has for each group ([FigureOutfit]). A kit part can take
 ## the place of a part of the body. It then hides the region of that part.
 ## The server names a kit part by its key only.
+##
+## ## The served place (10/17/2026)
+##
+## A served model of the asset key wins over the parts of the look
+## ([FigureOutfit]). The figure draws it as one part with the name
+## [constant SERVED_PART]. `served` holds the bone and the place of that
+## part, after the author moved it. With no `served`, the model takes the
+## box of the parts. A tier keeps its own `served`, because each asset key
+## has its own model. No `fit` row applies to it.
 
 ## The newest format that this reader knows. It reads each older format.
 const FORMAT := 1
@@ -73,7 +83,11 @@ const FORMAT := 1
 const FILE_SUFFIX := ".json"
 
 ## The keys that the writer leaves out when they are empty.
-const OPTIONAL_KEYS := ["base", "kit", "hides", "colors", "parts", "fit"]
+const OPTIONAL_KEYS := ["base", "kit", "hides", "colors", "parts", "fit", "served"]
+
+## The name of the part that draws the served model of the asset key. A
+## part of a look file cannot have this name.
+const SERVED_PART := "served"
 
 ## A name of a kit group: a-z, 0-9, and _, with a letter first.
 const NAME_PATTERN := "^[a-z][a-z0-9_]*$"
@@ -217,6 +231,12 @@ func fit() -> Dictionary:
 	return data.get("fit", {})
 
 
+## The bone and the place of the served model: `{bone, position, rotation,
+## scale}`. An empty dictionary when the author did not move it.
+func served() -> Dictionary:
+	return data.get("served", {})
+
+
 ## The fit row of one part on one body type, or an empty dictionary.
 func fit_row(body_key: String, part_name: String) -> Dictionary:
 	for row: Dictionary in fit().get(body_key, []):
@@ -336,6 +356,9 @@ func resolved(looks: Dictionary) -> FigureLook:
 		out["hides"] = hidden.keys()
 		out["hides"].sort()
 
+	if data.has("served"):
+		out["served"] = data["served"]
+
 	var look := FigureLook.new()
 
 	look.data = out
@@ -360,6 +383,36 @@ static func set_part_transform(row: Dictionary, xform: Transform3D) -> void:
 	# The angles come from the basis with no scale in it.
 	row["rotation"] = FigureJson.from_vector3(xform.basis.orthonormalized().get_euler())
 	row["scale"] = FigureJson.from_vector3(xform.basis.get_scale())
+
+
+## The place of one shape of a shape list in the space of its part: its
+## offset, its rotation, and its scale. [MeshBuilder] puts the three on the
+## node of the shape, so the node of a shape has this transform.
+static func shape_transform(shape: Dictionary) -> Transform3D:
+	var turn := FigureJson.vector3(shape.get("rotation"))
+	var size := FigureJson.vector3(shape.get("scale"), Vector3.ONE)
+	var basis := Basis.from_euler(turn).scaled_local(size)
+
+	return Transform3D(basis, FigureJson.vector3(shape.get("offset")))
+
+
+## Write the place of one shape into its row. A place that is the default
+## of its key leaves the row with no key, as a new shape has none. Thus, a
+## shape that goes back to its place leaves the file as it was.
+static func set_shape_transform(shape: Dictionary, xform: Transform3D) -> void:
+	var places := {
+		"offset": [FigureJson.from_vector3(xform.origin), FigureJson.from_vector3(Vector3.ZERO)],
+		"rotation": [FigureJson.from_vector3(xform.basis.orthonormalized().get_euler()),
+			FigureJson.from_vector3(Vector3.ZERO)],
+		"scale": [FigureJson.from_vector3(xform.basis.get_scale()),
+			FigureJson.from_vector3(Vector3.ONE)],
+	}
+
+	for place_key: String in places:
+		if places[place_key][0] == places[place_key][1]:
+			shape.erase(place_key)
+		else:
+			shape[place_key] = places[place_key][0]
 
 
 ## One shape of a shape list as [MeshBuilder] reads it: each vector is a
@@ -431,7 +484,24 @@ static func _problem(parsed: Dictionary) -> String:
 	if problem.is_empty():
 		problem = _fit_problem(parsed.get("fit", {}))
 
+	if problem.is_empty():
+		problem = _served_problem(parsed.get("served", {}))
+
 	return problem
+
+
+## Why the `served` row of a parsed look file has a bad form, or "".
+static func _served_problem(row: Variant) -> String:
+	if typeof(row) != TYPE_DICTIONARY:
+		return "served must be a table"
+
+	if row.is_empty():
+		return ""
+
+	if typeof(row.get("bone")) != TYPE_STRING or row["bone"].is_empty():
+		return "the served model needs a bone"
+
+	return _place_problem(row, "the served model")
 
 
 ## Why the kit group or the color table of a parsed look file has a bad
@@ -494,6 +564,9 @@ static func _parts_problem(rows: Array) -> String:
 
 		if names.has(row["name"]):
 			return "two parts have the name %s" % row["name"]
+
+		if row["name"] == SERVED_PART:
+			return "the part name %s belongs to the served model" % SERVED_PART
 
 		names[row["name"]] = true
 
@@ -561,5 +634,13 @@ static func _normal(parsed: Dictionary) -> Dictionary:
 		for name_key: String in ["model", "node"]:
 			if row.get(name_key, "x").is_empty():
 				row.erase(name_key)
+
+	if out.has("served"):
+		var served: Dictionary = out["served"]
+
+		for pair: Array in [["position", [0.0, 0.0, 0.0]], ["rotation", [0.0, 0.0, 0.0]],
+				["scale", [1.0, 1.0, 1.0]]]:
+			if not served.has(pair[0]):
+				served[pair[0]] = pair[1].duplicate()
 
 	return out

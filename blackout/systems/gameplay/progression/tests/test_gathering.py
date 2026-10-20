@@ -24,6 +24,7 @@ Description: The gathering channel -- the roll, the cadence, what opens one
 
 import time
 import unittest
+from unittest import mock
 
 from evennia import create_object
 from evennia.utils.test_resources import (
@@ -54,6 +55,8 @@ from systems.gameplay.progression.skills.skill_defs.gathering import (
     roll,
 )
 from systems.gameplay.progression.tests import gathering_support
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed_events
 from typeclasses.gathering_nodes import MetalPole, RustyPole
 from typeclasses.objects import DefaultObject
 from world.item_database import ITEM_DB
@@ -357,6 +360,76 @@ class GatheringChannelTest(EvenniaCommandTest):
         self.assertFalse(gathering_support.channel_is_open(self.char1))
 
 
+    @staticmethod
+    def _stub_skill():
+        """A skill whose every swing misses and continues.
+
+        It stands in for the roll, so no tick reads the global RNG. The
+        turn is the thing under test, not the harvest.
+        """
+        skill = mock.Mock()
+        skill.attempt_swing.return_value = ""
+
+        return skill
+
+
+    def _tick(self, skill, ticks=1):
+        """Drive the open channel of char1 for some ticks, with this skill."""
+        handler = gather_handler.get_gathering_handler(self.char1)
+
+        with mock.patch.object(gather_handler.GatheringHandler, "skill",
+                               return_value=skill):
+            for _ in range(ticks):
+                handler.tick()
+
+        return skill
+
+
+    def test_each_swing_turns_the_gatherer_to_the_node(self):
+        self._cut()
+        # The first swing, one cadence of wait, and the second swing.
+        ticks = 1 + gather_constants.SWING_TICKS
+
+        with mock.patch.object(feed_events, "emit_face") as faced:
+            skill = self._tick(self._stub_skill(), ticks)
+
+        swings = skill.attempt_swing.call_count
+
+        self.assertGreater(swings, 1)
+        self.assertEqual(faced.call_args_list,
+                         [mock.call(self.char1, self.pole)] * swings)
+
+
+    def test_the_turn_comes_before_the_swing(self):
+        # A swing can delete its node: a corpse goes with its cut.
+        self._cut()
+        skill = self._stub_skill()
+        calls = mock.Mock()
+        calls.attach_mock(skill.attempt_swing, "swing")
+
+        with mock.patch.object(feed_events, "emit_face") as faced:
+            calls.attach_mock(faced, "face")
+            self._tick(skill)
+
+        names = [entry[0] for entry in calls.mock_calls]
+
+        self.assertEqual(names, ["face", "swing"])
+
+
+    def test_a_face_event_that_fails_does_not_end_the_channel(self):
+        # The feed is a bystander to the harvest.
+        self._cut()
+
+        with mock.patch.object(feed_events, "emit_face",
+                               side_effect=RuntimeError("feed down")):
+            with mock.patch.object(gather_handler.logger, "log_err") as logged:
+                skill = self._tick(self._stub_skill())
+
+        self.assertTrue(skill.attempt_swing.called)
+        self.assertTrue(logged.called)
+        self.assertTrue(gathering_support.channel_is_open(self.char1))
+
+
 
 # ─── One swing ──────────────────────────────────────────────────────────────
 
@@ -403,6 +476,42 @@ class GatheringSwingTest(EvenniaTest):
         self.assertEqual(response, "")
         self.assertEqual(stop, "")
         self.assertEqual(before, after)
+
+
+    def test_each_attempt_sends_the_attempt_moment_of_the_skill(self):
+        """The client plays the axe sound one time for each attempt."""
+        scripts = {
+            "hit": gathering_support.DRAWS_YIELD_ONLY,
+            "miss": gathering_support.DRAWS_MISS,
+        }
+
+        for outcome, draws in scripts.items():
+            with self.subTest(attempt=outcome):
+                with mock.patch.object(feed_events, "emit_moment") as emitted:
+                    self._swing(draws=draws)
+
+                emitted.assert_called_once_with(
+                    self.char1, feed_const.MOMENT_CUT_ATTEMPT)
+
+
+    def test_a_skill_with_no_attempt_moment_sends_nothing(self):
+        with mock.patch.object(self.skill, "attempt_moment", None):
+            with mock.patch.object(feed_events, "emit_moment") as emitted:
+                self._swing()
+
+        emitted.assert_not_called()
+
+
+    def test_every_attempt_moment_is_a_moment_the_feed_sends(self):
+        """A typed name that is not in MOMENTS sends nothing, so it fails here."""
+        for key, skill_class in SKILL_REGISTRY.items():
+            moment = getattr(skill_class, "attempt_moment", None)
+
+            if moment is None:
+                continue
+
+            with self.subTest(skill=key):
+                self.assertIn(moment, feed_const.MOMENTS)
 
 
     def test_the_yield_the_swing_gives_is_the_one_the_registry_names(self):

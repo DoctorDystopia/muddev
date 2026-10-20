@@ -18,6 +18,9 @@ extends Node
 ## 7. A tier whose base is not there, and two tiers that name each other,
 ##    each draw no part and give a reason. The reader refuses a tier with a
 ##    part of its own.
+## 8. The `served` row reads with its place, and an empty one leaves the
+##    file (10/17/2026). The reader refuses a bad row and a part with the
+##    name of the served part. A tier keeps its own row.
 
 const TOLERANCE := 0.0001
 
@@ -32,6 +35,7 @@ func _ready() -> void:
 	_the_reader_refuses_a_bad_form()
 	_a_tier_takes_the_parts_of_its_base()
 	_a_tier_with_no_base_draws_no_part()
+	_the_served_row_reads()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -243,3 +247,33 @@ func _a_tier_with_no_base_draws_no_part() -> void:
 		"fit": {"body_2": [{"part": "dome"}]}}).error.is_empty(), "a tier has no fit of its own")
 	_expect(not _look({"format": 1, "key": "a", "base": "a"}).error.is_empty(),
 		"a look cannot be its own base")
+
+
+func _the_served_row_reads() -> void:
+	var sword := _look({"format": 1, "key": "sword",
+		"served": {"bone": "hand_r", "position": [0.0, 0.2, 0.0]}})
+	var empty := _look({"format": 1, "key": "sword", "served": {}})
+	var tier := _look({"format": 1, "key": "copper_sword", "base": "sword",
+		"served": {"bone": "hand_l"}})
+	var looks := {"sword": sword, "copper_sword": tier}
+	var again := FigureLook.from_text(sword.to_text())
+
+	_expect(sword.error.is_empty() and sword.served()["bone"] == "hand_r"
+		and sword.served()["scale"] == [1.0, 1.0, 1.0], "a served row reads, with its place")
+	_expect(FigureLook.part_transform(sword.served()).origin.is_equal_approx(
+		Vector3(0.0, 0.2, 0.0)), "the place of a served row is a part place")
+	_expect(again.error.is_empty() and again.to_text() == sword.to_text(),
+		"a served row gives the same bytes again")
+	_expect(empty.error.is_empty() and not empty.to_text().contains("served"),
+		"the writer leaves out an empty served row")
+	_expect(tier.error.is_empty() and tier.resolved(looks).served()["bone"] == "hand_l",
+		"a tier keeps its own served row")
+
+	for bad: Variant in [[], {"position": [0.0, 0.0, 0.0]}, {"bone": ""},
+			{"bone": "hand_r", "scale": [1.0]}]:
+		_expect(not _look({"format": 1, "key": "sword", "served": bad}).error.is_empty(),
+			"the reader refuses the served row %s" % [bad])
+
+	_expect(not _look({"format": 1, "key": "sword",
+		"parts": [{"name": FigureLook.SERVED_PART, "bone": "hand_r"}]}).error.is_empty(),
+		"a part cannot have the name of the served part")

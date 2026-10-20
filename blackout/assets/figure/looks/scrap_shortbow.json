@@ -1,0 +1,22 @@
+{
+	"format": 1,
+	"key": "scrap_shortbow",
+	"served": {
+		"bone": "hand_r",
+		"position": [
+			0.0,
+			0.33,
+			0.0
+		],
+		"rotation": [
+			-0.14903,
+			0.15216,
+			1.54995
+		],
+		"scale": [
+			1.14,
+			1.14,
+			1.14
+		]
+	}
+}

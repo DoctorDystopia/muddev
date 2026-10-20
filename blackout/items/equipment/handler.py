@@ -8,6 +8,8 @@ Description: EquipmentHandler — per-character wield-slot state and the
 
 from evennia.utils import logger
 
+from items import stacking
+
 from .constants import MAX_INVENTORY_SLOTS, WieldLocation, slots_displaced_by
 from .skill_requirements import ARMOR_SKILL_MAP, WEAPON_SKILL_MAP
 
@@ -133,15 +135,23 @@ class EquipmentHandler:
         off the wielded slot. Every equip path passes through here, including
         a mid-fight `wield`, so this one call covers them all.
 
+        And the figure (DESIGN-0014 section 21). The worn record is on the
+        row of the character and on char_avatar. A client draws the gear of
+        a player on the figure from it. character_figure.publish sends both,
+        as it does for a new body type. The call is here, not beside each
+        slot write, because every equip path passes through here.
+
         Imported inside the method. This package is reached from typeclass
         import time, and a module-scope import of the feed would couple the
         two systems' import order for no benefit.
         """
+        from systems.gameplay.figure import character_figure
         from systems.interface.statefeed import events as feed
 
         feed.emit_inventory(self.obj)
         feed.refresh_summary(self.obj)
         feed.emit_combat_options(self.obj)
+        character_figure.publish(self.obj)
 
 
     def _refresh_combat(self):
@@ -374,6 +384,35 @@ class EquipmentHandler:
         for old_obj in displaced:
             self._return_to_inventory(old_obj)
 
+    def _merge_into_worn(self, obj, use_slot):
+        """Fold a carried stack into the same stack in `use_slot`.
+
+        Returns the worn stack after the merge. Returns None when the two
+        cannot merge, and then changes nothing.
+
+        The worn stack is at location=None, so a pickup cannot merge into
+        it. Arrows that a player picks up after a fight thus make a second
+        stack in the bag. Without this step, an equip of that stack swapped
+        it with the worn stack. The slot then held the few arrows from the
+        floor, and the full quiver went back to the bag.
+
+        This step clears the grid slot before the merge deletes `obj`.
+        Thus, the saved map of the grid never names a deleted row.
+        """
+        worn = self.slots.get(use_slot)
+
+        if not stacking.is_mergeable(worn, obj):
+            return None
+
+        inventory = getattr(self.obj, "inventory", None)
+
+        if inventory is not None:
+            inventory.remove_item(obj)
+
+        stacking.merge(worn, obj)
+
+        return worn
+
     def equip(self, obj):
         """
         Purpose: Equip a carried item, displacing whatever it conflicts with.
@@ -383,16 +422,21 @@ class EquipmentHandler:
             inventory_use_slot.
 
         Exit/Returns:
-            No return value. Raises EquipmentError, with a player-facing
-            message, if the item cannot be equipped or the swap will not fit.
+            Returns the object that now sits in the slot. That is `obj`,
+            or the worn stack that `obj` merged into. A merge deletes
+            `obj`, so a caller reads the key from the return value.
+            Raises EquipmentError, with a player-facing message, if the
+            item cannot be equipped or the swap will not fit.
 
         Module Globals:
             None
 
         Methodology:
-            Check, collect, check again, place. The slot-conflict rule lives
-            in one table (constants.slots_displaced_by) that both the collect
-            and the place step read.
+            Check, merge, or else collect, check again, place. A stack of
+            the same item as the worn stack merges into it and displaces
+            nothing. The slot-conflict rule lives in one table
+            (constants.slots_displaced_by) that both the collect and the
+            place step read.
 
         Notes/References:
             Displaced items return to the inventory; the equipped item leaves
@@ -402,14 +446,20 @@ class EquipmentHandler:
         Creation date: 06/17/2026
         """
         use_slot = self._check_requirements(obj)
-        displaced = self._displaced_by(use_slot)
+        worn = self._merge_into_worn(obj, use_slot)
 
-        self._check_inventory_room(displaced)
-        self._place(obj, use_slot, displaced)
+        if worn is None:
+            displaced = self._displaced_by(use_slot)
+
+            self._check_inventory_room(displaced)
+            self._place(obj, use_slot, displaced)
+            worn = obj
 
         self._save()
         self._publish()
         self._refresh_combat()
+
+        return worn
 
 
     def unequip(self, obj_or_slot):

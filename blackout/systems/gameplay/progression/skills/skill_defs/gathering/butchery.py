@@ -13,6 +13,7 @@ from systems.gameplay.progression.skills.skill_defs.gathering.gathering_skill im
     GatheringSkill,
 )
 from systems.gameplay.quests import constants as quest_constants
+from systems.interface.statefeed import constants as feed_const
 
 
 
@@ -64,3 +65,4 @@ class Butchery(GatheringSkill):
 
     quest_action = quest_constants.ACTION_BUTCHER
     stat_key = stat_constants.BUTCHERY_TOTALS_STAT_KEY
+    attempt_moment = feed_const.MOMENT_BUTCHER_ATTEMPT

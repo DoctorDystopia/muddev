@@ -231,8 +231,8 @@ var _block_ready := false
 ## the edited plane also has flags, areas, border, objects, and models.
 var _views := {}
 
-var _ground_material: StandardMaterial3D
-var _ghost_material: StandardMaterial3D
+var _ground_material: ShaderMaterial
+var _ghost_material: ShaderMaterial
 var _overlay_material: StandardMaterial3D
 var _ring: MeshInstance3D
 var _marks: MeshInstance3D
@@ -255,11 +255,8 @@ func _init() -> void:
 
 
 func _ready() -> void:
-	_ground_material = StandardMaterial3D.new()
-	_ground_material.vertex_color_use_as_albedo = true
-	_ground_material.roughness = 1.0
-	_ghost_material = _ground_material.duplicate()
-	_ghost_material.albedo_color = TerrainOverlay.mark("ghost")
+	_ground_material = TerrainMaterial.make()
+	_ghost_material = TerrainMaterial.make(TerrainOverlay.mark("ghost"))
 	_overlay_material = TerrainOverlay.material()
 	_ring = MeshInstance3D.new()
 	_ring.material_override = _overlay_material
@@ -776,23 +773,25 @@ func _rebuild_key(key: Vector3i) -> void:
 ## plane, in `material`.
 func _plain_view(chunk: ChunkFile, on_plane: int, material: Material) -> Dictionary:
 	var coord := Vector2i(chunk.cx, chunk.cy)
+	var lights := TileLights.collect(chunks_on(on_plane), coord)
 
 	return {
-		"ground": _mesh_node(ChunkMeshBuilder.build(chunk), material),
+		"ground": _mesh_node(ChunkMeshBuilder.build(chunk, lights), material),
 		"water": _mesh_node(WaterMeshBuilder.build(chunk), material),
-		"walls": _mesh_node(_walls_mesh(chunk, coord, on_plane), material),
-		"props": _mesh_node(PropMeshBuilder.build(chunk), material),
+		"walls": _mesh_node(_walls_mesh(chunk, coord, on_plane, lights), material),
+		"props": _mesh_node(PropMeshBuilder.build(chunk, lights), material),
 	}
 
 
 ## The full view of a chunk of the edited plane: the meshes, the marks, and
 ## the objects.
 func _edited_view(chunk: ChunkFile, coord: Vector2i) -> Dictionary:
+	var lights := TileLights.collect(chunks, coord)
 	var view := {
-		"ground": _mesh_node(ChunkMeshBuilder.build(chunk), _ground_material),
+		"ground": _mesh_node(ChunkMeshBuilder.build(chunk, lights), _ground_material),
 		"water": _mesh_node(WaterMeshBuilder.build(chunk), _ground_material),
-		"walls": _mesh_node(_walls_mesh(chunk, coord, _plane), _ground_material),
-		"props": _mesh_node(PropMeshBuilder.build(chunk), _ground_material),
+		"walls": _mesh_node(_walls_mesh(chunk, coord, _plane, lights), _ground_material),
+		"props": _mesh_node(PropMeshBuilder.build(chunk, lights), _ground_material),
 		"flags": _mesh_node(TerrainOverlay.flag_mesh(chunks, coord),
 			_overlay_material),
 		"areas": _mesh_node(_area_mesh_if_shown(coord), _overlay_material),
@@ -810,15 +809,17 @@ func _edited_view(chunk: ChunkFile, coord: Vector2i) -> Dictionary:
 
 
 ## The walls of a chunk: low with [member walls_down], else each wall meets
-## the plane above where it has a floor.
-func _walls_mesh(chunk: ChunkFile, coord: Vector2i, on_plane: int) -> ArrayMesh:
+## the plane above where it has a floor. `lights` is the lamps that reach
+## the chunk.
+func _walls_mesh(chunk: ChunkFile, coord: Vector2i, on_plane: int,
+		lights: Array) -> ArrayMesh:
 	if walls_down:
-		return WallMeshBuilder.build(chunk, null, true)
+		return WallMeshBuilder.build(chunk, null, true, lights)
 
 	var above_set := chunks_on(on_plane + 1)
 	var above: ChunkFile = null if above_set == null else above_set.get_chunk(coord)
 
-	return WallMeshBuilder.build(chunk, above)
+	return WallMeshBuilder.build(chunk, above, false, lights)
 
 
 ## The material of a plane other than the edited one, or null when it does
@@ -898,7 +899,7 @@ func preview_look(look: Dictionary) -> void:
 ## The mark colours changed on the Look tab: the ghost planes, the beacon,
 ## the border, and each overlay take the new colours.
 func refresh_mark_colors() -> void:
-	_ghost_material.albedo_color = TerrainOverlay.mark("ghost")
+	TerrainMaterial.set_tint(_ghost_material, TerrainOverlay.mark("ghost"))
 
 	if _beacon != null and _beacon.material_override is StandardMaterial3D:
 		(_beacon.material_override as StandardMaterial3D).albedo_color = TerrainOverlay.mark("beacon")
@@ -997,7 +998,7 @@ func _scene_sun() -> DirectionalLight3D:
 
 ## Redraw these chunks, as (cx, cy, plane), and the chunk under each: its
 ## walls meet the plane above.
-func rebuild_many(keys: Array[Vector3i]) -> void:
+func rebuild_many(keys: Array[Vector3i], with_neighbours := false) -> void:
 	var all := {}
 
 	for key: Vector3i in keys:
@@ -1005,6 +1006,12 @@ func rebuild_many(keys: Array[Vector3i]) -> void:
 
 		if key.z > _Const.TILE_GROUND_PLANE:
 			all[key - Vector3i(0, 0, 1)] = true
+
+		# A lamp lights the chunks around its own (TileLights), so an object
+		# change redraws them too.
+		if with_neighbours:
+			for offset: Vector2i in TileLights.AROUND:
+				all[key + Vector3i(offset.x, offset.y, 0)] = true
 
 	for key: Vector3i in all:
 		_rebuild_key(key)
@@ -1403,6 +1410,6 @@ func replay_edit(edit: TerrainEdit, forward: bool) -> bool:
 		return false
 
 	edit.replay_planes(plane_sets(), forward)
-	rebuild_many(edit.chunk_keys())
+	rebuild_many(edit.chunk_keys(), edit.has_objects())
 
 	return true

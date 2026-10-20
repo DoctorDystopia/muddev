@@ -93,7 +93,7 @@ func _ready() -> void:
 	await _the_shipped_layout_fits_each_window(console)
 	_the_panel_survives_the_world_going_off(console)
 	_the_input_hint_follows_login_and_focus(console)
-	_the_world_map_sits_over_the_docks_and_under_the_veil(console)
+	_the_world_map_sits_under_the_docks_and_over_the_pop_up(console)
 	_the_minimap_strip_stays_inside_the_minimap(console)
 	_the_keys_follow_the_camera_only_when_asked(console)
 	_the_layout_editor_opens_from_options(console)
@@ -162,17 +162,23 @@ func _the_input_hint_follows_login_and_focus(console: Node) -> void:
 		"a logout puts the login line back")
 
 
-## The world map (09/28/2026) covers the docks, as the OSRS world map covers
-## the game. The right-click menu and the veil stay over it. The minimap
-## button reaches it, and it opens and closes.
-func _the_world_map_sits_over_the_docks_and_under_the_veil(console: Node) -> void:
+## The world map is a floating box, as the pop-up is (10/19/2026). Nick chose
+## the rule of the pop-up, so the map sits under the docks and the bag stays
+## in reach. It sits over the pop-up, because Esc closes it first. The
+## right-click menu and the veil stay over it. The minimap button reaches it,
+## and it opens and closes.
+func _the_world_map_sits_under_the_docks_and_over_the_pop_up(console: Node) -> void:
 	var view: WorldMapView = console._world_map_view
 	var pane: Control = console.get_node("%WorldPane")
 	var at := view.get_index()
 
 	_expect(view.get_parent() == pane, "the world map is a box of the world pane")
-	_expect(at > console.get_node("%PanelDock").get_index(),
-		"the world map is over the panel dock")
+	_expect(at < console.get_node("%PanelDock").get_index(),
+		"the world map is under the panel dock")
+	_expect(at > console._popup_view.get_index(), "and over the pop-up")
+	_expect(is_equal_approx(view._gap_left, console._popup_view._gap_left)
+		and is_equal_approx(view._gap_right, console._popup_view._gap_right),
+		"it has the gap between the docks that the pop-up has")
 	_expect(at < console.get_node("%ChooseOption").get_index(),
 		"and under the right-click menu")
 	_expect(at < console.get_node("%LoadingVeil").get_index(),

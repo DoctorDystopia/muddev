@@ -595,7 +595,7 @@ func _build(asset_key: String, body: PackedByteArray) -> Node3D:
 	var wrapper := Node3D.new()
 
 	wrapper.add_child(scene)
-	_normalise(scene)
+	normalise(scene)
 	_orient(asset_key, scene)
 
 	# Stamped on the WRAPPER, because that is what a caller holds. A grid cell
@@ -671,7 +671,10 @@ static func _prepare_materials(root: Node3D) -> void:
 
 
 ## Scale so the longest axis is one unit, and centre on the origin.
-func _normalise(scene: Node3D) -> void:
+##
+## Public and static for [FigureLibrary]. A picture from the gear editor
+## goes into the same unit box as a model.
+static func normalise(scene: Node3D) -> void:
 	var bounds := bounds_of(scene)
 	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
 
@@ -824,7 +827,7 @@ static func _mesh_bounds(root: Node3D) -> AABB:
 
 	# Each entry pairs a node with its transform relative to root. Root's own
 	# transform is deliberately excluded: the bounds wanted here are the ones
-	# _normalise is about to overwrite.
+	# normalise is about to overwrite.
 	var stack: Array = [[root, Transform3D.IDENTITY]]
 
 	while not stack.is_empty():

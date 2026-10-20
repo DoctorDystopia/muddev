@@ -8,6 +8,8 @@ Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings settings.py systems.gameplay.combat
 """
 
+import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 from evennia import create_object
@@ -21,6 +23,7 @@ from systems.gameplay.combat.auras.aura_handler import (
     ensure_aura_handler,
     get_aura_handler_for,
 )
+from systems.gameplay.combat.auras.aura_defs.base_aura import BaseAura, NO_SELF_BURN
 from systems.gameplay.combat.auras.aura_defs.righteous_fire import RighteousFire
 from systems.gameplay.combat.auras.registry import AURA_REGISTRY, find_aura
 from systems.core.tick.engine import get_tick_engine, purge_stale_handlers
@@ -259,6 +262,156 @@ class TestAuraHandlerTick(EvenniaTest):
         self.handler.tick()
 
         self.assertIsNone(get_aura_handler_for(self.char1))
+
+
+class _BurningAura(BaseAura):
+    """A test aura. Each test sets the burn share, not the balance."""
+
+    key = "test_burning_aura"
+    name = "Test Burning Aura"
+
+
+def _burns(aura, max_hp: int, pulses: int) -> list:
+    """The burn of each pulse, for `pulses` pulses, on a caster with `max_hp`."""
+    caster = SimpleNamespace(max_hp=max_hp)
+    carry = 0.0
+    burns = []
+
+    for _ in range(pulses):
+        burn, carry = aura.self_burn_for(caster, carry)
+        burns.append(burn)
+
+    return burns
+
+
+class TestAuraSelfBurnShare(unittest.TestCase):
+    """The burn is a share of max HP, and the carry keeps the fraction."""
+
+    def setUp(self):
+        self.aura = _BurningAura()
+
+    def test_no_share_burns_nothing(self):
+        self.aura.self_burn_pct = NO_SELF_BURN
+
+        self.assertEqual(_burns(self.aura, 100, 10), [0] * 10)
+
+    def test_the_mean_burn_is_the_share_of_max_hp(self):
+        # 0.5 HP for each pulse.
+        self.aura.self_burn_pct = 0.02
+
+        self.assertEqual(sum(_burns(self.aura, 25, 10)), 5)
+
+    def test_a_fraction_burns_on_the_first_pulse(self):
+        """A burn that rounded down would let a relit aura skip it."""
+        # 0.25 HP for each pulse.
+        self.aura.self_burn_pct = 0.01
+
+        self.assertEqual(_burns(self.aura, 25, 4), [1, 0, 0, 0])
+
+    def test_float_noise_does_not_round_a_whole_share_up(self):
+        """0.07 * 100 is 7.000000000000001, and its ceiling is 8."""
+        self.aura.self_burn_pct = 0.07
+
+        self.assertEqual(_burns(self.aura, 100, 3), [7, 7, 7])
+
+    def test_the_cost_line_names_the_share(self):
+        self.aura.self_burn_pct = 0.035
+
+        self.assertIn("3.5%", self.aura.cost)
+
+    def test_no_share_gives_no_cost_line(self):
+        self.aura.self_burn_pct = NO_SELF_BURN
+
+        self.assertEqual(self.aura.cost, "")
+
+
+class TestAuraSelfBurnOnTheCaster(EvenniaTest):
+    """The caster burns on every pulse, and the burn can kill."""
+
+    character_typeclass = BlackoutCharacter
+
+    # A test share, not the balance value: half of max HP each pulse.
+    _SHARE = 0.5
+
+    # A share that burns less than 1 HP each pulse at _MAX_HP.
+    _SMALL_SHARE = 0.01
+
+    _MAX_HP = 20
+
+    def setUp(self):
+        super().setUp()
+        self.aura = AURA_REGISTRY["righteous_fire"]
+
+        self.char1.db.skills[SKILL_KEY_FORTITUDE] = {"level": 100, "xp": 0}
+        self.char1.db.max_hp = self._MAX_HP
+        self.char1.hp = self._MAX_HP
+
+        patcher = mock.patch.object(type(self.aura), "self_burn_pct", self._SHARE)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.handler = ensure_aura_handler(self.char1)
+        self.handler.activate(self.aura)
+
+    def _first_burn(self) -> int:
+        """The burn of a first pulse on char1, read from the aura."""
+        burn, _carry = self.aura.self_burn_for(self.char1, 0.0)
+
+        return burn
+
+    def test_the_caster_burns_with_no_target_in_reach(self):
+        # char2 has no npc_key, so it is not a hostile.
+        burn = self._first_burn()
+
+        self.handler.tick()
+
+        self.assertEqual(self.char1.hp, self._MAX_HP - burn)
+
+    def test_the_caster_burns_on_a_pulse_that_hits(self):
+        self.char2.db.npc_key = "mutant_raider"
+        self.char2.db.max_hp = 100
+        self.char2.hp = 100
+        burn = self._first_burn()
+
+        self.handler.tick()
+
+        self.assertLess(self.char2.hp, 100)
+        self.assertEqual(self.char1.hp, self._MAX_HP - burn)
+
+    def test_the_burn_can_kill_the_caster(self):
+        self.char1.hp = 1
+
+        with mock.patch.object(type(self.char1), "msg") as mocked_msg:
+            self.handler.tick()
+
+        sent = " ".join(
+            strip_ansi(str(call.args[0][0])).lower()
+            for call in mocked_msg.call_args_list
+            if call.args and isinstance(call.args[0], tuple)
+        )
+
+        # A Character respawns at full HP, so the death shows as the aura
+        # going out.
+        self.assertIsNone(get_aura_handler_for(self.char1))
+        self.assertIn("gutters out", sent)
+
+    def test_a_death_puts_the_aura_out(self):
+        """Regression: respawn() restored HP, and the aura burned on."""
+        self.char1.at_damage(self.char1.hp, attacker=self.char2)
+
+        self.assertIsNone(get_aura_handler_for(self.char1))
+
+    def test_a_relit_aura_pays_on_its_first_pulse(self):
+        """The carry resets on a relight, so the burn must round up."""
+        with mock.patch.object(type(self.aura), "self_burn_pct", self._SMALL_SHARE):
+            burn = self._first_burn()
+
+            self.handler.tick()
+            self.handler.activate(self.aura)
+            self.handler.tick()
+
+        self.assertGreater(burn, 0)
+        self.assertEqual(self.char1.hp, self._MAX_HP - 2 * burn)
 
 
 class TestAuraRingCache(EvenniaTest):

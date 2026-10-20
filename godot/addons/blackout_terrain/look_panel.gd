@@ -24,6 +24,9 @@ extends VBoxContainer
 ## The terrain palette file changed.
 signal palette_changed
 
+## The light of one scenery key changed in the file.
+signal light_changed(scenery: String)
+
 ## The look of one area changed in the file.
 signal area_look_changed(area: String)
 
@@ -63,6 +66,15 @@ const ENERGY_STEP := 0.05
 const ELEVATION_LIMIT := 90.0
 const AZIMUTH_LIMIT := 180.0
 
+## The fields of a light, in the order of the tab, in the shape of
+## [constant AREA_FIELDS]. An energy of zero gives no light.
+const LIGHT_FIELDS := [
+	[LightLook.FIELD_COLOR, "Light colour", "color"],
+	[LightLook.FIELD_ENERGY, "Light energy (0 gives none)", [0.0, LightLook.ENERGY_MAX, ENERGY_STEP]],
+	[LightLook.FIELD_RANGE, "Light range (tiles)", [0.0, LightLook.RANGE_MAX, 0.5]],
+	[LightLook.FIELD_HEIGHT, "Bulb height (units)", [0.0, LightLook.HEIGHT_MAX, 0.05]],
+]
+
 ## The fields of an area look, in the order of the tab: the field, the
 ## label, and the kind: "color" or a `[low, high, step]` range.
 const AREA_FIELDS := [
@@ -96,10 +108,13 @@ var _prop_pickers := {}
 var _wall_pickers := {}
 var _wall_heights := {}
 var _lighten := SpinBox.new()
+var _light_key := OptionButton.new()
+var _light_controls := {}
 var _area := OptionButton.new()
 var _area_controls := {}
 var _preview := CheckBox.new()
 var _palette_timer := Timer.new()
+var _light_timer := Timer.new()
 var _area_timer := Timer.new()
 
 ## True while [method refresh] fills the controls, so they send nothing.
@@ -115,6 +130,7 @@ func _init() -> void:
 	add_child(_Fields.button("Reset colours", reset_requested.emit,
 		"Take every colour and height out of the look file. Each one then "
 		+ "shows the fallback of the client table."))
+	_build_light_rows()
 	_build_area_rows()
 	_build_mark_rows()
 	_build_timers()
@@ -147,6 +163,26 @@ func preview_on() -> bool:
 	return _preview.button_pressed
 
 
+## The scenery key of the light section.
+func light_scenery() -> String:
+	return _Fields.text_of(_light_key)
+
+
+## The light of the light fields, as [LightLook] holds a row.
+func light_row() -> Dictionary:
+	var light := {}
+
+	for row: Array in LIGHT_FIELDS:
+		var control: Control = _light_controls[row[0]]
+
+		if row[2] is String:
+			light[row[0]] = (control as ColorPickerButton).color
+		else:
+			light[row[0]] = (control as SpinBox).value
+
+	return light
+
+
 # ─── Writing ────────────────────────────────────────────────────────────────
 
 ## Fill each control from the look files and the fallback tables.
@@ -167,6 +203,7 @@ func refresh() -> void:
 		_wall_heights[style].value = WallPalette.height_steps(style)
 
 	_lighten.value = WallPalette.top_lighten()
+	_show_light()
 	_show_area()
 
 	for key: String in _mark_pickers:
@@ -226,6 +263,18 @@ func reset_area(reset: String) -> void:
 	area_look_changed.emit(reset)
 
 
+## "Reset light": the scenery key of the light section goes back to its
+## fallback light, or to none. It is one row, so the button asks nothing.
+func reset_light() -> void:
+	var scenery := light_scenery()
+
+	if writes_files:
+		LightLook.reset_light(scenery)
+
+	refresh()
+	light_changed.emit(scenery)
+
+
 # ─── Building ───────────────────────────────────────────────────────────────
 
 ## Build the pickers of the floor types and of the wall styles again, and
@@ -234,6 +283,7 @@ func reset_area(reset: String) -> void:
 func refill_tables(rename := {}) -> void:
 	_fill_floor_grid()
 	_fill_wall_grid()
+	_Fields.refill(_light_key, Array(TileTables.scenery_keys()))
 	_Fields.refill(_area, Array(TileTables.keys(TileTables.AREAS)),
 		_Fields.follow_of(rename, TileTables.AREAS))
 	refresh()
@@ -294,6 +344,36 @@ func _build_prop_rows() -> void:
 
 	for prop: String in TerrainPalette.PROP_KEYS:
 		_prop_pickers[prop] = _picker(grid, prop)
+
+
+## The light of a scenery key: the key list, then one control for each
+## field of [constant LIGHT_FIELDS].
+func _build_light_rows() -> void:
+	_Fields.fill(_light_key, Array(TileTables.scenery_keys()))
+	_light_key.item_selected.connect(func(_index: int) -> void: _show_light())
+	_Fields.row(self, "Light: the scenery that gives it", _light_key,
+		"The scenery key whose light the fields below edit. A lamp post is one.")
+
+	for row: Array in LIGHT_FIELDS:
+		var control: Control
+
+		if row[2] is String:
+			control = ColorPickerButton.new()
+			control.edit_alpha = false
+			control.color_changed.connect(func(_color: Color) -> void: _light_touched())
+		else:
+			var field := SpinBox.new()
+
+			_Fields.spin(field, row[2][0], row[2][1], row[2][2], 0.0)
+			field.value_changed.connect(func(_value: float) -> void: _light_touched())
+			control = field
+
+		_light_controls[row[0]] = control
+		_Fields.row(self, row[1], control)
+
+	add_child(_Fields.button("Reset light", reset_light,
+		"Take the light of the scenery key out of the look file. It then gives "
+		+ "its fallback light, or none."))
 
 
 func _build_area_rows() -> void:
@@ -357,12 +437,13 @@ func _mark_picker(grid: GridContainer, key: String, label_text: String) -> Color
 
 
 func _build_timers() -> void:
-	for timer: Timer in [_palette_timer, _area_timer, _marks_timer]:
+	for timer: Timer in [_palette_timer, _light_timer, _area_timer, _marks_timer]:
 		timer.one_shot = true
 		timer.wait_time = DEBOUNCE
 		add_child(timer)
 
 	_palette_timer.timeout.connect(_write_palette)
+	_light_timer.timeout.connect(_write_light)
 	_area_timer.timeout.connect(_write_area)
 	_marks_timer.timeout.connect(_write_marks)
 
@@ -397,6 +478,11 @@ func _picker(grid: GridContainer, label_text: String) -> ColorPickerButton:
 func _palette_touched() -> void:
 	if not _filling and is_inside_tree():
 		_palette_timer.start()
+
+
+func _light_touched() -> void:
+	if not _filling and is_inside_tree():
+		_light_timer.start()
 
 
 func _area_touched() -> void:
@@ -462,11 +548,41 @@ func _write_palette() -> void:
 	palette_changed.emit()
 
 
+func _write_light() -> void:
+	if writes_files:
+		LightLook.save_light(light_scenery(), light_row())
+
+	light_changed.emit(light_scenery())
+
+
 func _write_area() -> void:
 	if writes_files:
 		AreaLook.save_look(area(), area_look())
 
 	area_look_changed.emit(area())
+
+
+## Fill the light fields from the light of the chosen scenery key. A key
+## with no light shows the default row with an energy of zero.
+func _show_light() -> void:
+	var was_filling := _filling
+	var light := LightLook.light_of(light_scenery())
+
+	if light.is_empty():
+		light = LightLook.DEFAULT.duplicate()
+		light[LightLook.FIELD_ENERGY] = 0.0
+
+	_filling = true
+
+	for row: Array in LIGHT_FIELDS:
+		var control: Control = _light_controls[row[0]]
+
+		if row[2] is String:
+			(control as ColorPickerButton).color = light[row[0]]
+		else:
+			(control as SpinBox).set_value_no_signal(light[row[0]])
+
+	_filling = was_filling
 
 
 ## Fill the area fields from the look of the chosen area.

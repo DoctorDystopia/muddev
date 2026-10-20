@@ -20,12 +20,13 @@ from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
 
-from systems.core.tick.engine import PHASE_FEED, PHASE_START, get_tick_engine
+from systems.core.tick.engine import (
+    PHASE_END, PHASE_FEED, PHASE_START, get_tick_engine)
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid import movement
 from systems.core.tilegrid.world import TileWorld, set_world
-from systems.gameplay.combat import pvp
+from systems.gameplay.combat import constants as const, pvp
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.gameplay.movement import walk
 from typeclasses.npc_spawners import spawn_npc
@@ -94,7 +95,11 @@ class AHandlerMadeInTheStartPhaseTests(EvenniaTest):
         self.handler = handler
 
     def _tick_with_start_hook(self, count: int = 1):
-        hooks = {PHASE_START: [self._start_an_attack], PHASE_FEED: []}
+        hooks = {
+            PHASE_START: [self._start_an_attack],
+            PHASE_FEED: [],
+            PHASE_END: [],
+        }
 
         with mock.patch("systems.core.tick.engine._PHASE_HOOKS", hooks):
             self.engine._tick()
@@ -175,3 +180,49 @@ class AttackWalkTests(EvenniaTest):
         self.engine._tick()
 
         self.assertEqual(self.char1.combat.ndb.target_id, self.raider.id)
+
+
+class AttackByDbrefReachTests(EvenniaTest):
+    """A dbref past the engagement radius is refused as a name is.
+
+    Evennia reads a dbref as a global address. `caller.search` dropped the
+    candidate list for one, so `attack #<id>` reached a raider in any room
+    of the game. `search_in` bounds it (10/16/2026).
+    """
+
+    def setUp(self):
+        super().setUp()
+        world = _open_world()
+        set_world(world)
+        movement.place(world.rooms, self.char1, *_START, quiet=True)
+        past = (_START[0] + const.ENGAGEMENT_RADIUS_TILES + 1, _START[1])
+        self.raider = spawn_npc(
+            "mutant_raider", world.rooms.ensure_room(*past))
+
+        self.seen = []
+        self.char1.msg = lambda text=None, **kwargs: self.seen.append(text)
+
+    def tearDown(self):
+        walk.forget_all()
+        set_world(None)
+        super().tearDown()
+
+    def test_a_dbref_past_the_radius_starts_no_walk(self):
+        self.char1.execute_cmd(f"attack #{self.raider.id}")
+
+        self.assertIsNone(walk.current(self.char1))
+
+    def test_a_dbref_past_the_radius_is_refused_as_a_name_is(self):
+        """The refusal echoes the argument, so the two lines differ in the
+        name only. Both come from Evennia's search result handler."""
+        self.char1.execute_cmd(f"attack #{self.raider.id}")
+        by_dbref = _texts(self.seen)
+        self.seen.clear()
+
+        self.char1.execute_cmd(f"attack {self.raider.key}")
+        by_name = _texts(self.seen)
+
+        self.assertEqual(1, len(by_dbref))
+        self.assertEqual(1, len(by_name))
+        self.assertIn("could not find", by_dbref[0])
+        self.assertIn("could not find", by_name[0])

@@ -67,8 +67,17 @@ extends RefCounted
 ## A part on a bone that the rig does not have draws nothing, and the other
 ## parts draw (requirement D7). A part with a model that is not there, or
 ## with a node that its model does not have, draws its shape list.
+##
+## ## An item alone
+##
+## [method build_item] builds one worn look with no body and no skeleton:
+## the picture of an item in a cell of the bag (10/17/2026). Its parts get
+## their meshes from the same routine as the parts of a figure. Thus, the
+## cell shows what the hand holds.
 
 const FIGURE_NAME := "Figure"
+
+const ITEM_NAME := "Item"
 
 ## The name that a clip of the editor import gives its skeleton
 ## (DESIGN-0014 section 12.4). Each track of a clip has the path
@@ -82,6 +91,14 @@ const PART_META := "figure_part"
 
 ## The meta of a part node: one text for its shape list and its colors.
 const CONTENT_META := "figure_content"
+
+## The meta of a part node: true while the part draws the node of its
+## model. Each child of such a part is no shape.
+const MODEL_META := "figure_model"
+
+## The place keys of a shape. A change of one of them moves the node of the
+## shape, and the mesh stays.
+const SHAPE_PLACE_KEYS := ["offset", "rotation", "scale"]
 
 ## Between the look key and the part name in a node name. A node name
 ## cannot hold a point or a slash.
@@ -179,6 +196,35 @@ static func part_id(node: Node) -> Array:
 	return node.get_meta(PART_META)
 
 
+## `[look key, part name, shape index]` of the node of one shape of a shape
+## list, or an empty array. The node of a model is no shape, and a part is
+## none.
+static func shape_id(node: Node) -> Array:
+	if node == null or not node is MeshInstance3D:
+		return []
+
+	var part := node.get_parent()
+	var id := part_id(part)
+
+	if id.is_empty() or part.get_meta(MODEL_META, false):
+		return []
+
+	return [id[0], id[1], node.get_index()]
+
+
+## The node of one shape of one part, or null. A part that draws a model
+## has no shape node.
+static func shape_node(figure: Node3D, look_key: String, part_name: String,
+		shape_index: int) -> MeshInstance3D:
+	var part := part_node(figure, look_key, part_name)
+
+	if part == null or part.get_meta(MODEL_META, false) \
+			or shape_index < 0 or shape_index >= part.get_child_count():
+		return null
+
+	return part.get_child(shape_index) as MeshInstance3D
+
+
 ## The cost of a figure: `{parts, draws, triangles}`. One draw is one
 ## surface of one mesh. The mesh of a shape has one surface. The node of a
 ## model has one surface for each material.
@@ -198,6 +244,59 @@ static func counts(figure: Node3D) -> Dictionary:
 			triangles += instance.mesh.get_faces().size() / 3
 
 	return {"parts": parts.size(), "draws": draws, "triangles": triangles}
+
+
+# ─── An item alone ──────────────────────────────────────────────────────────
+
+## One worn look alone, with no skeleton: a node with one child for each
+## part. Each child has the meta of a part of a figure.
+##
+## Each part stands where the rest pose of `rig` puts its bone. A look with
+## all of its parts on one bone stands in the space of that bone. Thus, the
+## grip axis of a hand item (+Y) points up, as the author made it. The parts
+## of a look on several bones keep their places in the rest pose: the two
+## boots stand as a pair.
+##
+## A part on a bone that the rig does not have draws nothing. The node then
+## has fewer children, or none.
+static func build_item(rig: FigureRig, look: FigureLook, models: FigureModels = null,
+		palette: FigurePalette = null) -> Node3D:
+	var item := Node3D.new()
+	var frame := item_frame(rig, look)
+	var paint := {"models": models, "figure_colors": {},
+		"palette": FigurePalette.new() if palette == null else palette}
+
+	item.name = ITEM_NAME
+
+	for row: Dictionary in look.parts():
+		if not rig.has_bone(row["bone"]):
+			continue
+
+		var part := Node3D.new()
+
+		part.name = look.key() + NAME_JOIN + str(row["name"])
+		part.set_meta(PART_META, [look.key(), row["name"]])
+		item.add_child(part)
+		_fill(part, row, look.colors(), paint)
+		part.transform = frame * rig.global_rest_of(row["bone"]) \
+			* look.place_of(row["name"], rig.key())
+
+	return item
+
+
+## The space that an item of [method build_item] stands in: the inverse of
+## the rest of its one bone, or the space of the figure for a look on
+## several bones. [FigureOutfit] reads it for the box of a stand-in.
+static func item_frame(rig: FigureRig, look: FigureLook) -> Transform3D:
+	var bones := {}
+
+	for row: Dictionary in look.parts():
+		bones[row["bone"]] = true
+
+	if bones.size() != 1:
+		return Transform3D.IDENTITY
+
+	return rig.global_rest_of(bones.keys()[0]).affine_inverse()
 
 
 # ─── The parts ──────────────────────────────────────────────────────────────
@@ -262,8 +361,13 @@ static func _colors_of(look: FigureLook, figure_colors: Dictionary) -> Dictionar
 
 ## Give a part node its meshes: the node of its model, or the meshes of its
 ## shape list. A part with the same content as before keeps its meshes. The
-## content is the shapes, the colors, the model, the node, the stamp of the
-## model, and the stamp of the palette.
+## content is the shapes with no place, the colors, and the model. The
+## stamp of the model and the stamp of the palette are in it also.
+##
+## The place of a shape is no content: a moved shape keeps its node, and
+## the node takes the new place. The workbench needs this. The Godot tools
+## move the node of a shape, and the undo history of the editor names that
+## node.
 static func _fill(part: Node3D, row: Dictionary, colors: Dictionary,
 		paint: Dictionary) -> void:
 	var models: FigureModels = paint["models"]
@@ -271,25 +375,60 @@ static func _fill(part: Node3D, row: Dictionary, colors: Dictionary,
 	var model_key: String = row.get("model", "")
 	var node_name: String = row.get("node", "")
 	var stamp := 0 if models == null else models.stamp_of(model_key)
-	var content := JSON.stringify([row.get("shapes", []), colors, model_key, node_name,
+	var shapes: Array = row.get("shapes", [])
+	var content := JSON.stringify([_placeless(shapes), colors, model_key, node_name,
 		stamp, palette.stamp()], "", true)
 
-	if part.get_meta(CONTENT_META, "") == content:
-		return
+	if part.get_meta(CONTENT_META, "") != content:
+		_rebuild(part, shapes, colors, _model_instance(models, model_key, node_name, colors,
+			palette), palette)
+		part.set_meta(CONTENT_META, content)
 
+	if not part.get_meta(MODEL_META, false):
+		_place_shapes(part, shapes)
+
+
+## Give a part node new meshes: the node of its model, or one node for each
+## shape of its shape list.
+static func _rebuild(part: Node3D, shapes: Array, colors: Dictionary,
+		instance: MeshInstance3D, palette: FigurePalette) -> void:
 	for child: Node in part.get_children():
 		part.remove_child(child)
 		child.free()
 
-	var instance := _model_instance(models, model_key, node_name, colors, palette)
+	part.set_meta(MODEL_META, instance != null)
 
 	if instance != null:
 		part.add_child(instance)
-	else:
-		for shape: Dictionary in row.get("shapes", []):
-			part.add_child(_shape_instance(shape, colors, palette))
+		return
 
-	part.set_meta(CONTENT_META, content)
+	for shape: Dictionary in shapes:
+		part.add_child(_shape_instance(shape, colors, palette))
+
+
+## Put the node of each shape at the place of its row.
+static func _place_shapes(part: Node3D, shapes: Array) -> void:
+	for index in mini(shapes.size(), part.get_child_count()):
+		var instance := part.get_child(index) as Node3D
+		var xform := FigureLook.shape_transform(shapes[index])
+
+		if instance != null and not instance.transform.is_equal_approx(xform):
+			instance.transform = xform
+
+
+## The shapes of a shape list with no place key.
+static func _placeless(shapes: Array) -> Array:
+	var rows := []
+
+	for shape: Dictionary in shapes:
+		var row := shape.duplicate()
+
+		for place_key: String in SHAPE_PLACE_KEYS:
+			row.erase(place_key)
+
+		rows.append(row)
+
+	return rows
 
 
 ## The mesh of one shape of a shape list, with the color of its color role.

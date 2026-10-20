@@ -15,7 +15,17 @@ extends RefCounted
 ## The part node of `parts` that the ray meets first, or null. Each part
 ## must be in the tree.
 static func pick(parts: Array[Node3D], origin: Vector3, direction: Vector3) -> Node3D:
-	var nearest: Node3D = null
+	var instance := pick_instance(parts, origin, direction)
+
+	return null if instance == null else instance.get_parent() as Node3D
+
+
+## The mesh node of `parts` that the ray meets first, or null: the node of
+## one shape of a shape list, or the node of a model. Its parent is the
+## part.
+static func pick_instance(parts: Array[Node3D], origin: Vector3,
+		direction: Vector3) -> MeshInstance3D:
+	var nearest: MeshInstance3D = null
 	var nearest_distance := INF
 
 	for part: Node3D in parts:
@@ -29,7 +39,7 @@ static func pick(parts: Array[Node3D], origin: Vector3, direction: Vector3) -> N
 
 			if distance < nearest_distance:
 				nearest_distance = distance
-				nearest = part
+				nearest = instance
 
 	return nearest
 

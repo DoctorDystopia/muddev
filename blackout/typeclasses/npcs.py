@@ -26,6 +26,7 @@ from typeclasses.objects import ObjectParent, Unpocketable
 from .scripts import Script
 from systems.interface.menus.base_menu import start_blackout_menu
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed
 from systems.gameplay.exterminator import constants as ext_const
 
 
@@ -209,6 +210,9 @@ class CmdTalk(Command):
             return
 
         caller.msg((f"(You walk up and talk to {npc.key}.)", _MSG_ROOM))
+        # The two turn to face each other (10/18/2026). After the check
+        # above, so an NPC with nothing to say turns nobody.
+        feed.emit_face(caller, npc)
 
         start_blackout_menu(
             caller,
@@ -572,6 +576,9 @@ class CmdTrade(Command):
 
         caller = self.caller
         wants = service.wants_popup(caller)
+        # The two turn to face each other (10/18/2026), for the pop-up and
+        # for the menu alike.
+        feed.emit_face(caller, self.obj)
 
         if wants:
             opened = service.open_popup(caller, SHOP_POPUP_KEY, self.obj)

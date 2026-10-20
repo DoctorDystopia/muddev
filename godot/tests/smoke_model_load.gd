@@ -103,17 +103,44 @@ func _on_manifest(count: int) -> void:
 
 	_expect(scenery == null, "scenery with no art draws nothing at all")
 
-	# Each model that the server names for a chunk object must be served, or
-	# its tile stays bare. The transition pad is one.
-	var Const := preload("res://autoload/blackout_constants.gd")
+	_every_scenery_model_is_served()
+	_no_primitive_is_served()
 
-	for kind: String in Const.OBJECT_KIND_SCENERY:
-		var asset_key: String = Const.OBJECT_KIND_SCENERY[kind]
+	_resolver.refreshed.connect(_on_refreshed)
 
+
+## The server must serve each model that it names for a chunk object, or its
+## tile stays bare. The transition pad is one.
+##
+## A primitive is not a model. [PropMeshBuilder] draws it, and [TerrainView]
+## asks the resolver for no art. Until 10/19/2026 this loop also asked for the
+## art of each primitive. It failed on every ladder, crate and lamp. The loop
+## reads each scenery key through [method TileTables.scenery_of], as the
+## client does. Thus, a decor row of the table files gets the same check.
+func _every_scenery_model_is_served() -> void:
+	var checked := 0
+
+	for kind: String in _Const.OBJECT_KIND_SCENERY:
+		var asset_key: String = TileTables.scenery_of(kind)
+
+		if asset_key.is_empty() or not PropMeshBuilder.primitive_of(kind).is_empty():
+			continue
+
+		checked += 1
 		_expect(_resolver.may_have_art(asset_key),
 			"the scenery of %s (%s) is served" % [kind, asset_key])
 
-	_resolver.refreshed.connect(_on_refreshed)
+	_expect(checked > 0, "at least one chunk object names a model")
+
+
+## A served model with the key of a primitive never draws. The client skips
+## each primitive before it asks for art. When the art arrives, the key must
+## move out of `SCENERY_PRIMITIVES` in the tilegrid constants. This case fails
+## until the key moves.
+func _no_primitive_is_served() -> void:
+	for primitive: String in _Const.SCENERY_PRIMITIVES:
+		_expect(not _resolver.may_have_art(primitive),
+			"the primitive %s has no served model" % primitive)
 
 
 func _on_refreshed(asset_key: String) -> void:

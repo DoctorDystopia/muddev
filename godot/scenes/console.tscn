@@ -6,13 +6,14 @@
 [ext_resource type="PackedScene" uid="uid://b5m6anslna38l" path="res://scenes/login/login_view.tscn" id="5_login"]
 [ext_resource type="Theme" uid="uid://blvlnaat101gs" path="res://ui/blackout_theme.tres" id="6_theme"]
 [ext_resource type="Script" uid="uid://dg7hgjhm26aha" path="res://scenes/chat/chat_view.gd" id="7_chat"]
-[ext_resource type="Script" path="res://scenes/chat/chat_bar.gd" id="14_chatbar"]
-[ext_resource type="Script" path="res://scenes/chat/chat_mode_button.gd" id="15_chatmode"]
 [ext_resource type="Script" uid="uid://cpw82hbqqtkcm" path="res://scenes/panel/panel_view.gd" id="8_panel"]
 [ext_resource type="Script" uid="uid://cj3vfryvg0mgb" path="res://scenes/minimap/minimap_view.gd" id="10_minimap"]
 [ext_resource type="Script" uid="uid://o68yvcbc0tmk" path="res://scenes/loading/loading_veil.gd" id="11_veil"]
 [ext_resource type="Script" uid="uid://8vadnsx4gkim" path="res://scenes/world/choose_option.gd" id="12_choose"]
 [ext_resource type="Script" uid="uid://ckr8i6h1t1y83" path="res://scenes/xp/xp_hud_view.gd" id="13_xphud"]
+[ext_resource type="Script" uid="uid://bc5d02ut75op6" path="res://scenes/chat/chat_bar.gd" id="14_chatbar"]
+[ext_resource type="Script" uid="uid://bahu0irbrc5i0" path="res://scenes/chat/chat_mode_button.gd" id="15_chatmode"]
+[ext_resource type="Script" uid="uid://csqjqlstqwhuc" path="res://scenes/performance/performance_view.gd" id="16_perf"]
 
 [node name="Console" type="Control" unique_id=1927313264]
 layout_mode = 3
@@ -86,6 +87,17 @@ offset_bottom = 220.0
 grow_horizontal = 0
 mouse_filter = 2
 script = ExtResource("13_xphud")
+
+[node name="PerformanceHud" type="Control" parent="WorldPane" unique_id=434837267]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 0
+offset_left = 8.0
+offset_top = 80.0
+offset_right = 328.0
+offset_bottom = 288.0
+mouse_filter = 2
+script = ExtResource("16_perf")
 
 [node name="PanelDock" type="Control" parent="WorldPane" unique_id=1156632077]
 unique_name_in_owner = true
@@ -176,10 +188,10 @@ script = ExtResource("7_chat")
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="InputRow" type="HBoxContainer" parent="ConsoleDock/Box/Margin/Game"]
+[node name="InputRow" type="HBoxContainer" parent="ConsoleDock/Box/Margin/Game" unique_id=495276592]
 layout_mode = 2
 
-[node name="ChatMode" type="Button" parent="ConsoleDock/Box/Margin/Game/InputRow"]
+[node name="ChatMode" type="Button" parent="ConsoleDock/Box/Margin/Game/InputRow" unique_id=784215831]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("15_chatmode")
@@ -191,7 +203,7 @@ size_flags_horizontal = 3
 placeholder_text = "connect <name> <password>"
 caret_blink = true
 
-[node name="ChatBar" type="HBoxContainer" parent="ConsoleDock/Box/Margin/Game"]
+[node name="ChatBar" type="HBoxContainer" parent="ConsoleDock/Box/Margin/Game" unique_id=919809164]
 unique_name_in_owner = true
 layout_mode = 2
 script = ExtResource("14_chatbar")

@@ -125,9 +125,11 @@ No `exception` waives that. The check fails on a local source that has no
 
 To serve a source anyway, add an `exception` with the reason. The check prints
 every exception on every run, and the credits box marks it as "License not
-confirmed". Two sources use an exception today: the shopkeeper robot and the
-machine gun. Replace both before a public release. The OSRS player character
-used one until 10/16/2026, and the figure replaced it.
+confirmed". Four sources use an exception today: the shopkeeper robot, the
+machine gun, the blacksmith tools (the anvil and the hammer, 10/20/2026), and
+the boiler machine (the foundry furnace, 10/20/2026). Replace all four before
+a public release. The OSRS player character used one
+until 10/16/2026, and the figure replaced it.
 
 ## A source for clips
 
@@ -256,6 +258,7 @@ filter = "nearest"                        # for pixel art and palettes
 
 [output]                                  # optional
 max_texture_edge = 256                    # below the family budget
+max_triangles    = 6000                   # simplify a mesh over the budget
 texture_format   = "webp"                 # for photo textures only
 animations       = false                  # drop every animation
 color_roles      = true                   # keep the name of each material
@@ -270,6 +273,7 @@ color_roles      = true                   # keep the name of each material
 | `[fix] rotate` | The model faces the wrong way. The rotation is baked into the file |
 | `[fix] opaque` | A material says it is transparent, but the model must be solid |
 | `[fix] filter` | The texture is pixel art or a palette. `nearest` also resizes with the nearest kernel |
+| `[output] max_triangles` | The mesh has more triangles than the family budget. The build simplifies it with meshoptimizer, to at most this count. Each part loses the same share. 0, the default, keeps the mesh. The budget still checks the result, bytes included. UV seams keep vertices, so the count that fits the bytes can be lower than the triangle budget. See the furnace record |
 | `[output] animations` | The file carries animations that the client does not play, and they put it over budget. `false` drops all of them. The model keeps its rest pose |
 | `[output] color_roles` | The model is a figure model. `true` keeps the name of each material. See "A figure model" |
 
@@ -309,7 +313,7 @@ glTF and Godot 4 use these conventions. A model that faces another way needs a
 | Step | Tool | What it does |
 |---|---|---|
 | 1. Ingest | Blender, or `picocad.py` | Only for a source that is not glTF |
-| 2. Record and optimize | glTF Transform (`pipeline/build_model.mjs`) | Take the node, attach the texture, bake the fix, remove an all-black emissive texture, remove unused data, resize textures to the family budget |
+| 2. Record and optimize | glTF Transform (`pipeline/build_model.mjs`) | Take the node, attach the texture, bake the fix, remove an all-black emissive texture, remove unused data, simplify to `max_triangles`, resize textures to the family budget |
 | 3. Validate | Khronos glTF Validator | An error stops the model |
 | 4. Budget | `pipeline/budgets.py` | Bytes, triangles and texture edge. Over budget stops the model |
 

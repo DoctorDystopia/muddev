@@ -1,9 +1,9 @@
 @tool
 class_name FigureFamilyHandlers
 extends RefCounted
-## The handlers of the Families tab of the figure dock, and of the
-## presentation fields of the Gear tab: the shape of a family, its model,
-## and the offset, the turn, and the scale of a served model.
+## The handlers of the Families tab of the Figure dock: the shape of a
+## family, and its model. Also the handler of the presentation fields of
+## the Gear dock: the offset, the turn, and the scale of a served model.
 ##
 ## A family row and a presentation row are both rows of one file, so the
 ## first change of each makes the file ([method FigureHistory.change_or_new]).
@@ -28,8 +28,9 @@ func connect_panel(panel: FigureFamiliesPanel) -> void:
 	panel.model_changed.connect(_on_family_model_changed)
 
 
-## The presentation fields sit on the Gear tab, beside the row of the model.
-func connect_presentation(panel: FigureGearPanel) -> void:
+## The presentation fields sit on the Gear dock, beside the row of the
+## model.
+func connect_presentation(panel: GearLookPanel) -> void:
 	panel.presentation_changed.connect(_on_presentation_changed)
 
 

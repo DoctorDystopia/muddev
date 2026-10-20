@@ -1,13 +1,14 @@
 @tool
 class_name FigureGearHandlers
 extends RefCounted
-## The handlers of the Gear tab and of the outfit bar of the figure dock:
-## a row, a worn look, a copy, a tier, the colors and the hide list of a
-## look, a model import, and the outfit.
+## The handlers of the Gear dock and of the outfit bar: a row, a worn
+## look, a copy, a tier, the colors and the hide list of a look, a model
+## import, and the outfit. The Figure dock uses the outfit bar and the
+## rules of a look only.
 ##
-## A picked row of the Gear tab dresses each stand in that item. The outfit
-## bar does the same for one slot. The outfit is no figure file, so it makes
-## no undo entry.
+## A picked row of the Gear dock dresses each stand in that item. The
+## outfit bar does the same for one slot. The outfit is no figure file, so
+## it makes no undo entry.
 ##
 ## ## Models (Phase W4)
 ##
@@ -32,6 +33,14 @@ const SCRATCH_IMPORT := "This workbench is on a scratch directory, and an import
 
 const IMPORT_FAILED := "The import of %s did not end well:\n%s"
 
+## The keys of a look that holds only the place of a served model. With no
+## `served` row, such a look holds nothing, and "Fit served model to look"
+## removes it.
+const SERVED_ONLY_KEYS := ["format", "key"]
+
+const SERVED_IMPORT := "The figure draws the served model of %s as it is, so an import " \
+	+ "is not necessary. To import a model of the look, type another key in the model field."
+
 var _context: FigureHandlerContext
 
 
@@ -39,8 +48,13 @@ func _init(context: FigureHandlerContext) -> void:
 	_context = context
 
 
-func connect_panel(panel: FigureGearPanel) -> void:
+## The item list of the Gear dock.
+func connect_items(panel: GearItemsPanel) -> void:
 	panel.row_chosen.connect(_on_gear_row_chosen)
+
+
+## The look of the row of the Gear dock.
+func connect_look_panel(panel: GearLookPanel) -> void:
 	panel.look_requested.connect(_on_look_requested)
 	panel.look_removed.connect(on_look_removed)
 	panel.copy_requested.connect(_on_copy_requested)
@@ -50,6 +64,7 @@ func connect_panel(panel: FigureGearPanel) -> void:
 	panel.hide_changed.connect(on_hide_changed)
 	panel.import_requested.connect(_on_import_requested)
 	panel.model_parts_requested.connect(_on_model_parts_requested)
+	panel.served_fit_requested.connect(_on_served_fit_requested)
 
 
 func connect_outfit_bar(bar: FigureOutfitBar) -> void:
@@ -67,16 +82,17 @@ func _on_gear_row_chosen(key: String, slot: String) -> void:
 		return
 
 	bench.wear(slot, key)
+	_context.dock().save_row(key)
 	_show_row_on_family_stand(key)
-	_context.refresh_cost()
+	_context.refresh_panels()
 
 
-## A row with a served model shows that model on the family stand, as the
-## game draws it, with its presentation (ENG-0011, step L6). A row with
-## none leaves the stand as it is.
+## A row with a served model shows that model on the family stand, with
+## its presentation (ENG-0011, step L6). The stand draws it as the game
+## does. A row with none leaves the stand as it is.
 func _show_row_on_family_stand(key: String) -> void:
 	var bench := _context.bench()
-	var model_key := _context.dock().gear_panel().presented_model(key)
+	var model_key := GearLookPanel.presented_model(bench.store.looks, bench.models, key)
 
 	if model_key.is_empty():
 		return
@@ -208,6 +224,9 @@ func _on_import_requested(key: String, model_key: String, path: String,
 	var problem := "Select a row first." if key.is_empty() \
 		else import_problem(bench, model_key)
 
+	if problem.is_empty() and model_key == key and _serves_model(bench, key):
+		problem = SERVED_IMPORT % key
+
 	if bench == null or not problem.is_empty():
 		_context.status(problem)
 		return
@@ -270,8 +289,48 @@ func _on_model_parts_requested(key: String, model_key: String) -> void:
 		_context.status("Select a row first.")
 		return
 
+	if model_key == key and _serves_model(bench, key):
+		_context.status(SERVED_IMPORT % key)
+		return
+
 	bench.reload_models()
 	_make_model_parts(key, model_key)
+
+
+## True when the figure draws the served model of an item row in place of
+## its worn look. The rig of the selected body type decides.
+func _serves_model(bench: FigureWorkbench, key: String) -> bool:
+	var rig := _context.active_rig()
+
+	if bench == null or rig == null or not bench.catalog.has_item(key):
+		return false
+
+	return FigureOutfit.serves_model(rig, bench.catalog.slot_of(key), key, bench.store.looks,
+		bench.models)
+
+
+## "Fit served model to look": the look of the row loses its `served` row,
+## as one undo entry. A look that holds nothing else goes.
+func _on_served_fit_requested(key: String) -> void:
+	var bench := _context.bench()
+
+	if bench == null or not bench.store.has(FigureStore.KIND_LOOK, key):
+		_context.status("The row has no moved served model.")
+		return
+
+	var before := bench.store.data_of(FigureStore.KIND_LOOK, key)
+	var after := before.duplicate(true)
+	var problem := FigureLookEdits.clear_served_place(after)
+
+	if not problem.is_empty():
+		_context.status(problem)
+		return
+
+	if after.keys().all(func(field: String) -> bool: return field in SERVED_ONLY_KEYS):
+		after = {}
+
+	_context.history().commit(FigureStore.KIND_LOOK, key, before, after,
+		"fit the served model of %s to its look" % key)
 
 
 ## Make the parts of one worn look from the nodes of one served model, as
@@ -322,8 +381,8 @@ func on_outfit_changed() -> void:
 	_context.refresh_cost()
 	_context.refresh_clips()
 
-	if not tool_types.is_empty():
-		dock.clips_panel().select_stance(tool_types[0])
+	if not tool_types.is_empty() and _context.figure_dock() != null:
+		_context.figure_dock().clips_panel().select_stance(tool_types[0])
 
 	_context.reselect()
 

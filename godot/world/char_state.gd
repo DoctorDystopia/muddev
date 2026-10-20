@@ -54,6 +54,11 @@ var family := ""
 var body_type := ""
 var figure_colors: Dictionary = {}
 
+## The worn record of the observer: slot -> asset key (DESIGN-0014 section
+## 21). The figure of the avatar wears it. Empty for an observer that
+## wears nothing.
+var worn: Dictionary = {}
+
 var hp := 0
 var max_hp := 0
 
@@ -80,6 +85,7 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 			family = str(payload.get("family", ""))
 			body_type = str(payload.get("body_type", ""))
 			figure_colors = _text_table(payload.get("figure_colors", {}))
+			worn = _text_table(payload.get(_Const.ENTITY_WORN_KEY, {}))
 
 		_Const.CH_CHAR_VITALS:
 			hp = int(payload.get("hp", 0))
@@ -119,6 +125,7 @@ func reset() -> void:
 	family = ""
 	body_type = ""
 	figure_colors = {}
+	worn = {}
 	hp = 0
 	max_hp = 0
 	in_combat = false

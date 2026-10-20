@@ -1,0 +1,16 @@
+source = "itch_polyalchemist_boiler_machine"
+file   = "Boiler Machine.glb"
+
+[fix]
+# The export puts the round grate of the firebox on +X, so the furnace shows
+# its side to the camera. -90 about Y puts the grate to +Z.
+rotate = [0, -90, 0]
+
+[output]
+# The download has 45,500 triangles. The world_objects budget is 10,000.
+# Nick chose a simplify step over a higher budget (10/20/2026).
+#
+# The count is 6,000, not 9,000. Many vertices sit on UV seams, and the
+# simplifier keeps them. At 9,000 triangles the file is 853 KiB, over the
+# 768 KiB budget. At 6,000 it is 748 KiB, and it looks the same on a tile.
+max_triangles = 6000

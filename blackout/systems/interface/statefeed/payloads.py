@@ -147,6 +147,24 @@ class RoomInfoPayload(_Payload):
 
 
 @dataclass
+class TickPerfPayload(_Payload):
+    """One reading of the server tick. Blackout.TickPerf.
+
+    Seconds, not milliseconds. The server states the fact in the unit of
+    TICK_SECONDS, and the unit on the screen is the client's.
+    """
+
+    channel = const.CHANNEL_TICK_PERF
+
+    tick: int = 0          # the tick number of the engine
+    interval: float = 0.0  # seconds since the previous tick
+    duration: float = 0.0  # seconds that this tick took
+    handlers: int = 0      # the size of the rotation
+    failing: int = 0       # the handlers in the rotation with strikes
+    late: bool = False     # the interval passed the late threshold
+
+
+@dataclass
 class RoomPlayersPayload(_Payload):
     """Everything visible in the observer's room. GMCP Room.Players.
 
@@ -300,6 +318,10 @@ class CharAvatarPayload(_Payload):
     it builds each other figure from the same two keys of the entity row.
     `body_type` is "" for an observer that is no player character, and the
     client then draws `asset`.
+
+    `worn` joined on 10/16/2026 too (DESIGN-0014 section 21): slot -> asset
+    key, the worn record of the entity row. The client dresses the figure
+    of the observer with it. An empty dict dresses it with nothing.
     """
 
     channel = const.CHANNEL_CHAR_AVATAR
@@ -309,6 +331,7 @@ class CharAvatarPayload(_Payload):
     family: str = ""
     body_type: str = ""
     figure_colors: dict = field(default_factory=dict)
+    worn: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -432,6 +455,28 @@ class CharCombatPayload(_Payload):
     attack_speed_seconds: float = 0.0
     styles: list = field(default_factory=list)   # [{key, name, ...}, ...]
     pvp: dict = field(default_factory=dict)      # {enabled, command}
+
+
+@dataclass
+class CharAbilitiesPayload(_Payload):
+    """What the observer can do: one row for each ability. Char.Abilities.
+
+    A SNAPSHOT, for the reason CharCombatPayload gives. The state of a row
+    moves through the command, a level-up and a death. A delta would need
+    an emit at each, and would rot at the first one forgotten. It is also
+    tiny.
+
+    `abilities` is a LIST in the order of the registry. The slot of a
+    hotkey is its index. Each row is `{key, name, kind, state, command,
+    reason, tip}`. systems/gameplay/combat/auras/detail.py builds the rows.
+    `command` is the whole line that fires the row. The server names it,
+    for the reason the rows of CharCombatPayload name theirs. It is EMPTY
+    on a locked row.
+    """
+
+    channel = const.CHANNEL_CHAR_ABILITIES
+
+    abilities: list = field(default_factory=list)   # [{key, name, ...}, ...]
 
 
 @dataclass
@@ -634,6 +679,29 @@ class CombatPayload(_Payload):
     backfire: bool = False
     max_hit: bool = False
     max_hit_roll: int = 0
+
+
+@dataclass
+class FacePayload(_Payload):
+    """One entity turns to another, and that one turns back. Blackout.Face.
+
+    Sent when an attack is queued, a tick before the first swing, and when
+    a talk or a trade starts. A harvest sends one before each swing, with
+    the node as the target. The client turns the actor to its target, and
+    the target to its actor. The payload names no direction. The client
+    knows where each one stands, and it draws the turn from those two
+    points. Thus, two players who share a tile face each other across the
+    ring of that tile.
+
+    The names ride beside the ids, as on CombatPayload, for a log line.
+    """
+
+    channel = const.CHANNEL_FACE
+
+    actor_id: int = 0
+    actor_name: str = ""
+    target_id: int = 0
+    target_name: str = ""
 
 
 @dataclass

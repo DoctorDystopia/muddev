@@ -21,6 +21,12 @@ extends Node
 ## 7. The item catalog of the repository reads. Each slot name that the
 ##    workbench types is a slot of it.
 ## 8. Each item of the catalog draws on each body type of the repository.
+##    An item with a served model of the repository draws that model.
+## 9. A served model in hand wins over the worn look (10/17/2026). It takes
+##    the box of the stand-in, or the place of its `served` row, and the
+##    hide list and the colors of the look. A look that names the model
+##    draws as it is. A look with only a `served` row gives the slot shape
+##    as the stand-in. A model with no bone to hold it draws nothing.
 
 const SWORD := "iron_sword"
 const STICK := "wood_sword"
@@ -31,6 +37,9 @@ const TAIL_RING := "tail_ring"
 
 ## A slot of the test catalog that no rig has a bone for.
 const TAIL := "tail"
+
+## The rounding of a place in a look file, and a little more.
+const PLACE_TOLERANCE := 0.001
 
 var _failures := 0
 
@@ -44,6 +53,8 @@ func _ready() -> void:
 	_an_outfit_keeps_what_the_catalog_has()
 	_the_repository_catalog_reads()
 	_each_item_of_the_repository_draws()
+	_a_served_model_wins()
+	_a_served_model_takes_its_place()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -287,10 +298,13 @@ func _the_repository_catalog_reads() -> void:
 			_expect(catalog.has_slot(slot), "%s is a slot of the item catalog" % slot)
 
 
-## The proof of Phase W3: each item of the catalog draws on the figure.
+## The proof of Phase W3: each item of the catalog draws on the figure. An
+## item with a served model of the repository holds that model
+## (10/17/2026): its look names the model, or the served part draws it.
 func _each_item_of_the_repository_draws() -> void:
 	var catalog := FigureCatalog.read_file()
 	var store := FigureStore.new(FigureStore.repo_directory())
+	var models := FigureModels.from_directory(FigureStore.repo_models_directory())
 
 	store.load_all()
 
@@ -306,11 +320,157 @@ func _each_item_of_the_repository_draws() -> void:
 			var worn := {row["slot"]: row["key"]}
 
 			FigureBuilder.refresh(figure, rig,
-				FigureOutfit.looks_for(rig, worn, store.looks, catalog.families()))
+				FigureOutfit.looks_for(rig, worn, store.looks, catalog.families(), {}, models),
+				models)
 			_expect(_worn_parts(figure, body_key) > 0,
 				"%s draws on %s" % [row["key"], body_key])
 
+			if models.has(row["key"]):
+				_expect(_draws_model(figure, row["key"]),
+					"%s holds its served model on %s" % [row["key"], body_key])
+
 		figure.free()
+
+
+## True when a part of a figure draws a model with the key `model_key`.
+func _draws_model(figure: Node3D, model_key: String) -> bool:
+	for node: Node3D in FigureBuilder.part_nodes(figure):
+		var id := FigureBuilder.part_id(node)
+
+		if node.get_meta(FigureBuilder.MODEL_META, false) \
+				and (id[0] == model_key or id[1] == FigureLook.SERVED_PART):
+			return true
+
+	return false
+
+
+## The served models of the test, one for each key of `keys`. Each one is
+## a long box on the hand bone, ten units long and away from the origin, as
+## a download is.
+func _served_models(rig: FigureRig, keys: Array) -> FigureModels:
+	var models := FigureModels.new()
+	var download := FigureLook.from_data({"format": FigureLook.FORMAT, "key": "download",
+		"parts": [{"name": "blade", "bone": rig.slots()["main_hand"],
+			"position": [3.0, 2.0, 0.0],
+			"shapes": [{"shape": FamilyShapes.SHAPE_BOX, "size": [1.0, 10.0, 0.5]}]}]})
+	var body := FigureReference.buffer_of(rig, [download])
+
+	for key: String in keys:
+		_expect(models.put_buffer(key, body), "the served model of %s reads" % key)
+
+	return models
+
+
+## The place that a served model takes in the box of `stand_in`, on the
+## bone of one slot.
+func _box_place(rig: FigureRig, stand_in: FigureLook) -> Transform3D:
+	var picture := FigureBuilder.build_item(rig, stand_in)
+	var box := ModelLoader.bounds_of(picture)
+	var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
+
+	picture.free()
+
+	return Transform3D(Basis.from_scale(Vector3.ONE * longest), box.get_center())
+
+
+## True when two places differ by less than the rounding of a file.
+func _near(first: Transform3D, second: Transform3D) -> bool:
+	if first.origin.distance_to(second.origin) > PLACE_TOLERANCE:
+		return false
+
+	for axis in 3:
+		if first.basis[axis].distance_to(second.basis[axis]) > PLACE_TOLERANCE:
+			return false
+
+	return true
+
+
+func _a_served_model_wins() -> void:
+	var rig := _rig()
+	var looks := _looks(rig)
+	var models := _served_models(rig, [SWORD, STICK, TAIL_RING])
+	var hand: String = rig.slots()["main_hand"]
+	var drawn := FigureOutfit.look_of(rig, "main_hand", SWORD, looks, {}, models)
+	var row: Dictionary = drawn.part(FigureLook.SERVED_PART)
+
+	_expect(FigureOutfit.source_of(rig, "main_hand", SWORD, looks, models)
+		== FigureOutfit.SOURCE_MODEL and drawn.parts().size() == 1
+		and row.get("model") == SWORD and row.get("node") == FigureModels.WHOLE_MODEL
+		and row.get("bone") == hand,
+		"a served model in hand wins over the worn look, as one part on the bone of the slot")
+	_expect(FigureOutfit.source_of(rig, "main_hand", SWORD, looks) == FigureOutfit.SOURCE_LOOK
+		and FigureOutfit.source_of(rig, "main_hand", HELM, looks, models)
+			== FigureOutfit.SOURCE_LOOK,
+		"with no models, or with no model of the key, the worn look draws")
+	_expect(FigureOutfit.source_of(rig, TAIL, TAIL_RING, looks, models)
+		== FigureOutfit.SOURCE_NOTHING, "a served model with no bone to hold it draws nothing")
+
+	var named: Dictionary = looks[SWORD].data.duplicate(true)
+
+	named["parts"][0]["model"] = SWORD
+	named["parts"][0]["node"] = "blade"
+	looks[SWORD] = FigureLook.from_data(named)
+	_expect(FigureOutfit.source_of(rig, "main_hand", SWORD, looks, models)
+		== FigureOutfit.SOURCE_LOOK, "a look that names the model draws as it is")
+
+	var worn := FigureOutfit.looks_for(rig, {"main_hand": STICK}, looks, {}, {}, models)
+	var figure := FigureBuilder.build(rig, worn, models)
+	var node := FigureBuilder.part_node(figure, STICK, FigureLook.SERVED_PART)
+	var instance: MeshInstance3D = null if node == null else node.get_child(0) as MeshInstance3D
+	var box := AABB() if instance == null else instance.mesh.get_aabb()
+
+	_expect(_keys(worn) == [rig.key(), STICK] and node != null
+		and node.get_child_count() == 1 and FigureBuilder.part_nodes(figure).size()
+			== looks[rig.key()].parts().size() + 1,
+		"the figure draws the served model as one part, and no part of the stand-in")
+	_expect(is_equal_approx(maxf(box.size.x, maxf(box.size.y, box.size.z)), FigureModels.UNIT)
+		and box.get_center().length() < PLACE_TOLERANCE,
+		"the served part draws the whole model in the unit box: %s" % [box])
+	figure.free()
+
+
+func _a_served_model_takes_its_place() -> void:
+	var rig := _rig()
+	var looks := _looks(rig)
+	var models := _served_models(rig, [SWORD, STICK])
+	var hand: String = rig.slots()["main_hand"]
+	var sword_row := FigureOutfit.look_of(rig, "main_hand", SWORD, looks, {}, models) \
+		.part(FigureLook.SERVED_PART)
+	var stick_row := FigureOutfit.look_of(rig, "main_hand", STICK, looks, {}, models) \
+		.part(FigureLook.SERVED_PART)
+
+	_expect(_near(FigureLook.part_transform(sword_row), _box_place(rig, looks[SWORD])),
+		"a served model takes the box of the worn look")
+	_expect(_near(FigureLook.part_transform(stick_row), _box_place(rig, looks["main_hand"])),
+		"an item with no worn look takes the box of the slot shape")
+
+	var placed := Transform3D(Basis.from_scale(Vector3.ONE * 0.5), Vector3(0.0, 0.2, 0.0))
+	var data := {"format": FigureLook.FORMAT, "key": STICK, "hides": ["hands"],
+		"colors": {"metal": "gold"}}
+
+	FigureLookEdits.set_served_place(data, hand, placed)
+	looks[STICK] = FigureLook.from_data(data)
+
+	var drawn := FigureOutfit.look_of(rig, "main_hand", STICK, looks, {}, models)
+
+	_expect(_near(FigureLook.part_transform(drawn.part(FigureLook.SERVED_PART)), placed),
+		"a served row gives the model its place")
+	_expect(drawn.hides() == ["hands"] and drawn.colors().get("metal") == "gold",
+		"the served part takes the hide list and the colors of the look")
+	_expect(FigureOutfit.source_of(rig, "main_hand", STICK, looks)
+		== FigureOutfit.SOURCE_SLOT_SHAPE,
+		"a look with only a served row gives the slot shape as the stand-in")
+
+	data["served"]["bone"] = "no_such_bone"
+	looks[STICK] = FigureLook.from_data(data)
+	drawn = FigureOutfit.look_of(rig, "main_hand", STICK, looks, {}, models)
+	_expect(drawn.part(FigureLook.SERVED_PART)["bone"] == hand
+		and _near(FigureLook.part_transform(drawn.part(FigureLook.SERVED_PART)),
+			_box_place(rig, looks["main_hand"])),
+		"a served row on a bone that the rig does not have gives the first place")
+	_expect(FigureLookEdits.clear_served_place(data).is_empty() and not data.has("served")
+		and not FigureLookEdits.clear_served_place(data).is_empty(),
+		"the served row goes, and a second clear gives a reason")
 
 
 ## The count of the part nodes of a figure that are not of its body.

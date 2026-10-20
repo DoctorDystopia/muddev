@@ -37,7 +37,8 @@ walk speed. A path of one tile is one tile, with run on or off, so a click on
 the next tile never overshoots.
 
 A hop onto a transition ends the stride at the transition target, and it
-ends the walk.
+ends the walk. The walker gets the `transition` moment, and the client plays
+its sound.
 
 The walk feed
 -------------
@@ -52,6 +53,7 @@ from evennia.utils import logger
 
 from systems.core.tick.engine import PHASE_START, register_phase_hook
 from systems.core.tilegrid import constants as tile_const
+from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed
 from world import tile_travel
 
@@ -298,6 +300,24 @@ def _hops(here, tiles: list) -> list:
     return directions
 
 
+def _send_transition_moment(character, tile: tuple) -> None:
+    """
+    Tell the client of the walker that a transition moved it, if `tile`, the
+    tile of the last hop, holds a transition. `movement.stride` counts a hop
+    onto a transition only when the walker lands on the target. Thus, a
+    transition on that tile is proof of the move.
+    """
+    view = tile_travel.plane_view(character)
+
+    if view is None:
+        return
+
+    if tile_travel.transition_target(view, tile[0], tile[1]) is None:
+        return
+
+    feed.emit_moment(character, feed_const.MOMENT_TRANSITION)
+
+
 def advance(character) -> None:
     """
     Purpose: Move one walker for one tick.
@@ -317,7 +337,7 @@ def advance(character) -> None:
         3. Move along them in one stride. A refused first hop stops the
            walk, and the player reads why.
         4. Stop if the walker did not land on the path, for example after a
-           transition.
+           transition. A transition sends its moment, for its sound.
         5. Drop the tiles walked. An empty path arrives.
 
     Notes/References:
@@ -348,9 +368,11 @@ def advance(character) -> None:
         return
 
     setattr(character.ndb, const.REFUSAL_NDB_ATTR, None)
+    landed = walk.path[hops - 1]
 
-    if tile_travel.tile_of(character) != walk.path[hops - 1]:
+    if tile_travel.tile_of(character) != landed:
         set_walk(character, None)
+        _send_transition_moment(character, landed)
         return
 
     del walk.path[:hops]

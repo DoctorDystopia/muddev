@@ -1,0 +1,15 @@
+source = "itch_jordanholmes_blacksmith_tools"
+file   = "Blacksmith Tools.blend"
+# The .blend holds the whole set at one origin. The anvil sits on its stump
+# there, and the client puts every model in its unit box.
+node   = "Anvil"
+
+[texture]
+# The material of the .blend names no image.
+image = "Textures/Anvil/Anvil_BaseColor.png"
+
+[fix]
+# The export points the horn at +Z, so the anvil faces the camera end on.
+# A smith works at the long side. -90 about Y puts that side to +Z, with the
+# horn to the left.
+rotate = [0, -90, 0]

@@ -29,6 +29,7 @@ func _ready() -> void:
 	_the_xp_tracker_checks_write_settings_and_reset_only_asks()
 	_the_movement_check_writes_the_setting_and_follows_it()
 	_the_roofs_check_writes_the_setting_and_follows_it()
+	_the_performance_check_writes_the_setting_and_sends_no_command()
 	_the_credits_button_asks_for_the_box_and_sends_no_command()
 
 	_clean()
@@ -259,6 +260,28 @@ func _the_movement_check_writes_the_setting_and_follows_it() -> void:
 
 	_expect(_view._smooth_movement_check.button_pressed,
 		"and a reset elsewhere ticks it again")
+
+
+func _the_performance_check_writes_the_setting_and_sends_no_command() -> void:
+	# The subscription that follows this setting is the CONSOLE's to send,
+	# after the server confirms a session. The pane writes the setting only.
+	_fresh()
+
+	var sent: Array[String] = []
+	_view.command_requested.connect(func(line): sent.append(line))
+
+	_expect(not _view._performance_check.button_pressed,
+		"the performance check starts off, as the default is")
+
+	_view._performance_check.toggled.emit(true)
+
+	_expect(_settings.show_performance, "ticking it turns the view on")
+	_expect(sent.is_empty(), "and sends the server nothing from the pane")
+
+	_settings.reset()
+
+	_expect(not _view._performance_check.button_pressed,
+		"and a reset elsewhere unticks it again")
 
 
 func _the_roofs_check_writes_the_setting_and_follows_it() -> void:

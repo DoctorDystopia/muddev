@@ -42,6 +42,7 @@ import unittest
 
 from evennia.utils.test_resources import EvenniaTest
 
+from items.equipment.constants import WieldLocation
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
 from systems.gameplay.figure import constants as figure_const
@@ -90,6 +91,11 @@ _LONG_COLOR = "skin_of_the_eastern_approach_dark"
 # client has to ask for a particular cut. The other two levers on the table --
 # lower STATEFEED_ENTITY_RADIUS, or chunk room_players the way the old map was
 # chunked -- are both still there and both still cost more than a buffer does.
+#
+# The worn record came due next, on 10/16/2026 (DESIGN-0014 section 21). The
+# ceiling row wears an item in every slot, with a long asset key in each. A
+# 1200-entity room measures 1976936 bytes with it, so the buffer went from
+# 2 MiB to 4 MiB. The two other levers still stand.
 #
 # Keep this at what a real corpse actually affords. Set higher it stops being
 # a measurement; set lower it stops being a ceiling.
@@ -159,6 +165,8 @@ def _synthetic_entity(index: int) -> dict:
         const.ENTITY_BODY_TYPE_KEY: _LONG_BODY_TYPE,
         const.ENTITY_FIGURE_COLORS_KEY: {
             role: _LONG_COLOR for role in figure_const.CHARACTER_COLOR_ROLES},
+        # The worn record (section 21): an item in every slot.
+        const.ENTITY_WORN_KEY: {slot.value: _LONG_ASSET for slot in WieldLocation},
     }
 
 

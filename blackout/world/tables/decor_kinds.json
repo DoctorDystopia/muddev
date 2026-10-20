@@ -15,6 +15,16 @@
 			"key": "lamp_post",
 			"note": "A street lamp on a post.",
 			"scenery": "lamp_post"
+		},
+		{
+			"key": "oil_lamp",
+			"note": "A small oil lamp, for a table. Nudge it onto the table beside it.",
+			"scenery": "oil_lamp"
+		},
+		{
+			"key": "torch",
+			"note": "A metal torch on a pole, with an oil flame.",
+			"scenery": "torch"
 		}
 	]
 }

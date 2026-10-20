@@ -8,7 +8,8 @@ extends Node
 ##
 ## 1. A figure has one node for each part, on the attachment of its bone.
 ## 2. Each part follows its bone when the pose changes.
-## 3. A refresh keeps the node of each part that stays.
+## 3. A refresh keeps the node of each part that stays, and the node of a
+##    moved shape takes the new place.
 ## 4. A part on a bone that the rig does not have draws nothing, and the
 ##    other parts draw.
 ## 5. A worn look hides a region of the body, and it keeps its own parts.
@@ -123,6 +124,19 @@ func _a_refresh_keeps_each_node() -> void:
 	_expect(FigureBuilder.part_node(figure, body.key(), "head") == head
 		and head.transform.is_equal_approx(place) and head.get_child(0) == mesh,
 		"a moved part keeps its node and its mesh")
+
+	var shape_place := Transform3D(Basis.from_euler(Vector3(0.0, 0.5, 0.0)),
+		Vector3(0.0, 0.04, 0.0))
+
+	FigureEdits.set_shape_place(data, "head", 0, shape_place)
+	FigureBuilder.refresh(figure, rig, [FigureLook.from_data(data)])
+	_expect(head.get_child(0) == mesh and (mesh as Node3D).transform.is_equal_approx(shape_place)
+		and FigureBuilder.shape_id(mesh) == [body.key(), "head", 0]
+		and FigureBuilder.shape_node(figure, body.key(), "head", 0) == mesh,
+		"a moved shape keeps its node, and the node takes the place")
+	_expect(FigureBuilder.shape_id(head).is_empty()
+		and FigureBuilder.shape_node(figure, body.key(), "head", 9) == null,
+		"a part is no shape, and a shape index past the list gives no node")
 
 	FigureEdits.set_shape_value(data, "head", 0, "size", Vector3(0.2, 0.3, 0.2))
 	FigureEdits.set_shape_value(data, "head", 0, "top_width", 0.2)

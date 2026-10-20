@@ -1,0 +1,10 @@
+title     = "Copper shortbow"
+author    = "Nick Hobar"
+url       = "https://playblackout.io"
+site      = "blackout"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-10-18
+notes     = "Art made for Blackout. `python -m assets.pipeline figure-model` wrote this record."
+
+[files]
+"copper_shortbow.glb" = "sha256:5b3cacb637cba9968d32bb2e55d9562d05e46d75d8c2c8e8b126e0bc8915182f"

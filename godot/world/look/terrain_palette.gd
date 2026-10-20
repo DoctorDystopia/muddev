@@ -39,7 +39,7 @@ const KEY_WALL_TOP_LIGHTEN := "wall_top_lighten"
 ## The props of [PropMeshBuilder] that take a colour, in the order of the
 ## Look tab.
 const PROP_KEYS := ["ladder", "stairs", "hatch", "hatch_frame", "crate", "crate_lid",
-	"table", "lamp_post", "lamp"]
+	"table", "lamp_post", "lamp", "oil_lamp", "oil_lamp_glass", "torch", "torch_flame"]
 
 
 static func data() -> Dictionary:

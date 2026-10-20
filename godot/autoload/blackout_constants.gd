@@ -28,7 +28,9 @@ const CH_CHAR_SKILLS := "char_skills"
 const CH_CHAR_COMBAT := "char_combat"
 const CH_CHAR_POPUP := "char_popup"
 const CH_CHAR_CHAT := "char_chat"
+const CH_CHAR_ABILITIES := "char_abilities"
 const CH_COMBAT := "blackout_combat"
+const CH_FACE := "blackout_face"
 const CH_AURA := "blackout_aura"
 const CH_XP_DROP := "blackout_xp"
 const CH_TILE_CHUNK := "blackout_chunk"
@@ -36,6 +38,7 @@ const CH_WALK := "blackout_walk"
 const CH_WORLD_MAP := "blackout_world_map"
 const CH_WORLD_MAP_CHUNK := "blackout_world_map_chunk"
 const CH_MOMENT := "blackout_moment"
+const CH_TICK_PERF := "blackout_tick_perf"
 const CH_SUBSCRIBED := "blackout_subscribed"
 const CH_LOGIN_TOKEN := "blackout_login_token"
 
@@ -73,6 +76,11 @@ const KIND_CANCEL := "cancel"
 
 # Game moments -- what a client can mark with a sound.
 const MOMENT_TASK_COMPLETE := "task_complete"
+const MOMENT_CUT_ATTEMPT := "cut_attempt"
+const MOMENT_BUTCHER_ATTEMPT := "butcher_attempt"
+const MOMENT_METALSMITH_CRAFT := "metalsmith_craft"
+const MOMENT_FOUNDRY_CRAFT := "foundry_craft"
+const MOMENT_TRANSITION := "transition"
 
 # Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
 const MESSAGE_TYPE_KEY := "type"
@@ -167,6 +175,8 @@ const SCENERY_STAIRS_TOP := "stairs_top"
 const SCENERY_CRATE := "crate"
 const SCENERY_TABLE := "table"
 const SCENERY_LAMP_POST := "lamp_post"
+const SCENERY_OIL_LAMP := "oil_lamp"
+const SCENERY_TORCH := "torch"
 const TILE_DEFAULT_FLOOR := "sand"
 const TILE_DEFAULT_AREA := "oasis"
 const TILE_DEFAULT_WALL_STYLE := "plain"
@@ -196,7 +206,7 @@ const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_l
 const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "landmark", "npc", "sign", "transition"]
 const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable"]
 const TILE_CHECK_NOTE_RULES := ["unreachable"]
-const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch", "stairs_top", "crate", "table", "lamp_post"]
+const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch", "stairs_top", "crate", "table", "lamp_post", "oil_lamp", "torch"]
 const OBJECT_KINDS := {
 	"bank": "facility",
 	"foundry_furnace": "facility",
@@ -231,6 +241,18 @@ const OBJECT_KINDS := {
 	"crate": "decor",
 	"table": "decor",
 	"lamp_post": "decor",
+	"oil_lamp": "decor",
+	"torch": "decor",
+}
+const OBJECT_CATEGORY_LABELS := {
+	"climb": "Ladder or stairs",
+	"decor": "Decor",
+	"facility": "Facility",
+	"gathering": "Gathering node",
+	"landmark": "Landmark",
+	"npc": "NPC",
+	"sign": "Sign",
+	"transition": "Transition",
 }
 const OBJECT_KIND_TARGETS := {
 	"transition_oasis_to_outskirts": [72, 10],
@@ -268,6 +290,8 @@ const OBJECT_KIND_SCENERY := {
 	"crate": "crate",
 	"table": "table",
 	"lamp_post": "lamp_post",
+	"oil_lamp": "oil_lamp",
+	"torch": "torch",
 }
 const OBJECT_KIND_PREVIEW := {
 	"bank": ["bank_terminal", "station"],
@@ -308,13 +332,22 @@ const ASSET_KEY_CHARACTER := "player_character"
 const INVENTORY_SWAP_TEMPLATE := "swap {source} {target}"
 const TILE_KEY_TEMPLATE := "{x}:{y}"
 const ENTITY_APPROACH_TEMPLATE := "goto ({x},{y}) then {command}"
+const ENTITY_INSPECT_TEMPLATE := "inspect #{dbref}"
 const TILE_WALK_TEMPLATE := "goto ({x},{y})"
 const RUN_TOGGLE_COMMAND := "run"
+const ABILITY_STATE_READY := "ready"
+const ABILITY_STATE_ACTIVE := "active"
+const ABILITY_STATE_LOCKED := "locked"
+const ABILITY_KIND_TOGGLE := "toggle"
+const TIP_KEY := "tip"
+const TIP_TITLE_KEY := "title"
+const TIP_LINES_KEY := "lines"
 const ENTITY_SPENT_KEY := "spent"
 const ENTITY_FACING_KEY := "facing"
 const ENTITY_LOOK_KEY := "look"
 const ENTITY_BODY_TYPE_KEY := "body_type"
 const ENTITY_FIGURE_COLORS_KEY := "figure_colors"
+const ENTITY_WORN_KEY := "worn"
 const ACTION_AMOUNT_PLACEHOLDER := "{amount}"
 const ACTION_INPUT_KIND_QUANTITY := "quantity"
 const ACTION_INPUT_KIND_KEY := "kind"
@@ -325,7 +358,7 @@ const ACTION_TEXT_PLACEHOLDER := "{text}"
 const ACTION_INPUT_KIND_TEXT := "text"
 const DRAG_SOURCE_TOKEN := "{source}"
 const DRAG_TARGET_TOKEN := "{target}"
-const CLIENT_INBOUND_BUFFER_BYTES := 2097152
+const CLIENT_INBOUND_BUFFER_BYTES := 4194304
 const WORLD_MAP_ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 const WORLD_MAP_COMMAND := "worldmap"
 const LOGIN_ACCOUNT_KEY := "account"
@@ -336,6 +369,6 @@ const FORGET_COMMAND := "forget"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_moment", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_face", "blackout_moment", "blackout_tick_perf", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_abilities", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "page", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

@@ -106,13 +106,16 @@ func set_outfit(outfit: Dictionary) -> void:
 		var cell: OptionButton = _cells[slot]
 		var wanted: String = outfit.get(slot, "")
 
-		cell.select(0)
+		# A cell with no catalog yet has no row to select.
+		if cell.item_count > 0:
+			cell.select(0)
 
 		for index in cell.item_count:
 			if cell.get_item_metadata(index) == wanted:
 				cell.select(index)
 
-	_npcs.select(0)
+	if _npcs.item_count > 0:
+		_npcs.select(0)
 
 	for index in range(1, _npcs.item_count):
 		if _npc_outfits[_npcs.get_item_metadata(index)] == outfit:

@@ -34,6 +34,7 @@ func _ready() -> void:
 	_each_decor_kind_draws_its_primitive()
 	_a_table_top_stands_at_its_height()
 	_a_lamp_post_reaches_toward_the_front()
+	_an_oil_lamp_is_small_and_a_torch_is_tall()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -239,6 +240,20 @@ func _a_lamp_post_reaches_toward_the_front() -> void:
 
 		_expect(Vector2(middle.x, middle.z).dot(Vector2(front.x, front.z)) > 0.05,
 			"at rotation %d the arm of the lamp post reaches the front" % rotation)
+
+
+func _an_oil_lamp_is_small_and_a_torch_is_tall() -> void:
+	var oil_lamp := _bounds(_kind_of(_Const.SCENERY_OIL_LAMP), 0)
+	var torch := _bounds(_kind_of(_Const.SCENERY_TORCH), 0)
+	var oil_lamp_top := PropMeshBuilder.OIL_LAMP_BASE_HEIGHT + PropMeshBuilder.OIL_LAMP_BODY_HEIGHT \
+		+ PropMeshBuilder.OIL_LAMP_GLASS_HEIGHT
+	var torch_top := PropMeshBuilder.TORCH_HEIGHT + PropMeshBuilder.TORCH_FLAME_HEIGHT
+
+	_expect(is_equal_approx(oil_lamp.end.y, oil_lamp_top), "the glass of an oil lamp is its top")
+	_expect(oil_lamp.end.y < PropMeshBuilder.TABLE_HEIGHT, "an oil lamp is lower than a table")
+	_expect(is_equal_approx(torch.end.y, torch_top), "the flame of a torch is its top")
+	_expect(torch.size.x <= PropMeshBuilder.TORCH_CUP_SIZE + _NEAR,
+		"a torch is no wider than its cup")
 
 
 # ─── Private helpers ─────────────────────────────────────────────────────────

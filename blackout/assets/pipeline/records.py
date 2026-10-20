@@ -27,6 +27,7 @@ Description: Model records. One served model, one file:
 
                  [output]                             # optional
                  max_texture_edge = 256
+                 max_triangles    = 9000
                  texture_format   = "webp"
                  animations       = false
                  color_roles      = true
@@ -58,6 +59,12 @@ Description: Model records. One served model, one file:
              color role of a worn look (DESIGN-0014). The build joins two
              materials that differ in the name only. `color_roles = true`
              keeps each name.
+
+             MAX TRIANGLES (10/20/2026). A download with more triangles than
+             its family budget. The build simplifies the mesh to at most this
+             count, with meshoptimizer. 0, the default, keeps the mesh as it
+             is. The family budget still checks the result. Nick chose a
+             simplify step over a higher budget for the foundry furnace.
 """
 
 import os
@@ -93,12 +100,14 @@ class ModelRecord:
     """
     One served model, read from its record.
 
-    rotate is (x, y, z) in degrees, or None. texture_image is a path relative
-    to the source directory, or "". max_texture_edge is 0 when the family
-    budget decides it. animations is False when the served file must carry
-    no animation. color_roles is True when the build must keep the name of
-    each material. variant_of is the asset key of the base model that this
-    record is a variant of, or "".
+    The field `rotate` holds (x, y, z) in degrees, or None. The field
+    `texture_image` is a path relative to the source directory, or "".
+
+    A `max_texture_edge` of 0 lets the family budget decide the edge. A
+    `max_triangles` of 0 keeps the mesh as it is. The field `animations` is
+    False when the served file must carry no animation. The field
+    `color_roles` is True when the build must keep the name of each material.
+    The field `variant_of` is the asset key of the base model, or "".
     """
 
     asset_key: str
@@ -115,6 +124,7 @@ class ModelRecord:
     opaque: bool = False
     filter: str = FILTER_LINEAR
     max_texture_edge: int = 0
+    max_triangles: int = 0
     texture_format: str = TEXTURE_FORMAT_PNG
     animations: bool = True
     color_roles: bool = False
@@ -133,7 +143,8 @@ _TOP_FIELDS: frozenset = frozenset(
 _TEXTURE_FIELDS: frozenset = frozenset(("image", "roughness"))
 _FIX_FIELDS: frozenset = frozenset(("rotate", "opaque", "filter"))
 _OUTPUT_FIELDS: frozenset = frozenset(
-    ("max_texture_edge", "texture_format", "animations", "color_roles"))
+    ("max_texture_edge", "max_triangles", "texture_format", "animations",
+     "color_roles"))
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -212,9 +223,10 @@ def _read_output(where: str, output: dict) -> dict:
         output is the parsed table, possibly empty.
 
     Exit/Returns:
-        Returns {"max_texture_edge", "texture_format", "animations",
-        "color_roles"}. An edge of 0 means that the family budget decides.
-        Raises RecordError for a bad value.
+        Returns {"max_texture_edge", "max_triangles", "texture_format",
+        "animations", "color_roles"}. An edge of 0 means that the family
+        budget decides. A triangle count of 0 means no simplify. Raises
+        RecordError for a bad value.
 
     Module Globals:
         TEXTURE_FORMATS, TEXTURE_FORMAT_PNG read.
@@ -224,6 +236,7 @@ def _read_output(where: str, output: dict) -> dict:
     """
     _refuse_unknown(where + " [output]", output, _OUTPUT_FIELDS)
     edge = output.get("max_texture_edge", 0)
+    max_triangles = output.get("max_triangles", 0)
     texture_format = output.get("texture_format", TEXTURE_FORMAT_PNG)
     animations = output.get("animations", True)
     color_roles = output.get("color_roles", False)
@@ -231,6 +244,13 @@ def _read_output(where: str, output: dict) -> dict:
     if not isinstance(edge, int) or edge < 0:
         raise RecordError("%s: max_texture_edge must be a whole number"
                           % where)
+
+    # bool is an int in Python, so `max_triangles = true` must fail here.
+    whole = isinstance(max_triangles, int) and not isinstance(max_triangles,
+                                                               bool)
+
+    if not whole or max_triangles < 0:
+        raise RecordError("%s: max_triangles must be a whole number" % where)
 
     if texture_format not in TEXTURE_FORMATS:
         raise RecordError("%s: texture_format must be one of %s"
@@ -242,8 +262,9 @@ def _read_output(where: str, output: dict) -> dict:
     if not isinstance(color_roles, bool):
         raise RecordError("%s: color_roles must be true or false" % where)
 
-    return {"max_texture_edge": edge, "texture_format": texture_format,
-            "animations": animations, "color_roles": color_roles}
+    return {"max_texture_edge": edge, "max_triangles": max_triangles,
+            "texture_format": texture_format, "animations": animations,
+            "color_roles": color_roles}
 
 
 def _read_texture(where: str, texture: dict) -> dict:

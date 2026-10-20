@@ -36,8 +36,27 @@ extends RefCounted
 ## [method stamp_of] changes when a model gets new bytes. [FigureBuilder]
 ## keeps the stamp with the content of a part, so a part draws again after
 ## its model changed.
+##
+## ## The whole model, in the unit box (10/17/2026)
+##
+## A served model of an item is not in figure space. Its file has the size
+## and the place of its download. The node name [constant WHOLE_MODEL]
+## gives each node of such a model as one mesh, in the unit box. The
+## longest side is one unit, and the middle of the box is the origin. Each
+## surface keeps its material. The served part of a figure draws it
+## ([FigureOutfit]), and the place of that part gives its size.
 
 const MANIFEST_NAME := "manifest.json"
+
+## The node name of the whole model in the unit box. No node of a file has
+## this name: Godot refuses a slash in the name of a node.
+const WHOLE_MODEL := "/"
+
+## The longest side of the whole model, in figure units.
+const UNIT := 1.0
+
+## A whole model with a box smaller than this on each side has no unit box.
+const MIN_EXTENT := 0.000001
 
 ## The directory of the served model tree, under the web directory of the
 ## game.
@@ -68,6 +87,9 @@ var _manifest := {}
 ## Model key -> true for a file of the directory that does not read.
 var _unreadable := {}
 
+## Model key -> the row of its whole model, made on the first ask.
+var _wholes := {}
+
 
 ## The models of one served model tree on disk. `directory` holds
 ## `manifest.json`. A directory with no manifest gives no model.
@@ -91,6 +113,7 @@ func read_manifest() -> int:
 	_nodes.clear()
 	_stamps.clear()
 	_unreadable.clear()
+	_wholes.clear()
 
 	return _manifest.size()
 
@@ -109,6 +132,7 @@ func put_buffer(model_key: String, body: PackedByteArray) -> bool:
 	scene.free()
 	_nodes[model_key] = rows
 	_unreadable.erase(model_key)
+	_wholes.erase(model_key)
 	_last_stamp += 1
 	_stamps[model_key] = _last_stamp
 
@@ -183,7 +207,8 @@ func material_names(model_key: String, node_name: String) -> PackedStringArray:
 
 ## A new mesh instance for one node of a model, with no place of its own.
 ## The mesh is the mesh of the model, and each instance shares it. Null for
-## no such node.
+## no such node. [constant WHOLE_MODEL] gives the whole model in the unit
+## box.
 func instance_of(model_key: String, node_name: String) -> MeshInstance3D:
 	var row := _row_of(model_key, node_name)
 
@@ -192,7 +217,7 @@ func instance_of(model_key: String, node_name: String) -> MeshInstance3D:
 
 	var instance := MeshInstance3D.new()
 
-	instance.name = node_name
+	instance.name = node_name.validate_node_name()
 	instance.mesh = row[_MESH]
 
 	return instance
@@ -226,13 +251,113 @@ func _rows_of(model_key: String) -> Array:
 	return _nodes[model_key] if _load(model_key) else []
 
 
-## The row of one node of a model, or an empty dictionary.
+## The row of one node of a model, or an empty dictionary. The name
+## [constant WHOLE_MODEL] gives the row of the whole model.
 func _row_of(model_key: String, node_name: String) -> Dictionary:
+	if node_name == WHOLE_MODEL:
+		return _whole_row(model_key)
+
 	for row: Dictionary in _rows_of(model_key):
 		if row[_NAME] == node_name:
 			return row
 
 	return {}
+
+
+## The row of the whole model in the unit box. A model that is not there,
+## or that has no box, gives an empty dictionary. The first ask makes it.
+func _whole_row(model_key: String) -> Dictionary:
+	if _wholes.has(model_key):
+		return _wholes[model_key]
+
+	var rows := _rows_of(model_key)
+
+	if rows.is_empty():
+		return {}
+
+	var mesh := _unit_mesh(rows)
+	var row := {} if mesh == null \
+		else {_NAME: WHOLE_MODEL, _MESH: mesh, _PLACE: Transform3D.IDENTITY}
+
+	_wholes[model_key] = row
+
+	return row
+
+
+## The mesh of each node row as one mesh, in the unit box. The longest side
+## is [constant UNIT], and the middle of the box is the origin. Rows with
+## no box give null.
+static func _unit_mesh(rows: Array) -> ArrayMesh:
+	var bounds: AABB = rows[0][_PLACE] * (rows[0][_MESH] as Mesh).get_aabb()
+
+	for row: Dictionary in rows:
+		bounds = bounds.merge(row[_PLACE] * (row[_MESH] as Mesh).get_aabb())
+
+	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+	if longest < MIN_EXTENT:
+		return null
+
+	var factor := UNIT / longest
+	var unit := Transform3D(Basis.from_scale(Vector3.ONE * factor), -bounds.get_center() * factor)
+	var merged := ArrayMesh.new()
+
+	for row: Dictionary in rows:
+		_append_surfaces(merged, row[_MESH], unit * row[_PLACE])
+
+	return merged
+
+
+## Add each surface of `mesh` to `target`, moved by `place`. Each surface
+## keeps its material. A normal and a tangent turn with the basis, and each
+## keeps the length one.
+static func _append_surfaces(target: ArrayMesh, mesh: Mesh, place: Transform3D) -> void:
+	var normal_basis := place.basis.inverse().transposed()
+
+	for surface in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(surface)
+		var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var primitive := Mesh.PRIMITIVE_TRIANGLES
+
+		for index in vertices.size():
+			vertices[index] = place * vertices[index]
+
+		arrays[Mesh.ARRAY_VERTEX] = vertices
+
+		if arrays[Mesh.ARRAY_NORMAL] != null:
+			arrays[Mesh.ARRAY_NORMAL] = _turned(arrays[Mesh.ARRAY_NORMAL], normal_basis)
+
+		if arrays[Mesh.ARRAY_TANGENT] != null:
+			arrays[Mesh.ARRAY_TANGENT] = _turned_tangents(arrays[Mesh.ARRAY_TANGENT], place.basis)
+
+		if mesh is ArrayMesh:
+			primitive = (mesh as ArrayMesh).surface_get_primitive_type(surface)
+
+		target.add_surface_from_arrays(primitive, arrays)
+		target.surface_set_material(target.get_surface_count() - 1,
+			mesh.surface_get_material(surface))
+
+
+## Turn each vector of `directions` by `basis`, and give it the length one.
+static func _turned(directions: PackedVector3Array, basis: Basis) -> PackedVector3Array:
+	for index in directions.size():
+		directions[index] = (basis * directions[index]).normalized()
+
+	return directions
+
+
+## Each tangent of a tangent array, turned by `basis`. A tangent is four
+## numbers: the direction, then the sign of the bitangent, which stays.
+static func _turned_tangents(tangents: PackedFloat32Array, basis: Basis) -> PackedFloat32Array:
+	for index in range(0, tangents.size(), 4):
+		var turned := (basis * Vector3(tangents[index], tangents[index + 1],
+			tangents[index + 2])).normalized()
+
+		tangents[index] = turned.x
+		tangents[index + 1] = turned.y
+		tangents[index + 2] = turned.z
+
+	return tangents
 
 
 ## Add one row for each node below `node` that holds a mesh. `place` is the

@@ -143,9 +143,69 @@ CHANNEL_CHAR_POPUP: str = "char_popup"                # -> Char.Popup
 # A SNAPSHOT, and coalescable. The builder is statefeed/chat.py.
 CHANNEL_CHAR_CHAT: str = "char_chat"                  # -> Char.Chat
 
+# The abilities of the observer: each aura that the game knows, with its
+# state and the whole line that fires it. The ability rail of the Godot
+# client draws one button for each row, and a hotkey sends the command of
+# the row in that slot. Nick chose the rail over a slotted bar on
+# 10/20/2026, because every ability that exists today is a toggle.
+#
+# A Char.* channel for the reason the ones above give: it is about what
+# YOUR character can do, and nobody else receives it.
+#
+# STRUCTURED, NOT RENDERED. Each row is `{key, name, kind, state, command,
+# reason, tip}`. `command` is the whole line that a telnet player types.
+# A ready row carries `aura <name>`. The active row carries `aura off`. A
+# locked row carries an empty command, which every client reads as "the
+# server declines". `reason` says why a row is locked. `tip` is a TIP_*
+# block (see below). The rows come from
+# systems/gameplay/combat/auras/detail.py. The telnet `aura` listing reads
+# the same rows, so the rail and the listing cannot disagree.
+#
+# A SNAPSHOT, and coalescable. The state of a row moves when an aura lights
+# or goes out, and emit_aura marks it. It moves when a level moves, and
+# the level publish marks it. The order of the rows is the order of the
+# registry. The slot of a hotkey is its index in that order. The server
+# names no key. Which key fires which slot is the client's own table.
+CHANNEL_CHAR_ABILITIES: str = "char_abilities"        # -> Char.Abilities
+
+# The states of an ability row.
+ABILITY_STATE_READY: str = "ready"
+ABILITY_STATE_ACTIVE: str = "active"
+ABILITY_STATE_LOCKED: str = "locked"
+
+# The kinds of an ability row. A toggle is lit or not. A later kind, a cast
+# with a cooldown, is one more constant here and one more branch in the
+# rail. That branch draws a sweep from a `ready_at` field. A toggle does
+# not carry that field.
+ABILITY_KIND_TOGGLE: str = "toggle"
+
+# The tip block: `{TIP_TITLE_KEY: str, TIP_LINES_KEY: [str, ...]}`, under
+# TIP_KEY on a row. The server says what a thing IS, as lines of text. The
+# client says how a tip looks. The ability row is the first row that
+# carries one (10/20/2026). Nick expects a generic tip over most of the
+# game later. That tip reads this one shape from every row that has it:
+# an item, an entity, a skill. A row that gains a tip adds this block and
+# no new field.
+TIP_KEY: str = "tip"
+TIP_TITLE_KEY: str = "title"
+TIP_LINES_KEY: str = "lines"
+
 # Blackout-specific extensions.
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
 CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
+
+# One entity turns to another, and that one turns back (10/18/2026): the
+# start of a fight, a talk, or a trade. The attack command and the AI of
+# an NPC both queue an attack, and each queue sends one of these. The talk
+# and trade commands send one when the exchange opens. The client turns
+# the two to face each other.
+#
+# AN EVENT, NOT A SNAPSHOT, on its own channel. CHANNEL_COMBAT carries one
+# swing, and the client draws one hitsplat for each payload of it. A start
+# of a fight is not a swing, and it comes a tick before the first one. A
+# flag on the swing payload would make each hitsplat reader test it. The
+# payload names only the two ids. The client reads where each one stands.
+CHANNEL_FACE: str = "blackout_face"    # -> Blackout.Face
 
 # One XP award, as the player earned it: every skill one action taught, with
 # each skill's progress AFTER the award. What a graphical client draws an XP
@@ -202,14 +262,59 @@ CHANNEL_WORLD_MAP_CHUNK: str = "blackout_world_map_chunk"
 # sender.
 CHANNEL_MOMENT: str = "blackout_moment"  # -> Blackout.Moment
 
+# One reading of the server tick, sent after each tick: the tick number, the
+# gap since the previous tick, the time the tick took, the size of the
+# rotation, the handlers with strikes, and whether the gap was late. The
+# performance view of the Godot client draws its tick graphs from it. The
+# server says whether a tick was late, so the client holds no copy of
+# TICK_DEBUG_LATE_TICK_FACTOR.
+#
+# OPT-IN. A message on every tick is 100 messages a minute for each client.
+# A client that does not draw the view must not pay for it, and most do not.
+# Thus, SUBSCRIBE_ALL leaves it out, and a client names it one time when the
+# player turns the view on. See OPT_IN_CHANNELS.
+#
+# It goes to every SESSION that asks, not to an observer. The tick is a fact
+# of the server, not of a character. statefeed/performance.py is the one
+# sender, on PHASE_END of the tick engine, after the engine records the
+# duration. Thus, the send is outside the number that it reports.
+#
+# AN EVENT, NOT A SNAPSHOT. Each message is one tick, and a graph with a
+# gap is a graph that lies. Not in COALESCABLE_CHANNELS. The send happens
+# after the flush of the tick in any case.
+CHANNEL_TICK_PERF: str = "blackout_tick_perf"  # -> Blackout.TickPerf
+
 # The moment names. A new moment is one constant here, one entry in MOMENTS,
 # and one export row in clientexport.py.
 #
 # The last kill of an Exterminator task. ExterminatorHandler._complete sends it.
 MOMENT_TASK_COMPLETE: str = "task_complete"
 
+# One gathering attempt at a node, a hit or a miss. Each gathering skill
+# names its moment in `attempt_moment`, and GatheringSkill.attempt_swing
+# sends it. The channel makes an attempt every SWING_TICKS. Thus, the sound
+# repeats until the channel stops.
+MOMENT_CUT_ATTEMPT: str = "cut_attempt"
+MOMENT_BUTCHER_ATTEMPT: str = "butcher_attempt"
+
+# One finished craft under a skill. Each skill names its moment in
+# `craft_moment`, and crafting_service.perform_craft sends it after each item.
+# A batch makes one item every craft_seconds. Thus, the sound repeats until
+# the batch stops.
+MOMENT_METALSMITH_CRAFT: str = "metalsmith_craft"
+MOMENT_FOUNDRY_CRAFT: str = "foundry_craft"
+
+# A hop onto a transition tile moved the walker to the target tile.
+# walk.advance sends it after the stride, to the walker only.
+MOMENT_TRANSITION: str = "transition"
+
 MOMENTS: frozenset = frozenset((
     MOMENT_TASK_COMPLETE,
+    MOMENT_CUT_ATTEMPT,
+    MOMENT_BUTCHER_ATTEMPT,
+    MOMENT_METALSMITH_CRAFT,
+    MOMENT_FOUNDRY_CRAFT,
+    MOMENT_TRANSITION,
 ))
 
 # The command that asks for the world map. The key of CmdWorldMap, and the
@@ -236,7 +341,9 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_COMBAT,
     CHANNEL_CHAR_POPUP,
     CHANNEL_CHAR_CHAT,
+    CHANNEL_CHAR_ABILITIES,
     CHANNEL_COMBAT,
+    CHANNEL_FACE,
     CHANNEL_AURA,
     CHANNEL_XP_DROP,
     CHANNEL_TILE_CHUNK,
@@ -244,7 +351,20 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_WORLD_MAP,
     CHANNEL_WORLD_MAP_CHUNK,
     CHANNEL_MOMENT,
+    CHANNEL_TICK_PERF,
 ))
+
+# The channels that SUBSCRIBE_ALL does NOT include. A client subscribes to
+# one of these by name, when the player asks for what it carries. Each one
+# costs a message on a clock, not on an event of the player, so a client
+# that never draws it must not get it. A channel here is still in
+# SUBSCRIBABLE_CHANNELS: the subscribe inputfunc accepts its name.
+OPT_IN_CHANNELS: frozenset = frozenset((
+    CHANNEL_TICK_PERF,
+))
+
+# What SUBSCRIBE_ALL means: every channel that a client draws by default.
+DEFAULT_CHANNELS: frozenset = SUBSCRIBABLE_CHANNELS - OPT_IN_CHANNELS
 
 # Evennia's websocket `send_default` silently DROPS an outputfunc with this
 # name, and `clean_senddata` injects a key of the same name into every
@@ -656,6 +776,7 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_COMBAT,
     CHANNEL_CHAR_POPUP,
     CHANNEL_CHAR_CHAT,
+    CHANNEL_CHAR_ABILITIES,
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,
@@ -763,7 +884,14 @@ ROOM_PLAYERS_DELTA_MAX_FRACTION: float = 0.5
 # allocation on one socket in one client process, where lowering
 # STATEFEED_ENTITY_RADIUS takes the world away from the player and chunking
 # room_players makes a client render a half-applied entity list.
-CLIENT_INBOUND_BUFFER_BYTES: int = 2 * 1024 * 1024
+#
+# RAISED FROM 2 MiB TO 4 MiB ON 10/16/2026, for the worn record (DESIGN-0014
+# section 21). The row of a player character now carries slot -> asset key
+# for each item it wears. The ceiling row wears an item in every slot, and
+# the 1200-entity room went from 1347336 bytes to 1976936 against a
+# 1398101-byte budget. The same three levers stood, and the buffer was again
+# the cheapest. The other two cost the same as on 09/11/2026.
+CLIENT_INBOUND_BUFFER_BYTES: int = 4 * 1024 * 1024
 
 
 # ─── Asset keys ──────────────────────────────────────────────────────────────
@@ -841,6 +969,11 @@ TARGETED_VERB_BY_KIND: dict = {
     ASSET_KIND_ITEM: "get",
 }
 
+# The verb that reads the text of a thing. It is the key of CmdInspect. This
+# module cannot import the command layer. Thus, the key is here too, and
+# test_interaction.py asserts that the two agree.
+ENTITY_INSPECT_VERB: str = "inspect"
+
 # ─── Who walks ───────────────────────────────────────────────────────────────
 # A click on a thing the player is not standing with has to walk there first,
 # and the client wraps such a command in the server's own
@@ -863,8 +996,13 @@ TARGETED_VERB_BY_KIND: dict = {
 # no distance at all. Each one finds its target by a global search, so a walk
 # in front of it only moves the player for no purpose. These three are what a
 # click on another player offers (see Character.extra_actions).
+#
+# `inspect` reads a thing from where the player stands (Nick, 10/16/2026).
+# Its reach is the reach of the feed: CmdInspect finds a dbref among the
+# entities that the client draws, so a walk before it would move the player
+# for no purpose too.
 SELF_APPROACHING_VERBS: frozenset = frozenset(
-    {"attack", "profile", "skills", "stats"})
+    {"attack", "profile", "skills", "stats", ENTITY_INSPECT_VERB})
 
 
 # ─── Which one ───────────────────────────────────────────────────────────────
@@ -882,11 +1020,27 @@ SELF_APPROACHING_VERBS: frozenset = frozenset(
 # for anyone, because CmdAttack asks for the dbref explicitly -- and it
 # resolves only inside the candidate list the command already builds, so
 # nobody can name a dbref into a fight they cannot see.
-DBREF_TARGET_VERBS: frozenset = frozenset({"attack"})
+DBREF_TARGET_VERBS: frozenset = frozenset({"attack", ENTITY_INSPECT_VERB})
 
 # How a dbref is written into a command. One owner, because the command that
 # builds it and the command that parses it are in different files.
 ENTITY_DBREF_TEMPLATE: str = "#{dbref}"
+
+# ─── Inspect ─────────────────────────────────────────────────────────────────
+# Every entity affords Inspect, from any distance that the client draws
+# (Nick, 10/16/2026). The model is the OSRS "Examine" row, last on every
+# right-click menu.
+#
+# A TEMPLATE that the client fills with the dbref of the entity, not a row on
+# every entity. The row would be the same string on each entity of
+# `room_players`, the largest payload that the feed sends, on every move.
+# The approach template above makes the same choice for the same reason. The
+# server owns the SPELLING. The client knows the dbref, because `id` is on
+# every entity row.
+#
+# The dbref of a carried item is a valid target too. CmdInspect resolves the
+# dbref among the entities in the feed radius, the bag, and the worn slots.
+ENTITY_INSPECT_TEMPLATE: str = ENTITY_INSPECT_VERB + " " + ENTITY_DBREF_TEMPLATE
 
 # The payload key carrying the answer. Present and False only for a
 # self-approaching command; ABSENT means the client walks, which is what every
@@ -931,6 +1085,14 @@ ENTITY_LOOK_KEY: str = "look"
 # color of the palette. Neither key is on the row of an NPC or an item.
 ENTITY_BODY_TYPE_KEY: str = "body_type"
 ENTITY_FIGURE_COLORS_KEY: str = "figure_colors"
+
+# The payload key of the worn record of a player character (DESIGN-0014
+# section 21). The value is slot -> asset key, with one entry for each slot
+# that holds an item. The client draws the worn look of each asset key on
+# the figure. An asset key with no look draws the slot shape. Present only
+# when the character wears at least one item. ABSENT means that the figure
+# wears nothing. Not on the row of an NPC or an item.
+ENTITY_WORN_KEY: str = "worn"
 
 
 

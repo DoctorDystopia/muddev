@@ -1037,14 +1037,16 @@ class ActionWield(_Action):
         # command route popped an EvMenu mid-fight and never swapped weapons.
         # It also swallowed every EquipmentError, since the cmdhandler traps
         # command exceptions itself before they could reach us.
+        # The return value, not `weapon`: a stack of the worn ammo merges
+        # into the worn stack, and the merge deletes `weapon`.
         try:
-            equipment.equip(weapon)
+            worn = equipment.equip(weapon)
         except EquipmentError as exc:
             handler.obj.msg((f"|r{exc}|n", _MSG_COMBAT))
             return ActivityEvent.ACTION_RESOLVED
 
         handler._refresh_weapon()
-        handler.obj.msg((f"|gYou ready your |w{weapon.key}|g.|n", _MSG_COMBAT))
+        handler.obj.msg((f"|gYou ready your |w{worn.key}|g.|n", _MSG_COMBAT))
 
         return ActivityEvent.ACTION_RESOLVED
 
@@ -1178,6 +1180,11 @@ class BlackoutCombatHandler(TickableHandler):
         The defender is deliberately not given ACTION_QUEUED. It has not
         queued anything; it is in combat because it is being attacked, and
         its handler sitting in IDLE says exactly that.
+
+        The feed hears the start here (10/18/2026). Each queued attack
+        passes this one seam: the attack command, and the AI of an NPC
+        that strikes back. The client turns the two to face each other on
+        that event, a tick before the first swing.
         """
         self.dispatch(ActivityEvent.ACTION_QUEUED)
 
@@ -1186,6 +1193,7 @@ class BlackoutCombatHandler(TickableHandler):
 
         try:
             ensure_combat_handler(target)
+            feed.emit_face(self.obj, target)
         except Exception as exc:
             logger.log_err(
                 f"CombatHandler.start_combat_state (target) failed: {exc!r}"

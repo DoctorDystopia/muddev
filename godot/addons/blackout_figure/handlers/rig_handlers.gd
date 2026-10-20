@@ -63,8 +63,8 @@ func _on_bone_turned(bone_name: String, rotation: Quaternion, axis := "") -> voi
 	_context.history().change(FigureStore.KIND_RIG, _context.dock().active_body(),
 		"turn the socket %s on %s" % [bone_name, axis], edit, true)
 	# A refused change leaves the fields as the rig has them.
-	_context.dock().rig_panel().set_rig(_context.active_rig())
-	_context.dock().rig_panel().select_bone(bone_name)
+	_context.figure_dock().rig_panel().set_rig(_context.active_rig())
+	_context.figure_dock().rig_panel().select_bone(bone_name)
 
 
 func _on_bone_region_changed(bone_name: String, region: String) -> void:
@@ -72,7 +72,7 @@ func _on_bone_region_changed(bone_name: String, region: String) -> void:
 		"put the bone %s in %s" % [bone_name, "no region" if region.is_empty() else region],
 		func(rig: Dictionary) -> String:
 			return FigureRigEdits.set_bone_region(rig, bone_name, region))
-	_context.dock().rig_panel().select_bone(bone_name)
+	_context.figure_dock().rig_panel().select_bone(bone_name)
 
 
 func _on_region_requested(region: String) -> void:
@@ -98,8 +98,8 @@ func _on_socket_requested(socket: String, parent: String) -> void:
 	_context.history().change(FigureStore.KIND_RIG, _context.dock().active_body(),
 		"add the socket " + socket, func(rig: Dictionary) -> String:
 			return FigureRigEdits.add_socket(rig, socket, parent))
-	_context.dock().rig_panel().select_bone(socket)
-	on_bone_chosen(_context.dock().rig_panel().selected_bone())
+	_context.figure_dock().rig_panel().select_bone(socket)
+	on_bone_chosen(_context.figure_dock().rig_panel().selected_bone())
 
 
 ## "Remove the selected socket". A socket that carries a part of a look

@@ -54,7 +54,7 @@ func on_clip_chosen(clip_name: String) -> void:
 
 	bench.show_clip(clip_name, 0.0)
 	_context.dock().play_bar().set_clip_length(bench.clip_length(clip_name))
-	_context.dock().clips_panel().set_clearance(bench.clearance_lines(clip_name))
+	_context.figure_dock().clips_panel().set_clearance(bench.clearance_lines(clip_name))
 
 
 ## A play button of the stance table: play the clip of that action, at the
@@ -69,7 +69,7 @@ func _on_play_requested(clip_name: String) -> void:
 ## "Play" of the play bar: play the clip that the Clips tab selects.
 func _on_play_requested_from_bar(speed: float) -> void:
 	var bench := _context.bench()
-	var clips_panel := _context.dock().clips_panel()
+	var clips_panel := _context.figure_dock().clips_panel()
 
 	if bench != null and not bench.play_clip(clips_panel.selected_clip(), 0.0, speed):
 		_context.status("Select a clip on the Clips tab first.")
@@ -94,7 +94,7 @@ func _on_seek_requested(time: float) -> void:
 	var bench := _context.bench()
 
 	if bench != null:
-		bench.show_clip(_context.dock().clips_panel().selected_clip(), time)
+		bench.show_clip(_context.figure_dock().clips_panel().selected_clip(), time)
 
 
 func _on_probe_toggled(shown: bool) -> void:
@@ -120,7 +120,7 @@ func _on_animation_editor_requested() -> void:
 		_context.status("Make a rig first, on the Rig tab.")
 		return
 
-	var selected := _context.dock().clips_panel().selected_clip()
+	var selected := _context.figure_dock().clips_panel().selected_clip()
 
 	if bench.clips.has_animation(selected):
 		player.assigned_animation = selected
@@ -167,7 +167,7 @@ func _on_build_asked() -> void:
 	var bench := _context.bench()
 
 	if bench != null:
-		_context.dock().clips_panel().confirm_build(bench.overwritten_clip_files())
+		_context.figure_dock().clips_panel().confirm_build(bench.overwritten_clip_files())
 
 
 ## The author confirmed: make each clip file of each clip list again, on a

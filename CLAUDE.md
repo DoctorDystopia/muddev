@@ -448,7 +448,11 @@ reason that a renderer swap was cheap one time:
   with it:
   - `serialize_entity` sends `interact: "attack mutant raider"`
   - `tile_actions` sends `{command, kind}` for each tile
-  - `serialize_inventory` sends whole commands.
+  - `serialize_inventory` sends whole commands
+  - `ENTITY_INSPECT_TEMPLATE` spells the Inspect row of every entity
+    (`inspect #{dbref}`, 10/16/2026). The client fills in the dbref, as it
+    fills the tile into `ENTITY_APPROACH_TEMPLATE`. `CmdInspect` bounds
+    the dbref to the entities that the feed draws.
 
   The client sends them verbatim. Two times, we deleted a client verb table
   because it was wrong within a week. Do not add a third.
@@ -517,7 +521,10 @@ Since 10/13/2026 the design of `AreaLook.LOOKS` and of `FloorPalette.COLORS`
 is a JSON look file under `godot/world/look/`, and the table is its
 fallback. The Look tab of the terrain editor writes the file, and the same
 guard reads the file as JSON (`LookFileTests`). The rule above holds for the
-file too.
+file too. The light of a lamp is the same kind of fact (`lights.json`,
+10/18/2026): the server names the scenery of a kind, and the client says
+what light that scenery gives off. A key in the file must name a scenery
+that some object kind names.
 
 The guard found a bug at once. `SKILL_CATEGORY_COLORS` shipped with a `General`
 entry. `General` is the default category of `BaseSkill`, and no skill declares
@@ -877,6 +884,53 @@ each room. Most of the contents are scenery. The room of the speaker still
 gets its line from Evennia. Thus, a say on one tile is the same as before.
 A whisper and a call that names its receivers go to Evennia unchanged.
 
+## The ability rail
+
+An ability is one action that a player fires from the rail or by its
+command. Today, each aura is an ability. The rail is a HUD element: one
+toggle for each ability, in the order of the server, with its key in the
+corner. Nick chose the rail over a slotted bar on 10/20/2026, because every
+ability that exists today is a toggle. `godot/README.md` owns the client
+half.
+
+| Module | Holds |
+|---|---|
+| `systems/gameplay/combat/auras/detail.py` | What an ability IS, for one caster: `ability_rows`. The one owner, with two readers |
+| `systems/interface/statefeed/abilities.py` | The payload builder. It composes nothing |
+| `commands/combat_cmds.py` | The telnet `aura` listing. It renders from the same rows |
+| `systems/gameplay/combat/constants.py` | `AURA_COMMAND_KEY`, `AURA_IGNITE_TEMPLATE`, `AURA_EXTINGUISH_COMMAND` |
+| `godot/world/abilities_state.gd`, `ability_keys.gd`, `tip_text.gd`, `godot/scenes/abilities/ability_rail.gd` | The model, the key table, the tip text, and the view |
+
+Four rules:
+
+1. **Each row carries the whole line.** `aura <name>` on a ready row, `aura
+   off` on the active row, and nothing on a locked row. The client sends it
+   verbatim. The server names no key. `AbilityKeys` in the client says
+   which key fires which slot, and the slot of a row is its index. A
+   combination such as `Shift+1` is one more row of that table.
+2. **The rail follows its facts through the emitters of those facts.**
+   `emit_aura` calls `refresh_abilities` when an aura lights or goes out.
+   `_publish_level_change` calls it when a level moves, because the lock of
+   a row reads a level. Only resync calls `emit_abilities` itself. The
+   proof is in `statefeed/tests/test_abilities_feed.py`.
+3. **A new aura is one file, and it reaches the rail with no edit.** The
+   rows come from `AURA_REGISTRY`. A later ability with a cast and a
+   cooldown is one more `ABILITY_KIND_*` constant, one more row builder in
+   `detail.py`, and one more branch in the rail that draws a sweep.
+4. **The tip block is one shape for every row.** `tip: {title, lines}`,
+   under `TIP_KEY`, with the keys in `statefeed/constants.py`. The server
+   says what a thing IS, as lines of text. The client says how a tip looks.
+   The ability row is the first row that carries one. A generic tip over
+   the game later reads this shape from an item, an entity, or a skill, and
+   no row gains a second field for it.
+
+**An aura can burn its caster** (Nick, 10/20/2026). `self_burn_pct` on the
+aura class is the share of max HP that each pulse burns. The burn lands on
+every pulse, with or without a target, and it can kill. A death puts the
+aura out, in `CombatEntity.at_death`. `BaseAura.cost` makes the tip
+sentence from `self_burn_pct`, so the tip and the burn cannot disagree.
+Righteous Fire is the only aura with a burn today.
+
 ## 3D models
 
 `blackout/assets/` builds every model the client shows.
@@ -907,8 +961,9 @@ Five rules:
    `ModelRegistry.PRESENTATION`.
 3. **The license gate refuses anything but CC0, CC-BY, art made here, and art
    that Nick bought.** An `exception` in the source record waives it, and the
-   check prints each one on every run. The OSRS player character and the
-   shopkeeper robot use one today.
+   check prints each one on every run. The shopkeeper robot, the machine
+   gun, the blacksmith tools (the anvil and the hammer), and the foundry
+   furnace use one today.
 4. **Godot's runtime loader cannot read Draco, meshopt, or quantized meshes.**
    `pipeline/glb.py` owns the list of extensions that it can read.
 5. **The files of a bought pack never go into git.** This repository is
@@ -968,6 +1023,7 @@ Read the handoff before you continue this work.
 | Roofs (DESIGN-0013 S2): the roof shapes, the roof floor types, the under-roof rule, and the `roof_walkable` rule | `godot/addons/blackout_terrain/roof_shapes.gd`, `world/floor_types.py`, `TerrainView.under_roof` in `godot/world/terrain/terrain_view.gd`, `world/tile_checks.py` |
 | Wall styles (DESIGN-0013 S3): the style table, chunk file format 2, the wall colours and heights, and the Wall style brush | `world/wall_styles.py`, `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, `godot/world/look/terrain_palette.json` with `godot/world/terrain/wall_palette.gd` as the fallback, `paint_wall_style` in `structure_tools.gd` |
 | The look files (10/13/2026): the terrain palette, the area looks, the editor marks, and the Look tab | `godot/world/look/` (`look_file.gd`, `terrain_palette.gd`, the JSON files), `godot/world/area_look.gd`, `godot/addons/blackout_terrain/look_panel.gd`, `LookFileTests` in `test_client_constants.py` |
+| The lamp light (10/18/2026): the light of a scenery key, the bake into the ground, the walls, and the props, the terrain shader, and the real lights of the figures | `godot/world/look/light_look.gd` with `lights.json`, `godot/world/terrain/tile_lights.gd`, `terrain_material.gd`, `terrain.gdshader`, `godot/world/figure_lights.gd`, the light section of `look_panel.gd`, `test_the_lights_name_real_scenery` in `test_client_constants.py` |
 | The session file of each editor: the choices of the author between sessions, outside the repo | `godot/addons/blackout_terrain/terrain_session.gd` (`user://blackout_terrain_session.cfg`), `FigureDock` (`user://blackout_figure_session.cfg`) |
 | Decor (DESIGN-0013 S4): the `decor` category, the pin rule, the check exemption, the decor primitives, and the Decor tool | `world/object_kinds.py` (`UNPINNED_KINDS`), `TilePlane` in `systems/core/tilegrid/world.py`, `world/tile_checks.py`, `godot/world/terrain/prop_mesh_builder.gd`, `StructureTools.decor` in `structure_tools.gd` |
 | Templates (DESIGN-0013 S5): the template file, the copy and its plan, the tile selection, the Select and Place tools, and "Protect structures" | `structure_template.gd`, `structure_place.gd`, `tile_selection.gd`, `template_input.gd`, `TerrainBrushes.protect` in `godot/addons/blackout_terrain/`, `blackout/world/structures/`, `world/tests/test_structure_templates.py` |

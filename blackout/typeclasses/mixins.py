@@ -659,7 +659,55 @@ class CombatEntity:
         # unreachable for players.
         self.leave_combat()
 
+        # The aura goes out for the same reason. respawn() restores HP.
+        # Thus, a lit aura went on burning at the respawn point, and the
+        # self-burn of Righteous Fire would kill the player again.
+        self._put_out_aura()
+
         self.respawn()
+
+
+    def _put_out_aura(self) -> None:
+        """
+        Purpose: Put out the aura of this entity, if one burns.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            No return value. After return, this entity has no aura handler.
+
+        Module Globals:
+            combat_msg.format_aura_deactivate, _MSG_COMBAT read.
+
+        Methodology:
+            The same steps as the `aura off` command: read the aura, stop
+            the handler, then tell the player. Read the name before the
+            stop, because stop_aura deletes the handler that knows it.
+
+        Notes/References:
+            at_death calls this. The self-burn of a pulse can cause that
+            death. Thus, this can run inside the tick of the handler that it
+            stops. stop_aura is safe there, because the burn is the last step
+            of a pulse.
+
+        Author: Nick Hobar
+        Creation date: 10/20/2026
+        """
+        handler = self.aura
+
+        if handler is None:
+            return
+
+        try:
+            aura = handler.get_aura()
+            handler.stop_aura()
+        except Exception:
+            logger.log_trace()
+            return
+
+        if aura is not None:
+            self.msg((combat_msg.format_aura_deactivate(aura), _MSG_COMBAT))
 
 
     def _award_killer_xp(self, killer) -> None:

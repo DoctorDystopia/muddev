@@ -829,10 +829,54 @@ def perform_craft(caller, recipe_key):
         # same string a blueprint declares as `craft:rusty scrap axe`. The
         # spawned object's key is an item name and can differ.
         notify_quests(caller, quest_constants.ACTION_CRAFT, recipe_key)
+        _send_craft_moment(caller, recipe_cls)
 
     _publish_inventory(caller)
 
     return result
+
+
+
+def _send_craft_moment(caller, recipe_cls):
+    """
+    Purpose: Tell the client of the crafter that one craft finished.
+
+    Entry:
+        caller     - the crafting Character.
+        recipe_cls - the recipe of the finished craft.
+
+    Exit/Returns:
+        No return value. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The skill of the recipe names the moment, in `craft_moment`. A recipe
+        with no skill, or a skill with no moment, sends nothing.
+
+        Only a finished craft sends the moment. A refused craft made nothing,
+        so the client plays no sound for it.
+
+        The import is local. The skills registry must not load when this
+        module loads (see skill_requirement_text).
+
+    Notes/References:
+        events.emit_moment refuses a name that is not in MOMENTS.
+
+    Author: Nick Hobar
+    Creation date: 10/20/2026
+    """
+    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+    from systems.interface.statefeed import events as feed
+
+    skill_class = SKILL_REGISTRY.get(recipe_cls.required_skill)
+    moment = getattr(skill_class, "craft_moment", None)
+
+    if not moment:
+        return
+
+    feed.emit_moment(caller, moment)
 
 
 

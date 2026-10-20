@@ -63,7 +63,9 @@ where there is art, and the silhouette of the family where there is not.
 | **Mouse wheel on the minimap**, or its `-` and `+` | Zooms the minimap. Remembered |
 | **`Run` on the minimap**, or **R** in move mode | Turns run on or off. The button shows what the server says. Run moves two tiles each tick |
 | **"Show the walk path on the maps" in Options** | Shows or hides the walk path on both maps. Remembered |
-| **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, Esc to close |
+| **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, `Close` or Esc to close |
+| **Drag the world map title bar or a grip** | Moves or resizes the world map, as for the pop-up. Remembered |
+| **`Legend` on the world map** | Shows or hides the legend. A click on an icon row hides that category of map icon on the world map. Remembered |
 | **Combat tab** | Your weapon, combat level, attack speed, and a button per style — OSRS's Combat Options |
 | **Click a style** | Sends the row's `combatoptions <style>`. The highlight moves when the server republishes, not on the click |
 | **Character tab** | The sheet — whatever panels `char_summary` sent |
@@ -443,6 +445,7 @@ tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
 | The walls | `world/terrain/wall_mesh_builder.gd`, `wall_palette.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. The wall style of the tile gives its colour and its height. A plain primitive until the walls get art. The editor draws it with the same class |
 | The scenery | `TerrainView._place_scenery` | The model that `OBJECT_KIND_SCENERY` names for a chunk object, on the centre of its tile. The server names the model in `world/object_kinds.py`. The transition pad is the first. No art, no model |
 | The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, a hatch, or the newel posts at the top of a flight, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. A flight rises over the run of its kind, in front of its tile. The editor draws it with the same class |
+| The lamp light | `world/terrain/tile_lights.gd`, `terrain_material.gd`, `world/look/light_look.gd`, `world/figure_lights.gd` | The light of each lamp, baked into the ground, the walls, and the props around it, and a real light on the nearest few lamps for the figures. See "A lamp lights the ground" below |
 | The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
 | The pick | `WorldView._cell_under` | `TerrainPicking.ray_hit` on the height grid. No collision shape |
 | The area look | `WorldView._place_marker` | The area of the tile under the player, from its chunk, goes to `AreaEnvironment` |
@@ -467,6 +470,76 @@ Four rules:
 
 A hover mark shows on the tile under the cursor when a click there acts. It
 is the true tile square in `WorldView.COLOR_HOVER`.
+
+### The pick of an entity (10/20/2026)
+
+Each pixel of a drawn model is clickable. `EntityPool.pick` has three
+tiers, and the first tier that answers wins:
+
+1. **The surface.** The ray under the cursor meets the faces of the drawn
+   meshes. The nearest face wins. Thus, on a crowded tile the figure in
+   front takes the click. A visible part of the figure behind it still
+   takes a click on that part.
+2. **The box.** The ray enters the box of a node, as `ModelLoader.bounds_of`
+   gives it. A rigged model keeps its faces in its bind pose, so a face
+   test on one can miss. Its box still catches the click.
+3. **The nearest origin.** The origin of a node within `PICK_REACH_PIXELS`
+   of the cursor, on screen. A small item is a few pixels across when the
+   camera is far out. This tier keeps it clickable. It was the one rule
+   until 10/20/2026. Near the camera, a figure is a hundred pixels tall,
+   and the rule reached only its middle.
+
+`world/entity_picking.gd` holds the two ray tests. The boxes are the broad
+phase, nearest first. The pool tests the faces of a node only when the ray
+enters its box. It stops at the first box that starts past the nearest
+face. Thus, most picks test one mesh. The pool reads the faces of a node
+one time, on the first pick that enters its box. A redraw drops them with
+the node.
+
+No entity has a collision body. A body is a second copy of each model, and
+the copy goes stale on each redraw. `test_entity_picking` covers the ray
+maths on a slab. `test_entity_pool` covers the tiers, with a crowd of five
+on one tile.
+
+### A lamp lights the ground (10/18/2026)
+
+A chunk object whose scenery gives light is a lamp. Three decor kinds give
+light: the lamp post, the oil lamp, and the torch. The oil lamp is small,
+for a table. A tile holds one decor, so the author places it on the tile
+beside the table and nudges it onto the table with its look. The light
+moves with the nudge. The torch is a metal pole with a flame on top. The
+light is a look of the scenery key, in `world/look/lights.json`
+(`LightLook`): a colour, an energy, a range in tiles, and the height of the
+bulb. The server knows nothing of it. The Look tab edits it, and the
+Python guard refuses a key that no object kind names.
+
+The project runs the Compatibility renderer, for the web export. There, at
+most 8 omni lights can light one mesh, and the ground of a chunk is one
+mesh. A real light on each lamp would thus light 8 lamps of a street of 20.
+So the light splits in two:
+
+| Part | Where | What it does |
+|---|---|---|
+| The bake | `world/terrain/tile_lights.gd` | Finds the lamps that reach a chunk, from the chunk and its eight neighbours on the same plane. Gives each vertex of the ground, the walls, and the props the colour that those lamps add: the glow of the lamp, times the square of the falloff, times how much the face turns toward it. A face away from a lamp stays dark |
+| The material | `world/terrain/terrain_material.gd`, `terrain.gdshader` | One shader for the client and the editor. The vertex colour is the albedo, as before. The CUSTOM0 array of a mesh is its baked light, and the shader sends it out as emission. Thus a lamp shows in a dark area, where the sun gives the albedo nothing |
+| The bulb | `PropMeshBuilder` | The lamp of a lamp post, the glass of an oil lamp, and the flame of a torch glow with the light of their rows |
+| The real lights | `world/figure_lights.gd` | One `OmniLight3D` on each of the `MAX_LIGHTS` lamps nearest the player. No shadow, a fade with the distance, and a cull mask of the entity layer only. `FigureLights.mark_entity` puts each figure, each item, and the avatar on that layer. The ground never counts them |
+
+Three rules:
+
+1. **A lamp is a look, not a placement.** Every lamp post gives the same
+   light. An author who wants a dimmer lamp makes a second decor kind on
+   the Tables tab, with its own scenery key and its own row here.
+2. **A lamp reaches across a chunk edge.** `TerrainView` keeps the
+   signature of the lamps beside each built mesh, and builds a chunk again
+   when a neighbour arrives with a lamp that reaches it. The editor
+   redraws the neighbours of a chunk after an object edit for the same
+   reason.
+3. **A lamp lights its own plane.** A lamp on an upper floor does not
+   light the ground through the floor.
+
+`test_tile_lights.tscn` covers the bake, the look file, and the real
+lights.
 
 ### Planes (DESIGN-0011 Phase 7b)
 
@@ -781,6 +854,20 @@ cut: `Butcher chuck from Mutant Raider corpse`, `Butcher filet from …`.
 Each row sends `butcher <node> = <cut>`, a line that a telnet player could type.
 Nothing here knows that a corpse has cuts.
 
+**Every entity offers Inspect, last** (Nick, 10/16/2026). The model is the
+OSRS "Examine" row. The server spells the command in
+`ENTITY_INSPECT_TEMPLATE` (`inspect #{dbref}`), and `WorldView.options_for()`
+fills in the `id` of the row, as `approach_command()` fills the tile into
+`ENTITY_APPROACH_TEMPLATE`. The row is not in the payload, because it would be
+the same string on each entity of `room_players`. The row never walks: the
+server lists `inspect` in `SELF_APPROACHING_VERBS`, and `CmdInspect` finds the
+dbref among the entities that the feed draws, on the plane of the player. An
+entity with no verb of its own, such as another player with PvP off, now
+lights on hover, and a left click on it sends Inspect. The hover bar names the
+first row of the menu, so the bar and the click cannot disagree. A row with
+no `id` still affords nothing. `test_world_view` pins the row, and
+`test_choose_option` counts it.
+
 ## Something on a far tile is walked to, then acted on
 
 The statefeed names entities across a radius of tiles, so the pole that you
@@ -837,6 +924,40 @@ many cells the other made.
 The stage updates `WHEN_VISIBLE`, so text-only mode really does stop paying for
 it.
 
+**An item with a worn look and no served model draws that look** (10/17/2026,
+DESIGN-0014 section 23). A cell takes the first of three sources:
+
+1. The served model of the asset key (`MeshResolver.resolve_own_art`).
+2. The worn look of the asset key alone (`FigureLibrary.build_item`), from
+   the same `figure.json` and through the same `FigureBuilder` as a figure.
+3. The rest of the mesh ladder: the family model, then the family shape.
+
+Thus, a cell of the bag, of the doll, and of a pop-up shows the look that the
+gear editor made, and the hand holds the same look. The worn look also
+stands in while a served model is not in hand. A slot shape never draws in a
+cell, because it is the look of no item.
+
+- **A look on one bone stands in the space of that bone.** A hand item has
+  its length along +Y of its grip, so a sword stands up in its cell.
+- **A look on several bones keeps the rest pose of the rig.** The two boots
+  stand as a pair, and a chainbody holds its arms out.
+- **A served model wins over the worn look** (Nick, 10/17/2026). Today only
+  `rusty_scrap_shortsword` has both, so its cell shows the Sketchfab sword.
+  The hand holds the same sword (see "The gear editor makes the worn look
+  of each item").
+- **An item on the ground takes the same order** (10/17/2026). The world
+  pool (`EntityPool._item_for`) asks for the served model with the look of
+  the chunk object. Thus, the look still picks a variant. Each picture has
+  its own materials, because the hover glow and the hit flash write to one
+  node. The picture rests on its tile, as a model does. A row whose key has
+  no worn look draws as before.
+- **The picture follows the figure set.** `FigureLibrary.changed` draws each
+  of the three panes again when the set arrives, and when the model of a part
+  arrives. The world pool draws an item on the ground again when the item
+  draws a worn look. It does the same when the key has a worn look now. A
+  served model keeps its node.
+- `test_item_look.tscn` holds the proof.
+
 > **`own_world_3d` must be true, and it defaults to false.** A SubViewport left
 > at the default SHARES the `World3D` of its parent. Thus, the item meshes land
 > in the same 3D world as the game: forty swords and rocks in a neat grid that
@@ -854,7 +975,7 @@ world did not get. Until 09/29/2026 each dock hung from a fixed bottom corner
 (`PanelDock`), and the minimap, the vitals and the XP drops had fixed offsets
 in `console.tscn`. The player could size the two docks and nothing else.
 
-Now the player moves, sizes, hides, fades and scales six HUD elements in the
+Now the player moves, sizes, hides, fades and scales seven HUD elements in the
 layout editor. The "Edit layout" button in Options opens it. `Done` and Esc
 close it.
 
@@ -866,6 +987,7 @@ close it.
 | `xp` | XP drops | `%XpHud` | Yes | The whole element |
 | `vitals` | Vitals | `%WorldVitals` | Yes | The whole element |
 | `hover` | Hover text | the world `HoverBar` | Yes | The whole element |
+| `performance` | Performance | `%PerformanceHud` | Yes | The whole element |
 
 Five files share the work. Each one has one job:
 
@@ -1065,7 +1187,7 @@ three (10/08/2026). A grid that sends them carries four more fields:
 
 | Field | Holds |
 |---|---|
-| `tabs` | One `{index, label, title, asset, family, active, drop_key, actions}` for each tab button, the "+" last |
+| `tabs` | One `{index, label, title, asset, family, active, drop_key, heading, actions}` for each tab button, the "+" last |
 | `view` | The tab that the player views. `0` is the main tab |
 | `searchable` | `true` shows the search box |
 | `drag` | `{onto_slot, onto_tab}`: the command template for a drop on a slot or on a tab |
@@ -1074,6 +1196,12 @@ Each vault row also carries `tab`, `drag_key` and `placeholder`.
 `PopupState.row_groups` decides which rows show. A search shows each match in
 every tab. A tab other than `0` shows its own rows. The main tab shows every
 row, in one block for each tab, with a line between two blocks.
+
+In the main view, a small label names each block (10/19/2026). The text is
+the `heading` of the tab button: the name that the player gave the tab, or
+"Tab 2" for a tab with no name. `PopupState.group_heading` finds the text for
+a block. The server sends `""` for the unnamed main tab of a vault with no
+other tab, so a vault with no tabs shows no label.
 
 The rules that keep the client out of the game:
 
@@ -1130,6 +1258,12 @@ records. `PopupView` is a full-pane Control, as `ChooseOption` is. While it
 shows, it takes every click on the pane, so a click beside the box does not
 walk the player.
 
+**`FloatingBox` owns the box (10/19/2026).** The dim, the move, the grips, the
+first rect, and the save of the rect are one class. The pop-up and the world
+map both extend it. A subclass calls `super()` first in `_init`, because
+Godot 4 calls the `_init` of the parent only on that call. Each box keeps its
+own rect in `ClientSettings`.
+
 **It closes when the server says so.** The close button and Escape send
 `close_command`. The box goes away when the closed snapshot arrives. The
 server also closes it when the player walks away from the terminal.
@@ -1146,7 +1280,7 @@ minimap moved it again on every run.
 
 Three rules hold that together:
 
-- **`PopupView._place_box` stays the one owner of "the box is on screen".** It
+- **`FloatingBox._place_box` stays the one owner of "the box is on screen".** It
   clamps a rect into the pane on every open, every drag and every resize of
   the pane. Thus the saved rect is plain pixels, and a box saved by a wide
   window comes back inside a narrow one.
@@ -1668,6 +1802,7 @@ the client keeps its old values as the fallback, and a JSON file under
 |---|---|---|
 | `terrain_palette.json` | The colour of each floor type, the cliff, the water, and each prop. The colour and the height of each wall style, in height steps. The wall top lighten | `world/terrain/floor_palette.gd`, `wall_palette.gd` |
 | `area_looks.json` | The nine fields of the fog and the light of each area | `world/area_look.gd` |
+| `lights.json` | The light of each scenery key: the colour, the energy, the range in tiles, and the height of the bulb (10/18/2026) | `world/look/light_look.gd` |
 
 `world/look/look_file.gd` reads and writes them, with a cache, so a mesh
 build pays for no file read. A key with no row draws as before the file
@@ -1676,9 +1811,11 @@ on the client, and a missing file breaks nothing. The Python guard
 (`LookFileTests` in `test_client_constants.py`) fails on a key that names
 no server fact.
 
-The Look tab edits the two files. Each picker and each field writes the
+The Look tab edits the three files. Each picker and each field writes the
 file a short moment after the last change of a drag, and the block draws
-again, so the author sees the colour on the ground. "Preview the area
+again, so the author sees the colour on the ground. The light section
+lists every scenery key that an object kind names. An energy of zero
+gives no light, and "Reset light" takes the row out of the file. "Preview the area
 light" applies the fog and the light of the chosen area to the sun and the
 environment of the editor scene, through the same routine that the game
 uses (`AreaLook.apply_to`). The preview writes into the sky and the sun of
@@ -1770,8 +1907,10 @@ DESIGN-0014 has no phase left. The look layer of ENG-0011 (10/13/2026) added
 the finishes of the palette, the Families tab, and the presentation fields
 of the Gear tab. Since 10/16/2026 the game draws each player character as
 the figure (DESIGN-0014 section 20). See "The game draws each player as the
-figure" below. The short guides for an author are
-`blackout/assets/figure/README.md` (a figure) and
+figure" below. Since 10/16/2026 the worn look of an item is the work of
+the gear editor, a plugin of its own, and the Gear tab left this dock. See
+"The gear editor makes the worn look of each item" below. The short guides
+for an author are `blackout/assets/figure/README.md` (a figure) and
 `blackout/assets/figure/EQUIPMENT.md` (equipment).
 
 To use it:
@@ -1804,28 +1943,15 @@ tooltip. A button that cannot apply is off, and its tooltip gives the
 reason: a button that needs a row, the socket rotation of a bone of the
 body, or a build that runs now.
 
-The **Body** tab and the **Gear** tab fold their sections: Look, Colors,
-Hides, Model, Kit, and Parts. Parts starts open. The session file keeps
-the state of each fold.
+The **Body** tab folds its sections: Kit, Parts, and Part model. Parts
+starts open. The session file keeps the state of each fold. The part
+editor of the Body tab is the part editor of the gear editor
+(`PartEditor`): a tree of the parts and their shapes, a toolbar, and two
+grids. A click on a shape in the 3D view selects that shape, and the Godot
+tools move it. See "The gear editor makes the worn look of each item".
 
-To give an item a worn look:
-
-1. On the **Gear** tab, pick the row of the item. Each body type then wears
-   the item. An item with no worn look shows the slot shape of its slot.
-   The text field above the list keeps the rows with the typed text, with
-   no regard to the case.
-2. Click **New look**. The item gets a copy of the slot shape of its slot
-   as its own look.
-3. Change the parts, the shape list, and the colors, as on the Body tab. A
-   click on the item in the 3D view selects its part.
-4. Use the **outfit bar** above the tabs to put an item in each other slot.
-   Look for a part that goes through another part.
-5. Press Ctrl+S. The look is `blackout/assets/figure/looks/<item key>.json`.
-
-**Copy look** gives the row the parts and the colors of another look. A tier
-is a legal source. The list names it "key (a tier of base)", and the copy
-takes the look that the tier draws. **Only the rows with no worn look**
-lists the items that still show a slot shape.
+To give an item a worn look, open the gear editor. The steps are in that
+section.
 
 To give an item a model from a modeler (Phase W4):
 
@@ -1840,15 +1966,15 @@ To give an item a model from a modeler (Phase W4):
    torso object and two arm objects. Give each material the name of a color
    role: `metal`, `trim`, `cloth`.
 5. Export only the new objects, as one `.glb` file.
-6. On the **Gear** tab, pick the row of the item. Type the author of the
-   file, and click **Import model**. The model pipeline builds the model
-   on a thread. The status box says "Building ..." until it ends, and the
-   button is off. The editor stays usable.
+6. In the gear editor, pick the row of the item. Open the **Model** fold.
+   Type the author of the file, and click **Import model**. The model
+   pipeline builds the model on a thread. The status box says "Building
+   ..." until it ends, and the button is off. The editor stays usable.
 7. Look at the parts in the part editor. Each object is one part, on the
    bone with the name of the object, or on the nearest bone. Change a bone
    there if it is wrong. The part stays where it is.
-8. Tick each region that the item covers in **Regions that the look hides on
-   each other look**. A chainbody hides `torso` and `arms`.
+8. Tick each region that the item covers in the **Hides** fold. A
+   chainbody hides `torso` and `arms`.
 9. Select the other body type, and click **Fit from bone lengths**. Play
    each clip, and look at each body type.
 10. Press Ctrl+S.
@@ -1863,7 +1989,9 @@ command.
 The import refuses a key that another model has. An item key can be an alias
 in the record of another model, as `rusty_scrap_arrow` is. Take the key out
 of that record first. Or type another key in the model field, and the item
-keeps its old model in the inventory.
+keeps its old model in the inventory. For a row whose served model draws on
+the figure, the gear editor turns the import off until the model field
+names another key.
 
 **Parts from model** does step 7 for a model that the served tree has
 already. It also reads the served tree again after a build
@@ -1871,7 +1999,7 @@ in a terminal.
 
 To give ONE part a model from a modeler, the body included (10/16/2026):
 
-1. On the **Body** tab or the **Gear** tab, select the part: the head, the
+1. On the **Body** tab or in the gear editor, select the part: the head, the
    hair, a sleeve.
 2. Click **Export reference body** on the Body tab, and model the new part
    over the old one in the modeler. Keep its place. Give the object the
@@ -1899,9 +2027,9 @@ To change the fit of one part on one body type:
 
 To make a tier of an item (Phase W5):
 
-1. Give one item of the set its worn look, as above. The slot shape of the
-   slot can be that look also.
-2. On the **Gear** tab, pick the row of the next tier.
+1. Give one item of the set its worn look in the gear editor. The slot
+   shape of the slot can be that look also.
+2. In the gear editor, pick the row of the next tier.
 3. Select the look with the parts in the list below **Copy the parts and
    the colors of this look**.
 4. Click **Make tier**. The row then draws the parts of that look. Its file
@@ -1964,7 +2092,7 @@ and Revert concern the figure files only. Each change is one undo entry.
 
 To change how the game shows a served model (ENG-0011, step L6):
 
-1. On the **Gear** tab, pick the row of the item. The row needs a served
+1. In the gear editor, pick the row of the item. The row needs a served
    model: the model that its look names, or a model with the key of the
    row. The model shows on the stand at the right, with its presentation.
 2. Open the **Model** fold. Change the offset, the turn in degrees, or the
@@ -2091,7 +2219,7 @@ To add a clip from a source that has a clip list:
 | `world/figure/figure_rig.gd`, `figure_look.gd`, `figure_json.gd` | The readers and the writers. The game and the workbench use the same classes |
 | `world/figure/figure_builder.gd` | `FigureBuilder`: one figure from a rig and a list of worn looks |
 | `world/figure/figure_clips.gd` | `FigureClips`: the clip library, the player of a figure, and the pose of one moment of a clip |
-| `world/figure/figure_outfit.gd` | `FigureOutfit`: the worn looks of a figure for a worn record. It picks the worn look, the slot shape, or the family shape of each item |
+| `world/figure/figure_outfit.gd` | `FigureOutfit`: the worn looks of a figure for a worn record. It picks the served model, the worn look, the slot shape, or the family shape of each item |
 | `world/figure/figure_models.gd` | `FigureModels`: the mesh and the place of each node of each figure model. It does not put a model in the unit box |
 | `world/figure/figure_set.gd` | `FigureSet`: the reader of the served `figure.json` |
 | `blackout/web/static/webclient/models/figure.json` | The figure set: each rig, each worn look, and the palette in one served file. Generated, so never edit it by hand |
@@ -2106,7 +2234,9 @@ To add a clip from a source that has a clip list:
 | `addons/blackout_figure/check_panel.gd` | `FigureCheckPanel`: the Check tab |
 | `addons/blackout_figure/figure_shapes.gd` | `FigureShapes`: the part rows of a new body and of each new slot shape. A start for the author, not the design |
 | `addons/blackout_figure/edits/` | The edit rules, one script for each file that a rule changes: `FigureRigEdits`, `FigurePartEdits`, `FigureShapeEdits`, `FigureLookEdits`, `FigurePaletteEdits`, and `FigureClipEdits`. Each rule changes a copy of the content and returns the reason for a refusal, or "". `figure_edits.gd` keeps `FigureEdits` as a forwarder, for the tests only |
-| `addons/blackout_figure/handlers/` | The handlers of each tab of the dock, one script for each tab, plus `FigureHistory` (the undo seam: one entry for one file, or for several files) and `FigureHandlerContext` (what a handler may reach of the plugin). `figure_plugin.gd` keeps the editor contract only: the dock, the selection, the hint, the save, the jobs, and the refresh of each tab |
+| `addons/blackout_figure/handlers/` | The handlers of each panel, one script for each, plus `FigureHistory` (the undo seam: one entry for one file, or for several files) and `FigureHandlerContext` (what a handler may reach of the plugin). The gear editor uses the same handlers |
+| `addons/blackout_figure/figure_plugin_base.gd` | `FigureEditorBase`: what the two plugins share of the editor contract. The dock, the workbench, the undo seam, the jobs, the save, the click in the 3D view, the hint, and the selection. `figure_plugin.gd` gives the dock, the handlers, and the refresh of each tab |
+| `addons/blackout_figure/figure_dock_base.gd` | `FigureDockBase`: what the two docks share. The top strip, the bar, the outfit bar, the status box, the folds, and the two option files |
 | `addons/blackout_figure/` | The plugin, the dock, the store, the edit rules, the catalog reader, the clip build, and the clearance check. The editor only |
 
 The rules that the workbench keeps:
@@ -2215,11 +2345,11 @@ The rules that the workbench keeps:
   repository with a gap below zero.
 - **A skeleton outside the scene tree gives an old global pose.** A reader
   of `FigureClips.pose` uses `FigureClips.global_pose`.
-- **An item draws from one of three sources, in a fixed order.**
-  `FigureOutfit` takes the worn look of the item, then the slot shape of its
-  slot, then the family shape of `FamilyShapes`. The game and the workbench
-  use that class. Thus, a new item draws with no worn look and no client
-  edit.
+- **An item draws from one of four sources, in a fixed order.**
+  `FigureOutfit` takes the served model of the item when it is in hand,
+  then the worn look of the item, then the slot shape of its slot, then the
+  family shape of `FamilyShapes`. The game and the workbench use that
+  class. Thus, a new item draws with no worn look and no client edit.
 - **The key of a worn look says what it is.** An item key is the look of an
   item. A slot is a slot shape. A body type is a body. `test_figure_files.py`
   refuses each other key, and it refuses an item with the key of a slot.
@@ -2248,9 +2378,9 @@ The rules that the workbench keeps:
 - **An item empties each slot that it clears.** The catalog carries
   `SLOT_CONFLICTS` of the server, so the outfit bar holds only an outfit
   that a character can wear.
-- **One part editor serves each worn look.** `FigurePartsPanel` is in the
-  Body tab and in the Gear tab. Each handler of the plugin gets the look of
-  its tab.
+- **One part editor serves each worn look.** `PartEditor` of the gear
+  editor is in the Body tab, in the Families tab, and in the Gear dock.
+  Each handler of the plugin gets the look of its panel.
 - **One worn look shows on each stand.** A part of it has one node on each
   stand. `sync_from_nodes` finds each moved node before it writes. If not,
   the node that did not move writes its old place back.
@@ -2309,11 +2439,12 @@ The rules that the workbench keeps:
   of the tier over the colors of each base, and each hidden region of each
   base. `FigureOutfit` gives the builder only such looks.
 - **A tier can hide more, not less.** A region that a base hides stays
-  hidden. Its box on the Gear tab has a tick that the author cannot change.
+  hidden. Its box in the gear editor has a tick that the author cannot
+  change.
 - **A move of a part of a tier goes into the look with the parts.**
   `FigureWorkbench.parts_owner` names that look. Each tier of it follows.
 - **A tier whose base is not there draws no part.** The figure still draws.
-  The note of the Gear tab gives the reason, and `test_figure_files.py`
+  The note of the gear editor gives the reason, and `test_figure_files.py`
   fails on such a file of the repository.
 - **The colors of the character are no figure file.** They go to the
   builder as its `figure_colors`, over the color table of each look. The
@@ -2337,6 +2468,143 @@ The rules that the workbench keeps:
   variable was null in the editor. No headless test shows this. Make such a
   value in a routine, or give the script `@tool`, as `FamilyShapes` has.
 
+## The gear editor makes the worn look of each item
+
+Since 10/16/2026 the worn look of an item is the work of a plugin of its
+own, `addons/blackout_gear/` (DESIGN-0014 section 22). Nick asked for a
+dedicated gear editor, with the basic tools of a shape list moved there
+and made easier to use. The Gear tab left the Figure dock. The gear editor
+reads and writes the same figure files. Thus, the look that the author
+saves there is the look that the figure workbench and the game show.
+
+To open it, click **Open gear editor** in the top strip of the Figure
+dock. Or open `res://addons/blackout_gear/gear_workbench.tscn`, and select
+the `GearWorkbench` node. The Gear dock has three zones under the bar:
+
+1. **The items** (`GearItemsPanel`): the item catalog with its three
+   filters, by slot, by "no worn look", and by text. A picked row dresses
+   each stand in the item. The gear editor opens on the row of the last
+   session.
+2. **The part editor** (`PartEditor`): a tree of the parts of the look,
+   with the shapes of each part below it. Two rows of buttons sit above
+   the tree. The first row acts on a part: Add part, Copy part, Mirror
+   part, and Remove part. The second row adds one shape of each kind, then
+   Copy shape and Remove shape. Below the tree, a grid shows the selected
+   part, and a second grid shows the selected shape. While the tree has
+   the focus, Delete removes the selected row, and Ctrl+D copies it. The
+   Part model fold holds the model of one part.
+3. **The look** (`GearLookPanel`): four folds. Look (New look, Remove
+   look, Copy look, Make tier), Colors, Hides, and Model (the import of a
+   model, and the presentation of the served model).
+
+The bar above the zones has the body type, a clip list with the play bar,
+the budget line, the line of the selected item, and the outfit bar. The
+author plays a clip to see the item move with the figure, and dresses the
+other slots to see what the item meets.
+
+**A shape has its own gizmo.** A click on a shape in the 3D view selects
+that shape, and W, E, and R move it in the space of its part. The move
+goes into the offset, the rotation, and the scale of the shape. A second
+click on the same shape selects the whole part. A click on the node of a
+model selects the part at once, because the place of a model node is in
+the model file. A shape row of the tree selects the shape the same way.
+The Body tab and the Families tab of the Figure dock have the same part
+editor and the same gizmo.
+
+To give an item a worn look:
+
+1. In the gear editor, pick the row of the item. Each body type then wears
+   the item. An item with no worn look shows the slot shape of its slot.
+2. Open the **Look** fold, and click **New look**. The item gets a copy of
+   the slot shape of its slot as its own look.
+3. Click a shape on a stand, or a shape row of the tree. Move it with the
+   Godot tools, or change its fields in the shape grid. Add a shape with
+   one of the `+` buttons, on the selected part.
+4. Use the **outfit bar** to put an item in each other slot. Play a clip.
+   Look for a part that goes through another part.
+5. Press Ctrl+S. The look is `blackout/assets/figure/looks/<item key>.json`.
+
+**Copy look** gives the row the parts and the colors of another look. A tier
+is a legal source. The list names it "key (a tier of base)", and the copy
+takes the look that the tier draws. **Only the rows with no worn look**
+lists the items that still show a slot shape.
+
+### A served model wins over the worn look
+
+Since 10/17/2026 an item with a served model holds that model on the
+figure, in the game and on each stand (DESIGN-0014 section 24). Nick
+asked for it in these words: a served 3D model has precedence over any
+worn look from the gear editor. The cell of the item had the same order
+already (section 23).
+
+To change the place of a served model:
+
+1. Pick the row of the item. The row says "served model", and the note of
+   the Look fold says that the figure draws it.
+2. Click the model on a stand. The status box names the served model of
+   the item.
+3. Move it with W, turn it with E, and scale it with R. The other stand
+   follows.
+4. Press Ctrl+S. The look file of the item keeps the place in its
+   `served` row.
+
+**Fit served model to look** in the Model fold takes the `served` row
+away. The rules:
+
+- **The served model draws as one part,** the served part
+  (`FigureLook.SERVED_PART`). It holds the whole model in the unit box:
+  `FigureModels.WHOLE_MODEL` merges each node of the file into one mesh,
+  with the longest side one unit. A part of a look file cannot have that
+  name.
+- **The stand-in gives the first place.** The stand-in is the worn look,
+  else the slot shape, else the family shape. The longest side of the
+  model takes the longest side of the box of the stand-in, on the default
+  bone of the slot. The middle of the model takes the middle of the box.
+  The stand-in also draws while the model is not in hand.
+- **The served part takes the hide list and the colors** of the look of
+  the item and of the stand-in. A served chainbody thus hides the torso.
+- **A look that names the model of its own key draws as it is.** That
+  look is a figure model from **Import model**, in figure space.
+- **The `served` row has no fit row.** One place serves each body type.
+  A row on a bone that the rig does not have gives the first place.
+- **A move of the served model of an item with no look makes a look** with
+  the `served` row only. Such a look gives no stand-in: the slot shape
+  stands in.
+- **The import is off for such a row** until the model field names
+  another key. The pipeline refuses to write over a model that it did not
+  bring, and the served model needs no import.
+- **An alias is a served model too.** The shortbows alias the heavy
+  machine gun model, and the arrows alias its clip. Thus, the figure
+  holds those models, as their cells show them.
+
+**The two scenes share the files.** "Open figure workbench" in the Gear
+dock and "Open gear editor" in the Figure dock switch. With unsaved
+files, the switch asks to save them first. A plugin that takes its scene
+again reads the files again when the other scene wrote them
+(`FigureWorkbench.reload_if_changed`). A click on a part of a body or of
+a kit part in the gear editor says to open the figure workbench, and a
+click on a part of an item in the figure workbench says to open the gear
+editor. The two docks share one budget file, `figure_editor.cfg`.
+
+| File | Holds |
+|---|---|
+| `addons/blackout_gear/gear_plugin.gd` | The plugin: the dock, the handlers of the three zones, and the clip of the bar |
+| `addons/blackout_gear/gear_dock.gd` | `GearDock`: the three zones under the bar |
+| `addons/blackout_gear/gear_items_panel.gd` | `GearItemsPanel`: the item list and its filters |
+| `addons/blackout_gear/part_editor.gd` | `PartEditor`: the tree, the toolbar, the two grids, and the Part model fold. `FigureBodyPanel` and `FigureFamiliesPanel` extend it |
+| `addons/blackout_gear/gear_look_panel.gd` | `GearLookPanel`: the Look, Colors, Hides, and Model folds |
+| `addons/blackout_gear/gear_workbench.gd`, `gear_workbench.tscn` | `GearWorkbench`: a `FigureWorkbench` with another name, so the two plugins tell the two scenes apart |
+| `user://blackout_gear_session.cfg` | The session of the Gear dock: the body type, the outfit, the row, the author, and the folds. Git tracks none of it |
+
+`test_gear_dock.tscn` covers the three zones, the filters, the look
+panel, a tier, the presentation fields, the session file, and a row whose
+served model wins. `test_part_editor.tscn` covers the tree, the toolbar,
+the two grids, and the keys. `test_figure_workbench.tscn` covers the pick
+of a shape, a moved shape node, and a moved served model.
+`test_figure_builder.tscn` covers the shape node that a move keeps.
+`test_figure_outfit.tscn` covers the four sources and the place of a
+served model.
+
 ## The game draws each player as the figure
 
 Since 10/16/2026 the client draws each player character through
@@ -2349,12 +2617,26 @@ sees.
 | The figure set, the models of the parts, and the build of one figure | `world/figure/figure_library.gd` (`FigureLibrary`) |
 | The avatar | `world/world_view.gd`, `_build_avatar` |
 | Each other player | `world/entity_pool.gd`, `_figure_for` |
-| The body type and the figure colors of the observer | `world/char_state.gd` |
+| The body type, the figure colors, and the worn record of the observer | `world/char_state.gd` |
+| The worn looks of a worn record | `world/figure/figure_outfit.gd` (`FigureOutfit`) |
+| The item picture in a cell of the bag, the doll, and a pop-up | `FigureLibrary.build_item`, `FigureBuilder.build_item`, `scenes/inventory/item_stage.gd` |
 
 The server names, the client draws. The row of a player character carries
 `body_type`, and `figure_colors` when the character has a color of its own.
 A row with a body type draws a figure. Each other row draws its asset key,
 as before. The client never picks a body type.
+
+Since 10/16/2026 the row also carries `worn` (DESIGN-0014 section 21): slot
+-> asset key, for each slot that holds an item. The figure wears the worn
+look of each asset key. An item with no worn look draws the slot shape. The
+server sends the row again on each equip and unequip, and `char_avatar`
+carries the same record for the observer.
+
+Since 10/17/2026 a served model of the asset key wins over the worn look
+(DESIGN-0014 section 24). `FigureLibrary.build` asks the mesh ladder for
+the served model of each worn item. The worn look stands in until the file
+arrives. The arrival emits `changed`, and each pane builds its figures
+again.
 
 The rules:
 
@@ -2365,7 +2647,8 @@ The rules:
 - **Until the figure set arrives, a player draws the family shape of the
   character.** The arrival draws each figure again.
 - **The avatar builds again on a change of its look only.** An HP message
-  does not build it again, so a clip goes on.
+  does not build it again, so a clip goes on. The look is the body type,
+  the colors, and the worn record, so an equip builds it again.
 - **A figure walks while it slides to its tile, and it idles on its
   tile.** The clips come from the default clip set of
   `world/figure/stances.json`. A figure of the pool turns to its step.
@@ -2441,8 +2724,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All seventy-nine tests are headless and exit non-zero on failure.
-Seventy-six need nothing running (counted 10/12/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All one hundred and one tests are headless and exit non-zero on failure.
+Ninety-eight need nothing running (counted 10/20/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -2518,7 +2801,7 @@ The two maps have four scenes, and each needs nothing running.
 `test_minimap_view` checks the cell maths at each zoom, the dots, and the
 settings. `test_entity_roster` checks the entity model. `test_world_map_state`
 decodes hand-built summaries. `test_world_map_view` checks the pan, the zoom,
-and the planes:
+the planes, the floating box, and the legend:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_minimap_view.tscn
@@ -2628,7 +2911,9 @@ must be a clip file:
 chunk of the model, a mesh built again for a chunk sent again, and no mesh for
 a freed chunk. It also covers the walls layer, the props layer, and the
 scenery. `test_wall_mesh.tscn` covers the wall slabs. `test_prop_mesh.tscn`
-covers the primitives and their rotation.
+covers the primitives and their rotation. `test_tile_lights.tscn` covers
+the lamp light: the bake, the look file, and the real lights of the
+figures.
 
 `test_char_state.tscn` needs nothing running either:
 
@@ -2662,6 +2947,13 @@ retry:
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_view.tscn
 ```
 
+`test_item_look.tscn` needs nothing running either. It reads the served
+`figure.json` and checks the item picture of each item look:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_item_look.tscn
+```
+
 `test_summary_state.tscn` needs nothing running either:
 
 ```bash
@@ -2693,6 +2985,16 @@ highlight:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_combat_options_view.tscn
+```
+
+`test_abilities_state.tscn` and `test_ability_rail.tscn` need nothing running
+either. The state test covers the model, the key table and the tip text. The
+rail test asserts that every command that leaves the rail is the one that its
+row carried, that a key press fires the slot of its row, that a locked row
+fires nothing, and that a click alone never moves the light:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_ability_rail.tscn
 ```
 
 `test_login_view.tscn` and `test_saved_login.tscn` need nothing running
@@ -2864,6 +3166,58 @@ The channel republishes on a style switch, on any equipment change (which
 covers a mid-fight `wield`), on a level change (combat level), on the bare
 `combatoptions` command, and on resync.
 
+## The ability rail lights what the server says, not what was clicked
+
+The rail is one column of toggles over the world pane, to the right of the
+vitals: one button for each ability, in the order of the server, with its key
+in the corner. Nick chose the rail over a slotted bar on 10/20/2026, because
+every ability that exists today is a toggle. A slotted bar with drag and drop
+is the next step, when an ability with a cast or a cooldown exists, and it
+reads the same snapshot.
+
+```
+char_abilities -> {abilities: [{key, name, kind, state, command, reason,
+								tip: {title, lines}}, ...]}
+```
+
+Each row carries the whole line that fires it. A ready row carries
+`aura <name>`. The active row carries `aura off`. A locked row carries an
+empty command, and the rail draws it disabled. `reason` says why.
+`systems/gameplay/combat/auras/detail.py` builds the rows, and the telnet
+`aura` listing renders from that module too. Thus, the rail and the listing
+cannot describe an aura differently. The arrangement of the Combat tab.
+
+**A click sends, and changes nothing else.** The button goes straight back to
+what the last snapshot said. The light moves only when the server republishes
+`char_abilities`. A click on the lit row DOES send, because its command puts
+the aura out. The rule of `AbilitiesState` in `world/abilities_state.gd`.
+
+**The client owns the keys.** The server sends the rows in the order of its
+registry and names no key. The slot of a row is its index. `AbilityKeys` in
+`world/ability_keys.gd` says which key fires which slot: the number row, `1`
+to `0`, then `-` and `=`, twelve slots. A combination such as `Shift+1` is
+one more row of that table, with `shift` true. A press with Ctrl, Alt or Meta
+fires no slot. The console asks the table only when the player is not typing,
+as for the movement keys: Escape hands the keyboard to the map. The rail
+prints the key on each button.
+
+**The buttons take the mouse. The gaps do not.** The container ignores the
+mouse, so a click between two buttons reaches the tile under it.
+
+**The tip is one shape for every row.** The `tip` block, `{title, lines}`, is
+the first of its kind (10/20/2026). `TipText` in `world/tip_text.gd` reads it
+and joins it into the tooltip of the button. A locked row adds the reason of
+the lock after the block. Nick expects a generic tip over most of the game
+later: an item, an entity, a skill. That tip reads this one shape from every
+row that has it, through `TipText.read`, and replaces `TipText.format` with a
+richer look. A row that gains a tip adds the block, and no view learns a new
+field.
+
+The channel republishes when an aura lights or goes out, on a level change
+(an unlock), and on resync. It is marked stale, not built at the change. On a
+put-out, the server deletes the aura handler after the mark, and the build at
+the drain reads the finished state.
+
 ## The quest log is numbers, not sentences
 
 `char_quests` sends each objective as `{key, description, current, required,
@@ -2972,19 +3326,41 @@ names no part.
 
 ## The world map is every chunk, drawn small
 
-The world map (09/28/2026) follows the OSRS world map. It is a large box over
-the world pane, and it shows every chunk of one plane:
+The world map (09/28/2026) follows the OSRS world map. It is a floating box
+over the world pane, as the pop-up is, and it shows every chunk of one plane:
 
 - the ground, one pixel for each tile at the closest zoom,
 - a map icon for each chunk object,
 - the name of each area,
 - your tile, the destination marker, and the walk path,
-- the tile under the cursor, as `(x, y)`, for a player who types `goto x,y`.
+- the tile under the cursor, as `(x, y)`, for a player who types `goto x,y`,
+- the legend (10/19/2026).
 
 A drag pans, and the mouse wheel zooms around the cursor. `Up` and `Down`
-change the plane, `Me` centres on you, and `X` or Esc closes it. **A click
+change the plane, `Me` centres on you, and `Close` or Esc closes it. **A click
 walks nowhere** (Nick, 09/28/2026). A walk across the world can hit the limit
 of the A* search, so a click that walked would often fail.
+
+**The player moves and sizes it (Nick, 10/19/2026).** `FloatingBox` gives the
+map the box of the pop-up: a drag on the title bar moves it, and a drag on a
+grip sizes it. `ClientSettings.world_map_rect` keeps the rect, apart from the
+rect of the pop-up. The first box opens in the gap between the docks. Until
+10/19/2026 the map was a fixed box, 24 pixels inside the pane.
+
+**The legend names what the map draws (Nick, 10/19/2026).** A column at the
+right side of the box has one row for each map icon and one row for each
+marker. The `Legend` button shows or hides it. Each icon row has a check box.
+A click on the row hides that category of map icon on the world map, as in
+OSRS. The minimap does not change. `ClientSettings` keeps both choices.
+
+- An icon row draws its sample with `MapIcons.draw`, and a marker row with
+  the static draw calls of `WorldMapView`. Thus, a sample cannot differ from
+  the map.
+- The words of an icon row are `OBJECT_CATEGORY_LABELS`, which the server
+  owns in `blackout/systems/core/tilegrid/constants.py`. The category is a
+  fact of the server, and the icon is a look of the client.
+- A category with a row in `MapIcons.ICONS` gets a legend row with no edit to
+  the legend. The walk path row shows only while Options draws the path.
 
 **The server sends a summary, not the chunk file.** The client holds only the
 block around the player, so it cannot draw the world by itself. The `worldmap`
@@ -3003,8 +3379,11 @@ the box when the index arrives. A telnet session gets a text overview of its
 plane instead (`blackout/world/tile_world_map.py`).
 
 **It is a sibling box of the world pane.** `console.gd` builds it in code, as
-it builds the pop-up. It sits over the docks and under the right-click menu
-and the veil. `smoke_console` checks that order.
+it builds the pop-up. Nick chose the rule of the pop-up for a click beside the
+box (10/19/2026). The world takes no click, and the docks stay in reach. Thus,
+the map sits under the docks, over the pop-up, and under the right-click menu
+and the veil. Esc closes the map before the pop-up, because the map reads the
+key in `_input`. `smoke_console` checks that order.
 
 ## The log is tabbed, and the server never names a tab
 
@@ -3155,6 +3534,64 @@ has one owner.
 `test_xp_hud_view` walks every control in it to prove that the mouse passes
 through.
 
+## The performance view draws two clocks
+
+Options → Panes → "Performance graphs" turns it on. It is off by default. It
+is a HUD element (`performance`), so the layout editor moves and sizes it.
+It ships under the vitals, in the top left.
+
+One card, three blocks. Each block is a line of text over a graph:
+
+| Block | Line | Graph | Guide line |
+|---|---|---|---|
+| Client | `60 fps · 16.7 ms · peak 33.1 ms` | The frame time of each frame | The frame time of 60 fps |
+| Server tick | `tick 1234 · 600 ms · peak 640 ms · 3 handlers · 0 late` | The gap before each tick | `TICK_SECONDS` |
+| Server work | `work 2.1 ms · peak 8.4 ms` | How long each tick took, as bars | None |
+
+A red dot marks each tick that the server called late. A spike in the first
+graph is this machine or the browser. A spike in the second is the server or
+the path to it. A tick whose work fills most of its gap is a server that is
+about to run late.
+
+**The frames are the client's reading.** `PerformanceState.record_frame`
+takes the delta of each `_process`, and the view records only while it is
+drawn. A hidden view stops its process, and a view that comes back starts
+its frame graph again.
+
+**The ticks are the server's fact, on `blackout_tick_perf`.** Each message
+is one tick: the tick number, the gap, the work, the size of the rotation,
+the failing handlers, and whether the gap was late. The server decides
+"late" with the `tickdebug` rule, so the client holds no copy of it.
+`systems/interface/statefeed/performance.py` sends it from `PHASE_END` of
+the tick engine, after the engine records the duration. Thus, the send is
+outside the number that it reports.
+
+**The channel is opt-in, and this is the one setting that becomes a
+subscription.** `blackout_tick_perf` is a message on every tick, 100 a
+minute for each client. `all` leaves it out, so a client that never draws
+the view never pays for it. `Console._sync_performance_subscription` sends
+`blackout_subscribe` for the one channel when the setting goes on, and
+`blackout_unsubscribe` when it goes off. It sends only after the server
+confirms a subscription, and only when the setting and the last request
+differ. Thus, a server that refuses the name cannot start a loop of asks.
+
+Three files share the work:
+
+| File | Owns |
+|---|---|
+| `world/performance_state.gd` | The rings: the frame times, the tick gaps, the tick work, and the late flags. The clock is injected |
+| `scenes/performance/performance_view.gd` | The card. Every colour, size and unit. The text lines and the graph geometry are static, for the tests |
+| `scenes/console.gd` | The gate from the setting, and the subscription that follows it |
+
+`test_performance_state` and `test_performance_view` need nothing running.
+The view test checks the text lines and the geometry, and that no part of
+the card takes a click:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_performance_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_performance_view.tscn
+```
+
 ## Hitsplats: the server names the max hit
 
 A hitsplat is the damage number over a figure. Each `blackout_combat` payload
@@ -3200,6 +3637,53 @@ from a style file, because those are look decisions:
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hitsplat_layer.tscn
 ```
 
+## A fight turns the two to face each other
+
+A player who clicks a raider behind them turns round, and the raider turns to
+meet them (10/18/2026). A player who talks to a preceptor faces it, and it
+faces them. The server names who turns to whom. The client reads where the
+two stand and turns them.
+
+**The start of an exchange is its own event.** `blackout_face` names the
+actor and the target by id, and nothing else. The server sends it from four
+places. A queued attack sends it a tick before the first swing, from
+`BlackoutCombatHandler.start_combat_state`, the one seam that the attack
+command and the AI of an NPC both pass. Thus, the NPC turns when it strikes
+back, not when it is hit. `talk` and `trade` send it when the exchange opens.
+The payload goes to the same people as a swing. It is not a flag on
+`blackout_combat`, because each payload of that channel is one hitsplat.
+
+**A harvest turns the gatherer to the node** (10/20/2026).
+`GatheringHandler._swing` sends the face event before each swing, with the
+node as the target. The node keeps its turn, because it is not a mobile.
+
+The event holds no state, so each swing sends it again. A bystander who comes into
+view during the channel sees the turn at the next swing. So does a client that
+connects again, and a ring that moves when a third figure steps onto the tile.
+
+**On the face event, both turn. On a swing, the one who swings turns.** A
+target that fights back turns on its own swings. A target that does not keeps
+the turn of the face event. Thus, a raider with two attackers faces the one it
+attacks.
+
+**The direction comes from the DRAWN positions, not the tiles.** A melee fight
+stands on one tile, in the slots of its ring. Two tiles give no direction. Two
+slots give the right one: the two face each other across the ring. A pair with
+no gap keeps the yaw. `WorldView.yaw_facing` is the maths, the twin of
+`yaw_towards` for a point. `test_world_view` asserts that a foe one step away
+and a step to that foe turn the figure one way.
+
+**A character and an NPC turn. Each other thing keeps its turn.** A sign, an
+item and a station face the way the chunk file says. `EntityPool.face` refuses
+a row of any other kind. The pool keeps the yaw of a fight beside its nodes,
+as it keeps the animators. Thus, a node built again for a new look faces its
+foe at once, and the yaw ends when the entity leaves. An NPC also turns to
+its walk now, as the avatar does. Before, only a figure turned.
+
+The turn walks at `TURN_SPEED`, the rate of the avatar. With the animation
+off, it is at once. A step takes over while the figure slides, and the yaw of
+the fight comes back when it stands.
+
 ## Sound is the client's, and a cue hangs off a fact
 
 `world/sound_cues.gd` is the whole table: a cue NAME (`SoundCues.LEVEL_UP`)
@@ -3237,6 +3721,33 @@ nothing.
 The last kill of an Exterminator task is the first moment.
 `ExterminatorHandler._complete` sends `task_complete`, and the client plays
 `task_complete.wav`.
+
+**Every gathering skill has one sound rule: one sound for each gathering
+attempt.** A skill names its moment in the `attempt_moment` class attribute.
+`GatheringSkill.attempt_swing` sends it on each attempt, a hit or a miss.
+Cutting names `cut_attempt`, and Butchery names `butcher_attempt`. The client
+plays `cut_attempt.wav` or `butcher_attempt.wav`. The repeat comes from the
+channel, not from the clip. The clip does not loop, and the sound stops when
+the channel stops. A sound for another gathering skill is one moment, one
+class attribute, and one row in each table of `sound_cues.gd`. A skill with
+no `attempt_moment` is silent.
+
+**A crafting skill has one sound for each finished craft.** A skill names
+its moment in the `craft_moment` class attribute of `BaseSkill`.
+`crafting_service.perform_craft` sends it after each finished item. A
+refused craft sends nothing. Metalsmith names `metalsmith_craft`, and
+Foundry names `foundry_craft`. The client plays `metalsmith_craft.wav` or
+`foundry_craft.wav`. A batch makes one item every
+`craft_seconds`. Thus, the sound repeats until the batch stops. A sound for
+another crafting skill is one moment, one class attribute, and one row in
+each table of `sound_cues.gd`.
+
+**A transition has one sound for each move.** `walk.advance` sends
+`transition` when a hop onto a transition tile moves the walker to the
+target tile. The client plays `transition.wav`. A step, a run, and a `goto`
+walk all move on the tick, so all three send it. The moment goes to the
+walker only, as every moment does. A transition with a blocked target moves
+nobody, and it sends nothing.
 
 **Every clip plays on the `SFX` bus** declared in `default_bus_layout.tres`.
 An audio player that names a bus that does not exist plays on Master with no
@@ -3322,7 +3833,8 @@ To add a sound:
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/stable_hash.gd` | A string hash that gives the same number on every client. `EntityPool` turns the ring of figures on a tile by it. |
 | `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button. |
-| `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane. Pans, zooms, and changes the plane. Walks nowhere. |
+| `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane, in a floating box. Pans, zooms, and changes the plane. Walks nowhere. |
+| `scenes/worldmap/world_map_legend.gd` | The legend of the world map: a row for each map icon and each marker. A click on an icon row hides that category of map icon. |
 | `world/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |
 | `world/world_map_state.gd` | The world map summaries, as one image and one icon list for each plane. |
 | `world/map_raster.gd` | The colour of a tile on both maps, and the images the maps draw the ground from. |
@@ -3333,7 +3845,8 @@ To add a sound:
 | `scenes/layout/hud_slot.gd` | One HUD element: its control and its shipped place. |
 | `scenes/layout/hud_arranger.gd` | Places every HUD element from the layout of the player. The one owner of where an element sits. |
 | `scenes/layout/layout_editor.gd` | The layout editor: frames, grips, snap, the settings of an element, and presets. |
-| `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the pop-up and the layout editor. The pop-up raises its grips over every other box. |
+| `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the floating boxes and the layout editor. A floating box raises its grips over every other box. |
+| `scenes/floating_box.gd` | The box that the player moves and sizes over the world pane: the dim, the title bar, the grips, the first rect, and the saved rect. The pop-up and the world map extend it. |
 | `ui/icons/` | The tab icons, from game-icons.net (CC BY 3.0). `PanelView.TAB_ICONS` names the author of each, and the Credits box shows them. |
 | `world/doll_layout.gd` | Where each equipment frame sits on the paper doll. A picture, not a rule; guarded from Python by path. |
 | `scenes/equipment/equipment_view.gd` | The paper doll. Draws the frames the server sent, in the shape the table says. |
@@ -3353,7 +3866,8 @@ To add a sound:
 | `scenes/options/options_view.gd` | The sliders and the pane toggles. Writes through the settings object, applies nothing. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
 | `world/world_view.gd` | The 3D pane: the terrain node, the marker, the hover mark, the pick, and the avatar on the drawn ground. |
-| `world/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash and hover. |
+| `world/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash, hover, and the pick. |
+| `world/entity_picking.gd` | The ray against the faces and the box of one node. See "The pick of an entity" |
 | `world/hitsplats/` | The hitsplats. `hitsplat_layer.gd` picks a style and draws. `hitsplat_style.gd` and `styles/*.tres` hold the look. |
 | `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
 | `world/sound_cues.gd` | Which clip each cue plays, on the SFX bus. The server names no sound. |

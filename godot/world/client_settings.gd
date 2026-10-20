@@ -51,12 +51,20 @@ const KEY_AMOUNT_SIZE := "amount_size"
 const KEY_POPUP_RECT := "popup_rect"
 const KEY_MINIMAP_RADIUS := "minimap_radius"
 const KEY_SHOW_WALK_PATH := "show_walk_path"
+const KEY_SHOW_PERFORMANCE := "show_performance"
 
 ## The chat interface gets its own section: which mode a typed line goes to,
 ## and which tabs the player hid from All. See [ChatModes] and [ChatTabs].
 const CHAT_SECTION := "chat"
 const KEY_CHAT_MODE := "mode"
 const KEY_CHAT_HIDDEN := "hidden_from_all"
+
+## The world map gets its own section. It keeps the rect of the box, the
+## legend toggle, and the hidden map icons. See [WorldMapView].
+const WORLD_MAP_SECTION := "world_map"
+const KEY_WORLD_MAP_RECT := "rect"
+const KEY_WORLD_MAP_LEGEND := "legend"
+const KEY_WORLD_MAP_HIDDEN := "hidden_icons"
 
 ## The HUD layout gets its own section. See [HudLayout].
 const LAYOUT_SECTION := "layout"
@@ -180,6 +188,17 @@ const MAX_SFX_VOLUME := 1.0
 ## rather than one that restarted.
 const DEFAULT_SHOW_XP_DROPS := true
 
+## Whether the performance view is drawn over the world: the frame rate and
+## the frame time of this client, and the interval and the work of each
+## server tick, each as a graph.
+##
+## Off by default. It is a tool for a player with a stutter to report, and
+## for Nick. Turning it on also asks the server for `blackout_tick_perf`,
+## which is the one channel that costs a message on every tick. Thus, this
+## is the one display setting that the console turns into a subscription.
+## See [method Console._sync_performance_subscription].
+const DEFAULT_SHOW_PERFORMANCE := false
+
 ## Whether the tracker lists XP per hour for each skill trained this session.
 ##
 ## Off by default. The session rate answers "is this worth my time"; a row per
@@ -267,7 +286,7 @@ const DEFAULT_AMOUNT_SIZE := Vector2i.ZERO
 ##
 ## ## Pixels, not a part of the pane
 ##
-## [method PopupView._place_box] already clamps a rect into the pane it has, and
+## [method FloatingBox._place_box] already clamps a rect into the pane it has, and
 ## a rect saved by a wider window comes back too large for a narrow one. That
 ## clamp is therefore the ONE owner of "the box stays on screen", and it needs
 ## no help: it runs on every open, on every drag, and whenever the pane is
@@ -277,6 +296,19 @@ const DEFAULT_AMOUNT_SIZE := Vector2i.ZERO
 ## So the bounds below are not that rule. They only keep a hand-edited number
 ## sane.
 const DEFAULT_POPUP_RECT := Rect2()
+
+## Where the player put the world map box, as [constant DEFAULT_POPUP_RECT]
+## is for the pop-up (10/19/2026). Each box keeps its own rect: a bank and a
+## map that shared one rect would move each other.
+const DEFAULT_WORLD_MAP_RECT := Rect2()
+
+## Whether the world map shows its legend (10/19/2026). On by default, so a
+## player who opens the map the first time sees what each icon means.
+const DEFAULT_WORLD_MAP_LEGEND := true
+
+## The longest category key of a hidden map icon that the file may keep. A
+## fence around a text read from a file, as [constant MAX_CHAT_MODE_KEY] is.
+const MAX_MAP_ICON_KEY := 64
 
 ## The largest pixel figure a saved box may carry, on any axis.
 ##
@@ -327,8 +359,15 @@ var camera_relative_keys := DEFAULT_CAMERA_RELATIVE_KEYS
 var hide_roofs := DEFAULT_HIDE_ROOFS
 var minimap_radius := DEFAULT_MINIMAP_RADIUS
 var show_walk_path := DEFAULT_SHOW_WALK_PATH
+var show_performance := DEFAULT_SHOW_PERFORMANCE
 var amount_size := DEFAULT_AMOUNT_SIZE
 var popup_rect := DEFAULT_POPUP_RECT
+var world_map_rect := DEFAULT_WORLD_MAP_RECT
+var world_map_legend := DEFAULT_WORLD_MAP_LEGEND
+
+## The categories of the map icons that the world map does not draw. None by
+## default. A click on a row of the legend adds or removes one.
+var world_map_hidden_icons := PackedStringArray()
 var layout := DEFAULT_LAYOUT.duplicate()
 var chat_mode := DEFAULT_CHAT_MODE
 
@@ -386,10 +425,19 @@ func load_from_disk() -> void:
 		SECTION, KEY_MINIMAP_RADIUS, DEFAULT_MINIMAP_RADIUS)))
 	show_walk_path = bool(config.get_value(
 		SECTION, KEY_SHOW_WALK_PATH, DEFAULT_SHOW_WALK_PATH))
+	show_performance = bool(config.get_value(
+		SECTION, KEY_SHOW_PERFORMANCE, DEFAULT_SHOW_PERFORMANCE))
 	amount_size = _clamp_box_size(config.get_value(
 		SECTION, KEY_AMOUNT_SIZE, DEFAULT_AMOUNT_SIZE))
 	popup_rect = _clamp_box_rect(config.get_value(
 		SECTION, KEY_POPUP_RECT, DEFAULT_POPUP_RECT))
+	world_map_rect = _clamp_box_rect(config.get_value(
+		WORLD_MAP_SECTION, KEY_WORLD_MAP_RECT, DEFAULT_WORLD_MAP_RECT))
+	world_map_legend = bool(config.get_value(
+		WORLD_MAP_SECTION, KEY_WORLD_MAP_LEGEND, DEFAULT_WORLD_MAP_LEGEND))
+	world_map_hidden_icons = _clamp_key_list(config.get_value(
+		WORLD_MAP_SECTION, KEY_WORLD_MAP_HIDDEN, PackedStringArray()),
+		MAX_MAP_ICON_KEY)
 	layout = HudLayout.sanitize(config.get_value(
 		LAYOUT_SECTION, KEY_LAYOUT, DEFAULT_LAYOUT))
 	layout_presets = _sanitize_presets(config.get_value(
@@ -397,8 +445,8 @@ func load_from_disk() -> void:
 	_take_legacy_dock_sizes(config)
 	chat_mode = _clamp_chat_mode(config.get_value(
 		CHAT_SECTION, KEY_CHAT_MODE, DEFAULT_CHAT_MODE))
-	chat_hidden_from_all = _clamp_chat_hidden(config.get_value(
-		CHAT_SECTION, KEY_CHAT_HIDDEN, PackedStringArray()))
+	chat_hidden_from_all = _clamp_key_list(config.get_value(
+		CHAT_SECTION, KEY_CHAT_HIDDEN, PackedStringArray()), MAX_CHAT_MODE_KEY)
 
 	changed.emit()
 	layout_replaced.emit()
@@ -423,8 +471,12 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_HIDE_ROOFS, hide_roofs)
 	config.set_value(SECTION, KEY_MINIMAP_RADIUS, minimap_radius)
 	config.set_value(SECTION, KEY_SHOW_WALK_PATH, show_walk_path)
+	config.set_value(SECTION, KEY_SHOW_PERFORMANCE, show_performance)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
 	config.set_value(SECTION, KEY_POPUP_RECT, popup_rect)
+	config.set_value(WORLD_MAP_SECTION, KEY_WORLD_MAP_RECT, world_map_rect)
+	config.set_value(WORLD_MAP_SECTION, KEY_WORLD_MAP_LEGEND, world_map_legend)
+	config.set_value(WORLD_MAP_SECTION, KEY_WORLD_MAP_HIDDEN, world_map_hidden_icons)
 	config.set_value(LAYOUT_SECTION, KEY_LAYOUT, layout)
 	config.set_value(LAYOUT_SECTION, KEY_LAYOUT_PRESETS, layout_presets)
 	config.set_value(CHAT_SECTION, KEY_CHAT_MODE, chat_mode)
@@ -616,6 +668,16 @@ func set_show_xp_drops(value: bool) -> void:
 	changed.emit()
 
 
+## Show or hide the performance view, and persist it.
+func set_show_performance(value: bool) -> void:
+	if value == show_performance:
+		return
+
+	show_performance = value
+	save_to_disk()
+	changed.emit()
+
+
 ## Show or hide XP per hour for each skill, and persist it.
 func set_show_skill_rates(value: bool) -> void:
 	if value == show_skill_rates:
@@ -697,7 +759,7 @@ func set_amount_size(value: Vector2i) -> void:
 ## Remember where the player put the pop-up box, and persist it.
 ##
 ## The caller passes the rect the box ENDED at, after
-## [method PopupView._place_box] clamped it. The number that the player can
+## [method FloatingBox._place_box] clamped it. The number that the player can
 ## see is the number to keep.
 func set_popup_rect(value: Rect2) -> void:
 	var clamped := _clamp_box_rect(value)
@@ -706,6 +768,42 @@ func set_popup_rect(value: Rect2) -> void:
 		return
 
 	popup_rect = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Remember where the player put the world map box, and persist it. The
+## caller passes the rect the box ended at, as for the pop-up.
+func set_world_map_rect(value: Rect2) -> void:
+	var clamped := _clamp_box_rect(value)
+
+	if clamped == world_map_rect:
+		return
+
+	world_map_rect = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Show or hide the legend of the world map, and persist it.
+func set_world_map_legend(value: bool) -> void:
+	if value == world_map_legend:
+		return
+
+	world_map_legend = value
+	save_to_disk()
+	changed.emit()
+
+
+## Keep the categories of the map icons that the world map does not draw,
+## and persist them.
+func set_world_map_hidden_icons(value: PackedStringArray) -> void:
+	var clamped := _clamp_key_list(value, MAX_MAP_ICON_KEY)
+
+	if clamped == world_map_hidden_icons:
+		return
+
+	world_map_hidden_icons = clamped
 	save_to_disk()
 	changed.emit()
 
@@ -724,7 +822,7 @@ func set_chat_mode(value: String) -> void:
 
 ## Keep the chat tabs that the player hid from All, and persist them.
 func set_chat_hidden_from_all(value: PackedStringArray) -> void:
-	var clamped := _clamp_chat_hidden(value)
+	var clamped := _clamp_key_list(value, MAX_CHAT_MODE_KEY)
 
 	if clamped == chat_hidden_from_all:
 		return
@@ -765,8 +863,12 @@ func reset() -> void:
 	hide_roofs = DEFAULT_HIDE_ROOFS
 	minimap_radius = DEFAULT_MINIMAP_RADIUS
 	show_walk_path = DEFAULT_SHOW_WALK_PATH
+	show_performance = DEFAULT_SHOW_PERFORMANCE
 	amount_size = DEFAULT_AMOUNT_SIZE
 	popup_rect = DEFAULT_POPUP_RECT
+	world_map_rect = DEFAULT_WORLD_MAP_RECT
+	world_map_legend = DEFAULT_WORLD_MAP_LEGEND
+	world_map_hidden_icons = PackedStringArray()
 	layout = DEFAULT_LAYOUT.duplicate()
 	chat_mode = DEFAULT_CHAT_MODE
 	chat_hidden_from_all = PackedStringArray()
@@ -783,8 +885,10 @@ func _clamp_chat_mode(value: Variant) -> String:
 	return (value as String).left(MAX_CHAT_MODE_KEY)
 
 
-## The kept tab keys, with each one that is not a short string dropped.
-func _clamp_chat_hidden(value: Variant) -> PackedStringArray:
+## The kept keys of a list: the chat tabs hidden from All, or the hidden map
+## icons. The read drops each entry that is not a string, and cuts each one
+## at `longest` characters.
+func _clamp_key_list(value: Variant, longest: int) -> PackedStringArray:
 	var keys := PackedStringArray()
 
 	if typeof(value) != TYPE_PACKED_STRING_ARRAY and typeof(value) != TYPE_ARRAY:
@@ -792,7 +896,7 @@ func _clamp_chat_hidden(value: Variant) -> PackedStringArray:
 
 	for key: Variant in value:
 		if typeof(key) == TYPE_STRING and not keys.has(key):
-			keys.append((key as String).left(MAX_CHAT_MODE_KEY))
+			keys.append((key as String).left(longest))
 
 	return keys
 
@@ -839,9 +943,9 @@ func _clamp_box_size(value: Variant) -> Vector2i:
 
 ## A saved box rect, or an empty one when the file holds something else.
 ##
-## A negative position is legal and saved as it is. The pop-up clamps a rect
-## into its pane on every open, so a box saved half off a wide window comes
-## back inside a narrow one rather than being refused here.
+## A negative position is legal, and the file keeps it. A floating box clamps
+## a rect into its pane on every open. Thus, a box that a wide window saved
+## half off the pane comes back inside a narrow one. This read refuses nothing.
 func _clamp_box_rect(value: Variant) -> Rect2:
 	if typeof(value) != TYPE_RECT2:
 		return DEFAULT_POPUP_RECT

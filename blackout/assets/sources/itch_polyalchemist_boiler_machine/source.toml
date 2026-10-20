@@ -1,0 +1,11 @@
+title     = "Low Poly Medieval Boiler Machine"
+author    = "poly.alchemist"
+url       = "https://polyalchemist.itch.io/low-poly-medieval-boiler-machine"
+site      = "itch.io"
+license   = "LicenseRef-Unconfirmed"
+exception = "The itch.io page states no license (checked 10/20/2026). It calls the model suitable for mobile games or personal projects. Name-your-own-price is a price, not a grant. Ask the author, or replace the model, before a public release."
+retrieved = 2026-10-20
+notes     = "Boiler Machine.glb only, one of thirteen files on the page. The .glb holds two meshes (Body_1, Body_2) with 45,500 triangles. Its two materials carry 4K PBR textures inside the file. The model record simplifies the mesh to the world_objects budget."
+
+[files]
+"Boiler Machine.glb" = "sha256:9e1948f753df51ced1f5b4ee5a9064ad4a48c345ad884d64025df0b0ad97b2d4"

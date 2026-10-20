@@ -43,7 +43,7 @@ const RAIDER := {
 	"coords": [5.0, 3.0, "oasis_outskirts"],
 }
 
-## Another player: drawn, but affords nothing. Opening combat on one by misclick
+## Another player: drawn, with no verb of its own. Opening combat on one by misclick
 ## is the thing TARGETED_VERB_BY_KIND deliberately does not allow.
 const STRANGER := {
 	"id": 40471.0, "name": "someone", "kind": "character",
@@ -63,7 +63,7 @@ var _dismissals := 0
 func _ready() -> void:
 	_a_corpse_offers_every_verb_the_server_listed()
 	_an_entity_with_one_verb_falls_back_to_interact()
-	_an_entity_that_affords_nothing_offers_nothing()
+	_an_entity_that_affords_nothing_offers_only_inspect()
 	_a_repeated_command_is_listed_once()
 	_a_malformed_action_is_skipped()
 
@@ -93,14 +93,19 @@ func _ready() -> void:
 
 # ─── What the options are ────────────────────────────────────────────────────
 
+## Every entity with a dbref gets one more row, Inspect, LAST (10/16/2026).
+## The counts below say "and Inspect" for that row. test_world_view pins the
+## row itself.
 func _a_corpse_offers_every_verb_the_server_listed() -> void:
 	var options := WorldView.options_for(CORPSE)
 
-	_expect(options.size() == 2, "a corpse offers two options")
+	_expect(options.size() == 3, "a corpse offers two options, and Inspect")
 	_expect(str(options[0]["command"]) == "butcher Mutant Raider corpse",
 			"the first option is the one `interact` also names")
 	_expect(str(options[1]["command"]) == "get Mutant Raider corpse",
 			"the second option is the one only `actions` names")
+	_expect(str(options[2]["command"]) == WorldView.inspect_command(CORPSE),
+			"and Inspect is last")
 
 
 func _an_entity_with_one_verb_falls_back_to_interact() -> void:
@@ -108,14 +113,17 @@ func _an_entity_with_one_verb_falls_back_to_interact() -> void:
 	## single command, so this runs for almost every entity in the world.
 	var options := WorldView.options_for(RAIDER)
 
-	_expect(options.size() == 1, "a one-verb entity offers one option")
+	_expect(options.size() == 2, "a one-verb entity offers one option, and Inspect")
 	_expect(str(options[0]["command"]) == "attack Mutant Raider",
 			"and it is the `interact` string, verbatim")
 
 
-func _an_entity_that_affords_nothing_offers_nothing() -> void:
-	_expect(WorldView.options_for(STRANGER).is_empty(),
-			"an entity with no verb offers no menu")
+func _an_entity_that_affords_nothing_offers_only_inspect() -> void:
+	var options := WorldView.options_for(STRANGER)
+
+	_expect(options.size() == 1, "an entity with no verb offers Inspect alone")
+	_expect(str(options[0]["command"]) == WorldView.inspect_command(STRANGER),
+			"and that row is Inspect")
 
 
 func _a_repeated_command_is_listed_once() -> void:
@@ -127,8 +135,8 @@ func _a_repeated_command_is_listed_once() -> void:
 		{"command": "get Mutant Raider corpse", "label": "Take"},
 	]
 
-	_expect(WorldView.options_for(doubled).size() == 1,
-			"one command listed twice becomes one row")
+	_expect(WorldView.options_for(doubled).size() == 2,
+			"one command listed twice becomes one row, and Inspect")
 
 
 func _a_malformed_action_is_skipped() -> void:
@@ -144,7 +152,7 @@ func _a_malformed_action_is_skipped() -> void:
 
 	var options := WorldView.options_for(broken)
 
-	_expect(options.size() == 1, "junk entries are skipped")
+	_expect(options.size() == 2, "junk entries are skipped, Inspect stays")
 	_expect(str(options[0]["command"]) == "get Mutant Raider corpse",
 			"and the good one survives")
 

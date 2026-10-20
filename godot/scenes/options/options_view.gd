@@ -105,6 +105,7 @@ var _smooth_movement_check: CheckBox
 var _camera_keys_check: CheckBox
 var _hide_roofs_check: CheckBox
 var _walk_path_check: CheckBox
+var _performance_check: CheckBox
 
 ## Set while pushing values INTO the widgets, so their value_changed does not
 ## write straight back and fight the update that is in progress.
@@ -195,6 +196,13 @@ func _add_panes_section(column: VBoxContainer) -> void:
 	column.add_child(_world_check)
 	_inventory_check = _check("Inventory and equipment")
 	column.add_child(_inventory_check)
+
+	# The frame rate and the server tick, as graphs over the world. Off by
+	# default. The console also asks the server for the tick channel while
+	# this is on. See ClientSettings.DEFAULT_SHOW_PERFORMANCE.
+	_performance_check = _check("Performance graphs")
+	_performance_check.tooltip_text = "Frame rate, frame time, and the server tick."
+	column.add_child(_performance_check)
 
 	# The one way into the layout editor. The layout is locked outside it.
 	var edit_layout := Button.new()
@@ -330,6 +338,7 @@ func _connect_controls() -> void:
 	_camera_keys_check.toggled.connect(_on_camera_keys_toggled)
 	_hide_roofs_check.toggled.connect(_on_hide_roofs_toggled)
 	_walk_path_check.toggled.connect(_on_walk_path_toggled)
+	_performance_check.toggled.connect(_on_performance_toggled)
 
 
 func _sync() -> void:
@@ -354,6 +363,7 @@ func _sync() -> void:
 	_camera_keys_check.button_pressed = _settings.camera_relative_keys
 	_hide_roofs_check.button_pressed = _settings.hide_roofs
 	_walk_path_check.button_pressed = _settings.show_walk_path
+	_performance_check.button_pressed = _settings.show_performance
 	_syncing = false
 
 
@@ -425,6 +435,13 @@ func _on_hide_roofs_toggled(pressed: bool) -> void:
 		return
 
 	_settings.set_hide_roofs(pressed)
+
+
+func _on_performance_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_show_performance(pressed)
 
 
 func _on_walk_path_toggled(pressed: bool) -> void:

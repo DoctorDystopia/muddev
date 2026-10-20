@@ -191,6 +191,11 @@ static func set_shape_value(look: Dictionary, part_name: String, shape_index: in
 	return FigureShapeEdits.set_shape_value(look, part_name, shape_index, field, value)
 
 
+static func set_shape_place(look: Dictionary, part_name: String, shape_index: int,
+		xform: Transform3D) -> String:
+	return FigureShapeEdits.set_shape_place(look, part_name, shape_index, xform)
+
+
 # ─── A look ─────────────────────────────────────────────────────────────────
 
 static func mannequin(rig: FigureRig, girth := 1.0) -> FigureLook:

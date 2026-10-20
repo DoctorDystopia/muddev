@@ -27,6 +27,8 @@ extends Node
 ## 11. The figure set reads each entry, and a bad entry stays out.
 ## 12. The served `figure.json` of the repository holds each rig and each
 ##     worn look of the repository.
+## 13. The whole model of a file is one mesh in the unit box (10/17/2026).
+##     It keeps each surface and each material of its nodes.
 
 const TOLERANCE := 0.001
 const SAMPLES := 8
@@ -58,6 +60,7 @@ func _ready() -> void:
 	await _a_chainbody_hides_the_torso_and_the_arms()
 	_the_figure_set_reads()
 	_the_served_figure_set_is_the_repository()
+	_the_whole_model_is_in_the_unit_box()
 	_remove_scratch(_scratch)
 
 	if _failures > 0:
@@ -550,6 +553,41 @@ func _the_served_figure_set_is_the_repository() -> void:
 		_expect(FigureBuilder.part_nodes(figure).size() > 0,
 			"a figure of %s stands from the served figure set" % rig_key)
 		figure.free()
+
+
+func _the_whole_model_is_in_the_unit_box() -> void:
+	var rig := _rig()
+	var body := FigureEdits.mannequin(rig)
+	var models := FigureModels.new()
+	var surfaces := 0
+	var roles := {}
+
+	_expect(models.put_buffer("ref", FigureReference.buffer_of(rig, [body])),
+		"the reference body reads as a model")
+
+	for node_name: String in models.node_names("ref"):
+		for role: String in models.material_names("ref", node_name):
+			roles[role] = true
+			surfaces += 1
+
+	var whole := models.instance_of("ref", FigureModels.WHOLE_MODEL)
+	var box := AABB() if whole == null else whole.mesh.get_aabb()
+	var longest := maxf(box.size.x, maxf(box.size.y, box.size.z))
+
+	_expect(whole != null and models.has_node("ref", FigureModels.WHOLE_MODEL)
+		and not FigureModels.WHOLE_MODEL in models.node_names("ref"),
+		"the whole model is a node of each model, and no node of the file")
+	_expect(is_equal_approx(longest, FigureModels.UNIT) and box.get_center().length() < TOLERANCE,
+		"the whole model is in the unit box: %s" % [box])
+	_expect(whole != null and whole.mesh.get_surface_count() == surfaces
+		and Array(models.material_names("ref", FigureModels.WHOLE_MODEL)).all(
+			func(role: String) -> bool: return roles.has(role)),
+		"the whole model keeps each surface and each material of its nodes")
+	_expect(models.instance_of("none", FigureModels.WHOLE_MODEL) == null,
+		"a model that is not there has no whole model")
+
+	if whole != null:
+		whole.free()
 
 
 ## Delete the scratch tree of this test: files first, then directories.

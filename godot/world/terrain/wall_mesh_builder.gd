@@ -43,6 +43,11 @@ extends RefCounted
 ## Each tile has one wall style: a server fact in the chunk file. The style
 ## gives the colour of the walls of the tile ([WallPalette]) and their height
 ## with nothing above them. A style on a tile with no wall bit draws nothing.
+##
+## ## The lamp light (10/18/2026)
+##
+## The lamps that reach the chunk bake into each vertex, as on the ground
+## ([TileLights]). A face toward a lamp lights up. A face away stays dark.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -79,48 +84,46 @@ class _Surface:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var lamp := PackedFloat32Array()
 
 
 ## The wall mesh of one chunk. A chunk with no wall gives a mesh with no
 ## surface. `above` is the chunk of the same coordinates on the plane above,
-## or null. With `down`, every wall is [constant DOWN_HEIGHT] tall and meets
-## no floor: the "walls down" view of the editor.
+## or null. `down` gives the "walls down" view of the editor. Then every
+## wall is [constant DOWN_HEIGHT] tall and meets no floor. `lights` is the
+## lamps that reach the chunk, from [method TileLights.collect].
 static func build(chunk: ChunkFile, above: ChunkFile = null,
-		down: bool = false) -> ArrayMesh:
+		down: bool = false, lights: Array = []) -> ArrayMesh:
 	var size: int = _Const.CHUNK_SIZE
 	var out := _Surface.new()
 	var origin := Vector2i(chunk.cx, chunk.cy) * size
 	var wells := _stairwell(chunk, above)
+	var buckets := TileLights.bucket(chunk, lights)
 
 	for ly: int in size:
 		for lx: int in size:
-			var flag := chunk.flags[ly * size + lx]
+			var index := ly * size + lx
+			var flag := chunk.flags[index]
 
 			if flag & _Const.TILE_FLAGS_WALLS == 0:
 				continue
 
 			var style := chunk.wall_style_name(lx, ly)
 			var height := DOWN_HEIGHT if down else height_of(style)
-			var covered := _has_floor(above, ly * size + lx) \
+			var covered := _has_floor(above, index) \
 				or wells.has(origin + Vector2i(lx, ly))
 			var ceiling := above if not down and covered else null
+			var tile_lights: Array = buckets.get(index, [])
 
 			for wall: Array in _WALLS:
 				if flag & wall[0]:
-					_add_wall(chunk, ceiling, Vector2i(lx, ly), wall, height, style, out)
+					_add_wall(chunk, ceiling, Vector2i(lx, ly), wall, height, style,
+						tile_lights, out)
 
 	var mesh := ArrayMesh.new()
 
-	if out.vertices.is_empty():
-		return mesh
-
-	var arrays := []
-
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = out.vertices
-	arrays[Mesh.ARRAY_NORMAL] = out.normals
-	arrays[Mesh.ARRAY_COLOR] = out.colors
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	TerrainMaterial.add_surface(mesh,
+		TerrainMaterial.arrays_of(out.vertices, out.normals, out.colors, out.lamp))
 
 	return mesh
 
@@ -170,9 +173,11 @@ static func _stairwell(chunk: ChunkFile, above: ChunkFile) -> Dictionary:
 
 ## Add the five faces of one slab: two sides, two ends, and the top. `wall`
 ## is a row of [constant _WALLS]. `ceiling` is the chunk above when its tile
-## has a floor, else null. `style` is the wall style of the tile.
+## has a floor, else null. `style` is the wall style of the tile. `lights`
+## is the lamps that reach the tile.
 static func _add_wall(chunk: ChunkFile, ceiling: ChunkFile, tile: Vector2i,
-		wall: Array, height: float, style: String, out: _Surface) -> void:
+		wall: Array, height: float, style: String, lights: Array,
+		out: _Surface) -> void:
 	var start: Vector2i = tile + wall[1]
 	var end: Vector2i = tile + wall[2]
 	var sink := Vector3.DOWN * SINK
@@ -191,12 +196,12 @@ static func _add_wall(chunk: ChunkFile, ceiling: ChunkFile, tile: Vector2i,
 	var side := FloorPalette.shade(WallPalette.side_color(style), amount)
 	var top := FloorPalette.shade(WallPalette.top_color(style), amount)
 
-	_add_quad([outer_a, outer_b, outer_b + up_b, outer_a + up_a], core, side, out)
-	_add_quad([inner_a, inner_b, inner_b + up_b, inner_a + up_a], core, side, out)
-	_add_quad([outer_a, inner_a, inner_a + up_a, outer_a + up_a], core, side, out)
-	_add_quad([outer_b, inner_b, inner_b + up_b, outer_b + up_b], core, side, out)
+	_add_quad([outer_a, outer_b, outer_b + up_b, outer_a + up_a], core, side, lights, out)
+	_add_quad([inner_a, inner_b, inner_b + up_b, inner_a + up_a], core, side, lights, out)
+	_add_quad([outer_a, inner_a, inner_a + up_a, outer_a + up_a], core, side, lights, out)
+	_add_quad([outer_b, inner_b, inner_b + up_b, outer_b + up_b], core, side, lights, out)
 	_add_quad([outer_a + up_a, outer_b + up_b, inner_b + up_b, inner_a + up_a],
-		core, top, out)
+		core, top, lights, out)
 
 
 ## How far one end of a wall rises over its sunk base `base_y`, in world
@@ -224,16 +229,17 @@ static func _tile_centre(chunk: ChunkFile, tile: Vector2i, y: float) -> Vector3:
 
 ## Add a quad of four corners in ring order as two triangles, each with its
 ## front away from `core`, the middle of the slab.
-static func _add_quad(ring: Array, core: Vector3, color: Color,
+static func _add_quad(ring: Array, core: Vector3, color: Color, lights: Array,
 		out: _Surface) -> void:
-	_add_triangle(ring[0], ring[1], ring[2], core, color, out)
-	_add_triangle(ring[0], ring[2], ring[3], core, color, out)
+	_add_triangle(ring[0], ring[1], ring[2], core, color, lights, out)
+	_add_triangle(ring[0], ring[2], ring[3], core, color, lights, out)
 
 
 ## Add one triangle with its front away from `core`. As in
-## [ChunkMeshBuilder], (c - a) x (b - a) points out of the front.
+## [ChunkMeshBuilder], (c - a) x (b - a) points out of the front. Each
+## corner takes the lamp light of `lights` at its place.
 static func _add_triangle(a: Vector3, b: Vector3, c: Vector3, core: Vector3,
-		color: Color, out: _Surface) -> void:
+		color: Color, lights: Array, out: _Surface) -> void:
 	var normal := (c - a).cross(b - a)
 	var outward := (a + b + c) / 3.0 - core
 
@@ -250,3 +256,4 @@ static func _add_triangle(a: Vector3, b: Vector3, c: Vector3, core: Vector3,
 		out.vertices.append(corner)
 		out.normals.append(normal)
 		out.colors.append(color)
+		TileLights.append(out.lamp, TileLights.lit(corner, normal, lights))

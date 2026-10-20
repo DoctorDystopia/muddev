@@ -29,6 +29,9 @@ extends RefCounted
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
+## The tab number of the main view, which shows every tab.
+const MAIN_VIEW := 0
+
 ## Fired when a snapshot lands, so a view redraws from one place.
 signal changed
 
@@ -51,6 +54,7 @@ var status := ""
 ## at. `searchable` asks for a search box. `drag` maps a drop kind to a
 ## command template. A vault row also carries `tab`, `drag_key` and
 ## `placeholder`. [method row_groups] decides which rows show.
+## [method group_heading] gives the text over each group.
 var grids: Array = []
 
 ## [{label, command, template, input, active}] — the 1 / 5 / 10 / X / All row.
@@ -224,6 +228,7 @@ func _tabs(raw: Variant) -> Array:
 			"family": str(entry.get("family", "")),
 			"active": bool(entry.get("active", false)),
 			"drop_key": str(entry.get("drop_key", "")),
+			"heading": str(entry.get("heading", "")),
 			"actions": _actions(entry.get("actions", [])),
 		})
 
@@ -283,13 +288,37 @@ func row_groups(grid_index: int, search: String) -> Array:
 
 		var tab := int(row.get("tab", 0))
 
-		if view != 0 and tab != view:
+		if view != MAIN_VIEW and tab != view:
 			continue
 
 		_add_to_group(groups, row, last_tab, tab)
 		last_tab = tab
 
 	return groups
+
+
+## The text over one group of [method row_groups], or "" for none.
+##
+## Only the main view names its groups. One group there is one tab, and the
+## text is the `heading` the server sent on the button of that tab. A tab view
+## and a search show one group, and the tab bar or the search box already says
+## what it holds. The server sends "" for a section that needs no name.
+func group_heading(grid_index: int, search: String, group: Array) -> String:
+	if not is_filtered(grid_index) or group.is_empty():
+		return ""
+
+	var entry: Dictionary = grids[grid_index]
+
+	if int(entry["view"]) != MAIN_VIEW or not search.strip_edges().is_empty():
+		return ""
+
+	var tab := int((group[0] as Dictionary).get("tab", MAIN_VIEW))
+
+	for button: Dictionary in entry["tabs"]:
+		if int(button["index"]) == tab:
+			return str(button["heading"])
+
+	return ""
 
 
 ## Put one row in the last group, or in a new group when its tab differs.

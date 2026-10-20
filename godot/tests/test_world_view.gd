@@ -58,8 +58,17 @@ func _ready() -> void:
 	_the_hover_names_what_a_left_click_does()
 	_the_hover_counts_the_other_menu_rows()
 	_an_entity_that_affords_nothing_hovers_as_its_name()
+	_every_entity_offers_inspect_last()
+	_the_inspect_row_is_never_walked_to()
+	_an_entity_with_no_verb_inspects()
+	_an_inspect_row_the_server_sent_is_not_doubled()
+	_a_row_with_no_dbref_has_no_inspect()
 	_a_tile_hovers_as_its_menu_row()
 	_a_tile_with_no_action_hovers_as_nothing()
+	_facing_a_point_turns_the_front_to_it()
+	_facing_agrees_with_the_walk()
+	_facing_your_own_spot_keeps_the_yaw()
+	_a_foe_above_is_faced_along_the_ground()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -177,6 +186,8 @@ func _a_diagonal_splits_its_two_cardinals() -> void:
 
 
 # ─── Approach ────────────────────────────────────────────────────────────────
+
+const Const := preload("res://autoload/blackout_constants.gd")
 
 const POLE_COMMAND := "cut rusty pole"
 # A dbref, because that is how the server names a target that has to be
@@ -333,13 +344,101 @@ func _the_hover_counts_the_other_menu_rows() -> void:
 		WorldView.ONE_MORE_OPTION_TEXT), "one other row reads as singular")
 
 
-## Another player affords nothing. A click there does nothing, but the bar still
-## names who it is.
+## A row with no dbref affords nothing, not even Inspect. A click there does
+## nothing, but the bar still names what it is.
 func _an_entity_that_affords_nothing_hovers_as_its_name() -> void:
 	var player := {"name": "Nick", "interact": ""}
 
 	_expect(WorldView.entity_hover_text(player) == "Nick",
 		"an entity with no action hovers as its name")
+
+
+# ─── Inspect ─────────────────────────────────────────────────────────────────
+
+## Every entity with a dbref offers Inspect, LAST, after whatever the server
+## named. Asserted by what the command must carry, the dbref, and against the
+## server's own template, which the generated constants hold.
+func _every_entity_offers_inspect_last() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+	pole["id"] = 75931.0
+
+	var rows := WorldView.options_for(pole)
+	var last: Dictionary = rows[rows.size() - 1]
+
+	_expect(rows.size() == 2, "the verb of the server, then Inspect")
+	_expect(str(rows[0]["command"]) == POLE_COMMAND,
+		"the verb of the server stays first")
+	_expect(str(last["command"]) == WorldView.inspect_command(pole),
+		"Inspect is the last row")
+	_expect(str(last["command"]).contains("75931"),
+		"the Inspect row carries the dbref")
+	_expect(str(last["command"]).begins_with(
+		Const.ENTITY_INSPECT_TEMPLATE.split(" ")[0]),
+		"the Inspect row sends the verb of the server")
+
+	var raider := {
+		"name": "Mutant Raider",
+		"id": 75931.0,
+		"interact": RAIDER_COMMAND,
+		"actions": [
+			{"label": "Attack", "command": RAIDER_COMMAND},
+			{"label": "Talk", "command": "talk"}],
+	}
+	var raider_rows := WorldView.options_for(raider)
+
+	_expect(raider_rows.size() == 3, "a listed entity gets Inspect too")
+	_expect(str(raider_rows[2]["command"]) == WorldView.inspect_command(raider),
+		"and it is last there too")
+
+
+## Inspect reads from where the player stands, at any distance the server
+## draws. So the row is never wrapped in the walk.
+func _the_inspect_row_is_never_walked_to() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+	pole["id"] = 75931.0
+
+	var rows := WorldView.approach_options(WorldView.options_for(pole), pole,
+		HERE, HERE_Z)
+	var last: Dictionary = rows[rows.size() - 1]
+
+	_expect(str(last["command"]) == WorldView.inspect_command(pole),
+		"a far entity is inspected from here")
+	_expect(not WorldView.walks_there(WorldView.options_for(pole)[1]),
+		"and the row says so")
+
+
+## An entity the server named no verb for still inspects. The hover bar names
+## that row, and a left click sends it.
+func _an_entity_with_no_verb_inspects() -> void:
+	var player := {"name": "Nick", "id": 12.0, "interact": ""}
+	var rows := WorldView.options_for(player)
+
+	_expect(rows.size() == 1, "Inspect is the one row")
+	_expect(WorldView.entity_hover_text(player) == ChooseOption.row_text(rows[0]),
+		"the hover text is the Inspect row")
+	_expect(WorldView.entity_hover_text(player).begins_with("Inspect Nick"),
+		"and it reads as Inspect: %s" % WorldView.entity_hover_text(player))
+
+
+## A server that lists Inspect itself one day does not get a second row.
+func _an_inspect_row_the_server_sent_is_not_doubled() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+	pole["id"] = 75931.0
+	pole["actions"] = [
+		{"label": "Cut", "command": POLE_COMMAND},
+		{"label": "Inspect", "command": WorldView.inspect_command(pole)}]
+
+	var rows := WorldView.options_for(pole)
+
+	_expect(rows.size() == 2, "the row of the server is the Inspect row")
+	_expect(str(rows[1]["label"]) == "Inspect",
+		"and it keeps the label of the server")
+
+
+## A row with no dbref gets no Inspect command.
+func _a_row_with_no_dbref_has_no_inspect() -> void:
+	_expect(WorldView.inspect_command({"name": "Nick"}).is_empty(),
+		"no dbref, no Inspect")
 
 
 func _a_tile_hovers_as_its_menu_row() -> void:
@@ -351,6 +450,60 @@ func _a_tile_hovers_as_its_menu_row() -> void:
 func _a_tile_with_no_action_hovers_as_nothing() -> void:
 	_expect(WorldView.tile_hover_text({}).is_empty(),
 		"a tile the server named no action for shows no text")
+
+
+# ─── Facing a foe ────────────────────────────────────────────────────────────
+
+## The same relationship as the walk case, for a point: after the turn, the
+## front of the model points from the one figure to the other. Eight points
+## round a figure, on and off the axes.
+func _facing_a_point_turns_the_front_to_it() -> void:
+	var me := Vector3(2.0, 0.0, -3.0)
+
+	for direction: String in STEPS:
+		var step: Vector2i = STEPS[direction]
+		# A world offset, so the Z term is already flipped: a step north is
+		# a step to -Z.
+		var foe := me + Vector3(float(step.x), 0.0, float(-step.y)) * 0.37
+		var yaw := WorldView.yaw_facing(me, foe, 0.0)
+		var front := AUTHORED_FRONT.rotated(Vector3.UP, yaw)
+		var line := (foe - me).normalized()
+
+		_expect(front.distance_to(line) < 0.001,
+			"facing a foe to the %s points the front at it" % direction)
+
+
+## A foe one step away, and a step to that foe, turn the figure one way.
+## Two routines with one job cannot disagree.
+func _facing_agrees_with_the_walk() -> void:
+	for direction: String in STEPS:
+		var step: Vector2i = STEPS[direction]
+		var walk := WorldView.yaw_towards(Vector2i.ZERO, step, 0.0)
+		var foe := Vector3(float(step.x), 0.0, float(-step.y))
+		var faced := WorldView.yaw_facing(Vector3.ZERO, foe, 0.0)
+
+		_expect(is_zero_approx(angle_difference(walk, faced)),
+			"a foe to the %s is faced the way a step there turns" % direction)
+
+
+func _facing_your_own_spot_keeps_the_yaw() -> void:
+	var spot := Vector3(1.0, 0.0, 1.0)
+
+	_expect(is_equal_approx(WorldView.yaw_facing(spot, spot, 1.25), 1.25),
+		"a foe on the same point keeps the yaw")
+
+
+## Only the ground plane counts. A raider on the roof above is faced along
+## the ground, and a raider straight above keeps the yaw.
+func _a_foe_above_is_faced_along_the_ground() -> void:
+	var me := Vector3.ZERO
+	var up_and_east := Vector3(1.0, 4.0, 0.0)
+	var east := WorldView.yaw_facing(me, Vector3(1.0, 0.0, 0.0), 0.0)
+
+	_expect(is_equal_approx(WorldView.yaw_facing(me, up_and_east, 0.0), east),
+		"a foe above and to the east is faced east")
+	_expect(is_equal_approx(WorldView.yaw_facing(me, Vector3(0.0, 4.0, 0.0), 1.25), 1.25),
+		"a foe straight above keeps the yaw")
 
 
 # ─── Harness ─────────────────────────────────────────────────────────────────

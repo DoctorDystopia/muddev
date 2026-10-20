@@ -18,3 +18,7 @@ Description: The structured state feed — a machine-readable side-channel that
 # Imported for its side effect: buffer registers the tick-phase hooks that
 # bracket its per-tick coalescing window.
 from . import buffer  # noqa: E402,F401
+
+# Imported for its side effect: performance registers the PHASE_END hook
+# that sends one reading of the tick to each session that asked for it.
+from . import performance  # noqa: E402,F401

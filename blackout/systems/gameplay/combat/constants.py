@@ -312,6 +312,21 @@ AURA_DEFAULT_TICK_INTERVAL: int = 4
 # differs, so this is a pure retune knob.
 AURA_DISTANCE_METRIC: str = "euclidean"
 
+# The tip sentence of an aura that burns its caster. BaseAura.cost fills in
+# self_burn_pct as a percent, so the tip and the burn cannot disagree.
+# Player-facing text, so the voice stays.
+AURA_SELF_BURN_COST_TEMPLATE: str = "Burns you for {percent:g}% of your max HP each pulse."
+
+# The `aura` command: its key, and the argument that puts the active aura
+# out. Here, not in commands/combat_cmds.py, because the ability detail
+# (auras/detail.py) composes the whole line of each ability row from them,
+# and the command module imports the aura package. The template fills in
+# the aura NAME, because find_aura reads a name or a key.
+AURA_COMMAND_KEY: str = "aura"
+AURA_OFF_ARG: str = "off"
+AURA_IGNITE_TEMPLATE: str = f"{AURA_COMMAND_KEY} {{name}}"
+AURA_EXTINGUISH_COMMAND: str = f"{AURA_COMMAND_KEY} {AURA_OFF_ARG}"
+
 
 # ─── Combat level ────────────────────────────────────────────────────────────
 # Blackout's derived "how tough is this combatant" number, ported from OSRS:

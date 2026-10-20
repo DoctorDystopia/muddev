@@ -268,6 +268,20 @@ static func scenery_of(kind: String) -> String:
 	return _Const.OBJECT_KIND_SCENERY.get(kind, "")
 
 
+## Every scenery key that some object kind names, each one time, in the
+## order of the kinds. The Look tab lists them for a light ([LightLook]).
+static func scenery_keys() -> PackedStringArray:
+	var found := PackedStringArray()
+
+	for kind: String in object_kinds():
+		var key := scenery_of(kind)
+
+		if not key.is_empty() and not found.has(key):
+			found.append(key)
+
+	return found
+
+
 ## The tiles of the flight of a climb kind, or 0 for a ladder and every
 ## other kind. A climb is a Python row, so the constants hold it.
 static func climb_run(kind: String) -> int:

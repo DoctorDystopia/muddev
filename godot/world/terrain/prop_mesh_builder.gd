@@ -33,19 +33,31 @@ extends RefCounted
 ## - A crate, a table, and a lamp post are decor (DESIGN-0013 Phase S4). A
 ##   crate and a table stand on the centre of the tile. A table is wider
 ##   than it is deep. The arm of a lamp post reaches toward the front.
+## - An oil lamp and a torch are decor too (10/18/2026). The oil lamp is a
+##   small lamp with a glass chimney, on the ground of its tile. A tile
+##   holds one decor, so the nudge of its look puts it on a table beside
+##   it. The torch is a metal pole with a cup and a flame on top. The glass
+##   and the flame glow with the light of their rows.
 ##
 ## ## A new primitive
 ##
 ## A primitive of the server with no shape here draws a plain post, so new
 ## content needs no client edit. A shape here that the server does not name
 ## is a bug. `test_prop_mesh.gd` checks both lists.
+##
+## ## The lamp light (10/18/2026)
+##
+## The lamps that reach the chunk bake into each vertex, as on the ground
+## ([TileLights]). The lamp of a lamp post glows with the light of its row
+## ([LightLook]), so the bulb shows the colour that it gives off.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
 ## Every primitive that this class draws with its own shape.
 const SHAPES := [_Const.SCENERY_LADDER, _Const.SCENERY_STAIRS,
 	_Const.SCENERY_HATCH, _Const.SCENERY_STAIRS_TOP, _Const.SCENERY_CRATE,
-	_Const.SCENERY_TABLE, _Const.SCENERY_LAMP_POST]
+	_Const.SCENERY_TABLE, _Const.SCENERY_LAMP_POST, _Const.SCENERY_OIL_LAMP,
+	_Const.SCENERY_TORCH]
 
 ## How high a ladder and a flight of stairs rise: one plane. The terrain
 ## editor starts a new plane 32 height steps up (TerrainWorld.NEW_PLANE_RISE),
@@ -112,6 +124,26 @@ const LAMP_LAMP_HEIGHT := 0.1
 const LAMP_BASE_SIZE := 0.2
 const LAMP_BASE_HEIGHT := 0.06
 
+## The oil lamp. The base has a side and a height. The reservoir sits on
+## it, with a side and a height. The glass chimney stands on the
+## reservoir, with a side and a height. The whole is small, for a table.
+const OIL_LAMP_BASE_SIZE := 0.16
+const OIL_LAMP_BASE_HEIGHT := 0.03
+const OIL_LAMP_BODY_SIZE := 0.12
+const OIL_LAMP_BODY_HEIGHT := 0.1
+const OIL_LAMP_GLASS_SIZE := 0.08
+const OIL_LAMP_GLASS_HEIGHT := 0.18
+
+## The torch. The pole has a side and a height. The cup sits on the pole,
+## with a side and a height. The flame rises out of the cup, with a side
+## and a height.
+const TORCH_POLE_SIZE := 0.05
+const TORCH_HEIGHT := 1.2
+const TORCH_CUP_SIZE := 0.14
+const TORCH_CUP_HEIGHT := 0.1
+const TORCH_FLAME_SIZE := 0.08
+const TORCH_FLAME_HEIGHT := 0.16
+
 ## The post of a primitive with no shape here: its side and its height.
 const POST_SIZE := 0.15
 const POST_HEIGHT := 1.0
@@ -123,15 +155,20 @@ class _Surface:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var lamp := PackedFloat32Array()
 
 
 ## Where one shape stands. The origin is the ground point of the tile
 ## centre, with the nudge of its look. The basis is the turn of its object,
 ## with the tilt and the scale of its look. The run is that of its kind.
+## The lights are the lamps that reach the tile, and the glow is the light
+## that the shape itself gives off: black for every shape but a lamp.
 class _Place:
 	var origin: Vector3
 	var basis: Basis
 	var run := 0
+	var lights: Array = []
+	var glow := Color.BLACK
 
 	## The direction of a local normal under the basis, with the scale
 	## taken out.
@@ -140,30 +177,41 @@ class _Place:
 
 
 ## The primitive mesh of one chunk. A chunk with no primitive gives a mesh
-## with no surface.
-static func build(chunk: ChunkFile) -> ArrayMesh:
+## with no surface. `lights` is the lamps that reach the chunk, from
+## [method TileLights.collect].
+static func build(chunk: ChunkFile, lights: Array = []) -> ArrayMesh:
 	var out := _Surface.new()
+	var buckets := TileLights.bucket(chunk, lights)
 
 	for thing: Dictionary in chunk.objects:
 		var shape := primitive_of(thing["kind"])
 
-		if not shape.is_empty():
-			_add_shape(shape, _place(chunk, thing), out)
+		if shape.is_empty():
+			continue
+
+		var place := _place(chunk, thing)
+
+		place.lights = buckets.get(thing["y"] * _Const.CHUNK_SIZE + thing["x"], [])
+		place.glow = _glow_of(shape)
+		_add_shape(shape, place, out)
 
 	var mesh := ArrayMesh.new()
 
-	if out.vertices.is_empty():
-		return mesh
-
-	var arrays := []
-
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = out.vertices
-	arrays[Mesh.ARRAY_NORMAL] = out.normals
-	arrays[Mesh.ARRAY_COLOR] = out.colors
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	TerrainMaterial.add_surface(mesh,
+		TerrainMaterial.arrays_of(out.vertices, out.normals, out.colors, out.lamp))
 
 	return mesh
+
+
+## The light that a shape gives off: the glow of its row in [LightLook], or
+## black for a shape with no light.
+static func _glow_of(shape: String) -> Color:
+	var row := LightLook.light_of(shape)
+
+	if not LightLook.is_lit(row):
+		return Color.BLACK
+
+	return LightLook.glow_of(row)
 
 
 ## The primitive of an object kind, or "" when its scenery is a model or it
@@ -258,6 +306,10 @@ static func _add_shape(shape: String, place: _Place, out: _Surface) -> void:
 		_add_table(place, out)
 	elif shape == _Const.SCENERY_LAMP_POST:
 		_add_lamp_post(place, out)
+	elif shape == _Const.SCENERY_OIL_LAMP:
+		_add_oil_lamp(place, out)
+	elif shape == _Const.SCENERY_TORCH:
+		_add_torch(place, out)
 	else:
 		var half := POST_SIZE * 0.5
 
@@ -393,15 +445,50 @@ static func _add_lamp_post(place: _Place, out: _Surface) -> void:
 	_add_box(place, Vector3(-arm, arm_low, -LAMP_ARM - lamp), Vector3(arm, LAMP_HEIGHT, -pole),
 		color, out)
 	_add_box(place, Vector3(-lamp, arm_low - LAMP_LAMP_HEIGHT, -LAMP_ARM - lamp),
-		Vector3(lamp, arm_low, -LAMP_ARM + lamp), FloorPalette.prop("lamp"), out)
+		Vector3(lamp, arm_low, -LAMP_ARM + lamp), FloorPalette.prop("lamp"), out,
+		place.glow)
+
+
+## A small base, a reservoir on it, and a glass chimney that glows, on the
+## centre of the tile.
+static func _add_oil_lamp(place: _Place, out: _Surface) -> void:
+	var base := OIL_LAMP_BASE_SIZE * 0.5
+	var body := OIL_LAMP_BODY_SIZE * 0.5
+	var glass := OIL_LAMP_GLASS_SIZE * 0.5
+	var body_top := OIL_LAMP_BASE_HEIGHT + OIL_LAMP_BODY_HEIGHT
+	var color := FloorPalette.prop("oil_lamp")
+
+	_add_box(place, Vector3(-base, -SINK, -base), Vector3(base, OIL_LAMP_BASE_HEIGHT, base),
+		color, out)
+	_add_box(place, Vector3(-body, OIL_LAMP_BASE_HEIGHT, -body), Vector3(body, body_top, body),
+		color, out)
+	_add_box(place, Vector3(-glass, body_top, -glass),
+		Vector3(glass, body_top + OIL_LAMP_GLASS_HEIGHT, glass),
+		FloorPalette.prop("oil_lamp_glass"), out, place.glow)
+
+
+## A metal pole with a cup on top, and a flame that glows out of the cup.
+static func _add_torch(place: _Place, out: _Surface) -> void:
+	var pole := TORCH_POLE_SIZE * 0.5
+	var cup := TORCH_CUP_SIZE * 0.5
+	var flame := TORCH_FLAME_SIZE * 0.5
+	var cup_low := TORCH_HEIGHT - TORCH_CUP_HEIGHT
+	var color := FloorPalette.prop("torch")
+
+	_add_box(place, Vector3(-pole, -SINK, -pole), Vector3(pole, cup_low, pole), color, out)
+	_add_box(place, Vector3(-cup, cup_low, -cup), Vector3(cup, TORCH_HEIGHT, cup), color, out)
+	_add_box(place, Vector3(-flame, TORCH_HEIGHT, -flame),
+		Vector3(flame, TORCH_HEIGHT + TORCH_FLAME_HEIGHT, flame),
+		FloorPalette.prop("torch_flame"), out, place.glow)
 
 
 # ─── Boxes ──────────────────────────────────────────────────────────────────
 
 ## Add the six faces of a box from `low` to `high`, local corners before the
-## turn. The top face is lighter, so the shape reads from above.
+## turn. The top face is lighter, so the shape reads from above. `glow` is
+## the light that the box itself gives off, for the lamp of a lamp post.
 static func _add_box(place: _Place, low: Vector3, high: Vector3, color: Color,
-		out: _Surface) -> void:
+		out: _Surface, glow := Color.BLACK) -> void:
 	var corners: Array[Vector3] = []
 
 	for index: int in 8:
@@ -414,18 +501,19 @@ static func _add_box(place: _Place, low: Vector3, high: Vector3, color: Color,
 
 	# Each face: its four corner indexes in ring order, and its local normal.
 	# The top and the bottom turn with the tilt too.
-	_add_quad(corners, [0, 1, 3, 2], place.normal(Vector3.FORWARD), color, out)
-	_add_quad(corners, [4, 5, 7, 6], place.normal(Vector3.BACK), color, out)
-	_add_quad(corners, [0, 2, 6, 4], place.normal(Vector3.LEFT), color, out)
-	_add_quad(corners, [1, 3, 7, 5], place.normal(Vector3.RIGHT), color, out)
-	_add_quad(corners, [0, 1, 5, 4], place.normal(Vector3.DOWN), color, out)
-	_add_quad(corners, [2, 3, 7, 6], place.normal(Vector3.UP), top, out)
+	_add_quad(corners, [0, 1, 3, 2], place.normal(Vector3.FORWARD), color, place, glow, out)
+	_add_quad(corners, [4, 5, 7, 6], place.normal(Vector3.BACK), color, place, glow, out)
+	_add_quad(corners, [0, 2, 6, 4], place.normal(Vector3.LEFT), color, place, glow, out)
+	_add_quad(corners, [1, 3, 7, 5], place.normal(Vector3.RIGHT), color, place, glow, out)
+	_add_quad(corners, [0, 1, 5, 4], place.normal(Vector3.DOWN), color, place, glow, out)
+	_add_quad(corners, [2, 3, 7, 6], place.normal(Vector3.UP), top, place, glow, out)
 
 
 ## Add a quad as two triangles, each with its front along `outward`. As in
-## [ChunkMeshBuilder], (c - a) x (b - a) points out of the front.
+## [ChunkMeshBuilder], (c - a) x (b - a) points out of the front. Each
+## corner takes the lamp light of the place at its point, plus `glow`.
 static func _add_quad(corners: Array[Vector3], ring: Array, outward: Vector3,
-		color: Color, out: _Surface) -> void:
+		color: Color, place: _Place, glow: Color, out: _Surface) -> void:
 	var a := corners[ring[0]]
 	var b := corners[ring[1]]
 	var c := corners[ring[2]]
@@ -441,3 +529,4 @@ static func _add_quad(corners: Array[Vector3], ring: Array, outward: Vector3,
 		out.vertices.append(corner)
 		out.normals.append(outward)
 		out.colors.append(color)
+		TileLights.append(out.lamp, glow + TileLights.lit(corner, outward, place.lights))

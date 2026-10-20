@@ -279,7 +279,7 @@ def _target_name(observer, target_id) -> str:
 
 # ─── Private helper routines: measurement ────────────────────────────────────
 
-def _late_threshold() -> float:
+def late_threshold() -> float:
     """Return the interval above which a tick counts as late."""
     threshold = const.TICK_SECONDS * const.TICK_DEBUG_LATE_TICK_FACTOR
 
@@ -321,7 +321,7 @@ def _interval_stats(engine) -> dict:
         return empty
 
     samples = list(recorded)
-    threshold = _late_threshold()
+    threshold = late_threshold()
     total = sum(samples)
     peak = max(samples)
     late = 0
@@ -714,7 +714,7 @@ def after_tick(engine) -> None:
         return
 
     interval = engine.ndb.tick_interval or 0.0
-    threshold = _late_threshold()
+    threshold = late_threshold()
     is_late = interval > threshold
     retired = []
 

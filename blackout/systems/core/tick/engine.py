@@ -54,12 +54,16 @@ TICK_ENGINE_KEY = "blackout_tick_engine"
 # The engine drives the game's heartbeat; it must not know which systems care
 # that a tick started, or it stops being infrastructure and becomes a hub.
 #
-# START fires after inbound actions are applied and before any handler runs;
-# FEED fires last, once everything that could change state has.
+# START fires after the engine applies the inbound actions, and before the
+# first handler runs. FEED fires after the last change of state. END fires
+# after the engine records the duration of the tick. A hook on END is outside
+# the measurement. Thus, a monitor adds no cost to the number that it reports.
+# systems/interface/statefeed/performance.py is the one user of END.
 PHASE_START = "start"
 PHASE_FEED = "feed"
+PHASE_END = "end"
 
-_PHASE_HOOKS: dict = {PHASE_START: [], PHASE_FEED: []}
+_PHASE_HOOKS: dict = {PHASE_START: [], PHASE_FEED: [], PHASE_END: []}
 
 
 
@@ -743,6 +747,10 @@ class BlackoutTickEngine(DefaultScript):
         _run_phase_hooks(PHASE_FEED)
 
         self.ndb.tick_duration = time.monotonic() - started_at
+
+        # END after the measurement. A hook here reads the duration that the
+        # line above recorded, and its own cost is not in that number.
+        _run_phase_hooks(PHASE_END)
 
         tick_debug.after_tick(self)
 

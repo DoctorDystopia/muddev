@@ -509,7 +509,7 @@ func _the_rig_tab_sends() -> void:
 
 
 func _the_part_editor_sends() -> void:
-	var panel := FigurePartsPanel.new()
+	var panel := PartEditor.new()
 	var sent := []
 
 	add_child(panel)

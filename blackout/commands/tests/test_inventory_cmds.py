@@ -13,12 +13,20 @@ Run with:
     evennia test --settings settings.py commands.tests.test_inventory_cmds
 """
 
+from evennia import DefaultObject
+from evennia.utils.create import create_object
 from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTestCase
 
 from commands.equipment_cmds import CmdEquipment, CmdInspect, CmdUnequip
 from commands.inventory_cmds import CmdSwap, parse_slot_number
 from items.equipment.constants import WieldLocation
 from items.inventory.handler import SLOTS_TOTAL
+from systems.core.tilegrid import chunkfile
+from systems.core.tilegrid import constants as tile_const
+from systems.core.tilegrid import movement
+from systems.core.tilegrid.world import TileWorld, set_world
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import neighbourhood
 from typeclasses.characters import Character as BlackoutCharacter
 from world.item_database import ITEM_DB
 
@@ -28,6 +36,23 @@ from world.item_database import ITEM_DB
 EQUIPPABLE_KEY = "glass_cannon_amulet"
 PLAIN_KEY = "rusty_metal_chunk"
 OTHER_PLAIN_KEY = "rusty_scrap_metal"
+
+# The tile world of TestCmdInspectReach: one area, one floor, flat ground.
+_AREA = "oasis"
+_FLOOR = "sand"
+_ORIGIN = (2, 2)
+
+
+def _chunk(cx: int, cy: int) -> chunkfile.ChunkFile:
+    """One open chunk of the ground plane."""
+    tile_count = tile_const.CHUNK_SIZE * tile_const.CHUNK_SIZE
+
+    return chunkfile.ChunkFile(
+        cx=cx, cy=cy, plane=tile_const.GROUND_PLANE, floor_names=[_FLOOR],
+        area_names=[_AREA],
+        heights=[0] * tile_const.CORNERS_PER_SIDE ** 2,
+        floors=[0] * tile_count, flags=[0] * tile_count,
+        areas=[0] * tile_count, objects=[])
 
 
 class TestParseSlotNumber(EvenniaTestCase):
@@ -167,6 +192,114 @@ class TestCmdInspect(EvenniaCommandTest):
         response = self.call(CmdInspect(), "")
 
         self.assertIn("usage", response.lower())
+
+    # ─── By dbref, what the world pane sends ─────────────────────────────
+
+    def _dbref(self, thing) -> str:
+        # The neighbourhood cache keys on the room id, and each test gets
+        # the same ids back. A tuple from an earlier test holds stale room
+        # objects with the contents of that test. The real server
+        # invalidates on room lifecycle, which no fixture here runs.
+        neighbourhood.reset()
+        self.addCleanup(neighbourhood.reset)
+
+        return feed_const.ENTITY_DBREF_TEMPLATE.format(dbref=thing.id)
+
+    def test_the_inspect_template_names_this_command(self):
+        """The feed spells the verb without an import of this module."""
+        self.assertEqual(feed_const.ENTITY_INSPECT_VERB, CmdInspect.key)
+        self.assertTrue(feed_const.ENTITY_INSPECT_TEMPLATE.startswith(
+            CmdInspect.key + " "))
+
+    def test_inspect_never_walks_first(self):
+        """The reach is the feed radius, so a walk would serve no purpose."""
+        self.assertIn(CmdInspect.key, feed_const.SELF_APPROACHING_VERBS)
+
+    def test_a_dbref_describes_a_thing_in_the_room(self):
+        self.obj1.db.desc = "A thing on the ground, read from afar."
+
+        response = self.call(CmdInspect(), self._dbref(self.obj1))
+
+        self.assertIn("read from afar", response)
+
+    def test_a_dbref_describes_a_carried_item(self):
+        made = self._pile(count=1)
+        made[0].db.desc = "A thing in the bag, read by dbref."
+
+        response = self.call(CmdInspect(), self._dbref(made[0]))
+
+        self.assertIn("read by dbref", response)
+
+    def test_a_dbref_describes_a_worn_item(self):
+        item = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        item.db.desc = "A thing worn, read by dbref."
+        self.char1.inventory.sync()
+        self.char1.equipment.equip(item)
+
+        response = self.call(CmdInspect(), self._dbref(item))
+
+        self.assertIn("read by dbref", response)
+
+    def test_a_dbref_out_of_sight_is_refused(self):
+        """A dbref is global in Evennia. Here it is bounded by what the
+        feed draws, so nobody can read a thing they cannot see."""
+        self.obj2.db.desc = "A thing in another room."
+        self.obj2.location = self.room2
+
+        response = self.call(CmdInspect(), self._dbref(self.obj2))
+
+        self.assertNotIn("another room", response)
+
+
+class TestCmdInspectReach(EvenniaCommandTest):
+    """`inspect #<id>` reaches as far as the feed draws, on the tile world.
+
+    The rule is the one of `say`: a player can read each thing that the
+    client draws. The edge is STATEFEED_ENTITY_RADIUS, read through the
+    command's own constant, so a retune of the feed moves this test with it.
+    """
+
+    character_typeclass = BlackoutCharacter
+
+    def setUp(self):
+        super().setUp()
+        radius = feed_const.STATEFEED_ENTITY_RADIUS
+        span = (_ORIGIN[0] + radius + 1) // tile_const.CHUNK_SIZE + 1
+        chunks = [_chunk(cx, cy) for cx in range(span) for cy in range(span)]
+        self.world = TileWorld(chunks)
+        self.world.load_rooms()
+        set_world(self.world)
+        self.addCleanup(set_world, None)
+        self.edge = (_ORIGIN[0] + radius, _ORIGIN[1])
+        self.past_edge = (_ORIGIN[0] + radius + 1, _ORIGIN[1])
+        self._put(self.char1, _ORIGIN)
+
+    def _put(self, thing, tile: tuple) -> None:
+        rooms = self.world.plane(tile_const.GROUND_PLANE).rooms
+        movement.place(rooms, thing, *tile, quiet=True)
+
+    def _thing(self, tile: tuple):
+        thing = create_object(DefaultObject, key="far thing")
+        thing.db.desc = "Read from the edge of the feed."
+        self._put(thing, tile)
+
+        return thing
+
+    def test_a_thing_at_the_edge_of_the_feed_is_read(self):
+        thing = self._thing(self.edge)
+        dbref = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref=thing.id)
+
+        response = self.call(CmdInspect(), dbref)
+
+        self.assertIn("edge of the feed", response)
+
+    def test_a_thing_past_the_edge_is_refused(self):
+        thing = self._thing(self.past_edge)
+        dbref = feed_const.ENTITY_DBREF_TEMPLATE.format(dbref=thing.id)
+
+        response = self.call(CmdInspect(), dbref)
+
+        self.assertNotIn("edge of the feed", response)
 
 
 class TestCmdSwap(EvenniaCommandTest):

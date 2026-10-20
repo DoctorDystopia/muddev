@@ -1,6 +1,7 @@
 class_name WorldMapView
-extends PanelContainer
-## The world map: a large map of every chunk of one plane, over the world pane.
+extends FloatingBox
+## The world map: a large map of every chunk of one plane, in a floating box
+## over the world pane.
 ##
 ## ## What it shows (09/28/2026, the OSRS world map)
 ##
@@ -12,6 +13,7 @@ extends PanelContainer
 ##     follows the same setting.
 ##   - The tile under the cursor, as `(x, y)`, for a player who types
 ##     `goto x,y`.
+##   - The legend, in a column at the right side (10/19/2026).
 ##
 ## ## It moves nothing
 ##
@@ -19,18 +21,33 @@ extends PanelContainer
 ## cursor, and a click walks nowhere. A walk across the world can hit the
 ## limit of the A* search, so a click that walked would often fail.
 ##
-## ## Where it lives
+## ## A floating box (10/19/2026)
 ##
-## A sibling of the world pane's other boxes, as [PopupView] is: above the
-## docks, under the right-click menu and the veil. Built in code, because its
-## contents depend on nothing in the scene. Esc or the close button hides it.
+## [FloatingBox] owns the box, as it owns the box of the pop-up: the dim over
+## the world, the move, the grips, and the first rect between the docks. The
+## rect is [member ClientSettings.world_map_rect]. Until 10/19/2026 the map
+## was a fixed box over the docks.
+##
+## Nick chose the rule of the pop-up for a click beside the box: the world
+## takes no click, and the docks stay in reach. Thus, the map sits under the
+## docks, as the pop-up does, and over the pop-up. Esc reads the key in
+## `_input`, and the pop-up reads it in `_unhandled_input`. Thus, Esc closes
+## the box on top first.
+##
+## ## The legend (10/19/2026)
+##
+## [WorldMapLegend] names each map icon and each marker. The Legend button
+## shows or hides it. A click on an icon row hides the map icons of that
+## category on the world map. The minimap does not change. [ClientSettings]
+## keeps both choices, and the map reads them at each draw. Thus, Reset in
+## Options shows every icon again at once.
 
 ## Pixels for each tile at each zoom step.
 const ZOOM_STEPS: Array[int] = [1, 2, 3, 4, 6, 8]
 const DEFAULT_ZOOM := 3
 
-## Clear space around the box, inside the world pane.
-const MARGIN := 24.0
+const TITLE_TEXT := "World map"
+const LEGEND_TEXT := "Legend"
 
 const LABEL_FONT_SIZE := 14
 const LABEL_OUTLINE := 4
@@ -48,10 +65,22 @@ const ICON_SHARE := 1.6
 const ICON_MIN_PX := 6.0
 const ICON_MAX_PX := 12.0
 const SELF_MIN_PX := 6.0
+const SELF_OUTLINE_WIDTH := 2.0
+
+## The height of the destination marker: tiles of the zoom, and the bounds in
+## pixels. The cloth is a triangle, in parts of that height.
+const FLAG_SHARE := 3.0
+const FLAG_MIN_PX := 10.0
+const FLAG_MAX_PX := 18.0
+const FLAG_CLOTH_WIDTH := 0.7
+const FLAG_CLOTH_TIP := 0.2
+const FLAG_CLOTH_DROP := 0.45
+const FLAG_POLE_WIDTH := 1.5
+
+const PATH_WIDTH := 2.0
 
 var _map: WorldMapState
 var _state: WorldState
-var _settings: ClientSettings
 
 ## The plane on show, and the zoom in pixels for each tile.
 var _plane := 0
@@ -65,45 +94,38 @@ var _textures := {}
 
 var _dragging := false
 
+## The two choices of the legend, when no settings are bound. A test binds
+## none. With settings, [ClientSettings] is the one owner of both.
+var _local_hidden := PackedStringArray()
+var _local_legend := ClientSettings.DEFAULT_WORLD_MAP_LEGEND
+
 var _canvas: Control
 var _plane_label: Label
 var _readout: Label
 var _plane_down: Button
 var _plane_up: Button
+var _legend_button: Button
+var _legend_scroll: ScrollContainer
+var _legend: WorldMapLegend
 
 
+## The box, the title bar and the grips come from [FloatingBox].
 func _init() -> void:
+	super()
 	name = "WorldMap"
-	visible = false
+	_title.text = TITLE_TEXT
+	_build_title_buttons()
 
-	# The look of the other boxes over the world pane: the dock, the pop-up.
-	theme_type_variation = &"PopupBox"
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	offset_left = MARGIN
-	offset_top = MARGIN
-	offset_right = -MARGIN
-	offset_bottom = -MARGIN
+	var body := HBoxContainer.new()
 
-	var column := VBoxContainer.new()
-
-	add_child(column)
-	column.add_child(_build_title_bar())
-
-	_canvas = Control.new()
-	_canvas.name = "Canvas"
-	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_canvas.clip_contents = true
-	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_canvas.mouse_filter = Control.MOUSE_FILTER_STOP
-	_canvas.draw.connect(_draw_map)
-	_canvas.gui_input.connect(_on_canvas_input)
-	_canvas.resized.connect(_clamp_centre)
-	column.add_child(_canvas)
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_column.add_child(body)
+	body.add_child(_build_canvas())
+	body.add_child(_build_legend())
 
 	_readout = Label.new()
 	_readout.text = " "
-	column.add_child(_readout)
+	_column.add_child(_readout)
 
 
 ## Bind to the models. The console owns all three.
@@ -111,14 +133,16 @@ func bind(map: WorldMapState, state: WorldState,
 		settings: ClientSettings = null) -> void:
 	_map = map
 	_state = state
-	_settings = settings
+	bind_settings(settings)
 	_map.plane_changed.connect(_on_plane_changed)
 	_map.index_arrived.connect(_on_index)
 	_state.room_changed.connect(_canvas.queue_redraw)
 	_state.walk_changed.connect(_canvas.queue_redraw)
 
 	if _settings != null:
-		_settings.changed.connect(_canvas.queue_redraw)
+		_settings.changed.connect(_on_settings_changed)
+
+	_sync_legend()
 
 
 # ─── Open and close ──────────────────────────────────────────────────────────
@@ -134,7 +158,12 @@ func open() -> void:
 	_centre = Vector2(_state.current_cell) + Vector2.ONE * 0.5
 	_clamp_centre()
 	_sync_plane_controls()
+	_sync_legend()
 	_canvas.queue_redraw()
+
+	# Deferred: a pane that changed size while the box was hidden needs the
+	# layout pass that sizes this control.
+	_place_box.call_deferred()
 
 
 func close() -> void:
@@ -180,40 +209,78 @@ func _on_plane_changed(changed: int) -> void:
 		_canvas.queue_redraw()
 
 
-# ─── The title bar ───────────────────────────────────────────────────────────
+# ─── The rect between runs ───────────────────────────────────────────────────
 
-func _build_title_bar() -> HBoxContainer:
-	var bar := HBoxContainer.new()
-	var title := Label.new()
+func _stored_rect() -> Rect2:
+	return _settings.world_map_rect
 
-	title.text = "World map"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar.add_child(title)
 
-	_plane_down = _bar_button(bar, "Down", "Show the plane below")
+func _store_rect(rect: Rect2) -> void:
+	_settings.set_world_map_rect(rect)
+
+
+# ─── Building ────────────────────────────────────────────────────────────────
+
+## The buttons after the title: the plane, the zoom, the legend, and Close.
+func _build_title_buttons() -> void:
+	_plane_down = _bar_button("Down", "Show the plane below")
 	_plane_down.pressed.connect(step_plane.bind(-1))
 	_plane_label = Label.new()
-	bar.add_child(_plane_label)
-	_plane_up = _bar_button(bar, "Up", "Show the plane above")
+	_title_bar.add_child(_plane_label)
+	_plane_up = _bar_button("Up", "Show the plane above")
 	_plane_up.pressed.connect(step_plane.bind(1))
 
-	_bar_button(bar, "-", "Zoom out").pressed.connect(step_zoom.bind(-1))
-	_bar_button(bar, "+", "Zoom in").pressed.connect(step_zoom.bind(1))
-	_bar_button(bar, "Me", "Centre on you").pressed.connect(centre_on_player)
-	_bar_button(bar, "X", "Close the world map").pressed.connect(close)
+	_bar_button("-", "Zoom out").pressed.connect(step_zoom.bind(-1))
+	_bar_button("+", "Zoom in").pressed.connect(step_zoom.bind(1))
+	_bar_button("Me", "Centre on you").pressed.connect(centre_on_player)
 
-	return bar
+	_legend_button = _bar_button(LEGEND_TEXT, "Show or hide the legend")
+	_legend_button.toggle_mode = true
+	_legend_button.toggled.connect(set_legend_shown)
+
+	_add_close_button(close).focus_mode = Control.FOCUS_NONE
 
 
-func _bar_button(bar: HBoxContainer, text: String, tip: String) -> Button:
+## A button of the title bar. It takes no keyboard focus, so a click on it
+## leaves the keyboard with the game input.
+func _bar_button(text: String, tip: String) -> Button:
 	var button := Button.new()
 
 	button.text = text
 	button.tooltip_text = tip
 	button.focus_mode = Control.FOCUS_NONE
-	bar.add_child(button)
+	_title_bar.add_child(button)
 
 	return button
+
+
+func _build_canvas() -> Control:
+	_canvas = Control.new()
+	_canvas.name = "Canvas"
+	_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_canvas.clip_contents = true
+	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_canvas.mouse_filter = Control.MOUSE_FILTER_STOP
+	_canvas.draw.connect(_draw_map)
+	_canvas.gui_input.connect(_on_canvas_input)
+	_canvas.resized.connect(_clamp_centre)
+
+	return _canvas
+
+
+## The legend, in a scroll. A short box then does not grow to hold every row.
+## The scroll takes the width of the legend, so no row is cut.
+func _build_legend() -> Control:
+	_legend_scroll = ScrollContainer.new()
+	_legend_scroll.name = "LegendScroll"
+	_legend_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+
+	_legend = WorldMapLegend.new()
+	_legend.icon_toggled.connect(set_icon_shown)
+	_legend_scroll.add_child(_legend)
+
+	return _legend_scroll
 
 
 func _sync_plane_controls() -> void:
@@ -223,6 +290,86 @@ func _sync_plane_controls() -> void:
 	_plane_label.text = "Plane %d" % _plane
 	_plane_down.disabled = at <= 0
 	_plane_up.disabled = at < 0 or at >= held.size() - 1
+
+
+# ─── The legend ──────────────────────────────────────────────────────────────
+
+## The legend. For tests.
+func legend() -> WorldMapLegend:
+	return _legend
+
+
+## True when the legend shows.
+func legend_shown() -> bool:
+	if _settings != null:
+		return _settings.world_map_legend
+
+	return _local_legend
+
+
+## Show or hide the legend, as the Legend button does.
+func set_legend_shown(shown: bool) -> void:
+	if _settings != null:
+		_settings.set_world_map_legend(shown)
+	else:
+		_local_legend = shown
+
+	_sync_legend()
+
+
+## True when the map draws the map icons of `category`.
+func icon_shown(category: String) -> bool:
+	return not _hidden_icons().has(category)
+
+
+## Show or hide the map icons of one category, as a click on its legend row
+## does.
+func set_icon_shown(category: String, shown: bool) -> void:
+	var hidden := _hidden_icons().duplicate()
+	var at := hidden.find(category)
+
+	if shown and at >= 0:
+		hidden.remove_at(at)
+	elif not shown and at < 0:
+		hidden.append(category)
+
+	if _settings != null:
+		_settings.set_world_map_hidden_icons(hidden)
+	else:
+		_local_hidden = hidden
+
+	_sync_legend()
+	_canvas.queue_redraw()
+
+
+func _hidden_icons() -> PackedStringArray:
+	if _settings != null:
+		return _settings.world_map_hidden_icons
+
+	return _local_hidden
+
+
+## Make the legend, its button, and its rows say what the settings say.
+##
+## A legend that appears raises the smallest box. This places the box again,
+## so the wider box stays inside the pane.
+func _sync_legend() -> void:
+	var shown := legend_shown()
+	var path_drawn := _settings != null and _settings.show_walk_path
+
+	_legend_button.set_pressed_no_signal(shown)
+	_legend.sync(_hidden_icons(), path_drawn)
+
+	if _legend_scroll.visible == shown:
+		return
+
+	_legend_scroll.visible = shown
+	_place_box.call_deferred()
+
+
+func _on_settings_changed() -> void:
+	_sync_legend()
+	_canvas.queue_redraw()
 
 
 # ─── Plane, zoom, and pan ────────────────────────────────────────────────────
@@ -338,6 +485,34 @@ func _tile_centre(tile: Vector2i) -> Vector2:
 	return canvas_point(Vector2(tile) + Vector2.ONE * 0.5)
 
 
+# ─── The markers, for the map and the legend ─────────────────────────────────
+
+## Draw the mark of the tile of the player: a square `side` pixels across.
+## The legend draws its sample with the same call, so the two cannot differ.
+static func draw_self_mark(canvas: CanvasItem, middle: Vector2, side: float) -> void:
+	var rect := Rect2(middle - Vector2.ONE * side * 0.5, Vector2.ONE * side)
+
+	canvas.draw_rect(rect, COLOR_SELF)
+	canvas.draw_rect(rect, COLOR_SELF_OUTLINE, false, SELF_OUTLINE_WIDTH)
+
+
+## Draw the destination marker: a flag `height` pixels tall, on a pole that
+## stands on `foot`.
+static func draw_flag(canvas: CanvasItem, foot: Vector2, height: float) -> void:
+	var top := foot - Vector2(0, height)
+	var cloth := PackedVector2Array([top,
+		top + Vector2(height * FLAG_CLOTH_WIDTH, height * FLAG_CLOTH_TIP),
+		top + Vector2(0, height * FLAG_CLOTH_DROP)])
+
+	canvas.draw_line(foot, top, COLOR_FLAG_POLE, FLAG_POLE_WIDTH)
+	canvas.draw_colored_polygon(cloth, COLOR_FLAG)
+
+
+## Draw the walk path through `points`.
+static func draw_path(canvas: CanvasItem, points: PackedVector2Array) -> void:
+	canvas.draw_polyline(points, COLOR_PATH, PATH_WIDTH)
+
+
 # ─── Drawing ─────────────────────────────────────────────────────────────────
 
 func _draw_map() -> void:
@@ -385,12 +560,19 @@ func _texture_of(shown: int) -> ImageTexture:
 	return _textures[shown]
 
 
+## Each map icon of the plane, except the kinds that the player hid in the
+## legend.
 func _draw_icons() -> void:
 	var icon_px := clampf(_zoom * ICON_SHARE, ICON_MIN_PX, ICON_MAX_PX)
+	var hidden := _hidden_icons()
 
 	for icon: Dictionary in _map.icons(_plane):
-		MapIcons.draw(_canvas, icon["category"], _tile_centre(icon["tile"]),
-			icon_px)
+		var category: String = icon["category"]
+
+		if hidden.has(category):
+			continue
+
+		MapIcons.draw(_canvas, category, _tile_centre(icon["tile"]), icon_px)
 
 
 func _draw_labels() -> void:
@@ -416,25 +598,17 @@ func _on_player_plane() -> bool:
 
 func _draw_self() -> void:
 	var side := maxf(float(_zoom), SELF_MIN_PX)
-	var middle := _tile_centre(_state.current_cell)
-	var rect := Rect2(middle - Vector2.ONE * side * 0.5, Vector2.ONE * side)
 
-	_canvas.draw_rect(rect, COLOR_SELF)
-	_canvas.draw_rect(rect, COLOR_SELF_OUTLINE, false, 2.0)
+	draw_self_mark(_canvas, _tile_centre(_state.current_cell), side)
 
 
 func _draw_flag() -> void:
 	if not _state.walk_on_current_plane():
 		return
 
-	var foot := _tile_centre(_state.walk_goal)
-	var height := clampf(_zoom * 3.0, 10.0, 18.0)
-	var top := foot - Vector2(0, height)
-	var cloth := PackedVector2Array([top, top + Vector2(height * 0.7, height * 0.2),
-		top + Vector2(0, height * 0.45)])
+	var height := clampf(_zoom * FLAG_SHARE, FLAG_MIN_PX, FLAG_MAX_PX)
 
-	_canvas.draw_line(foot, top, COLOR_FLAG_POLE, 1.5)
-	_canvas.draw_colored_polygon(cloth, COLOR_FLAG)
+	draw_flag(_canvas, _tile_centre(_state.walk_goal), height)
 
 
 func _draw_walk_path() -> void:
@@ -446,7 +620,7 @@ func _draw_walk_path() -> void:
 	for tile: Vector2i in _state.walk_path:
 		points.append(_tile_centre(tile))
 
-	_canvas.draw_polyline(points, COLOR_PATH, 2.0)
+	draw_path(_canvas, points)
 
 
 # ─── Input ───────────────────────────────────────────────────────────────────

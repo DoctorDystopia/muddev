@@ -195,6 +195,19 @@ func resolve_scenery(asset_key: String, look: Dictionary = {}, seed: String = ""
 	return _variant_art_for(asset_key, look, seed)
 
 
+## The served model of the asset key itself, or null. This is tier 1 alone,
+## with no family model and no family shape. A key with no model in hand
+## starts its fetch. [signal refreshed] names the key when the file arrives.
+##
+## `look` and `seed` pick a variant, as for [method resolve_entity]. With no
+## look, the answer is the model of the key.
+##
+## For [ItemStage] and [EntityPool]. Each has a stand-in of its own between
+## tier 1 and tier 2: the worn look of the item (10/17/2026).
+func resolve_own_art(asset_key: String, look: Dictionary = {}, seed: String = "") -> Node3D:
+	return _variant_art_for(asset_key, look, seed)
+
+
 ## The variant keys of one base model. See [method ModelRegistry.variants_of].
 func variants_of(asset_key: String) -> PackedStringArray:
 	return _registry.variants_of(asset_key)

@@ -58,13 +58,19 @@ the name.
 | webclient | the retired browser client in `archive/webclient-js/`, and nothing else | web client, JS client |
 | pane | one region of the Godot client UI | window, view |
 | pop-up | a box that the server opens over the world pane, for example the bank (`char_popup`) | window, dialog, interface, modal |
+| floating box | a box over the world pane that the player moves by its title bar and sizes by its grips: the pop-up or the world map (`FloatingBox`) | window, dialog, panel, modal |
 | vault layout | the bank tabs, the order of the slots, the tab names and the placeholders of one vault (`systems/gameplay/banking/layout.py`) | bank layout, bank config |
 | bank tab | one numbered group of vault slots. A tab that becomes empty disappears (`bank move`, `bank view`) | bank folder, category, page |
 | main tab | tab 0 of the vault. It holds each slot that is in no other tab, and it shows every slot, grouped by tab | All tab, default tab, tab zero |
 | placeholder | a vault slot that keeps its place and its tab after the last unit leaves. It uses one slot until the player releases it (`bank release`) | ghost slot, empty slot, reserved slot |
 | dock | the box of the game log or of the control panel. Both are HUD elements (`%ConsoleDock`, `%PanelDock`) | window, sidebar, drawer |
 | grip | the strip on an edge or a corner of a box that a drag resizes (`ResizeGrips`) | handle, resizer, border |
-| HUD element | a box over the world pane that the player places in the layout editor: a dock, the minimap, the vitals, the XP drops, or the hover text (`HudElements`) | widget, frame, panel, component |
+| HUD element | a box over the world pane that the player places in the layout editor: a dock, the minimap, the vitals, the XP drops, the hover text, the performance view, or the ability rail (`HudElements`) | widget, frame, panel, component |
+| ability | one action that a player fires from the rail or by its command: today, each aura (`char_abilities`, `auras/detail.py`) | skill, power, spell, action |
+| ability rail | the HUD element with one toggle for each ability, in the order of the server, each with its key (`AbilityRail`) | skill bar, action bar, hotbar, ability bar |
+| ability key | the key that fires one slot of the ability rail. The client owns the table (`AbilityKeys`) | hotkey, keybind, shortcut |
+| tip | the `{title, lines}` block of a feed row that a tooltip shows. The server says what a thing is, and the client draws it (`TipText`) | tooltip data, hover info, description block |
+| performance view | the HUD element that draws the frame time of the client and the gap and the work of each server tick (`PerformanceView`, `blackout_tick_perf`) | perf overlay, FPS counter, debug HUD |
 | layout | where each HUD element sits, and its size, opacity, scale and Shown flag (`ClientSettings.layout`) | UI config, arrangement |
 | layout editor | the mode in which the player changes the layout. Options opens it (`LayoutEditor`) | edit mode, UI edit mode, unlock mode |
 | layout preset | a layout that the player saved by name (`ClientSettings.layout_presets`) | profile, saved layout, template |
@@ -91,6 +97,7 @@ what each item means and which rule uses it.
 | skill cycle | the loop Gathering → Processing → Production → Combat and Utility → Gathering | pipeline, skill tree, chain |
 | category | the group a skill belongs to, for example Processing | skill type, tier, branch |
 | stage | the position of an item in the skill cycle | tier, level, grade |
+| gathering attempt | one roll of a gathering channel at a node, a hit or a miss (`GatheringSkill.attempt_swing`). Each attempt sends the `attempt_moment` of the skill | swing, harvest attempt, try |
 | world resource | an item that a Gathering skill takes from a node | raw material, raw resource |
 | crafting component | an item that a Processing skill makes, and that another recipe consumes | intermediate material, refined material |
 | finished product | an item that a Production skill makes, and that no recipe consumes | finished item, finished gear, end product |
@@ -129,6 +136,8 @@ Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
 | hitsplat | the damage number that the Godot client draws over a figure for one swing (`HitsplatLayer`) | damage number, damage popup, floating text, splat |
 | hitsplat style | the look of one kind of hitsplat: one `.tres` file in `godot/world/hitsplats/styles/` (`HitsplatStyle`) | hitsplat theme, hitsplat skin |
 | detail line | the small line under a max hit hitsplat that names the roll and a bonus or a penalty | subtitle, caption, breakdown |
+| face event | the event that says two entities turn to face each other, at the start of a fight, a talk, or a trade, and at each swing of a harvest (`blackout_face`, `FacePayload`) | engage, aggro, target lock, look-at |
+| mobile | an entity row that turns, to its step and to its fight: a character or an NPC (`EntityPool._mobile`) | mover, actor, creature |
 
 Guns and Ballistics are skill names, so they are identifiers. Guns decides
 whether a shot lands. Ballistics decides how hard it lands.
@@ -196,12 +205,19 @@ clip set, and action, and it uses stance. Phase W6 (10/13/2026) added kit
 part, kit group, kit, budget, and budget line. It uses finding and note as
 the terrain checks do, for a figure file in place of a tile. Since
 10/16/2026 the game draws each player character as a figure (DESIGN-0014
-section 20), and that work added body type and figure colors.
+section 20), and that work added body type and figure colors. The gear
+editor of 10/16/2026 (section 22) added gear editor, Gear dock, and part
+editor. The cells of 10/17/2026 (section 23) added item picture. The
+served model on the figure (10/17/2026, section 24) added served part,
+served place, and stand-in.
 
 | Use | For | Not |
 |---|---|---|
 | figure | a humanoid that the client builds from a rig, a body, and a worn record | avatar model, character mesh, doll |
-| figure workbench | the editor plugin and its scene that make rigs, worn looks, and stances (`godot/addons/blackout_figure/`) | character editor, gear editor, character creator |
+| figure workbench | the editor plugin and its scene that make rigs, bodies, kit parts, the palette, and stances (`godot/addons/blackout_figure/`) | character editor, character creator |
+| gear editor | the editor plugin and its scene that make the worn look of each item (`godot/addons/blackout_gear/`, DESIGN-0014 section 22) | gear tab, item editor, equipment editor |
+| Gear dock | the panel of the gear editor: the items, the part editor, and the look | gear panel, gear tab |
+| part editor | the tree of the parts and the shapes of one worn look, with its toolbar and its two grids (`PartEditor`). The Gear dock, the Body tab, and the Families tab hold it | shape editor, primitive editor, parts panel |
 | rig | the bones, the sockets, the regions, and the slot table of one body type | skeleton file, armature |
 | socket | a bone of the rig that carries gear and no body part | attach point, mount, anchor |
 | region | a named group of bones whose body parts a worn item can hide | body group, geoset, body slot |
@@ -210,6 +226,10 @@ section 20), and that work added body type and figure colors.
 | worn record | the map from slot to asset key that the server sends for one character | appearance block, outfit payload |
 | shape list | a part made of plain shapes in the workbench, in the vocabulary of `FamilyShapes` | primitive (the scenery noun), proxy mesh |
 | slot shape | the worn look that a slot draws for an item with no worn look | placeholder, default model |
+| item picture | the 3D picture of one item in a cell of the bag, the doll, or a pop-up. The served model of the item comes first. An item with no served model and with a worn look draws that look alone (`FigureLibrary.build_item`). Each other item draws its family model or its family shape | icon, thumbnail, inventory model |
+| served part | the one part that draws the served model of an item on a figure, in place of its worn look. It holds the whole model in the unit box (`FigureLook.SERVED_PART`) | model part, held model, override part |
+| served place | the bone and the place of the served part after the author moved it: the `served` row of the worn look of the item | grip override, model offset, hand place |
+| stand-in | the worn look, the slot shape, or the family shape that draws while the served model of an item is not in hand. Its box gives the served part its first place | fallback look, placeholder, proxy |
 | clip | one animation of the rig | anim, animation file, action |
 | stance | the clip set that a `tool_type` selects | animation set, weapon pose |
 | color role | the name of a surface that a worn look gives a color to | material slot, tint channel |
@@ -350,6 +370,7 @@ its name: tile map.
 | walk path | the tiles that the current walk still has to step on | route, trail, path line |
 | map dot | a dot for a live entity on the minimap | blip, marker, pip |
 | map icon | a symbol for a chunk object (a bank, a node, a transition) on either map | map marker, POI icon, map symbol |
+| legend | the column of the world map that names each map icon and each marker. A click on an icon row hides that category of map icon (`WorldMapLegend`) | key, map key, guide |
 | world map summary | the compact form of one chunk for the world map: one character for each tile, and its objects | map chunk, thumbnail, overview chunk |
 
 ## Movement

@@ -128,12 +128,25 @@ func reserve(count: int) -> void:
 
 
 ## Draw one item at one index. `asset` and `family` are the server's, untouched.
+##
+## Three sources, in this order (10/17/2026):
+##
+## 1. The served model of the asset key, from `resolver`.
+## 2. The worn look of the item, from `figures`: the look of the gear
+##    editor, which the hand holds also.
+## 3. The rest of the mesh ladder: the family model, then the family shape.
+##
+## A served model that is not in hand yet starts its fetch. The worn look
+## stands in until the file arrives.
 func place(index: int, asset: String, family: String,
-		resolver: MeshResolver) -> void:
-	if index < 0 or index >= _capacity or resolver == null:
+		resolver: MeshResolver, figures: FigureLibrary = null) -> void:
+	if index < 0 or index >= _capacity:
 		return
 
-	var node := resolver.resolve_entity(asset, family)
+	var node := _item_node(asset, family, resolver, figures)
+
+	if node == null:
+		return
 	# A cell shows one item alone, so a model that PRESENTATION shrinks for
 	# the world still fills its cell like every other item.
 	var fill := ITEM_SCALE / ModelLoader.presentation_scale(node)
@@ -194,6 +207,24 @@ func _process(delta: float) -> void:
 
 
 # ─── Private ─────────────────────────────────────────────────────────────────
+
+## The served model, else the worn look, else the rest of the mesh ladder.
+## Null when the stage has no source.
+func _item_node(asset: String, family: String, resolver: MeshResolver,
+		figures: FigureLibrary) -> Node3D:
+	var node: Node3D = null
+
+	if resolver != null:
+		node = resolver.resolve_own_art(asset)
+
+	if node == null and figures != null:
+		node = figures.build_item(asset)
+
+	if node == null and resolver != null:
+		node = resolver.resolve_entity(asset, family)
+
+	return node
+
 
 func _row_count() -> int:
 	return maxi(1, ceili(float(_capacity) / float(COLUMNS)))

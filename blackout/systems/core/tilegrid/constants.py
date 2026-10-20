@@ -217,6 +217,20 @@ OBJECT_CATEGORIES: tuple = (
     OBJECT_CATEGORY_TRANSITION,
 )
 
+# The name of each category, for a player. The legend of the world map in the
+# Godot client shows it beside the map icon of the category (10/19/2026). The
+# icon is a look of the client. The name is a fact of the server.
+OBJECT_CATEGORY_LABELS: dict = {
+    OBJECT_CATEGORY_CLIMB: "Ladder or stairs",
+    OBJECT_CATEGORY_DECOR: "Decor",
+    OBJECT_CATEGORY_FACILITY: "Facility",
+    OBJECT_CATEGORY_GATHERING: "Gathering node",
+    OBJECT_CATEGORY_LANDMARK: "Landmark",
+    OBJECT_CATEGORY_NPC: "NPC",
+    OBJECT_CATEGORY_SIGN: "Sign",
+    OBJECT_CATEGORY_TRANSITION: "Transition",
+}
+
 # A kind of this category carries text in the chunk file: the words of a
 # signpost. A kind of any other category carries none. The chunk file reader
 # does not know the kinds, so `world/tile_checks.py` holds this rule.
@@ -243,6 +257,10 @@ SCENERY_STAIRS_TOP: str = "stairs_top"
 SCENERY_CRATE: str = "crate"
 SCENERY_TABLE: str = "table"
 SCENERY_LAMP_POST: str = "lamp_post"
+# The oil lamp and the torch are the second light sources (10/18/2026). The
+# oil lamp is small, for a table. The torch is a metal pole with a flame.
+SCENERY_OIL_LAMP: str = "oil_lamp"
+SCENERY_TORCH: str = "torch"
 
 SCENERY_PRIMITIVES: tuple = (
     SCENERY_LADDER,
@@ -252,6 +270,8 @@ SCENERY_PRIMITIVES: tuple = (
     SCENERY_CRATE,
     SCENERY_TABLE,
     SCENERY_LAMP_POST,
+    SCENERY_OIL_LAMP,
+    SCENERY_TORCH,
 )
 
 # ─── Climbing (Phase 7) ──────────────────────────────────────────────────────

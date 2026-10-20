@@ -25,6 +25,10 @@ Description: The bank pop-up: the vault in one grid, its tabs above it, and
              for each key press. A tab click sends `bank view <n>`, because a
              new item goes into the viewed tab, and that is a rule of the
              server. systems/gameplay/banking/layout.py owns the layout.
+
+             THE SECTION NAMES (10/19/2026). Each tab button also sends a
+             heading: the name of the tab, or "Tab 2" when it has no name.
+             The client draws it over the slots of that tab in the main view.
 """
 
 from items.inventory.handler import SLOTS_TOTAL
@@ -81,6 +85,7 @@ DRAG_ONTO_TAB: str = "onto_tab"
 ROW_TAB_FIELD: str = "tab"
 ROW_DRAG_KEY_FIELD: str = "drag_key"
 ROW_PLACEHOLDER_FIELD: str = "placeholder"
+TAB_HEADING_FIELD: str = "heading"
 
 # The tab buttons. The main tab shows text, a named tab shows its name, and
 # any other tab shows the mesh of its first item.
@@ -344,6 +349,47 @@ def _tab_actions(current, index: int) -> list:
     return actions
 
 
+def _section_heading(current, index: int) -> str:
+    """
+    Purpose: Name the section of one tab in the main view.
+
+    Entry:
+        current - the vault layout.
+        index   - the tab number.
+
+    Exit/Returns:
+        Returns the text over the slots of the tab, or "" for no text.
+
+    Module Globals:
+        MAIN_TAB_TITLE, TAB_TITLE read.
+
+    Methodology:
+        A named tab gives its name. An unnamed tab gives the title of its
+        button: "Tab 2", or "Main tab". The unnamed main tab of a vault with
+        no other tab gives "". The main view then has one section, and a
+        name over the whole vault tells the player nothing.
+
+    Notes/References:
+        The client draws the text over each section of the main view only.
+        A tab view and a search show one section.
+
+    Author: Nick Hobar
+    Creation date: 10/19/2026
+    """
+    name = current.names[index]
+
+    if name:
+        return name
+
+    if index != bank_const.MAIN_TAB:
+        return TAB_TITLE.format(index=index)
+
+    if len(current.tabs) > bank_const.FIRST_TAB:
+        return MAIN_TAB_TITLE
+
+    return ""
+
+
 def _tab_button(current, index: int, groups: dict) -> dict:
     """
     Purpose: Render one tab button.
@@ -355,7 +401,7 @@ def _tab_button(current, index: int, groups: dict) -> dict:
 
     Exit/Returns:
         Returns {index, label, title, asset, family, active, drop_key,
-        actions}.
+        heading, actions}.
 
     Module Globals:
         The MAIN_TAB_* and TAB_* constants read.
@@ -364,7 +410,8 @@ def _tab_button(current, index: int, groups: dict) -> dict:
         A named tab sends its name and no asset. An unnamed player tab sends
         the art of its first slot. The unnamed main tab sends "All". The
         client draws the mesh when there is an asset, and the label when
-        there is not, so it decides nothing about a tab.
+        there is not, so it decides nothing about a tab. The heading is the
+        text over the slots of the tab in the main view (_section_heading).
 
     Notes/References:
         None.
@@ -389,19 +436,22 @@ def _tab_button(current, index: int, groups: dict) -> dict:
         "index": index, "label": label, "title": title,
         "asset": asset, "family": family,
         "active": index == current.viewed, "drop_key": str(index),
+        TAB_HEADING_FIELD: _section_heading(current, index),
         "actions": _tab_actions(current, index),
     }
 
 
 def _tab_buttons(current, groups: dict) -> list:
     """Every tab button in order, the main tab first, and the "+" last. The
-    "+" takes a drop only: its drop key is the new-tab word."""
+    "+" takes a drop only: its drop key is the new-tab word. It holds no
+    slot, so it names no section."""
     buttons = [_tab_button(current, index, groups)
                for index in range(len(current.tabs))]
     buttons.append({
         "index": len(current.tabs), "label": NEW_TAB_LABEL,
         "title": NEW_TAB_TITLE, "asset": "", "family": "", "active": False,
-        "drop_key": bank_const.NEW_TAB_WORD, "actions": [],
+        "drop_key": bank_const.NEW_TAB_WORD, TAB_HEADING_FIELD: "",
+        "actions": [],
     })
 
     return buttons

@@ -60,7 +60,7 @@ class TestSubscribeInputfunc(EvenniaTestCase):
         inputfuncs.blackout_subscribe(self.fake_session, channels="all")
 
         subscribed = subscriptions.subscribed_channels(self.fake_session)
-        self.assertEqual(subscribed, set(const.SUBSCRIBABLE_CHANNELS))
+        self.assertEqual(subscribed, set(const.DEFAULT_CHANNELS))
 
     def test_the_client_is_told_what_it_got(self):
         inputfuncs.blackout_subscribe(self.fake_session, channels="all")
@@ -91,7 +91,7 @@ class TestSubscribeInputfunc(EvenniaTestCase):
         inputfuncs.blackout_subscribe(self.fake_session)
 
         subscribed = subscriptions.subscribed_channels(self.fake_session)
-        self.assertEqual(subscribed, set(const.SUBSCRIBABLE_CHANNELS))
+        self.assertEqual(subscribed, set(const.DEFAULT_CHANNELS))
 
     def test_a_typo_is_reported_back_as_an_empty_set(self):
         inputfuncs.blackout_subscribe(self.fake_session, channels=["rooom_info"])
@@ -114,7 +114,7 @@ class TestSubscribeInputfunc(EvenniaTestCase):
         inputfuncs.blackout_subscribe(self.fake_session, channels="all")
 
         subscribed = subscriptions.subscribed_channels(self.fake_session)
-        self.assertEqual(subscribed, set(const.SUBSCRIBABLE_CHANNELS))
+        self.assertEqual(subscribed, set(const.DEFAULT_CHANNELS))
 
     def test_resync_without_a_puppet_is_not_an_error(self):
         self.fake_session.puppet = None
@@ -154,7 +154,7 @@ class TestAnnounce(EvenniaTestCase):
         subscriptions.announce(self.fake_session)
 
         sent = self.fake_session.sent[-1]
-        expected = sorted(const.SUBSCRIBABLE_CHANNELS)
+        expected = sorted(const.DEFAULT_CHANNELS)
         self.assertEqual(sent[const.CHANNEL_SUBSCRIBED_ACK], {"channels": expected})
 
     def test_the_ack_channel_is_not_itself_subscribable(self):

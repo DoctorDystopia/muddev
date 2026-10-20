@@ -295,9 +295,9 @@
 					"segments": 8,
 					"shape": "prism",
 					"size": [
+						0.17,
 						0.085,
-						0.085,
-						0.1
+						0.14
 					],
 					"top_depth": 0.165,
 					"top_width": 0.17
@@ -317,7 +317,7 @@
 						0.165
 					],
 					"top_depth": 0.16,
-					"top_width": 0.15
+					"top_width": 0.17
 				},
 				{
 					"color": "skin",
@@ -329,12 +329,12 @@
 					"segments": 8,
 					"shape": "prism",
 					"size": [
-						0.15,
+						0.17,
 						0.035,
 						0.16
 					],
 					"top_depth": 0.1,
-					"top_width": 0.08
+					"top_width": 0.14
 				},
 				{
 					"color": "skin",

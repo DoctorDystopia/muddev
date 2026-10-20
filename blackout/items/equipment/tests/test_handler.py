@@ -159,3 +159,82 @@ class TestSlotConflicts(EvenniaTest):
             self.char1.equipment.slots[WieldLocation.MAIN_HAND], blade
         )
         self.assertEqual(self.char1.equipment.slots[WieldLocation.HEAD], helm)
+
+
+class TestWornStackMerge(EvenniaTest):
+    """A stack of the worn ammo joins the worn stack. It does not swap.
+
+    The worn stack is at location=None. Thus, a player who picks up arrows
+    after a fight gets a second stack in the bag. An equip of that stack
+    swapped the two stacks. The slot held the arrows from the floor. The
+    full quiver went back to the bag.
+    """
+
+    character_typeclass = BlackoutCharacter
+
+    def _ammo_keys(self) -> list:
+        """The key of each stackable ItemDef that goes in the AMMO slot."""
+        from items.equipment.constants import WieldLocation
+
+        return [
+            item_def.key for item_def in ITEM_DB.values()
+            if item_def.use_slot == WieldLocation.AMMO and item_def.stackable
+        ]
+
+    def _carry(self, item_key: str, quantity: int):
+        """Spawn a stack in the bag, and return the live carried stack.
+
+        create() can return a row that the bag merged away. Thus, this
+        reads the stack back from the contents.
+        """
+        ITEM_DB[item_key].create(location=self.char1, quantity=quantity)
+
+        for obj in self.char1.contents:
+            if obj.key == ITEM_DB[item_key].name:
+                return obj
+
+        self.fail(f"no carried stack of {item_key}")
+
+    def _worn_ammo(self):
+        from items.equipment.constants import WieldLocation
+
+        return self.char1.equipment.slots[WieldLocation.AMMO]
+
+    def test_the_same_ammo_merges_into_the_worn_stack(self):
+        item_key = self._ammo_keys()[0]
+        quiver = self._carry(item_key, 20)
+        self.char1.equipment.equip(quiver)
+
+        pickup = self._carry(item_key, 5)
+        worn = self.char1.equipment.equip(pickup)
+
+        self.assertEqual(worn, quiver)
+        self.assertEqual(self._worn_ammo(), quiver)
+        self.assertEqual(quiver.quantity, 25)
+        self.assertIsNone(pickup.pk)
+
+    def test_a_merge_leaves_no_stack_in_the_bag(self):
+        item_key = self._ammo_keys()[0]
+        self.char1.equipment.equip(self._carry(item_key, 20))
+
+        self.char1.equipment.equip(self._carry(item_key, 5))
+
+        self.assertEqual(list(self.char1.contents), [])
+        self.assertEqual(self.char1.inventory.count_used(), 0)
+
+    def test_a_different_ammo_still_swaps(self):
+        ammo_keys = self._ammo_keys()
+
+        if len(ammo_keys) < 2:
+            self.skipTest("ITEM_DB holds one stackable ammo item")
+
+        quiver = self._carry(ammo_keys[0], 20)
+        self.char1.equipment.equip(quiver)
+
+        other = self._carry(ammo_keys[1], 5)
+        worn = self.char1.equipment.equip(other)
+
+        self.assertEqual(worn, other)
+        self.assertEqual(self._worn_ammo(), other)
+        self.assertIn(quiver, self.char1.contents)
+        self.assertEqual(quiver.quantity, 20)

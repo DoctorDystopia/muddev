@@ -25,3 +25,17 @@ Royalty-free licence: https://ovanisound.com/policies/terms-of-service
 |---|---|---|
 | `sfx/level_up.wav` | `Jingles & Stingers/Level Up.wav` | Renamed. Imported as mono (Force → Mono); the source file is unmodified. |
 | `sfx/task_complete.wav` | `Hollywood/Knife Kills.wav` | Renamed. The source file is unmodified. |
+| `sfx/metalsmith_craft.wav` | `Medieval/Metal Twang.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/foundry_craft.wav` | `Steampunk/Steampunk Gas Ignite.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/transition.wav` | `Motions and Impacts/Whoosh Cyberwave.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+
+## Enzo — Flesh and Fracture - Lite
+
+Bought by Nick. The pack holds no licence file, only a thank-you note to the
+buyer. Thus, this repo holds only the clips that the client plays, and not
+the pack.
+
+| Clip | Source file in the pack | Changes |
+|---|---|---|
+| `sfx/butcher_attempt.wav` | `Flesh Tearing/Flesh Tearing_T.Bone  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/cut_attempt.wav` | `Axe Chops/Axe Chop_MKE 600  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |

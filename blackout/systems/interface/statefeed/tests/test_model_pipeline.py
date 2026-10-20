@@ -193,6 +193,38 @@ class ModelRecordTests(unittest.TestCase):
             with self.assertRaises(records.RecordError):
                 records.load_record(path)
 
+    def test_a_record_keeps_its_mesh_unless_it_names_a_triangle_count(self):
+        """
+        0 keeps the mesh as it is. Thus, each served model that the build
+        made before the field keeps the same mesh.
+        """
+        bodies = {"": 0, "[output]\nmax_triangles = 9000\n": 9000}
+
+        for body, expected in bodies.items():
+            with self.subTest(body=body):
+                with tempfile.TemporaryDirectory() as folder:
+                    path = _write_record(
+                        folder, "world_objects", "k",
+                        'source = "s"\nfile = "f.glb"\n' + body)
+                    record = records.load_record(path)
+
+                self.assertEqual(record.max_triangles, expected)
+
+    def test_a_triangle_count_that_is_not_a_whole_number_is_refused(self):
+        # true is an int in Python. A record that writes it means nothing.
+        values = ("-1", "9000.5", '"9000"', "true")
+
+        for value in values:
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as folder:
+                    path = _write_record(
+                        folder, "world_objects", "k",
+                        'source = "s"\nfile = "f.glb"\n[output]\n'
+                        'max_triangles = ' + value + '\n')
+
+                    with self.assertRaises(records.RecordError):
+                        records.load_record(path)
+
 
 class VariantRecordTests(unittest.TestCase):
     """A variant is a record of its own that names its base (10/16/2026)."""

@@ -29,6 +29,8 @@ from unittest import mock
 from evennia.utils import create
 from evennia.utils.test_resources import EvenniaTest
 
+from items.equipment.constants import WieldLocation
+from items.equipment.handler import EquipmentError
 from systems.core.stat_tracker import constants as stat_constants
 from systems.gameplay.figure import character_figure
 from systems.gameplay.figure import constants as figure_const
@@ -38,6 +40,7 @@ from systems.gameplay.progression.skills import constants as skill_constants
 from systems.interface.statefeed import buffer
 from systems.interface.statefeed import constants as const
 from systems.interface.statefeed import events
+from systems.interface.statefeed import serializers
 from systems.interface.statefeed import subscriptions
 from systems.gameplay.exterminator import constants as ext_const
 from systems.gameplay.exterminator import service as ext_service
@@ -51,6 +54,7 @@ from systems.interface.popups.popup_defs.exterminator import (
 )
 from typeclasses.channels import Channel
 from typeclasses.characters import Character as BlackoutCharacter
+from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 
 
@@ -175,8 +179,14 @@ class TestDossierFollowsItsFacts(_FreshnessTest):
                 self.assertEqual(buffer.stale_count(), 1)
 
     def test_an_aura_lighting_marks_it_and_a_pulse_does_not(self):
+        # The dossier and the ability rail both name the lit aura, so a
+        # light marks the two of them. A pulse marks nothing.
         events.emit_aura(self.char1, events.AURA_EVENT_ACTIVATE, "test", 1)
-        self.assertEqual(buffer.stale_count(), 1)
+        self.assertEqual(buffer.stale_count(), 2)
+
+        self._drain(const.CHANNEL_CHAR_SUMMARY)
+        self.assertEqual(len(self._bodies(const.CHANNEL_CHAR_SUMMARY)), 1)
+        self.assertEqual(len(self._bodies(const.CHANNEL_CHAR_ABILITIES)), 1)
 
         buffer.reset()
         events.emit_aura(self.char1, events.AURA_EVENT_PULSE, "test", 1)
@@ -374,13 +384,12 @@ class TestTaskPopupFollowsTheTask(_FreshnessTest):
         self.assertEqual(bodies[-1]["grids"], [])
 
 
-class TestFigureFollowsTheAppearance(_FreshnessTest):
-    """The figure of a player: its body type and its figure colors.
+class _FigureFeedTest(_FreshnessTest):
+    """A tapped area send, for the entity row that each observer reads.
 
-    Two readers draw it. The owner reads char_avatar, and each other player
-    reads the entity row. Each write of the two facts must reach both
-    (DESIGN-0014 section 20). The writers are the two routines of
-    character_figure.py, so these cases drive them and nothing else.
+    Two readers draw the figure of a player. The owner reads char_avatar,
+    and each other player reads the entity row. Each write of a figure fact
+    must reach both (DESIGN-0014 sections 20 and 21).
     """
 
     def setUp(self):
@@ -400,6 +409,14 @@ class TestFigureFollowsTheAppearance(_FreshnessTest):
     def _rows_for_observers(self) -> list:
         return [body["entity"] for channel, body in self.area_sent
                 if channel == const.CHANNEL_ROOM_PLAYER_ADD]
+
+
+class TestFigureFollowsTheAppearance(_FigureFeedTest):
+    """The figure of a player: its body type and its figure colors.
+
+    The writers are the two routines of character_figure.py, so these cases
+    drive them and nothing else.
+    """
 
     def _other_body_type(self) -> str:
         """A body type with a rig that the character does not have yet."""
@@ -463,3 +480,62 @@ class TestFigureFollowsTheAppearance(_FreshnessTest):
         self.assertFalse(succeeded)
         self.assertEqual(self._bodies(const.CHANNEL_CHAR_AVATAR), [])
         self.assertEqual(self._rows_for_observers(), [])
+
+
+class TestTheWornRecordFollowsTheGear(_FigureFeedTest):
+    """The gear of a player on its figure: the worn record.
+
+    An equip and an unequip write equipment.slots, and the figure must
+    follow on both readers (DESIGN-0014 section 21). The handler publishes,
+    so these cases drive the handler and nothing else.
+    """
+
+    def _equip_one_item(self) -> tuple:
+        """Equip the first item of the database that char1 can wear.
+
+        Returns (slot value, asset key). The database picks the item, so a
+        renamed item breaks no case here. The asset key comes from the row
+        of the item itself: the figure must wear the key that the item has
+        everywhere else in the feed.
+        """
+        for key in sorted(ITEM_DB):
+            item_def = ITEM_DB[key]
+
+            if item_def.use_slot is None:
+                continue
+
+            item = item_def.create(location=self.char1)
+
+            try:
+                self.char1.equipment.equip(item)
+            except EquipmentError:
+                item.delete()
+                continue
+
+            return item_def.use_slot.value, serializers.serialize_entity(item)["asset"]
+
+        self.skipTest("a new character can equip no item of the database")
+
+    def test_an_equip_reaches_the_owner_and_each_observer(self):
+        slot, asset_key = self._equip_one_item()
+
+        avatar = self._bodies(const.CHANNEL_CHAR_AVATAR)[-1]
+        row = self._rows_for_observers()[-1]
+        self.assertEqual(avatar["worn"], {slot: asset_key})
+        self.assertEqual(row[const.ENTITY_WORN_KEY], {slot: asset_key})
+
+    def test_an_unequip_takes_the_slot_off_both_readers(self):
+        slot, _asset_key = self._equip_one_item()
+
+        self.char1.equipment.unequip(WieldLocation(slot))
+
+        avatar = self._bodies(const.CHANNEL_CHAR_AVATAR)[-1]
+        row = self._rows_for_observers()[-1]
+        self.assertEqual(avatar["worn"], {})
+        self.assertNotIn(const.ENTITY_WORN_KEY, row)
+
+    def test_a_character_with_no_gear_sends_no_worn_key(self):
+        character_figure.publish(self.char1)
+
+        row = self._rows_for_observers()[-1]
+        self.assertNotIn(const.ENTITY_WORN_KEY, row)

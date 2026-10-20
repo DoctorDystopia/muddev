@@ -40,6 +40,11 @@ extends Node3D
 ## equivalent across ENTITY_SCALE, TILE_PROP_SCALE and ITEM_SCALE in three
 ## files, and they drifted.
 ##
+## Two stand-ins come from [FigureLibrary], in the same unit box. A row with
+## a body type draws as a figure. An item with no served model draws its
+## worn look from the gear editor, before its family (10/17/2026). The
+## cells of the bag use the same order. See [method _item_for].
+##
 ## ## The observer occupies a tile this pool cannot see
 ##
 ## `emit_room_contents` excludes the observer from their OWN room_players list —
@@ -242,6 +247,17 @@ var _tile_origins: Dictionary = {}
 ## every entity on every change.
 var _lift: Dictionary = {}
 
+## int id -> the box of its node, in the space of the node, as
+## [method ModelLoader.bounds_of] gives it. The same walk that gives the
+## lift gives the box. [method pick] tests a ray against it first.
+var _boxes: Dictionary = {}
+
+## int id -> the faces of its node, from [method EntityPicking.faces_of].
+## Built on the first pick that enters the box of the node, not at the
+## build. Most nodes never get a cursor. [method _drop_node] clears it with
+## the node, so a redraw never tests the faces of a freed node.
+var _faces: Dictionary = {}
+
 ## int id -> the nudge of the look of its chunk object, in world units. The
 ## slot moves by it. Zero for a row with no look (10/16/2026).
 var _nudge: Dictionary = {}
@@ -249,6 +265,25 @@ var _nudge: Dictionary = {}
 ## int id -> the fields the node of that entity was built from. See
 ## [method _look_of]. A row that arrives with the same look keeps its node.
 var _looks: Dictionary = {}
+
+## int id -> the yaw that a fight turned that entity to, in radians about Y
+## (10/18/2026). See [method face]. Beside the nodes and not on them, for
+## the reason the animators are: a rebuild for a new look frees the node,
+## and the turn must outlive it. [method _drop_node] erases it.
+var _facing: Dictionary = {}
+
+## int id -> whether that entity turns at all. A character and an NPC turn,
+## to their step and to their fight. Each other row (an item, a sign, a
+## station) keeps the turn that it has, which for a chunk object is the
+## facing the server sent. See [method _turns].
+var _mobile: Dictionary = {}
+
+## Where the node of an entity came from. A new figure set changes a figure
+## and a worn look, never a served model. See [method _redraws_for_figures].
+enum Drawn { FIGURE, OWN_ART, WORN_LOOK, LADDER }
+
+## int id -> the [enum Drawn] of the node of that entity.
+var _drawn_from: Dictionary = {}
 
 ## The last set of marks sent on [signal true_tiles_changed]. Kept so a frame
 ## in which nobody started or stopped moving emits nothing.
@@ -299,8 +334,9 @@ func bind(resolver: MeshResolver, locate: Callable, step: float) -> void:
 
 
 ## Give the pool the figure library. A row with a body type then draws as a
-## figure (DESIGN-0014 section 20). With no library, the row draws its asset
-## key through the mesh ladder, as before.
+## figure (DESIGN-0014 section 20). An item with a worn look and no served
+## model draws its worn look (section 23). With no library, each row draws
+## its asset key through the mesh ladder, as before.
 func bind_figures(library: FigureLibrary) -> void:
 	_figures = library
 	_figures.changed.connect(_on_figures_changed)
@@ -484,16 +520,115 @@ func apply_delta(added: Array, removed: Array) -> void:
 	_sync()
 
 
-## The entity nearest a point on screen, or 0 for nothing within reach.
+## The entity under a point on screen, or 0 for none.
 ##
-## Screen-space rather than a physics raycast: there are no collision bodies in
-## this scene and adding them would mean a second representation of every
-## entity to keep in step. Picking by cursor distance also does the more
-## obliging thing when two entities overlap -- it takes whichever LOOKS closest
-## to the cursor.
+## Three tiers, and the first that answers wins:
+##
+## 1. The entity whose SURFACE the ray under the cursor meets first. Each
+##    pixel of a drawn model is clickable. A click takes the model that the
+##    player sees under the cursor. On a crowded tile the figures overlap
+##    (see [constant ENTITY_SCALE]). This tier tells them apart. The face
+##    in front wins, not the box.
+## 2. The entity whose BOX the ray enters first. A rigged model keeps its
+##    faces in its bind pose, so a face test on one can miss. Its box
+##    still catches the click.
+## 3. The entity whose origin is nearest the cursor, within `reach` pixels.
+##    A small item is a few pixels across when the camera is far out. This
+##    tier keeps it clickable. It was the one rule until 10/20/2026.
+##
+## No physics raycast. This scene has no collision bodies. A body for each
+## entity is a second copy of each model, and the copy goes stale on each
+## redraw. [EntityPicking] tests the drawn meshes themselves.
 ##
 ## Zero is a safe "nothing" because Evennia object ids start at 1.
 func pick(camera: Camera3D, screen_point: Vector2, reach: float) -> int:
+	var found := pick_ray(camera.project_ray_origin(screen_point),
+		camera.project_ray_normal(screen_point))
+
+	if found != 0:
+		return found
+
+	return _pick_near(camera, screen_point, reach)
+
+
+## The entity that a ray meets, or 0. The first two tiers of [method pick].
+##
+## The boxes are the broad phase, nearest first. The pool tests the faces
+## of a node only when the ray enters its box. The walk stops at the first
+## box that begins past the nearest face. Thus, most picks test one mesh.
+## A served model of thousands of faces costs nothing while the cursor is
+## off it.
+func pick_ray(origin: Vector3, direction: Vector3) -> int:
+	var boxed := _box_hits(origin, direction)
+
+	if boxed.is_empty():
+		return 0
+
+	var found := 0
+	var nearest := EntityPicking.MISS
+
+	for hit: Array in boxed:
+		var box_distance: float = hit[0]
+		var entity_id: int = hit[1]
+
+		if found != 0 and box_distance >= nearest:
+			break
+
+		var distance := EntityPicking.surface_distance(
+			_faces_of(entity_id), origin, direction)
+
+		if distance == EntityPicking.MISS:
+			continue
+
+		if found == 0 or distance < nearest:
+			nearest = distance
+			found = entity_id
+
+	if found != 0:
+		return found
+
+	var first: Array = boxed[0]
+
+	return first[1]
+
+
+## Every entity whose box the ray enters, as `[[distance, id], ...]`,
+## nearest first. It skips a node that is not drawn, or that has no box.
+func _box_hits(origin: Vector3, direction: Vector3) -> Array:
+	var hits: Array = []
+
+	for entity_id: int in _nodes:
+		var node: Node3D = _nodes[entity_id]
+
+		if not node.is_visible_in_tree() or not _boxes.has(entity_id):
+			continue
+
+		var distance := EntityPicking.box_distance(
+			node, _boxes[entity_id], origin, direction)
+
+		if distance != EntityPicking.MISS:
+			hits.append([distance, entity_id])
+
+	hits.sort_custom(func(first: Array, second: Array) -> bool:
+		return first[0] < second[0])
+
+	return hits
+
+
+## The faces of one node, built on the first ask. See [member _faces].
+func _faces_of(entity_id: int) -> Array:
+	if not _faces.has(entity_id):
+		_faces[entity_id] = EntityPicking.faces_of(_nodes[entity_id])
+
+	return _faces[entity_id]
+
+
+## The entity whose origin is nearest a point on screen, within `reach`
+## pixels, or 0. The third tier of [method pick].
+##
+## Screen space, not a ray. When two small things overlap it takes the one
+## that LOOKS nearest to the cursor.
+func _pick_near(camera: Camera3D, screen_point: Vector2, reach: float) -> int:
 	var nearest := reach
 	var found := 0
 
@@ -668,29 +803,73 @@ func _process(delta: float) -> void:
 		var node: Node3D = _nodes[entity_id]
 
 		node.position = animator.advance(delta)
-		_move_figure(node, animator, delta)
+
+		if _mobile.get(entity_id, false):
+			_turn(node, animator, _facing.get(entity_id, node.rotation.y), delta)
+			_play_step(node, animator)
 
 	_publish_marks()
 
 
-## A figure turns to its step, walks while it slides, and idles on its tile.
-## Each other node has no clip and keeps the turn that it has.
+## Turn a mobile to its step while it slides, and to `facing` while it
+## stands. A mobile that stands and has no facing keeps the turn it has:
+## the caller passes its own yaw as `facing` then.
 ##
 ## The turn rate is the one of the avatar, so the player and the figure
 ## beside them turn by one rule.
-static func _move_figure(node: Node3D, animator: StepAnimator, delta: float) -> void:
+static func _turn(node: Node3D, animator: StepAnimator, facing: float,
+		delta: float) -> void:
+	var heading := animator.target() - animator.drawn()
+	var wanted := facing
+
+	if animator.is_travelling() and Vector2(heading.x, heading.z).length() > StepAnimator.ARRIVED:
+		wanted = atan2(heading.x, heading.z)
+
+	node.rotation.y = rotate_toward(node.rotation.y, wanted,
+		WorldView.TURN_SPEED * delta)
+
+
+## A figure walks while it slides, and idles on its tile. Each other node
+## has no clip, and the call does nothing for it.
+static func _play_step(node: Node3D, animator: StepAnimator) -> void:
 	if FigureLibrary.figure_of(node) == null:
 		return
 
-	var travelling := animator.is_travelling()
-	var heading := animator.target() - animator.drawn()
+	FigureLibrary.play(node, FigureStances.ACTION_WALK
+		if animator.is_travelling() else FigureStances.ACTION_IDLE)
 
-	if travelling and Vector2(heading.x, heading.z).length() > StepAnimator.ARRIVED:
-		node.rotation.y = rotate_toward(node.rotation.y, atan2(heading.x, heading.z),
-			WorldView.TURN_SPEED * delta)
 
-	FigureLibrary.play(node, FigureStances.ACTION_WALK if travelling
-		else FigureStances.ACTION_IDLE)
+## Turn a mobile to `yaw` (radians about Y), the way a fight turns it.
+##
+## The server names who turns to whom (`blackout_face`, and each swing on
+## `blackout_combat`). The pane reads where the two stand and gives this
+## pool the yaw. Thus, the pool owns no copy of the placement maths.
+##
+## The turn is a walk of the rotation over [method _process], at
+## [constant WorldView.TURN_SPEED]. With the animation off, it is at once,
+## because [method _process] then runs nothing. A step takes over while
+## the mobile slides, and the yaw comes back when it stands. A row that is
+## not a mobile keeps its turn: a chunk object faces the way its file says.
+func face(entity_id: int, yaw: float) -> void:
+	if not _mobile.get(entity_id, false):
+		return
+
+	_facing[entity_id] = yaw
+
+	if _animated:
+		return
+
+	var node: Node3D = _nodes.get(entity_id)
+
+	if node != null:
+		node.rotation.y = yaw
+
+
+## Whether a row turns at all: a character or an NPC. See [member _mobile].
+static func _turns(entity_data: Dictionary) -> bool:
+	var kind := str(entity_data.get("kind", ""))
+
+	return kind == _Const.FAMILY_CHARACTER or kind == _Const.FAMILY_NPC
 
 
 ## Tell the pane which true tiles to mark, when that set has changed.
@@ -886,6 +1065,11 @@ func _prune(by_tile: Dictionary) -> void:
 		if entity_data.is_empty() or _looks.get(entity_id) != _look_of(entity_data):
 			_drop_node(entity_id)
 
+		# The turn of a fight outlives a rebuild for a new look, and ends
+		# when the entity leaves. See [member _facing].
+		if entity_data.is_empty():
+			_facing.erase(entity_id)
+
 
 ## Free one node and forget what was measured on it.
 ##
@@ -901,7 +1085,11 @@ func _drop_node(entity_id: int) -> void:
 	_end_fade(entity_id)
 	_nodes.erase(entity_id)
 	_looks.erase(entity_id)
+	_mobile.erase(entity_id)
+	_drawn_from.erase(entity_id)
 	_lift.erase(entity_id)
+	_boxes.erase(entity_id)
+	_faces.erase(entity_id)
 	_nudge.erase(entity_id)
 
 	if _hovered == entity_id:
@@ -977,16 +1165,27 @@ func _node_for_entity(entity_data: Dictionary) -> Node3D:
 
 	var node := _build(entity_data)
 
-	# The lift is measured BEFORE the label is attached. Both read the bounds
-	# of the node. A label attached first counts as part of the mesh, and it
-	# lifts the entity off the ground by the height of its own text.
-	_lift[entity_id] = _rest_offset(node)
+	# The pool measures the box BEFORE it attaches the label. The lift and
+	# the pick both read the box. A label in the box counts as part of the
+	# mesh. Then the height of its text lifts the entity off the ground.
+	var box := ModelLoader.bounds_of(node)
+
+	_boxes[entity_id] = box
+	_lift[entity_id] = _rest_offset(node, box)
 	_nudge[entity_id] = ObjectLook.offset_of(_object_look_of(entity_data))
 	_attach_label(node, entity_data)
+	# The lamps light a figure through the entity layer (10/18/2026).
+	FigureLights.mark_entity(node)
 	add_child(node)
 
 	_nodes[entity_id] = node
 	_looks[entity_id] = _look_of(entity_data)
+	_mobile[entity_id] = _turns(entity_data)
+
+	# A node built again in the middle of a fight faces its foe at once.
+	# The facing of its chunk file does not apply. See [method face].
+	if _facing.has(entity_id) and _mobile[entity_id]:
+		node.rotation.y = _facing[entity_id]
 
 	return node
 
@@ -1037,34 +1236,39 @@ static func _object_look_of(entity_data: Dictionary) -> Dictionary:
 	return look if look is Dictionary else {}
 
 
-## The body type and the figure colors of a row, as one text. "" for a row
-## with no body type.
+## The body type, the figure colors, and the worn record of a row, as one
+## text. "" for a row with no body type.
 static func _figure_look_of(entity_data: Dictionary) -> String:
 	if not entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
 		return ""
 
-	var colors: Variant = entity_data.get(_Const.ENTITY_FIGURE_COLORS_KEY, {})
-
 	return FigureLibrary.look_key(str(entity_data[_Const.ENTITY_BODY_TYPE_KEY]),
-		colors if typeof(colors) == TYPE_DICTIONARY else {})
+		_table_of(entity_data, _Const.ENTITY_FIGURE_COLORS_KEY),
+		_table_of(entity_data, _Const.ENTITY_WORN_KEY))
 
 
-## One entity's mesh, from the ladder.
+## One dictionary field of a row, or {} when the row lacks it or when the
+## value is no dictionary.
+static func _table_of(entity_data: Dictionary, key: String) -> Dictionary:
+	var value: Variant = entity_data.get(key, {})
+
+	return value if typeof(value) == TYPE_DICTIONARY else {}
+
+
+## The mesh of one entity: its figure, else the node of [method _item_for].
 ##
-## `asset` and `family` are passed through exactly as the server sent them; this
-## file decides nothing about what a thing looks like. An entity ALWAYS gets a
-## mesh -- resolve_entity never returns null -- because something unmodelled
-## still has to be visible and clickable.
+## The pool gives `asset` and `family` on as the server sent them. This file
+## decides nothing about what a thing looks like. An entity ALWAYS gets a
+## mesh, because the rest of the ladder never gives null. A thing with no
+## model must still be visible and clickable.
 func _build(entity_data: Dictionary) -> Node3D:
 	var node := _figure_for(entity_data)
 	var look := _object_look_of(entity_data)
 
 	if node == null:
-		# The id seeds the auto variant: one object keeps one look for as
-		# long as it stands.
-		node = _resolver.resolve_entity(
-			str(entity_data.get("asset", "")), str(entity_data.get("family", "")),
-			look, str(_id_of(entity_data)))
+		node = _item_for(entity_data, look)
+	else:
+		_drawn_from[_id_of(entity_data)] = Drawn.FIGURE
 
 	# The rotation of the chunk object that stood the entity up. A row with
 	# no facing keeps the model as it comes. The look scales and tilts it
@@ -1079,6 +1283,40 @@ func _build(entity_data: Dictionary) -> Node3D:
 	return node
 
 
+## The node of a row that draws no figure. Three sources, in the order of
+## the cells of [ItemStage] (Nick, 10/17/2026):
+##
+## 1. The served model of the asset key. The look of the chunk object
+##    picks its variant.
+## 2. The worn look of the item, from the gear editor.
+## 3. The rest of the mesh ladder: the family model, then the family shape.
+##
+## A served model that is not in hand yet starts its fetch. The worn look
+## stands in until the file arrives. A row whose key has no worn look draws
+## as before.
+func _item_for(entity_data: Dictionary, look: Dictionary) -> Node3D:
+	var entity_id := _id_of(entity_data)
+	var asset := str(entity_data.get("asset", ""))
+	# The id seeds the auto variant: one object keeps one look for as long
+	# as it stands.
+	var seed := str(entity_id)
+	var node := _resolver.resolve_own_art(asset, look, seed)
+	var drawn := Drawn.OWN_ART
+
+	if node == null and _figures != null:
+		node = _figures.build_item(asset)
+		drawn = Drawn.WORN_LOOK
+
+	if node == null:
+		node = _resolver.resolve_entity(asset, str(entity_data.get("family", "")),
+			look, seed)
+		drawn = Drawn.LADDER
+
+	_drawn_from[entity_id] = drawn
+
+	return node
+
+
 ## The figure of a row with a body type, or null. It is null also while the
 ## figure set is not in hand. The row then draws through the mesh ladder.
 ## When the set arrives, the row draws again as a figure.
@@ -1086,24 +1324,49 @@ func _figure_for(entity_data: Dictionary) -> Node3D:
 	if _figures == null or not entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
 		return null
 
-	var colors: Variant = entity_data.get(_Const.ENTITY_FIGURE_COLORS_KEY, {})
-
 	return _figures.build(str(entity_data[_Const.ENTITY_BODY_TYPE_KEY]),
-		colors if typeof(colors) == TYPE_DICTIONARY else {})
+		_table_of(entity_data, _Const.ENTITY_FIGURE_COLORS_KEY),
+		_table_of(entity_data, _Const.ENTITY_WORN_KEY))
 
 
-## The figure set or the model of a part arrived. Each row with a body type
-## draws again. A new model does the same for each row of its key.
+## The figure set or the model of a part arrived. Each row that the change
+## reaches draws again. See [method _redraws_for_figures].
 func _on_figures_changed() -> void:
 	var redrawn := false
 
 	for entity_data: Dictionary in _entities:
-		if entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
+		if _redraws_for_figures(entity_data):
 			_drop_node(_id_of(entity_data))
 			redrawn = true
 
 	if redrawn:
 		_sync()
+
+
+## Whether a new figure set, or the model of a part, changes the node of a
+## row.
+##
+## - A row with a body type is a figure, or it waits for the figure set.
+## - A worn look can change, or it can leave the set. Its row draws again.
+## - A row of the rest of the ladder draws again when its key has a worn
+##   look now.
+## - A served model wins over a worn look. Its row keeps its node.
+##
+## Not each row: each model of a part that arrives sends the signal again.
+## A rebuild of each node in view at each arrival is the lag of 09/22/2026.
+func _redraws_for_figures(entity_data: Dictionary) -> bool:
+	if entity_data.has(_Const.ENTITY_BODY_TYPE_KEY):
+		return true
+
+	var drawn: int = _drawn_from.get(_id_of(entity_data), Drawn.LADDER)
+
+	if drawn == Drawn.WORN_LOOK:
+		return true
+
+	var asset := str(entity_data.get("asset", ""))
+	var has_look := _figures.has_item_look(asset)
+
+	return drawn == Drawn.LADDER and has_look
 
 
 ## Hang the server's text over one entity, when it sent any.
@@ -1211,11 +1474,12 @@ func _slot_position(origin: Vector3, tile: String, index: int,
 ##
 ## Measured UNSCALED and multiplied, because [method ModelLoader.bounds_of]
 ## excludes the root's own transform: that is what makes the number independent
-## of the scale just applied.
-func _rest_offset(node: Node3D) -> float:
+## of the scale just applied. `box` is that measurement. The caller keeps
+## it for the pick, so the pool walks the subtree one time.
+func _rest_offset(node: Node3D, box: AABB) -> float:
 	# The scale of the node, not ENTITY_SCALE: the look of a chunk object
 	# may have scaled it (10/16/2026).
-	return ObjectLook.rest_lift(node)
+	return ObjectLook.lift_of(box, node)
 
 
 ## How far out to place a ring of `total` occupants.

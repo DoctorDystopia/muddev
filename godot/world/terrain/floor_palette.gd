@@ -68,6 +68,10 @@ const PROP_COLORS := {
 	"table": Color("6f6b63"),
 	"lamp_post": Color("3d4147"),
 	"lamp": Color("ffd27a"),
+	"oil_lamp": Color("b08a4a"),
+	"oil_lamp_glass": Color("ffe0a0"),
+	"torch": Color("4a4a4e"),
+	"torch_flame": Color("ff9a3a"),
 }
 
 ## How much lighter the top face of a primitive is than its sides, so its

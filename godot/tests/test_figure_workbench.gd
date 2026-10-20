@@ -18,7 +18,8 @@ extends Node
 ## 5. New content shows on the stand, and the part keeps its node.
 ## 6. A part node that a Godot tool moved goes into its worn look. The old
 ##    place of the node brings the old content back.
-## 7. A ray picks the part that it meets first.
+## 7. A ray picks the part that it meets first, and the node of one shape
+##    of it. A moved shape node goes into its shape.
 ## 8. The figure files of the repository read, and each one is in its
 ##    canonical text. A mannequin of each body type stands.
 ## 9. The outfit dresses each stand: the family shape, then the slot shape,
@@ -46,6 +47,10 @@ extends Node
 ##     rows of a clip build.
 ## 19. A job runs a routine on a thread, and it gives the result when it
 ##     ends.
+## 20. A served model of an item wins over its worn look on each stand
+##     (10/17/2026). A ray picks it. A move of its node goes into the
+##     `served` row of the look, and the node on the other stand follows.
+##     An item with no look gets a look with the row only.
 
 const WORKBENCH_SCENE := "res://addons/blackout_figure/figure_workbench.tscn"
 
@@ -89,6 +94,7 @@ func _ready() -> void:
 	await _the_workbench_stands_and_changes()
 	await _the_outfit_dresses_each_stand()
 	await _the_workbench_has_models_and_a_fit()
+	await _a_served_model_moves_on_the_stands()
 	await _the_workbench_has_colors_tiers_and_stances()
 	await _the_family_stand_shows_an_entity()
 	await _a_job_runs_on_a_thread()
@@ -239,9 +245,11 @@ func _the_workbench_stands_and_changes() -> void:
 
 	_new_content_shows(bench)
 	_a_moved_node_goes_into_the_look(bench)
+	_a_moved_shape_goes_into_the_look(bench)
 	_a_moved_mark_goes_into_the_rig(bench)
 	await _frames(SETTLE_FRAMES)
 	_a_ray_picks_the_first_part(bench)
+	_a_ray_picks_a_shape(bench)
 	_a_new_rig_gets_a_stand(bench)
 	bench.queue_free()
 
@@ -322,6 +330,53 @@ func _a_moved_node_goes_into_the_look(bench: FigureWorkbench) -> void:
 	hand.transform = before
 	_expect(bench.sync_from_nodes() and bench.store.looks["body_2"].to_text() == text,
 		"the old place of the node brings the old content back")
+
+
+## A shape node that a Godot tool moved goes into its shape: the offset,
+## the rotation, and the scale. The node keeps its place, and the old
+## place brings the old content back.
+func _a_moved_shape_goes_into_the_look(bench: FigureWorkbench) -> void:
+	var shape := bench.shape_node("body_1", "body_1", "head", 0)
+	var other := bench.shape_node("body_2", "body_2", "head", 0)
+	var text: String = bench.store.looks["body_1"].to_text()
+	var other_text: String = bench.store.looks["body_2"].to_text()
+	var before := shape.transform
+	var moved := Transform3D(Basis.from_euler(Vector3(0.3, 0.0, 0.0)).scaled_local(
+		Vector3(1.0, 1.2, 1.0)), Vector3(0.0, 0.03, 0.01))
+
+	_expect(shape != null and other != null and not bench.sync_from_nodes(),
+		"each stand has the node of the first shape of the head, and nobody moved it")
+	shape.transform = moved
+	_expect(bench.sync_from_nodes(), "a moved shape node changes its look")
+
+	var row: Dictionary = bench.store.looks["body_1"].part("head")["shapes"][0]
+
+	_expect(FigureLook.shape_transform(row).origin.distance_to(moved.origin) < TOLERANCE
+		and FigureLook.shape_transform(row).basis.y.distance_to(moved.basis.y) < TOLERANCE,
+		"the shape has the place of the node")
+	_expect(is_instance_valid(shape) and bench.shape_node("body_1", "body_1", "head", 0) == shape
+		and shape.transform.is_equal_approx(moved), "the moved shape keeps its node")
+	_expect(not bench.sync_from_nodes(), "the rounding of the file is not a move")
+	_expect(bench.store.looks["body_2"].to_text() == other_text,
+		"the other body type keeps its own body")
+
+	shape.transform = before
+	_expect(bench.sync_from_nodes() and bench.store.looks["body_1"].to_text() == text,
+		"the old place of the shape node brings the old content back")
+
+
+## A ray picks the node of one shape, and the shape id names the shape.
+func _a_ray_picks_a_shape(bench: FigureWorkbench) -> void:
+	var head := bench.part_node("body_1", "body_1", "head")
+	var head_at: Vector3 = (head.get_child(0) as Node3D).global_position
+	var instance := bench.shape_at(head_at + Vector3(0.0, 0.0, 5.0), Vector3.FORWARD)
+
+	_expect(instance != null and instance.get_parent() == head,
+		"a ray at the head picks a shape of the head")
+	_expect(instance != null and FigureBuilder.shape_id(instance).slice(0, 2)
+		== ["body_1", "head"], "the shape id names the look and the part")
+	_expect(bench.shape_at(head_at + Vector3(0.0, 5.0, 5.0), Vector3.FORWARD) == null,
+		"a ray over the figure picks no shape")
 
 
 ## The bone mark is a node that the Godot move tool moves. Its move goes
@@ -588,6 +643,92 @@ func _the_workbench_has_models_and_a_fit() -> void:
 	_expect(not bench.sync_from_nodes(), "a new part with a model is at its place")
 
 	_a_fit_keeps_the_other_stand(bench, part_name)
+	bench.queue_free()
+
+
+## A workbench whose served tree has a model of the stick: a long box,
+## away from the origin, as a download is.
+func _served_bench(name: String) -> FigureWorkbench:
+	var directory := _scratch.path_join(name)
+	var served := directory.path_join("served")
+	var relative := "items/%s.glb" % STICK
+	var bench := FigureWorkbench.new()
+
+	_filled_store(directory).save()
+
+	var rig := FigureEdits.rig_from_profile("body_1")
+	var download := FigureLook.from_data({"format": FigureLook.FORMAT, "key": "download",
+		"parts": [{"name": "blade", "bone": rig.slots()["main_hand"], "position": [2.0, 1.0, 0.0],
+			"shapes": [{"shape": FamilyShapes.SHAPE_BOX, "size": [0.5, 6.0, 0.2]}]}]})
+
+	_expect(FigureReference.export(rig, [download], served.path_join(relative)) == OK,
+		"the served model of the stick writes")
+
+	var manifest := FileAccess.open(served.path_join(FigureModels.MANIFEST_NAME), FileAccess.WRITE)
+
+	manifest.store_string(JSON.stringify({STICK: relative}))
+	manifest.close()
+	bench.figure_directory = directory
+	bench.clip_directory = directory.path_join("clips")
+	bench.catalog_path = _write_catalog()
+	bench.models_directory = served
+
+	return bench
+
+
+func _a_served_model_moves_on_the_stands() -> void:
+	var bench := _served_bench("served_bench")
+
+	add_child(bench)
+	await _frames(SETTLE_FRAMES)
+
+	var rig: FigureRig = bench.store.rigs["body_1"]
+	var stick := FigureLook.from_data(FigureEdits.look_from(STICK,
+		FigureEdits.slot_shape(rig, "main_hand")))
+
+	bench.put(LOOK, STICK, stick.data)
+	bench.wear("main_hand", STICK)
+	await _frames(SETTLE_FRAMES)
+
+	var first := bench.part_node("body_1", STICK, FigureLook.SERVED_PART)
+	var second := bench.part_node("body_2", STICK, FigureLook.SERVED_PART)
+	var fitted := FigureOutfit.fit_place(rig, rig.slots()["main_hand"], stick, bench.models)
+
+	_expect(bench.source_of("body_1", "main_hand") == FigureOutfit.SOURCE_MODEL
+		and first != null and second != null
+		and bench.part_node("body_1", STICK, stick.parts()[0]["name"]) == null,
+		"each stand draws the served model, and no part of the worn look")
+
+	if first == null or second == null:
+		bench.queue_free()
+		return
+
+	_expect(_near(first.transform, fitted) and not bench.sync_from_nodes(),
+		"the served model takes the box of the worn look, and nothing moved")
+	_expect(bench.part_at((first.get_child(0) as Node3D).global_position
+		+ Vector3(0.0, 0.0, 5.0), Vector3.FORWARD) == first, "a ray picks the served model")
+
+	var moved := Transform3D(Basis.from_scale(Vector3.ONE * 0.4), Vector3(0.0, 0.1, 0.02))
+
+	first.transform = moved
+	_expect(bench.sync_from_nodes()
+		and bench.store.looks[STICK].served().get("bone") == rig.slots()["main_hand"]
+		and _near(FigureLook.part_transform(bench.store.looks[STICK].served()), moved),
+		"a moved served model goes into the served row of the look")
+	await _frames(SETTLE_FRAMES)
+	_expect(_near(bench.part_node("body_2", STICK, FigureLook.SERVED_PART).transform, moved),
+		"the served model on the other stand follows")
+
+	bench.put(LOOK, STICK, {})
+	await _frames(SETTLE_FRAMES)
+	first = bench.part_node("body_1", STICK, FigureLook.SERVED_PART)
+	first.transform = moved
+	_expect(bench.sync_from_nodes() and bench.store.has(LOOK, STICK)
+		and bench.store.looks[STICK].parts().is_empty()
+		and not bench.store.looks[STICK].served().is_empty(),
+		"an item with no look gets a look with the served row only")
+	_expect(bench.source_of("body_1", "main_hand") == FigureOutfit.SOURCE_MODEL,
+		"the served model still draws")
 	bench.queue_free()
 
 

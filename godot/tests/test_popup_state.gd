@@ -31,6 +31,8 @@ func _ready() -> void:
 	_the_main_view_groups_rows_by_tab()
 	_a_tab_view_shows_only_its_tab()
 	_a_search_covers_every_tab_in_one_group()
+	_the_main_view_names_each_group_by_its_tab()
+	_a_tab_view_and_a_search_name_no_group()
 	_a_grid_with_no_tabs_is_not_filtered()
 	_a_drop_fills_the_server_template()
 	_a_text_action_substitutes_the_text()
@@ -115,15 +117,19 @@ static func vault_payload(view: int = 0) -> Dictionary:
 			 "tabs": [
 				{"index": 0.0, "label": "All", "title": "Main tab", "asset": "",
 				 "family": "", "active": view == 0, "drop_key": "0",
+				 "heading": "Main tab",
 				 "actions": [{"label": "View", "command": "bank view 0"}]},
 				{"index": 1.0, "label": "", "title": "Tab 1", "asset": "iron_ore",
 				 "family": "material", "active": view == 1, "drop_key": "1",
+				 "heading": "Tab 1",
 				 "actions": [{"label": "View", "command": "bank view 1"}, rename]},
 				{"index": 2.0, "label": "Bars", "title": "Tab 2: Bars", "asset": "",
 				 "family": "", "active": view == 2, "drop_key": "2",
+				 "heading": "Bars",
 				 "actions": [{"label": "View", "command": "bank view 2"}]},
 				{"index": 3.0, "label": "+", "title": "New tab", "asset": "",
-				 "family": "", "active": false, "drop_key": "new", "actions": []},
+				 "family": "", "active": false, "drop_key": "new", "heading": "",
+				 "actions": []},
 			 ],
 			 "view": float(view), "searchable": true,
 			 "drag": {"onto_slot": "bank swap {source} = {target}",
@@ -398,12 +404,37 @@ func _a_search_covers_every_tab_in_one_group() -> void:
 		"a search reaches past the viewed tab and ignores case")
 
 
+func _the_main_view_names_each_group_by_its_tab() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(0))
+	var headings := state.row_groups(0, "").map(
+		func(group: Array) -> String: return state.group_heading(0, "", group))
+
+	_expect(headings == ["Tab 1", "Bars", "Main tab"],
+		"each group takes the heading the server sent on its tab")
+
+
+func _a_tab_view_and_a_search_name_no_group() -> void:
+	var state := PopupState.new()
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(1))
+	var viewed: Array = state.row_groups(0, "")[0]
+
+	_expect(state.group_heading(0, "", viewed).is_empty(), "a tab view names no group")
+
+	state.ingest(_Const.CH_CHAR_POPUP, vault_payload(0))
+	var found: Array = state.row_groups(0, "o")[0]
+
+	_expect(state.group_heading(0, "o", found).is_empty(), "a search names no group")
+
+
 func _a_grid_with_no_tabs_is_not_filtered() -> void:
 	var state := PopupState.new()
 	state.ingest(_Const.CH_CHAR_POPUP, bank_payload())
 
 	_expect(not state.is_filtered(0), "a grid with no tabs draws every slot")
 	_expect(state.row_groups(0, "dust").is_empty(), "and has no groups")
+	_expect(state.group_heading(0, "", [state.row_at(0, 0)]).is_empty(),
+		"and names no group")
 
 
 func _a_drop_fills_the_server_template() -> void:

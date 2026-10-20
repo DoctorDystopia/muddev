@@ -37,6 +37,13 @@ extends RefCounted
 ## parts of that base, and it keeps only its own colors
 ## ([method FigureLook.resolved]). [method new_kit_part] makes a kit part:
 ## a hair shape, a head, a beard.
+##
+## ## The served place (10/17/2026)
+##
+## [method set_served_place] keeps the place of a moved served model in the
+## `served` row of the look of its item. [method clear_served_place] takes
+## the row away, and the model then takes the box of the stand-in again
+## ([FigureOutfit]).
 
 ## The color role of the skin of a body. [constant FigureShapes.BODY_COLORS]
 ## gives each role of a new body its color.
@@ -150,6 +157,31 @@ static func set_hide(look: Dictionary, region: String, hidden: bool) -> String:
 	# The writer leaves out an empty hide list, so the content has no key.
 	if hides.is_empty():
 		look.erase("hides")
+
+	return ""
+
+
+## Keep the place of the served model of a look on one bone: its `served`
+## row.
+static func set_served_place(look: Dictionary, bone: String, xform: Transform3D) -> String:
+	if bone.is_empty():
+		return "The served model needs a bone."
+
+	var row := {"bone": bone}
+
+	FigureLook.set_part_transform(row, xform)
+	look["served"] = row
+
+	return ""
+
+
+## Take the place of the served model out of a look. The model then takes
+## the box of the stand-in again.
+static func clear_served_place(look: Dictionary) -> String:
+	if not look.has("served"):
+		return "The served model of the look has its first place already."
+
+	look.erase("served")
 
 	return ""
 

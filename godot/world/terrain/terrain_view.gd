@@ -11,9 +11,17 @@ extends Node3D
 ## [ChunkMeshBuilder] draws the ground, the same class that the terrain editor
 ## uses. Thus, what an author sees in the editor is what a player sees.
 ##
-## The material is the one of the editor: vertex colour from the floor type,
-## and a rough surface. The flat shading comes from the mesh, which gives each
-## triangle its own normal (DESIGN-0011 section 6.8).
+## The material is the one of the editor ([TerrainMaterial]): vertex colour
+## from the floor type, and a rough surface. The flat shading comes from the
+## mesh, which gives each triangle its own normal (DESIGN-0011 section 6.8).
+##
+## ## The lamp light (10/18/2026)
+##
+## Each build bakes the lamps that reach the chunk into its ground, its
+## walls, and its props ([TileLights]). A lamp may stand in a neighbour
+## chunk, so [method sync] keeps the signature of the lamps beside each
+## built mesh. A chunk builds again when a neighbour arrives with a lamp
+## that reaches it. The few real lights go to the figures ([FigureLights]).
 ##
 ## ## Planes (Phase 7b)
 ##
@@ -93,6 +101,10 @@ var _built := {}
 ## above means "build again" too.
 var _built_above := {}
 
+## Key -> the signature of the lamps that its meshes bake
+## ([method TileLights.signature]). A new lamp in reach means "build again".
+var _built_lights := {}
+
 ## Keys to build, first key first.
 var _queue: Array[Vector3i] = []
 
@@ -103,13 +115,11 @@ var _hide_roofs := true
 ## it.
 var _covered := false
 
-var _material: StandardMaterial3D
+var _material: ShaderMaterial
 
 
 func _init() -> void:
-	_material = StandardMaterial3D.new()
-	_material.vertex_color_use_as_albedo = true
-	_material.roughness = 1.0
+	_material = TerrainMaterial.make()
 
 
 ## Draw the chunks of this model, now and each time they change.
@@ -154,12 +164,18 @@ func sync() -> void:
 	for key: Vector3i in present:
 		var above: Variant = present.get(key + Vector3i(0, 0, 1))
 		var stale: bool = _built.get(key) != present[key] \
-			or _built_above.get(key) != above
+			or _built_above.get(key) != above \
+			or _built_lights.get(key) != TileLights.signature(_lights_for(key))
 
 		if stale and not _queue.has(key):
 			_queue.append(key)
 
 	_sort_queue()
+
+
+## The lamps that reach the chunk of `key`, from its plane.
+func _lights_for(key: Vector3i) -> Array[TileLights.Light]:
+	return TileLights.collect(_state.plane_chunks(key.z), Vector2i(key.x, key.y))
 
 
 ## Build every queued chunk now.
@@ -271,22 +287,24 @@ func _build(key: Vector3i, chunk: ChunkFile, above: ChunkFile) -> void:
 	_free(key)
 
 	var node := MeshInstance3D.new()
+	var lights := _lights_for(key)
 
 	node.name = "Chunk_%d_%d_p%d" % [key.x, key.y, key.z]
-	node.mesh = ChunkMeshBuilder.build(chunk)
+	node.mesh = ChunkMeshBuilder.build(chunk, lights)
 	node.material_override = _material
 	node.visible = _plane_shows(key.z)
 
 	# The water and the walls are children, so they hide with the roof of
 	# their plane.
 	_add_layer(node, "Water", WaterMeshBuilder.build(chunk))
-	_add_layer(node, "Walls", WallMeshBuilder.build(chunk, above))
-	_add_layer(node, PROPS_NODE, PropMeshBuilder.build(chunk))
+	_add_layer(node, "Walls", WallMeshBuilder.build(chunk, above, false, lights))
+	_add_layer(node, PROPS_NODE, PropMeshBuilder.build(chunk, lights))
 
 	add_child(node)
 	_nodes[key] = node
 	_built[key] = chunk
 	_built_above[key] = above
+	_built_lights[key] = TileLights.signature(lights)
 	_place_scenery(key)
 
 
@@ -404,6 +422,7 @@ func _free(key: Vector3i) -> void:
 	_nodes.erase(key)
 	_built.erase(key)
 	_built_above.erase(key)
+	_built_lights.erase(key)
 
 
 func _on_room_changed() -> void:

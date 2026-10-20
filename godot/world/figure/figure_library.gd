@@ -24,6 +24,14 @@ extends Node
 ## ladder, so one file costs one request. Until the model is in hand, the
 ## part draws its shape list.
 ##
+## ## The served model of a worn item (10/17/2026)
+##
+## A served model of the asset key wins over the worn look of the item, in
+## the hand as in a cell ([FigureOutfit]). [method build] asks the mesh
+## ladder for the served model of each worn item. Until the file arrives,
+## the worn look stands in. The arrival emits [signal changed], and each
+## pane builds its figures again.
+##
 ## ## The node of a figure
 ##
 ##     FigureHolder (Node3D), the node that a pane places, turns, and scales
@@ -43,6 +51,14 @@ extends Node
 ## each part. Section 20 of DESIGN-0014 gives the crowd numbers that permit
 ## it for the count of players of today, and the count at which the shared
 ## version must replace it.
+##
+## ## The picture of an item
+##
+## [method build_item] gives the worn look of one item alone, in the unit
+## box of the mesh ladder (10/17/2026). [ItemStage] draws it in a cell of
+## the bag, of the doll, and of a pop-up. [EntityPool] draws it on the
+## ground. A served model of the asset key wins over the worn look. An item
+## with neither draws its family model or its family shape, as before.
 
 ## Emitted when the figure set arrives, or when a model of a part arrives.
 ## Each pane then builds its figures again.
@@ -63,6 +79,12 @@ const FALLBACK_TOP := 1.7
 const HALF_WIDTH := 0.35
 
 const HOLDER_NAME := "FigureHolder"
+
+const ITEM_HOLDER_NAME := "ItemHolder"
+
+## The body type of the rig that an item stands on: none. An item has no
+## wearer, so it gets the first rig, as an unknown body type does.
+const ITEM_BODY_TYPE := ""
 
 ## The meta of a holder of [method build].
 const HOLDER_META := "figure_holder"
@@ -161,13 +183,20 @@ func take_text(text: String) -> bool:
 ## The figure of one player character, or null when the figure set is not
 ## in hand. A body type with no rig gets the first rig: a person who looks
 ## like another body type is better than a block (requirement D7).
-func build(body_type: String, figure_colors: Dictionary) -> Node3D:
+##
+## `worn` is the worn record of the character: slot -> asset key. Each item
+## draws its served model, its worn look, or the slot shape
+## ([method FigureOutfit.looks_for]). An empty record dresses the body with
+## nothing.
+func build(body_type: String, figure_colors: Dictionary, worn: Dictionary = {}) -> Node3D:
 	var rig := _rig_for(body_type)
 
 	if rig == null:
 		return null
 
-	var looks := FigureOutfit.looks_for(rig, {}, figure_set.looks)
+	_want_worn(worn)
+
+	var looks := FigureOutfit.looks_for(rig, worn, figure_set.looks, {}, {}, models)
 	var figure := FigureBuilder.build(rig, looks, models, figure_set.palette, figure_colors)
 	var holder := Node3D.new()
 	var top := _top_of(rig) * _scale
@@ -185,10 +214,55 @@ func build(body_type: String, figure_colors: Dictionary) -> Node3D:
 	return holder
 
 
-## One text for what a figure looks like: the body type and the colors. A
-## pane builds a figure again only when this text changes.
-static func look_key(body_type: String, figure_colors: Dictionary) -> String:
-	return body_type + "|" + JSON.stringify(figure_colors, "", true)
+## The picture of one item: its worn look alone, scaled so that its longest
+## side is one unit, and centered on the origin. The holder has no scale and
+## no turn, so a pane can set them.
+##
+## Null when the figure set is not in hand, when no look has the asset key,
+## or when the look draws no part: a tier with no base, for example. The
+## pane then draws the item through the mesh ladder.
+##
+## A part with a model draws its shape list until the model is in hand.
+## [signal changed] then tells the pane to draw the item again.
+##
+## Each picture has its own materials, as a figure does. The pool of the
+## world draws an item on the ground with it ([EntityPool]). The hover glow
+## and the hit flash of the pool write to the materials of one node.
+func build_item(asset_key: String) -> Node3D:
+	if not has_item_look(asset_key):
+		return null
+
+	var looks: Dictionary = figure_set.looks
+	var look: FigureLook = looks[asset_key].resolved(looks)
+	var item := FigureBuilder.build_item(_rig_for(ITEM_BODY_TYPE), look, models,
+		figure_set.palette)
+
+	if item.get_child_count() == 0:
+		item.free()
+		return null
+
+	var holder := Node3D.new()
+
+	holder.name = ITEM_HOLDER_NAME
+	holder.add_child(item)
+	ModelLoader.normalise(item)
+	_own_materials(item)
+
+	return holder
+
+
+## True when the figure set is in hand and has a look for the asset key.
+## The picture of the key can still be null: a tier with no base gives no
+## picture ([method build_item]).
+func has_item_look(asset_key: String) -> bool:
+	return figure_set != null and figure_set.looks.has(asset_key)
+
+
+## One text for what a figure looks like: the body type, the colors, and the
+## worn record. A pane builds a figure again only when this text changes.
+static func look_key(body_type: String, figure_colors: Dictionary, worn: Dictionary = {}) -> String:
+	return "%s|%s|%s" % [body_type, JSON.stringify(figure_colors, "", true),
+		JSON.stringify(worn, "", true)]
 
 
 ## The figure node of a holder of [method build], or null for another node.
@@ -269,6 +343,24 @@ func _want_models() -> void:
 				_wanted[model_key] = true
 
 	_ask_for_wanted()
+
+
+## Ask the mesh ladder for the served model of each item of a worn record.
+## A model in hand goes to [member models] now. A key that the manifest does
+## not name has no served model, so nothing asks for it.
+func _want_worn(worn: Dictionary) -> void:
+	if _resolver == null:
+		return
+
+	for value: Variant in worn.values():
+		var asset_key := str(value)
+
+		if asset_key.is_empty() or models.has(asset_key) \
+				or not _resolver.may_have_art(asset_key) or _take_model(asset_key):
+			continue
+
+		_wanted[asset_key] = true
+		_resolver.want(asset_key)
 
 
 ## Ask the mesh ladder for each wanted model. A model that the manifest does

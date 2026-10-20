@@ -2,12 +2,12 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 10/16/2026
-Description: Cases for the figure of a player character: the two
+Description: Cases for the figure of a player character: the three
              readers, the two writers, and the names that they take from the
              figure files.
 
              No case needs a database. A small stand-in object gives the
-             attribute handler, and _publish is replaced, because
+             attribute handler, and publish is replaced, because
              test_freshness.py owns the proof that a write reaches the feed.
 
 Run from blackout/:
@@ -21,6 +21,7 @@ import unittest
 from unittest import mock
 
 from assets.pipeline import paths
+from items.equipment.constants import WieldLocation
 from systems.gameplay.figure import character_figure
 from systems.gameplay.figure import constants as const
 from systems.gameplay.figure import figure_files
@@ -100,7 +101,7 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(character_figure.figure_colors_of(character), {role: "skin"})
 
 
-@mock.patch.object(character_figure, "_publish")
+@mock.patch.object(character_figure, "publish")
 class WriterTests(unittest.TestCase):
     """set_body_type and set_figure_color."""
 
@@ -161,3 +162,35 @@ class WriterTests(unittest.TestCase):
         self.assertFalse(succeeded)
         self.assertIn("not a named color", message)
         publish.assert_not_called()
+
+
+class _Slots:
+    """A stand-in for an EquipmentHandler: the slots and nothing else."""
+
+    def __init__(self, slots):
+        self.slots = slots
+
+
+class WornItemsTests(unittest.TestCase):
+    """worn_items_of: the item in each slot, by slot value."""
+
+    def test_an_object_with_no_equipment_wears_nothing(self):
+        self.assertEqual(character_figure.worn_items_of(_Character()), {})
+        self.assertEqual(character_figure.worn_items_of(None), {})
+
+    def test_a_character_with_empty_slots_wears_nothing(self):
+        character = _Character()
+        character.equipment = _Slots({slot: None for slot in WieldLocation})
+
+        self.assertEqual(character_figure.worn_items_of(character), {})
+
+    def test_each_held_slot_gives_its_item_by_slot_value(self):
+        character = _Character()
+        held = list(WieldLocation)[:2]
+        items = {slot: object() for slot in held}
+        slots = {slot: items.get(slot) for slot in WieldLocation}
+        character.equipment = _Slots(slots)
+
+        worn = character_figure.worn_items_of(character)
+
+        self.assertEqual(worn, {slot.value: items[slot] for slot in held})

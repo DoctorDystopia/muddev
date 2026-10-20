@@ -426,6 +426,7 @@ the inventory to equip or unequip items.
 > inspect 7
 > inspect main hand
 > inspect toy sword
+> inspect #75931
 ```
 
 The command prints exactly what `look` prints, for something that you carry or
@@ -434,6 +435,17 @@ chunks in the bag, `look mutant raider cured chunk` can only answer with a
 multimatch list. A slot names one object, so every action that the 3D pane
 sends is slot-addressed. Refer to `INVENTORY_ACTION_INSPECT` in
 `systems/interface/statefeed/constants.py`.
+
+`inspect #<id>` reads a thing in the world, at any distance that the client
+draws (10/16/2026). It is the line that the Inspect row of the world pane
+sends, the last row of the right-click menu of every entity. The reach is
+`STATEFEED_ENTITY_RADIUS`, on the plane of the player, as for `say`. A dbref
+outside that reach gets "You see nothing like that." The dbref of a carried
+or worn item works too. Refer to `ENTITY_INSPECT_TEMPLATE` in the same file.
+
+A dbref in `caller.search` is global, whatever the candidate list says.
+`search_in` in `commands/command.py` bounds it, and `inspect` and `attack`
+both go through it.
 
 ### Inspect equipment state (Python)
 
@@ -647,6 +659,15 @@ The stream expires after `TICK_DEBUG_AUTO_EXPIRE_TICKS` (5 minutes) and stops
 on disconnect. It costs nothing when nobody watches: both engine hooks return on
 a dictionary truth test before they read any handler state.
 
+The Godot client draws the same numbers as graphs. Options → Panes →
+"Performance graphs" turns its performance view on. The view subscribes to
+`blackout_tick_perf`, and the server then sends one reading for each tick:
+the gap, the work, the rotation, and the late flag from the same rule as
+`LATE` above. The channel is opt-in. `all` leaves it out, so a client with
+the view off pays nothing. `systems/interface/statefeed/performance.py`
+sends it from `PHASE_END` of the engine, after the engine records the
+duration. See "The performance view draws two clocks" in `godot/README.md`.
+
 ### Known gaps
 
 - Nothing awards Defense XP when a character *takes* damage
@@ -832,7 +853,8 @@ In the Godot client, the tabs are buttons above the vault. A left click on a
 tab views it. A right click renames it. Drag a vault item onto a tab to move
 it there, onto the "+" to make a new tab, or onto another item to swap the
 two. The search box filters the whole vault by name. The buttons under the
-vault switch placeholders and release them all.
+vault switch placeholders and release them all. In the main tab, a small
+label names the items of each tab: the name you gave the tab, or "Tab 2".
 
 ### Python inspection
 

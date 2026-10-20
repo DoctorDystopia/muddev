@@ -116,6 +116,7 @@ def send_full_state(observer) -> int:
         sent += _send_self(observer)
         sent += events.emit_skills(observer, force=True)
         sent += events.emit_combat_options(observer, force=True)
+        sent += events.emit_abilities(observer, force=True)
         sent += events.emit_quests(observer, force=True)
         sent += events.emit_inventory(observer, force=True)
         sent += events.emit_popup(observer, force=True)

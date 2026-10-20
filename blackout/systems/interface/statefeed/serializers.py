@@ -813,6 +813,48 @@ def _add_figure_fields(body: dict, entity) -> None:
     if colors:
         body[const.ENTITY_FIGURE_COLORS_KEY] = colors
 
+    worn = _worn_record(entity)
+
+    if worn:
+        body[const.ENTITY_WORN_KEY] = worn
+
+
+def _worn_record(entity) -> dict:
+    """
+    Purpose: Give the worn record of a player character: slot -> asset key.
+
+    Entry:
+        entity - a player character.
+
+    Exit/Returns:
+        Returns a new dict, slot value -> the asset key of the item in that
+        slot. A slot with no item has no entry.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        character_figure.worn_items_of gives the item of each slot, and
+        _classify names its art. The same routine names an item on the
+        ground and an item in the bag. Thus, the figure wears the asset key
+        that the item has everywhere else in the feed, and one worn look
+        serves all three.
+
+    Notes/References:
+        DESIGN-0014 section 21. The client resolves each asset key through
+        FigureOutfit: the worn look, else the slot shape.
+
+    Author: Nick Hobar
+    Creation date: 10/16/2026
+    """
+    worn = {}
+
+    for slot, item in character_figure.worn_items_of(entity).items():
+        _kind, asset_key = _classify(item)
+        worn[slot] = asset_key
+
+    return worn
+
 
 def serialize_entity(entity, coords=(), observer=None) -> dict:
     """

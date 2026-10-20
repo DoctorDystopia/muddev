@@ -683,6 +683,39 @@ def format_aura_incoming(aura, target, damage: int) -> str:
     )
 
 
+def format_aura_self_burn(aura, damage: int) -> str:
+    """
+    Purpose: One line that tells the caster how much their own aura burned
+    them.
+
+    Entry:
+        aura   - the aura definition. The line shows aura.name.
+        damage - integer HP that this pulse burns from the caster.
+
+    Exit/Returns:
+        Formatted single-line string ready for caster.msg(...).
+
+    Module Globals:
+        TAG_INCOMING, TAG_OUTGOING_NAME, TAG_RESET read.
+
+    Methodology:
+        The palette of format_backfire. From the side of the player, the two
+        are the same event: the damage comes from their own source. The line
+        names the aura for the same reason.
+
+    Notes/References:
+        Only the caster gets this line. The burn comes on every pulse. A line
+        to the room on each pulse would bury the fight of everyone near.
+
+    Author: Nick Hobar
+    Creation date: 10/20/2026
+    """
+    return (
+        f"{TAG_INCOMING}Your {TAG_OUTGOING_NAME}{aura.name}{TAG_INCOMING} "
+        f"sears you for {damage}.{TAG_RESET}"
+    )
+
+
 # ─── Equipment stat readouts ─────────────────────────────────────────────────
 
 def format_combat_stat_bonuses(bonuses: dict) -> list:

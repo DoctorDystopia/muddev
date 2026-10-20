@@ -1,6 +1,6 @@
 @tool
 class_name FigureFamiliesPanel
-extends FigurePartsPanel
+extends PartEditor
 ## The Families tab of the figure workbench (ENG-0011, step L5): the shape
 ## of each item family with no art of its own, as the look file
 ## `families.json` holds it ([FamilyLooks]).
@@ -12,7 +12,7 @@ extends FigurePartsPanel
 ## game draws it.
 ##
 ## A family with a row in the file has the part editor below
-## ([FigurePartsPanel]). A family with no row has a note and "New shape
+## ([PartEditor]). A family with no row has a note and "New shape
 ## from the fallback": the row then starts from the table, or from the
 ## generic block. "Remove shape" takes the row out, and the family draws
 ## its table again.

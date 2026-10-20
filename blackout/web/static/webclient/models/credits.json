@@ -35,6 +35,29 @@
     ]
   },
   {
+    "title": "Copper shortbow",
+    "author": "Nick Hobar",
+    "url": "https://playblackout.io",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "copper_shortbow"
+    ]
+  },
+  {
+    "title": "Free Blacksmith Tool Set - PBR Textures included",
+    "author": "JordanHolmes",
+    "url": "https://jordanholmes.itch.io/free-blacksmith-tool-set-pbr-textures-included",
+    "license": "License not confirmed",
+    "license_url": "",
+    "confirmed": false,
+    "models": [
+      "anvil",
+      "hammer"
+    ]
+  },
+  {
     "title": "Low Poly Food Asset Pack",
     "author": "Kyle Fuji",
     "url": "https://www.patreon.com/kylefuji",
@@ -59,6 +82,17 @@
       "mutant_raider_prime_cured_meat_sandwich",
       "mutant_raider_prime_steak",
       "mutant_raider_steak"
+    ]
+  },
+  {
+    "title": "Low Poly Medieval Boiler Machine",
+    "author": "poly.alchemist",
+    "url": "https://polyalchemist.itch.io/low-poly-medieval-boiler-machine",
+    "license": "License not confirmed",
+    "license_url": "",
+    "confirmed": false,
+    "models": [
+      "furnace"
     ]
   },
   {

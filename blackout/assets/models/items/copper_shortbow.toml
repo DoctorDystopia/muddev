@@ -1,0 +1,7 @@
+source = "blackout_copper_shortbow"
+file   = "copper_shortbow.glb"
+
+[output]
+# The name of each material is a color role of a worn look. The build keeps
+# each name.
+color_roles = true

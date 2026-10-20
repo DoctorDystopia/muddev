@@ -61,7 +61,7 @@ func _on_named_color_set(color_name: String, color: Color) -> void:
 		return FigurePaletteEdits.set_named_color(palette, color_name, color)
 
 	_change_palette("set the color " + color_name, edit, true)
-	_context.dock().colors_panel().select_color(color_name)
+	_context.figure_dock().colors_panel().select_color(color_name)
 
 
 func _on_finish_changed(color_name: String, finish: String) -> void:
@@ -75,7 +75,7 @@ func _on_finish_changed(color_name: String, finish: String) -> void:
 func _on_finish_set(finish: String, metalness: float, roughness: float) -> void:
 	_change_palette("set the finish " + finish, func(palette: Dictionary) -> String:
 		return FigurePaletteEdits.set_finish(palette, finish, metalness, roughness), true)
-	_context.dock().colors_panel().select_finish(finish)
+	_context.figure_dock().colors_panel().select_finish(finish)
 
 
 func _on_finish_removed(finish: String) -> void:
@@ -131,7 +131,7 @@ func _on_named_color_renamed(color_name: String, new_name: String) -> void:
 	_context.history().commit_many(changes, "give the color %s the name %s" % [color_name,
 		new_name])
 	_rename_figure_color(color_name, new_name)
-	_context.dock().colors_panel().select_color(new_name)
+	_context.figure_dock().colors_panel().select_color(new_name)
 
 
 ## The colors of the character on the stands follow a new name. They are

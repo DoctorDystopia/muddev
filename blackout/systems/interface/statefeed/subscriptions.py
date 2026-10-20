@@ -30,7 +30,9 @@ def _normalise(channels) -> set:
     must not be iterated into characters.
     """
     if channels == const.SUBSCRIBE_ALL:
-        return set(const.SUBSCRIBABLE_CHANNELS)
+        # Not every subscribable channel. An opt-in channel sends on a clock,
+        # and a client asks for it by name. See const.OPT_IN_CHANNELS.
+        return set(const.DEFAULT_CHANNELS)
 
     if isinstance(channels, str):
         return {channels}
@@ -55,7 +57,9 @@ def subscribe(session, channels) -> set:
     Entry:
         session  - a ServerSession.
         channels - an iterable of channel-name strings, or the single string
-                   constants.SUBSCRIBE_ALL to mean every known channel.
+                   constants.SUBSCRIBE_ALL to mean every channel in
+                   constants.DEFAULT_CHANNELS. An opt-in channel needs its
+                   name.
 
     Exit/Returns:
         Returns the session's full subscription set after the change. Names

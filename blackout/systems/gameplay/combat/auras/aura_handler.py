@@ -81,6 +81,9 @@ class BlackoutAuraHandler(TickableHandler):
         if self.ndb.ticks_until_pulse is None:
             self.ndb.ticks_until_pulse = 0
 
+        if self.ndb.burn_carry is None:
+            self.ndb.burn_carry = 0.0
+
         # aura_key is legitimately None until activate() runs, and the cached
         # ring is legitimately absent until the first pulse, so neither needs
         # seeding here.
@@ -96,6 +99,11 @@ class BlackoutAuraHandler(TickableHandler):
         # Zero, not tick_interval: the aura pulses on the very next tick, so
         # lighting it gives immediate feedback instead of a silent first cycle.
         self.ndb.ticks_until_pulse = 0
+
+        # A new aura owes no burn from the last one. The burn rounds up, so
+        # a relit aura pays on its first pulse and the reset gives no free
+        # pulse. See BaseAura.self_burn_for.
+        self.ndb.burn_carry = 0.0
 
         # Force a radius rebuild on the first pulse.
         self.ndb.ring_rooms = None
@@ -182,13 +190,22 @@ class BlackoutAuraHandler(TickableHandler):
         return dealt
 
     def _pulse(self, caster, aura) -> None:
-        """Resolve one full damage pulse across everything in radius."""
+        """Resolve one full pulse: every hostile in radius, then the caster.
+
+        The caster burns on every pulse, with or without a target. The burn
+        comes last because it can kill the caster. Then at_death puts the
+        aura out and deletes this handler.
+        """
         rooms = self._current_ring(caster, aura)
         targets = hostiles_in_rooms(rooms, caster)
 
-        if not targets:
-            return
+        if targets:
+            self._burn_targets(caster, aura, targets)
 
+        self._burn_caster(caster, aura)
+
+    def _burn_targets(self, caster, aura, targets) -> None:
+        """Apply one pulse to every target, then pay the XP of the total."""
         damage = aura.damage_for(caster)
         total_dealt = 0
 
@@ -213,6 +230,39 @@ class BlackoutAuraHandler(TickableHandler):
         )
 
         self._award_xp(caster, aura, total_dealt)
+
+    def _burn_caster(self, caster, aura) -> None:
+        """Apply the self-burn of one pulse to the caster.
+
+        The message-before-damage order of _apply_pulse. The two lines are
+        the pair that the backfire in combat.py sends. at_damage can end in
+        at_death, which prints the death line and puts the aura out. A line
+        sent after it would read below the death that it caused.
+
+        The caster is its own attacker. at_death reads that as a
+        self-inflicted death, so nobody gets the kill.
+        """
+        burn, carry = aura.self_burn_for(caster, self.ndb.burn_carry)
+        self.ndb.burn_carry = carry
+
+        if burn <= 0:
+            return
+
+        hp_after = max(0, caster.hp - burn)
+        max_hp = getattr(caster, "max_hp", 0)
+
+        caster.msg((combat_msg.format_aura_self_burn(aura, burn), _MSG_COMBAT))
+        caster.msg((
+            combat_msg.format_hp_status(combat_msg.SELF_HP_LABEL, hp_after, max_hp),
+            _MSG_COMBAT,
+        ))
+
+        caster.at_damage(
+            burn,
+            attacker=caster,
+            source=aura,
+            damage_type=aura.damage_type,
+        )
 
     def _pulse_tiles(self, targets) -> list:
         """Return the distinct world (x, y) tiles this pulse will land on.

@@ -65,6 +65,7 @@ func _ready() -> void:
 	_the_grid_fits_its_columns_to_the_width()
 	_the_vault_draws_its_tabs_and_lights_the_viewed_one()
 	_the_main_view_draws_a_block_for_each_tab()
+	_only_the_main_view_labels_its_blocks()
 	_a_tab_click_sends_its_view_command()
 	_a_named_tab_shows_its_name_and_an_icon_tab_shows_none()
 	_a_drop_on_a_slot_sends_the_swap()
@@ -553,6 +554,21 @@ func _the_main_view_draws_a_block_for_each_tab() -> void:
 
 	_expect(_view.slots_in(0).size() == 4, "the main view draws every slot")
 	_expect(_view.block_count(0) == 3, "one block for each tab, so a line between")
+	_expect(_view.section_headings(0) == ["Tab 1", "Bars", "Main tab"],
+		"a label names each block: the tab name, or its number")
+
+
+func _only_the_main_view_labels_its_blocks() -> void:
+	_show_vault(1)
+
+	_expect(_view.section_headings(0).is_empty(), "a tab view draws no label")
+
+	_show_vault(0)
+	_view.set_search("o")
+
+	_expect(_view.section_headings(0).is_empty(), "a search draws no label")
+
+	_view.set_search("")
 
 
 func _a_tab_click_sends_its_view_command() -> void:

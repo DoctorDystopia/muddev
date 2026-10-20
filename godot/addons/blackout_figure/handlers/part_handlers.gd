@@ -1,13 +1,13 @@
 @tool
 class_name FigurePartHandlers
 extends RefCounted
-## The handlers of the part editor ([FigurePartsPanel]) of the figure
-## dock: a part, its place, its fit, and its shapes.
+## The handlers of the part editor ([PartEditor]): a part, its place, its
+## fit, and its shapes.
 ##
-## The Body tab, the Gear tab, and the Families tab hold the same part
+## The Body tab, the Families tab, and the Gear dock hold the same part
 ## editor. Each one edits one worn look: the body of the selected body
-## type, the look of the selected row of the Gear tab, or the row of the
-## selected family. Thus, [method connect_panel] binds `look_of` to each
+## type, the row of the selected family, or the look of the selected row
+## of the Gear dock. Thus, [method connect_panel] binds `look_of` to each
 ## handler, and the handler gets it after the arguments of its signal.
 ## `look_of` gives the key of the worn look that the editor shows now.
 
@@ -21,8 +21,9 @@ func _init(context: FigureHandlerContext) -> void:
 ## Connect one part editor. `look_of` gives the key of the worn look that
 ## the editor shows now. Each handler gets it after the arguments of its
 ## signal.
-func connect_panel(panel: FigurePartsPanel, look_of: Callable) -> void:
+func connect_panel(panel: PartEditor, look_of: Callable) -> void:
 	panel.part_chosen.connect(_on_part_chosen.bind(look_of))
+	panel.shape_chosen.connect(_on_shape_chosen.bind(look_of))
 	panel.part_requested.connect(_on_part_requested.bind(panel, look_of))
 	panel.part_removed.connect(_on_part_removed.bind(look_of))
 	panel.part_copied.connect(_on_part_copied.bind(panel, look_of))
@@ -107,7 +108,12 @@ func _on_part_chosen(part_name: String, look_of: Callable) -> void:
 	_context.select_part(look_of.call(), part_name)
 
 
-func _on_part_requested(bone: String, panel: FigurePartsPanel, look_of: Callable) -> void:
+## A shape row of the tree: the Godot tools then move that shape.
+func _on_shape_chosen(part_name: String, shape_index: int, look_of: Callable) -> void:
+	_context.select_shape(look_of.call(), part_name, shape_index)
+
+
+func _on_part_requested(bone: String, panel: PartEditor, look_of: Callable) -> void:
 	var made := PackedStringArray()
 	var rig := _rig_of_look(look_of.call())
 
@@ -130,7 +136,7 @@ func _on_part_removed(part_name: String, look_of: Callable) -> void:
 
 
 ## "Copy the selected part": a second part at the same place, selected.
-func _on_part_copied(part_name: String, panel: FigurePartsPanel, look_of: Callable) -> void:
+func _on_part_copied(part_name: String, panel: PartEditor, look_of: Callable) -> void:
 	var made := PackedStringArray()
 
 	_change_look(look_of.call(), "copy the part " + part_name, func(look: Dictionary) -> String:
@@ -144,7 +150,7 @@ func _on_part_copied(part_name: String, panel: FigurePartsPanel, look_of: Callab
 
 ## "Make the part of the other side": the mirror picture of a part, on the
 ## bone of the other side.
-func _on_part_mirrored(part_name: String, panel: FigurePartsPanel,
+func _on_part_mirrored(part_name: String, panel: PartEditor,
 		look_of: Callable) -> void:
 	var made := PackedStringArray()
 
@@ -164,7 +170,7 @@ func _on_part_mirrored(part_name: String, panel: FigurePartsPanel,
 		_context.select_part(look_of.call(), made[0])
 
 
-func _on_shape_copied(part_name: String, shape_index: int, panel: FigurePartsPanel,
+func _on_shape_copied(part_name: String, shape_index: int, panel: PartEditor,
 		look_of: Callable) -> void:
 	var made := PackedInt32Array()
 
@@ -177,7 +183,7 @@ func _on_shape_copied(part_name: String, shape_index: int, panel: FigurePartsPan
 		panel.select_shape(made[0])
 
 
-func _on_part_renamed(part_name: String, new_name: String, panel: FigurePartsPanel,
+func _on_part_renamed(part_name: String, new_name: String, panel: PartEditor,
 		look_of: Callable) -> void:
 	if part_name == new_name:
 		return
