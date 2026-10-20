@@ -55,6 +55,7 @@ where there is art, and the silhouette of the family where there is not.
 | **Left-click a player** | Nothing — an empty `interact`, which the server decides and this pane does not |
 | **Drag an inventory cell** | Swaps two carried squares. The one command this client composes, because a drag knows two endpoints |
 | **Left-click an inventory cell** | The server's first action on that row: `Equip` on a wearable, `Deposit` or `Sell` while a pop-up is open |
+| **Shift + left-click an inventory cell** | Drops the item, when **Shift + left click drops an item** is on in Options. Off by default, as in OSRS. The cell sends the Drop action of the row (`INVENTORY_DROP_KEY`), never a verb of its own. A worn item has no Drop, so the click does what a plain click does. Remembered |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
 | **Edit layout** in Options | Opens the layout editor. Drag a frame to move a HUD element, and drag a grip to size it. Click a frame to hide, fade or scale the element. Save and load layouts by name. `Done` or Esc closes it. Remembered |
@@ -62,6 +63,7 @@ where there is art, and the silhouette of the family where there is not.
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
 | **Mouse wheel on the minimap**, or its `-` and `+` | Zooms the minimap. Remembered |
 | **`Run` on the minimap**, or **R** in move mode | Turns run on or off. The button shows what the server says. Run moves two tiles each tick |
+| **Ctrl + left-click a tile, a minimap cell, or a thing** | Walks there with run on, and runs there with run off, when **Ctrl + left click swaps walk and run** is on in Options. On by default, as in OSRS. The click sends the paced walk that the server spells (`TILE_PACED_WALK_TEMPLATE`, `ENTITY_PACED_APPROACH_TEMPLATE`), as `goto/walk` or `goto/run`. A use of the run toggle during that walk ends its pace. Remembered |
 | **"Show the walk path on the maps" in Options** | Shows or hides the walk path on both maps. Remembered |
 | **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, `Close` or Esc to close |
 | **Drag the world map title bar or a grip** | Moves or resizes the world map, as for the pop-up. Remembered |

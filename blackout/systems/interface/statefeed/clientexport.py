@@ -241,6 +241,9 @@ _SCALAR_EXPORTS: tuple = (
     ("SUBSCRIBE_ALL", const.SUBSCRIBE_ALL),
     ("ASSET_KEY_CHARACTER", const.ASSET_KEY_CHARACTER),
     ("INVENTORY_SWAP_TEMPLATE", const.INVENTORY_SWAP_TEMPLATE),
+    # The key of the Drop action on a carried row. Shift + left click
+    # sends it.
+    ("INVENTORY_DROP_KEY", const.INVENTORY_DROP_KEY),
     ("TILE_KEY_TEMPLATE", const.TILE_KEY_TEMPLATE),
     ("ENTITY_APPROACH_TEMPLATE", const.ENTITY_APPROACH_TEMPLATE),
     # The Inspect row of every entity. The server spells it, and the client
@@ -252,6 +255,13 @@ _SCALAR_EXPORTS: tuple = (
     ("TILE_WALK_TEMPLATE", const.TILE_COMMAND_GOTO_TEMPLATE),
     # The run toggle. The Run button and its hotkey send it.
     ("RUN_TOGGLE_COMMAND", const.COMMAND_RUN_TOGGLE),
+    # The pace of one walk. A Ctrl + left click fills `{pace}` of the paced
+    # templates with the word that is not the run toggle.
+    ("GOTO_PACE_WALK", const.GOTO_PACE_WALK),
+    ("GOTO_PACE_RUN", const.GOTO_PACE_RUN),
+    ("TILE_PACED_WALK_TEMPLATE", const.TILE_COMMAND_GOTO_PACED_TEMPLATE),
+    ("ENTITY_PACED_APPROACH_TEMPLATE", const.ENTITY_APPROACH_PACED_TEMPLATE),
+    ("TILE_ACTION_PACED_KEY", const.TILE_ACTION_PACED_KEY),
     # The ability rows of char_abilities: the states, the kinds, and the
     # keys of the tip block that every row with a tip carries.
     ("ABILITY_STATE_READY", const.ABILITY_STATE_READY),

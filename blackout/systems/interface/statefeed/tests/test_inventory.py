@@ -16,6 +16,8 @@ Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings settings.py systems.interface.statefeed
 """
 
+from unittest.mock import patch
+
 from evennia.utils.test_resources import EvenniaTest
 
 from items.equipment.constants import MAX_INVENTORY_SLOTS, WieldLocation
@@ -27,6 +29,18 @@ from world.item_database import ITEM_DB
 # Public constant definitions
 
 EQUIPPABLE_KEY = "glass_cannon_amulet"
+
+
+class _LeadingLens:
+    """A stand-in for an open pop-up: one action that leads every row."""
+
+    ACTION = {"label": "Deposit", "command": "deposit 1"}
+
+    def actions(self, _item, _slot_index, _units) -> list:
+        return [dict(self.ACTION)]
+
+    def detail(self, _item) -> str:
+        return ""
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -241,6 +255,41 @@ class TestInventoryActions(EvenniaTest):
         self.assertEqual(drops, ["drop 1", "drop 2", "drop 3"])
         self.assertEqual(len(set(drops)), len(drops))
 
+    def test_each_carried_row_names_its_own_drop_action(self):
+        """Shift + left click sends the drop field of the row.
+
+        The field must be one of the actions of that row, and it must name
+        the slot of that row. A field that named the first copy would drop
+        the wrong chunk, as the old `drop <name>` did.
+        """
+        for _ in range(3):
+            ITEM_DB["rusty_metal_chunk"].create(location=self.char1)
+
+        ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        payload = feed_inventory.build_payload(self.char1)
+        _label, template = const.INVENTORY_ACTION_DROP
+
+        for row in payload.items:
+            with self.subTest(slot=row["slot"]):
+                drop = row[const.INVENTORY_DROP_KEY]
+                self.assertIn(drop, row["actions"])
+                self.assertEqual(
+                    drop["command"], template.format(slot=row["slot"] + 1))
+
+    def test_the_drop_field_follows_an_open_popup(self):
+        """An open pop-up leads the list. The drop field stays the Drop."""
+        from systems.interface.popups import service as popup_service
+
+        ITEM_DB["rusty_metal_chunk"].create(location=self.char1)
+        lens = _LeadingLens()
+
+        with patch.object(popup_service, "carried_lens", return_value=lens):
+            payload = feed_inventory.build_payload(self.char1)
+
+        row = payload.items[0]
+        self.assertEqual(row["actions"][0], _LeadingLens.ACTION)
+        self.assertEqual(row[const.INVENTORY_DROP_KEY]["command"], "drop 1")
+
 
 class TestEquippedSnapshot(EvenniaTest):
     """The paper-doll half of the payload."""
@@ -272,6 +321,15 @@ class TestEquippedSnapshot(EvenniaTest):
         expected = "unequip " + WieldLocation.NECK.value
 
         self.assertIn(expected, _commands(row))
+
+    def test_an_equipped_row_names_no_drop_action(self):
+        """A worn item has no Drop. Shift + left click on it does a click."""
+        amulet = ITEM_DB[EQUIPPABLE_KEY].create(location=self.char1)
+        self.char1.equipment.equip(amulet)
+
+        payload = feed_inventory.build_payload(self.char1)
+
+        self.assertNotIn(const.INVENTORY_DROP_KEY, payload.equipped[0])
 
     def test_a_displaced_item_reappears_in_the_carried_grid(self):
         """Equipping into an occupied slot returns the old item to inventory.

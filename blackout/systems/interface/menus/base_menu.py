@@ -441,7 +441,8 @@ def _is_world_command(caller: object, raw_string: str) -> bool:
     if not cmd:
         return False
 
-    verb = cmd.split(" ")[0]
+    # A switch is part of the verb: `goto/walk (4,7)` is a walk too.
+    verb = cmd.split(" ")[0].partition("/")[0]
 
     if verb == feed_const.TILE_COMMAND_GOTO:
         return True

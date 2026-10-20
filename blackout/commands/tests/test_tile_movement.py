@@ -381,6 +381,55 @@ class WalkAndRunTests(EvenniaTest):
         self.assertFalse(walk.is_running(self.char1))
         self.assertIn("usage", self._said())
 
+    def _paced_goto(self, pace: str, tile: tuple) -> None:
+        """Type the paced walk that a Ctrl + left click sends."""
+        self.char1.execute_cmd(feed_const.TILE_COMMAND_GOTO_PACED_TEMPLATE
+                               .format(pace=pace, x=tile[0], y=tile[1]))
+
+    def test_a_walk_switch_walks_with_run_on(self):
+        walk.set_running(self.char1, True)
+        self._paced_goto(feed_const.GOTO_PACE_WALK, self._west(4))
+
+        self.assertEqual(_walk_out(), 4)
+        self.assertEqual(self._tile(), self._west(4))
+        self.assertTrue(walk.is_running(self.char1))
+
+    def test_a_run_switch_runs_with_run_off(self):
+        self._paced_goto(feed_const.GOTO_PACE_RUN, self._west(4))
+
+        self.assertEqual(_walk_out(), 2)
+        self.assertEqual(self._tile(), self._west(4))
+        self.assertFalse(walk.is_running(self.char1))
+
+    def _tiles_left(self) -> int:
+        return len(walk.current(self.char1).path)
+
+    def test_the_run_toggle_ends_the_pace_of_a_walk(self):
+        # Run on, then a walk. The walk takes one tile. Then run goes off
+        # and on again: the newest command wins, so the walk runs. A* can
+        # start with a diagonal, so this counts the tiles left on the path.
+        walk.set_running(self.char1, True)
+        self._paced_goto(feed_const.GOTO_PACE_WALK, self._west(5))
+        start = self._tiles_left()
+        _tick()
+
+        self.assertEqual(self._tiles_left(),
+                         start - walk_const.WALK_TILES_PER_TICK)
+
+        self.char1.execute_cmd("run off")
+        self.char1.execute_cmd("run on")
+        before = self._tiles_left()
+        _tick()
+
+        self.assertEqual(self._tiles_left(),
+                         before - walk_const.RUN_TILES_PER_TICK)
+
+    def test_a_switch_that_is_not_a_pace_starts_nothing(self):
+        self.char1.execute_cmd("goto/fly (%d,%d)" % self._west(4))
+
+        self.assertIsNone(walk.current(self.char1))
+        self.assertIn("usage", self._said())
+
 
 class TileLogoutTests(EvenniaTest):
 

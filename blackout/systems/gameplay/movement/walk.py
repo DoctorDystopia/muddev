@@ -40,6 +40,14 @@ A hop onto a transition ends the stride at the transition target, and it
 ends the walk. The walker gets the `transition` moment, and the client plays
 its sound.
 
+The pace of one walk
+--------------------
+A `goto/walk` or a `goto/run` sets the pace of its walk, with the run toggle
+on or off (Nick, 10/20/2026). A Ctrl + left click in the client sends the
+pace that is not the toggle, as in OSRS. `TileWalk.running` holds it. A use
+of the run toggle during the walk ends that pace, because the newest command
+wins. The walk then follows the toggle, and the Run button tells the truth.
+
 The walk feed
 -------------
 `set_walk` is the one writer of the walk, and it sends `blackout_walk` when
@@ -90,6 +98,8 @@ class TileWalk:
     the end. `shown` is False for a direction walk: the minimap draws no
     destination marker for a held key. `announce` is False for a walk of
     one tile: a click on the next tile is a step, and it says nothing.
+    `running` is the pace of this walk alone, or None to follow the run
+    toggle. See "The pace of one walk" in the module docstring.
     """
 
     path: list
@@ -97,6 +107,7 @@ class TileWalk:
     follow_up: str = ""
     shown: bool = True
     announce: bool = True
+    running: object = None
     session: object = field(default=None, repr=False)
 
 
@@ -108,14 +119,30 @@ def is_running(character) -> bool:
 
 
 def set_running(character, running: bool) -> None:
-    """Turn run on or off, and send the walk feed, which carries it."""
+    """
+    Turn run on or off, and send the walk feed, which carries it. The walk
+    in progress loses its own pace and follows the toggle from now on.
+    """
     character.attributes.add(const.RUN_ATTR, bool(running))
+    walk = current(character)
+
+    if walk is not None:
+        walk.running = None
+
     feed.emit_walk(character)
 
 
-def tiles_per_tick(character) -> int:
-    """Return how many tiles the character moves each tick."""
-    if is_running(character):
+def tiles_per_tick(character, walk=None) -> int:
+    """
+    Return how many tiles the character moves each tick. The pace of `walk`
+    wins over the run toggle, if the walk has one.
+    """
+    running = is_running(character)
+
+    if walk is not None and walk.running is not None:
+        running = walk.running
+
+    if running:
         return const.RUN_TILES_PER_TICK
 
     return const.WALK_TILES_PER_TICK
@@ -254,13 +281,14 @@ def start_direction(character, direction: str, session=None) -> str:
 
 
 def start_path(character, path: list, goal: tuple, follow_up: str = "",
-               session=None) -> None:
+               session=None, running=None) -> None:
     """
     Start a walk along a path from A*. An empty path arrives at once, so the
-    follow-up runs now. The first step goes on the next tick.
+    follow-up runs now. The first step goes on the next tick. `running` is
+    the pace of this walk, or None to follow the run toggle.
     """
     walk = TileWalk(path=list(path), goal=tuple(goal), follow_up=follow_up,
-                    announce=len(path) > 1, session=session)
+                    announce=len(path) > 1, running=running, session=session)
 
     if not walk.path:
         _arrive(character, walk)
@@ -332,7 +360,8 @@ def advance(character) -> None:
         None.
 
     Methodology:
-        1. Take the next tiles of the path: one, or two with run on.
+        1. Take the next tiles of the path: one, or two with run on. The
+           pace of the walk wins over the toggle, if it has one.
         2. Stop if the path does not start next to the walker.
         3. Move along them in one stride. A refused first hop stops the
            walk, and the player reads why.
@@ -353,7 +382,7 @@ def advance(character) -> None:
         return
 
     here = tile_travel.tile_of(character)
-    directions = _hops(here, walk.path[:tiles_per_tick(character)])
+    directions = _hops(here, walk.path[:tiles_per_tick(character, walk)])
 
     if not directions:
         set_walk(character, None)

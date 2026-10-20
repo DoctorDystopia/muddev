@@ -28,6 +28,14 @@ const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
 const STACK_QUANTITY := 12
 const CHOSEN_AMOUNT := 4
 
+## The Drop that the server names for the stack, in its list and under its
+## own key. LAST in the list, so a test that sent the first action by mistake
+## cannot pass.
+const DROP_ACTION := {"label": "Drop", "command": "drop 7"}
+
+## A carried slot whose row carries no Drop key.
+const NO_DROP_SLOT := 8
+
 ## Disposable, rather than the real profile: one case here writes a size.
 const SETTINGS_PATH := "user://test_slot_cell.cfg"
 
@@ -50,6 +58,9 @@ func _ready() -> void:
 	_the_placeholder_is_never_left_in_a_sent_command()
 	_a_prompt_the_client_cannot_read_sends_nothing()
 	_the_box_remembers_the_size_the_player_gave_it()
+	_a_shift_click_drops_when_the_player_turned_it_on()
+	_a_shift_click_is_a_click_when_the_option_is_off()
+	_a_shift_click_on_a_row_with_no_drop_is_a_click()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -81,7 +92,14 @@ func _payload() -> Dictionary:
 						   "label": "Sell how many?"}},
 				{"label": "Sell All", "command": "sell 7 all"},
 				{"label": "Declined", "command": ""},
-			 ]},
+				DROP_ACTION,
+			 ],
+			 _Const.INVENTORY_DROP_KEY: DROP_ACTION},
+			# No Drop key, as a worn row has none.
+			{"id": 102.0, "slot": float(NO_DROP_SLOT), "name": "scrap plate",
+			 "asset": "", "family": "armor", "quantity": 1.0,
+			 "stackable": false, "equip_slot": "",
+			 "actions": [{"label": "Inspect", "command": "inspect 9"}]},
 		],
 		"equipped": [],
 		"equip_slots": [],
@@ -160,12 +178,77 @@ func _a_drag_does_not_send_the_first_action() -> void:
 	cell.free()
 
 
-func _left_click(pressed: bool) -> InputEventMouseButton:
+func _left_click(pressed: bool, shift: bool = false) -> InputEventMouseButton:
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	click.pressed = pressed
+	click.shift_pressed = shift
 
 	return click
+
+
+## A press and a release with Shift held, as the player gives it.
+func _shift_click(cell: InventorySlotCell) -> void:
+	cell._gui_input(_left_click(true, true))
+	cell._gui_input(_left_click(false, true))
+
+
+## Settings on a disposable file, with the Shift option set as asked.
+func _settings_with_shift_drop(on: bool) -> ClientSettings:
+	_clean_settings()
+	var settings := ClientSettings.new(SETTINGS_PATH)
+	settings.set_shift_click_drop(on)
+
+	return settings
+
+
+func _a_shift_click_drops_when_the_player_turned_it_on() -> void:
+	_sent.clear()
+	var cell := _cell()
+	cell.bind_settings(_settings_with_shift_drop(true))
+
+	_shift_click(cell)
+	_expect(_sent == [DROP_ACTION["command"]],
+		"a Shift + left click sends the Drop that the server named")
+
+	_sent.clear()
+	cell._gui_input(_left_click(true))
+	cell._gui_input(_left_click(false))
+	_expect(_sent == ["sell 7 1"], "a plain left click still sends the first action")
+
+	cell.free()
+	_clean_settings()
+
+
+func _a_shift_click_is_a_click_when_the_option_is_off() -> void:
+	_sent.clear()
+	var cell := _cell()
+	cell.bind_settings(_settings_with_shift_drop(false))
+
+	_shift_click(cell)
+	_expect(_sent == ["sell 7 1"],
+		"with the option off, a Shift + left click sends the first action")
+
+	cell.free()
+	_clean_settings()
+
+
+func _a_shift_click_on_a_row_with_no_drop_is_a_click() -> void:
+	_sent.clear()
+	var cell := SlotCell.new()
+	add_child(cell)
+	cell.bind(_state, SlotCell.KIND_CARRIED, NO_DROP_SLOT)
+	cell.bind_settings(_settings_with_shift_drop(true))
+	cell.action_chosen.connect(func(command: String) -> void:
+		_sent.append(command)
+	)
+
+	_shift_click(cell)
+	_expect(_sent == ["inspect 9"],
+		"a row with no Drop key gets the first action, never a guessed drop")
+
+	cell.free()
+	_clean_settings()
 
 
 func _an_empty_command_sends_nothing() -> void:

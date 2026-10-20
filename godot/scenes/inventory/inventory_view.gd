@@ -63,8 +63,9 @@ var _stage: ItemStage
 ## one model cache and a `.glb` is fetched once for both.
 var _meshes: MeshResolver
 
-## What the player set. Held only to hand to each cell, which reads one fact
-## from it: how big they left the amount box. See [AmountPrompt].
+## What the player set. Held only to hand to each cell. A cell reads two facts
+## from it: the size of the amount box (see [AmountPrompt]), and the Shift
+## option.
 var _settings: ClientSettings
 
 ## The worn looks of the gear editor, or null. A cell draws the look of its
@@ -131,7 +132,8 @@ func bind_figures(library: FigureLibrary) -> void:
 ## Give the pane the player's settings, for the boxes its cells open.
 ##
 ## No redraw and no `changed` hookup: nothing the pane DRAWS comes from here.
-## The one fact read is the amount box's size, and it is read when a box opens.
+## A cell reads the size of the amount box when a box opens, and the Shift
+## option when a click lands. Thus, a change in Options needs no rebuild.
 func bind_settings(settings: ClientSettings) -> void:
 	_settings = settings
 

@@ -43,6 +43,10 @@ _XYZ_LENGTH: int = 3
 # DefaultCharacter as _content_types = ("character",).
 _CHARACTER_CONTENT_TYPE: str = "character"
 
+# What a paced template keeps in the place of its pace word. The client
+# fills it in. See `_climb_action`.
+_PACE_PLACEHOLDER: str = "{pace}"
+
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
@@ -1486,6 +1490,10 @@ def _climb_action(observer: tuple, tile: tuple, way: str) -> dict:
     """
     Return the action of a climb `way` on `tile`: the climb alone for an
     observer on that tile, else the walk to it and then the climb.
+
+    The walk also carries its paced form under TILE_ACTION_PACED_KEY, with
+    `{pace}` left in it. A Ctrl + left click fills it in, so a far climb
+    walks or runs as the click asks.
     """
     climb = const.TILE_COMMAND_CLIMB_TEMPLATE.format(way=way)
 
@@ -1494,8 +1502,12 @@ def _climb_action(observer: tuple, tile: tuple, way: str) -> dict:
 
     command = const.ENTITY_APPROACH_TEMPLATE.format(x=tile[0], y=tile[1],
                                                    command=climb)
+    paced = const.ENTITY_APPROACH_PACED_TEMPLATE.format(
+        x=tile[0], y=tile[1], command=climb, pace=_PACE_PLACEHOLDER)
+    action = tile_action(command, const.TILE_ACTION_KIND_WALK)
+    action[const.TILE_ACTION_PACED_KEY] = paced
 
-    return tile_action(command, const.TILE_ACTION_KIND_WALK)
+    return action
 
 
 def _add_tile_world_steps(here, actions: dict) -> None:

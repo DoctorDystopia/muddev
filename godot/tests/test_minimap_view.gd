@@ -40,6 +40,7 @@ func _ready() -> void:
 	_the_world_map_button_asks_for_the_world_map()
 	_the_run_button_follows_the_walk_feed()
 	_a_press_of_run_sends_the_toggle_and_keeps_the_fact()
+	_a_ctrl_click_on_the_map_swaps_walk_and_run()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -335,6 +336,51 @@ func _a_press_of_run_sends_the_toggle_and_keeps_the_fact() -> void:
 	_expect(sent == [Const.RUN_TOGGLE_COMMAND], "a press sends the run command")
 	_expect(not _map.run_shown(),
 		"the button shows the server fact until the feed answers")
+
+
+## A Ctrl + left click on the map sends the paced walk, at the pace that is
+## not the toggle. With the option off, it is a plain click.
+func _a_ctrl_click_on_the_map_swaps_walk_and_run() -> void:
+	_fresh()
+
+	var path := "user://test_minimap_ctrl_settings.cfg"
+	var settings := ClientSettings.new(path)
+	var target := HOME + Vector2i(6, -4)
+	var paced := Const.TILE_PACED_WALK_TEMPLATE \
+		.replace("{x}", str(target.x)).replace("{y}", str(target.y))
+	var plain := Const.TILE_WALK_TEMPLATE \
+		.replace("{x}", str(target.x)).replace("{y}", str(target.y))
+	var sent: Array[String] = []
+
+	# Set, not read from the default, so a change of the default breaks
+	# nothing here.
+	settings.set_ctrl_click_swaps_run(true)
+	_map.bind_settings(settings)
+	_map.command_requested.connect(func(line): sent.append(line))
+	_state.ingest(Const.CH_WALK, {"goal": [], "path": [], "running": true})
+	_map._gui_input(_left_click(_centre_of(target), true))
+
+	_expect(sent == [paced.replace("{pace}", Const.GOTO_PACE_WALK)],
+		"with run on, a Ctrl click walks there")
+
+	settings.set_ctrl_click_swaps_run(false)
+	_map._gui_input(_left_click(_centre_of(target), true))
+
+	_expect(sent.size() == 2 and sent[1] == plain,
+		"with the option off, a Ctrl click is a plain click")
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _left_click(point: Vector2, ctrl: bool) -> InputEventMouseButton:
+	var click := InputEventMouseButton.new()
+
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	click.position = point
+	click.ctrl_pressed = ctrl
+
+	return click
 
 
 func _entity(id: int, kind: String, tile: Vector2i,

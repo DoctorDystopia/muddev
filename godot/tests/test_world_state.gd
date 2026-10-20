@@ -25,6 +25,8 @@ func _ready() -> void:
 	_the_ground_height_is_read_from_the_chunk()
 	_the_server_decides_what_a_near_tile_affords()
 	_a_far_tile_walks_by_the_server_template()
+	_a_ctrl_click_sends_the_pace_that_is_not_the_toggle()
+	_a_ctrl_click_on_a_near_tile_reads_the_server_action()
 	_the_hash_matches_the_browser()
 	_the_plane_comes_from_the_room_z()
 	_each_plane_keeps_its_own_chunks()
@@ -183,6 +185,55 @@ func _a_far_tile_walks_by_the_server_template() -> void:
 	state.ingest_room_info({"coords": [5.0, 5.0, "oasis"]})
 
 	_expect(state.tile_action(far).is_empty(), "off the tile world, no walk")
+
+
+## A Ctrl + left click sends the paced walk, with the pace that is not the
+## toggle. The templates and the pace words are the server's.
+func _a_ctrl_click_sends_the_pace_that_is_not_the_toggle() -> void:
+	var state := _standing_state()
+	var far := Vector2i(30, 12)
+	var paced := _Const.TILE_PACED_WALK_TEMPLATE \
+		.replace("{x}", str(far.x)).replace("{y}", str(far.y))
+
+	_expect(state.click_command(far) == state.tile_action(far).get("command", ""),
+		"a plain click sends the plain walk")
+	_expect(state.click_command(far, true)
+			== paced.replace("{pace}", _Const.GOTO_PACE_RUN),
+		"with run off, a Ctrl click runs")
+
+	state.ingest_walk({"goal": [], "path": [], "running": true})
+
+	_expect(state.click_command(far, true)
+			== paced.replace("{pace}", _Const.GOTO_PACE_WALK),
+		"with run on, a Ctrl click walks")
+	_expect(state.click_command(far) == state.tile_action(far).get("command", ""),
+		"and a plain click still follows the toggle")
+
+
+## A near action with no paced form sends its command on a Ctrl click. A
+## near climb sends the paced form that the server built.
+func _a_ctrl_click_on_a_near_tile_reads_the_server_action() -> void:
+	var state := _standing_state()
+	var climb_paced := _Const.ENTITY_PACED_APPROACH_TEMPLATE \
+		.replace("{x}", "8").replace("{y}", "5").replace("{command}", "climb up")
+
+	state.ingest_room_info({
+		"coords": [5.0, 5.0, _Const.TILE_WORLD_Z],
+		"tile_actions": {
+			"5:6": {"command": "goto (5,6)", "kind": "step"},
+			"8:5": {
+				"command": "goto (8,5) then climb up",
+				"kind": "walk",
+				_Const.TILE_ACTION_PACED_KEY: climb_paced,
+			},
+		},
+	})
+
+	_expect(state.click_command(Vector2i(5, 6), true) == "goto (5,6)",
+		"a step to the next tile has no pace to swap")
+	_expect(state.click_command(Vector2i(8, 5), true)
+			== climb_paced.replace("{pace}", _Const.GOTO_PACE_RUN),
+		"a near climb fills the paced form of the server")
 
 
 func _the_hash_matches_the_browser() -> void:

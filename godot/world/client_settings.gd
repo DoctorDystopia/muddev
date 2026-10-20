@@ -46,12 +46,14 @@ const KEY_SHOW_XP_DROPS := "show_xp_drops"
 const KEY_SHOW_SKILL_RATES := "show_skill_rates"
 const KEY_SMOOTH_MOVEMENT := "smooth_movement"
 const KEY_CAMERA_RELATIVE_KEYS := "camera_relative_keys"
+const KEY_CTRL_CLICK_SWAPS_RUN := "ctrl_click_swaps_run"
 const KEY_HIDE_ROOFS := "hide_roofs"
 const KEY_AMOUNT_SIZE := "amount_size"
 const KEY_POPUP_RECT := "popup_rect"
 const KEY_MINIMAP_RADIUS := "minimap_radius"
 const KEY_SHOW_WALK_PATH := "show_walk_path"
 const KEY_SHOW_PERFORMANCE := "show_performance"
+const KEY_SHIFT_CLICK_DROP := "shift_click_drop"
 
 ## The chat interface gets its own section: which mode a typed line goes to,
 ## and which tabs the player hid from All. See [ChatModes] and [ChatTabs].
@@ -232,6 +234,19 @@ const DEFAULT_SMOOTH_MOVEMENT := true
 ## ([method MovementKeys.steered]).
 const DEFAULT_CAMERA_RELATIVE_KEYS := false
 
+## Whether Ctrl + left click walks with run on, and runs with run off
+## (10/20/2026). OSRS does the same on a Ctrl + click.
+##
+## On by default, as in OSRS. The click changes the pace of one walk only,
+## and nothing is lost when a player presses Ctrl by mistake. With it off, a
+## Ctrl + left click is a plain click.
+##
+## A GESTURE, not a fact. The server spells the paced walk
+## ([code]TILE_PACED_WALK_TEMPLATE[/code]), and the click fills in the pace
+## that is not the run toggle ([method WorldState.swapped_pace]). The setting
+## stays on this machine.
+const DEFAULT_CTRL_CLICK_SWAPS_RUN := true
+
 ## Hide every plane above the plane of the player (DESIGN-0011 Phase 7b), as
 ## the OSRS "Hide roofs" setting does. On by default (Nick, 09/26/2026): with
 ## it off, the floor above hides a player who stands indoors.
@@ -254,6 +269,17 @@ const DEFAULT_MINIMAP_RADIUS := 20
 ## the extra that Nick asked for as a toggle. The server sends the path either
 ## way, so the toggle hides a line and changes no fact.
 const DEFAULT_SHOW_WALK_PATH := false
+
+## Whether Shift + left click on a carried item drops it (10/20/2026). The
+## OSRS setting "Shift click to drop items" does the same.
+##
+## Off by default, as in OSRS. With it on, one slip of the hand puts an item
+## on the floor. With it off, a Shift + left click is a plain click.
+##
+## A GESTURE, not a fact. Each row carries its Drop action under
+## [code]INVENTORY_DROP_KEY[/code]. The cell sends that action, and the
+## setting stays on this machine.
+const DEFAULT_SHIFT_CLICK_DROP := false
 
 ## How big the player made the amount box, in pixels, or zero on either axis
 ## before they sized one.
@@ -356,10 +382,12 @@ var show_xp_drops := DEFAULT_SHOW_XP_DROPS
 var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
 var smooth_movement := DEFAULT_SMOOTH_MOVEMENT
 var camera_relative_keys := DEFAULT_CAMERA_RELATIVE_KEYS
+var ctrl_click_swaps_run := DEFAULT_CTRL_CLICK_SWAPS_RUN
 var hide_roofs := DEFAULT_HIDE_ROOFS
 var minimap_radius := DEFAULT_MINIMAP_RADIUS
 var show_walk_path := DEFAULT_SHOW_WALK_PATH
 var show_performance := DEFAULT_SHOW_PERFORMANCE
+var shift_click_drop := DEFAULT_SHIFT_CLICK_DROP
 var amount_size := DEFAULT_AMOUNT_SIZE
 var popup_rect := DEFAULT_POPUP_RECT
 var world_map_rect := DEFAULT_WORLD_MAP_RECT
@@ -419,6 +447,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_SMOOTH_MOVEMENT, DEFAULT_SMOOTH_MOVEMENT))
 	camera_relative_keys = bool(config.get_value(
 		SECTION, KEY_CAMERA_RELATIVE_KEYS, DEFAULT_CAMERA_RELATIVE_KEYS))
+	ctrl_click_swaps_run = bool(config.get_value(
+		SECTION, KEY_CTRL_CLICK_SWAPS_RUN, DEFAULT_CTRL_CLICK_SWAPS_RUN))
 	hide_roofs = bool(config.get_value(
 		SECTION, KEY_HIDE_ROOFS, DEFAULT_HIDE_ROOFS))
 	minimap_radius = _clamp_minimap_radius(int(config.get_value(
@@ -427,6 +457,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_SHOW_WALK_PATH, DEFAULT_SHOW_WALK_PATH))
 	show_performance = bool(config.get_value(
 		SECTION, KEY_SHOW_PERFORMANCE, DEFAULT_SHOW_PERFORMANCE))
+	shift_click_drop = bool(config.get_value(
+		SECTION, KEY_SHIFT_CLICK_DROP, DEFAULT_SHIFT_CLICK_DROP))
 	amount_size = _clamp_box_size(config.get_value(
 		SECTION, KEY_AMOUNT_SIZE, DEFAULT_AMOUNT_SIZE))
 	popup_rect = _clamp_box_rect(config.get_value(
@@ -468,10 +500,12 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
 	config.set_value(SECTION, KEY_SMOOTH_MOVEMENT, smooth_movement)
 	config.set_value(SECTION, KEY_CAMERA_RELATIVE_KEYS, camera_relative_keys)
+	config.set_value(SECTION, KEY_CTRL_CLICK_SWAPS_RUN, ctrl_click_swaps_run)
 	config.set_value(SECTION, KEY_HIDE_ROOFS, hide_roofs)
 	config.set_value(SECTION, KEY_MINIMAP_RADIUS, minimap_radius)
 	config.set_value(SECTION, KEY_SHOW_WALK_PATH, show_walk_path)
 	config.set_value(SECTION, KEY_SHOW_PERFORMANCE, show_performance)
+	config.set_value(SECTION, KEY_SHIFT_CLICK_DROP, shift_click_drop)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
 	config.set_value(SECTION, KEY_POPUP_RECT, popup_rect)
 	config.set_value(WORLD_MAP_SECTION, KEY_WORLD_MAP_RECT, world_map_rect)
@@ -678,6 +712,16 @@ func set_show_performance(value: bool) -> void:
 	changed.emit()
 
 
+## Turn Shift + left click to drop on or off, and persist it.
+func set_shift_click_drop(value: bool) -> void:
+	if value == shift_click_drop:
+		return
+
+	shift_click_drop = value
+	save_to_disk()
+	changed.emit()
+
+
 ## Show or hide XP per hour for each skill, and persist it.
 func set_show_skill_rates(value: bool) -> void:
 	if value == show_skill_rates:
@@ -706,6 +750,23 @@ func set_camera_relative_keys(value: bool) -> void:
 	camera_relative_keys = value
 	save_to_disk()
 	changed.emit()
+
+
+## Turn Ctrl + left click to swap walk and run on or off, and persist it.
+func set_ctrl_click_swaps_run(value: bool) -> void:
+	if value == ctrl_click_swaps_run:
+		return
+
+	ctrl_click_swaps_run = value
+	save_to_disk()
+	changed.emit()
+
+
+## True when a click asks for the pace that is not the run toggle: Ctrl is
+## held, and [member ctrl_click_swaps_run] is on. The 3D pane and the
+## minimap both ask here, so the two cannot read the gesture differently.
+func swaps_pace(click: InputEventWithModifiers) -> bool:
+	return ctrl_click_swaps_run and click.ctrl_pressed
 
 
 ## Hide the planes above the player, or show them, and persist it.
@@ -860,10 +921,12 @@ func reset() -> void:
 	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
 	smooth_movement = DEFAULT_SMOOTH_MOVEMENT
 	camera_relative_keys = DEFAULT_CAMERA_RELATIVE_KEYS
+	ctrl_click_swaps_run = DEFAULT_CTRL_CLICK_SWAPS_RUN
 	hide_roofs = DEFAULT_HIDE_ROOFS
 	minimap_radius = DEFAULT_MINIMAP_RADIUS
 	show_walk_path = DEFAULT_SHOW_WALK_PATH
 	show_performance = DEFAULT_SHOW_PERFORMANCE
+	shift_click_drop = DEFAULT_SHIFT_CLICK_DROP
 	amount_size = DEFAULT_AMOUNT_SIZE
 	popup_rect = DEFAULT_POPUP_RECT
 	world_map_rect = DEFAULT_WORLD_MAP_RECT

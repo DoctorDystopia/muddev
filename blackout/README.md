@@ -504,6 +504,8 @@ on. `systems/gameplay/movement/walk.py` owns the walk.
 > goto (12,4)          # walk to a tile, one tick for each step
 > goto bank            # walk to a named thing near you
 > goto                 # stop the walk
+> goto/walk (12,4)     # walk there, even with run on
+> goto/run bank        # run there, even with run off
 > run                  # turn run on or off
 > run on
 > run off
@@ -512,6 +514,9 @@ on. `systems/gameplay/movement/walk.py` owns the walk.
 
 In the Godot client, hold a movement key to walk (WASD with QEZC, or HJKL
 with YUBN). Press R, or click `Run` on the minimap, to turn run on or off.
+Hold Ctrl and left click to go at the other pace for one walk. The client
+then sends `goto/walk` or `goto/run`. A use of `run` during that walk ends
+its pace, and the walk follows the toggle again.
 
 ### How a step resolves
 

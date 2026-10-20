@@ -22,8 +22,9 @@ extends PanelContainer
 ## It decides **nothing about the game**. Whether a drop is legal is
 ## [method InventoryState.can_equip], which compares two server-supplied values.
 ## What a click can do is the row's own `actions`, which are whole commands the
-## server named. A left click selects the first action. This control turns a
-## gesture into a request and emits it; the
+## server named. A left click selects the first action. A Shift + left click
+## selects the Drop that the server named, when the player turned that on in
+## Options. This control turns a gesture into a request and emits it; the
 ## view sends it. There is no verb here, and there must never be one — the
 ## browser pane had a verb table once, it was wrong within a week, and a
 ## superuser walked off with a Foundry Furnace.
@@ -76,9 +77,10 @@ var _skip_left_release := false
 ## render targets for forty thumbnails is the build to avoid.
 var _art: TextureRect
 
-## What the player set, or null. Read for one fact only: how big they left the
-## amount box. Given by the view, because a cell is made and freed per snapshot
-## and has no route to the console.
+## What the player set, or null. Read for two facts: how big they left the
+## amount box, and whether Shift + left click drops. Given by the view,
+## because a cell is made and freed per snapshot and has no route to the
+## console.
 var _settings: ClientSettings
 
 
@@ -321,7 +323,7 @@ func _gui_input(event: InputEvent) -> void:
 			_skip_left_release = false
 			return
 
-		activate()
+		activate(click.shift_pressed)
 		accept_event()
 		return
 
@@ -330,14 +332,39 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
-## Do the server's first action. Public so a test can click without a window.
-func activate() -> void:
-	var action := _default_action()
+## Do the server's first action, or the Drop of the row on a Shift + left
+## click. Public so a test can click without a window.
+func activate(shift: bool = false) -> void:
+	var action := _click_action(shift)
 
 	if action.is_empty():
 		return
 
 	_perform(action)
+
+
+## The action that a left click sends.
+##
+## With Shift held and the option on, this is the Drop that the server named
+## for the row. In every other case it is the first action. A row with no
+## Drop, such as a worn item, also gets the first action, as OSRS does.
+func _click_action(shift: bool) -> Dictionary:
+	if shift and _shift_drops():
+		var drop := _state.drop_action_for(_row)
+
+		if not drop.is_empty():
+			return drop
+
+	return _default_action()
+
+
+## True when the player turned on Shift + left click to drop. A cell with no
+## settings, as in a test, keeps the plain click.
+func _shift_drops() -> bool:
+	if _settings == null or _state == null:
+		return false
+
+	return _settings.shift_click_drop
 
 
 ## The first action is the default action. The server orders the list.

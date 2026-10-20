@@ -406,6 +406,9 @@ def _serialize_carried(handler, context, lens=None) -> list:
     click deposits or sells, as in the OSRS bag beside an interface. They
     replace the commerce group, which offers the same verb. `detail` gives
     the row a short line, for example the price the shop pays.
+
+    Each row also names its Drop action under INVENTORY_DROP_KEY, for the
+    Shift + left click of the client.
     """
     rows = []
     occupied = handler.all_items()
@@ -439,11 +442,13 @@ def _serialize_carried(handler, context, lens=None) -> list:
             actions.extend(
                 _commerce_actions(item, slot_number, equip_slot, context, units))
 
+        drop = _build_actions(
+            (const.INVENTORY_ACTION_DROP,), item, slot_number, equip_slot)
         actions.extend(_build_actions(
-            (const.INVENTORY_ACTION_INSPECT, const.INVENTORY_ACTION_DROP),
-            item, slot_number, equip_slot,
-        ))
+            (const.INVENTORY_ACTION_INSPECT,), item, slot_number, equip_slot))
+        actions.extend(drop)
         row = _serialize_item(item, slot_index, actions)
+        row[const.INVENTORY_DROP_KEY] = dict(drop[0])
         detail = lens.detail(item) if lens is not None else ""
 
         if detail:

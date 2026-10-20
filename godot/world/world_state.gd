@@ -293,6 +293,11 @@ func area_at(tile: Vector2i) -> String:
 ## The chunk flags say which tile is walkable. They are server facts: the
 ## server reads the same chunk file. `goto` still refuses a walk that it cannot
 ## find, in words, in the text pane.
+##
+## A walk to a far tile also carries its paced form, under
+## [constant _Const.TILE_ACTION_PACED_KEY], from
+## [constant _Const.TILE_PACED_WALK_TEMPLATE]. A climb near the observer
+## carries the paced form that the server built. See [method click_command].
 func tile_action(cell: Vector2i) -> Dictionary:
 	var key := _Const.TILE_KEY_TEMPLATE \
 		.replace("{x}", str(cell.x)) \
@@ -315,8 +320,43 @@ func tile_action(cell: Vector2i) -> Dictionary:
 	var command := _Const.TILE_WALK_TEMPLATE \
 		.replace("{x}", str(cell.x)) \
 		.replace("{y}", str(cell.y))
+	var paced := _Const.TILE_PACED_WALK_TEMPLATE \
+		.replace("{x}", str(cell.x)) \
+		.replace("{y}", str(cell.y))
 
-	return {"command": command, "kind": _Const.KIND_WALK}
+	return {
+		"command": command,
+		"kind": _Const.KIND_WALK,
+		_Const.TILE_ACTION_PACED_KEY: paced,
+	}
+
+
+## The command that a left click on a cell sends, or "" for no command.
+##
+## `swap_pace` is true for a Ctrl + left click with the option on in Options.
+## A tile action with a paced form then sends that form, filled with
+## [method swapped_pace]. Every other action sends its command: a step to
+## the next tile moves one tile at either pace.
+func click_command(cell: Vector2i, swap_pace := false) -> String:
+	var action := tile_action(cell)
+	var paced := str(action.get(_Const.TILE_ACTION_PACED_KEY, ""))
+
+	if swap_pace and not paced.is_empty():
+		return paced.replace("{pace}", swapped_pace())
+
+	return str(action.get("command", ""))
+
+
+## The pace word that is NOT the run toggle: walk with run on, and run with
+## run off. A Ctrl + left click fills the paced templates with it.
+##
+## It reads [member running], the toggle from the walk feed, and the Run
+## button shows the same fact.
+func swapped_pace() -> String:
+	if running:
+		return _Const.GOTO_PACE_WALK
+
+	return _Const.GOTO_PACE_RUN
 
 
 ## The chunk coordinates of the block around a tile. The server streams the

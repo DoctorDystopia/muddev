@@ -104,6 +104,21 @@ func actions_for(row: Dictionary) -> Array:
 	return row.get("actions", [])
 
 
+## The Drop action the SERVER named for one row, as {label, command}, or an
+## empty dictionary for a worn row.
+##
+## Read from its own key and never found in [method actions_for] by its label
+## or its place. Shift + left click sends it. See
+## [constant ClientSettings.DEFAULT_SHIFT_CLICK_DROP].
+func drop_action_for(row: Dictionary) -> Dictionary:
+	var action: Variant = row.get(_Const.INVENTORY_DROP_KEY, {})
+
+	if typeof(action) != TYPE_DICTIONARY:
+		return {}
+
+	return action
+
+
 ## Whether a carried row may be dropped into one equipment frame.
 ##
 ## A comparison of two SERVER-supplied values, not a rule invented here: the

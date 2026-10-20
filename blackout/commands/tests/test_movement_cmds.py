@@ -83,13 +83,61 @@ class TestGotoFollowUpParsing(unittest.TestCase):
 
         self.assertEqual(command.args, "")
         self.assertEqual(command.follow_up, "")
+        self.assertEqual(command.pace, "")
+
+
+class TestGotoPaceParsing(unittest.TestCase):
+    """
+    Purpose: A switch sets the pace of one walk. A client builds a string
+    from the paced templates, and the parse gives back the pace, the walk,
+    and the follow-up.
+
+    Author: Nick Hobar
+    Creation date: 10/20/2026
+    """
+
+    PACES = (feed_const.GOTO_PACE_WALK, feed_const.GOTO_PACE_RUN)
+
+    def _sent(self, template, **fields):
+        """The argument that the cmdhandler gives for a filled template."""
+        line = template.format(**fields)
+
+        return line[len(feed_const.TILE_COMMAND_GOTO):]
+
+    def test_the_paced_walk_template_parses_back_into_its_parts(self):
+        for pace in self.PACES:
+            with self.subTest(pace=pace):
+                command = _parsed(self._sent(
+                    feed_const.TILE_COMMAND_GOTO_PACED_TEMPLATE,
+                    pace=pace, x=4, y=7))
+
+                self.assertEqual(command.pace, pace)
+                self.assertEqual(command.args, COORD_ARGUMENT)
+                self.assertEqual(command.follow_up, "")
+
+    def test_the_paced_approach_template_parses_back_into_its_parts(self):
+        for pace in self.PACES:
+            with self.subTest(pace=pace):
+                command = _parsed(self._sent(
+                    feed_const.ENTITY_APPROACH_PACED_TEMPLATE,
+                    pace=pace, x=4, y=7, command=FOLLOW_UP))
+
+                self.assertEqual(command.pace, pace)
+                self.assertEqual(command.args, COORD_ARGUMENT)
+                self.assertEqual(command.follow_up, FOLLOW_UP)
+
+    def test_a_switch_with_no_target_is_an_empty_target(self):
+        command = _parsed("/" + feed_const.GOTO_PACE_RUN)
+
+        self.assertEqual(command.pace, feed_const.GOTO_PACE_RUN)
+        self.assertEqual(command.args, "")
 
 
 class TestGotoRunsTheTileWalk(unittest.TestCase):
     """The command hands the parsed parts to the tile world walk."""
 
-    def test_func_calls_run_goto_with_both_parts(self):
-        command = _parsed(" " + COORD_ARGUMENT
+    def test_func_calls_run_goto_with_every_part(self):
+        command = _parsed("/" + feed_const.GOTO_PACE_WALK + " " + COORD_ARGUMENT
                           + feed_const.GOTO_FOLLOW_UP_SEPARATOR + FOLLOW_UP)
         command.caller = mock.Mock()
         command.session = mock.Mock()
@@ -98,7 +146,8 @@ class TestGotoRunsTheTileWalk(unittest.TestCase):
             command.func()
 
         run.assert_called_once_with(command.caller, COORD_ARGUMENT, FOLLOW_UP,
-                                    command.session)
+                                    command.session,
+                                    pace=feed_const.GOTO_PACE_WALK)
 
     def test_the_cmdset_holds_goto_and_every_direction(self):
         cmdset = MovementCmdSet()

@@ -47,6 +47,7 @@ func _ready() -> void:
 	_a_bent_run_faces_along_its_slide()
 	_a_diagonal_splits_its_two_cardinals()
 	_a_far_entity_is_walked_to_first()
+	_a_paced_click_walks_to_the_entity_at_that_pace()
 	_an_entity_on_your_tile_is_acted_on_directly()
 	_an_entity_on_another_island_is_never_walked_to()
 	_an_entity_without_coords_is_acted_on_directly()
@@ -211,6 +212,27 @@ func _a_far_entity_is_walked_to_first() -> void:
 	_expect(sent != POLE_COMMAND, "a pole two tiles off is not cut from here")
 	_expect(sent.contains("(4,7)"), "the walk names the pole's tile")
 	_expect(sent.ends_with(POLE_COMMAND), "and the verb arrives intact")
+
+
+## A Ctrl + left click gives a pace. The walk then carries it in the paced
+## template of the server, and the tile and the verb still arrive intact.
+func _a_paced_click_walks_to_the_entity_at_that_pace() -> void:
+	var pole := _pole_at([4.0, 7.0, HERE_Z])
+	var sent := WorldView.approach_command(POLE_COMMAND, pole, HERE, HERE_Z,
+		true, Const.GOTO_PACE_RUN)
+	var expected := Const.ENTITY_PACED_APPROACH_TEMPLATE \
+		.replace("{pace}", Const.GOTO_PACE_RUN) \
+		.replace("{x}", "4").replace("{y}", "7") \
+		.replace("{command}", POLE_COMMAND)
+
+	_expect(sent == expected, "the paced walk names the pace, the tile and the verb")
+	_expect(sent != WorldView.approach_command(POLE_COMMAND, pole, HERE, HERE_Z),
+		"and it is not the walk of a plain click")
+
+	var here := WorldView.approach_command(POLE_COMMAND,
+		_pole_at([2.0, 3.0, HERE_Z]), HERE, HERE_Z, true, Const.GOTO_PACE_RUN)
+
+	_expect(here == POLE_COMMAND, "a pole on your own tile has no walk to pace")
 
 
 func _an_entity_on_your_tile_is_acted_on_directly() -> void:

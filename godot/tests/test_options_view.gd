@@ -30,6 +30,8 @@ func _ready() -> void:
 	_the_movement_check_writes_the_setting_and_follows_it()
 	_the_roofs_check_writes_the_setting_and_follows_it()
 	_the_performance_check_writes_the_setting_and_sends_no_command()
+	_the_shift_drop_check_writes_the_setting_and_sends_no_command()
+	_the_ctrl_run_check_writes_the_setting_and_sends_no_command()
 	_the_credits_button_asks_for_the_box_and_sends_no_command()
 
 	_clean()
@@ -281,6 +283,50 @@ func _the_performance_check_writes_the_setting_and_sends_no_command() -> void:
 	_settings.reset()
 
 	_expect(not _view._performance_check.button_pressed,
+		"and a reset elsewhere unticks it again")
+
+
+## The option is a gesture of this client. The server never hears about it,
+## and the check shows the setting, whichever way the default points.
+func _the_ctrl_run_check_writes_the_setting_and_sends_no_command() -> void:
+	_fresh()
+
+	var sent: Array[String] = []
+	_view.command_requested.connect(func(line): sent.append(line))
+	var flipped := not ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN
+
+	_expect(_view._ctrl_run_check.button_pressed == ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN,
+		"the Ctrl click check starts at the default")
+
+	_view._ctrl_run_check.toggled.emit(flipped)
+
+	_expect(_settings.ctrl_click_swaps_run == flipped, "a toggle writes the setting")
+	_expect(sent.is_empty(), "and sends the server nothing")
+
+	_settings.reset()
+
+	_expect(_view._ctrl_run_check.button_pressed == ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN,
+		"and a reset elsewhere puts the check back")
+
+
+## The option is a gesture of this client. The server never hears about it.
+func _the_shift_drop_check_writes_the_setting_and_sends_no_command() -> void:
+	_fresh()
+
+	var sent: Array[String] = []
+	_view.command_requested.connect(func(line): sent.append(line))
+
+	_expect(not _view._shift_drop_check.button_pressed,
+		"the Shift drop check starts off, as the default is")
+
+	_view._shift_drop_check.toggled.emit(true)
+
+	_expect(_settings.shift_click_drop, "ticking it turns the gesture on")
+	_expect(sent.is_empty(), "and sends the server nothing")
+
+	_settings.reset()
+
+	_expect(not _view._shift_drop_check.button_pressed,
 		"and a reset elsewhere unticks it again")
 
 

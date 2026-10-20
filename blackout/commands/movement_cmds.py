@@ -34,6 +34,29 @@ from . import tile_movement
 from .world_map_cmds import CmdWorldMap
 
 
+# ─── Private constant definitions ────────────────────────────────────────────
+
+# What starts a switch of a command, as in `goto/walk`.
+_SWITCH_MARK = "/"
+
+
+# ─── Private helper routines ─────────────────────────────────────────────────
+
+def _split_switch(raw: str) -> tuple:
+    """
+    Return (switch, rest) for an argument that starts with `/<switch>`, else
+    ("", raw). The switch is in lower case, and the rest has no outer space.
+    """
+    if not raw.startswith(_SWITCH_MARK):
+        return ("", raw)
+
+    switch, _space, rest = raw[len(_SWITCH_MARK):].partition(" ")
+
+    return (switch.lower(), rest.strip())
+
+
+# ─── Commands ────────────────────────────────────────────────────────────────
+
 class BlackoutGotoCmd(Command):
     """
     Walk to a place via the shortest path.
@@ -43,6 +66,8 @@ class BlackoutGotoCmd(Command):
                                       (two tiles each tick with run on)
         goto (x,y)                  - walk to a tile
         goto <place> then <command> - walk there, then run <command>
+        goto/walk <place>           - walk there, even with run on
+        goto/run <place>            - run there, even with run off
         goto                        - stop the walk in progress
 
     A place is the name of a thing that stands on a tile near you, for
@@ -58,33 +83,41 @@ class BlackoutGotoCmd(Command):
     # reads as having no follow-up.
     follow_up = ""
 
+    # The pace switch, split off the argument by `parse`: `walk`, `run`, or
+    # "" to follow the run toggle. A class default for the same reason.
+    pace = ""
+
     def parse(self):
         """
-        Purpose: Split `<place> then <command>` into the destination and the
-            command to run on arrival.
+        Purpose: Split `/<pace> <place> then <command>` into the pace, the
+            destination, and the command to run on arrival.
 
         Entry:
             self.args - the raw argument, as the cmdhandler set it.
 
         Exit/Returns:
-            None. Leaves self.args holding the destination alone and
+            None. Leaves self.pace holding the switch, or "" when none was
+            given. Leaves self.args holding the destination alone and
             self.follow_up holding the command, or "" when none was given.
 
         Module Globals:
             feed_const.GOTO_FOLLOW_UP_SEPARATOR read.
 
         Methodology:
-            Split on the FIRST separator, so a follow-up that itself contains
-            " then " arrives intact.
+            The cmdhandler leaves a switch at the start of the argument:
+            `goto/walk (4,7)` gives "/walk (4,7)". Split it off first. Then
+            split on the FIRST separator, so a follow-up that itself
+            contains " then " arrives intact.
 
         Notes/References:
             The separator's spaces are part of it: `goto Heathen Market` is a
             place name, not a walk to "Hea" followed by "n Market".
+            tile_movement.run_goto refuses a pace that it does not know.
 
         Author: Nick Hobar
         Creation date: 09/13/2026
         """
-        raw = self.args.strip()
+        self.pace, raw = _split_switch(self.args.strip())
         destination, separator, follow_up = raw.partition(
             feed_const.GOTO_FOLLOW_UP_SEPARATOR)
 
@@ -99,7 +132,7 @@ class BlackoutGotoCmd(Command):
     def func(self):
         """Walk on the tile world. See tile_movement.run_goto."""
         tile_movement.run_goto(self.caller, self.args, self.follow_up,
-                               self.session)
+                               self.session, pace=self.pace)
 
 
 class MovementCmdSet(CmdSet):

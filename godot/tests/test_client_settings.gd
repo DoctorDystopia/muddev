@@ -32,6 +32,8 @@ func _ready() -> void:
 	_the_camera_keys_persist_and_reset()
 	_hide_roofs_persists_and_resets()
 	_the_performance_view_persists_and_resets()
+	_shift_click_drop_persists_and_resets()
+	_ctrl_click_swaps_run_persists_and_resets()
 	_the_map_settings_persist_clamp_and_reset()
 	_a_box_the_player_sized_is_remembered()
 	_a_box_size_from_a_bad_file_falls_back()
@@ -418,6 +420,61 @@ func _the_performance_view_persists_and_resets() -> void:
 
 	reloaded.reset()
 	_expect(reloaded.show_performance == ClientSettings.DEFAULT_SHOW_PERFORMANCE,
+		"and reset restores it")
+
+	_clean()
+
+
+## The option persists and resets, and the gesture needs both Ctrl and the
+## option. The default is read from its constant, so a change of the default
+## breaks nothing here.
+func _ctrl_click_swaps_run_persists_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	var flipped := not ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN
+
+	_expect(s.ctrl_click_swaps_run == ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN,
+		"Ctrl + left click to swap the pace starts at its default")
+
+	s.set_ctrl_click_swaps_run(flipped)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.ctrl_click_swaps_run == flipped, "a change persists")
+
+	reloaded.reset()
+	_expect(reloaded.ctrl_click_swaps_run == ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN,
+		"and reset restores it")
+
+	var ctrl := InputEventMouseButton.new()
+	var plain := InputEventMouseButton.new()
+	ctrl.ctrl_pressed = true
+
+	reloaded.set_ctrl_click_swaps_run(true)
+	_expect(reloaded.swaps_pace(ctrl), "a Ctrl click swaps the pace with the option on")
+	_expect(not reloaded.swaps_pace(plain), "a plain click never swaps it")
+
+	reloaded.set_ctrl_click_swaps_run(false)
+	_expect(not reloaded.swaps_pace(ctrl), "and a Ctrl click does not with the option off")
+
+	_clean()
+
+
+## Off by default, as the OSRS setting of the same name.
+func _shift_click_drop_persists_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(not s.shift_click_drop, "Shift + left click to drop is off by default")
+
+	s.set_shift_click_drop(true)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.shift_click_drop, "turning it on persists")
+
+	reloaded.reset()
+	_expect(reloaded.shift_click_drop == ClientSettings.DEFAULT_SHIFT_CLICK_DROP,
 		"and reset restores it")
 
 	_clean()

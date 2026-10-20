@@ -16,6 +16,7 @@ func _ready() -> void:
 	_actions_come_from_the_server()
 	_equip_legality_compares_server_values()
 	_swap_is_one_based_and_uses_the_server_spelling()
+	_the_drop_action_is_read_from_its_own_key()
 	_a_malformed_payload_is_survived()
 	_an_unknown_channel_is_refused()
 
@@ -146,6 +147,25 @@ func _swap_is_one_based_and_uses_the_server_spelling() -> void:
 	_expect(inv.swap_command(3, 3).is_empty(), "a drag onto itself is a no-op")
 	_expect(inv.swap_command(0, 1).begins_with("swap "),
 		"the verb is the server's, from the generated template")
+
+
+## Shift + left click sends this action. The server names it under its own
+## key. The client never finds it by its label or by its place in the list.
+func _the_drop_action_is_read_from_its_own_key() -> void:
+	var inv := InventoryState.new()
+	var payload := _payload()
+	var drop := {"label": "Drop", "command": "drop 6"}
+	payload["items"][1][_Const.INVENTORY_DROP_KEY] = drop
+	inv.ingest(_Const.CH_CHAR_ITEMS, payload)
+
+	_expect(inv.drop_action_for(inv.carried_at(5)) == drop,
+		"a carried row gives the Drop that the server named")
+	_expect(inv.drop_action_for(inv.carried_at(0)).is_empty(),
+		"a row with no key gives nothing, though its list holds a Drop")
+	_expect(inv.drop_action_for(inv.equipped_at("armor_body")).is_empty(),
+		"a worn row gives nothing")
+	_expect(inv.drop_action_for({_Const.INVENTORY_DROP_KEY: "drop 6"}).is_empty(),
+		"a key that holds no action gives nothing")
 
 
 func _a_malformed_payload_is_survived() -> void:

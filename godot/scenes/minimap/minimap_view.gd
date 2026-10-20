@@ -588,7 +588,9 @@ func _gui_input(event: InputEvent) -> void:
 
 		MOUSE_BUTTON_LEFT:
 			if _on_window(click.position):
-				_walk_to(_to_cell(click.position))
+				var swap_pace := _settings != null and _settings.swaps_pace(click)
+
+				_walk_to(_to_cell(click.position), swap_pace)
 
 			accept_event()
 
@@ -617,14 +619,16 @@ func _hover_at(point: Vector2) -> void:
 	queue_redraw()
 
 
-## Send whatever a click on this cell does. Nothing is composed or refused
-## here: [method WorldState.tile_action] owns the answer.
-func _walk_to(cell: Vector2i) -> void:
+## Send whatever a click on this cell does. This pane composes nothing and
+## refuses nothing. [method WorldState.click_command] owns the answer.
+##
+## `swap_pace` is true for a Ctrl + left click with the option on. The walk
+## then goes at the pace that is not the run toggle.
+func _walk_to(cell: Vector2i, swap_pace := false) -> void:
 	if _state == null:
 		return
 
-	var action := _state.tile_action(cell)
-	var command := str(action.get("command", ""))
+	var command := _state.click_command(cell, swap_pace)
 
 	if command.is_empty():
 		return

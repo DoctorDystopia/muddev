@@ -263,6 +263,22 @@ class StairsTests(_PlaneTestBase):
 
         self.assertEqual(actions[serializers.tile_key(*_LADDER)]["command"], command)
 
+    def test_the_paced_click_on_a_far_ladder_runs_and_climbs(self):
+        # A Ctrl + left click fills in the paced form of the action.
+        movement.place(self.world.rooms, self.char1, *_PLAIN, quiet=True)
+        actions = serializers.tile_actions(self.char1.location)
+        action = actions[serializers.tile_key(*_LADDER)]
+        paced = action[feed_const.TILE_ACTION_PACED_KEY]
+
+        self.char1.execute_cmd(paced.replace("{pace}", feed_const.GOTO_PACE_RUN))
+
+        self.assertTrue(walk.current(self.char1).running)
+        self.assertFalse(walk.is_running(self.char1))
+
+        _walk_out()
+
+        self.assertEqual(self._where(), (_LADDER, _UPPER))
+
 
 class WalkOnAPlaneTests(_PlaneTestBase):
 

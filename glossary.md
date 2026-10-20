@@ -386,6 +386,7 @@ The walk and the run, named on 09/29/2026 (`systems/gameplay/movement/`).
 | tile skip | the rule that the middle tile of a run gets no room and no arrival hook | skipped step, pass-through |
 | held key | a movement key that the player keeps down. The client sends its direction again every half tick | key repeat, hold-to-walk |
 | Run button | the toggle in the top-left corner of the minimap that sends `run` | run orb, run toggle button |
+| pace | the speed of one walk alone, walk or run, that `goto/walk` or `goto/run` sets with run on or off (10/20/2026). A Ctrl + left click sends it | speed override, temporary run |
 
 ## Deploy
 

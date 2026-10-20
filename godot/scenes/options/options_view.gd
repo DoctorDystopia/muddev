@@ -103,9 +103,11 @@ var _xp_drops_check: CheckBox
 var _skill_rates_check: CheckBox
 var _smooth_movement_check: CheckBox
 var _camera_keys_check: CheckBox
+var _ctrl_run_check: CheckBox
 var _hide_roofs_check: CheckBox
 var _walk_path_check: CheckBox
 var _performance_check: CheckBox
+var _shift_drop_check: CheckBox
 
 ## Set while pushing values INTO the widgets, so their value_changed does not
 ## write straight back and fight the update that is in progress.
@@ -131,6 +133,7 @@ func _init() -> void:
 	_add_sound_section(column)
 	_add_panes_section(column)
 	_add_movement_section(column)
+	_add_inventory_section(column)
 	_add_skills_section(column)
 
 	# After the client sections and before the Game section, because it
@@ -228,6 +231,12 @@ func _add_movement_section(column: VBoxContainer) -> void:
 	_camera_keys_check = _check("WASD follows the camera")
 	column.add_child(_camera_keys_check)
 
+	# On by default, as in OSRS. The click sends the paced walk that the
+	# server spelled. See ClientSettings.DEFAULT_CTRL_CLICK_SWAPS_RUN.
+	_ctrl_run_check = _check("Ctrl + left click swaps walk and run")
+	_ctrl_run_check.tooltip_text = "Hold Ctrl and left click to walk when run is on, or to run when run is off."
+	column.add_child(_ctrl_run_check)
+
 	# The floors above the player. See ClientSettings.DEFAULT_HIDE_ROOFS.
 	_hide_roofs_check = _check("Hide roofs")
 	column.add_child(_hide_roofs_check)
@@ -237,6 +246,17 @@ func _add_movement_section(column: VBoxContainer) -> void:
 	# ClientSettings.DEFAULT_SHOW_WALK_PATH.
 	_walk_path_check = _check("Show the walk path on the maps")
 	column.add_child(_walk_path_check)
+
+
+## What a click in the bag does.
+func _add_inventory_section(column: VBoxContainer) -> void:
+	column.add_child(_heading("Inventory"))
+
+	# Off by default, as in OSRS. The cell sends the Drop that the server
+	# named. See ClientSettings.DEFAULT_SHIFT_CLICK_DROP.
+	_shift_drop_check = _check("Shift + left click drops an item")
+	_shift_drop_check.tooltip_text = "Hold Shift and left click an item in the bag to drop it."
+	column.add_child(_shift_drop_check)
 
 
 ## Where a clicked skill's detail goes, and the XP drops over the world.
@@ -336,9 +356,11 @@ func _connect_controls() -> void:
 	_skill_rates_check.toggled.connect(_on_skill_rates_toggled)
 	_smooth_movement_check.toggled.connect(_on_smooth_movement_toggled)
 	_camera_keys_check.toggled.connect(_on_camera_keys_toggled)
+	_ctrl_run_check.toggled.connect(_on_ctrl_run_toggled)
 	_hide_roofs_check.toggled.connect(_on_hide_roofs_toggled)
 	_walk_path_check.toggled.connect(_on_walk_path_toggled)
 	_performance_check.toggled.connect(_on_performance_toggled)
+	_shift_drop_check.toggled.connect(_on_shift_drop_toggled)
 
 
 func _sync() -> void:
@@ -361,9 +383,11 @@ func _sync() -> void:
 	_skill_rates_check.disabled = not _settings.show_xp_drops
 	_smooth_movement_check.button_pressed = _settings.smooth_movement
 	_camera_keys_check.button_pressed = _settings.camera_relative_keys
+	_ctrl_run_check.button_pressed = _settings.ctrl_click_swaps_run
 	_hide_roofs_check.button_pressed = _settings.hide_roofs
 	_walk_path_check.button_pressed = _settings.show_walk_path
 	_performance_check.button_pressed = _settings.show_performance
+	_shift_drop_check.button_pressed = _settings.shift_click_drop
 	_syncing = false
 
 
@@ -430,6 +454,13 @@ func _on_camera_keys_toggled(pressed: bool) -> void:
 	_settings.set_camera_relative_keys(pressed)
 
 
+func _on_ctrl_run_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_ctrl_click_swaps_run(pressed)
+
+
 func _on_hide_roofs_toggled(pressed: bool) -> void:
 	if _syncing:
 		return
@@ -449,6 +480,13 @@ func _on_walk_path_toggled(pressed: bool) -> void:
 		return
 
 	_settings.set_show_walk_path(pressed)
+
+
+func _on_shift_drop_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_shift_click_drop(pressed)
 
 
 ## The chosen index is a position in ClientSettings.SKILL_DETAIL_MODES, because

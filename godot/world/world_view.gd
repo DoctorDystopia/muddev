@@ -644,7 +644,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton
 
 	if click.button_index == MOUSE_BUTTON_LEFT and click.pressed:
-		_act_on(click.position)
+		var swap_pace := _settings != null and _settings.swaps_pace(click)
+
+		_act_on(click.position, swap_pace)
 		return
 
 	# Right click ASKS instead of acting. Left click still performs the
@@ -834,28 +836,36 @@ func _clear_tile_hover() -> void:
 ## That constraint is the whole of Phase 3: there is no privileged client
 ## channel, so every lock, cooldown and permission still applies with nothing
 ## to re-audit. Clicking a tile sends `north`. It does not send a position.
-func _act_on(screen_point: Vector2) -> void:
+##
+## `swap_pace` is true for a Ctrl + left click with the option on. A walk
+## then goes at the pace that is not the run toggle (10/20/2026).
+func _act_on(screen_point: Vector2, swap_pace := false) -> void:
 	var entity_id := _entities.pick(_camera, screen_point, PICK_REACH_PIXELS)
 
 	if entity_id != 0:
-		_act_on_entity(_entities.entity(entity_id))
+		_act_on_entity(_entities.entity(entity_id), swap_pace)
 		return
 
-	_walk_towards(_cell_under(screen_point))
+	_walk_towards(_cell_under(screen_point), swap_pace)
 
 
 ## A left click sends the FIRST row of the menu, which is `interact` whenever
 ## the server named a verb, and Inspect otherwise. The hover bar names the
 ## same row, so what the bar says is what the click does.
-func _act_on_entity(entity: Dictionary) -> void:
+##
+## A Ctrl + left click walks to the entity at the pace that is not the run
+## toggle. An entity on the tile of the observer needs no walk, and nor does
+## a verb that closes its own distance, so the click is then a plain click.
+func _act_on_entity(entity: Dictionary, swap_pace := false) -> void:
 	var options := options_for(entity)
 
 	if options.is_empty():
 		return
 
 	var first: Dictionary = options[0]
+	var pace := _state.swapped_pace() if swap_pace else ""
 	var command := approach_command(str(first.get("command", "")), entity,
-		_state.current_cell, _state.current_z, walks_there(first))
+		_state.current_cell, _state.current_z, walks_there(first), pace)
 
 	if command.is_empty():
 		return
@@ -1058,9 +1068,13 @@ static func walks_there(source: Dictionary) -> bool:
 ## standing on, so the same numbers there name a different room entirely.
 ## Wrapping it would walk the player somewhere they never clicked.
 ##
+## A `pace` word (10/20/2026) wraps the command in the paced template of the
+## server, [constant Const.ENTITY_PACED_APPROACH_TEMPLATE], so the walk goes
+## at that pace. An empty `pace` follows the run toggle.
+##
 ## Static and public so a test can pin every branch with hand-built payloads.
 static func approach_command(command: String, entity: Dictionary,
-		here: Vector2i, here_z: String, walks := true) -> String:
+		here: Vector2i, here_z: String, walks := true, pace := "") -> String:
 	if command.is_empty():
 		return ""
 
@@ -1081,9 +1095,14 @@ static func approach_command(command: String, entity: Dictionary,
 	if cell == here or str(coords[2]) != here_z:
 		return command
 
+	var template := Const.ENTITY_APPROACH_TEMPLATE
+
+	if not pace.is_empty():
+		template = Const.ENTITY_PACED_APPROACH_TEMPLATE.replace("{pace}", pace)
+
 	# {command} LAST, so a command that happened to contain "{x}" is carried
 	# as written rather than having a coordinate substituted into it.
-	return Const.ENTITY_APPROACH_TEMPLATE \
+	return template \
 		.replace("{x}", str(cell.x)) \
 		.replace("{y}", str(cell.y)) \
 		.replace("{command}", command)
@@ -1131,9 +1150,11 @@ static func approach_options(options: Array, entity: Dictionary,
 ## does not track a walk, so `current_cancel_action` is stored and unused and
 ## a mid-walk click on your own tile looks. Harmless, and deliberately left for
 ## whoever adds walk tracking rather than half-built here.
-func _walk_towards(cell: Vector2i) -> void:
-	var action := _state.tile_action(cell)
-	var command := str(action.get("command", ""))
+##
+## [method WorldState.click_command] owns the answer, and the paced form of a
+## Ctrl + left click. The minimap asks the same method.
+func _walk_towards(cell: Vector2i, swap_pace := false) -> void:
+	var command := _state.click_command(cell, swap_pace)
 
 	if command.is_empty():
 		return

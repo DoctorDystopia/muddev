@@ -300,6 +300,16 @@ class TestClickingTheWorldClosesTheMenu(_LiveMenuTest):
 
         self._assert_forwarded(walk)
 
+    def test_a_paced_walk_to_a_tile_closes_it(self):
+        # A Ctrl + left click sends this form. The switch rides on the verb.
+        menu = self._menu()
+        walk = feed_const.TILE_COMMAND_GOTO_PACED_TEMPLATE.format(
+            pace=feed_const.GOTO_PACE_WALK, x=4, y=7)
+
+        menu.parse_input(walk)
+
+        self._assert_forwarded(walk)
+
     def test_an_action_on_something_in_the_room_closes_it(self):
         # Derived from the feed rather than typed, so this is the very string
         # a click on obj1 sends.

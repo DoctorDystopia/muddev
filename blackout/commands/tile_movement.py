@@ -24,6 +24,10 @@ Since 09/29/2026 no command here moves a player. A direction command and
 movement: one tile, or two tiles with run on. The `goto` command runs A* on
 the tile grid and walks the path. `BlackoutGotoCmd` in `commands/movement_cmds.py` calls
 `run_goto`.
+
+Since 10/20/2026 a switch sets the pace of one `goto` walk: `goto/walk`
+walks with run on, and `goto/run` runs with run off. A Ctrl + left click in
+the Godot client sends one of the two.
 """
 
 import re
@@ -47,9 +51,18 @@ _MSG_STOPPED = "You stop walking."
 _MSG_UNKNOWN = "You know of no place called '{text}' here."
 _MSG_NO_PATH = "You cannot find a way there."
 _MSG_SET_OFF = "You set off toward {place}."
+_MSG_PACE_USAGE = "Usage: goto/walk <place> or goto/run <place>."
 
 # `goto (x,y)`, with or without the brackets and the spaces.
 _COORDINATE_RE = re.compile(r"^\(?\s*(-?\d+)\s*,\s*(-?\d+)\s*\)?$")
+
+# The pace switch of `goto` -> the run of that one walk. None follows the
+# run toggle.
+_PACE_RUNS: dict = {
+    "": None,
+    feed_const.GOTO_PACE_WALK: False,
+    feed_const.GOTO_PACE_RUN: True,
+}
 
 
 # ─── Direction commands ──────────────────────────────────────────────────────
@@ -270,7 +283,8 @@ def _resolve(world, text: str, here: tuple):
     return tiles[0], text.strip()
 
 
-def run_goto(caller, text: str, follow_up: str = "", session=None) -> None:
+def run_goto(caller, text: str, follow_up: str = "", session=None,
+             pace: str = "") -> None:
     """
     Purpose: Do `goto` for a character on the tile world.
 
@@ -279,18 +293,21 @@ def run_goto(caller, text: str, follow_up: str = "", session=None) -> None:
         text      - the target: "(x, y)" or a place name. "" stops a walk.
         follow_up - the line to run on arrival, or "".
         session   - the session of the command.
+        pace      - the switch of the command: GOTO_PACE_WALK, GOTO_PACE_RUN,
+                    or "" to follow the run toggle.
 
     Exit/Returns:
         None. The tick moves the walk: one tile a tick, or two with run on.
 
     Module Globals:
-        None.
+        _PACE_RUNS read.
 
     Methodology:
-        1. An empty target stops the walk, or asks where to go.
-        2. Resolve the target, then search a path with A*.
-        3. A walker on the goal arrives at once, so the follow-up runs now.
-        4. Else start the walk. A new `goto` replaces an old walk.
+        1. A pace that is not known refuses, and nothing stops.
+        2. An empty target stops the walk, or asks where to go.
+        3. Resolve the target, then search a path with A*.
+        4. A walker on the goal arrives at once, so the follow-up runs now.
+        5. Else start the walk. A new `goto` replaces an old walk.
 
     Notes/References:
         `BlackoutGotoCmd.func` calls this. `walk.start_path` owns the rest.
@@ -298,6 +315,10 @@ def run_goto(caller, text: str, follow_up: str = "", session=None) -> None:
     Author: Nick Hobar
     Creation date: 09/24/2026
     """
+    if pace not in _PACE_RUNS:
+        caller.msg(_MSG_PACE_USAGE)
+        return
+
     if not text.strip():
         stopped = walk.stop(caller)
         caller.msg(_MSG_STOPPED if stopped else _MSG_WHERE)
@@ -328,4 +349,5 @@ def run_goto(caller, text: str, follow_up: str = "", session=None) -> None:
     if len(path) > 1:
         caller.msg(_MSG_SET_OFF.format(place=place))
 
-    walk.start_path(caller, path, goal, follow_up, session)
+    walk.start_path(caller, path, goal, follow_up, session,
+                    running=_PACE_RUNS[pace])

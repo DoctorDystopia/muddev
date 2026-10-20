@@ -1229,6 +1229,13 @@ ITEM_FAMILY_GENERIC: str = "generic"
 INVENTORY_ACTION_EQUIP: tuple = ("Equip", "equip {slot}")
 INVENTORY_ACTION_DROP: tuple = ("Drop", "drop {slot}")
 
+# The key of the Drop action on a carried row: the same {label, command} as
+# the Drop entry in its `actions`. A client that drops on a gesture, such as
+# Shift + left click (10/20/2026), reads this key. The key is a fact of the
+# server. Thus, the client finds no verb by its label or by its place in the
+# list. A worn row has no Drop, and so it has no key.
+INVENTORY_DROP_KEY: str = "drop"
+
 # Eat names a SLOT, for the reason Drop and Inspect do: three identical cured
 # chucks are a real inventory, and a pane sending `eat mutant raider cured
 # chuck` would be sending a command whose target it cannot predict.
@@ -1351,6 +1358,28 @@ GOTO_FOLLOW_UP_SEPARATOR: str = " then "
 ENTITY_APPROACH_TEMPLATE: str = (
     TILE_COMMAND_GOTO_TEMPLATE + GOTO_FOLLOW_UP_SEPARATOR + "{command}"
 )
+
+# The pace of one walk, as a switch of `goto` (Nick, 10/20/2026).
+# `goto/walk (4,7)` walks there and `goto/run (4,7)` runs there, with the
+# run toggle on or off. A plain `goto` follows the toggle. A Ctrl + left
+# click in the Godot client sends the pace that is not the toggle, as a
+# Ctrl + click does in OSRS. commands/tile_movement.py reads the switch.
+GOTO_PACE_WALK: str = "walk"
+GOTO_PACE_RUN: str = "run"
+
+# The paced forms of the two walk templates above. The client fills `{pace}`
+# with one of the two words above, as it fills the tile.
+TILE_COMMAND_GOTO_PACED_TEMPLATE: str = (
+    TILE_COMMAND_GOTO + "/{pace} ({x},{y})"
+)
+ENTITY_APPROACH_PACED_TEMPLATE: str = (
+    TILE_COMMAND_GOTO_PACED_TEMPLATE + GOTO_FOLLOW_UP_SEPARATOR + "{command}"
+)
+
+# The key of the paced form on a tile action that walks. Only the climb near
+# the observer carries one, because the server builds its walk. The client
+# builds the walk to a far tile from TILE_COMMAND_GOTO_PACED_TEMPLATE.
+TILE_ACTION_PACED_KEY: str = "paced"
 
 # How a tile is keyed in a tile-action map. Formatted here rather than in the
 # client for the same reason serialize_inventory formats its slot numbers here:
