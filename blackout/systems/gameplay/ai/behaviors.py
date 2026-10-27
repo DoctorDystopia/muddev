@@ -116,6 +116,47 @@ def _can_be_fought(npc, target) -> bool:
 
 
 
+def _already_attacking(handler, target) -> bool:
+    """
+    Purpose: Report whether the pending action of `handler` is an attack on
+             `target`.
+
+    Entry:
+        handler - the BlackoutCombatHandler of the NPC.
+        target  - the entity the behaviour wants to attack.
+
+    Exit/Returns:
+        True if the handler holds an attack on that target. False for no
+        action, an approach, or an attack on someone else.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The controller asks a behaviour after each hit (10/22/2026), so
+        that an NPC follows its last attacker through a fight. A behaviour
+        that answers "attack" on each hit queues one attack for each hit.
+        Each queue sends a face event. This test limits the answer to the
+        hits that change the target.
+
+    Notes/References:
+        The import of ActionAttack sits here for the cycle reason that
+        _last_attacker gives.
+
+    Author: Nick Hobar
+    Creation date: 10/22/2026
+    """
+    from systems.gameplay.combat.combat import ActionAttack
+
+    pending = handler.ndb.pending_action
+
+    if not isinstance(pending, ActionAttack):
+        return False
+
+    return pending.target_id == target.id
+
+
+
 @register_behavior(AI_BEHAVIOR_AGGRESSIVE_MELEE)
 def aggressive_melee(handler):
     """
@@ -145,9 +186,11 @@ def aggressive_melee(handler):
 
     Notes/References:
         ActionAttack.next_action returns itself, so ONE queued attack
-        self-sustains at the weapon's attack_speed cadence. This behaviour
-        therefore fires once per fight in the normal case, not once per tick --
-        the controller only consults it when pending_action is None.
+        self-sustains at the weapon's attack_speed cadence. The controller
+        consults this behaviour on every tick (10/22/2026). It answers on
+        the tick that the last attacker changes, and None on every other
+        tick. Thus, the NPC follows whoever hit it last, as many times as
+        the fight turns (Nick, 10/22/2026).
 
     Author: Nick Hobar
     Creation date: 08/23/2026
@@ -162,6 +205,9 @@ def aggressive_melee(handler):
     can_be_fought = _can_be_fought(npc, target)
 
     if not can_be_fought:
+        return None
+
+    if _already_attacking(handler, target):
         return None
 
     action = {"kind": "attack", "target": target}
@@ -316,6 +362,9 @@ def chasing_melee(handler):
         # releases the leash: the NPC is where it needs to be, and the next
         # chase should measure from here.
         _release_leash(npc)
+
+        if _already_attacking(handler, target):
+            return None
 
         return {"kind": "attack", "target": target}
 

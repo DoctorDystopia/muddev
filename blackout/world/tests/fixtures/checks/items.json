@@ -1,0 +1,17 @@
+{
+	"format": 1,
+	"items": [
+		{
+			"family": "generic",
+			"key": "fixture_blade",
+			"name": "fixture_blade",
+			"stackable": false
+		},
+		{
+			"family": "generic",
+			"key": "fixture_scrap",
+			"name": "fixture_scrap",
+			"stackable": true
+		}
+	]
+}

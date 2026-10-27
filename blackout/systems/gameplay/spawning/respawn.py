@@ -34,6 +34,14 @@ silently resolve to the wrong room after an id reuse.
 If the room was deleted, ``unpack_dbobj`` returns ``None`` rather than raising,
 so ``_spawn`` must treat ``room is None`` as "drop this entry".
 
+An item spawn (10/21/2026) queues an entry of a second shape::
+
+    {"item_key": "rusty_metal_chunk", "room": <Room>, "due_at": 1753900000.0}
+
+The entry holds no quantity and no respawn. When it comes due,
+``item_spawns.respawn`` reads the spawn from the tile world. Thus, the chunk
+file stays the one owner of the spawn. One clock for each (item key, room).
+
 Entries are *dicts inside a list*, never tuples: ``from_pickle.process_tree``
 passes the tuple itself as the saver ``parent``, and a tuple has no
 ``_save_tree`` — so any mutable nested in a tuple raises on the first in-place
@@ -61,6 +69,9 @@ RESPAWN_MANAGER_KEY = "blackout_respawn_manager"
 # would truncate (see systems/core/tick/engine.py's module docstring). 2s
 # bounds worst-case lateness on a 30s respawn at ~7%.
 RESPAWN_SWEEP_SECONDS: int = 2
+
+# The key of the item of an item spawn entry. An NPC entry has "npc_key".
+ITEM_ENTRY_KEY: str = "item_key"
 
 
 # ─── identity helper ───────────────────────────────────────────────────────
@@ -220,6 +231,73 @@ class BlackoutRespawnManager(DefaultScript):
         self._write_queue(queue)
         return True
 
+    def schedule_item(self, item_key, room, delay_seconds, now=None) -> bool:
+        """
+        Purpose: Queue a new item of an item spawn after `delay_seconds`.
+
+        Entry:
+            item_key      - the ItemDef key of the spawn.
+            room          - the tile room of the spawn. Must still exist.
+            delay_seconds - whole seconds from now.
+            now           - injectable clock, as in `schedule`.
+
+        Exit/Returns:
+            True if an entry was added. False for a bad request, or for a
+            clock of the same spawn that already runs.
+
+        Module Globals:
+            ITEM_ENTRY_KEY read.
+
+        Methodology:
+            One clock for each (item key, room). The entry holds no
+            quantity and no respawn, because `item_spawns.respawn` reads
+            them from the chunk file when the entry comes due.
+
+        Author: Nick Hobar
+        Creation date: 10/21/2026
+        """
+        if not item_key or room is None or getattr(room, "pk", None) is None:
+            return False
+
+        if self.is_item_queued(item_key, room):
+            return False
+
+        queue = self._read_queue()
+        queue.append({
+            ITEM_ENTRY_KEY: item_key,
+            "room": room,
+            "due_at": (time.time() if now is None else now)
+            + max(0, int(delay_seconds)),
+        })
+        self._write_queue(queue)
+        return True
+
+    def is_item_queued(self, item_key, room) -> bool:
+        """True if the clock of the spawn of `item_key` in `room` runs."""
+        for entry in self._read_queue():
+            if entry.get(ITEM_ENTRY_KEY) == item_key and entry.get("room") == room:
+                return True
+        return False
+
+    def cancel_items(self, room, keep=()) -> int:
+        """Drop the item entries of `room` whose item is not in `keep`.
+
+        The tile sync calls this when a tile loses a spawn, through
+        ``item_spawns.clear_stale``. Returns the count dropped.
+        """
+        queue = self._read_queue()
+        kept = [
+            entry
+            for entry in queue
+            if not (entry.get(ITEM_ENTRY_KEY)
+                    and entry.get("room") == room
+                    and entry.get(ITEM_ENTRY_KEY) not in keep)
+        ]
+        dropped = len(queue) - len(kept)
+        if dropped:
+            self._write_queue(kept)
+        return dropped
+
     def cancel(self, npc_key, room) -> int:
         """Drop pending entries for (npc_key, room). Returns the count dropped.
 
@@ -299,7 +377,12 @@ class BlackoutRespawnManager(DefaultScript):
         return spawned
 
     def _spawn(self, entry) -> bool:
-        """Re-create one queued NPC. Returns True if an object was created."""
+        """Make one queued NPC or item again. True if an object was made."""
+        if entry.get(ITEM_ENTRY_KEY):
+            from systems.gameplay.spawning import item_spawns
+
+            return item_spawns.respawn(entry[ITEM_ENTRY_KEY], entry.get("room"))
+
         # Local import: world.npc_database pulls world.npc_defs.* at import
         # time; keeping it lazy matches the style in npc_combat.py and keeps
         # this module importable in isolation.
@@ -384,6 +467,12 @@ def schedule_respawn(npc_key, room, delay_seconds, now=None,
     """Convenience wrapper — the single entry point callers should use."""
     return get_respawn_manager().schedule(npc_key, room, delay_seconds,
                                           now=now, facing=facing, look=look)
+
+
+def schedule_item_respawn(item_key, room, delay_seconds, now=None) -> bool:
+    """The entry point of an item spawn: see the manager's schedule_item."""
+    return get_respawn_manager().schedule_item(item_key, room, delay_seconds,
+                                               now=now)
 
 
 @register_manager

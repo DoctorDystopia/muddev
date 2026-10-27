@@ -53,6 +53,8 @@ const ENTRIES := [
 	["WASD + QEZC", "Hold to walk. W and D together walk northeast. Also HJKL + YUBN.\n"
 			+ "In Options, \"WASD follows the camera\" makes W walk where the camera looks."],
 	["R", "Run on or off: two tiles each tick. Also the Run button on the minimap."],
+	["Arrow keys", "Hold to turn and tilt the camera, while the map has the keyboard. "
+			+ "The same as a middle-drag, for a trackpad with no middle button."],
 	["Click a tile", "Walk there, if the server offered a way."],
 	["Click an NPC or item", "Whatever the server named: attack, get, cut."],
 	["Click an item", "Its first action: equip, eat, deposit, sell."],

@@ -200,14 +200,23 @@ func _tooltip() -> String:
 
 
 ## The one-line form for the [HoverBar].
-func hover_text() -> String:
-	return HOVER_SEPARATOR.join(_description())
+##
+## `shift` is true while the player holds Shift. The bar then names the action
+## that a left click sends now. It reads [method _click_action], as the click
+## does. Thus, the bar and the click cannot disagree. The view tracks the key,
+## because a cell knows nothing about the keyboard until a click lands.
+func hover_text(shift: bool = false) -> String:
+	return HOVER_SEPARATOR.join(_description(shift))
 
 
-## The item's name, its count, and the left-click action it gives to the
+## The name of the item, its count, and the left-click action it gives to the
 ## player. The server names the action. This control joins that action to the
-## item's already-sent name, as [ChooseOption] does for a world entity.
-func _description() -> PackedStringArray:
+## name that the server sent, as [ChooseOption] does for a world entity.
+##
+## The delayed tooltip gives no `shift`. It names the plain click, because
+## [method _redraw] builds it one time for each snapshot. It does not follow
+## the key.
+func _description(shift: bool = false) -> PackedStringArray:
 	var parts: PackedStringArray = [str(_row.get("name", ""))]
 	var count := StackCountLabel.count_text(int(_row.get("quantity", 1)))
 	var detail := str(_row.get("detail", ""))
@@ -218,7 +227,7 @@ func _description() -> PackedStringArray:
 	if not detail.is_empty():
 		parts.append(detail)
 
-	var action_text := _default_action_text()
+	var action_text := _action_text(_click_action(shift))
 
 	if not action_text.is_empty():
 		parts.append("Click: %s" % action_text)
@@ -226,10 +235,8 @@ func _description() -> PackedStringArray:
 	return parts
 
 
-## The default action's server label, followed by this row's server name.
-func _default_action_text() -> String:
-	var action := _default_action()
-
+## The server label of one action, followed by the server name of this row.
+func _action_text(action: Dictionary) -> String:
 	if action.is_empty():
 		return ""
 

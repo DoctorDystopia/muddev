@@ -1,0 +1,152 @@
+{
+	"colors": {
+		"leather": "wood",
+		"metal": "rust",
+		"trim": "iron_dark"
+	},
+	"format": 1,
+	"key": "rusty_scrap_axe",
+	"parts": [
+		{
+			"bone": "hand_r",
+			"name": "item",
+			"position": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"region": "",
+			"rotation": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"shapes": [
+				{
+					"color": "metal",
+					"diamond": true,
+					"lean_x": 0.066,
+					"offset": [
+						0.045,
+						0.24,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						-1.0472
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.13,
+						0.1,
+						0.018
+					],
+					"top_depth": 0.015,
+					"top_width": 0.15
+				},
+				{
+					"color": "metal",
+					"diamond": true,
+					"lean_x": 0.1,
+					"offset": [
+						0.14,
+						0.22,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						-1.0472
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.15,
+						0.05,
+						0.015
+					],
+					"top_depth": 0.0,
+					"top_width": 0.0
+				},
+				{
+					"color": "trim",
+					"offset": [
+						0.0,
+						0.2,
+						0.0
+					],
+					"rotation": [
+						0.0,
+						0.0,
+						-2.61799
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.032,
+						0.18,
+						0.036
+					]
+				},
+				{
+					"color": "leather",
+					"offset": [
+						0.0,
+						0.05,
+						0.0
+					],
+					"segments": 6,
+					"shape": "prism",
+					"size": [
+						0.03,
+						0.26,
+						0.03
+					]
+				},
+				{
+					"color": "trim",
+					"diamond": true,
+					"offset": [
+						0.0,
+						-0.099,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.0,
+						0.022,
+						0.0
+					],
+					"top_depth": 0.048,
+					"top_width": 0.048
+				},
+				{
+					"color": "trim",
+					"diamond": true,
+					"offset": [
+						0.0,
+						-0.077,
+						0.0
+					],
+					"segments": 4,
+					"shape": "prism",
+					"size": [
+						0.048,
+						0.022,
+						0.048
+					],
+					"top_depth": 0.02,
+					"top_width": 0.02
+				}
+			]
+		}
+	]
+}

@@ -19,6 +19,11 @@ extends RefCounted
 ## [method probe_look] gives the same probe as a worn look, so the
 ## workbench can show it.
 ##
+## A clip can name the slots that hold an item through it (`held_in` of its
+## clip list, 10/25/2026). The check then holds a probe in the bone of each
+## of those slots only. A two-handed swing names `two_hands`: the off hand
+## grips the one item, and a second probe in it would go through the chest.
+##
 ## ## The measure
 ##
 ## The gap is the distance from the surface of the probe to the nearest
@@ -63,21 +68,26 @@ const PROBE_DEPTH := 0.012
 
 ## The worst moment of one clip for a held item.
 ##
+## `slots` names the slots that hold an item through the clip
+## ([method FigureStore.held_in]). With no slots, each hand slot holds one.
+##
 ## Returns `{gap, time, part, hand}`: the gap, the time of that moment, the
 ## name of the nearest body part, and the hand bone that holds the probe. A
 ## rig with no hand bone gives an empty dictionary.
-static func check(rig: FigureRig, body: FigureLook, clip: Animation) -> Dictionary:
+static func check(rig: FigureRig, body: FigureLook, clip: Animation,
+		slots := PackedStringArray(HAND_SLOTS)) -> Dictionary:
 	var figure := FigureBuilder.build(rig, [body])
 	var skeleton := FigureBuilder.skeleton_of(figure)
 	var worst := {}
 	var samples := maxi(int(ceil(clip.length * SAMPLES_PER_SECOND)), 1)
+	var hands := hand_bones(rig, slots)
 
 	for sample in samples + 1:
 		var time := clip.length * sample / samples
 
 		FigureClips.pose(skeleton, clip, time)
 
-		for hand: String in hand_bones(rig):
+		for hand: String in hands:
 			var found := _nearest(figure, rig, body, hand)
 
 			if not found.is_empty() and (worst.is_empty() or found["gap"] < worst["gap"]):
@@ -108,11 +118,13 @@ static func line_of(clip_name: String, result: Dictionary) -> String:
 		% [clip_name, result["hand"], -result["gap"], result["part"], result["time"]]
 
 
-## The bones that hold a probe: the bone of each hand slot of the rig.
-static func hand_bones(rig: FigureRig) -> PackedStringArray:
+## The bones that hold a probe: the bone of each slot of `slots` in the rig.
+## The default is each hand slot.
+static func hand_bones(rig: FigureRig,
+		slots := PackedStringArray(HAND_SLOTS)) -> PackedStringArray:
 	var bones := PackedStringArray()
 
-	for slot: String in HAND_SLOTS:
+	for slot: String in slots:
 		var bone: String = rig.slots().get(slot, "")
 
 		if rig.has_bone(bone) and not bone in bones:

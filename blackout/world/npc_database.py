@@ -110,9 +110,9 @@ class NpcCombat:
     attack_speed: int | None = None
 
     # combat_stat_bonuses — dict[str, int] keyed by per-damage-type stat
-    #     (same keys weapon ItemDefs use: stab/slash/crush_attack_bonus,
-    #     *_defense_bonus, melee_strength_bonus). The active style's
-    #     attack_type selects which *_attack_bonus feeds the accuracy roll.
+    #     (the keys of the weapon ItemDefs, for example
+    #     melee_stab_attack_bonus). The attack_type of the active style
+    #     selects the attack bonus that feeds the accuracy roll.
     combat_stat_bonuses: dict = field(default_factory=dict)
 
     # combat_styles — dict[style_name, dict]. Sub-dicts contain:

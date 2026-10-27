@@ -59,6 +59,11 @@ DEFAULT_AUTHOR: str = "Nick Hobar"
 # The source id of a figure model is this prefix and the model key.
 SOURCE_PREFIX: str = "blackout_"
 
+# The site and the URL of a source of art made for Blackout. The model
+# wizard gives them as the defaults for such a source.
+OWNED_SITE: str = "blackout"
+OWNED_URL: str = "https://playblackout.io"
+
 
 class FigureError(RuntimeError):
     """A figure file that does not read, or an import that cannot go on."""
@@ -68,12 +73,6 @@ class FigureError(RuntimeError):
 
 _KEY_FIELD: str = "key"
 _JSON_SEPARATORS: tuple = (",", ":")
-
-# A model key is a file name and a TOML value. Thus it has plain letters only.
-_KEY_PATTERN: str = r"^[a-z][a-z0-9_]*$"
-
-_SOURCE_SITE: str = "blackout"
-_SOURCE_URL: str = "https://playblackout.io"
 
 _SOURCE_TEMPLATE: str = '''title     = "{title}"
 author    = "{author}"
@@ -256,7 +255,7 @@ def _prepare_source(source_id: str, title: str, author: str) -> str:
 
     Module Globals:
         paths.SOURCES_DIR, paths.SOURCE_RECORD_NAME, _SOURCE_TEMPLATE,
-        _SOURCE_SITE, _SOURCE_URL read.
+        OWNED_SITE, OWNED_URL read.
 
     Author: Nick Hobar
     Creation date: 10/12/2026
@@ -280,8 +279,8 @@ def _prepare_source(source_id: str, title: str, author: str) -> str:
     os.makedirs(directory, exist_ok=True)
     today = datetime.date.today().isoformat()
     text = _SOURCE_TEMPLATE.format(
-        title=_toml_text(title), author=_toml_text(author), url=_SOURCE_URL,
-        site=_SOURCE_SITE, license=licenses.OWNED_LICENSE, retrieved=today)
+        title=_toml_text(title), author=_toml_text(author), url=OWNED_URL,
+        site=OWNED_SITE, license=licenses.OWNED_LICENSE, retrieved=today)
 
     with open(record, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
@@ -424,7 +423,7 @@ def import_model(family: str, model_key: str, path: str,
         model has, or a source that is not art of Blackout.
 
     Module Globals:
-        _KEY_PATTERN read.
+        None.
 
     Methodology:
         1. Refuse a key that another model record has.
@@ -435,8 +434,8 @@ def import_model(family: str, model_key: str, path: str,
     Author: Nick Hobar
     Creation date: 10/12/2026
     """
-    key_fits = re.match(_KEY_PATTERN, model_key)
-    family_fits = re.match(_KEY_PATTERN, family)
+    key_fits = records.is_key(model_key)
+    family_fits = records.is_key(family)
 
     if not key_fits or not family_fits:
         raise FigureError("a model key and a family use only a-z, 0-9 and _, "

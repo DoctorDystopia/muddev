@@ -15,6 +15,9 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 
 const _EXPECTED_FILE := "expected.json"
 
+## The item list of the fixture world, in the layout of `spawn_items.json`.
+const _ITEMS_FILE := "items.json"
+
 var _failures := 0
 
 
@@ -22,6 +25,7 @@ func _ready() -> void:
 	_the_fixture_world_gives_the_expected_findings()
 	_an_empty_world_has_no_respawn_point()
 	_every_rule_is_a_generated_name()
+	_the_item_list_of_the_game_reads()
 	_water_draws_on_water_tiles_only()
 	_the_water_surface_meets_the_highest_corner()
 	_the_fixture_stamp_matches_the_fixture_files()
@@ -48,7 +52,11 @@ func _the_fixture_world_gives_the_expected_findings() -> void:
 			_expect(chunk.error.is_empty(), "fixture %s reads" % file_name)
 			files.append(chunk)
 
-	var found := TerrainChecks.check_world(files)
+	var items := SpawnItems.from_file(directory.path_join(_ITEMS_FILE))
+
+	_expect(items.error.is_empty(), "the fixture item list reads: " + items.error)
+
+	var found := TerrainChecks.check_world(files, items.stacking())
 	var got: Array[String] = []
 
 	for finding: Dictionary in found:
@@ -81,13 +89,28 @@ func _every_rule_is_a_generated_name() -> void:
 		_Const.TILE_CHECK_CLIMB_LANDING, _Const.TILE_CHECK_VOID_OPEN,
 		_Const.TILE_CHECK_RESPAWN_COUNT, _Const.TILE_CHECK_SIGN_TEXT,
 		_Const.TILE_CHECK_WALL_ON_VOID, _Const.TILE_CHECK_UNREACHABLE,
-		_Const.TILE_CHECK_ROOF_WALKABLE]
+		_Const.TILE_CHECK_ROOF_WALKABLE, _Const.TILE_CHECK_SPAWN_TABLE,
+		_Const.TILE_CHECK_SPAWN_ITEM]
 
 	for rule: String in twin_rules:
 		_expect(_Const.TILE_CHECK_RULES.has(rule), "%s is in TILE_CHECK_RULES" % rule)
 
 	_expect(_Const.TILE_CHECK_RULES.size() == twin_rules.size(),
 		"this twin checks every rule of tile_checks.py")
+
+
+## The generated list of the game reads, and each row names a family. The
+## Python test holds the file to ITEM_DB.
+func _the_item_list_of_the_game_reads() -> void:
+	SpawnItems.forget()
+
+	var items := SpawnItems.game()
+
+	_expect(items.error.is_empty(), "spawn_items.json reads: " + items.error)
+	_expect(not items.keys().is_empty(), "spawn_items.json names an item")
+
+	for key: String in items.keys():
+		_expect(not items.family(key).is_empty(), "item %s has a family" % key)
 
 
 func _water_draws_on_water_tiles_only() -> void:

@@ -122,8 +122,8 @@ class EquipmentHandler:
         the move has completed.
 
         Also republishes the dossier, not only the inventory pane: the
-        Character tab's Combat Readiness band (weapon, attack/defence
-        bonuses) and its Holdings counts both read off equipment.slots, and
+        Character tab's Combat Readiness band (total combat stat bonuses)
+        and its Holdings counts both read off equipment.slots, and
         until this call was added here they went stale the moment a player
         equipped or unequipped anything without also running `score` --
         emit_summary was reachable only from resync and the score menu.

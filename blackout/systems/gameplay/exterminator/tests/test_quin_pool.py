@@ -326,7 +326,7 @@ class DamageForDefenseTests(_QuinTest):
     def test_it_cuts_a_positive_defense_bonus(self):
         self._give_task(ext_const.BUFF_DAMAGE_FOR_DEFENSE)
         context = self._context(self.crab, self.char1)
-        bonus_key = f"{context.attack_type}_defense_bonus"
+        bonus_key = combat_const.defense_bonus_key(context.attack_type)
         context.defender_stats = {bonus_key: _FIXTURE_DEFENSE_BONUS}
 
         self._contribute(ext_const.BUFF_DAMAGE_FOR_DEFENSE, context, context.defender_bag)
@@ -337,7 +337,7 @@ class DamageForDefenseTests(_QuinTest):
     def test_it_never_cuts_a_bonus_that_is_not_positive(self):
         self._give_task(ext_const.BUFF_DAMAGE_FOR_DEFENSE)
         context = self._context(self.crab, self.char1)
-        bonus_key = f"{context.attack_type}_defense_bonus"
+        bonus_key = combat_const.defense_bonus_key(context.attack_type)
         context.defender_stats = {bonus_key: -_FIXTURE_DEFENSE_BONUS}
 
         self._contribute(ext_const.BUFF_DAMAGE_FOR_DEFENSE, context, context.defender_bag)

@@ -19,6 +19,7 @@ from evennia import Command, CmdSet
 from evennia import DefaultObject
 from evennia.utils import logger
 
+from commands.command import FacingCommand
 from commands.constants import HELP_CATEGORY_GENERAL
 from systems.interface.statefeed.constants import ASSET_KIND_NPC, COMMERCE_ROLE_SHOP
 from typeclasses.npc_defined import NpcDefined
@@ -425,7 +426,7 @@ class ShopkeepCleanup(Script):
                 logger.log_trace()
 
 
-class CmdSell(Command):
+class CmdSell(FacingCommand):
     """
     Sell something you are carrying to the shopkeeper standing here.
 
@@ -479,7 +480,7 @@ class CmdSell(Command):
         perform_sell(self.caller, self.obj, self.args)
 
 
-class CmdBuy(Command):
+class CmdBuy(FacingCommand):
     """
     Buy something from the shopkeeper standing here.
 
@@ -507,7 +508,7 @@ class CmdBuy(Command):
         perform_buy(self.caller, self.obj, self.args)
 
 
-class CmdValue(Command):
+class CmdValue(FacingCommand):
     """
     Look at something the shopkeeper standing here sells.
 
@@ -531,7 +532,7 @@ class CmdValue(Command):
         perform_value(self.caller, self.obj, self.args)
 
 
-class CmdTrade(Command):
+class CmdTrade(FacingCommand):
     """
     Open the shop of the shopkeeper standing here.
 
@@ -576,10 +577,9 @@ class CmdTrade(Command):
 
         caller = self.caller
         wants = service.wants_popup(caller)
-        # The two turn to face each other (10/18/2026), for the pop-up and
-        # for the menu alike.
-        feed.emit_face(caller, self.obj)
 
+        # The two turn to face each other in FacingCommand.at_pre_cmd, for
+        # the pop-up and for the menu alike.
         if wants:
             opened = service.open_popup(caller, SHOP_POPUP_KEY, self.obj)
 

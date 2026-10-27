@@ -47,7 +47,7 @@ from analysis import _snapshot_env as env
 
 # The stat the player's armour is chosen on. Every NPC in NPC_DB currently
 # attacks crush, so crush defence is the axis worth optimising against.
-ARMOUR_SELECTION_STAT: str = "crush_defense_bonus"
+ARMOUR_SELECTION_STAT: str = "melee_crush_defense_bonus"
 
 # Lowest level the sweeps plot from. Level 0 gives a character 0 max HP, which
 # makes every inbound time-to-kill zero and squashes the ratio axis.

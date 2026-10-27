@@ -68,12 +68,11 @@ class ItemDef:
     
     # ─── Combat fields (weapons only; None on non-combat items) ──
     # attack_speed — integer ticks; one tick = TICK_SECONDS (0.6s).
-    # combat_stat_bonuses — dict[str, int] keyed by per-damage-type stat (e.g.
-    #     'stab_attack_bonus', 'slash_attack_bonus', 'crush_attack_bonus',
-    #     'melee_strength_bonus', 'stab_defense_bonus', 'slash_defense_bonus',
-    #     'crush_defense_bonus').
-    #     The active style's attack_type (stab/slash/crush) selects
-    #     which *_attack_bonus feeds the accuracy roll.
+    # combat_stat_bonuses — dict[str, int]. Each key names a combat category
+    #     and an attack type, for example 'melee_stab_attack_bonus' or
+    #     'projectile_light_defense_bonus'. UNARMED_DEFAULT_COMBAT_STATS
+    #     holds every key. The attack_type of the active style selects the
+    #     attack bonus that feeds the accuracy roll.
     # combat_styles — dict mapping a per-weapon style name (e.g. "stab") to
     #     a sub-dict containing:
     #       { 'weapon_style': 'accurate'|'aggressive'|'defensive'|'controlled',

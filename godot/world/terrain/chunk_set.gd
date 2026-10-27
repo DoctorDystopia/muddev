@@ -311,7 +311,7 @@ static func _name_index(names: PackedStringArray, name: String) -> int:
 
 # ─── Objects ────────────────────────────────────────────────────────────────
 
-## Each object on world tile `tile`, as `{kind, rotation, text, look}`.
+## Each object on world tile `tile`, as `{kind, rotation, text, look, spawn}`.
 func objects_at(tile: Vector2i) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 	var chunk := _tile_chunk(tile)
@@ -324,15 +324,17 @@ func objects_at(tile: Vector2i) -> Array[Dictionary]:
 	for thing: Dictionary in chunk.objects:
 		if thing["x"] == local.x and thing["y"] == local.y:
 			found.append({"kind": thing["kind"], "rotation": thing["rotation"],
-				"text": thing.get("text", ""), "look": thing.get("look", {}).duplicate(true)})
+				"text": thing.get("text", ""), "look": thing.get("look", {}).duplicate(true),
+				"spawn": thing.get("spawn", {}).duplicate(true)})
 
 	return found
 
 
 ## Place an object on `tile`. `text` is the words of a signpost, or "".
-## `look` is the look of the object, or `{}` (10/16/2026).
+## `look` is the look of the object, or `{}` (10/16/2026). `spawn` is the
+## spawn of an item spawn, or `{}` (10/21/2026).
 func add_object(tile: Vector2i, kind: String, rotation: int,
-		text: String = "", look: Dictionary = {}) -> void:
+		text: String = "", look: Dictionary = {}, spawn: Dictionary = {}) -> void:
 	var chunk := _tile_chunk(tile)
 
 	if chunk == null:
@@ -341,30 +343,30 @@ func add_object(tile: Vector2i, kind: String, rotation: int,
 	var local := local_of(tile, chunk_of_tile(tile))
 
 	chunk.objects.append({"kind": kind, "x": local.x, "y": local.y,
-		"rotation": rotation, "text": text, "look": look.duplicate(true)})
+		"rotation": rotation, "text": text, "look": look.duplicate(true),
+		"spawn": spawn.duplicate(true)})
 	_dirty[chunk_of_tile(tile)] = true
 
 
-## Remove one object with this kind, rotation, text, and look from `tile`.
-## True when one was there. Two looks match by their text, so the order of
-## the keys does not count.
+## Remove one object with this kind, rotation, text, look, and spawn from
+## `tile`. True when one was there. Two looks match by their text, so the
+## order of the keys does not count. Two spawns match the same way.
 func remove_object(tile: Vector2i, kind: String, rotation: int,
-		text: String = "", look: Dictionary = {}) -> bool:
+		text: String = "", look: Dictionary = {}, spawn: Dictionary = {}) -> bool:
 	var chunk := _tile_chunk(tile)
 
 	if chunk == null:
 		return false
 
 	var local := local_of(tile, chunk_of_tile(tile))
-	var wanted := ChunkFile.look_text(look)
+	var wanted := {"kind": kind, "rotation": rotation, "text": text, "look": look,
+		"spawn": spawn}
 
 	for index: int in chunk.objects.size():
 		var thing: Dictionary = chunk.objects[index]
 
 		if thing["x"] == local.x and thing["y"] == local.y \
-				and thing["kind"] == kind and thing["rotation"] == rotation \
-				and thing.get("text", "") == text \
-				and ChunkFile.look_text(thing.get("look", {})) == wanted:
+				and same_object(wanted, thing):
 			chunk.objects.remove_at(index)
 			_dirty[chunk_of_tile(tile)] = true
 			return true
@@ -373,12 +375,20 @@ func remove_object(tile: Vector2i, kind: String, rotation: int,
 
 
 ## True when two objects of [method objects_at] are the same object: the
-## same kind, rotation, text, and look.
+## same kind, rotation, text, look, and spawn.
 static func same_object(first: Dictionary, second: Dictionary) -> bool:
 	return first["kind"] == second["kind"] and first["rotation"] == second["rotation"] \
-		and first["text"] == second["text"] \
+		and first.get("text", "") == second.get("text", "") \
 		and ChunkFile.look_text(first.get("look", {})) \
-			== ChunkFile.look_text(second.get("look", {}))
+			== ChunkFile.look_text(second.get("look", {})) \
+		and _spawn_text(first) == _spawn_text(second)
+
+
+## The spawn of an object as the writer writes it, or "" for no spawn.
+static func _spawn_text(thing: Dictionary) -> String:
+	var spawn: Dictionary = thing.get("spawn", {})
+
+	return "" if spawn.is_empty() else ChunkFile.spawn_text(spawn)
 
 
 # ─── Seams ──────────────────────────────────────────────────────────────────

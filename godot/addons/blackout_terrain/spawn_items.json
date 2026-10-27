@@ -1,0 +1,635 @@
+{
+	"format": 1,
+	"items": [
+		{
+			"family": "weapon",
+			"key": "bit_blade",
+			"name": "bit-blade",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "broken_bit_blade",
+			"name": "broken bit-blade",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "copper_arrow",
+			"name": "copper arrow",
+			"stackable": true
+		},
+		{
+			"family": "crafting_tool",
+			"key": "copper_axe",
+			"name": "copper axe",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_battleaxe",
+			"name": "copper battleaxe",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "copper_boots",
+			"name": "copper boots",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "copper_chainbody",
+			"name": "copper chainbody",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "copper_chunk",
+			"name": "copper chunk",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_dagger",
+			"name": "copper dagger",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "copper_dust",
+			"name": "copper dust",
+			"stackable": true
+		},
+		{
+			"family": "armor",
+			"key": "copper_great_helm",
+			"name": "copper great helm",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_greatsword",
+			"name": "copper greatsword",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "copper_hide_cape",
+			"name": "copper hide cape",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "copper_platelegs",
+			"name": "copper platelegs",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_scimitar",
+			"name": "copper scimitar",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_shortbow",
+			"name": "copper shortbow",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_shortsword",
+			"name": "copper shortsword",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "copper_spear",
+			"name": "copper spear",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "copper_square_shield",
+			"name": "copper square shield",
+			"stackable": false
+		},
+		{
+			"family": "currency",
+			"key": "credits",
+			"name": "credits",
+			"stackable": true
+		},
+		{
+			"family": "jewellery",
+			"key": "glass_cannon_amulet",
+			"name": "Glass Cannon amulet",
+			"stackable": false
+		},
+		{
+			"family": "crafting_tool",
+			"key": "hammer",
+			"name": "hammer",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "legendary_bit_blade",
+			"name": "0x7F",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "malfunctioning_gizmo",
+			"name": "malfunctioning gizmo",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "metal_chunk",
+			"name": "metal chunk",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "metal_dust",
+			"name": "metal dust",
+			"stackable": true
+		},
+		{
+			"family": "weapon",
+			"key": "mk2_bit_blade",
+			"name": "MK.II bit-blade",
+			"stackable": false
+		},
+		{
+			"family": "corpse",
+			"key": "mutant_giant_corpse",
+			"name": "Mutant Giant corpse",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_cured_chuck",
+			"name": "mutant giant cured chuck",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_cured_fatless_meat",
+			"name": "mutant giant cured fatless meat",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_cured_filet",
+			"name": "mutant giant cured filet",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_cured_hide",
+			"name": "mutant giant cured hide",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_cured_meat_sandwich",
+			"name": "mutant giant cured meat sandwich",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_cured_prime_meat",
+			"name": "mutant giant cured prime meat",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_fatless_meat",
+			"name": "mutant giant fatless meat",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_prime_cured_meat_sandwich",
+			"name": "mutant giant prime cured meat sandwich",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_prime_meat",
+			"name": "mutant giant prime meat",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_prime_raw_hide",
+			"name": "mutant giant prime raw hide",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_prime_steak",
+			"name": "mutant giant prime steak",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_prime_tallow",
+			"name": "mutant giant prime tallow",
+			"stackable": true
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_raw_chuck",
+			"name": "mutant giant raw chuck",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_raw_filet",
+			"name": "mutant giant raw filet",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_raw_hide",
+			"name": "mutant giant raw hide",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_sinew",
+			"name": "mutant giant sinew",
+			"stackable": true
+		},
+		{
+			"family": "food",
+			"key": "mutant_giant_steak",
+			"name": "mutant giant steak",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_giant_tallow",
+			"name": "mutant giant tallow",
+			"stackable": true
+		},
+		{
+			"family": "corpse",
+			"key": "mutant_raider_corpse",
+			"name": "Mutant Raider corpse",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_cured_chuck",
+			"name": "mutant raider cured chuck",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_cured_fatless_meat",
+			"name": "mutant raider cured fatless meat",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_cured_filet",
+			"name": "mutant raider cured filet",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_cured_hide",
+			"name": "mutant raider cured hide",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_cured_meat_sandwich",
+			"name": "mutant raider cured meat sandwich",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_cured_prime_meat",
+			"name": "mutant raider cured prime meat",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_fatless_meat",
+			"name": "mutant raider fatless meat",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_prime_cured_hide",
+			"name": "mutant raider prime cured hide",
+			"stackable": false
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_prime_cured_meat_sandwich",
+			"name": "mutant raider prime cured meat sandwich",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_prime_meat",
+			"name": "mutant raider prime meat",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_prime_raw_hide",
+			"name": "mutant raider prime raw hide",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_prime_sinew",
+			"name": "mutant raider prime sinew",
+			"stackable": true
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_prime_steak",
+			"name": "mutant raider prime steak",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_prime_tallow",
+			"name": "mutant raider prime tallow",
+			"stackable": true
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_raw_chuck",
+			"name": "mutant raider raw chuck",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_raw_filet",
+			"name": "mutant raider raw filet",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_raw_hide",
+			"name": "mutant raider raw hide",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_sinew",
+			"name": "mutant raider sinew",
+			"stackable": true
+		},
+		{
+			"family": "food",
+			"key": "mutant_raider_steak",
+			"name": "mutant raider steak",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "mutant_raider_tallow",
+			"name": "mutant raider tallow",
+			"stackable": true
+		},
+		{
+			"family": "crafting_material",
+			"key": "rusty_metal_chunk",
+			"name": "rusty metal chunk",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "rusty_metal_dust",
+			"name": "rusty metal dust",
+			"stackable": true
+		},
+		{
+			"family": "crafting_material",
+			"key": "rusty_scrap_arrow",
+			"name": "rusty scrap arrow",
+			"stackable": true
+		},
+		{
+			"family": "crafting_tool",
+			"key": "rusty_scrap_axe",
+			"name": "rusty scrap axe",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_battleaxe",
+			"name": "rusty scrap battleaxe",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_boots",
+			"name": "rusty scrap boots",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_chainbody",
+			"name": "rusty scrap chainbody",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_dagger",
+			"name": "rusty scrap dagger",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_great_helm",
+			"name": "rusty scrap great helm",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_greatsword",
+			"name": "rusty scrap greatsword",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_hide_cape",
+			"name": "rusty scrap hide cape",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "rusty_scrap_metal",
+			"name": "rusty scrap metal",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_platelegs",
+			"name": "rusty scrap platelegs",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_scimitar",
+			"name": "rusty scrap scimitar",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_shortbow",
+			"name": "rusty scrap shortbow",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_shortsword",
+			"name": "rusty scrap shortsword",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "rusty_scrap_spear",
+			"name": "rusty scrap spear",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "rusty_scrap_square_shield",
+			"name": "rusty scrap square shield",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "scrap_arrow",
+			"name": "scrap arrow",
+			"stackable": true
+		},
+		{
+			"family": "crafting_tool",
+			"key": "scrap_axe",
+			"name": "scrap axe",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_battleaxe",
+			"name": "scrap battleaxe",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_boots",
+			"name": "scrap boots",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_chainbody",
+			"name": "scrap chainbody",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "scrap_copper",
+			"name": "scrap copper",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_dagger",
+			"name": "scrap dagger",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_great_helm",
+			"name": "scrap great helm",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_greatsword",
+			"name": "scrap greatsword",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_hide_cape",
+			"name": "scrap hide cape",
+			"stackable": false
+		},
+		{
+			"family": "crafting_material",
+			"key": "scrap_metal",
+			"name": "scrap metal",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_platelegs",
+			"name": "scrap platelegs",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_scimitar",
+			"name": "scrap scimitar",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_shortbow",
+			"name": "scrap shortbow",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_shortsword",
+			"name": "scrap shortsword",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "scrap_spear",
+			"name": "scrap spear",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_square_shield",
+			"name": "scrap square shield",
+			"stackable": false
+		},
+		{
+			"family": "crafting_tool",
+			"key": "spray_can",
+			"name": "spray can",
+			"stackable": false
+		},
+		{
+			"family": "generic",
+			"key": "task_writ",
+			"name": "Task Writ",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
+			"key": "toy_sword",
+			"name": "Toy Sword",
+			"stackable": false
+		}
+	]
+}

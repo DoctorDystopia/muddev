@@ -99,6 +99,10 @@ const STEP := TILE_SIZE
 @onready var _aura: MeshInstance3D = $Aura
 @onready var _camera: Camera3D = $Camera/SpringArm3D/Camera3D
 
+## The rig that holds [member _camera]. The arrow keys turn it through
+## [method turn_camera].
+@onready var _rig: OrbitCamera = $Camera
+
 ## The fog and the light of the area that the player stands in. This pane
 ## tells it the area on each placement. See [AreaEnvironment].
 @onready var _area_environment: AreaEnvironment = $Environment
@@ -152,6 +156,16 @@ const TURN_SPEED := 12.0
 ## before their model arrived should still be facing north after it does.
 var _avatar_yaw := 0.0
 var _avatar_yaw_drawn := 0.0
+
+## The yaw of a face event that waits for the avatar to stand, or null when
+## none waits (10/20/2026).
+##
+## A walk that ends in `then craft` sends its last step and the face event in
+## one tick. The avatar faces along the step while it slides, and turns to the
+## furnace when it stands, as each mobile of [EntityPool] does. A new step
+## drops the face, because the player then walks away. See
+## [method _take_facing].
+var _avatar_facing: Variant = null
 
 ## The tile the avatar was last placed on, and which island it was on.
 ##
@@ -280,6 +294,7 @@ func _build_hover_mark() -> void:
 ## server sends nothing between two steps.
 func _process(delta: float) -> void:
 	_animator.advance(delta)
+	_take_facing()
 	_avatar_yaw_drawn = rotate_toward(
 		_avatar_yaw_drawn, _avatar_yaw, TURN_SPEED * delta)
 	_draw_avatar()
@@ -554,6 +569,7 @@ func _on_channel(channel: String, payload: Dictionary) -> void:
 	match channel:
 		Const.CH_COMBAT:
 			var target_id := int(payload.get("target_id", 0))
+			var attacker_id := int(payload.get("attacker_id", 0))
 
 			if payload.get("hit", false):
 				_entities.flash(target_id)
@@ -562,7 +578,11 @@ func _on_channel(channel: String, payload: Dictionary) -> void:
 			# Each swing turns the one who swings. A target that fights
 			# back turns on its own swings. A target that does not keeps
 			# the turn of the face event.
-			_face_toward(int(payload.get("attacker_id", 0)), target_id)
+			_face_toward(attacker_id, target_id)
+			# The server names the action of the swing: its hands and its
+			# attack type. A node that is no figure plays nothing.
+			FigureLibrary.strike(_figure_of(attacker_id),
+				str(payload.get("figure_action", "")))
 
 		Const.CH_FACE:
 			_on_face(payload)
@@ -590,16 +610,22 @@ func _on_face(payload: Dictionary) -> void:
 
 ## Turn the figure of `mover_id` to face the figure of `other_id`.
 ##
-## Read from the DRAWN positions, not the tiles. A melee fight stands on
+## Read from the DRAWN figures, not the tiles. A melee fight stands on
 ## one tile, in the slots of its ring. Two tiles would give no direction,
 ## and two slots give the right one: the two face each other across the
 ## ring. A pair with no gap between them keeps the yaw. So does a pair with
 ## a figure this pane does not draw, which a backfire is (the two ids are
 ## one).
 ##
-## The avatar turns over [member _avatar_yaw], and [method _process] walks
-## it there at [constant TURN_SPEED]. Each other figure turns in the pool,
-## by the same rate. See [method EntityPool.face].
+## Each point is where the figure STANDS: the end of its slide (10/20/2026).
+## A face that comes with the last step of a walk finds the avatar still
+## on the tile before. A yaw from there points along the walk, not at the
+## furnace on the slot beside it. See [method _standing_point].
+##
+## The avatar turns over [member _avatar_facing], which it takes when it
+## stands. [method _process] walks it there at [constant TURN_SPEED]. Each
+## other figure turns in the pool, by the same rate. See
+## [method EntityPool.face].
 func _face_toward(mover_id: int, other_id: int) -> void:
 	if mover_id == other_id:
 		return
@@ -610,14 +636,37 @@ func _face_toward(mover_id: int, other_id: int) -> void:
 	if mover == null or other == null:
 		return
 
-	var yaw := yaw_facing(mover.global_position, other.global_position,
-		mover.rotation.y)
+	var yaw := yaw_facing(_standing_point(mover_id, mover),
+		_standing_point(other_id, other), mover.rotation.y)
 
 	if _char != null and _char.is_me(mover_id):
-		_avatar_yaw = yaw
+		_avatar_facing = yaw
+		_take_facing()
 		return
 
 	_entities.face(mover_id, yaw)
+
+
+## Where a figure stands: the end of its slide. The same as its drawn
+## point when it does not slide. The avatar slides on [member _animator],
+## and each other figure on its own animator in the pool.
+func _standing_point(entity_id: int, figure: Node3D) -> Vector3:
+	if _char != null and _char.is_me(entity_id):
+		var slide := _animator.target() - _animator.drawn()
+
+		return figure.global_position + slide
+
+	return _entities.standing_point(entity_id)
+
+
+## Give the avatar the yaw of a waiting face, once it stands. While it
+## slides, the step keeps the turn. See [member _avatar_facing].
+func _take_facing() -> void:
+	if _avatar_facing == null or _animator.is_travelling():
+		return
+
+	_avatar_yaw = _avatar_facing
+	_avatar_facing = null
 
 
 ## The figure of one entity id, or null when this pane draws none.
@@ -691,6 +740,12 @@ func _locate_coords(coords: Array) -> Variant:
 	var cell := Vector2i(int(coords[0]), int(coords[1]))
 
 	return _ground_point(cell, plane)
+
+
+## Turn and tilt the camera by held keys. The console calls it on each frame
+## that a camera key is down. See [method OrbitCamera.turn].
+func turn_camera(axis: Vector2, delta: float) -> void:
+	_rig.turn(axis, delta)
 
 
 ## Where the camera looks, flat on the tile grid, with Y to the north.
@@ -1306,6 +1361,12 @@ static func yaw_facing(from: Vector3, to: Vector3, keep: float) -> float:
 func _turn_avatar() -> void:
 	if _facing_z == _state.current_z:
 		_avatar_yaw = yaw_towards(_facing_cell, _state.current_cell, _avatar_yaw)
+
+	# A step drops a face that waits, because the player walks away from
+	# the thing. The face of a walk that ends in `then craft` comes AFTER its
+	# last step, so this drops none of that walk.
+	if _facing_cell != _state.current_cell or _facing_z != _state.current_z:
+		_avatar_facing = null
 
 	_facing_cell = _state.current_cell
 	_facing_z = _state.current_z

@@ -7,8 +7,10 @@ Commands describe the input the account can do to the game.
 
 from evennia import ObjectDB
 from evennia.commands.command import Command as BaseCommand
+from evennia.utils import logger
 
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed
 
 # The first character of a dbref argument, from the one template that spells
 # a dbref into a command.
@@ -63,6 +65,53 @@ def search_in(caller, text: str, candidates: list, **kwargs):
 
     return caller.handle_search_results(text, list(matches), **kwargs)
 
+
+def turn_to(caller, target) -> None:
+    """
+    Purpose: Send the face event of one interaction. The caller turns to the
+             target, and a target that can turn turns back.
+
+    Entry:
+        caller - the character that acts.
+        target - the object that it acts on, or None.
+
+    Exit/Returns:
+        No return value. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Only for a target in the room of the caller. A thing in the bag, for
+        example the egg or a writ, has no figure in the world. The caller
+        is never its own target.
+
+        Guarded, because the statefeed is a bystander to the command. A
+        face event that fails must not stop a craft or a deposit.
+        GatheringHandler._face_node makes the same choice.
+
+    Notes/References:
+        FacingCommand calls this for each command that hangs on a thing.
+        A command that finds its target in its arguments calls it after the
+        search: `read`, `task new`, `get`.
+
+    Author: Nick Hobar
+    Creation date: 10/20/2026
+    """
+    if target is None or target == caller:
+        return
+
+    here = getattr(caller, "location", None)
+    there = getattr(target, "location", None)
+
+    if here is None or there != here:
+        return
+
+    try:
+        feed.emit_face(caller, target)
+    except Exception as exc:
+        logger.log_err(f"turn_to: {caller} to {target} failed: {exc!r}")
+
 # from evennia import default_cmds
 
 
@@ -87,6 +136,51 @@ class Command(BaseCommand):
     #         every command, like prompts.
     #
     pass
+
+
+class FacingCommand(Command):
+    """
+    Purpose: A command that hangs on a thing in the room: a station, a bank
+             terminal, or a shopkeep. Each time the command runs, the caller
+             turns to that thing (Nick, 10/20/2026).
+
+    Entry:
+        self.caller is the character that typed the line.
+        self.obj is the thing whose cmdset holds this command.
+
+    Exit/Returns:
+        No conditions.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The turn is in at_pre_cmd, before parse and func. Thus, the turn
+        comes with every line, also a line that the command refuses. A
+        player who clicks a furnace turns to it, as in OSRS, before the
+        furnace says what is missing.
+
+        Each line sends the event, not only the first. The event holds no
+        state, so a bystander who comes into view later gets the turn at the
+        next line. Each swing of a harvest sends it for the same reason.
+
+        A class, not a call in each func. A check that each command repeats
+        is a check that someone forgets on the ninth command.
+
+    Notes/References:
+        turn_to owns the rule. CmdTalk sends its own face event, because an
+        NPC with nothing to say turns nobody.
+
+    Author: Nick Hobar
+    Creation date: 10/20/2026
+    """
+
+    def at_pre_cmd(self):
+        """Turn the caller to the thing that holds this command."""
+        turn_to(self.caller, self.obj)
+        aborted = super().at_pre_cmd()
+
+        return aborted
 
 
 # -------------------------------------------------------------

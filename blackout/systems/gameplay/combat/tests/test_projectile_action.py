@@ -2,8 +2,9 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/17/2026
-Description: Tests for the projectile shot end to end — the ammunition it
-             spends, where the spent unit goes, and the two refusals.
+Description: Tests for the whole projectile shot: the ammunition it spends,
+             where the spent unit goes, and the two refusals. Also the moment
+             that each shot sends to the client.
 
 What these are guarding
 -----------------------
@@ -16,15 +17,23 @@ skills the player levelled.
 """
 
 import random
+import unittest
+from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
 
 from items.equipment.constants import WieldLocation
 from systems.gameplay.combat import ammunition
+from systems.gameplay.combat import combat as combat_module
 from systems.gameplay.combat import constants as const
-from systems.gameplay.combat.combat import combat_profile, ensure_combat_handler
-from systems.gameplay.combat.rules.context import ActionContext, read_skill_levels
+from systems.gameplay.combat.combat import (
+    ActionAttack, combat_profile, ensure_combat_handler)
+from systems.gameplay.combat.rules.context import (
+    ActionContext, ActionResult, read_skill_levels)
 from systems.gameplay.progression.skills import constants as skill_constants
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed_events
 from typeclasses.npc_spawners import spawn_npc
 from world.item_database import ITEM_DB
 
@@ -351,3 +360,80 @@ class TestTheQuiverReachesTheClient(_ProjectileFixture):
             ammunition.spend(self.char1, combat_profile(self.char1), self.target)
 
         self.assertFalse(mocked_emit.called)
+
+
+class TestAnAttackSendsTheMomentOfItsSkill(_ProjectileFixture):
+    """Each shot of a gun sends the moment of Guns, one time. Each melee
+    swing sends the moment of Strike, one time. The client plays the sound
+    of that moment (godot/world/sound_cues.gd)."""
+
+    def _attack(self, result):
+        """Resolve one attack with a scripted result. Give the mock of
+        emit_moment.
+
+        The spend is a mock too, so the recovery roll reads no global RNG.
+        The moment does not depend on where the unit goes."""
+        self.handler._refresh_weapon()
+        action = ActionAttack(self.target.id)
+
+        with mock.patch.object(combat_module, "resolve_action",
+                               return_value=result), \
+             mock.patch.object(ammunition, "spend"), \
+             mock.patch.object(feed_events, "emit_moment") as emitted:
+            action.resolve(self.handler)
+
+        return emitted
+
+    def test_a_hit_sends_the_moment(self):
+        result = ActionResult(hit=True, damage=1,
+                              damage_type=const.DAMAGE_TYPE_PROJECTILE)
+
+        emitted = self._attack(result)
+
+        emitted.assert_called_once_with(self.char1, feed_const.MOMENT_GUNS_SHOT)
+
+    def test_a_miss_sends_the_moment(self):
+        """The gun fires before the roll decides the hit."""
+        emitted = self._attack(ActionResult(hit=False))
+
+        emitted.assert_called_once_with(self.char1, feed_const.MOMENT_GUNS_SHOT)
+
+    def test_a_melee_hit_sends_the_moment_of_strike(self):
+        """Strike is the accuracy skill of a fist, as of every melee style."""
+        self.char1.equipment.unequip(self.bow)
+
+        emitted = self._attack(ActionResult(hit=True, damage=1))
+
+        emitted.assert_called_once_with(self.char1,
+                                        feed_const.MOMENT_MELEE_SWING)
+
+    def test_a_melee_miss_sends_the_moment_of_strike(self):
+        """The swing goes out before the roll decides the hit."""
+        self.char1.equipment.unequip(self.bow)
+
+        emitted = self._attack(ActionResult(hit=False))
+
+        emitted.assert_called_once_with(self.char1,
+                                        feed_const.MOMENT_MELEE_SWING)
+
+    def test_an_empty_quiver_sends_nothing(self):
+        """No unit left, so no shot and no sound."""
+        self.char1.equipment.unequip(self.arrows)
+
+        emitted = self._attack(ActionResult(hit=True, damage=1))
+
+        emitted.assert_not_called()
+
+
+class TestEveryAttackMomentIsSent(unittest.TestCase):
+
+    def test_every_attack_moment_is_a_moment_the_feed_sends(self):
+        """A typed name that is not in MOMENTS sends nothing, so it fails here."""
+        for key, skill_class in SKILL_REGISTRY.items():
+            moment = getattr(skill_class, "attack_moment", None)
+
+            if moment is None:
+                continue
+
+            with self.subTest(skill=key):
+                self.assertIn(moment, feed_const.MOMENTS)

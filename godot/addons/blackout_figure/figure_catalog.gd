@@ -17,6 +17,8 @@ extends RefCounted
 ##     tool_types  each tool type of the server (Phase W6)
 ##     npcs        [{key, name, outfit}, ...]: each NPC def with an outfit
 ##                 (Phase W6). `outfit` is slot -> asset key.
+##     attack_actions  each action that a swing can name (10/25/2026), for
+##                 example `attack_one_hand_slash` ([FigureStances])
 ##
 ## `clears` names each other slot that an item in this slot empties. A
 ## two-handed weapon clears the two hand slots. [method wear] follows it, so
@@ -172,6 +174,16 @@ func tool_types() -> PackedStringArray:
 	return names
 
 
+## Each attack action that a swing of the server can name, in sorted order.
+## A catalog of before 10/25/2026 has none.
+func attack_actions() -> PackedStringArray:
+	var names := PackedStringArray(data.get("attack_actions", []))
+
+	names.sort()
+
+	return names
+
+
 ## The key of each NPC def that has an outfit, in the order of the file
 ## (Phase W6). The server owns the outfit of an NPC (decision 8).
 func npc_keys() -> PackedStringArray:
@@ -298,6 +310,9 @@ static func _problem(parsed: Dictionary) -> String:
 static func _more_problem(parsed: Dictionary) -> String:
 	if not FigureJson.is_strings(parsed.get("tool_types", [])):
 		return "tool_types must be a list of names"
+
+	if not FigureJson.is_strings(parsed.get("attack_actions", [])):
+		return "attack_actions must be a list of names"
 
 	if typeof(parsed.get("npcs", [])) != TYPE_ARRAY:
 		return "npcs must be a list"

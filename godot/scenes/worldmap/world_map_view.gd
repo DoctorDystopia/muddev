@@ -14,6 +14,9 @@ extends FloatingBox
 ##   - The tile under the cursor, as `(x, y)`, for a player who types
 ##     `goto x,y`.
 ##   - The legend, in a column at the right side (10/19/2026).
+##   - The position readout, while the XY button is on: your tile and your
+##     plane (10/21/2026). The minimap has the same button, and both buttons
+##     write one setting.
 ##
 ## ## It moves nothing
 ##
@@ -48,6 +51,10 @@ const DEFAULT_ZOOM := 3
 
 const TITLE_TEXT := "World map"
 const LEGEND_TEXT := "Legend"
+
+## The position readout: the words of [method MinimapView.coordinates_of],
+## marked as yours. The tile under the cursor stands in the same row.
+const POSITION_TEMPLATE := "You: %s"
 
 const LABEL_FONT_SIZE := 14
 const LABEL_OUTLINE := 4
@@ -99,9 +106,15 @@ var _dragging := false
 var _local_hidden := PackedStringArray()
 var _local_legend := ClientSettings.DEFAULT_WORLD_MAP_LEGEND
 
+## The XY button, when no settings are bound. With settings,
+## [member ClientSettings.show_coordinates] is the one owner.
+var _local_coordinates := ClientSettings.DEFAULT_SHOW_COORDINATES
+
 var _canvas: Control
 var _plane_label: Label
 var _readout: Label
+var _position: Label
+var _coordinates_button: Button
 var _plane_down: Button
 var _plane_up: Button
 var _legend_button: Button
@@ -122,10 +135,7 @@ func _init() -> void:
 	_column.add_child(body)
 	body.add_child(_build_canvas())
 	body.add_child(_build_legend())
-
-	_readout = Label.new()
-	_readout.text = " "
-	_column.add_child(_readout)
+	_column.add_child(_build_footer())
 
 
 ## Bind to the models. The console owns all three.
@@ -137,12 +147,14 @@ func bind(map: WorldMapState, state: WorldState,
 	_map.plane_changed.connect(_on_plane_changed)
 	_map.index_arrived.connect(_on_index)
 	_state.room_changed.connect(_canvas.queue_redraw)
+	_state.room_changed.connect(_sync_coordinates)
 	_state.walk_changed.connect(_canvas.queue_redraw)
 
 	if _settings != null:
 		_settings.changed.connect(_on_settings_changed)
 
 	_sync_legend()
+	_sync_coordinates()
 
 
 # ─── Open and close ──────────────────────────────────────────────────────────
@@ -221,7 +233,8 @@ func _store_rect(rect: Rect2) -> void:
 
 # ─── Building ────────────────────────────────────────────────────────────────
 
-## The buttons after the title: the plane, the zoom, the legend, and Close.
+## The buttons after the title: the plane, the zoom, XY, the legend, and
+## Close.
 func _build_title_buttons() -> void:
 	_plane_down = _bar_button("Down", "Show the plane below")
 	_plane_down.pressed.connect(step_plane.bind(-1))
@@ -233,6 +246,11 @@ func _build_title_buttons() -> void:
 	_bar_button("-", "Zoom out").pressed.connect(step_zoom.bind(-1))
 	_bar_button("+", "Zoom in").pressed.connect(step_zoom.bind(1))
 	_bar_button("Me", "Centre on you").pressed.connect(centre_on_player)
+
+	_coordinates_button = _bar_button(MinimapView.COORDINATES_BUTTON_TEXT,
+		MinimapView.COORDINATES_TIP)
+	_coordinates_button.toggle_mode = true
+	_coordinates_button.toggled.connect(set_coordinates_shown)
 
 	_legend_button = _bar_button(LEGEND_TEXT, "Show or hide the legend")
 	_legend_button.toggle_mode = true
@@ -283,6 +301,24 @@ func _build_legend() -> Control:
 	return _legend_scroll
 
 
+## The row under the canvas: the tile under the cursor at the left, and the
+## position readout at the right.
+func _build_footer() -> Control:
+	var footer := HBoxContainer.new()
+
+	footer.name = "Footer"
+	_readout = Label.new()
+	_readout.text = " "
+	_readout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	footer.add_child(_readout)
+
+	_position = Label.new()
+	_position.name = "Position"
+	footer.add_child(_position)
+
+	return footer
+
+
 func _sync_plane_controls() -> void:
 	var held: Array[int] = _map.planes if _map != null else []
 	var at := held.find(_plane)
@@ -325,18 +361,18 @@ func icon_shown(category: String) -> bool:
 ## Show or hide the map icons of one category, as a click on its legend row
 ## does.
 func set_icon_shown(category: String, shown: bool) -> void:
-	var hidden := _hidden_icons().duplicate()
-	var at := hidden.find(category)
+	var hidden_categories := _hidden_icons().duplicate()
+	var at := hidden_categories.find(category)
 
 	if shown and at >= 0:
-		hidden.remove_at(at)
+		hidden_categories.remove_at(at)
 	elif not shown and at < 0:
-		hidden.append(category)
+		hidden_categories.append(category)
 
 	if _settings != null:
-		_settings.set_world_map_hidden_icons(hidden)
+		_settings.set_world_map_hidden_icons(hidden_categories)
 	else:
-		_local_hidden = hidden
+		_local_hidden = hidden_categories
 
 	_sync_legend()
 	_canvas.queue_redraw()
@@ -369,7 +405,50 @@ func _sync_legend() -> void:
 
 func _on_settings_changed() -> void:
 	_sync_legend()
+	_sync_coordinates()
 	_canvas.queue_redraw()
+
+
+# ─── The position readout ────────────────────────────────────────────────────
+
+## True when the map shows the position readout.
+func coordinates_shown() -> bool:
+	if _settings != null:
+		return _settings.show_coordinates
+
+	return _local_coordinates
+
+
+## Show or hide the position readout, as the XY button does. The minimap
+## follows, because both maps read one setting.
+func set_coordinates_shown(shown: bool) -> void:
+	if _settings != null:
+		_settings.set_show_coordinates(shown)
+	else:
+		_local_coordinates = shown
+
+	_sync_coordinates()
+
+
+## The position readout that the map shows now. Empty while the XY button is
+## off, and off the tile world. For tests.
+func coordinates_text() -> String:
+	return _position.text
+
+
+## Make the XY button and the position readout say what the setting says,
+## and where the player stands now.
+func _sync_coordinates() -> void:
+	var shown := coordinates_shown()
+	var words := MinimapView.coordinates_of(_state)
+
+	_coordinates_button.set_pressed_no_signal(shown)
+
+	if not shown or words.is_empty():
+		_position.text = ""
+		return
+
+	_position.text = POSITION_TEMPLATE % words
 
 
 # ─── Plane, zoom, and pan ────────────────────────────────────────────────────
@@ -564,12 +643,12 @@ func _texture_of(shown: int) -> ImageTexture:
 ## legend.
 func _draw_icons() -> void:
 	var icon_px := clampf(_zoom * ICON_SHARE, ICON_MIN_PX, ICON_MAX_PX)
-	var hidden := _hidden_icons()
+	var hidden_categories := _hidden_icons()
 
 	for icon: Dictionary in _map.icons(_plane):
 		var category: String = icon["category"]
 
-		if hidden.has(category):
+		if hidden_categories.has(category):
 			continue
 
 		MapIcons.draw(_canvas, category, _tile_centre(icon["tile"]), icon_px)

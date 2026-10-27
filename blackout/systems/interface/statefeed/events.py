@@ -24,6 +24,7 @@ from evennia.utils import logger
 
 from . import constants as const
 from . import buffer, serializers, subscriptions
+from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.movement import constants as walk_const
 from systems.interface.popups import constants as popup_const
 from .emit import emit, emit_to_area, emit_to_room
@@ -199,6 +200,39 @@ def _style_name(context) -> str:
 
 
 
+def _figure_action(context) -> str:
+    """
+    Purpose: Name the action of the figure of the attacker for one swing.
+
+    Entry:
+        context is the ActionContext that the swing resolved against.
+
+    Exit/Returns:
+        Returns const.FIGURE_ATTACK_ACTION_TEMPLATE, filled with the hands
+        of the swing and its attack type. For example, a slash with a
+        one-handed weapon gives attack_one_hand_slash.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        context.weapon is the held weapon, or None for bare hands and for
+        each NPC. Its slot gives the hands (combat_const.attack_hands).
+        figure_catalog.attack_actions lists each action with the same two
+        reads. Thus, the workbench offers each action that a swing names.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    use_slot = getattr(context.weapon, "inventory_use_slot", None)
+    hands = combat_const.attack_hands(use_slot)
+    action = const.FIGURE_ATTACK_ACTION_TEMPLATE.format(
+        hands=hands, attack_type=context.attack_type)
+
+    return action
+
+
+
 def _broadcast(payload, attacker, target, room) -> int:
     """Send one payload to the two combatants and their onlookers.
 
@@ -355,6 +389,7 @@ def emit_swing(context, result, hp_after: int, max_hp: int,
         damage_type=str(result.damage_type),
         attack_type=str(context.attack_type),
         style=_style_name(context),
+        figure_action=_figure_action(context),
         hp_after=hp_after,
         max_hp=max_hp,
         killed=bool(killed),
@@ -406,6 +441,7 @@ def emit_miss(context) -> int:
         damage_type=str(context.style.get("attack_type", "")),
         attack_type=str(context.attack_type),
         style=_style_name(context),
+        figure_action=_figure_action(context),
         hp_after=getattr(target, "hp", 0),
         max_hp=getattr(target, "max_hp", 0),
         killed=False,
@@ -418,8 +454,8 @@ def emit_miss(context) -> int:
 def emit_face(actor, target) -> int:
     """
     Purpose: Publish that one entity turns to another, and that one turns
-             back: the start of a fight, a talk, or a trade, and each
-             swing of a harvest.
+             back. The start of a fight or a talk sends it. So does each
+             use of a thing that the player clicks, and each harvest swing.
 
     Entry:
         actor  - the entity that starts the exchange.
@@ -439,13 +475,24 @@ def emit_face(actor, target) -> int:
         be a second copy of the two positions, and it could not say which
         way to face on a shared tile.
 
-        Four call sites. BlackoutCombatHandler.start_combat_state is the
-        one seam that each queued attack passes: the attack command, and
-        the AI of an NPC when it strikes back. CmdTalk and CmdTrade in
-        typeclasses/npcs.py send one when the exchange opens.
-        GatheringHandler._swing sends one before each swing, so the
-        gatherer faces the node (10/20/2026). A node is not a mobile, and
-        the client does not turn it.
+        The call sites:
+
+        - BlackoutCombatHandler.start_combat_state is the one seam that
+          each queued attack passes: the attack command, and the AI of an
+          NPC when it strikes back.
+        - CmdTalk in typeclasses/npcs.py sends one when the talk opens.
+        - commands/command.py turn_to sends one for each use of a thing
+          (10/20/2026). FacingCommand calls it for each command that hangs
+          on a thing: craft, collect, the bank, and the shop. `read`, `task
+          new`, `task writ`, and `get` call it after their search.
+        - GatheringHandler._swing sends one before each swing, so the
+          gatherer faces the node (10/20/2026).
+
+        Only a character and an NPC turn in the client. A station, a node,
+        or an item keeps the turn of its chunk file.
+
+        Inside a tick, the buffer holds the event until the snapshots of
+        the tick are out. See TRAILING_CHANNELS.
 
     Notes/References:
         FacePayload documents the fields.
@@ -878,7 +925,8 @@ def emit_combat_options(observer, force: bool = False) -> int:
     """
     from . import combat_options as combat_options_serializer
 
-    # The dossier's readiness band repeats the weapon and the active style.
+    # A gear change moves the bonuses of the dossier, and a level change
+    # moves its combat level.
     refresh_summary(observer)
 
     wants = subscriptions.has_channel_subscribers(
@@ -1891,7 +1939,8 @@ def _emit_room_contents_full(observer) -> int:
 
 
 
-def refresh_room_contents(observer, delay: float = 0.0) -> bool:
+def refresh_room_contents(observer, delay: float = 0.0,
+                          whole: bool = True) -> bool:
     """Mark the observer's view of what is around them out of date.
 
     See refresh_summary for the marking pattern. This one exists because the
@@ -1903,9 +1952,20 @@ def refresh_room_contents(observer, delay: float = 0.0) -> bool:
     at the moment a spent timer expires -- no move, no hit, no command -- so
     only a mark scheduled at the deadline can put the verb back on the pane.
     That is the same arrangement a cure coming due uses on the dossier.
+
+    WHOLE says which builder runs. True builds the whole list, for a fact
+    that changes no id (the spent node above). False lets the builder pick
+    the delta or the list, as a step does. The arrival of a mover passes
+    False (10/21/2026). Before, the arrival built its list at once, and the
+    buffer held it until the flush. A `get` in the same tick sent its remove
+    at once. Then the flush sent the older list, and the client drew a stack
+    that the player carried. A mark builds after the last change of the
+    tick, so the list can never be older than an event of that tick.
     """
+    builder = _emit_room_contents_full if whole else emit_room_contents
+
     marked = _mark_stale_if_heard(
-        observer, RoomPlayersPayload.channel, _emit_room_contents_full, delay
+        observer, RoomPlayersPayload.channel, builder, delay
     )
 
     return marked

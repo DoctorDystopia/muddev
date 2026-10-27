@@ -36,24 +36,24 @@ ITEMS = {
         # attack_speed=4,
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 8,
-            "slash_defense_bonus": 7,
-            "crush_defense_bonus": 6,
+            "melee_stab_defense_bonus": 8,
+            "melee_slash_defense_bonus": 7,
+            "melee_crush_defense_bonus": 6,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 8,
-            "standard_defense_bonus": 7,
-            "heavy_defense_bonus": 6,
+            "projectile_light_defense_bonus": 8,
+            "projectile_standard_defense_bonus": 7,
+            "projectile_heavy_defense_bonus": 6,
 
             # Other bonuses
             "melee_strength_bonus": 0,
@@ -84,24 +84,24 @@ ITEMS = {
         # attack_speed=4,
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 11,
-            "slash_defense_bonus": 10,
-            "crush_defense_bonus": 10,
+            "melee_stab_defense_bonus": 11,
+            "melee_slash_defense_bonus": 10,
+            "melee_crush_defense_bonus": 10,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 11,
-            "standard_defense_bonus": 10,
-            "heavy_defense_bonus": 10,
+            "projectile_light_defense_bonus": 11,
+            "projectile_standard_defense_bonus": 10,
+            "projectile_heavy_defense_bonus": 10,
 
             # Other bonuses
             "melee_strength_bonus": 0,
@@ -131,24 +131,24 @@ ITEMS = {
         tags=[("copper_platelegs", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 17,
-            "slash_defense_bonus": 16,
-            "crush_defense_bonus": 15,
+            "melee_stab_defense_bonus": 17,
+            "melee_slash_defense_bonus": 16,
+            "melee_crush_defense_bonus": 15,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 17,
-            "standard_defense_bonus": 16,
-            "heavy_defense_bonus": 15,
+            "projectile_light_defense_bonus": 17,
+            "projectile_standard_defense_bonus": 16,
+            "projectile_heavy_defense_bonus": 15,
 
             # Other bonuses
             "melee_strength_bonus": 0,

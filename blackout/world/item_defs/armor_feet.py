@@ -5,7 +5,7 @@ Creation date: 08/22/2026
 Description: Blackout armor ItemDef entries — feet armor
               test targets. Stats are OSRS bronze-tier translated to the
               0..127 scale. combat_stat_bonuses keys are per-damage-type
-              (stab_attack_bonus, slash_attack_bonus, crush_attack_bonus,
+              (melee_stab_attack_bonus, melee_slash_attack_bonus, melee_crush_attack_bonus,
                melee_strength_bonus) plus per-damage-type defense.
 """
 
@@ -39,24 +39,24 @@ ITEMS = {
         tags=[("rusty_scrap_boots", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 1,
-            "slash_defense_bonus": 2,
-            "crush_defense_bonus": 3,
+            "melee_stab_defense_bonus": 1,
+            "melee_slash_defense_bonus": 2,
+            "melee_crush_defense_bonus": 3,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 1,
-            "standard_defense_bonus": 2,
-            "heavy_defense_bonus": 3,
+            "projectile_light_defense_bonus": 1,
+            "projectile_standard_defense_bonus": 2,
+            "projectile_heavy_defense_bonus": 3,
 
             # Other bonuses
             "melee_strength_bonus": 0,
@@ -86,24 +86,24 @@ ITEMS = {
         tags=[("scrap_boots", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 2,
-            "slash_defense_bonus": 3,
-            "crush_defense_bonus": 4,
+            "melee_stab_defense_bonus": 2,
+            "melee_slash_defense_bonus": 3,
+            "melee_crush_defense_bonus": 4,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 2,
-            "standard_defense_bonus": 3,
-            "heavy_defense_bonus": 4,
+            "projectile_light_defense_bonus": 2,
+            "projectile_standard_defense_bonus": 3,
+            "projectile_heavy_defense_bonus": 4,
 
             # Other bonuses
             "melee_strength_bonus": 0,
@@ -133,24 +133,24 @@ ITEMS = {
         tags=[("copper_boots", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 5,
-            "slash_defense_bonus": 6,
-            "crush_defense_bonus": 7,
+            "melee_stab_defense_bonus": 5,
+            "melee_slash_defense_bonus": 6,
+            "melee_crush_defense_bonus": 7,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 5,
-            "standard_defense_bonus": 6,
-            "heavy_defense_bonus": 7,
+            "projectile_light_defense_bonus": 5,
+            "projectile_standard_defense_bonus": 6,
+            "projectile_heavy_defense_bonus": 7,
 
             # Other bonuses
             "melee_strength_bonus": 0,

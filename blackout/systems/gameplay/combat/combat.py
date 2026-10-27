@@ -12,6 +12,7 @@ from evennia.utils import logger
 
 from items.equipment.constants import WieldLocation
 from items.equipment.handler import EquipmentError
+from systems.gameplay.ai.constants import LAST_ATTACKER_ID_ATTR
 from systems.gameplay.ai.registry import behavior_key_for, get_behavior
 from systems.gameplay.progression.skills import xp_awards
 from systems.interface.statefeed import events as feed
@@ -164,6 +165,48 @@ def _award_style_xp(attacker, style: dict, damage: int) -> list:
     awards = _plan_style_xp(attacker, style, damage)
 
     return xp_awards.grant_xp(attacker, awards, feed_const.MESSAGE_TYPE_COMBAT)
+
+
+def _send_attack_moment(context) -> None:
+    """
+    Purpose: Tell the client of the attacker that one attack went out.
+
+    Entry:
+        context is the ActionContext of the attack.
+
+    Exit/Returns:
+        No return value. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The accuracy skill of the style names the moment, in
+        `attack_moment`. Each style of a gun reads Guns. Thus, each shot of
+        a gun sends the moment of Guns. Each melee style reads Strike, so
+        each melee swing sends the moment of Strike. A skill with no moment
+        sends nothing.
+
+        The import is local, as in style_options.py. This module loads with
+        every typeclass, and the skills package walks its registry on import.
+
+    Notes/References:
+        events.emit_moment refuses a name that is not in MOMENTS. It sends
+        nothing to an NPC.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+
+    skill_key = context.accuracy_skill()
+    skill_class = SKILL_REGISTRY.get(skill_key)
+    moment = getattr(skill_class, "attack_moment", None)
+
+    if not moment:
+        return
+
+    feed.emit_moment(context.attacker, moment)
 
 
 # ─── Helper-tool functions (encapsulate repetitive dict accesses) ─────────
@@ -850,6 +893,9 @@ class ActionAttack(_Action):
         # and a recovered arrow has to have a tile to fall on.
         ammunition.spend(attacker, weapon_data, target)
 
+        # The shot goes out on a hit and on a miss alike, as the unit does.
+        _send_attack_moment(context)
+
         if result.hit and result.damage > 0:
             killed = self._land_hit(context, result)
 
@@ -1298,8 +1344,22 @@ class BlackoutCombatHandler(TickableHandler):
         A player killed by an NPC is exactly that case. Respawn moves them to
         another map, and without this the NPC stood swinging at an empty room
         for the whole grace -- the punching-bag bug, in a new form.
+
+        A handler with NO target measures its last attacker instead
+        (10/22/2026). That is a defender before its first answer, or a
+        hostile that an aura pulse burned from another tile. An attacker
+        that could walk back into reach keeps the grace open. One on
+        another map, or dead, ends it at once, as a target does. Thus, a
+        hostile burned from two tiles keeps its handler between pulses,
+        and a hostile whose killer respawned elsewhere stops on its next
+        tick.
         """
-        target = _object_by_id(self.ndb.target_id)
+        target_id = self.ndb.target_id
+
+        if target_id is None:
+            target_id = getattr(self.obj.ndb, LAST_ATTACKER_ID_ATTR, None)
+
+        target = _object_by_id(target_id)
 
         if target_unusable(target):
             return False
@@ -1458,13 +1518,53 @@ class BlackoutCombatHandler(TickableHandler):
 
         self._consult_controller()
 
+    def on_hit(self) -> None:
+        """
+        Purpose: Ask the controller what to do after a hit lands on this
+                 combatant.
+
+        Entry:
+            CombatEntity.at_damage calls this after it records the attacker.
+            The handler row can be gone, or this combatant can have no
+            controller. Both are fine.
+
+        Exit/Returns:
+            No return value. Queues an action as a side effect, or nothing.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            An NPC follows its last attacker through a fight, as many times
+            as the fight turns (Nick, 10/22/2026). The last attacker changes
+            only on a hit, so the hit is the one seam that needs the
+            controller. The answer lands at the next INPUT phase, like a
+            typed command. Thus, a switch costs the NPC the tick that a
+            player pays too. A tick after the hit would cost one more. A
+            behaviour answers None while its pending attack names the
+            attacker. Thus, a hit from the current target queues nothing.
+
+        Notes/References:
+            The aura pulse reaches here through the same at_damage. Thus, a
+            burned hostile answers the caster on the next tick.
+
+        Author: Nick Hobar
+        Creation date: 10/22/2026
+        """
+        if self.pk is None:
+            return
+
+        self.init_runtime_state()
+        self._consult_controller()
+
     def _consult_controller(self) -> None:
         """
         Purpose: Ask this combatant's controller what to do on an idle tick.
 
         Entry:
-            None. Called from tick() only when pending_action is None and the
-            combatant is off cooldown.
+            None. Called from tick() when pending_action is None and the
+            combatant is off cooldown, on each stalled tick, and from on_hit
+            after a hit lands (10/22/2026).
 
         Exit/Returns:
             No return value. Queues an action as a side effect, or does
@@ -1479,6 +1579,9 @@ class BlackoutCombatHandler(TickableHandler):
             precisely a player Character, waiting for the next command. So the
             player/NPC distinction costs no isinstance check and no second
             code path: players simply never stamp the attribute.
+
+            A behaviour answers None on a call that changes nothing. Thus,
+            a hit from the current target queues no second attack.
 
             Queueing goes through queue_action, not a direct pending_action
             write. queue_action routes through the tick engine's INPUT phase,
@@ -1549,6 +1652,11 @@ class BlackoutCombatHandler(TickableHandler):
 
         self.dispatch(event)
 
+        if event is ActivityEvent.TARGET_INVALID:
+            self._release_target()
+
+            return True
+
         over = states.is_final(self.state)
 
         if not over:
@@ -1561,6 +1669,58 @@ class BlackoutCombatHandler(TickableHandler):
             self.end_combat()
 
         return True
+
+    def _release_target(self) -> None:
+        """
+        Purpose: Let go of a target that is gone, and end the fight only if
+                 nobody else is in it.
+
+        Entry:
+            The state machine moved this handler to IDLE on TARGET_INVALID.
+            The handler row can be gone, because a death inside the action
+            can tear this handler down.
+
+        Exit/Returns:
+            No return value. After return, the handler holds no action and
+            no target. If no enemy is in the fight, the handler is gone.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. Drop the pending action and the target id. A kept attack
+               would resolve against the dead target on every tick.
+            2. Stop if the row is gone already.
+            3. Ask get_sides for a live enemy. One that targets this
+               combatant keeps the fight open. The next tick consults the
+               controller. Thus, an NPC turns on its last attacker. A
+               player stays in combat until a new attack or the grace.
+            4. With no enemy, end the fight now. A solo kill ends on the
+               tick of the kill, as before.
+
+        Notes/References:
+            The two-attacker fault (10/22/2026). A raider killed one of its
+            two attackers. Its fight ended, and it stood still while the
+            other hit it. A player killed one of two raiders. The player
+            read as out of combat while the other raider hit them. See
+            tests/test_multi_combat.py.
+
+        Author: Nick Hobar
+        Creation date: 10/22/2026
+        """
+        self.ndb.pending_action = None
+        self.ndb.target_id = None
+
+        if self.pk is None:
+            return
+
+        _allies, enemies = self.get_sides()
+        engaged = [enemy for enemy in enemies if enemy.is_alive()]
+
+        if engaged:
+            return
+
+        self.end_combat()
 
     def _charge_cooldown(self, action) -> None:
         """Queue the action's successor and pay for it, if it costs anything.

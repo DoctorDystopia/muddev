@@ -62,9 +62,13 @@ const EXPECTED := [
 	["rig", "rigs", "body_2", "Head"],
 	["slot", "rigs", "body_2", "ammo"],
 	["slot", "rigs", "body_2", "tail_slot"],
+	["stance", "stances", "stances", "/attack_one_hnd_slash"],
 	["stance", "stances", "stances", "laser"],
 	["stance", "stances", "stances", "laser/idle"],
 ]
+
+## The one attack action of the item catalog of the fixture.
+const ATTACK_ACTION := "attack_one_hand_slash"
 
 var _failures := 0
 var _scratch := ""
@@ -101,7 +105,7 @@ func _expect(condition: bool, what: String) -> void:
 # ─── The fixture ────────────────────────────────────────────────────────────
 
 ## The item catalog of the fixture: each slot of a new rig, three items,
-## and one tool type.
+## two tool types, and one attack action.
 func _catalog() -> FigureCatalog:
 	var slots := []
 	var items := []
@@ -115,7 +119,7 @@ func _catalog() -> FigureCatalog:
 			"tier": 1, "family": "weapon"})
 
 	return FigureCatalog.from_data({"format": 1, "slots": slots, "items": items,
-		"tool_types": ["axe", "sword"], "npcs": []})
+		"tool_types": ["axe", "sword"], "npcs": [], "attack_actions": [ATTACK_ACTION]})
 
 
 ## A store with no fault, saved in `directory`: two rigs with a body, each
@@ -140,6 +144,7 @@ func _good_store(directory: String) -> FigureStore:
 	var stances := FigureEdits.new_stances()
 
 	FigureEdits.set_stance_clip(stances, "", "idle", "idle")
+	FigureEdits.set_stance_clip(stances, "", ATTACK_ACTION, "idle")
 	store.put(STANCES, STANCES, stances)
 	store.save()
 
@@ -223,6 +228,8 @@ func _add_faults(store: FigureStore) -> FigureStore:
 	palette["roles"]["ghost"] = "no_color"
 	store.put(PALETTE, PALETTE, palette)
 	stances["stances"]["laser"] = {"idle": "gone_clip"}
+	# A typed attack action: no swing of the server names it.
+	stances["default"]["attack_one_hnd_slash"] = "idle"
 	store.put(STANCES, STANCES, stances)
 	stray["key"] = "stray_look"
 	store.put(LOOK, "stray_look", stray)

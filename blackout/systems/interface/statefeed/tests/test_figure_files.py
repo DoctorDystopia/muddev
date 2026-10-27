@@ -48,7 +48,7 @@ Description: Guard the server names in the figure files.
 
              The stance table (godot/world/figure/stances.json, Phase W5)
              has a tool type as the key of each stance. Only Python knows
-             the tool types, so rule C7 is here.
+             the tool types and the attack actions, so rule C7 is here.
 
              A kit part (Phase W6) is a worn look with a `kit` group: one
              hair shape, one head. Its key names no item, so rule C1 lets
@@ -75,6 +75,7 @@ from items.equipment.constants import (SLOT_CONFLICTS, SLOT_DISPLAY_ORDER,
                                        WieldLocation)
 from items.equipment.skill_requirements import (ARMOR_SKILL_MAP,
                                                 WEAPON_SKILL_MAP)
+from systems.gameplay.combat import constants as combat_const
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 
@@ -219,6 +220,20 @@ class ClipListSourceTests(unittest.TestCase):
 
                 self.assertEqual(problem, "")
 
+    def test_each_held_in_names_a_slot(self):
+        """
+        The clearance check holds a probe in the bone of each slot that
+        `held_in` names (10/25/2026). A typed slot has no bone, so the
+        check of that clip would hold no probe and always pass.
+        """
+        slots = {location.value for location in WieldLocation}
+
+        for key, clip_list in self.clip_lists.items():
+            for clip_name, clip in clip_list.get("clips", {}).items():
+                for slot in clip.get("held_in", []):
+                    with self.subTest(clip_list=key, clip=clip_name, slot=slot):
+                        self.assertIn(slot, slots)
+
 
 class ItemCatalogTests(unittest.TestCase):
     """
@@ -313,6 +328,38 @@ class ItemCatalogTests(unittest.TestCase):
             if item_def.tool_type:
                 with self.subTest(item=key):
                     self.assertIn(item_def.tool_type, listed)
+
+    def test_each_weapon_style_has_its_attack_action(self):
+        """
+        A swing of each held weapon names an action of the list. Thus, the
+        Clips tab has a row for the swing of each weapon.
+        """
+        listed = set(self.catalog["attack_actions"])
+        template = const.FIGURE_ATTACK_ACTION_TEMPLATE
+
+        for key, item_def in ITEM_DB.items():
+            if item_def.use_slot not in combat_const.ATTACK_HANDS_BY_SLOT:
+                continue
+
+            hands = combat_const.attack_hands(item_def.use_slot)
+
+            for style_key, style in (item_def.combat_styles or {}).items():
+                action = template.format(hands=hands,
+                                         attack_type=style["attack_type"])
+
+                with self.subTest(item=key, style=style_key):
+                    self.assertIn(action, listed)
+
+    def test_each_unarmed_style_has_its_attack_action(self):
+        listed = set(self.catalog["attack_actions"])
+        template = const.FIGURE_ATTACK_ACTION_TEMPLATE
+
+        for style_key, style in combat_const.UNARMED_COMBAT_STYLES.items():
+            action = template.format(hands=combat_const.ATTACK_HANDS_UNARMED,
+                                     attack_type=style["attack_type"])
+
+            with self.subTest(style=style_key):
+                self.assertIn(action, listed)
 
     def test_each_npc_def_with_an_outfit_has_a_row(self):
         rows = {row["key"]: row for row in self.catalog["npcs"]}
@@ -612,18 +659,35 @@ class StanceTableTests(unittest.TestCase):
     workbench writes it, and the client reads it. A stance with a typed
     tool type selects nothing, and an action with a clip that is not there
     leaves the figure in its rest pose.
+
+    Each attack action of the table is one that a swing names (10/25/2026).
+    A typed attack action never plays. Each clip of an attack action plays
+    one time: the client waits for the end of a swing, and a clip that loops
+    has no end.
     """
 
     _CLIP_SUFFIX = ".res"
+
+    # The start of the name of each attack action: the template up to its
+    # first field. The `attack` action of the client is this start with no
+    # final "_", and an attack action with no clip plays its clip.
+    _ATTACK_PREFIX = const.FIGURE_ATTACK_ACTION_TEMPLATE.split("{", 1)[0]
+    _FALLBACK_ACTION = _ATTACK_PREFIX.rstrip("_")
 
     @classmethod
     def setUpClass(cls):
         cls.path = figure_catalog.stances_path()
         cls.table = _read_json(cls.path)
         cls.tool_types = set(figure_catalog.tool_types())
+        cls.attack_actions = set(figure_catalog.attack_actions())
         cls.clips = {name[:-len(cls._CLIP_SUFFIX)]
                      for name in os.listdir(figure_catalog.clips_directory())
                      if name.endswith(cls._CLIP_SUFFIX)}
+        cls.loops = {
+            clip_name: bool(clip.get("loop"))
+            for clip_list in _read_files(paths.FIGURE_CLIPS_DIR).values()
+            for clip_name, clip in clip_list.get("clips", {}).items()
+        }
 
     def _clip_sets(self):
         """Give (name, clip set) for the default set and for each stance."""
@@ -646,6 +710,27 @@ class StanceTableTests(unittest.TestCase):
             for action, clip in clip_set.items():
                 with self.subTest(stance=name, action=action):
                     self.assertIn(clip, self.clips)
+
+    def test_each_attack_action_is_one_that_a_swing_names(self):
+        for name, clip_set in self._clip_sets():
+            for action in clip_set:
+                if not action.startswith(self._ATTACK_PREFIX):
+                    continue
+
+                with self.subTest(stance=name, action=action):
+                    self.assertIn(action, self.attack_actions)
+
+    def test_no_clip_of_an_attack_action_loops(self):
+        for name, clip_set in self._clip_sets():
+            for action, clip in clip_set.items():
+                is_attack = action.startswith(self._ATTACK_PREFIX) \
+                    or action == self._FALLBACK_ACTION
+
+                if not is_attack or clip not in self.loops:
+                    continue
+
+                with self.subTest(stance=name, action=action, clip=clip):
+                    self.assertFalse(self.loops[clip])
 
 
 class FigureSetTests(unittest.TestCase):

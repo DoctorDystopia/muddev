@@ -192,6 +192,11 @@ var _world_state := WorldState.new()
 ## The movement keys held now. A held key walks until the player lets go.
 var _held_movement := HeldMovement.new(Const.TICK_SECONDS * HELD_RESEND_TICKS)
 
+## The arrow keys held now. A held key turns the camera until the player lets
+## go. It follows the rules of [member _held_movement]: the map must have the
+## keyboard, and a loss of focus forgets the keys. See [CameraKeys].
+var _camera_keys := CameraKeys.new()
+
 ## The entities near you, one row per id. Owned here, not by the 3D pane, for
 ## the reason [member _world_state] is: the 3D pane and the minimap draw the
 ## same rows. See [EntityRoster].
@@ -327,8 +332,10 @@ func _ready() -> void:
 	_input.focus_exited.connect(_refresh_input_hint)
 
 	# A key that goes up while the input has the keyboard never reaches
-	# _unhandled_key_input. Forget the held keys, so no walk goes on alone.
+	# _unhandled_key_input. Forget the held keys, so no walk or turn goes on
+	# alone.
 	_input.focus_entered.connect(_held_movement.clear)
+	_input.focus_entered.connect(_camera_keys.clear)
 	_input.grab_focus()
 	# ServerEndpoint decides where art is fetched from, the same way it decides
 	# where the socket dials -- keyed off the build rather than a constant
@@ -719,6 +726,7 @@ func _build_layout() -> void:
 	add_child(_layout_editor)
 	_layout_editor.bind(_arranger, _settings)
 	_layout_editor.opened.connect(_held_movement.clear)
+	_layout_editor.opened.connect(_camera_keys.clear)
 	_layout_editor.closed.connect(func() -> void: _set_typing(true))
 
 
@@ -924,6 +932,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 	if not key.pressed:
 		_held_movement.release(key.keycode)
+		_camera_keys.release(key.keycode)
 		return
 
 	if key.echo:
@@ -965,6 +974,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# An arrow key turns the camera. Nothing goes to the server: the camera is
+	# the client's own. [method _process] turns it while the key stays down.
+	if _camera_keys.press(key.keycode):
+		get_viewport().set_input_as_handled()
+		return
+
 	if not MovementKeys.is_movement_key(key.keycode):
 		return
 
@@ -983,11 +998,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 ## Send the direction of a held movement key again, on the interval of
 ## [HeldMovement]. The server moves one tick for each command, so a held key
 ## walks at the speed of a click.
+##
+## Turn the camera by the held arrow keys, on each frame. See [CameraKeys].
 func _process(delta: float) -> void:
 	var direction := _held_movement.advance(delta)
 
 	if not direction.is_empty():
 		Evennia.command(_steer(direction))
+
+	if _camera_keys.is_holding():
+		_world.turn_camera(_camera_keys.turn(), delta)
 
 
 ## Turn a key direction to follow the camera, when the player chose that in
@@ -1001,10 +1021,11 @@ func _steer(direction: String) -> String:
 
 
 ## A window that loses focus gets no key-up event. Forget the held keys, so
-## the player does not walk on alone.
+## the player does not walk on alone and the camera does not turn on alone.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		_held_movement.clear()
+		_camera_keys.clear()
 
 
 ## Move the keyboard between the input and the map, and say so.

@@ -186,6 +186,7 @@ func _ready() -> void:
 	_turning_the_animation_off_lands_everybody()
 	_a_face_walks_the_turn_with_the_animation_on()
 	_a_step_turns_a_mobile_to_its_walk_and_the_face_comes_back()
+	_the_standing_point_is_the_end_of_the_slide()
 
 	# Waits for a flash to run out, so it goes after every case that does not.
 	await _a_flash_during_the_tint_ends_at_the_own_colour()
@@ -1211,6 +1212,33 @@ func _a_step_turns_a_mobile_to_its_walk_and_the_face_comes_back() -> void:
 
 	_expect(is_equal_approx(node.rotation.y, FACED),
 		"and the face comes back when it stands")
+
+	_pool.set_animated(false)
+	_pool.replace_all([])
+
+
+## A face reads where a figure stands: the end of its slide, not the point
+## where it is drawn in the middle of a step (10/20/2026).
+func _the_standing_point_is_the_end_of_the_slide() -> void:
+	_pool.set_animated(true)
+	_pool.replace_all([RAIDER])
+	_pool.replace_all([_moved(RAIDER, NEXT_DOOR)])
+
+	var node := _node_for(20743)
+	var next_door: Vector3 = _tile_positions[str(NEXT_DOOR)]
+
+	_expect(_apart(node.global_position, next_door) > 0.5,
+		"the raider is drawn on the tile that it left")
+	_expect(_apart(_pool.standing_point(20743), next_door) < 0.001,
+		"but it stands on the tile that it walks to")
+
+	for _frame: int in 100:
+		_pool._process(0.02)
+
+	_expect(_pool.standing_point(20743).is_equal_approx(node.global_position),
+		"a raider that stands is drawn where it stands")
+	_expect(_pool.standing_point(20744) == Vector3.ZERO,
+		"an entity that the pool does not draw stands nowhere")
 
 	_pool.set_animated(false)
 	_pool.replace_all([])

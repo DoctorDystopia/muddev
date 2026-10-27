@@ -21,9 +21,53 @@
 		"Spine": "spine"
 	},
 	"clips": {
+		"attack": {
+			"from": "1H_Melee_Attack_Slice_Diagonal",
+			"loop": false
+		},
 		"idle": {
 			"from": "Idle",
 			"loop": true
+		},
+		"one_hand_chop": {
+			"from": "1H_Melee_Attack_Chop",
+			"loop": false
+		},
+		"one_hand_stab": {
+			"from": "1H_Melee_Attack_Stab",
+			"loop": false
+		},
+		"punch": {
+			"from": "Unarmed_Melee_Attack_Punch_A",
+			"loop": false
+		},
+		"two_hands_chop": {
+			"from": "2H_Melee_Attack_Chop",
+			"held_in": [
+				"two_hands"
+			],
+			"loop": false
+		},
+		"two_hands_shoot": {
+			"from": "2H_Ranged_Shoot",
+			"held_in": [
+				"two_hands"
+			],
+			"loop": false
+		},
+		"two_hands_slice": {
+			"from": "2H_Melee_Attack_Slice",
+			"held_in": [
+				"two_hands"
+			],
+			"loop": false
+		},
+		"two_hands_stab": {
+			"from": "2H_Melee_Attack_Stab",
+			"held_in": [
+				"two_hands"
+			],
+			"loop": false
 		},
 		"walk": {
 			"from": "Walking_B",

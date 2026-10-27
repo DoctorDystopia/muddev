@@ -113,14 +113,15 @@ func _nested_values_render_one_level() -> void:
 
 
 func _nested_dict_fields_become_a_group_not_a_row() -> void:
-	# A nested dict field is exactly what Combat Readiness's "bonuses" is --
-	# it must not show up as a crammed one-line row, and rows_for must no
-	# longer report it at all now that groups_for exists for it.
+	# A nested dict field is what Combat Readiness's "total_combat_stat_bonuses"
+	# is. It must not show up as a crammed one-line row, and rows_for must not
+	# report it at all. The scalar field beside it shows a panel that mixes both.
 	var summary := SummaryState.new()
 	summary.ingest(_Const.CH_CHAR_SUMMARY, {"panels": {
 		"readiness": {
 			"weapon": "scrap shortsword",
-			"bonuses": {"stab_attack_bonus": 6.0, "crush_attack_bonus": -2.0},
+			"total_combat_stat_bonuses": {"melee_stab_attack_bonus": 6.0,
+				"melee_crush_attack_bonus": -2.0},
 		},
 	}})
 
@@ -130,7 +131,8 @@ func _nested_dict_fields_become_a_group_not_a_row() -> void:
 
 	var groups := summary.groups_for("readiness")
 	_expect(groups.size() == 1, "the nested field becomes one group")
-	_expect(groups[0]["label"] == "Bonuses", "labelled by its own field name")
+	_expect(groups[0]["label"] == "Total Combat Stat Bonuses",
+		"labelled by its own field name")
 
 	var group_rows: Array = groups[0]["rows"]
 	_expect(group_rows.size() == 2, "one row per sub-key")
@@ -139,8 +141,8 @@ func _nested_dict_fields_become_a_group_not_a_row() -> void:
 	for row: Array in group_rows:
 		seen[str(row[0])] = row
 
-	_expect(seen.get("Stab Attack Bonus")[1] == "6", "each sub-key keeps its own row")
-	_expect(seen.get("Crush Attack Bonus")[1] == "-2", "including a negative one")
+	_expect(seen.get("Melee Stab Attack Bonus")[1] == "6", "each sub-key keeps its own row")
+	_expect(seen.get("Melee Crush Attack Bonus")[1] == "-2", "including a negative one")
 
 
 func _negative_numbers_are_flagged_for_the_view() -> void:
@@ -152,7 +154,8 @@ func _negative_numbers_are_flagged_for_the_view() -> void:
 		"readiness": {
 			"attack_bonus": -1.0,
 			"strength_bonus": 7.0,
-			"bonuses": {"crush_attack_bonus": -2.0, "stab_attack_bonus": 6.0},
+			"total_combat_stat_bonuses": {"melee_crush_attack_bonus": -2.0,
+				"melee_stab_attack_bonus": 6.0},
 		},
 	}})
 
@@ -167,9 +170,9 @@ func _negative_numbers_are_flagged_for_the_view() -> void:
 	for row: Array in summary.groups_for("readiness")[0]["rows"]:
 		group_flagged[str(row[0])] = row[2]
 
-	_expect(group_flagged.get("Crush Attack Bonus") == true,
+	_expect(group_flagged.get("Melee Crush Attack Bonus") == true,
 		"a negative value inside a group is flagged too")
-	_expect(group_flagged.get("Stab Attack Bonus") == false,
+	_expect(group_flagged.get("Melee Stab Attack Bonus") == false,
 		"and a positive one inside the same group is not")
 
 

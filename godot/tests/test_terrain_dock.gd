@@ -19,14 +19,26 @@ extends Node
 ##    when the rows are old, and the block report keeps its lines.
 ## 6. The look fields of the selected object send a look with no key at its
 ##    default (10/16/2026).
+## 7. The Side field of the block strip sends the side, within the cap, and
+##    [method TerrainDock.set_block] fills it with no send (10/21/2026).
+## 8. The spawn fields show for a selected item spawn only (10/21/2026). A
+##    fill sends nothing. A changed respawn sends the whole spawn.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
+const _Session := preload("res://addons/blackout_terrain/terrain_session.gd")
+
+## The session file of this test. No file is there, so the dock starts on
+## its defaults, never on the choices of the author.
+const SESSION_PATH := "user://test_terrain_dock_session.cfg"
 
 var _failures := 0
 var _sent := []
 
 
 func _ready() -> void:
+	# The dock reads the session file in _init, before `persist = false`.
+	_Session.path = SESSION_PATH
+
 	var dock := TerrainDock.new()
 
 	dock.persist = false
@@ -37,6 +49,9 @@ func _ready() -> void:
 	_the_ramp_has_no_shape(dock)
 	_the_object_list_filters_and_the_fields_send_an_edit(dock)
 	_the_frame_counts_and_warns(dock)
+	_the_side_field_sends_the_block_side(dock)
+	_an_item_spawn_shows_and_sends_its_spawn(dock)
+	_expect(not FileAccess.file_exists(SESSION_PATH), "the dock writes no session file")
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -55,16 +70,15 @@ func _expect(condition: bool, what: String) -> void:
 
 func _record(sent: Signal, name_of: String) -> void:
 	sent.connect(func(a: Variant = null, b: Variant = null, c: Variant = null,
-			d: Variant = null) -> void:
-		_sent.append([name_of, a, b, c, d]))
+			d: Variant = null, e: Variant = null) -> void:
+		_sent.append([name_of, a, b, c, d, e]))
 
 
 func _the_tabs_and_the_paint_hint(dock: TerrainDock) -> void:
 	var tabs: TabContainer = dock.get_node("TabContainer") if dock.has_node("TabContainer") \
 		else null
 
-	# The dock starts on the tool of the session file of the author. The
-	# test picks its own, so the hint is the same on every machine.
+	# The test picks its own tool, so a new default tool breaks no case.
 	dock.select_tool(TerrainDock.Tool.RAISE)
 
 	var hint := dock.paint_hint(2)
@@ -239,6 +253,58 @@ func _find_suffixed(root: Node, suffix: String) -> SpinBox:
 	return null
 
 
+## Case 8. The item comes from the item list of the game, so no item key is
+## typed here.
+func _an_item_spawn_shows_and_sends_its_spawn(dock: TerrainDock) -> void:
+	var items := SpawnItems.game().keys()
+
+	_expect(not items.is_empty(), "the item list of the game names an item")
+
+	if items.is_empty():
+		return
+
+	var spawn := {_Const.SPAWN_ITEM_KEY: items[0], _Const.SPAWN_RESPAWN_KEY: 40}
+	var row := {"tile": Vector2i(3, 3), "kind": _Const.OBJECT_ITEM_SPAWN_KIND,
+		"rotation": 0, "text": "", "look": {}, "spawn": spawn}
+	var fields: Array[SpawnFields] = []
+
+	_collect(dock, SpawnFields, fields)
+	_expect(fields.size() == 2, "the Paint tab and the Objects tab each have spawn fields")
+
+	if fields.size() != 2:
+		return
+
+	var selected := fields[1]
+
+	dock.set_selection({"tile": Vector2i(2, 2), "kind": "ladder_up", "rotation": 0,
+		"text": "", "look": {}, "spawn": {}}, {})
+	_expect(not selected.visible, "a ladder shows no spawn fields")
+	_sent.clear()
+	dock.set_selection(row, {})
+	_expect(selected.visible, "an item spawn shows its spawn fields")
+	_expect(_sent.is_empty(), "a filled spawn sends nothing")
+	_expect(selected.spawn() == spawn, "the fields show the spawn: %s" % [selected.spawn()])
+	_expect(TerrainDock.describe_object(row).contains(items[0]),
+		"the object list names the item of a spawn")
+
+	var respawn := _find_suffixed(selected, "ticks")
+
+	if respawn != null:
+		respawn.value = 60
+
+	_expect(_sent.size() == 1 and _sent[0][5].get(_Const.SPAWN_RESPAWN_KEY) == 60,
+		"a changed respawn sends the spawn: %s" % [_sent])
+
+
+## Each node of `type` under `root`, depth first, into `found`.
+func _collect(root: Node, type: Variant, found: Array) -> void:
+	for child: Node in root.get_children():
+		if is_instance_of(child, type):
+			found.append(child)
+
+		_collect(child, type, found)
+
+
 ## The rotation field of `type` with `value`. The Paint tab has a rotation
 ## field too, with the same tooltip, so the search goes by the value.
 func _find(root: Node, type: Variant, value: int) -> Control:
@@ -280,6 +346,50 @@ func _the_frame_counts_and_warns(dock: TerrainDock) -> void:
 
 	_expect(_label(dock, "Block around chunk (0, 0), plane 0.\nSeam: east") != null,
 		"the block report keeps its lines")
+
+
+func _the_side_field_sends_the_block_side(dock: TerrainDock) -> void:
+	var field := _spin_with_cap(dock, TerrainWorld.BLOCK_SIDE_MAX)
+
+	_sent.clear()
+	_record(dock.block_side_requested, "side")
+
+	_expect(dock.block_side() == TerrainWorld.BLOCK_SIDE_DEFAULT,
+		"the field starts at the default side of the world")
+	_expect(field != null, "the block strip has the Side field")
+
+	dock.set_block(Vector2i(2, 3), 1, 6)
+
+	_expect(dock.block_side() == 6 and _sent.is_empty(),
+		"set_block fills the field and sends nothing")
+
+	if field == null:
+		return
+
+	field.value = 7
+
+	_expect(_sent.size() == 1 and _sent[0].slice(0, 3) == ["side", 7, null],
+		"a change sends the side")
+
+	field.value = TerrainWorld.BLOCK_SIDE_MAX + 10
+
+	_expect(dock.block_side() == TerrainWorld.BLOCK_SIDE_MAX, "the field holds the cap")
+
+	dock.set_block(Vector2i.ZERO, 0, TerrainWorld.BLOCK_SIDE_DEFAULT)
+
+
+## The one SpinBox under `root` whose largest value is `cap`.
+func _spin_with_cap(root: Node, cap: int) -> SpinBox:
+	for child: Node in root.get_children():
+		if child is SpinBox and int(child.max_value) == cap:
+			return child
+
+		var found := _spin_with_cap(child, cap)
+
+		if found != null:
+			return found
+
+	return null
 
 
 func _button(root: Node, text: String) -> Button:

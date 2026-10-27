@@ -44,8 +44,8 @@ _NEVER_HITS = 0.9999999
 
 # Fixture stats and levels. Not balance values: any block with a max hit
 # above 1 serves.
-_ATTACKER_STATS = {"stab_attack_bonus": 5, "melee_strength_bonus": 4}
-_DEFENDER_STATS = {"stab_defense_bonus": 2}
+_ATTACKER_STATS = {"melee_stab_attack_bonus": 5, "melee_strength_bonus": 4}
+_DEFENDER_STATS = {"melee_stab_defense_bonus": 2}
 _FIXTURE_LEVEL = 40
 
 # The change that the test contributors add to the damage channel.
@@ -74,7 +74,7 @@ def _context(rng, attacker_rules=()) -> ActionContext:
         weapon=None,
         weapon_data={},
         style={},
-        attack_type=const.ATTACK_TYPE_STAB,
+        attack_type=const.MELEE_ATTACK_TYPE_STAB,
         attacker_stats=dict(_ATTACKER_STATS),
         defender_stats=dict(_DEFENDER_STATS),
         attacker_levels=_levels(),

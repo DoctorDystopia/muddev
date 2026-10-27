@@ -65,24 +65,24 @@ ITEMS = {
         ],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 0,
-            "crush_defense_bonus": 0,
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 0,
-            "standard_defense_bonus": 0,
-            "heavy_defense_bonus": 0,
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
 
             # Other bonuses
             "melee_strength_bonus": 0,
@@ -116,24 +116,24 @@ ITEMS = {
         ],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 0,
-            "crush_defense_bonus": 0,
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 0,
-            "standard_defense_bonus": 0,
-            "heavy_defense_bonus": 0,
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
 
             # Other bonuses
             "melee_strength_bonus": 0,
@@ -167,24 +167,24 @@ ITEMS = {
         ],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 0,
-            "crush_defense_bonus": 0,
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 0,
-            "standard_defense_bonus": 0,
-            "heavy_defense_bonus": 0,
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
 
             # Other bonuses
             "melee_strength_bonus": 0,

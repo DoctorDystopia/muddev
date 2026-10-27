@@ -27,7 +27,8 @@ A JSON object with these keys, in this order::
     objects      [{"kind", "x", "y", "rotation"}, ...]. An object may also
                  have "text": the words of a signpost (09/27/2026). It may
                  also have "look": the variant, the scale, the tilt, and
-                 the nudge of that one placement (10/16/2026)
+                 the nudge of that one placement (10/16/2026). It may also
+                 have "spawn": the item of an item spawn (10/21/2026)
 
 An object without text writes the same bytes as before the text key, so no
 file of format 1 needed a rewrite. The text follows CHUNK_TEXT_PATTERN, so no
@@ -49,6 +50,22 @@ Thus, each object has one text, as with the text key. `look_problem` holds
 the rule. The statefeed asks it before it sends a look. The server reads no
 value of a look for a rule. It stores the look. The tile sync gives it to
 the entity that the object stands up.
+
+The spawn (10/21/2026)
+----------------------
+A `spawn` is a table with the keys of SPAWN_KEYS, in that order::
+
+    item      the ItemDef key of the item that lies on the tile. Required
+    quantity  [low, high] ints, in SPAWN_QUANTITY_UNIT..SPAWN_QUANTITY_MAX,
+              low first. Not [1, 1]. Each new item rolls in the range
+    respawn   an int in SPAWN_RESPAWN_MIN..SPAWN_RESPAWN_MAX: the ticks from
+              the time the item leaves the tile to the next item. Required
+
+The reader refuses an unknown key, a missing key, and a quantity at its
+default, as for a look. `spawn_problem` holds the rule. The reader does not
+know the items. `world/tile_checks.py` checks that the item exists, and that
+a range of more than one is on an item that stacks. The writer writes the
+spawn key last.
 
 Format 2: the wall styles (10/09/2026)
 --------------------------------------
@@ -125,8 +142,14 @@ OBJECT_TEXT_KEY: str = "text"
 # the client reads it off the statefeed too.
 OBJECT_LOOK_KEY: str = const.OBJECT_LOOK_KEY
 
-# The two optional keys of an object.
-OBJECT_OPTIONAL_KEYS: tuple = (OBJECT_TEXT_KEY, OBJECT_LOOK_KEY)
+# The key of the optional spawn of an object. The writer writes it last, and
+# only for an object with a spawn.
+OBJECT_SPAWN_KEY: str = const.OBJECT_SPAWN_KEY
+
+# The three optional keys of an object, in the order that the writer writes
+# them.
+OBJECT_OPTIONAL_KEYS: tuple = (OBJECT_TEXT_KEY, OBJECT_LOOK_KEY,
+                               OBJECT_SPAWN_KEY)
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -156,7 +179,8 @@ class ChunkObject:
     One placed object, at local tile coordinates. The `text` is the words of
     a signpost, or "" for an object that carries none. The `look` is the
     table of the module docstring, or {} for an object that draws the base
-    model as it comes.
+    model as it comes. The `spawn` is the spawn table of an item spawn, or
+    {} for every other object.
     """
 
     kind: str
@@ -165,6 +189,7 @@ class ChunkObject:
     rotation: int = 0
     text: str = ""
     look: dict = field(default_factory=dict)
+    spawn: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -267,6 +292,18 @@ class ChunkFile:
         for thing in self.objects:
             placed.append((thing.kind, origin_x + thing.x, origin_y + thing.y,
                            thing.text))
+
+        return placed
+
+    def global_spawns(self) -> list:
+        """Return (kind, x, y, spawn) of each object, at world tiles."""
+        origin_x = self.cx * const.CHUNK_SIZE
+        origin_y = self.cy * const.CHUNK_SIZE
+        placed = []
+
+        for thing in self.objects:
+            placed.append((thing.kind, origin_x + thing.x, origin_y + thing.y,
+                           thing.spawn))
 
         return placed
 
@@ -377,15 +414,16 @@ def _objects(value) -> list:
             rotation=_int_in(item["rotation"], 0, const.ROTATION_COUNT - 1,
                              "object %d rotation" % index),
             text=_object_text_value(item, index),
-            look=_object_look_value(item, index)))
+            look=_object_look_value(item, index),
+            spawn=_object_spawn_value(item, index)))
 
     return found
 
 
 def _has_object_keys(item: dict) -> bool:
     """
-    Return True if an object has OBJECT_KEYS, and at most the text and the
-    look too.
+    Return True if an object has OBJECT_KEYS, and at most the optional keys
+    too.
     """
     keys = set(item) - set(OBJECT_OPTIONAL_KEYS)
 
@@ -408,12 +446,69 @@ def _object_look_value(item: dict, index: int) -> dict:
     return normal_look(item[OBJECT_LOOK_KEY])
 
 
+def _object_spawn_value(item: dict, index: int) -> dict:
+    """
+    Return the spawn of an object, or {}. A spawn key that is present must
+    pass `spawn_problem`. The GDScript `_object_spawn` has the same rule.
+    """
+    if OBJECT_SPAWN_KEY not in item:
+        return {}
+
+    problem = spawn_problem(item[OBJECT_SPAWN_KEY])
+
+    if problem:
+        _fail("object %d spawn: %s", index, problem)
+
+    return normal_spawn(item[OBJECT_SPAWN_KEY])
+
+
 def _int_or_none(value):
     """Return `value` as an int, as `_as_int` does, or None."""
     try:
         return _as_int(value, "look")
     except ChunkFileError:
         return None
+
+
+def _quantity_problem(value) -> str:
+    """
+    Return why `value` is no quantity of a spawn, or "". A quantity is
+    [low, high] in SPAWN_QUANTITY_UNIT..SPAWN_QUANTITY_MAX, low first. One
+    unit is the default, and the default is refused.
+    """
+    if not isinstance(value, list) or len(value) != const.SPAWN_QUANTITY_BOUNDS:
+        return "the quantity must be [low, high]"
+
+    numbers = [_int_or_none(item) for item in value]
+
+    if any(number is None for number in numbers):
+        return "the quantity must hold two integers"
+
+    low, high = numbers
+
+    if low < const.SPAWN_QUANTITY_UNIT or high > const.SPAWN_QUANTITY_MAX \
+            or low > high:
+        return "the quantity must stay in %d..%d, low first" % (
+            const.SPAWN_QUANTITY_UNIT, const.SPAWN_QUANTITY_MAX)
+
+    if high == const.SPAWN_QUANTITY_UNIT:
+        return "a quantity of one is the default. Leave the key out"
+
+    return ""
+
+
+def _respawn_problem(value) -> str:
+    """Return why `value` is no respawn of a spawn, or ""."""
+    number = _int_or_none(value)
+
+    if number is None:
+        return "the respawn must be an integer"
+
+    if number < const.SPAWN_RESPAWN_MIN or number > const.SPAWN_RESPAWN_MAX:
+        return "the respawn must stay in %d..%d ticks" % (
+            const.SPAWN_RESPAWN_MIN, const.SPAWN_RESPAWN_MAX)
+
+    return ""
 
 
 def _axes_problem(value, limit: int, what: str) -> str:
@@ -588,8 +683,9 @@ def _name_list_text(names: list) -> str:
 
 def _object_text(thing: ChunkObject) -> str:
     """
-    Return one object as one line. The text key comes after the four keys.
-    The look key comes last. Each one is there only when the object has it.
+    Return one object as one line. The text key comes after the four keys,
+    then the look key, then the spawn key. Each one is there only when the
+    object has it.
     """
     words = ""
 
@@ -598,6 +694,9 @@ def _object_text(thing: ChunkObject) -> str:
 
     if thing.look:
         words += ',"%s":%s' % (OBJECT_LOOK_KEY, look_text(thing.look))
+
+    if thing.spawn:
+        words += ',"%s":%s' % (OBJECT_SPAWN_KEY, spawn_text(thing.spawn))
 
     return '{"kind":"%s","x":%d,"y":%d,"rotation":%d%s}' % (
         thing.kind, thing.x, thing.y, thing.rotation, words)
@@ -713,6 +812,114 @@ def look_text(look: dict) -> str:
             parts.append('"%s":%d' % (key, item))
 
     return "{" + ",".join(parts) + "}"
+
+
+def spawn_problem(value) -> str:
+    """
+    Purpose: Say why `value` is no spawn of a chunk object.
+
+    Entry:
+        value - anything. A spawn is a dict with the keys of SPAWN_KEYS, as
+                the module docstring gives them.
+
+    Exit/Returns:
+        A reason, or "" for a spawn. An integral float counts as an int, as
+        in the rest of the reader.
+
+    Module Globals:
+        const.SPAWN_KEYS, const.SPAWN_REQUIRED_KEYS, and the spawn ranges
+        read.
+
+    Methodology:
+        1. Refuse a value that is not a table, an unknown key, and a
+           missing required key.
+        2. Test each key in the order of SPAWN_KEYS. The first problem
+           wins. A quantity of one unit is a problem, so each spawn has one
+           text.
+
+    Notes/References:
+        The reader refuses what this refuses. The rule does not know the
+        items: `world/tile_checks.py` checks the item.
+        `ChunkFile.spawn_problem` in `chunk_file.gd` is the GDScript twin.
+
+    Author: Nick Hobar
+    Creation date: 10/21/2026
+    """
+    if not isinstance(value, dict):
+        return "a spawn must be a table"
+
+    unknown = sorted(set(value) - set(const.SPAWN_KEYS))
+
+    if unknown:
+        return "the key %s is not one of %s" % (unknown[0],
+                                               ", ".join(const.SPAWN_KEYS))
+
+    for key in const.SPAWN_REQUIRED_KEYS:
+        if key not in value:
+            return "a spawn must hold the key %s" % key
+
+    item = value[const.SPAWN_ITEM_KEY]
+
+    if not isinstance(item, str) or not _NAME_RE.fullmatch(item):
+        return "the item %r is not a name" % (item,)
+
+    problem = ""
+
+    if const.SPAWN_QUANTITY_KEY in value:
+        problem = _quantity_problem(value[const.SPAWN_QUANTITY_KEY])
+
+    if not problem:
+        problem = _respawn_problem(value[const.SPAWN_RESPAWN_KEY])
+
+    return problem
+
+
+def normal_spawn(value: dict) -> dict:
+    """
+    Return a spawn that `spawn_problem` accepts with each number as an int,
+    and its keys in the order of SPAWN_KEYS. The reader stores this form.
+    """
+    spawn = {const.SPAWN_ITEM_KEY: value[const.SPAWN_ITEM_KEY]}
+
+    if const.SPAWN_QUANTITY_KEY in value:
+        spawn[const.SPAWN_QUANTITY_KEY] = [
+            _as_int(number, const.SPAWN_QUANTITY_KEY)
+            for number in value[const.SPAWN_QUANTITY_KEY]]
+
+    spawn[const.SPAWN_RESPAWN_KEY] = _as_int(value[const.SPAWN_RESPAWN_KEY],
+                                             const.SPAWN_RESPAWN_KEY)
+
+    return spawn
+
+
+def spawn_text(spawn: dict) -> str:
+    """
+    Return a spawn as the writer writes it: one JSON object with its keys in
+    the order of SPAWN_KEYS, and no spaces. The GDScript `spawn_text` writes
+    the same bytes.
+    """
+    parts = ['"%s":"%s"' % (const.SPAWN_ITEM_KEY,
+                            spawn[const.SPAWN_ITEM_KEY])]
+
+    if const.SPAWN_QUANTITY_KEY in spawn:
+        parts.append('"%s":%s' % (const.SPAWN_QUANTITY_KEY,
+                                  _axes_text(spawn[const.SPAWN_QUANTITY_KEY])))
+
+    parts.append('"%s":%d' % (const.SPAWN_RESPAWN_KEY,
+                              spawn[const.SPAWN_RESPAWN_KEY]))
+
+    return "{" + ",".join(parts) + "}"
+
+
+def spawn_quantity(spawn: dict) -> tuple:
+    """
+    Return the (low, high) quantity of a spawn. A spawn with no quantity key
+    gives one unit each time.
+    """
+    unit = const.SPAWN_QUANTITY_UNIT
+    low, high = spawn.get(const.SPAWN_QUANTITY_KEY, (unit, unit))
+
+    return (low, high)
 
 
 def chunk_file_name(cx: int, cy: int, plane: int) -> str:
@@ -1008,7 +1215,8 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
     Methodology:
         One line for the chunk, one for each name list, one for each tile in
         row order, and one for each object. An object line ends with its
-        text, when it has one. A tile line gives its world
+        text, its look, and its spawn, each when it has one. A tile line
+        gives its world
         coordinates, its four corners, its tile height, its flags, and its
         floor and area names. A reader that swaps x and y, loses a corner, or
         adds the chunk offset wrong writes a different line.
@@ -1062,6 +1270,9 @@ def semantic_dump(chunk_file: ChunkFile) -> str:
 
         if thing.look:
             line += " " + look_text(thing.look)
+
+        if thing.spawn:
+            line += " " + spawn_text(thing.spawn)
 
         lines.append(line)
 

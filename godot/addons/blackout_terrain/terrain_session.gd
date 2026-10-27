@@ -11,13 +11,18 @@ extends RefCounted
 
 const PATH := "user://blackout_terrain_session.cfg"
 
+## The file that [method read] and [method write] use. A test sets a path
+## with no file before it makes a panel, because each panel reads the file
+## in `_init`. Each read then gives its default.
+static var path := PATH
+
 
 ## One value of `section`, or `default` when the file has no such value or
 ## a value of another type.
 static func read(section: String, key: String, default: Variant) -> Variant:
 	var config := ConfigFile.new()
 
-	if config.load(PATH) != OK:
+	if config.load(path) != OK:
 		return default
 
 	var value: Variant = config.get_value(section, key, default)
@@ -29,9 +34,9 @@ static func read(section: String, key: String, default: Variant) -> Variant:
 static func write(section: String, values: Dictionary) -> void:
 	var config := ConfigFile.new()
 
-	config.load(PATH)
+	config.load(path)
 
 	for key: String in values:
 		config.set_value(section, key, values[key])
 
-	config.save(PATH)
+	config.save(path)

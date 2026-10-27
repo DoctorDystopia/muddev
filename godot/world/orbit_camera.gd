@@ -1,3 +1,4 @@
+class_name OrbitCamera
 extends Node3D
 ## Orbit rig that follows the player's avatar.
 ##
@@ -19,8 +20,17 @@ extends Node3D
 ##
 ## **Orbit is MIDDLE-drag, not right-drag.** The right button belongs to the
 ## world pane's Choose Option menu; see [method _handle_button].
+##
+## **The arrow keys orbit too** (10/26/2026), for a trackpad with no middle
+## button. The console holds the keys in [CameraKeys] and calls
+## [method turn] on each frame.
 
 const ORBIT_SPEED := 0.006      # radians per pixel MIDDLE-dragged
+
+## How fast a held arrow key turns the camera, in radians per second. A full
+## turn takes about three seconds, and the tilt crosses its range in under two.
+const KEY_YAW_SPEED := 2.0
+const KEY_PITCH_SPEED := 1.2
 const ZOOM_STEP := 1.12         # distance multiplier per wheel notch
 const DISTANCE_START := 14.0
 const DISTANCE_MIN := 0.5
@@ -98,6 +108,20 @@ func _handle_button(event: InputEventMouseButton) -> void:
 			_zoom(1.0 / ZOOM_STEP)
 		MOUSE_BUTTON_WHEEL_DOWN:
 			_zoom(ZOOM_STEP)
+
+
+## Turn and tilt by held keys, for `delta` seconds.
+##
+## `axis` is [method CameraKeys.turn]: X +1 turns the view to the left, and
+## Y +1 lifts the camera. A RATE times the frame time, so a held key turns at
+## one speed at every frame rate. The tilt keeps the clamp of the drag.
+func turn(axis: Vector2, delta: float) -> void:
+	if axis.is_zero_approx():
+		return
+
+	_yaw += axis.x * KEY_YAW_SPEED * delta
+	_pitch = clampf(_pitch + axis.y * KEY_PITCH_SPEED * delta, PITCH_MIN, PITCH_MAX)
+	_apply()
 
 
 func _zoom(factor: float) -> void:

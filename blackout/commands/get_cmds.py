@@ -10,6 +10,8 @@ crash the pickup announcement.
 from evennia import default_cmds
 from evennia.commands.cmdset import CmdSet
 from evennia.utils import utils
+from commands.command import turn_to
+from items import stacking
 from systems.interface.statefeed import constants as feed_const
 
 # Every line this module sends a player is about your inventory, so the
@@ -28,21 +30,18 @@ _LOWEST_STACK_SUFFIX = "-1"
 
 # Private helper routines
 
-def _is_single_stacked_group(caller, matches) -> bool:
+def _is_single_stacked_group(matches) -> bool:
     """
     Purpose: Decide whether an ambiguous set of search matches is really
         just one item duplicated on the ground, rather than several
         distinct items that happen to share a partial name match.
 
     Entry:
-        caller  - the searching Character, passed through to
-                  get_display_name so grouping matches what Evennia's own
-                  multimatch error would show the player.
         matches - the raw (unfiltered) list of objects a quiet search
                   returned.
 
     Exit/Returns:
-        Returns True only when every match shares the same display name,
+        Returns True only when every match is a copy of one item,
         meaning a plain "get <name>" is unambiguous in intent even though
         the search itself is not. Returns False for 0 or 1 matches, or
         for a mix of distinct items (e.g. "sword" matching both "long
@@ -53,10 +52,15 @@ def _is_single_stacked_group(caller, matches) -> bool:
         _MIN_AMBIGUOUS_MATCHES read.
 
     Methodology:
-        Mirrors the grouping key `evennia.utils.utils.at_search_result`
-        uses to number multimatch results ("chunk-1", "chunk-2", ...):
-        `get_display_name`. Matching that key is what guarantees the
-        first entry here is the same object the engine would label "-1".
+        `stacking.is_one_item` compares the item keys. Until 10/22/2026
+        this compared display names, and a stack's display name carries
+        its quantity. Thus two credit stacks of 23 and 46 on one tile
+        were two items, and `get credits` failed on every try.
+
+        The "-1" suffix that the caller adds picks the first entry of the
+        whole match list. Evennia numbers the list itself in
+        `ObjectDBManager.search_object`, not by display name, so any
+        copy is a correct pick.
 
     Author: Nick Hobar
     Creation date: 08/15/2026
@@ -64,14 +68,9 @@ def _is_single_stacked_group(caller, matches) -> bool:
     if len(matches) < _MIN_AMBIGUOUS_MATCHES:
         return False
 
-    names = set()
-    for match in matches:
-        if hasattr(match, "get_display_name"):
-            names.add(match.get_display_name(caller))
-        else:
-            names.add(str(match))
+    one_item = stacking.is_one_item(matches)
 
-    return len(names) == 1
+    return one_item
 
 
 class GetCmd(default_cmds.CmdGet):
@@ -104,7 +103,8 @@ class GetCmd(default_cmds.CmdGet):
             1. When the player gives no explicit count and the target
                name is ambiguous only because several copies of the
                same item are lying around (a loot drop that spawned
-               separate instances instead of one quantity-N stack),
+               separate instances instead of one quantity-N stack, or
+               two kills on one tile that each dropped credits),
                resolve to the lowest-numbered copy ("<name>-1") instead
                of making the player retype the target with a suffix
                they cannot see without a matching text-channel message.
@@ -139,7 +139,7 @@ class GetCmd(default_cmds.CmdGet):
             quiet_matches = utils.make_iter(
                 caller.search(self.args, location=caller.location, quiet=True)
             )
-            if _is_single_stacked_group(caller, quiet_matches):
+            if _is_single_stacked_group(quiet_matches):
                 self.args = self.args + _LOWEST_STACK_SUFFIX
 
         objs = caller.search(self.args, location=caller.location, stacked=self.number)
@@ -150,6 +150,11 @@ class GetCmd(default_cmds.CmdGet):
         if len(objs) == 1 and caller == objs[0]:
             self.msg(("You can't get yourself.", _MSG_INVENTORY))
             return
+
+        # Before the checks, so a refused pickup turns the player too. Before
+        # the move as well, because the item leaves the world in the move.
+        # The client turns the player to the figure that it still draws.
+        turn_to(caller, objs[0])
 
         for obj in objs:
             if not obj.access(caller, "get"):

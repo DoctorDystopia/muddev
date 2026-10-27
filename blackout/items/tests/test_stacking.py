@@ -172,6 +172,45 @@ class TestFindMergeable(_StackingTestBase):
         self.assertIsNone(found)
 
 
+class TestIsOneItem(_StackingTestBase):
+    """Whether a name that finds several objects names one item."""
+
+    def test_two_stacks_of_different_sizes_are_one_item(self):
+        # The display name carries the quantity, so these two read as
+        # "credits (x10)" and "credits (x4)". The key is the same.
+        first = self._stack(quantity=STARTING_UNITS)
+        second = self._stack(quantity=INCOMING_UNITS)
+
+        self.assertTrue(stacking.is_one_item([first, second]))
+
+    def test_two_plain_copies_are_one_item(self):
+        first = self._plain()
+        second = self._plain()
+
+        self.assertTrue(stacking.is_one_item([first, second]))
+
+    def test_different_keys_are_not_one_item(self):
+        stack = self._stack()
+        other = self._stack(item_key=OTHER_STACKABLE_KEY)
+
+        self.assertFalse(stacking.is_one_item([stack, other]))
+
+    def test_keys_are_compared_ignoring_case(self):
+        first = self._stack()
+        second = self._stack()
+        second.key = second.key.upper()
+
+        self.assertTrue(stacking.is_one_item([first, second]))
+
+    def test_a_none_entry_is_not_one_item(self):
+        stack = self._stack()
+
+        self.assertFalse(stacking.is_one_item([stack, None]))
+
+    def test_an_empty_set_is_not_one_item(self):
+        self.assertFalse(stacking.is_one_item([]))
+
+
 class TestAvailableUnits(_StackingTestBase):
     """The tally deposit_many / withdraw_many size themselves against."""
 

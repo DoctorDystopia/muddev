@@ -29,11 +29,19 @@ extends Node
 ##     list can hide decor (DESIGN-0013 Phase S4).
 
 const _Const := preload("res://autoload/blackout_constants.gd")
+const _Session := preload("res://addons/blackout_terrain/terrain_session.gd")
+
+## The session file of this test. No file is there, so the Build panel
+## starts on its defaults, never on the choices of the author.
+const SESSION_PATH := "user://test_structure_tools_session.cfg"
 
 var _failures := 0
 
 
 func _ready() -> void:
+	# The Build panel reads the session file in _init, before `persist = false`.
+	_Session.path = SESSION_PATH
+
 	_a_wall_line_keeps_to_one_axis()
 	_a_wall_line_takes_the_side_that_is_not_void()
 	_a_removal_clears_both_sides()
@@ -63,6 +71,7 @@ func _ready() -> void:
 	_decor_stands_on_blocked_but_not_on_void()
 	_the_object_list_can_hide_decor()
 	_the_build_gestures_drive_a_world()
+	_expect(not FileAccess.file_exists(SESSION_PATH), "the Build panel writes no session file")
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -734,10 +743,9 @@ func _the_build_gestures_drive_a_world() -> void:
 	var input := BuildInput.new()
 	var labels: Array[String] = []
 
-	# The settings file is in git. A test must not change it.
+	# A test must not change the session file.
 	panel.persist = false
-	# The panel loads the settings of the author. A roof floor there would
-	# block the room, so the test sets the floor itself.
+	# A roof floor would block the room, so the test sets the floor itself.
 	panel.sample(BuildPanel.KEEP, "", "")
 	world.chunk_directory = scratch
 	add_child(world)

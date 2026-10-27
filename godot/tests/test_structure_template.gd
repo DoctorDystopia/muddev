@@ -22,16 +22,26 @@ extends Node
 ## 10. "Protect structures" keeps the corners of a structure.
 ## 11. A click inside a room selects the room, its level, and its roof.
 ## 12. The Select and the Place gestures drive a world, one undo entry each.
+## 13. A capture, the file text, and a turn keep the spawn of an item spawn
+##     (10/21/2026).
 
 const _Const := preload("res://autoload/blackout_constants.gd")
+const _Session := preload("res://addons/blackout_terrain/terrain_session.gd")
 
 ## The fixture that the Python name check also reads.
 const FIXTURE := "../blackout/world/tests/fixtures/structures/fixture_stall.json"
+
+## The session file of this test. No file is there, so the Build panel
+## starts on its defaults, never on the choices of the author.
+const SESSION_PATH := "user://test_structure_template_session.cfg"
 
 var _failures := 0
 
 
 func _ready() -> void:
+	# The Build panel reads the session file in _init, before `persist = false`.
+	_Session.path = SESSION_PATH
+
 	_the_fixture_reads_and_writes_back()
 	_four_turns_and_two_mirrors_give_it_back()
 	_a_turn_and_a_mirror_move_each_fact()
@@ -46,6 +56,8 @@ func _ready() -> void:
 	_protect_keeps_the_corners_of_a_structure()
 	_a_click_in_a_room_selects_its_level_and_roof()
 	_the_select_and_place_gestures_drive_a_world()
+	_a_spawn_rides_a_template()
+	_expect(not FileAccess.file_exists(SESSION_PATH), "the Build panel writes no session file")
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -223,6 +235,27 @@ func _a_copy_gives_the_facts_of_its_capture() -> void:
 
 	for at: Vector3i in selection.keys:
 		_expect_same_tile(sets[at.z], Vector2i(at.x, at.y), offset)
+
+
+## Case 13. The reader does not know the items, so the item is any name.
+func _a_spawn_rides_a_template() -> void:
+	var sets := _planes()
+	var rect := _house(sets)
+	var spawn := {_Const.SPAWN_ITEM_KEY: "scrap", _Const.SPAWN_QUANTITY_KEY: [2, 3],
+		_Const.SPAWN_RESPAWN_KEY: 30}
+
+	sets[0].add_object(rect.position + Vector2i(2, 1), _Const.OBJECT_ITEM_SPAWN_KIND, 0, "",
+		{}, spawn)
+
+	var selection := _house_selection(sets, rect)
+	var template := StructureTemplate.capture(sets, selection.keys, 0, "house")
+	var again := StructureTemplate.parse_text(template.to_text())
+	var spawns := again.turned().objects.filter(func(thing: Dictionary) -> bool:
+		return not thing.get("spawn", {}).is_empty())
+
+	_expect(again.error.is_empty(), "a template with a spawn reads back: " + again.error)
+	_expect(spawns.size() == 1 and spawns[0]["spawn"] == spawn,
+		"a capture, the text, and a turn keep the spawn: %s" % [spawns])
 
 
 func _expect_same_tile(chunks: ChunkSet, tile: Vector2i, offset: Vector2i) -> void:

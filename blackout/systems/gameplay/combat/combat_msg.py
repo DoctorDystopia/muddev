@@ -147,7 +147,7 @@ def _miss_verb(damage_type, person_key: str) -> str:
 def _label_for_stat_key(stat_key: str) -> str:
     """Derive a player-facing label from a combat_stat_bonuses key.
 
-    "stab_attack_bonus" -> "Stab Attack". Purely mechanical so a new stat key
+    "melee_stab_attack_bonus" -> "Melee Stab Attack". Purely mechanical so a new stat key
     added to a weapon or armor def needs no second edit here to display.
     """
     stripped = stat_key.removesuffix(STAT_KEY_BONUS_SUFFIX)
@@ -724,7 +724,7 @@ def format_combat_stat_bonuses(bonuses: dict) -> list:
     item's inspect screen or an equipment total.
 
     Entry:
-        bonuses - dict[str, int] keyed by stat (e.g. "stab_attack_bonus").
+        bonuses - dict[str, int] keyed by stat (e.g. "melee_stab_attack_bonus").
                   May be empty.
 
     Exit/Returns:

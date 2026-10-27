@@ -38,6 +38,11 @@ class BaseSkill:
     # crafting_service.perform_craft sends it.
     craft_moment = None
 
+    # The MOMENT_* name that each attack sends to the client of the attacker.
+    # The accuracy skill of the combat style names it. None sends no moment.
+    # ActionAttack.resolve sends it, on a hit and on a miss.
+    attack_moment = None
+
 
     def cooldown_key(self) -> str:
         """

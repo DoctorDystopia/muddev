@@ -25,8 +25,13 @@ extends Node
 ##    (10/14/2026). The scene is not saved.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
+const _Session := preload("res://addons/blackout_terrain/terrain_session.gd")
 
 const WORKBENCH_SCENE := "res://addons/blackout_terrain/structure_workbench.tscn"
+
+## The session file of this test. No file is there, so the Build panel
+## starts on its defaults, never on the choices of the author.
+const SESSION_PATH := "user://test_structure_workbench_session.cfg"
 
 ## A file in the scratch directory that is not a chunk file. A clear keeps it.
 const OTHER_FILE := "notes.txt"
@@ -36,6 +41,8 @@ var _scratch := ""
 
 
 func _ready() -> void:
+	# The Build panel reads the session file in _init, before `persist = false`.
+	_Session.path = SESSION_PATH
 	_scratch = ProjectSettings.globalize_path("user://structure_workbench_test_%d"
 		% Time.get_ticks_usec())
 
@@ -45,6 +52,7 @@ func _ready() -> void:
 	_the_check_leaves_out_the_world_rules()
 	_a_preview_ends_with_the_own_sky()
 	_remove_scratch(_scratch)
+	_expect(not FileAccess.file_exists(SESSION_PATH), "the Build panel writes no session file")
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -106,18 +114,21 @@ func _a_preview_ends_with_the_own_sky() -> void:
 	var environment := (root.get_node("WorldEnvironment") as WorldEnvironment).environment
 	var sun := root.get_node("Sun") as DirectionalLight3D
 	var own := [environment.background_mode, environment.fog_enabled,
-		environment.ambient_light_color, sun.light_color, sun.rotation]
+		environment.ambient_light_color, sun.light_color, sun.shadow_opacity, sun.rotation]
 	var look := AreaLook.look_for(AreaLook.LOOKS.keys()[0])
 
 	world.preview_look(look)
 	_expect(world.previewing() and environment.fog_enabled, "the preview turns the fog on")
 	_expect(world.previewed_look() == look, "the world gives the look of the preview")
 	_expect(sun.light_color == look["sun_color"], "the preview colours the sun")
+	_expect(is_equal_approx(sun.shadow_opacity, 1.0 - AreaLook.shadow_minimum()),
+		"the preview gives the sun the shadow minimum")
 	world.preview_look({})
 	_expect(not world.previewing() and world.previewed_look().is_empty(),
 		"the preview ends")
 	_expect([environment.background_mode, environment.fog_enabled,
-		environment.ambient_light_color, sun.light_color, sun.rotation] == own,
+		environment.ambient_light_color, sun.light_color, sun.shadow_opacity,
+		sun.rotation] == own,
 		"the end of the preview gives the scene its own sky and sun")
 	root.free()
 

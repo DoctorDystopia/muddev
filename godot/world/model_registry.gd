@@ -197,12 +197,12 @@ func variants_of(asset_key: String) -> PackedStringArray:
 ## - "" gives the base.
 ## - The key of a variant of the base gives that variant.
 ## - [code]LOOK_VARIANT_ANY[/code] gives the base or one variant, from a
-##   hash of `seed`.
+##   hash of `variant_seed`.
 ## - A key that is no variant of the base gives the base. Thus, a stale
 ##   chunk file never hides a thing.
 ##
 ## The server names the model. This picks among the looks of that model.
-func variant_for(asset_key: String, choice: String, seed: String) -> String:
+func variant_for(asset_key: String, choice: String, variant_seed: String) -> String:
 	if choice.is_empty():
 		return asset_key
 
@@ -212,7 +212,7 @@ func variant_for(asset_key: String, choice: String, seed: String) -> String:
 		if options.is_empty():
 			return asset_key
 
-		var index := StableHash.of(seed) % (options.size() + 1)
+		var index := StableHash.of(variant_seed) % (options.size() + 1)
 
 		return asset_key if index == 0 else options[index - 1]
 

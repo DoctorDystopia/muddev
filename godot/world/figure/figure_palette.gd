@@ -361,10 +361,10 @@ static func _problem(parsed: Dictionary) -> String:
 	return problem
 
 
-## Why the colors table has a bad form, or "". `finishes` is the finishes
-## table of the same file. A finish of it is legal. A finish of
+## Why the colors table has a bad form, or "". `finish_table` is the
+## finishes table of the same file. A finish of it is legal. A finish of
 ## [MeshPalette] is legal also.
-static func _colors_problem(table: Dictionary, finishes: Dictionary) -> String:
+static func _colors_problem(table: Dictionary, finish_table: Dictionary) -> String:
 	var hex := RegEx.create_from_string(COLOR_PATTERN)
 	var plain := RegEx.create_from_string(NAME_PATTERN)
 
@@ -381,7 +381,7 @@ static func _colors_problem(table: Dictionary, finishes: Dictionary) -> String:
 		var finish: Variant = row.get("finish", DEFAULT_FINISH)
 
 		if typeof(finish) != TYPE_STRING \
-				or (not finishes.has(finish) and not MeshPalette.FINISHES.has(finish)):
+				or (not finish_table.has(finish) and not MeshPalette.FINISHES.has(finish)):
 			return "the color %s has no finish %s" % [color_name, finish]
 
 	return ""

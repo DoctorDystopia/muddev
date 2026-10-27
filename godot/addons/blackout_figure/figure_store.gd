@@ -183,6 +183,19 @@ func presentation() -> ModelPresentation:
 	return _presentations.get(KIND_PRESENTATION, ModelPresentation.new())
 
 
+## The slots that hold an item through one clip. The clip list of the clip
+## gives them ([method FigureClipList.held_in]). A clip that no clip list
+## names gives [constant FigureClearance.HAND_SLOTS].
+func held_in(clip_name: String) -> PackedStringArray:
+	for key: String in keys_of(KIND_CLIPS):
+		var list: FigureClipList = clip_lists[key]
+
+		if list.clips().has(clip_name):
+			return list.held_in(clip_name)
+
+	return PackedStringArray(FigureClearance.HAND_SLOTS)
+
+
 ## Read each file of the directory. This drops each change in memory.
 func load_all() -> void:
 	rigs.clear()

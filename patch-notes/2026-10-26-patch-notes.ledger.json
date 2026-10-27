@@ -1,0 +1,1364 @@
+{
+  "base": "e506931e397b555c859cabf934a613f630d42e72",
+  "created": "2026-10-26",
+  "draft": "../playblackout-site/src/content/blog/2026-10-26-patch-notes.md",
+  "files": {
+    "CLAUDE.md": {
+      "digest": "af20ec03dbd25802",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "blackout/README.md": {
+      "digest": "6b3235a9a65291d6",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "blackout/analysis/_snapshot_env.py": {
+      "digest": "5d81e193d13ce4a8",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/analysis/show_dps_matrix.py": {
+      "digest": "13cb8e0fd34bcfe5",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/assets/README.md": {
+      "digest": "69346b32291274e2",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "blackout/assets/audio/__init__.py": {
+      "digest": "dc324361690aedd7",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/__main__.py": {
+      "digest": "7cee2a8c74c575e4",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/check.py": {
+      "digest": "e56970c016eeb7ef",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/credits.py": {
+      "digest": "3aa308b14618d882",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/cue_table.py": {
+      "digest": "8ba88324b87b4b30",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/godot_import.py": {
+      "digest": "3ee32ed280a4957c",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/kinds.py": {
+      "digest": "c784bebab624fbf9",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/paths.py": {
+      "digest": "7414c992436931ba",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/audio/wizard.py": {
+      "digest": "96c6bcfcfc383ad6",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "blackout/assets/figure/README.md": {
+      "digest": "be59c5a217b782dc",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "blackout/assets/figure/clips/kaykit_adventurers.json": {
+      "digest": "0d48f9598984f215",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "blackout/assets/figure/looks/copper_axe.json": {
+      "digest": "f247aefe017f3cf0",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_boots.json": {
+      "digest": "8d44ce741629ed41",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_chainbody.json": {
+      "digest": "0bc423f7f21bef48",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_dagger.json": {
+      "digest": "77baf8bcd0b36598",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_great_helm.json": {
+      "digest": "dcd82b3fec4fb9a8",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_greatsword.json": {
+      "digest": "6bd734df14651c68",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_hide_cape.json": {
+      "digest": "29b245fdcb4620cb",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_platelegs.json": {
+      "digest": "9a200920d2217328",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_scimitar.json": {
+      "digest": "66ddf375c6c99a5e",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_shortbow.json": {
+      "digest": "fafb1e470e7df5bb",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_shortsword.json": {
+      "digest": "96ce5dde04c1b14d",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/copper_square_shield.json": {
+      "digest": "039e5d974f9db932",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/rusty_scrap_axe.json": {
+      "digest": "350c847ed1559ab6",
+      "mark": "covered",
+      "note": "Rusty scrap axe and dagger"
+    },
+    "blackout/assets/figure/looks/rusty_scrap_dagger.json": {
+      "digest": "e87e5a8f48e388f6",
+      "mark": "covered",
+      "note": "Rusty scrap axe and dagger"
+    },
+    "blackout/assets/figure/looks/rusty_scrap_scimitar.json": {
+      "digest": "5899ee914705fab6",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_axe.json": {
+      "digest": "49391e5f871de35e",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_boots.json": {
+      "digest": "c1b46e6ff9feee01",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_chainbody.json": {
+      "digest": "0f2509ef281e239e",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_dagger.json": {
+      "digest": "b39f907dd4f895fb",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_great_helm.json": {
+      "digest": "2cfa8c525c61963b",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_greatsword.json": {
+      "digest": "20769f5115426e71",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_hide_cape.json": {
+      "digest": "964b06c49042f0a3",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_platelegs.json": {
+      "digest": "08050e759247f2a2",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_scimitar.json": {
+      "digest": "630bcfe9e2392065",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_shortbow.json": {
+      "digest": "00abe62ab2ddb936",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/figure/looks/scrap_square_shield.json": {
+      "digest": "21dac8507349e2b6",
+      "mark": "covered",
+      "note": "Gear looks share their shapes"
+    },
+    "blackout/assets/key_list.json": {
+      "digest": "8b422084c51d30f2",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/assets/models/world_objects/curing_chamber.toml": {
+      "digest": "8b71ed4fbd288195",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/assets/models/world_objects/gunbench.toml": {
+      "digest": "6eeaf7fc502bf1c1",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/assets/models/world_objects/rendering_cooker.toml": {
+      "digest": "292d448604e28d11",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/assets/pipeline/__main__.py": {
+      "digest": "1b1cd2d727b26761",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/assets/pipeline/blender.py": {
+      "digest": "78fce0cf966ae73a",
+      "mark": "covered",
+      "note": "MagicaVoxel models"
+    },
+    "blackout/assets/pipeline/blender_vox.py": {
+      "digest": "50b63fd21cf735d5",
+      "mark": "covered",
+      "note": "MagicaVoxel models"
+    },
+    "blackout/assets/pipeline/build.py": {
+      "digest": "9c29c2a89b6b861e",
+      "mark": "covered",
+      "note": "MagicaVoxel models"
+    },
+    "blackout/assets/pipeline/fetch.py": {
+      "digest": "a9c1814eddc4dfc5",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/assets/pipeline/figure.py": {
+      "digest": "2b0d67927f1ba4cf",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/assets/pipeline/paths.py": {
+      "digest": "b417a809a819f184",
+      "mark": "covered",
+      "note": "MagicaVoxel models"
+    },
+    "blackout/assets/pipeline/questions.py": {
+      "digest": "ea995e2a3f7b91a1",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/assets/pipeline/records.py": {
+      "digest": "1ec2dfa61350e859",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/assets/pipeline/wizard.py": {
+      "digest": "bfa26047f4402fcc",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/assets/sources/itch_eclair_pot_enamel/README_CC0_SOURCE.md": {
+      "digest": "802bddf5016d4d26",
+      "mark": "covered",
+      "note": "Credits"
+    },
+    "blackout/assets/sources/itch_eclair_pot_enamel/pot_enamel_01_cc0_clip_ready_v1.glb": {
+      "digest": "22dbcc97e7e10acc",
+      "mark": "skipped",
+      "note": "source download: credited through its source record"
+    },
+    "blackout/assets/sources/itch_eclair_pot_enamel/source.toml": {
+      "digest": "2562a23912c19d7e",
+      "mark": "covered",
+      "note": "Credits"
+    },
+    "blackout/assets/sources/itch_retro_blacksmith_workbench/retro-blacksmith-workbench/LICENSE.pdf": {
+      "digest": "e2c3324f31f2236f",
+      "mark": "skipped",
+      "note": "source download: credited through its source record"
+    },
+    "blackout/assets/sources/itch_retro_blacksmith_workbench/retro-blacksmith-workbench/blacksmith_workbench.fbx": {
+      "digest": "26cf1b32d1a6155d",
+      "mark": "skipped",
+      "note": "source download: credited through its source record"
+    },
+    "blackout/assets/sources/itch_retro_blacksmith_workbench/retro-blacksmith-workbench/textures/color.png": {
+      "digest": "2431ed8258074834",
+      "mark": "skipped",
+      "note": "source download: credited through its source record"
+    },
+    "blackout/assets/sources/itch_retro_blacksmith_workbench/retro-blacksmith-workbench/textures/color_dark.png": {
+      "digest": "66923c932aaee3df",
+      "mark": "skipped",
+      "note": "source download: credited through its source record"
+    },
+    "blackout/assets/sources/itch_retro_blacksmith_workbench/source.toml": {
+      "digest": "29e356e5aac4cdc4",
+      "mark": "covered",
+      "note": "Credits"
+    },
+    "blackout/assets/sources/itch_stove_2/source.toml": {
+      "digest": "c1e2b2064e3bad0e",
+      "mark": "covered",
+      "note": "Credits"
+    },
+    "blackout/assets/sources/itch_stove_2/stove (2).vox": {
+      "digest": "9955b8308e2ae876",
+      "mark": "skipped",
+      "note": "source download: credited through its source record"
+    },
+    "blackout/commands/command.py": {
+      "digest": "71ba4659ad30457e",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/commands/drop_cmds.py": {
+      "digest": "27bfb094c0bee495",
+      "mark": "covered",
+      "note": "Two stacks of credits"
+    },
+    "blackout/commands/exterminator_cmds.py": {
+      "digest": "e60a660a41567f53",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/commands/get_cmds.py": {
+      "digest": "acd99b70bc4905cc",
+      "mark": "covered",
+      "note": "Two stacks of credits"
+    },
+    "blackout/commands/read_cmds.py": {
+      "digest": "3ee16cb9945b67fb",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/commands/tests/test_drop_cmd.py": {
+      "digest": "163483f956a7c861",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/commands/tests/test_get_cmd.py": {
+      "digest": "47c2f8d5e2cd4ef2",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/items/equipment/handler.py": {
+      "digest": "2c17b49bef44cf54",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/items/equipment/tests/test_handler.py": {
+      "digest": "442898621932239f",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/items/stacking.py": {
+      "digest": "02815d898162692b",
+      "mark": "covered",
+      "note": "Two stacks of credits"
+    },
+    "blackout/items/tests/test_stacking.py": {
+      "digest": "10989a5124c4caf4",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/scripts/export_client_constants.py": {
+      "digest": "ed920ec3ad57ae26",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/scripts/migrate_bonus_keys.py": {
+      "digest": "2b1b5b2aec0e7331",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/systems/core/tick/states.py": {
+      "digest": "647bbd044b967f49",
+      "mark": "covered",
+      "note": "Fights with several foes"
+    },
+    "blackout/systems/core/tick/tests/test_states.py": {
+      "digest": "02051ef8eb860a2c",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/core/tilegrid/chunkfile.py": {
+      "digest": "6fcdcdf1aa39a5c9",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/core/tilegrid/constants.py": {
+      "digest": "e94a8328a1ddf456",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/core/tilegrid/tests/fixture_builder.py": {
+      "digest": "29635f8122d10aeb",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/core/tilegrid/tests/fixtures/chunk_3_-2_p0.json": {
+      "digest": "a5b8a2f8cb97897c",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/core/tilegrid/tests/fixtures/digests.json": {
+      "digest": "05db93ed8c6e6841",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/core/tilegrid/tests/test_chunkfile.py": {
+      "digest": "d7bd778f937e0d78",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/core/tilegrid/world.py": {
+      "digest": "44ad867465df3722",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/gameplay/ai/behaviors.py": {
+      "digest": "a1c71e5127db4a17",
+      "mark": "covered",
+      "note": "NPCs answer the last hit"
+    },
+    "blackout/systems/gameplay/combat/auras/aura_handler.py": {
+      "digest": "b843cbac5eb559f3",
+      "mark": "covered",
+      "note": "Auras start a fight"
+    },
+    "blackout/systems/gameplay/combat/combat.py": {
+      "digest": "c44cd3d011ec885c",
+      "mark": "covered",
+      "note": "Fights with several foes"
+    },
+    "blackout/systems/gameplay/combat/combat_calc.py": {
+      "digest": "a7d6dc4d4e22ee24",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/systems/gameplay/combat/combat_msg.py": {
+      "digest": "56f1275340d64966",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/systems/gameplay/combat/constants.py": {
+      "digest": "db26ea365cbef92c",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "blackout/systems/gameplay/combat/rules/context.py": {
+      "digest": "763f52805128a82d",
+      "mark": "covered",
+      "note": "Bow strength"
+    },
+    "blackout/systems/gameplay/combat/rules/tests/test_action_pipeline.py": {
+      "digest": "4d098fab36e78e1e",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/combat/rules/tests/test_max_hit.py": {
+      "digest": "c68cb68d77213bc8",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/combat/rules/tests/test_rule_defs.py": {
+      "digest": "b07988d9efeeb96c",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/combat/tests/test_combat_handler.py": {
+      "digest": "d2ff60ca1588184f",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/combat/tests/test_combat_msg.py": {
+      "digest": "4c14bff97e57fbcb",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/combat/tests/test_multi_combat.py": {
+      "digest": "db7adea648f7c5d1",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/combat/tests/test_projectile_action.py": {
+      "digest": "94810da44f30bbee",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/exterminator/tests/test_quin_pool.py": {
+      "digest": "b92d40f51be27f87",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/progression/skills/skill_defs/base_skill.py": {
+      "digest": "068ee9df37c808e0",
+      "mark": "covered",
+      "note": "Attack sounds"
+    },
+    "blackout/systems/gameplay/progression/skills/skill_defs/combat/guns.py": {
+      "digest": "7d11c4bd9d86cabe",
+      "mark": "covered",
+      "note": "Attack sounds"
+    },
+    "blackout/systems/gameplay/progression/skills/skill_defs/combat/strike.py": {
+      "digest": "6ce833e5a73e1bd4",
+      "mark": "covered",
+      "note": "Attack sounds"
+    },
+    "blackout/systems/gameplay/spawning/item_spawns.py": {
+      "digest": "7cbbafef68b40eaa",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/gameplay/spawning/respawn.py": {
+      "digest": "9806077bfdc0759d",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/gameplay/spawning/tests/test_item_spawns.py": {
+      "digest": "13d8854069ee2cd1",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/gameplay/spawning/tile_sync.py": {
+      "digest": "7bc54223a0d93784",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/systems/interface/statefeed/buffer.py": {
+      "digest": "c757bff6ab339644",
+      "mark": "covered",
+      "note": "Facing after a walk"
+    },
+    "blackout/systems/interface/statefeed/clientexport.py": {
+      "digest": "d3c6b08ba787e096",
+      "mark": "skipped",
+      "note": "generated: export rows"
+    },
+    "blackout/systems/interface/statefeed/constants.py": {
+      "digest": "79500d6ed52ff77b",
+      "mark": "covered",
+      "note": "Facing after a walk"
+    },
+    "blackout/systems/interface/statefeed/events.py": {
+      "digest": "f6385825fa969280",
+      "mark": "covered",
+      "note": "Items you pick up"
+    },
+    "blackout/systems/interface/statefeed/figure_catalog.py": {
+      "digest": "16b7329a20aeda52",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "blackout/systems/interface/statefeed/key_list.py": {
+      "digest": "c9eb3e94ccdeced9",
+      "mark": "covered",
+      "note": "Model wizard"
+    },
+    "blackout/systems/interface/statefeed/payloads.py": {
+      "digest": "dc43f61e10ade763",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "blackout/systems/interface/statefeed/spawn_items.py": {
+      "digest": "ab787360a698effb",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "blackout/systems/interface/statefeed/tests/test_buffer.py": {
+      "digest": "73ca417b038109da",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_cue_table.py": {
+      "digest": "00bc901392c80b9a",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_figure_files.py": {
+      "digest": "896e36bf6d0db492",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_integration.py": {
+      "digest": "39299846c912daea",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_key_list.py": {
+      "digest": "100296fae81fd8d2",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_model_pipeline.py": {
+      "digest": "c291e36b712fbd4e",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_model_wizard.py": {
+      "digest": "e0cfb4d6795a9b76",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_room_contents_delta.py": {
+      "digest": "9dfba4c80739098d",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_sound_wizard.py": {
+      "digest": "6d2979b300833b7e",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_spawn_items.py": {
+      "digest": "7959034e00a6f0ab",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/statefeed/tests/test_wiring.py": {
+      "digest": "8edb969920d1444e",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/systems/interface/summary/panel_defs/readiness.py": {
+      "digest": "c5238e082028a5b3",
+      "mark": "covered",
+      "note": "Combat Readiness shows your totals"
+    },
+    "blackout/systems/interface/summary/panel_defs/world.py": {
+      "digest": "a12263e5b865c917",
+      "mark": "covered",
+      "note": "Playtime as a clock"
+    },
+    "blackout/systems/interface/summary/tests/test_summary.py": {
+      "digest": "15a06e8bee98ea86",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/typeclasses/bank_nodes.py": {
+      "digest": "11fde74f2d46a717",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/typeclasses/crafting_facilities.py": {
+      "digest": "c20ea32fab9546df",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/typeclasses/mixins.py": {
+      "digest": "c026539fd8355660",
+      "mark": "covered",
+      "note": "NPCs answer the last hit"
+    },
+    "blackout/typeclasses/npcs.py": {
+      "digest": "db2f977ca6480523",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/typeclasses/rooms.py": {
+      "digest": "50e129bc64c7e1f8",
+      "mark": "covered",
+      "note": "Items you pick up"
+    },
+    "blackout/typeclasses/skill_facilities.py": {
+      "digest": "94ed1a4b550af942",
+      "mark": "covered",
+      "note": "You turn to what you use"
+    },
+    "blackout/web/static/webclient/models/CREDITS.md": {
+      "digest": "e9c3626ff82370bb",
+      "mark": "covered",
+      "note": "Credits"
+    },
+    "blackout/web/static/webclient/models/credits.json": {
+      "digest": "64bd343f05f5024e",
+      "mark": "covered",
+      "note": "Credits"
+    },
+    "blackout/web/static/webclient/models/figure.json": {
+      "digest": "41d9422ff523171d",
+      "mark": "covered",
+      "note": "Rusty scrap axe and dagger"
+    },
+    "blackout/web/static/webclient/models/manifest.json": {
+      "digest": "d0ac81e0db687778",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/web/static/webclient/models/world_objects/curing_chamber.glb": {
+      "digest": "771cab479debc308",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/web/static/webclient/models/world_objects/gunbench.glb": {
+      "digest": "520fe887a135b4ca",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/web/static/webclient/models/world_objects/rendering_cooker.glb": {
+      "digest": "3aca6a05b52fbb4e",
+      "mark": "covered",
+      "note": "New station models"
+    },
+    "blackout/world/chunks/chunk_-1_0_p0.json": {
+      "digest": "f010a7f098f4a10b",
+      "mark": "covered",
+      "note": "The Oasis crafting yard"
+    },
+    "blackout/world/chunks/chunk_0_0_p0.json": {
+      "digest": "7e6e757b4afc27c8",
+      "mark": "covered",
+      "note": "The Oasis crafting yard"
+    },
+    "blackout/world/chunks/chunk_1_-1_p0.json": {
+      "digest": "296a81af764241f8",
+      "mark": "covered",
+      "note": "A dirt track in the Outskirts"
+    },
+    "blackout/world/chunks/chunk_1_0_p0.json": {
+      "digest": "6a22bbe2c29a9376",
+      "mark": "covered",
+      "note": "A dirt track in the Outskirts"
+    },
+    "blackout/world/chunks/chunk_2_-1_p0.json": {
+      "digest": "b05a99bd748e5035",
+      "mark": "covered",
+      "note": "A dirt track in the Outskirts"
+    },
+    "blackout/world/chunks/chunk_2_0_p0.json": {
+      "digest": "8f09249b19742287",
+      "mark": "covered",
+      "note": "More mutant giants"
+    },
+    "blackout/world/item_database.py": {
+      "digest": "a031a60c779da3cd",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "blackout/world/item_defs/ammunition.py": {
+      "digest": "d0c05c8bfc703fcd",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/armor_back.py": {
+      "digest": "7dcb562e3aae12d4",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/armor_body.py": {
+      "digest": "e01491c8ab82cfb5",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/armor_feet.py": {
+      "digest": "beb6dff8299f5599",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/armor_head.py": {
+      "digest": "3159feeb67bdbe9c",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/armor_legs.py": {
+      "digest": "8919cac43a61c22b",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/armor_offhand.py": {
+      "digest": "1ea4b05b880ec28c",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/gadgets.py": {
+      "digest": "397a0e5875757ba3",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/tools.py": {
+      "digest": "c0f5571eedc5ad6d",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/item_defs/weapons.py": {
+      "digest": "34fa88c5c00c9caf",
+      "mark": "covered",
+      "note": "Scimitar Chop style"
+    },
+    "blackout/world/npc_database.py": {
+      "digest": "8dcb5eb1eecdfe20",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/npc_defs/hostile.py": {
+      "digest": "55c5dd019aec0660",
+      "mark": "covered",
+      "note": "Combat bonus names"
+    },
+    "blackout/world/object_kinds.py": {
+      "digest": "1b710527eed0ef03",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "blackout/world/tests/check_fixture_builder.py": {
+      "digest": "26c957e1219c8944",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/fixtures/checks/chunk_0_0_p0.json": {
+      "digest": "f61c38c7856497bd",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/fixtures/checks/expected.json": {
+      "digest": "fb0be7f6603f0688",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/fixtures/checks/items.json": {
+      "digest": "7d0e58ea7d56cdf0",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/fixtures/checks/sync_stamp.json": {
+      "digest": "c332f9f4cc569b55",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/test_item_database.py": {
+      "digest": "d7db1caa87d25988",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/test_npc_database.py": {
+      "digest": "8141b1882f7baefe",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/test_tile_checks.py": {
+      "digest": "1413d8ae0344878a",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tests/test_tile_content.py": {
+      "digest": "6e551b2d7b3e61da",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "blackout/world/tile_checks.py": {
+      "digest": "3b3e5d77ed91c726",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "blackout/world/tile_map.py": {
+      "digest": "af731d0a1bfca2b8",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "glossary.md": {
+      "digest": "9bedc79708607c39",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "godot/README.md": {
+      "digest": "56ebce769b2a9aee",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "godot/addons/blackout_figure/clips_panel.gd": {
+      "digest": "27ab9af0fc6d533f",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/edits/clip_edits.gd": {
+      "digest": "9fe4a85e8db0b4da",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_catalog.gd": {
+      "digest": "59405f5589936cff",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_checks.gd": {
+      "digest": "d501f56e909c8f4f",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_clearance.gd": {
+      "digest": "fc170f826e31399c",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_clip_list.gd": {
+      "digest": "4bb5cba726b6adfc",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_plugin.gd": {
+      "digest": "aef15cd4909eb311",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_store.gd": {
+      "digest": "8ebb77e6abca6a23",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/figure_workbench.gd": {
+      "digest": "0dd711525cf7b2fb",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_figure/item_catalog.json": {
+      "digest": "b6846fd0606619ca",
+      "mark": "covered",
+      "note": "A clip for each swing"
+    },
+    "godot/addons/blackout_terrain/spawn_fields.gd": {
+      "digest": "290c0d2e2c93b461",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/spawn_items.gd": {
+      "digest": "a8772d33f2c0face",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/spawn_items.json": {
+      "digest": "7ee2f9b48d5586a6",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/structure_place.gd": {
+      "digest": "26ec66b51540b2ee",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/structure_template.gd": {
+      "digest": "f44ae7aa101060be",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/structure_tools.gd": {
+      "digest": "aa0cc430c0b883f4",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_checks.gd": {
+      "digest": "418a4c115477c246",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_dock.gd": {
+      "digest": "fd15d52ee5f404f5",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_edit.gd": {
+      "digest": "f97d4f6fc456cf2f",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_models.gd": {
+      "digest": "3769771a5536775a",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_overlay.gd": {
+      "digest": "93bfc629ce116526",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_plugin.gd": {
+      "digest": "1c09dc1edd704512",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/addons/blackout_terrain/terrain_session.gd": {
+      "digest": "a3233a31dcfba6fa",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/addons/blackout_terrain/terrain_world.gd": {
+      "digest": "485a9f0f7310656c",
+      "mark": "covered",
+      "note": "Editor block side"
+    },
+    "godot/audio/CREDITS.md": {
+      "digest": "96d84dfec6ad0a75",
+      "mark": "skipped",
+      "note": "context: the feature list comes from these docs"
+    },
+    "godot/audio/cues.json": {
+      "digest": "cb188982e426eb4a",
+      "mark": "covered",
+      "note": "Attack sounds"
+    },
+    "godot/audio/sfx/guns_shot.wav": {
+      "digest": "61886b0c7f784f3a",
+      "mark": "covered",
+      "note": "Attack sounds"
+    },
+    "godot/audio/sfx/melee_swing.wav": {
+      "digest": "53dca180e17dd028",
+      "mark": "covered",
+      "note": "Attack sounds"
+    },
+    "godot/scenes/inventory/inventory_view.gd": {
+      "digest": "511c8d710b1f7d67",
+      "mark": "covered",
+      "note": "Shift-click drop shows Drop"
+    },
+    "godot/scenes/inventory/item_stage.gd": {
+      "digest": "d110d49e1c8a9922",
+      "mark": "covered",
+      "note": "Larger item pictures"
+    },
+    "godot/scenes/inventory/slot_cell.gd": {
+      "digest": "838b55d06eec44d9",
+      "mark": "covered",
+      "note": "Shift-click drop shows Drop"
+    },
+    "godot/scenes/minimap/minimap_view.gd": {
+      "digest": "f874a3fae4e73b09",
+      "mark": "covered",
+      "note": "Position readout on the maps"
+    },
+    "godot/scenes/summary/summary_view.gd": {
+      "digest": "43460f84507ab528",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/scenes/worldmap/world_map_legend.gd": {
+      "digest": "b21e7c7eb630332e",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/scenes/worldmap/world_map_view.gd": {
+      "digest": "071789c29c0920a8",
+      "mark": "covered",
+      "note": "Position readout on the maps"
+    },
+    "godot/tests/test_area_look.gd": {
+      "digest": "1281ef55af15dc08",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_avatar_facing.gd": {
+      "digest": "6c64682840fc8682",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_avatar_facing.gd.uid": {
+      "digest": "c503953497b7a1fe",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_avatar_facing.tscn": {
+      "digest": "e005cfea02ba07db",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_chunk_file.gd": {
+      "digest": "ddd97d3163da4f7d",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_client_settings.gd": {
+      "digest": "bf28821a2bdfec72",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_entity_pool.gd": {
+      "digest": "0614081c072a4562",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_figure_checks.gd": {
+      "digest": "57339e5d158078f1",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_figure_clips.gd": {
+      "digest": "87d5df7320db97f7",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_figure_dock.gd": {
+      "digest": "6adeca225a6537a9",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_figure_library.gd": {
+      "digest": "10627ca555cf3641",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_figure_stances.gd": {
+      "digest": "c8ed43b9351d4d06",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_inventory_view.gd": {
+      "digest": "eb529f52909607d0",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_item_look.gd": {
+      "digest": "0bebae1e3ee11643",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_look_files.gd": {
+      "digest": "aee84cdc4ee5850e",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_minimap_view.gd": {
+      "digest": "65fbb8e2f804527b",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_slot_cell.gd": {
+      "digest": "f080cd92909fbaba",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_sound_cues.gd": {
+      "digest": "659feb6d630e31cc",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_structure_template.gd": {
+      "digest": "7b31bbd95919bbdf",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_structure_tools.gd": {
+      "digest": "ae2d70bec015c7c5",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_structure_workbench.gd": {
+      "digest": "1d241bcb423e2553",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_summary_state.gd": {
+      "digest": "9f97db42c959583a",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_terrain_checks.gd": {
+      "digest": "86fa040a528fed1d",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_terrain_dock.gd": {
+      "digest": "0e8f64468fe027ad",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_terrain_editing.gd": {
+      "digest": "a7541c7e9b7b6b7f",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_terrain_view.gd": {
+      "digest": "535f5e8c908b6e8b",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_terrain_world.gd": {
+      "digest": "0a2aeca64871b2ec",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/tests/test_world_map_view.gd": {
+      "digest": "9c458e2270509d12",
+      "mark": "skipped",
+      "note": "test"
+    },
+    "godot/world/client_settings.gd": {
+      "digest": "ce41b9205a088f74",
+      "mark": "covered",
+      "note": "Position readout on the maps"
+    },
+    "godot/world/entity_pool.gd": {
+      "digest": "6e8fe4371a5c38a7",
+      "mark": "covered",
+      "note": "Facing after a walk"
+    },
+    "godot/world/figure/clips/attack.res": {
+      "digest": "1aba02b1d8719038",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/one_hand_chop.res": {
+      "digest": "4576807e79ff2926",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/one_hand_stab.res": {
+      "digest": "15cbda5c3064587e",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/punch.res": {
+      "digest": "9f76e54a34869eb1",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/two_hands_chop.res": {
+      "digest": "1d9bc5fcfac05795",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/two_hands_shoot.res": {
+      "digest": "f0c15009ef51f67e",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/two_hands_slice.res": {
+      "digest": "e0741393da4ef315",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/clips/two_hands_stab.res": {
+      "digest": "512616fe5031f49a",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/figure_builder.gd": {
+      "digest": "496c21bdf572fe12",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/figure/figure_clips.gd": {
+      "digest": "7ae2e83e2a709ef9",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/figure_library.gd": {
+      "digest": "2bb98b6e8babf529",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/figure_look.gd": {
+      "digest": "5da2c4007c2edeaf",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/figure/figure_palette.gd": {
+      "digest": "d89b2f162463ee33",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/figure/figure_rig.gd": {
+      "digest": "2b9aaa19a4dadad0",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/figure/figure_stances.gd": {
+      "digest": "5edebf715ebb973f",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure/stances.json": {
+      "digest": "b8d984d552de8286",
+      "mark": "covered",
+      "note": "Attack animations"
+    },
+    "godot/world/figure_lights.gd": {
+      "digest": "427587140c93cde1",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/look/light_look.gd": {
+      "digest": "21b319512942392e",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/look/look_file.gd": {
+      "digest": "fc799c5887f6c49d",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/look/model_presentation.gd": {
+      "digest": "9cfa07d149520c16",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/meshes/mesh_resolver.gd": {
+      "digest": "25bacae52fdd56b7",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/model_registry.gd": {
+      "digest": "3877f1444cb1673a",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/sound_cues.gd": {
+      "digest": "4d08debe61a8d4de",
+      "mark": "covered",
+      "note": "Sound wizard"
+    },
+    "godot/world/summary_state.gd": {
+      "digest": "0bdc8da722339b77",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/terrain/chunk_file.gd": {
+      "digest": "2ebb12239be07d3c",
+      "mark": "covered",
+      "note": "Item spawns"
+    },
+    "godot/world/terrain/chunk_set.gd": {
+      "digest": "00c5fbf125ffbe20",
+      "mark": "covered",
+      "note": "Item spawns in the terrain editor"
+    },
+    "godot/world/terrain/tile_tables.gd": {
+      "digest": "4f6617a94d0b7a4f",
+      "mark": "skipped",
+      "note": "refactor: no player effect"
+    },
+    "godot/world/world_view.gd": {
+      "digest": "0195964e7f42cc5f",
+      "mark": "covered",
+      "note": "Facing after a walk"
+    }
+  },
+  "format": 1,
+  "state": "open"
+}

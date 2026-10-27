@@ -68,6 +68,7 @@ Description: Model records. One served model, one file:
 """
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass
 
@@ -89,6 +90,10 @@ TEXTURE_FORMATS: tuple = (TEXTURE_FORMAT_PNG, TEXTURE_FORMAT_WEBP)
 DEFAULT_ROUGHNESS: float = 0.7
 
 AXES: int = 3
+
+# An asset key, a family and a source id are each a file name and a TOML
+# value. Thus they use plain letters only, with a letter first.
+KEY_PATTERN: str = r"^[a-z][a-z0-9_]*$"
 
 
 class RecordError(RuntimeError):
@@ -298,6 +303,28 @@ def _read_texture(where: str, texture: dict) -> dict:
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
+
+def is_key(text: str) -> bool:
+    """
+    Purpose: Tell whether one text can be an asset key, a family or a
+    source id.
+
+    Entry:
+        text is any text, empty included.
+
+    Exit/Returns:
+        Returns True when text matches KEY_PATTERN.
+
+    Module Globals:
+        KEY_PATTERN read.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    match = re.match(KEY_PATTERN, text)
+
+    return match is not None
+
 
 def load_record(record_path: str) -> ModelRecord:
     """

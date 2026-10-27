@@ -184,6 +184,86 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             self.assertNotIn(channel, const.COALESCABLE_CHANNELS, msg=channel)
 
 
+class TestTrailingEvents(_BufferTestCase):
+    """A face event waits for the snapshots of its tick, and none is lost.
+
+    A walk that ends in `then craft` takes its last step and turns the player
+    to the furnace in one tick. The client reads the face event against the
+    position that the step gives, so the step must arrive first (10/20/2026).
+    """
+
+    def _face(self, target_id=1):
+        """A payload on a TRAILING channel."""
+        return payloads.FacePayload(actor_id=self.char1.id, target_id=target_id)
+
+    def _flushed(self) -> list:
+        """Flush, and return each payload that went, in the order it went."""
+        with mock.patch.object(emit_module, "emit", return_value=1) as sent:
+            buffer.flush()
+
+        return [call.args[1] for call in sent.call_args_list]
+
+    def test_a_face_event_goes_at_once_outside_a_tick(self):
+        held = buffer.hold(self.char1, self._face())
+
+        self.assertFalse(held)
+        self.assertEqual(buffer.trailing_count(), 0)
+
+    def test_a_face_event_waits_inside_a_tick(self):
+        buffer.begin_tick()
+
+        held = buffer.hold(self.char1, self._face())
+
+        self.assertTrue(held)
+        self.assertEqual(buffer.trailing_count(), 1)
+        self.assertEqual(buffer.pending_count(), 0)
+
+    def test_the_face_event_goes_after_a_snapshot_of_its_tick(self):
+        # The face event is emitted FIRST. It still goes last.
+        buffer.begin_tick()
+        buffer.hold(self.char1, self._face())
+        buffer.hold(self.char1, self._vitals())
+
+        channels = [payload.channel for payload in self._flushed()]
+
+        self.assertEqual(channels, [const.CHANNEL_CHAR_VITALS, const.CHANNEL_FACE])
+
+    def test_two_face_events_both_go_in_their_order(self):
+        buffer.begin_tick()
+        buffer.hold(self.char1, self._face(target_id=1))
+        buffer.hold(self.char1, self._face(target_id=2))
+
+        targets = [payload.target_id for payload in self._flushed()]
+
+        self.assertEqual(targets, [1, 2])
+
+    def test_a_flush_empties_the_waiting_events(self):
+        buffer.begin_tick()
+        buffer.hold(self.char1, self._face())
+
+        self._flushed()
+
+        self.assertEqual(buffer.trailing_count(), 0)
+
+    def test_a_reset_drops_the_waiting_events(self):
+        buffer.begin_tick()
+        buffer.hold(self.char1, self._face())
+
+        buffer.reset()
+
+        self.assertEqual(buffer.trailing_count(), 0)
+
+    def test_the_face_channel_trails(self):
+        self.assertIn(const.CHANNEL_FACE, const.TRAILING_CHANNELS)
+
+    def test_no_channel_is_coalesced_and_trailing(self):
+        # A coalesced channel keeps only its newest message, and a trailing
+        # channel keeps every message. One channel cannot do both.
+        both = const.COALESCABLE_CHANNELS & const.TRAILING_CHANNELS
+
+        self.assertEqual(both, frozenset())
+
+
 class TestFlushIsolation(_BufferTestCase):
     def test_a_deleted_observer_is_skipped(self):
         buffer.begin_tick()
@@ -385,6 +465,19 @@ class TestEngineBrackets(_BufferTestCase):
         self.engine._tick()
 
         self.assertFalse(buffer.is_holding())
+
+    def test_the_walkers_move_while_the_buffer_holds(self):
+        # The flush puts the face event of a follow-up after the last step
+        # only if the buffer holds both. Thus, the window must be open
+        # before the walkers move on PHASE_START.
+        from systems.core.tick import engine as engine_module
+        from systems.gameplay.movement import walk
+
+        hooks = engine_module._PHASE_HOOKS[engine_module.PHASE_START]
+        opens = hooks.index(buffer.begin_tick)
+        moves = hooks.index(walk.advance_all)
+
+        self.assertLess(opens, moves)
 
     def test_a_tick_flushes_what_it_held(self):
         held = []

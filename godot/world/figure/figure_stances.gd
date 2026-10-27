@@ -28,6 +28,15 @@ extends RefCounted
 ## An action is what a figure does: [constant ACTIONS]. The client asks for
 ## the clip of one action. [method clip_for] gives the clip name, or "" for
 ## an action with no clip. A figure with no clip keeps its rest pose.
+##
+## ## An attack action (10/25/2026)
+##
+## The server names the action of each swing: the hands of the swing and its
+## attack type, for example `attack_one_hand_slash` (`figure_action` of
+## `blackout_combat`). The item catalog lists each action that a swing can
+## name. The Clips tab shows a row for each. [method attack_clip_for] gives
+## its clip. An attack action with no clip of its own plays the clip of
+## [constant ACTION_ATTACK]. Thus, a new weapon needs no edit here.
 
 ## The newest format that this reader knows. It reads each older format.
 const FORMAT := 1
@@ -47,6 +56,9 @@ const ACTION_WALK := "walk"
 const ACTION_RUN := "run"
 const ACTION_ATTACK := "attack"
 const ACTIONS := [ACTION_IDLE, ACTION_WALK, ACTION_RUN, ACTION_ATTACK]
+
+## The start of the name of each attack action of the server.
+const ATTACK_PREFIX := ACTION_ATTACK + "_"
 
 ## A name of a tool type, of an action, or of a clip: a-z, 0-9, and _, with
 ## a letter first.
@@ -161,6 +173,21 @@ func clip_for(tool_type: String, action: String) -> String:
 	return default_set().get(action, "") if clip.is_empty() else clip
 
 
+## The clip of one attack action for one tool type: the clip of the action
+## ([method clip_for]), then the clip of [constant ACTION_ATTACK], then "".
+func attack_clip_for(tool_type: String, action: String) -> String:
+	var clip := clip_for(tool_type, action)
+
+	return clip_for(tool_type, ACTION_ATTACK) if clip.is_empty() else clip
+
+
+## True for the name of an attack action of the server: it starts with
+## [constant ATTACK_PREFIX]. The stance check compares each such action of
+## the table with the item catalog.
+static func is_attack_action(action: String) -> bool:
+	return action.begins_with(ATTACK_PREFIX)
+
+
 ## The clip set of one tool type: action -> clip name, for each action that
 ## has a clip.
 func clip_set_of(tool_type: String) -> Dictionary:
@@ -171,11 +198,11 @@ func clip_set_of(tool_type: String) -> Dictionary:
 	return clips
 
 
-## The tool type whose stance a figure takes. `tool_types` is the tool type
-## of each worn item, in the order of the slots. The first one with a
-## stance decides. "" for the default clip set.
-func stance_of(tool_types: Array) -> String:
-	for tool_type: String in tool_types:
+## The tool type whose stance a figure takes. The list `worn_types` holds
+## the tool type of each worn item, in the order of the slots. The first one
+## with a stance decides. "" for the default clip set.
+func stance_of(worn_types: Array) -> String:
+	for tool_type: String in worn_types:
 		if has_stance(tool_type):
 			return tool_type
 

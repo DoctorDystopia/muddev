@@ -16,20 +16,29 @@ Two regressions are guarded here above all others:
      padding a coloured string overpads by exactly the markup length.
 """
 
+import unittest
+
 from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
+from systems.gameplay.combat import constants as combat_const
+from systems.gameplay.combat.combat import combat_profile
+from systems.gameplay.combat.rules.context import ActionContext
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.interface.menus import summary_menu
 from systems.interface.summary import constants as const
 from systems.interface.summary import layout, service
 from systems.interface.summary.panel_defs.holdings import HoldingsPanel
 from systems.interface.summary.panel_defs.identity import IdentityPanel
-from systems.interface.summary.panel_defs.readiness import ReadinessPanel
+from systems.interface.summary.panel_defs.readiness import (
+    TOTAL_BONUSES_KEY,
+    ReadinessPanel,
+)
 from systems.interface.summary.panel_defs.vitals import VitalsPanel
 from systems.interface.summary.panel_defs.world import WorldPanel
 from systems.interface.summary.registry import PANEL_REGISTRY, _iter_panel_modules
 from typeclasses.characters import Character as BlackoutCharacter
+from world.item_database import ITEM_DB
 
 
 class _SummaryTest(EvenniaTest):
@@ -159,6 +168,19 @@ class TestPanels(_SummaryTest):
 
         self.assertIn("bare hands", text)
 
+    def test_readiness_data_is_the_total_combat_stat_bonuses(self):
+        """The Character tab draws one group: the bonuses of the profile.
+
+        Nick removed the weapon, speed, style and swing bonus rows from the
+        tab on 10/22/2026. The Combat tab shows the weapon, speed and style.
+        """
+        bonuses = combat_profile(self.char1)["combat_stat_bonuses"]
+        totals = {key: int(value) for key, value in bonuses.items()}
+
+        payload = ReadinessPanel.data(self.char1)
+
+        self.assertEqual({TOTAL_BONUSES_KEY: totals}, payload)
+
     def test_holdings_reports_the_inventory_cap(self):
         from items.equipment.constants import MAX_INVENTORY_SLOTS
 
@@ -186,6 +208,60 @@ class TestPanels(_SummaryTest):
         encoded = json.dumps(payload)
 
         self.assertIn("vitals", encoded)
+
+
+def _swing_context(style: dict, bonuses: dict) -> ActionContext:
+    """An ActionContext with only the fields that a bonus read needs."""
+    return ActionContext(
+        attacker=None,
+        defender=None,
+        weapon=None,
+        weapon_data={},
+        style=style,
+        attack_type=style["attack_type"],
+        attacker_stats=bonuses,
+        defender_stats={},
+        attacker_levels={},
+        defender_levels={},
+        stance_boost={},
+    )
+
+
+class TestReadinessReadsTheSwing(unittest.TestCase):
+    """The band shows the bonuses that the swing reads. No DB."""
+
+    def test_each_style_shows_the_attack_and_strength_bonus_of_the_swing(self):
+        """Each key holds its own number, so a wrong key gives a wrong number.
+
+        Until 10/21/2026 the band read melee_strength_bonus for each style.
+        Thus, a bow showed +0, and its swing read projectile_strength_bonus.
+        """
+        bonus_keys = combat_const.UNARMED_DEFAULT_COMBAT_STATS
+        bonuses = {key: index + 1 for index, key in enumerate(bonus_keys)}
+
+        for item_key, item_def in ITEM_DB.items():
+            for style_key, style in item_def.combat_styles.items():
+                context = _swing_context(style, bonuses)
+                expected = (
+                    context.attack_equip_bonus(),
+                    context.strength_equip_bonus(),
+                )
+
+                with self.subTest(item=item_key, style=style_key):
+                    shown = ReadinessPanel._swing_bonuses(style, bonuses)
+                    self.assertEqual(shown, expected)
+
+    def test_the_comparison_includes_a_projectile_style(self):
+        """Without a projectile style, the test above proves nothing for a bow."""
+        projectile_styles = [
+            style
+            for item_def in ITEM_DB.values()
+            for style in item_def.combat_styles.values()
+            if combat_const.style_combat_axes(style)
+            is combat_const.PROJECTILE_COMBAT_AXES
+        ]
+
+        self.assertTrue(projectile_styles)
 
 
 class TestService(_SummaryTest):
@@ -260,6 +336,67 @@ class TestPlaytime(_SummaryTest):
         second = self.char1.attributes.get(PLAYTIME_TOTAL_ATTR)
 
         self.assertEqual(first, second)
+
+    def test_world_data_sends_playtime_as_the_clock(self):
+        """The Godot Character tab draws the field as it arrives. Thus, the
+        server sends the clock text, not a raw second count."""
+        from typeclasses.characters import (
+            PLAYTIME_SESSION_START_ATTR,
+            PLAYTIME_TOTAL_ATTR,
+        )
+
+        one_day_four_hours = (24 + 4) * 3600 + 12 * 60 + 33
+        self.char1.attributes.remove(PLAYTIME_SESSION_START_ATTR)
+        self.char1.attributes.add(PLAYTIME_TOTAL_ATTR, one_day_four_hours)
+
+        payload = WorldPanel.data(self.char1)
+
+        clock = WorldPanel._format_clock(one_day_four_hours)
+
+        self.assertEqual(clock, payload["playtime"])
+        self.assertNotIn("playtime_seconds", payload)
+
+
+class TestPlaytimeClock(unittest.TestCase):
+    """The clock format alone. No database, so no Evennia fixture."""
+
+    def test_the_clock_shows_all_four_units(self):
+        one_day_four_hours = (24 + 4) * 3600 + 12 * 60 + 33
+
+        self.assertEqual(
+            "01 day : 04 hours : 12 mins : 33 sec",
+            WorldPanel._format_clock(one_day_four_hours),
+        )
+
+    def test_a_count_of_one_takes_the_singular_label(self):
+        one_of_each = 24 * 3600 + 3600 + 60 + 1
+
+        self.assertEqual(
+            "01 day : 01 hour : 01 min : 01 sec",
+            WorldPanel._format_clock(one_of_each),
+        )
+
+    def test_a_count_of_two_takes_the_plural_label(self):
+        two_of_each = 2 * (24 * 3600 + 3600 + 60 + 1)
+
+        self.assertEqual(
+            "02 days : 02 hours : 02 mins : 02 sec",
+            WorldPanel._format_clock(two_of_each),
+        )
+
+    def test_the_clock_of_no_playtime_is_all_zeros(self):
+        self.assertEqual(
+            "00 days : 00 hours : 00 mins : 00 sec",
+            WorldPanel._format_clock(0),
+        )
+
+    def test_the_days_grow_past_the_pad_width(self):
+        many_days = 123 * 24 * 3600 + 5
+
+        self.assertEqual(
+            "123 days : 00 hours : 00 mins : 05 sec",
+            WorldPanel._format_clock(many_days),
+        )
 
 
 class TestMenuNodes(_SummaryTest):

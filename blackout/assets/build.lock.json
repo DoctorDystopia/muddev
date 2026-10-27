@@ -23,6 +23,10 @@
     "inputs": "sha256:5a9154925b5fe3c680feb0b793893ca3800124e08429e8eea109ccfd01e6643f",
     "output": "sha256:86214cd7050cc841d1f2aaca7b49c11622158afd39490435553ea62f0e0c40cd"
   },
+  "curing_chamber": {
+    "inputs": "sha256:da7ed9e5db7db3b8ef725104995139d6ce04fa55aa1ad01cf46c2b3d86261bb9",
+    "output": "sha256:771cab479debc30864a5d7d13b4b4c520b749297735eda356194e7b64552d1e0"
+  },
   "floating_eye": {
     "inputs": "sha256:61acfc75f6d875bf3618fa25bd3673cdb0d40c45f79845c5b36183f56df5cd15",
     "output": "sha256:2f2ecfb05343596863e221de094d95d12a7defd72d50f16f0eb8bcf1a2eee1b9"
@@ -34,6 +38,10 @@
   "furnace": {
     "inputs": "sha256:df2e4680748679590e3d3bc6868d32eabd249addba048bd495a220c66eafe792",
     "output": "sha256:2dfbe4937db1cb4b46725f99eff5c75ab398d0ada221cc8d7b0f3e86834b0649"
+  },
+  "gunbench": {
+    "inputs": "sha256:2fadf3d3f6d60fba1801090927032d9841753a540272d4b985555190c4d21371",
+    "output": "sha256:520fe887a135b4caceded7f5c8cd43410b07a887b22d74dd81681f55e9730716"
   },
   "hammer": {
     "inputs": "sha256:6518d00d40a46e53902bb50c59aebd2e971594764ec6e7e34e756d703c31cbdf",
@@ -78,6 +86,10 @@
   "mutant_raider_steak": {
     "inputs": "sha256:2761df198f5700f5cb15226e6da6d48113bb0d08c255137b539d3f8514ac4124",
     "output": "sha256:81edf2911627edaec006fa94b2ed5d271e70199e681fdc00e5618cdf7532c95c"
+  },
+  "rendering_cooker": {
+    "inputs": "sha256:89fa88dae22ad9fadebb3b05ea116cf9302da5c66c7c1711682481ef081c45f1",
+    "output": "sha256:3aca6a05b52fbb4e80d329997f68f3f5f7eff213c94e5be416f433b264d4207c"
   },
   "rusty_pole": {
     "inputs": "sha256:f4005bb99514b1e081e4395c887e8d1812d668d537f73769ba2bd05f80404cf2",

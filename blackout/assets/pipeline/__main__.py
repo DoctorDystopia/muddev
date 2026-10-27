@@ -13,13 +13,17 @@ Description: The command line of the model pipeline. Run it from blackout/:
 import sys
 
 from assets.pipeline import (budgets, build, check, fetch, figure, glb,
-                             outputs, paths, picocad, records, sources)
+                             outputs, paths, picocad, records, sources,
+                             wizard)
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
 
 _USAGE: str = """python -m assets.pipeline <command>
 
+  add                               answer questions to add one model: an
+                                    upload, a Poly Haven model, or a source
+                                    that is here already. Then build it
   build [asset_key ...] [--force]   build models (default: every record)
   check                             check records, sources and served tree
   seal <source_id ...> | --all      record the hash of every file in a source
@@ -363,7 +367,44 @@ def _command_figure_model(arguments: list) -> int:
     return status
 
 
+def _command_add(_arguments: list) -> int:
+    """
+    Purpose: Run the model wizard, then build its model when the person
+    asks.
+
+    Entry:
+        No conditions. The wizard reads the terminal.
+
+    Exit/Returns:
+        Returns failed when the person stops, or the build fails.
+
+    Module Globals:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    result = wizard.run()
+
+    if result is None:
+        return _EXIT_FAILED
+
+    status = _EXIT_OK
+
+    if result.build:
+        status = _command_build([result.asset_key])
+
+    built = result.build and status == _EXIT_OK
+    lines = wizard.next_steps(result, built)
+
+    for line in lines:
+        print(line)
+
+    return status
+
+
 _COMMANDS: dict = {
+    "add": _command_add,
     "build": _command_build,
     "check": _command_check,
     "seal": _command_seal,

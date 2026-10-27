@@ -144,7 +144,7 @@ static func save_light(scenery: String, light: Dictionary) -> Error:
 	for field: String in FIELDS:
 		var value: Variant = light.get(field, DEFAULT[field])
 
-		row[field] = LookFile.hex_of(value) if value is Color else float(value)
+		row[field] = LookFile.stored_of(value)
 
 	rows[scenery] = row
 	content["format"] = LookFile.FORMAT

@@ -34,24 +34,24 @@ class TestTotalCombatStatBonuses(EvenniaTest):
 
         totals = self.char1.equipment.total_combat_stat_bonuses()
 
-        self.assertEqual(totals["stab_attack_bonus"], 4)
+        self.assertEqual(totals["melee_stab_attack_bonus"], 4)
         self.assertEqual(totals["melee_strength_bonus"], 5)
 
     def test_two_equipped_items_sum_the_same_key(self):
-        self._equip("rusty_scrap_shortsword", {"slash_defense_bonus": 2})
-        self._equip("glass_cannon_amulet", {"slash_defense_bonus": 10})
+        self._equip("rusty_scrap_shortsword", {"melee_slash_defense_bonus": 2})
+        self._equip("glass_cannon_amulet", {"melee_slash_defense_bonus": 10})
 
         totals = self.char1.equipment.total_combat_stat_bonuses()
 
-        self.assertEqual(totals["slash_defense_bonus"], 12)
+        self.assertEqual(totals["melee_slash_defense_bonus"], 12)
 
     def test_an_item_with_no_bonuses_attribute_is_skipped_not_zeroed(self):
-        self._equip("rusty_scrap_shortsword", {"slash_defense_bonus": 2})
+        self._equip("rusty_scrap_shortsword", {"melee_slash_defense_bonus": 2})
         self._equip("glass_cannon_amulet")  # no combat_stat_bonuses attribute
 
         totals = self.char1.equipment.total_combat_stat_bonuses()
 
-        self.assertEqual(totals["slash_defense_bonus"], 2)
+        self.assertEqual(totals["melee_slash_defense_bonus"], 2)
 
     def test_unequipping_an_item_removes_its_contribution(self):
         sword = self._equip("rusty_scrap_shortsword")

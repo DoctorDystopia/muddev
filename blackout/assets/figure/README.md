@@ -107,6 +107,20 @@ on the stands. It writes no file.
 3. To add a clip, click **List source clips**, pick one, and click **Put
    clip in list**. Then click **Build the clips**.
 
+## Give a swing its clip
+
+Each swing in the game plays the clip of its attack action, for example
+`attack_one_hand_slash` or `attack_two_hands_stab`. The hands of the swing
+and the attack type of the combat style give the name.
+
+1. On the **Clips** tab, select the default clip set in the stance list.
+2. Pick a clip in the row of each attack action.
+3. Press Ctrl+S.
+
+An attack action with no clip plays the clip of `attack`. A clip of an
+attack action plays one time, so its loop box stays off. A clip that holds
+one item in two hands has `"held_in": ["two_hands"]` in `clips/`.
+
 ## Check, save, and see it in the game
 
 1. On the **Check** tab, click **Check the figure files**. A finding is a

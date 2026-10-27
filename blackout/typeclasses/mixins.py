@@ -366,6 +366,7 @@ class CombatEntity:
             amount = 0
 
         self._record_attacker(attacker)
+        self._answer_attacker(attacker)
 
         # God mode, the moderator tool's damage immunity. Read here rather
         # than by calling systems.devtools.actions.godmode_enabled, which is
@@ -517,6 +518,46 @@ class CombatEntity:
             return
 
         setattr(self.ndb, LAST_ATTACKER_ID_ATTR, attacker_id)
+
+
+    def _answer_attacker(self, attacker) -> None:
+        """
+        Purpose: Give the controller of this entity its say after a hit.
+
+        Entry:
+            attacker - the CombatEntity that dealt the damage, or None.
+
+        Exit/Returns:
+            No return value.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            1. Stop on no attacker or a self-hit. _record_attacker records
+               neither, so neither changes the answer.
+            2. Stop when this entity has no combat handler. A hit outside a
+               fight records the attacker and nothing more. The attack
+               command and the aura pulse give a target its handler first.
+            3. Call on_hit on the handler. It asks the controller, and an
+               NPC turns on its last attacker (Nick, 10/22/2026).
+
+        Notes/References:
+            The combat accessor gives the handler, from a cache. The
+            handler setup and end_combat clear that cache.
+
+        Author: Nick Hobar
+        Creation date: 10/22/2026
+        """
+        if attacker is None or attacker is self:
+            return
+
+        handler = self.combat
+
+        if handler is None:
+            return
+
+        handler.on_hit()
 
 
     def at_death(self, killer=None, source=None, damage_type=None) -> None:

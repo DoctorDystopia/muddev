@@ -194,6 +194,17 @@ TIP_LINES_KEY: str = "lines"
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
 CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
 
+# The action of the figure of the attacker for one swing (10/25/2026): the
+# key of a clip in the clip set of the stance table. The hands of the swing
+# and its attack type fill it, for example attack_two_hands_slash. Each
+# payload of CHANNEL_COMBAT carries it as `figure_action`.
+#
+# The server names the swing. The client picks the clip. An action with no
+# clip of its own plays the clip of the `attack` action, so a new weapon or
+# a new attack type needs no client edit. The item catalog of the figure
+# workbench lists each action that a swing can name (figure_catalog.py).
+FIGURE_ATTACK_ACTION_TEMPLATE: str = "attack_{hands}_{attack_type}"
+
 # One entity turns to another, and that one turns back (10/18/2026): the
 # start of a fight, a talk, or a trade. The attack command and the AI of
 # an NPC both queue an attack, and each queue sends one of these. The talk
@@ -308,6 +319,13 @@ MOMENT_FOUNDRY_CRAFT: str = "foundry_craft"
 # walk.advance sends it after the stride, to the walker only.
 MOMENT_TRANSITION: str = "transition"
 
+# One attack under a skill, a hit or a miss. The accuracy skill of the style
+# names its moment in `attack_moment`, and ActionAttack.resolve sends it after
+# each shot. Guns names one for each weapon whose style reads Guns. Strike
+# names one for each melee swing, a fist included.
+MOMENT_GUNS_SHOT: str = "guns_shot"
+MOMENT_MELEE_SWING: str = "melee_swing"
+
 MOMENTS: frozenset = frozenset((
     MOMENT_TASK_COMPLETE,
     MOMENT_CUT_ATTEMPT,
@@ -315,6 +333,8 @@ MOMENTS: frozenset = frozenset((
     MOMENT_METALSMITH_CRAFT,
     MOMENT_FOUNDRY_CRAFT,
     MOMENT_TRANSITION,
+    MOMENT_GUNS_SHOT,
+    MOMENT_MELEE_SWING,
 ))
 
 # The command that asks for the world map. The key of CmdWorldMap, and the
@@ -781,6 +801,22 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,
     CHANNEL_WALK,
+))
+
+# ─── Trailing channels ───────────────────────────────────────────────────────
+# Event channels that the client reads against the positions of the snapshots.
+# Inside a tick, the buffer holds each message in order, and sends it AFTER the
+# snapshots of that tick. Nothing is coalesced: two face events are two facts.
+#
+# The face event is the reason (10/20/2026). A walk that ends in `goto (4,7)
+# then craft` takes its last step and runs `craft` in one tick. The step goes
+# out at the end of the tick, as a held room_info. The face event went out at
+# once, so the client turned the player to the furnace first. Then the step
+# arrived and turned the player back along the walk.
+#
+# A channel is in this set or in COALESCABLE_CHANNELS, never in both.
+TRAILING_CHANNELS: frozenset = frozenset((
+    CHANNEL_FACE,
 ))
 
 # How many passes buffer.drain_stale makes before leaving what is still stale

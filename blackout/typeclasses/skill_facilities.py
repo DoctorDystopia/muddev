@@ -8,8 +8,9 @@ Description: Per-skill crafting facility typeclasses (furnace, anvil) and
 
 
 
-from evennia import Command, CmdSet
+from evennia import CmdSet
 
+from commands.command import FacingCommand
 from commands.constants import HELP_CATEGORY_CRAFTING
 from systems.gameplay.crafting.constants import (
     CRAFT_CATEGORY_CURING,
@@ -91,10 +92,9 @@ class RenderingCookerFacility(RenderingBaseFacility):
     Tagged as a 'rendering_cooker' tool so it satisfies recipe tool
     requirements.
 
-    The asset_key is its own rather than borrowed from the furnace. Neither
-    has art today, so both draw the same procedural station mesh and the
-    client needs no edit either way -- but a borrowed key would mean the day a
-    cooker model is packed, the furnace silently becomes a cooker too.
+    The asset_key is its own, not the key of the furnace. Since 10/20/2026
+    each one has its own model: the boiler for the furnace and the enamel
+    pot for the cooker. A shared key would draw the two as one model.
     """
     asset_key = "rendering_cooker"
 
@@ -106,7 +106,7 @@ class RenderingCookerFacility(RenderingBaseFacility):
 
 
 
-class CmdCollect(Command):
+class CmdCollect(FacingCommand):
     """
     Purpose: Take every finished cure out of the chamber.
 

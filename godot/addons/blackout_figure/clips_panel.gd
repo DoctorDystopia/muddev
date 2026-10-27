@@ -25,6 +25,10 @@ extends VBoxContainer
 ##
 ## A row of a tool type with no clip of its own uses the clip of the default
 ## clip set. The first choice of its list says which clip that is.
+##
+## The table has a row for each attack action of the item catalog
+## (10/25/2026): each action that a swing of the server can name. An attack
+## action with no clip plays the clip of `attack` in the game.
 
 signal clip_chosen(clip_name: String)
 
@@ -91,6 +95,9 @@ var _stances := FigureStances.new()
 
 ## The tool type whose stance the outfit takes, or "".
 var _outfit_stance := ""
+
+## Each attack action that a swing of the server can name.
+var _attack_actions := PackedStringArray()
 
 ## The actions and the clip lists of the stance table, as one text.
 var _shown_stance := ""
@@ -159,14 +166,16 @@ func set_clips(clips: AnimationLibrary) -> void:
 
 ## Show the stance table. `tool_types` names each tool type of the item
 ## catalog. `outfit_stance` is the tool type whose stance the outfit takes,
-## or "" for the default clip set. The list keeps its choice.
+## or "" for the default clip set. `attack_actions` names each attack action
+## of the item catalog. The list keeps its choice.
 func set_stances(stances: FigureStances, tool_types: PackedStringArray,
-		outfit_stance := "") -> void:
+		outfit_stance := "", attack_actions := PackedStringArray()) -> void:
 	var kept := selected_stance()
 	var names := Array(tool_types)
 
 	_stances = stances
 	_outfit_stance = outfit_stance
+	_attack_actions = attack_actions
 
 	# A stance of the file stays in the list when no item has its tool type.
 	for tool_type: String in stances.tool_types():
@@ -315,11 +324,16 @@ func _build_stance_rows() -> void:
 
 
 ## The actions of the stance table. Those of
-## [constant FigureStances.ACTIONS] are first. Each other action of the
-## selected stance and of the default clip set comes after them.
+## [constant FigureStances.ACTIONS] are first, then the attack actions of the
+## item catalog. Each other action of the selected stance and of the default
+## clip set comes after them.
 func _stance_actions() -> Array:
 	var actions: Array = FigureStances.ACTIONS.duplicate()
 	var more: Array = _stances.default_set().keys()
+
+	for action: String in _attack_actions:
+		if not action in actions:
+			actions.append(action)
 
 	more.append_array(_stances.stances().get(selected_stance(), {}).keys())
 	more.sort()

@@ -241,6 +241,7 @@ static func counts(figure: Node3D) -> Dictionary:
 				continue
 
 			draws += instance.mesh.get_surface_count()
+			@warning_ignore("integer_division")
 			triangles += instance.mesh.get_faces().size() / 3
 
 	return {"parts": parts.size(), "draws": draws, "triangles": triangles}

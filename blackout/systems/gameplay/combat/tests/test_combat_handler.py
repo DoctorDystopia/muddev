@@ -270,13 +270,13 @@ class TestNpcSeeding(EvenniaTest):
         npc = spawn_npc("mutant_raider", self.room1)
 
         b = npc.db.combat_stat_bonuses
-        self.assertEqual(b["stab_attack_bonus"], -21)
-        self.assertEqual(b["slash_attack_bonus"], -21)
-        self.assertEqual(b["crush_attack_bonus"], -21)
+        self.assertEqual(b["melee_stab_attack_bonus"], -21)
+        self.assertEqual(b["melee_slash_attack_bonus"], -21)
+        self.assertEqual(b["melee_crush_attack_bonus"], -21)
         self.assertEqual(b["melee_strength_bonus"], -15)
-        self.assertEqual(b["stab_defense_bonus"], -15)
-        self.assertEqual(b["slash_defense_bonus"], -15)
-        self.assertEqual(b["crush_defense_bonus"], -15)
+        self.assertEqual(b["melee_stab_defense_bonus"], -15)
+        self.assertEqual(b["melee_slash_defense_bonus"], -15)
+        self.assertEqual(b["melee_crush_defense_bonus"], -15)
 
     def test_stance_boost_matches_declared_weapon_style(self):
         """Regression: accurate/aggressive boosts were swapped in the spawner."""
@@ -344,11 +344,11 @@ class TestDefenderBonuses(EvenniaTest):
         """Regression: the swing read defence bonuses out of the *attacker's*
         weapon block, so defence never applied to anything."""
         npc = spawn_npc("mutant_raider", self.room1)
-        npc.db.combat_stat_bonuses = dict(npc.db.combat_stat_bonuses, slash_defense_bonus=42)
+        npc.db.combat_stat_bonuses = dict(npc.db.combat_stat_bonuses, melee_slash_defense_bonus=42)
 
         bonuses = get_defense_bonuses(npc)
 
-        self.assertEqual(bonuses["slash_defense_bonus"], 42)
+        self.assertEqual(bonuses["melee_slash_defense_bonus"], 42)
 
     def test_unequipped_character_falls_back_to_unarmed_defaults(self):
         bonuses = get_defense_bonuses(self.char1)
@@ -376,12 +376,12 @@ class TestMultiSlotStatAggregation(EvenniaTest):
         return item
 
     def test_defense_bonus_sums_weapon_and_a_second_slot(self):
-        self._equip("rusty_scrap_shortsword")  # slash_defense_bonus: 2
-        self._equip("glass_cannon_amulet", {"slash_defense_bonus": 10})
+        self._equip("rusty_scrap_shortsword")  # melee_slash_defense_bonus: 2
+        self._equip("glass_cannon_amulet", {"melee_slash_defense_bonus": 10})
 
         bonuses = get_defense_bonuses(self.char1)
 
-        self.assertEqual(bonuses["slash_defense_bonus"], 12)
+        self.assertEqual(bonuses["melee_slash_defense_bonus"], 12)
 
     def test_attacker_stat_bonuses_sum_across_slots(self):
         self._equip("rusty_scrap_shortsword")  # melee_strength_bonus: 5
@@ -403,12 +403,12 @@ class TestMultiSlotStatAggregation(EvenniaTest):
         self.assertEqual(profile["active_combat_style"]["attack_type"], "stab")
 
     def test_an_item_with_no_bonuses_does_not_zero_out_another_slots_bonus(self):
-        self._equip("rusty_scrap_shortsword")  # slash_defense_bonus: 2
+        self._equip("rusty_scrap_shortsword")  # melee_slash_defense_bonus: 2
         self._equip("glass_cannon_amulet")  # no combat_stat_bonuses attribute
 
         bonuses = get_defense_bonuses(self.char1)
 
-        self.assertEqual(bonuses["slash_defense_bonus"], 2)
+        self.assertEqual(bonuses["melee_slash_defense_bonus"], 2)
 
 
 class TestEquipMidCombatRefreshesTheWeapon(EvenniaTest):

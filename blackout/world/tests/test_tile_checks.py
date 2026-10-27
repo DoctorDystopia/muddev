@@ -29,6 +29,17 @@ def _read_text(path: str) -> str:
         return handle.read().replace("\r\n", "\n")
 
 
+def _fixture_items() -> dict:
+    """
+    Return the `items` of the fixture world from items.json, as the GDScript
+    half reads them: {item key: True if the item stacks}.
+    """
+    path = os.path.join(builder.FIXTURE_DIRECTORY, builder.ITEMS_FILE)
+    rows = json.loads(_read_text(path))["items"]
+
+    return {row["key"]: row["stackable"] for row in rows}
+
+
 class FixtureTests(unittest.TestCase):
     """The committed fixtures are the output of the builder."""
 
@@ -43,6 +54,12 @@ class FixtureTests(unittest.TestCase):
         path = os.path.join(builder.FIXTURE_DIRECTORY, builder.EXPECTED_FILE)
 
         self.assertEqual(_read_text(path), builder.expected_text())
+
+    def test_items_json_is_the_builder_list(self):
+        path = os.path.join(builder.FIXTURE_DIRECTORY, builder.ITEMS_FILE)
+
+        self.assertEqual(_read_text(path), builder.items_text())
+        self.assertEqual(_fixture_items(), builder.ITEMS)
 
     def test_the_gdscript_twin_reads_these_fixtures(self):
         # The GDScript half of the parity names the fixture directory as
@@ -77,12 +94,13 @@ class CheckWorldTests(unittest.TestCase):
         path = os.path.join(builder.FIXTURE_DIRECTORY, builder.EXPECTED_FILE)
         expected = [tuple(row) for row in json.loads(_read_text(path))]
         found = tile_checks.check_world(
-            chunkfile.load_directory(builder.FIXTURE_DIRECTORY))
+            chunkfile.load_directory(builder.FIXTURE_DIRECTORY),
+            _fixture_items())
 
         self.assertEqual([finding.key() for finding in found], expected)
 
     def test_each_finding_has_a_message(self):
-        found = tile_checks.check_world(builder.build_fixtures())
+        found = tile_checks.check_world(builder.build_fixtures(), builder.ITEMS)
 
         for finding in found:
             with self.subTest(finding=finding.key()):
@@ -123,8 +141,19 @@ class CheckWorldTests(unittest.TestCase):
         self.assertIn(pocket, before)
         self.assertNotIn(pocket, after)
 
+    def test_a_good_spawn_with_no_item_list_gives_a_finding(self):
+        # None is no item. A caller that forgets the list sees each spawn.
+        fixtures = builder.build_fixtures()
+        good = (tile_checks.RULE_SPAWN_ITEM, *builder.GOOD_SPAWN, 0)
+        without = [finding.key() for finding in tile_checks.check_world(fixtures)]
+        with_list = [finding.key() for finding in
+                     tile_checks.check_world(fixtures, builder.ITEMS)]
+
+        self.assertIn(good, without)
+        self.assertNotIn(good, with_list)
+
     def test_only_the_note_rules_give_notes(self):
-        found = tile_checks.check_world(builder.build_fixtures())
+        found = tile_checks.check_world(builder.build_fixtures(), builder.ITEMS)
 
         for finding in found:
             with self.subTest(finding=finding.key()):

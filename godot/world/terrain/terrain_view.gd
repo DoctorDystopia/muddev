@@ -38,6 +38,14 @@ extends Node3D
 ## sees into the room. RS3 calls this rule "Selectively". The client holds
 ## every streamed plane, so the rule needs no server data.
 ##
+## A hidden plane keeps its shadow (Nick, 10/20/2026). Its meshes cast
+## [constant GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY]. The
+## camera does not draw them, and the sun still does. Thus a room keeps the
+## shade of its roof, and a player who walks in does not step into sunlight.
+## When its plane shows again, each mesh of a chunk tree goes back to
+## [constant GeometryInstance3D.SHADOW_CASTING_SETTING_ON]. Thus no mesh here
+## may use a third setting.
+##
 ## A chunk with a water tile also gets a "Water" child: the flat surface of
 ## [WaterMeshBuilder]. A chunk with a wall flag gets a "Walls" child: the slabs
 ## of [WallMeshBuilder]. A wall under a floor of the plane above meets that
@@ -108,7 +116,8 @@ var _built_lights := {}
 ## Keys to build, first key first.
 var _queue: Array[Vector3i] = []
 
-## Hide the planes above the player while the player is under a roof.
+## Hide the planes above the player while the player is under a roof. A
+## hidden plane keeps its shadow.
 var _hide_roofs := true
 
 ## True while the player is under a roof. [method _refresh_visibility] sets
@@ -139,7 +148,8 @@ func bind_meshes(resolver: MeshResolver) -> void:
 		_place_scenery(key)
 
 
-## Hide or show the planes above the plane of the player.
+## Hide or show the planes above the plane of the player. A hidden plane
+## keeps its shadow.
 func set_hide_roofs(hidden: bool) -> void:
 	_hide_roofs = hidden
 	_refresh_visibility()
@@ -292,13 +302,13 @@ func _build(key: Vector3i, chunk: ChunkFile, above: ChunkFile) -> void:
 	node.name = "Chunk_%d_%d_p%d" % [key.x, key.y, key.z]
 	node.mesh = ChunkMeshBuilder.build(chunk, lights)
 	node.material_override = _material
-	node.visible = _plane_shows(key.z)
 
-	# The water and the walls are children, so they hide with the roof of
-	# their plane.
+	# The water and the walls are children. They hide with the roof of their
+	# plane, and they keep their shadow with it.
 	_add_layer(node, "Water", WaterMeshBuilder.build(chunk))
 	_add_layer(node, "Walls", WallMeshBuilder.build(chunk, above, false, lights))
 	_add_layer(node, PROPS_NODE, PropMeshBuilder.build(chunk, lights))
+	_cast_all(node, _casting(_plane_shows(key.z)))
 
 	add_child(node)
 	_nodes[key] = node
@@ -353,6 +363,9 @@ func _place_scenery(key: Vector3i) -> void:
 		if model != null:
 			holder.add_child(model)
 			_stand(model, chunk, thing)
+
+	# Art can arrive while the plane hides.
+	_cast_all(holder, _casting(_plane_shows(key.z)))
 
 
 ## The seed of the auto variant of one object: its world tile and its plane.
@@ -430,11 +443,21 @@ func _on_room_changed() -> void:
 	_sort_queue()
 
 
+## Draw each plane that shows, and keep only the shadow of each plane that
+## hides.
+##
+## Each step of the player calls this. The root of a chunk tree has the
+## setting of the whole tree. Thus this skips a tree that already has the
+## setting.
 func _refresh_visibility() -> void:
 	_covered = under_roof()
 
 	for key: Vector3i in _nodes:
-		_nodes[key].visible = _plane_shows(key.z)
+		var node: MeshInstance3D = _nodes[key]
+		var casting := _casting(_plane_shows(key.z))
+
+		if node.cast_shadow != casting:
+			_cast_all(node, casting)
 
 
 ## False for a plane above the player while roofs hide and the player is
@@ -444,3 +467,23 @@ func _plane_shows(plane: int) -> bool:
 		return true
 
 	return plane <= _state.current_plane
+
+
+## The shadow setting of a plane: the full draw when it shows, and the shadow
+## only when it hides.
+static func _casting(shows: bool) -> GeometryInstance3D.ShadowCastingSetting:
+	if shows:
+		return GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+	return GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+
+
+## Give `casting` to every mesh in the tree of `node`: the chunk ground, its
+## layers, and each mesh of each scenery model.
+static func _cast_all(node: Node,
+		casting: GeometryInstance3D.ShadowCastingSetting) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).cast_shadow = casting
+
+	for child: Node in node.get_children():
+		_cast_all(child, casting)

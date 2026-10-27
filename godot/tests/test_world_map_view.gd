@@ -44,6 +44,8 @@ func _ready() -> void:
 	_the_legend_button_shows_and_hides_the_legend()
 	_the_legend_choices_live_in_the_settings()
 	_the_walk_path_row_follows_options()
+	_the_xy_button_shows_the_position_readout()
+	_one_xy_setting_serves_both_maps()
 
 	_clean_settings()
 
@@ -358,6 +360,69 @@ func _the_walk_path_row_follows_options() -> void:
 
 	settings.set_show_walk_path(true)
 	_expect(_view.legend().path_row_shown(), "with it on, the row shows")
+	_clean_settings()
+
+
+## The readout stands beside the tile under the cursor, and says which one is
+## yours. Set, not read from the default, so a change of the default breaks
+## nothing here.
+func _the_xy_button_shows_the_position_readout() -> void:
+	_fresh()
+	_view.set_coordinates_shown(false)
+
+	_expect(_view.coordinates_text().is_empty(), "with XY off, the map writes nothing")
+
+	_view._coordinates_button.button_pressed = true
+
+	var words := MinimapView.COORDINATES_TEMPLATE % [HOME.x, HOME.y,
+		Const.TILE_GROUND_PLANE]
+
+	_expect(_view.coordinates_shown(), "a press of XY turns the readout on")
+	_expect(_view.coordinates_text() == WorldMapView.POSITION_TEMPLATE % words,
+		"and the map writes your tile and your plane, as the minimap does")
+
+	var next := HOME + Vector2i(-3, 5)
+
+	_state.ingest(Const.CH_ROOM_INFO, {"coords": [float(next.x), float(next.y),
+		Const.TILE_WORLD_Z]})
+	_expect(_view.coordinates_text().contains("(%d, %d)" % [next.x, next.y]),
+		"a step changes the readout")
+
+	_view._coordinates_button.button_pressed = false
+	_expect(_view.coordinates_text().is_empty(), "a second press turns it off")
+
+
+## Both XY buttons write one setting, so a press on one map changes the
+## other. Reset in Options turns both off.
+func _one_xy_setting_serves_both_maps() -> void:
+	_clean_settings()
+	var settings := ClientSettings.new(SETTINGS_PATH)
+	_fresh(settings)
+
+	var minimap := MinimapView.new()
+
+	add_child(minimap)
+	minimap.bind(_state)
+	minimap.bind_settings(settings)
+	settings.set_show_coordinates(false)
+
+	minimap._coordinates_button.button_pressed = true
+	_expect(_view.coordinates_shown() and _view._coordinates_button.button_pressed
+		and not _view.coordinates_text().is_empty(),
+		"a press of XY on the minimap shows the readout on the world map")
+
+	_view._coordinates_button.button_pressed = false
+	_expect(not minimap.coordinates_shown()
+		and not minimap._coordinates_button.button_pressed,
+		"a press of XY on the world map hides it on the minimap")
+
+	settings.set_show_coordinates(true)
+	settings.reset()
+	_expect(_view.coordinates_shown() == ClientSettings.DEFAULT_SHOW_COORDINATES
+		and minimap.coordinates_shown() == ClientSettings.DEFAULT_SHOW_COORDINATES,
+		"Reset puts both maps back to the shipped default")
+
+	minimap.queue_free()
 	_clean_settings()
 
 

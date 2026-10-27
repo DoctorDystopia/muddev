@@ -31,6 +31,18 @@ Two conditions, both required:
      never held, because coalescing them would lose information rather than
      compress it. See that constant for the full argument.
 
+Trailing events: held in order, sent last
+-----------------------------------------
+One kind of event channel waits too, but is never coalesced: a channel in
+const.TRAILING_CHANNELS. The client reads such an event against the positions
+that the snapshots give. Inside a tick, hold() keeps each message in a list, in
+the order of its emission. flush() sends the list after the snapshots. Thus,
+the face event of a walk that ends in `then craft` reaches the client after
+the step that the same tick took (10/20/2026).
+
+Outside a tick nothing waits. A typed line sends its snapshots at once, so the
+positions are already current when its face event goes.
+
 Stale marks: coalescing the BUILD, not only the send
 ----------------------------------------------------
 Holding a payload collapses several sends into one, but every one of them was
@@ -81,6 +93,10 @@ _holding = False
 # sends channels in the order they were first written this tick.
 _pending: dict = {}
 
+# (observer, payload) of each trailing event of this tick, in the order of its
+# emission. A list, not a dict, because two face events are two facts.
+_trailing: list = []
+
 # (observer id, builder) -> (observer, builder). Insertion-ordered, so a drain
 # builds snapshots in the order they went stale.
 _stale: dict = {}
@@ -122,6 +138,17 @@ def _should_hold(payload) -> bool:
     coalescable = payload.channel in const.COALESCABLE_CHANNELS
 
     return coalescable
+
+
+def _should_trail(payload) -> bool:
+    """Whether this payload waits, in order, until the snapshots of the tick
+    are out. Only inside a tick, and only on a trailing channel."""
+    if not _holding:
+        return False
+
+    trailing = payload.channel in const.TRAILING_CHANNELS
+
+    return trailing
 
 
 def _key_for(obj, payload):
@@ -249,6 +276,11 @@ def pending_count() -> int:
     return len(_pending)
 
 
+def trailing_count() -> int:
+    """Return how many trailing events are waiting to be sent."""
+    return len(_trailing)
+
+
 def stale_count() -> int:
     """Return how many snapshots are marked stale and not yet rebuilt."""
     return len(_stale)
@@ -266,12 +298,15 @@ def hold(obj, payload) -> bool:
         case the caller must NOT send. False to send immediately.
 
     Module Globals:
-        _pending written.
+        _pending and _trailing written.
 
     Methodology:
         Last write wins for a given observer and channel, which is the whole
         point: three inventory snapshots produced by one tick's worth of
         gathering collapse to the one that is actually true at the end of it.
+
+        A trailing event is the exception. Each one goes to the end of
+        _trailing, and none replaces another. See TRAILING_CHANNELS.
 
     Notes/References:
         Never raises. emit() calls this on a gameplay path and the module
@@ -281,6 +316,13 @@ def hold(obj, payload) -> bool:
     Creation date: 08/18/2026
     """
     try:
+        trail = _should_trail(payload)
+
+        if trail:
+            _trailing.append((obj, payload))
+
+            return True
+
         should = _should_hold(payload)
 
         if not should:
@@ -427,7 +469,7 @@ def flush() -> int:
         Returns the number of sessions reached across all payloads.
 
     Module Globals:
-        _holding written. _pending read and written.
+        _holding written. _pending and _trailing read and written.
 
     Methodology:
         Stale snapshots are built FIRST, while _holding is still set, so what
@@ -443,6 +485,10 @@ def flush() -> int:
         _holding is cleared before the payloads drain, so the emits below take
         the immediate path rather than re-entering the buffer they are
         draining.
+
+        The trailing events go after every snapshot, in the order of their
+        emission. The client then has the positions of this tick when it
+        reads them. See TRAILING_CHANNELS.
 
         _pending is emptied unconditionally. An entry whose send fails is
         NOT retried: the next tick that touches the same observer and channel
@@ -465,13 +511,15 @@ def flush() -> int:
 
     _holding = False
 
-    if not _pending:
+    if not _pending and not _trailing:
         return 0
 
     from . import emit as emit_module
 
     draining = list(_pending.values())
+    draining.extend(_trailing)
     _pending.clear()
+    _trailing.clear()
 
     sent = 0
 
@@ -494,6 +542,7 @@ def reset() -> None:
 
     _holding = False
     _pending.clear()
+    _trailing.clear()
     _stale.clear()
     _cancel_drain_call()
 

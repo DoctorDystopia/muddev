@@ -81,6 +81,8 @@ const MOMENT_BUTCHER_ATTEMPT := "butcher_attempt"
 const MOMENT_METALSMITH_CRAFT := "metalsmith_craft"
 const MOMENT_FOUNDRY_CRAFT := "foundry_craft"
 const MOMENT_TRANSITION := "transition"
+const MOMENT_GUNS_SHOT := "guns_shot"
+const MOMENT_MELEE_SWING := "melee_swing"
 
 # Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
 const MESSAGE_TYPE_KEY := "type"
@@ -137,6 +139,15 @@ const LOOK_TURN_MAX := 180
 const LOOK_OFFSET_UNIT := 100
 const LOOK_OFFSET_MAX := 100
 const LOOK_AXES := 3
+const OBJECT_SPAWN_KEY := "spawn"
+const SPAWN_ITEM_KEY := "item"
+const SPAWN_QUANTITY_KEY := "quantity"
+const SPAWN_RESPAWN_KEY := "respawn"
+const SPAWN_QUANTITY_UNIT := 1
+const SPAWN_QUANTITY_MAX := 100000
+const SPAWN_QUANTITY_BOUNDS := 2
+const SPAWN_RESPAWN_MIN := 1
+const SPAWN_RESPAWN_MAX := 144000
 const CHUNK_FILE_TEMPLATE := "chunk_{cx}_{cy}_p{plane}.json"
 const CHUNK_DIRECTORY := "world/chunks"
 const STRUCTURE_DIRECTORY := "world/structures"
@@ -166,8 +177,11 @@ const OBJECT_CATEGORY_SIGN := "sign"
 const OBJECT_CATEGORY_TRANSITION := "transition"
 const OBJECT_CATEGORY_CLIMB := "climb"
 const OBJECT_CATEGORY_DECOR := "decor"
+const OBJECT_CATEGORY_ITEM_SPAWN := "item_spawn"
 const OBJECT_TEXT_CATEGORY := "sign"
+const OBJECT_SPAWN_CATEGORY := "item_spawn"
 const OBJECT_SIGNPOST_KIND := "signpost"
+const OBJECT_ITEM_SPAWN_KIND := "item_spawn"
 const SCENERY_LADDER := "ladder"
 const SCENERY_STAIRS := "stairs"
 const SCENERY_HATCH := "hatch"
@@ -196,6 +210,8 @@ const TILE_CHECK_SIGN_TEXT := "sign_text"
 const TILE_CHECK_WALL_ON_VOID := "wall_on_void"
 const TILE_CHECK_UNREACHABLE := "unreachable"
 const TILE_CHECK_ROOF_WALKABLE := "roof_walkable"
+const TILE_CHECK_SPAWN_TABLE := "spawn_table"
+const TILE_CHECK_SPAWN_ITEM := "spawn_item"
 
 # What the terrain editor paints and places. The order is
 # the order of each table under world/.
@@ -203,8 +219,8 @@ const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concr
 const TILE_ROOF_FLOOR_TYPES := ["roof_sheet_metal", "roof_tile", "roof_concrete"]
 const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta"]
 const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_link", "rubble"]
-const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "landmark", "npc", "sign", "transition"]
-const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable"]
+const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "item_spawn", "landmark", "npc", "sign", "transition"]
+const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable", "spawn_table", "spawn_item"]
 const TILE_CHECK_NOTE_RULES := ["unreachable"]
 const SCENERY_PRIMITIVES := ["ladder", "stairs", "hatch", "stairs_top", "crate", "table", "lamp_post", "oil_lamp", "torch"]
 const OBJECT_KINDS := {
@@ -228,6 +244,7 @@ const OBJECT_KINDS := {
 	"mutant_crab": "npc",
 	"mutant_giant": "npc",
 	"signpost": "sign",
+	"item_spawn": "item_spawn",
 	"respawn_point": "landmark",
 	"transition_oasis_to_outskirts": "transition",
 	"transition_outskirts_to_oasis": "transition",
@@ -249,6 +266,7 @@ const OBJECT_CATEGORY_LABELS := {
 	"decor": "Decor",
 	"facility": "Facility",
 	"gathering": "Gathering node",
+	"item_spawn": "Item spawn",
 	"landmark": "Landmark",
 	"npc": "NPC",
 	"sign": "Sign",

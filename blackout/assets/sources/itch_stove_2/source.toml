@@ -1,0 +1,9 @@
+title     = "curing_chamber"
+author    = "ghostguyhi"
+url       = "https://ghostguyhi.itch.io/stoveoven"
+site      = "itch.io"
+license   = "CC0-1.0"
+retrieved = 2026-10-25
+
+[files]
+"stove (2).vox" = "sha256:9955b8308e2ae876e032232beb352d5f6b61965d8603757a2c0b45b87f20b114"

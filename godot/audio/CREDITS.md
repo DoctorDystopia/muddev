@@ -4,6 +4,11 @@ Every clip under `audio/`, where it came from, and the licence it arrived
 under. Add a row in the same commit as the clip — a file with no row is
 indistinguishable from one whose licence nobody checked.
 
+The sound wizard (`python -m assets.audio add`, see "To add a sound" in
+`godot/README.md`) adds the row, or a new pack section at the end. It
+changes no other line. The check of `assets.audio` fails for a clip of the
+cue table with no row here.
+
 **Source packs never live in this repo.** Only the clips the client actually
 plays are copied in; the packs themselves stay in
 `C:\Users\NickR\Games\Projects\Godot\Assets\`. See "Sound is the client's" in
@@ -28,6 +33,7 @@ Royalty-free licence: https://ovanisound.com/policies/terms-of-service
 | `sfx/metalsmith_craft.wav` | `Medieval/Metal Twang.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/foundry_craft.wav` | `Steampunk/Steampunk Gas Ignite.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/transition.wav` | `Motions and Impacts/Whoosh Cyberwave.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/guns_shot.wav` | `Hollywood/Titan Handgun.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 
 ## Enzo — Flesh and Fracture - Lite
 
@@ -39,3 +45,15 @@ the pack.
 |---|---|---|
 | `sfx/butcher_attempt.wav` | `Flesh Tearing/Flesh Tearing_T.Bone  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/cut_attempt.wav` | `Axe Chops/Axe Chop_MKE 600  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+
+## Hove Audio — Sword Combat Sound Effects Pack Free Version
+
+License: LicenseRef-Unconfirmed.
+
+Exception to the license gate: The itch.io page states no license (checked 10/26/2026). It tags the pack Royalty Free, and the author says in a comment that no credit is necessary. Name-your-own-price is a price, not a grant. Ask the author, or replace the clip, before a public release.
+
+Store page: https://hoveaudio.itch.io/sword-combat-sound-effects-pack-free-version
+
+| Clip | Source file in the pack | Changes |
+|---|---|---|
+| `sfx/melee_swing.wav` | `Main Sounds/Sword Stabs/w_Whoosh/WEAPSwrd_SwordStabwWhoosh_HoveAud_SwordCombat_01.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |

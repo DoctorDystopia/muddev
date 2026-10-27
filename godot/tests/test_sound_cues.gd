@@ -10,6 +10,7 @@ var _failures := 0
 
 
 func _ready() -> void:
+	_the_cue_table_reads()
 	_the_bus_every_cue_plays_on_exists()
 	_every_cue_plays_a_clip_on_that_bus()
 	_the_level_up_cue_the_console_names_has_a_clip()
@@ -34,13 +35,21 @@ func _ready() -> void:
 	get_tree().quit(0)
 
 
-func _the_bus_every_cue_plays_on_exists() -> void:
-	# A player naming a bus the layout does not declare plays on Master and
-	# says nothing -- so a renamed bus would quietly take every sound out from
-	# under its volume setting.
-	var index := AudioServer.get_bus_index(SoundCues.BUS)
+func _the_cue_table_reads() -> void:
+	# A cue table that does not read gives no cue at all. Then every sound of
+	# the game stops, with no error.
+	_expect(FileAccess.file_exists(SoundCues.TABLE_PATH), "the cue table is there")
+	_expect(not SoundCues.cues().is_empty(), "and it reads, with at least one cue")
 
-	_expect(index != -1, "default_bus_layout.tres declares the %s bus" % SoundCues.BUS)
+
+func _the_bus_every_cue_plays_on_exists() -> void:
+	# An audio player that names a bus that the layout does not declare plays
+	# on Master, with no warning. Thus, a renamed bus would take every sound
+	# away from its volume setting.
+	for bus: String in SoundCues.buses():
+		var index := AudioServer.get_bus_index(bus)
+
+		_expect(index != -1, "default_bus_layout.tres declares the %s bus" % bus)
 
 
 func _every_cue_plays_a_clip_on_that_bus() -> void:
@@ -58,8 +67,10 @@ func _every_cue_plays_a_clip_on_that_bus() -> void:
 		if not played:
 			continue
 
+		var bus := SoundCues.bus_of(cue)
+
 		_expect(player.stream is AudioStream, "%s carries a clip" % cue)
-		_expect(player.bus == SoundCues.BUS, "%s plays on %s" % [cue, SoundCues.BUS])
+		_expect(player.bus == bus, "%s plays on %s" % [cue, bus])
 		_expect(player.get_parent() == cues, "%s is parented to the cue node" % cue)
 
 		# Stopped before the free: a playback still mixing when the test quits
@@ -88,13 +99,15 @@ func _the_task_complete_moment_plays_a_clip() -> void:
 	var cues := SoundCues.new()
 	add_child(cues)
 
+	var cue := SoundCues.cue_for_moment(Const.MOMENT_TASK_COMPLETE)
 	var player := cues.play_moment(Const.MOMENT_TASK_COMPLETE)
 
+	_expect(not cue.is_empty(), "the task_complete moment has a cue")
 	_expect(player != null, "the task_complete moment plays a clip")
 
 	if player != null:
-		_expect(player.stream == cues.play(SoundCues.TASK_COMPLETE).stream,
-			"and the clip is the TASK_COMPLETE cue")
+		_expect(player.stream == SoundCues.stream_of(cue),
+			"and the clip is the clip of its cue")
 
 	_expect(cues.play_moment("a_moment_nobody_mapped") == null,
 		"a moment with no cue plays nothing")

@@ -53,16 +53,10 @@ NO_STANCE_BONUS: int = 0
 # parent up. Derived rather than hardcoded so a snapshot runs from any cwd.
 _BLACKOUT_ROOT: Path = Path(__file__).resolve().parents[1]
 
-# Per-damage-type equipment keys. The attack type is interpolated in, exactly
-# as systems/gameplay/combat/combat.py does it: stab / slash / crush for a
-# melee style, light / standard / heavy for a projectile one.
-#
-# There is no strength-bonus constant here. Which key carries the damage bonus
-# depends on the style's axes -- melee_strength_bonus or
-# projectile_strength_bonus -- so _equipment_bonuses reads it off the axes
-# table rather than off a name written once.
-_ATTACK_BONUS_TEMPLATE: str = "{attack_type}_attack_bonus"
-_DEFENSE_BONUS_TEMPLATE: str = "{attack_type}_defense_bonus"
+# There is no bonus key constant here. _equipment_bonuses gets the attack and
+# defense keys from the builders in the combat constants, as the swing does.
+# The strength key comes from the axes of the style: melee_strength_bonus or
+# projectile_strength_bonus.
 
 # Value assumed for an equipment key no item in a loadout declares.
 _ABSENT_BONUS: int = 0
@@ -730,7 +724,7 @@ def best_loadout(stat_key: str, include_hands: bool = True) -> tuple:
 
     Entry:
         bootstrap() must have run. stat_key is an equipment bonus key such as
-        "melee_strength_bonus" or "slash_defense_bonus". include_hands False
+        "melee_strength_bonus" or "melee_slash_defense_bonus". include_hands False
         returns armour only, for a caller supplying its own weapon.
 
     Exit/Returns:
@@ -795,12 +789,8 @@ def style_combat_axes(style: dict) -> dict:
     and the whole point of this module is to model the game, not to repeat it.
     """
     combat_const = combat_constants()
-    axes = style.get(combat_const.STYLE_COMBAT_AXES_KEY)
 
-    if not axes:
-        return combat_const.MELEE_COMBAT_AXES
-
-    return axes
+    return combat_const.style_combat_axes(style)
 
 
 def style_attack_speed(profile: AttackProfile, style: dict) -> int:
@@ -873,8 +863,9 @@ def _equipment_bonuses(attacker: Combatant, defender: Combatant,
     slot on a live character, and an AttackProfile here is a weapon plus
     armour. A bow snapshot therefore shows the floor, not the loaded number.
     """
-    attack_key = _ATTACK_BONUS_TEMPLATE.format(attack_type=attack_type)
-    defense_key = _DEFENSE_BONUS_TEMPLATE.format(attack_type=attack_type)
+    combat_const = combat_constants()
+    attack_key = combat_const.attack_bonus_key(attack_type)
+    defense_key = combat_const.defense_bonus_key(attack_type)
     strength_key = style_combat_axes(style)["strength_bonus_key"]
 
     attacker_stats = attacker.profile.combat_stat_bonuses

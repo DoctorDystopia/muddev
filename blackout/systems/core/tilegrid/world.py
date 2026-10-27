@@ -113,7 +113,8 @@ class TilePlane:
             for thing in chunk_file.objects:
                 tile = (origin_x + thing.x, origin_y + thing.y)
                 self._objects.setdefault(tile, []).append(
-                    (thing.kind, thing.rotation, thing.text, thing.look))
+                    (thing.kind, thing.rotation, thing.text, thing.look,
+                     thing.spawn))
 
         # A tile with a placed object keeps its room (TileRooms.pin). A tile
         # that holds only unpinned kinds does not.
@@ -167,20 +168,32 @@ class TilePlane:
         The text is "" for an object that carries none.
         """
         placed = self._objects.get((x, y), ())
-        texts = [(kind, text) for kind, _rotation, text, _look in placed]
+        texts = [(kind, text) for kind, _rotation, text, *_rest in placed]
 
         return texts
 
     def placed_at(self, x: int, y: int) -> list:
         """
-        Return (kind, rotation, text, look) of each object placed on a tile,
-        in file order. The tile sync gives the rotation and the look to the
-        entity that a kind stands up. The look is {} for an object with
-        none.
+        Return (kind, rotation, text, look, spawn) of each object placed on
+        a tile, in file order. The tile sync gives the rotation and the look
+        to the entity that a kind stands up. The look is {} for an object
+        with none. The spawn is {} for each object that is no item spawn.
         """
         placed = self._objects.get((x, y), ())
 
         return list(placed)
+
+    def spawn_at(self, x: int, y: int, item_key: str):
+        """
+        Return (rotation, look, spawn) of the object on a tile whose spawn
+        names `item_key`, or None. The respawn queue asks here when an item
+        comes due. Thus, the chunk file stays the one owner of a spawn.
+        """
+        for _kind, rotation, _text, look, spawn in self._objects.get((x, y), ()):
+            if spawn and spawn[const.SPAWN_ITEM_KEY] == item_key:
+                return (rotation, look, spawn)
+
+        return None
 
     def placed_objects(self) -> list:
         """Return (kind, x, y, rotation) of every placed object."""

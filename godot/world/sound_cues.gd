@@ -4,105 +4,102 @@ extends Node
 ##
 ## ## A cue is a moment, not a file
 ##
-## Callers ask for [constant LEVEL_UP], never for `level_up.wav`, so swapping a
-## clip is one line in [constant _STREAMS] and no caller moves. It is the split
-## [ModelRegistry] makes for meshes: Python owns what is TRUE about the game,
-## this client owns what it looks -- and sounds -- like. A sound named by the
-## server would be the client verb table that has been deleted twice, in a new
-## medium.
+## Callers ask for a cue such as [constant LEVEL_UP], never for `level_up.wav`.
+## Thus, a clip swap is one line in the cue table, and no caller moves. It is
+## the split that [ModelRegistry] makes for meshes: Python owns what is TRUE
+## about the game, and this client owns what it looks and sounds like. A sound
+## that the server names would be the client verb table again, in a new
+## medium. The repo deleted that table two times.
 ##
-## ## Every clip plays on the SFX bus
+## ## The cue table is a file
 ##
-## Declared in `res://default_bus_layout.tres`, so the player's volume is one
-## write to one bus -- [method apply_volume] -- rather than a walk over every
-## player alive, and it reaches a sound already playing as well as the next.
-## A player naming a bus that does not exist falls back to Master without a
-## word, which is why the test checks [constant BUS] by name.
+## `res://audio/cues.json` (10/26/2026), because a table that an author grows
+## is a table file. The sound wizard, `python -m assets.audio add`, writes it.
+## `blackout/assets/audio/cue_table.py` owns its format:
+##
+## | Key | Holds |
+## |---|---|
+## | `cues` | Cue to `{kind, clip, note}`. `clip` is relative to `res://audio/` |
+## | `moments` | Server moment to cue |
+##
+## A moment key is a plain string now, not a generated constant. Thus, the
+## Python check (`statefeed/tests/test_cue_table.py`) does the work of the
+## compiler. It refuses a moment that the server does not name, a missing
+## clip, and a clip with no credits row. A moment with no row plays nothing.
+##
+## ## Every clip plays on the bus of its kind
+##
+## [constant _KIND_BUSES] maps a sound kind to a bus of
+## `res://default_bus_layout.tres`. Thus, the volume of the player is one
+## write to one bus, [method apply_volume]. The write reaches a sound that
+## plays now, and the next one. A kind with no row plays on [constant BUS].
+## An audio player that names a bus that does not exist plays on Master with
+## no warning. For that reason, the test checks each bus by name. Music is a
+## later kind, with a bus of its own.
 ##
 ## ## One player per play
 ##
-## Created, played, and freed on `finished`. Two skills levelling off one kill
-## publish two rosters a moment apart, and their cues overlap rather than the
-## second cutting the first off, which one shared player would do.
+## Created, played, and freed on `finished`. Two skills can level up from one
+## kill, and their rosters come a moment apart. Their cues then overlap. One
+## shared player would cut the first cue off.
 ##
-## ## The web will not play a sound before the page has been touched
+## ## The web plays no sound before the player touches the page
 ##
-## Browsers refuse audio without user activation. Logging in is a click or a
-## keypress, so anything cued from a game event is safe; a sound on the login
-## screen itself may not be.
+## Browsers refuse audio until the player clicks or types in the page. A login
+## does both, so each cue from a game event plays. A sound on the login screen
+## itself can fail to play.
 
-## The bus every cue plays on. Must match a name in `default_bus_layout.tres`.
+## The bus of a sound effect, and of a kind with no row in [constant
+## _KIND_BUSES]. Must match a name in `default_bus_layout.tres`.
 ##
-## Plain Strings, here and below, and never `&"..."` literals: `test_theme`
+## Plain Strings, here and below, and never `&"..."` literals. `test_theme`
 ## reads every StringName literal under `world/` and `scenes/` as a theme
-## variation, and that check is only sound while nothing else spells one.
+## variation. That check is correct only while nothing else spells one.
 const BUS := "SFX"
 
-## A skill's level rose. Cued from [signal SkillsState.levelled].
+## A level of a skill rose. [signal SkillsState.levelled] cues it, so the
+## client names it in code. The cue table must hold it, and the test checks
+## that.
 const LEVEL_UP := "level_up"
 
-## The last kill of an Exterminator task. Cued from the server moment of the
-## same name, through [constant _MOMENT_CUES].
-const TASK_COMPLETE := "task_complete"
+## The cue table, and the folder that each clip of it is relative to.
+const TABLE_PATH := "res://audio/cues.json"
+const AUDIO_DIR := "res://audio/"
 
-## One gathering attempt at a node, a hit or a miss: one cue for each
-## gathering skill. The server sends the moment of the skill on each attempt
-## of the channel. Thus, the cue repeats until the gathering stops, and the
-## clip itself does not loop.
-const CUT_ATTEMPT := "cut_attempt"
-const BUTCHER_ATTEMPT := "butcher_attempt"
+const KEY_CUES := "cues"
+const KEY_MOMENTS := "moments"
+const FIELD_KIND := "kind"
+const FIELD_CLIP := "clip"
 
-## One finished craft under a skill: one cue for each skill that names a
-## craft moment. A batch makes one item at a time. Thus, the cue repeats
-## until the batch stops.
-const METALSMITH_CRAFT := "metalsmith_craft"
-const FOUNDRY_CRAFT := "foundry_craft"
-
-## A transition tile moved the player to its target tile. The server sends
-## the moment one time for each move, to the player who moved.
-const TRANSITION := "transition"
-
-const _Const := preload("res://autoload/blackout_constants.gd")
-
-## Cue to clip. Adding a sound is one constant above and one row here.
-const _STREAMS := {
-	LEVEL_UP: preload("res://audio/sfx/level_up.wav"),
-	TASK_COMPLETE: preload("res://audio/sfx/task_complete.wav"),
-	CUT_ATTEMPT: preload("res://audio/sfx/cut_attempt.wav"),
-	BUTCHER_ATTEMPT: preload("res://audio/sfx/butcher_attempt.wav"),
-	METALSMITH_CRAFT: preload("res://audio/sfx/metalsmith_craft.wav"),
-	FOUNDRY_CRAFT: preload("res://audio/sfx/foundry_craft.wav"),
-	TRANSITION: preload("res://audio/sfx/transition.wav"),
+## Sound kind to bus. A kind with no row plays on [constant BUS]. Music adds
+## a row and a bus.
+const _KIND_BUSES := {
+	"sfx": BUS,
 }
 
-## Server moment to cue. The server names the moment, and this table decides
-## what it sounds like. The keys come from the generated constants, so a
-## moment that the server renames breaks this file, not the sound. A moment
-## with no row plays nothing.
-const _MOMENT_CUES := {
-	_Const.MOMENT_TASK_COMPLETE: TASK_COMPLETE,
-	_Const.MOMENT_CUT_ATTEMPT: CUT_ATTEMPT,
-	_Const.MOMENT_BUTCHER_ATTEMPT: BUTCHER_ATTEMPT,
-	_Const.MOMENT_METALSMITH_CRAFT: METALSMITH_CRAFT,
-	_Const.MOMENT_FOUNDRY_CRAFT: FOUNDRY_CRAFT,
-	_Const.MOMENT_TRANSITION: TRANSITION,
-}
+## The cue table after the first read. Empty for a file that is not there or
+## does not read.
+static var _table := {}
+static var _table_read := false
+
+## Cue to its loaded clip, filled on the first play.
+static var _streams := {}
 
 
-## Play one cue, returning the player so a caller can stop it early.
+## Play one cue, and return the player, so a caller can stop it early.
 ##
-## An unknown cue plays nothing and returns null rather than raising: a missing
-## sound is a cosmetic gap, and a client that crashed on one would be trading a
-## silent moment for a broken session.
+## An unknown cue plays nothing and returns null. It does not raise. A missing
+## sound is a cosmetic gap, and a crash would trade a silent moment for a
+## broken session.
 func play(cue: String) -> AudioStreamPlayer:
-	var stream: AudioStream = _STREAMS.get(cue)
+	var stream := stream_of(cue)
 
 	if stream == null:
 		return null
 
 	var player := AudioStreamPlayer.new()
 	player.stream = stream
-	player.bus = BUS
+	player.bus = bus_of(cue)
 	player.finished.connect(player.queue_free)
 	add_child(player)
 	player.play()
@@ -118,28 +115,66 @@ func play_moment(moment: String) -> AudioStreamPlayer:
 	return play(cue)
 
 
-## Every cue that has a clip.
+## Every cue of the cue table.
 static func cues() -> Array:
-	return _STREAMS.keys()
+	return _section(KEY_CUES).keys()
 
 
 ## Every server moment that has a cue.
 static func moments() -> Array:
-	return _MOMENT_CUES.keys()
+	return _section(KEY_MOMENTS).keys()
 
 
 ## The cue of one server moment, or "" for a moment with no row.
 static func cue_for_moment(moment: String) -> String:
-	return _MOMENT_CUES.get(moment, "")
+	var cue: Variant = _section(KEY_MOMENTS).get(moment, "")
+
+	return cue if cue is String else ""
 
 
-## Set the SFX bus from a LINEAR volume, 0.0 to 1.0, as the Options slider
-## stores it in [member ClientSettings.sfx_volume].
+## The clip of one cue, loaded on the first use. Null for a cue with no row,
+## or a clip that does not load.
+static func stream_of(cue: String) -> AudioStream:
+	if _streams.has(cue):
+		return _streams[cue]
+
+	var row := _row_of(cue)
+	var clip: Variant = row.get(FIELD_CLIP)
+	var stream: AudioStream = null
+
+	if clip is String and not clip.is_empty():
+		stream = load(AUDIO_DIR + clip) as AudioStream
+
+	_streams[cue] = stream
+
+	return stream
+
+
+## The bus of one cue: the bus of its kind, or [constant BUS].
+static func bus_of(cue: String) -> String:
+	var kind: Variant = _row_of(cue).get(FIELD_KIND, "")
+
+	return _KIND_BUSES.get(kind, BUS)
+
+
+## Every bus that a kind plays on.
+static func buses() -> Array:
+	var found := [BUS]
+
+	for bus: String in _KIND_BUSES.values():
+		if not found.has(bus):
+			found.append(bus)
+
+	return found
+
+
+## Set the SFX bus from a LINEAR volume, 0.0 to 1.0. The Options slider stores
+## it in [member ClientSettings.sfx_volume].
 ##
-## Converted to decibels here because this file owns the bus. Zero MUTES rather
-## than writing `linear_to_db(0.0)`, which is negative infinity -- a value that
-## leaves "silent" up to how the mixer treats an infinity. Muting keeps the
-## last decibel level, so nothing is lost by it.
+## This file owns the bus, so it converts to decibels. Zero MUTES the bus. The
+## code does not write `linear_to_db(0.0)`, which is negative infinity. Then
+## "silent" would depend on how the mixer treats an infinity. A mute keeps the
+## last decibel level, so the mute loses nothing.
 static func apply_volume(linear: float) -> void:
 	var index := AudioServer.get_bus_index(BUS)
 
@@ -153,3 +188,44 @@ static func apply_volume(linear: float) -> void:
 		return
 
 	AudioServer.set_bus_volume_db(index, linear_to_db(linear))
+
+
+## Drop the cached table and clips, so that the next read sees the file again.
+## For a test, and for a reload after an edit outside Godot.
+static func forget() -> void:
+	_table = {}
+	_table_read = false
+	_streams = {}
+
+
+## The row of one cue, or an empty dictionary.
+static func _row_of(cue: String) -> Dictionary:
+	var row: Variant = _section(KEY_CUES).get(cue, {})
+
+	return row if row is Dictionary else {}
+
+
+## One section of the cue table, or an empty dictionary.
+static func _section(key: String) -> Dictionary:
+	var rows: Variant = _data().get(key, {})
+
+	return rows if rows is Dictionary else {}
+
+
+## The parsed cue table. This routine reads the file one time.
+static func _data() -> Dictionary:
+	if _table_read:
+		return _table
+
+	_table_read = true
+
+	if not FileAccess.file_exists(TABLE_PATH):
+		return _table
+
+	var text := FileAccess.get_file_as_string(TABLE_PATH)
+	var parsed: Variant = JSON.parse_string(text)
+
+	if parsed is Dictionary:
+		_table = parsed
+
+	return _table

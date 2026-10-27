@@ -137,8 +137,8 @@ static func errors() -> PackedStringArray:
 static func rows(table: String) -> Array[Dictionary]:
 	var copies: Array[Dictionary] = []
 
-	for row: Dictionary in _entry(table)["rows"]:
-		copies.append(row.duplicate(true))
+	for table_row: Dictionary in _entry(table)["rows"]:
+		copies.append(table_row.duplicate(true))
 
 	return copies
 

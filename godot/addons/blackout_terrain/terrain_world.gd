@@ -1,12 +1,15 @@
 @tool
 class_name TerrainWorld
 extends Node3D
-## The terrain that the editor shows: a 4 x 4 block of chunks around
+## The terrain that the editor shows: a square block of chunks around
 ## [member centre_chunk], on every plane. The world chunk files are its store.
+## [member block_side] gives the side of the block, 4 x 4 chunks unless the
+## author says otherwise (10/21/2026), up to [constant BLOCK_SIDE_MAX].
 ##
 ## A block with an even side has no middle chunk. Thus the centre chunk is
 ## the south-west chunk of the middle four. The block reaches
-## [constant BLOCK_BELOW] chunks west and south of it, and two east and north.
+## [method block_below] chunks west and south of it, and the rest east and
+## north.
 ##
 ## The scene holds no terrain data (DESIGN-0011 section 6.3). Every mesh here
 ## is made at load and has no owner, so a scene save stores none of it. The
@@ -89,12 +92,19 @@ const _Const := preload("res://autoload/blackout_constants.gd")
 ## How the planes above the edited plane show.
 enum UpperPlanes { HIDDEN, GHOST, SOLID }
 
-## How many chunks are on each side of the block.
-const BLOCK_SIDE := 4
+## How many chunks are on each side of the block when nothing says
+## otherwise: the side of the block since Phase 4a.
+const BLOCK_SIDE_DEFAULT := 4
 
-## How many chunks the block reaches west and south of the centre chunk.
-## The block reaches `BLOCK_SIDE - 1 - BLOCK_BELOW` chunks east and north.
-const BLOCK_BELOW := 1
+## The smallest block: one chunk, with every edge locked.
+const BLOCK_SIDE_MIN := 1
+
+## The largest block. The cap bounds the cost of a load and of a redraw: an
+## 8 x 8 block holds 64 chunks on each of the four planes, 256 chunk views
+## at one time (Nick allowed a cap, 10/21/2026, and 8 is the pick here).
+## [constant StructureTemplate.SIDE_MAX] reads it, so a template that fits
+## the largest block reads.
+const BLOCK_SIDE_MAX := 8
 
 ## The height steps between a plane and a new chunk of the plane above: two
 ## tiles (Nick, 09/26/2026). The Build tools use the same rise for a level.
@@ -128,6 +138,17 @@ const MARKER_NOSE_NODE := "Nose"
 		return _plane
 	set(value):
 		move_block(_centre, value)
+
+## How many chunks are on each side of the block, from
+## [constant BLOCK_SIDE_MIN] to [constant BLOCK_SIDE_MAX]. A change saves
+## the changed chunks and loads the block again, as a move does. It is not
+## an export. The author makes the choice, and the dock keeps it in the
+## session file. Thus a scene save stores none of it.
+var block_side := BLOCK_SIDE_DEFAULT:
+	get:
+		return _side
+	set(value):
+		resize_block(value)
 
 ## Where the chunk files are: an OS path, or a `user://` or `res://` path.
 ## Empty means the world chunk directory, `blackout/world/chunks/`. A test
@@ -194,7 +215,7 @@ var load_errors := PackedStringArray()
 const _PREVIEW_ENVIRONMENT_FIELDS := ["background_mode", "background_color", "fog_enabled",
 	"fog_mode", "fog_density", "fog_light_color", "fog_depth_begin", "fog_depth_end",
 	"ambient_light_color", "ambient_light_energy"]
-const _PREVIEW_SUN_FIELDS := ["light_color", "light_energy", "rotation"]
+const _PREVIEW_SUN_FIELDS := ["light_color", "light_energy", "shadow_opacity", "rotation"]
 
 ## The look that the preview draws, or empty, and the fields of the scene
 ## that it replaced.
@@ -212,6 +233,7 @@ var selected := {}
 
 var _centre := Vector2i.ZERO
 var _plane := 0
+var _side := BLOCK_SIDE_DEFAULT
 
 ## One [ChunkSet] for each plane, indexed by plane.
 var _planes: Array[ChunkSet] = []
@@ -364,29 +386,57 @@ func move_block(centre: Vector2i, new_plane: int) -> void:
 		load_block()
 
 
+## Give the block `side` chunks on each side, clamped to
+## [constant BLOCK_SIDE_MIN] and [constant BLOCK_SIDE_MAX]. The same rule as
+## a move: a change saves the changed chunks first, and loads the block
+## again around the same centre. The same side loads nothing.
+func resize_block(side: int) -> void:
+	var clamped := clampi(side, BLOCK_SIDE_MIN, BLOCK_SIDE_MAX)
+
+	if clamped == _side:
+		return
+
+	if is_inside_tree() and has_unsaved_changes():
+		save_block()
+
+	_side = clamped
+	clear_selection()
+
+	if is_inside_tree():
+		load_block()
+
+
 ## Every chunk coordinate of the block.
 func block_coords() -> Array[Vector2i]:
 	var coords: Array[Vector2i] = []
 	var low := block_low()
 
-	for dy: int in BLOCK_SIDE:
-		for dx: int in BLOCK_SIDE:
+	for dy: int in _side:
+		for dx: int in _side:
 			coords.append(low + Vector2i(dx, dy))
 
 	return coords
 
 
+## How many chunks the block reaches west and south of the centre chunk.
+## A block with an even side has no middle chunk, so the centre chunk is
+## the south-west chunk of the middle four. The block reaches
+## `block_side - 1 - block_below()` chunks east and north.
+func block_below() -> int:
+	return (_side - 1) / 2
+
+
 ## The south-west chunk of the block.
 func block_low() -> Vector2i:
-	return _centre - Vector2i.ONE * BLOCK_BELOW
+	return _centre - Vector2i.ONE * block_below()
 
 
 ## True when `tile` is in the loaded block.
 func block_has_tile(tile: Vector2i) -> bool:
 	var offset := ChunkSet.chunk_of_tile(tile) - block_low()
 
-	return offset.x >= 0 and offset.x < BLOCK_SIDE \
-		and offset.y >= 0 and offset.y < BLOCK_SIDE
+	return offset.x >= 0 and offset.x < _side \
+		and offset.y >= 0 and offset.y < _side
 
 
 ## The path of a chunk file. `on_plane` -1 means the edited plane.
@@ -589,7 +639,7 @@ static func copy_shared_corners(chunk: ChunkFile, neighbour: ChunkFile,
 ## The neighbour at `coord` of `on_plane` when it is a file or an edit, else
 ## null. A chunk outside the block counts only as a file on disk.
 func _existing_neighbour(coord: Vector2i, on_plane: int) -> ChunkFile:
-	var block := Rect2i(block_low(), Vector2i(BLOCK_SIDE, BLOCK_SIDE))
+	var block := Rect2i(block_low(), Vector2i(_side, _side))
 
 	if block.has_point(coord):
 		if chunk_exists(coord, on_plane):
@@ -741,7 +791,7 @@ func _rebuild_block_outline() -> void:
 
 	var size: int = _Const.CHUNK_SIZE
 	var low := block_low() * size
-	var tiles := BLOCK_SIDE * size
+	var tiles := _side * size
 
 	_block_outline = _mesh_node(TerrainOverlay.outline_mesh(chunks, low, tiles,
 		TerrainOverlay.mark("locked")), _overlay_material)
@@ -1125,14 +1175,33 @@ static func _marker_nose() -> MeshInstance3D:
 	return nose
 
 
-## The label of a marker: the kind, and the words of a sign.
+## The label of a marker: the kind, and the words of a sign or the item of
+## an item spawn.
 static func _marker_text(thing: Dictionary) -> String:
 	var text: String = thing.get("text", "")
+	var spawn: Dictionary = thing.get("spawn", {})
+
+	if not spawn.is_empty():
+		return "%s\n%s" % [thing["kind"], spawn_label(spawn)]
 
 	if text.is_empty():
 		return thing["kind"]
 
 	return "%s\n\"%s\"" % [thing["kind"], text]
+
+
+## A spawn for a person: the item, its quantity, and its respawn, as
+## `scrap x2-7, 150 ticks`. The marker and the object list show it.
+static func spawn_label(spawn: Dictionary) -> String:
+	var bounds: Array = ChunkFile.spawn_quantity(spawn)
+	var amount := ""
+
+	if bounds[1] > _Const.SPAWN_QUANTITY_UNIT:
+		amount = " x%d" % bounds[0] if bounds[0] == bounds[1] \
+			else " x%d-%d" % [bounds[0], bounds[1]]
+
+	return "%s%s, %d ticks" % [spawn[_Const.SPAWN_ITEM_KEY], amount,
+		spawn[_Const.SPAWN_RESPAWN_KEY]]
 
 
 ## The object markers of one chunk of the block, or an empty list. For a
@@ -1260,7 +1329,7 @@ func _rebuild_links() -> void:
 # ─── Objects and the selection ──────────────────────────────────────────────
 
 ## Every object of the edited plane of the block as
-## `{tile, kind, rotation, text}`, south row first.
+## `{tile, kind, rotation, text, look, spawn}`, south row first.
 func objects_in_block() -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 
@@ -1268,7 +1337,7 @@ func objects_in_block() -> Array[Dictionary]:
 		for thing: Dictionary in chunks.get_chunk(coord).global_objects():
 			found.append({"tile": Vector2i(thing["x"], thing["y"]),
 				"kind": thing["kind"], "rotation": thing["rotation"],
-				"text": thing["text"], "look": thing["look"]})
+				"text": thing["text"], "look": thing["look"], "spawn": thing["spawn"]})
 
 	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if a["tile"].y != b["tile"].y:
@@ -1281,15 +1350,16 @@ func objects_in_block() -> Array[Dictionary]:
 
 ## Select one object. The beacon marks its tile.
 func select(tile: Vector2i, kind: String, turn: int, text: String = "",
-		look: Dictionary = {}) -> void:
+		look: Dictionary = {}, spawn: Dictionary = {}) -> void:
 	selected = {"tile": tile, "kind": kind, "rotation": turn, "text": text,
-		"look": look.duplicate(true)}
+		"look": look.duplicate(true), "spawn": spawn.duplicate(true)}
 	show_beacon(tile)
 
 
 ## Select one object of [method ChunkSet.objects_at] on `tile`.
 func select_thing(tile: Vector2i, thing: Dictionary) -> void:
-	select(tile, thing["kind"], thing["rotation"], thing["text"], thing["look"])
+	select(tile, thing["kind"], thing["rotation"], thing["text"], thing["look"],
+		thing.get("spawn", {}))
 
 
 ## The variant keys of the model of a kind, from the served tree of the

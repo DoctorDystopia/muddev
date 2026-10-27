@@ -84,11 +84,11 @@ static func label_of(category: String) -> String:
 
 ## Set each check box from the categories that the player hid. Show the walk
 ## path row only while the map draws the walk path. Emits nothing.
-func sync(hidden: PackedStringArray, path_drawn: bool) -> void:
+func sync(hidden_categories: PackedStringArray, path_drawn: bool) -> void:
 	for category: String in _boxes:
 		var box: CheckBox = _boxes[category]
 
-		box.set_pressed_no_signal(not hidden.has(category))
+		box.set_pressed_no_signal(not hidden_categories.has(category))
 
 	_path_row.visible = path_drawn
 

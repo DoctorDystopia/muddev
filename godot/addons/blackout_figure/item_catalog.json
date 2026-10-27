@@ -1,4 +1,16 @@
 {
+	"attack_actions": [
+		"attack_one_hand_crush",
+		"attack_one_hand_slash",
+		"attack_one_hand_stab",
+		"attack_two_hands_crush",
+		"attack_two_hands_heavy",
+		"attack_two_hands_light",
+		"attack_two_hands_slash",
+		"attack_two_hands_stab",
+		"attack_two_hands_standard",
+		"attack_unarmed_crush"
+	],
 	"format": 1,
 	"items": [
 		{

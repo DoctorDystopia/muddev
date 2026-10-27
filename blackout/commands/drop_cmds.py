@@ -19,6 +19,7 @@ that a graphical client is able to point at.
 """
 
 from commands.inventory_cmds import parse_slot_number
+from items import stacking
 from evennia import default_cmds
 from evennia.commands.cmdset import CmdSet
 from evennia.utils import utils
@@ -41,22 +42,19 @@ _LOWEST_STACK_SUFFIX = "-1"
 
 # Private helper routines
 
-def _is_single_stacked_group(caller, matches) -> bool:
+def _is_single_stacked_group(matches) -> bool:
     """
-    Purpose: Decide whether an ambiguous set of search matches is really
-        just one item duplicated in the caller's inventory, rather than
-        several distinct items that happen to share a partial name match.
+    Purpose: Decide whether an ambiguous set of search matches is one
+        item that the caller carries several copies of. The alternative
+        is several different items with a common partial name.
 
     Entry:
-        caller  - the searching Character, passed through to
-                  get_display_name so grouping matches what Evennia's own
-                  multimatch error would show the player.
         matches - the raw (unfiltered) list of objects a quiet search
                   returned.
 
     Exit/Returns:
-        Returns True only when every match shares the same display name,
-        meaning a plain "drop <name>" is unambiguous in intent even though
+        Returns True only when every match is a copy of one item. Then
+        a plain "drop <name>" is unambiguous in intent even though
         the search itself is not. Returns False for 0 or 1 matches, or for
         a mix of distinct items, where auto-resolving could hand the
         player the wrong object.
@@ -66,10 +64,11 @@ def _is_single_stacked_group(caller, matches) -> bool:
 
     Methodology:
         Mirrors commands.get_cmds._is_single_stacked_group, which solves
-        the identical problem for `get`. Duplicated rather than imported
-        because the two commands search different candidate pools
-        (inventory here, room contents there) and keeping the helper local
-        to each file matches this repo's existing convention.
+        the identical problem for `get`. The two commands search different
+        candidate pools: the inventory here, the room contents there. Thus
+        each file keeps its own wrapper. The rule itself has one owner,
+        `stacking.is_one_item`, which compares item keys and never display
+        names.
 
     Notes/References:
         See commands/get_cmds.py for the "get" side of this same fix.
@@ -80,14 +79,9 @@ def _is_single_stacked_group(caller, matches) -> bool:
     if len(matches) < _MIN_AMBIGUOUS_MATCHES:
         return False
 
-    names = set()
-    for match in matches:
-        if hasattr(match, "get_display_name"):
-            names.add(match.get_display_name(caller))
-        else:
-            names.add(str(match))
+    one_item = stacking.is_one_item(matches)
 
-    return len(names) == 1
+    return one_item
 
 
 class DropCmd(default_cmds.CmdDrop):
@@ -230,7 +224,7 @@ class DropCmd(default_cmds.CmdDrop):
                 quiet_matches = utils.make_iter(
                     caller.search(self.args, location=caller, quiet=True)
                 )
-                if _is_single_stacked_group(caller, quiet_matches):
+                if _is_single_stacked_group(quiet_matches):
                     self.args = self.args + _LOWEST_STACK_SUFFIX
 
             objs = caller.search(

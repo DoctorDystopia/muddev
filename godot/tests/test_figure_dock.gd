@@ -724,6 +724,19 @@ func _the_clips_tab_shows_and_sends_a_stance() -> void:
 	panel.select_stance("no_such_type")
 	_expect(panel.selected_stance().is_empty(),
 		"a tool type that the list does not have selects the default clip set")
+
+	# The attack actions of the item catalog come after the actions of the
+	# client, each with a row (10/25/2026).
+	var swings := PackedStringArray([FigureStances.ATTACK_PREFIX + "one_hand_slash",
+		FigureStances.ATTACK_PREFIX + "unarmed_crush"])
+	var first_swing := FigureStances.ACTIONS.size() * FigureClipsPanel.STANCE_COLUMNS
+
+	panel.set_stances(table, PackedStringArray(["bow"]), "", swings)
+	_expect(panel._stance_grid.get_child_count()
+		== (FigureStances.ACTIONS.size() + swings.size()) * FigureClipsPanel.STANCE_COLUMNS,
+		"the stance table has one row for each attack action of the catalog")
+	_expect((panel._stance_grid.get_child(first_swing) as Label).text == swings[0],
+		"the attack actions follow the actions of the client")
 	panel.queue_free()
 
 

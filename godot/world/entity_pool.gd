@@ -865,6 +865,31 @@ func face(entity_id: int, yaw: float) -> void:
 		node.rotation.y = yaw
 
 
+## Where the node of one entity stands: the end of its slide, in world
+## space (10/20/2026). The drawn point while it does not slide, and zero for
+## an entity that this pool does not draw.
+##
+## The pane reads this for a face, not the drawn point. A figure in the
+## middle of a step is between two tiles, and a yaw from there is wrong
+## when the step ends. The slide is a move in the space of the pool, and
+## the pool is not turned or scaled. Thus, the same move applies in world
+## space.
+func standing_point(entity_id: int) -> Vector3:
+	var node: Node3D = _nodes.get(entity_id)
+
+	if node == null:
+		return Vector3.ZERO
+
+	var animator: StepAnimator = _animators.get(entity_id)
+
+	if animator == null:
+		return node.global_position
+
+	var slide := animator.target() - animator.drawn()
+
+	return node.global_position + slide
+
+
 ## Whether a row turns at all: a character or an NPC. See [member _mobile].
 static func _turns(entity_data: Dictionary) -> bool:
 	var kind := str(entity_data.get("kind", ""))
@@ -1299,8 +1324,8 @@ func _item_for(entity_data: Dictionary, look: Dictionary) -> Node3D:
 	var asset := str(entity_data.get("asset", ""))
 	# The id seeds the auto variant: one object keeps one look for as long
 	# as it stands.
-	var seed := str(entity_id)
-	var node := _resolver.resolve_own_art(asset, look, seed)
+	var variant_seed := str(entity_id)
+	var node := _resolver.resolve_own_art(asset, look, variant_seed)
 	var drawn := Drawn.OWN_ART
 
 	if node == null and _figures != null:
@@ -1309,7 +1334,7 @@ func _item_for(entity_data: Dictionary, look: Dictionary) -> Node3D:
 
 	if node == null:
 		node = _resolver.resolve_entity(asset, str(entity_data.get("family", "")),
-			look, seed)
+			look, variant_seed)
 		drawn = Drawn.LADDER
 
 	_drawn_from[entity_id] = drawn

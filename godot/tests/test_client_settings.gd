@@ -508,14 +508,17 @@ func _the_map_settings_persist_clamp_and_reset() -> void:
 	_expect(s.minimap_radius == ClientSettings.DEFAULT_MINIMAP_RADIUS,
 		"the minimap starts at the shipped zoom")
 	_expect(not s.show_walk_path, "the walk path is off by default")
+	_expect(not s.show_coordinates, "the position readout is off by default")
 
 	s.set_minimap_radius(steps[0])
 	s.set_show_walk_path(true)
+	s.set_show_coordinates(true)
 
 	var reloaded := ClientSettings.new(TEST_PATH)
 	reloaded.load_from_disk()
 	_expect(reloaded.minimap_radius == steps[0], "the zoom persists")
 	_expect(reloaded.show_walk_path, "the walk path toggle persists")
+	_expect(reloaded.show_coordinates, "the XY toggle persists")
 
 	reloaded.set_minimap_radius(9999)
 	_expect(reloaded.minimap_radius == steps[steps.size() - 1],
@@ -523,7 +526,8 @@ func _the_map_settings_persist_clamp_and_reset() -> void:
 
 	reloaded.reset()
 	_expect(reloaded.minimap_radius == ClientSettings.DEFAULT_MINIMAP_RADIUS
-		and not reloaded.show_walk_path, "and reset restores both")
+		and not reloaded.show_walk_path and not reloaded.show_coordinates,
+		"and reset restores all three")
 
 	_clean()
 

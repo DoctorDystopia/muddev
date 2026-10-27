@@ -36,8 +36,8 @@ from unittest import mock
 # assets/ is import-safe by design -- it touches no database and starts no
 # Evennia. That is what separates it from blackout/scripts/, which CLAUDE.md
 # marks import-unsafe and which a test must never reach into.
-from assets.pipeline import (budgets, check, glb, licenses, outputs, paths,
-                             records, sources)
+from assets.pipeline import (blender, budgets, build, check, glb, licenses,
+                             outputs, paths, records, sources)
 
 
 def _write_record(folder, family, asset_key, text):
@@ -603,6 +603,93 @@ class GodotExtensionTests(unittest.TestCase):
         for name in traps:
             with self.subTest(extension=name):
                 self.assertNotIn(name, glb.GODOT_RUNTIME_EXTENSIONS)
+
+
+class FormatScriptTests(unittest.TestCase):
+    """
+    A format with a script of its own (.vox, 10/25/2026) runs that script,
+    and the script feeds only the digest of a model in its format. Thus, a
+    new format makes no other model stale.
+    """
+
+    _SOURCE = ('title = "t"\nauthor = "a"\nurl = "u"\nsite = "s"\n'
+               'license = "CC0-1.0"\nretrieved = 2026-10-25\n\n[files]\n')
+    _FILES = ("model.glb", "model.vox")
+
+    def setUp(self):
+        self._folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self._folder.cleanup)
+        root = self._folder.name
+        patch = mock.patch.object(paths, "SOURCES_DIR", root)
+        patch.start()
+        self.addCleanup(patch.stop)
+        directory = os.path.join(root, "kit")
+        os.makedirs(directory)
+
+        with open(os.path.join(directory, paths.SOURCE_RECORD_NAME), "w",
+                  encoding="utf-8") as handle:
+            handle.write(self._SOURCE)
+
+        for name in self._FILES:
+            with open(os.path.join(directory, name), "wb") as handle:
+                handle.write(b"art")
+
+        sources.seal(sources.load_source("kit"))
+        self.source = sources.load_source("kit")
+        self.records = [
+            records.load_record(_write_record(
+                os.path.join(root, "models"), "items", "model_%d" % index,
+                'source = "kit"\nfile = "%s"\n' % name))
+            for index, name in enumerate(self._FILES)]
+
+    def _digests(self, script_text):
+        """Give the digest of each record, with this text as the script."""
+        script = os.path.join(self._folder.name, "script.py")
+
+        with open(script, "w", encoding="utf-8") as handle:
+            handle.write(script_text)
+
+        with mock.patch.dict(blender.FORMAT_SCRIPTS, {".vox": script}):
+            return {record.file: build.inputs_digest(record, self.source)
+                    for record in self.records}
+
+    def test_a_format_script_feeds_only_the_digest_of_its_format(self):
+        before = self._digests("one")
+        after = self._digests("two")
+
+        self.assertEqual(before["model.glb"], after["model.glb"])
+        self.assertNotEqual(before["model.vox"], after["model.vox"])
+
+    def test_each_format_script_is_a_pipeline_file_outside_the_shared_list(
+            self):
+        shared = [os.path.normcase(path) for path in build._PIPELINE_FILES]
+
+        for suffix, script in blender.FORMAT_SCRIPTS.items():
+            with self.subTest(suffix=suffix):
+                self.assertTrue(os.path.isfile(script))
+                self.assertIn(suffix, blender.BLENDER_SUFFIXES)
+                self.assertNotIn(os.path.normcase(script), shared)
+
+    def test_blender_runs_the_script_of_the_format(self):
+        output = os.path.join(self._folder.name, "out.glb")
+
+        with open(output, "wb") as handle:
+            handle.write(b"glTF")
+
+        finished = mock.Mock(returncode=0, stdout="", stderr="")
+        cases = (("model.vox", blender.FORMAT_SCRIPTS[".vox"]),
+                 ("model.fbx", paths.BLENDER_SCRIPT))
+
+        for name, expected in cases:
+            with self.subTest(file=name), \
+                    mock.patch.object(blender, "find_blender",
+                                      return_value="blender"), \
+                    mock.patch.object(blender.subprocess, "run",
+                                      return_value=finished) as run:
+                blender.to_glb(name, output)
+                command = run.call_args[0][0]
+
+                self.assertIn(expected, command)
 
 
 if __name__ == "__main__":

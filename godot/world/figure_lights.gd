@@ -79,10 +79,10 @@ func refresh() -> void:
 	show_lights(TileLights.all_of(_state.plane_chunks(_state.current_plane)), origin)
 
 
-## Stand a light on each of the [constant MAX_LIGHTS] lamps of `lights`
-## nearest `origin`, and hide the rest.
-func show_lights(lights: Array, origin: Vector3) -> void:
-	var chosen := nearest(lights, origin, MAX_LIGHTS)
+## Stand a light on each of the [constant MAX_LIGHTS] `lamps` nearest
+## `origin`, and hide the rest.
+func show_lights(lamps: Array, origin: Vector3) -> void:
+	var chosen := nearest(lamps, origin, MAX_LIGHTS)
 
 	for index: int in MAX_LIGHTS:
 		var light := _lights[index]
@@ -116,9 +116,9 @@ func lights() -> Array[OmniLight3D]:
 	return _lights
 
 
-## The `count` lamps of `lights` nearest `origin`, nearest first.
-static func nearest(lights: Array, origin: Vector3, count: int) -> Array:
-	var sorted := lights.duplicate()
+## The `count` entries of `lamps` nearest `origin`, nearest first.
+static func nearest(lamps: Array, origin: Vector3, count: int) -> Array:
+	var sorted := lamps.duplicate()
 
 	sorted.sort_custom(func(a: TileLights.Light, b: TileLights.Light) -> bool:
 		return a.position.distance_squared_to(origin) < b.position.distance_squared_to(origin))

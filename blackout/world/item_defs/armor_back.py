@@ -35,24 +35,24 @@ ITEMS = {
         tags=[("rusty_scrap_hide_cape", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 1,
-            "slash_defense_bonus": 1,
-            "crush_defense_bonus": 1,
+            "melee_stab_defense_bonus": 1,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 1,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 1,
-            "standard_defense_bonus": 1,
-            "heavy_defense_bonus": 1,
+            "projectile_light_defense_bonus": 1,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 1,
 
             # Other bonuses
             "melee_strength_bonus": 1,
@@ -82,24 +82,24 @@ ITEMS = {
         tags=[("scrap_hide_cape", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 2,
-            "slash_defense_bonus": 2,
-            "crush_defense_bonus": 2,
+            "melee_stab_defense_bonus": 2,
+            "melee_slash_defense_bonus": 2,
+            "melee_crush_defense_bonus": 2,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 2,
-            "standard_defense_bonus": 2,
-            "heavy_defense_bonus": 2,
+            "projectile_light_defense_bonus": 2,
+            "projectile_standard_defense_bonus": 2,
+            "projectile_heavy_defense_bonus": 2,
 
             # Other bonuses
             "melee_strength_bonus": 2,
@@ -129,24 +129,24 @@ ITEMS = {
         tags=[("copper_hide_cape", "armor")],
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": 0,
-            "slash_attack_bonus": 0,
-            "crush_attack_bonus": 0,
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 3,
-            "slash_defense_bonus": 3,
-            "crush_defense_bonus": 3,
+            "melee_stab_defense_bonus": 3,
+            "melee_slash_defense_bonus": 3,
+            "melee_crush_defense_bonus": 3,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 3,
-            "standard_defense_bonus": 3,
-            "heavy_defense_bonus": 3,
+            "projectile_light_defense_bonus": 3,
+            "projectile_standard_defense_bonus": 3,
+            "projectile_heavy_defense_bonus": 3,
 
             # Other bonuses
             "melee_strength_bonus": 3,

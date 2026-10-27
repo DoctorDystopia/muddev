@@ -61,6 +61,7 @@ func _ready() -> void:
 	_a_shift_click_drops_when_the_player_turned_it_on()
 	_a_shift_click_is_a_click_when_the_option_is_off()
 	_a_shift_click_on_a_row_with_no_drop_is_a_click()
+	_the_hover_text_names_what_a_shift_click_sends()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -248,6 +249,36 @@ func _a_shift_click_on_a_row_with_no_drop_is_a_click() -> void:
 		"a row with no Drop key gets the first action, never a guessed drop")
 
 	cell.free()
+	_clean_settings()
+
+
+## The bar must name what the click sends, in all three cases above.
+func _the_hover_text_names_what_a_shift_click_sends() -> void:
+	var drop_text := "Click: Drop rusty metal dust"
+	var first_text := "Click: Sell 1 rusty metal dust"
+	var cell := _cell()
+	cell.bind_settings(_settings_with_shift_drop(true))
+
+	_expect(cell.hover_text(true).contains(drop_text),
+		"with Shift held, the hover text names the Drop")
+	_expect(cell.hover_text(false).contains(first_text),
+		"without Shift, it names the first action")
+	_expect(cell.tooltip_text.contains(first_text),
+		"the delayed tooltip names the plain click")
+
+	cell.bind_settings(_settings_with_shift_drop(false))
+	_expect(cell.hover_text(true).contains(first_text),
+		"with the option off, Shift does not change the hover text")
+	cell.free()
+
+	var plate := SlotCell.new()
+	add_child(plate)
+	plate.bind(_state, SlotCell.KIND_CARRIED, NO_DROP_SLOT)
+	plate.bind_settings(_settings_with_shift_drop(true))
+	_expect(plate.hover_text(true).contains("Click: Inspect scrap plate"),
+		"a row with no Drop key names its first action with Shift held")
+
+	plate.free()
 	_clean_settings()
 
 

@@ -23,6 +23,9 @@ const FIXTURES_FROM_GAME := "systems/core/tilegrid/tests/fixtures"
 const DIGEST_FILE := "digests.json"
 const BASE_FIXTURE := "chunk_-1_2_p0.json"
 
+## The fixture with the two item spawns.
+const SPAWN_FIXTURE := "chunk_3_-2_p0.json"
+
 var _failures := 0
 var _base := {}
 
@@ -42,6 +45,7 @@ func _ready() -> void:
 	_an_integral_float_counts_as_an_int()
 	_objects_are_local_and_the_reader_adds_the_offset()
 	_a_look_reads_as_ints_and_writes_one_text()
+	_a_spawn_reads_as_ints_and_writes_one_text()
 	_the_file_name_follows_the_template()
 
 	if _failures > 0:
@@ -157,6 +161,7 @@ func _every_invalid_case_is_refused() -> void:
 		d["objects"][0]["look"] = {_Const.LOOK_OFFSET_KEY: [0, 0.5, 0]})
 	_refuses("object_look_offset_too_far", func(d: Dictionary) -> void:
 		d["objects"][0]["look"] = {_Const.LOOK_OFFSET_KEY: [-_Const.LOOK_OFFSET_MAX - 1, 0, 0]})
+	_every_spawn_case_is_refused()
 	# Format 2, the wall styles (DESIGN-0013 section 6.4).
 	_refuses("format_one_with_walls", func(d: Dictionary) -> void:
 		_with_walls(d, ["brick"], 0)
@@ -169,6 +174,50 @@ func _every_invalid_case_is_refused() -> void:
 		_with_walls(d, ["brick"], 1))
 	_refuses("walls_all_default", func(d: Dictionary) -> void:
 		_with_walls(d, [_Const.TILE_DEFAULT_WALL_STYLE, "brick"], 0))
+
+
+## The spawn cases (10/21/2026). Each one breaks one key of a good spawn, as
+## the Python `_GOOD_SPAWN` cases do.
+func _every_spawn_case_is_refused() -> void:
+	var top: int = _Const.SPAWN_QUANTITY_MAX + 1
+
+	_refuses("object_spawn_not_table", _with_spawn("scrap"))
+	_refuses("object_spawn_unknown_key", _with_spawn(_good_spawn({"chance": 50})))
+	_refuses("object_spawn_no_item", _with_spawn({_Const.SPAWN_RESPAWN_KEY: 10}))
+	_refuses("object_spawn_no_respawn", _with_spawn({_Const.SPAWN_ITEM_KEY: "scrap"}))
+	_refuses("object_spawn_bad_item", _with_spawn(_good_spawn(
+		{_Const.SPAWN_ITEM_KEY: "Scrap Metal"})))
+	_refuses("object_spawn_quantity_not_pair", _with_spawn(_good_spawn(
+		{_Const.SPAWN_QUANTITY_KEY: [3]})))
+	_refuses("object_spawn_quantity_backwards", _with_spawn(_good_spawn(
+		{_Const.SPAWN_QUANTITY_KEY: [5, 2]})))
+	_refuses("object_spawn_quantity_zero", _with_spawn(_good_spawn(
+		{_Const.SPAWN_QUANTITY_KEY: [0, 2]})))
+	_refuses("object_spawn_quantity_default", _with_spawn(_good_spawn(
+		{_Const.SPAWN_QUANTITY_KEY: [1, 1]})))
+	_refuses("object_spawn_quantity_too_large", _with_spawn(_good_spawn(
+		{_Const.SPAWN_QUANTITY_KEY: [1, top]})))
+	_refuses("object_spawn_respawn_zero", _with_spawn(_good_spawn(
+		{_Const.SPAWN_RESPAWN_KEY: 0})))
+	_refuses("object_spawn_respawn_too_long", _with_spawn(_good_spawn(
+		{_Const.SPAWN_RESPAWN_KEY: _Const.SPAWN_RESPAWN_MAX + 1})))
+	_refuses("object_spawn_respawn_fraction", _with_spawn(_good_spawn(
+		{_Const.SPAWN_RESPAWN_KEY: 2.5})))
+
+
+## A spawn that the reader accepts, with `changes` over it.
+static func _good_spawn(changes: Dictionary) -> Dictionary:
+	var spawn := {_Const.SPAWN_ITEM_KEY: "scrap", _Const.SPAWN_RESPAWN_KEY: 10}
+
+	spawn.merge(changes, true)
+
+	return spawn
+
+
+## A change that gives the first object of the base fixture `spawn`.
+static func _with_spawn(spawn: Variant) -> Callable:
+	return func(d: Dictionary) -> void:
+		d["objects"][0][ChunkFile.OBJECT_SPAWN_KEY] = spawn
 
 
 ## Make `data` a file of format 2 with the wall styles `names`. The first
@@ -306,6 +355,37 @@ func _a_look_reads_as_ints_and_writes_one_text() -> void:
 	_expect(ChunkFile.look_problem(full).is_empty(), "the full look passes look_problem")
 	_expect(not ChunkFile.look_problem({_Const.LOOK_SCALE_KEY: _Const.LOOK_SCALE_UNIT}).is_empty(),
 		"a scale at the unit is refused")
+
+
+## The spawn fixture holds a spawn with a quantity and one with none
+## (10/21/2026). A float from the parser reads as an int. The text keeps the
+## order of the keys, as the Python writer does.
+func _a_spawn_reads_as_ints_and_writes_one_text() -> void:
+	var chunk := ChunkFile.parse_text(_fixture_text(SPAWN_FIXTURE))
+	var spawns: Array[Dictionary] = []
+
+	for thing: Dictionary in chunk.objects:
+		if not thing["spawn"].is_empty():
+			spawns.append(thing["spawn"])
+
+	var ranged := spawns.filter(func(spawn: Dictionary) -> bool:
+		return spawn.has(_Const.SPAWN_QUANTITY_KEY))
+
+	_expect(spawns.size() == 2, "the spawn fixture holds two spawns")
+	_expect(ranged.size() == 1, "one spawn of the fixture holds a quantity")
+
+	for spawn: Dictionary in spawns:
+		_expect(spawn[_Const.SPAWN_RESPAWN_KEY] is int, "the respawn of a spawn reads as an int")
+		_expect(ChunkFile.spawn_problem(spawn).is_empty(), "a fixture spawn passes spawn_problem")
+		_expect(ChunkFile.normal_spawn(JSON.parse_string(ChunkFile.spawn_text(spawn))) == spawn,
+			"spawn_text writes JSON that reads back to the spawn")
+
+	var unit: int = _Const.SPAWN_QUANTITY_UNIT
+
+	_expect(ChunkFile.spawn_quantity({}) == [unit, unit], "no quantity gives one unit")
+	_expect(not ChunkFile.spawn_problem({_Const.SPAWN_ITEM_KEY: "scrap",
+		_Const.SPAWN_QUANTITY_KEY: [unit, unit], _Const.SPAWN_RESPAWN_KEY: 10}).is_empty(),
+		"a quantity of one unit is refused")
 
 
 func _the_file_name_follows_the_template() -> void:

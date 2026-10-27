@@ -158,12 +158,12 @@ func free_models() -> void:
 ## waiting on art.
 ##
 ## `look` is the look of the chunk object that stood the entity up, and
-## `seed` names its tile for the auto variant (10/16/2026). The variant of
-## the look draws first. A variant with no art falls to the base, and only
-## then to the family.
+## `variant_seed` names its tile for the auto variant (10/16/2026). The
+## variant of the look draws first. A variant with no art falls to the base,
+## and only then to the family.
 func resolve_entity(asset_key: String, family: String, look: Dictionary = {},
-		seed: String = "") -> Node3D:
-	var model := _variant_art_for(asset_key, look, seed)
+		variant_seed: String = "") -> Node3D:
+	var model := _variant_art_for(asset_key, look, variant_seed)
 
 	if model != null:
 		return model
@@ -190,22 +190,24 @@ func resolve_entity(asset_key: String, family: String, look: Dictionary = {},
 ## generic block on every unmodelled tile is scenery nobody asked for — every
 ## tile in the game would sprout a grey cube.
 ##
-## `look` and `seed` pick a variant, as for [method resolve_entity].
-func resolve_scenery(asset_key: String, look: Dictionary = {}, seed: String = "") -> Node3D:
-	return _variant_art_for(asset_key, look, seed)
+## `look` and `variant_seed` pick a variant, as for [method resolve_entity].
+func resolve_scenery(asset_key: String, look: Dictionary = {},
+		variant_seed: String = "") -> Node3D:
+	return _variant_art_for(asset_key, look, variant_seed)
 
 
 ## The served model of the asset key itself, or null. This is tier 1 alone,
 ## with no family model and no family shape. A key with no model in hand
 ## starts its fetch. [signal refreshed] names the key when the file arrives.
 ##
-## `look` and `seed` pick a variant, as for [method resolve_entity]. With no
-## look, the answer is the model of the key.
+## `look` and `variant_seed` pick a variant, as for [method resolve_entity].
+## With no look, the answer is the model of the key.
 ##
 ## For [ItemStage] and [EntityPool]. Each has a stand-in of its own between
 ## tier 1 and tier 2: the worn look of the item (10/17/2026).
-func resolve_own_art(asset_key: String, look: Dictionary = {}, seed: String = "") -> Node3D:
-	return _variant_art_for(asset_key, look, seed)
+func resolve_own_art(asset_key: String, look: Dictionary = {},
+		variant_seed: String = "") -> Node3D:
+	return _variant_art_for(asset_key, look, variant_seed)
 
 
 ## The variant keys of one base model. See [method ModelRegistry.variants_of].
@@ -215,8 +217,8 @@ func variants_of(asset_key: String) -> PackedStringArray:
 
 ## The art of the variant that a look picks, or of the base when the
 ## variant has none, or null.
-func _variant_art_for(asset_key: String, look: Dictionary, seed: String) -> Node3D:
-	var key := _registry.variant_for(asset_key, ObjectLook.variant_of(look), seed)
+func _variant_art_for(asset_key: String, look: Dictionary, variant_seed: String) -> Node3D:
+	var key := _registry.variant_for(asset_key, ObjectLook.variant_of(look), variant_seed)
 	var model := _art_for(key)
 
 	if model == null and key != asset_key:

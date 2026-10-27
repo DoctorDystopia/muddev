@@ -6,10 +6,11 @@ Description: CraftingFacility base typeclass and the craft command attached
              to facilities.
 """
 
-from evennia import Command, CmdSet
+from evennia import CmdSet
 from evennia import DefaultObject
 from systems.interface.menus.base_menu import start_blackout_menu
 
+from commands.command import FacingCommand
 from commands.constants import HELP_CATEGORY_CRAFTING
 from systems.interface.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent
@@ -124,7 +125,7 @@ def cancel_craft(caller) -> bool:
     return cancelled
 
 
-class CmdCraft(Command):
+class CmdCraft(FacingCommand):
     """
     Purpose: Opens this crafting facility, or crafts at it.
 

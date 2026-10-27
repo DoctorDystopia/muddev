@@ -92,6 +92,18 @@ const HOLDER_META := "figure_holder"
 ## The meta of a figure node: the action whose clip it plays.
 const ACTION_META := "figure_action"
 
+## The meta of a figure node: the action that the frame asks for, idle or
+## walk. A swing goes back to the clip of this action at its end.
+const REST_META := "figure_rest_action"
+
+## The meta of a figure node: the clip of the swing that it plays, or "".
+const STRIKE_META := "figure_strike_clip"
+
+## The seconds that a swing takes to blend in from the clip before it, and
+## to blend out into the clip after it. Without a blend, the figure jumps
+## to the first pose of the swing.
+const STRIKE_BLEND := 0.12
+
 ## Why a figure set with no rig does not serve: no figure can stand.
 const NO_RIG := "it has no rig"
 
@@ -278,19 +290,67 @@ static func figure_of(holder: Node3D) -> Node3D:
 ## Play the clip of one action on a figure: idle, walk. The clip comes from
 ## the default clip set of the stance table. A figure that plays the clip of
 ## that action already goes on with it.
+##
+## A pane calls this on each frame. A swing that plays ([method strike])
+## stays until its end. The action of the frame then follows it.
 static func play(holder: Node3D, action: String) -> void:
 	var figure := figure_of(holder)
 
-	if figure == null or figure.get_meta(ACTION_META, "") == action:
+	if figure == null:
 		return
 
-	var clip := _stance_table().clip_for("", action)
+	figure.set_meta(REST_META, action)
 
-	if clip.is_empty():
-		clip = _stance_table().clip_for("", FigureStances.ACTION_IDLE)
+	if figure.get_meta(ACTION_META, "") == action:
+		return
+
+	var clip := _rest_clip(action)
+
+	if _striking(figure):
+		_queue_after_strike(figure, clip)
+		return
 
 	figure.set_meta(ACTION_META, action)
-	FigureClips.play(figure, clip)
+	figure.set_meta(STRIKE_META, "")
+
+	# The queue of a swing starts this clip at the end of the swing, with a
+	# blend. A new start would cut that blend.
+	if not _plays(figure, clip):
+		FigureClips.play(figure, clip)
+
+
+## Play the clip of one attack action on a figure, one time: one swing
+## (`figure_action` of `blackout_combat`, 10/25/2026). An action with no
+## clip of its own plays the clip of `attack`. A figure with neither clip
+## keeps what it plays.
+##
+## A second swing starts again from the start of its clip. At the end of a
+## swing, the player goes on with the clip of the action of the frame, from
+## a queue. Thus, a figure that no pane plays on each frame also goes back.
+static func strike(holder: Node3D, action: String) -> void:
+	var figure := figure_of(holder)
+
+	if figure == null:
+		return
+
+	var clip := _stance_table().attack_clip_for("", action)
+
+	if clip.is_empty() or not FigureClips.play(figure, clip, 1.0, STRIKE_BLEND):
+		return
+
+	var rest: String = figure.get_meta(REST_META, FigureStances.ACTION_IDLE)
+
+	figure.set_meta(ACTION_META, action)
+	figure.set_meta(STRIKE_META, clip)
+	_queue_after_strike(figure, _rest_clip(rest))
+
+
+## True while a figure plays a swing that has not ended. A clip that loops
+## never ends, so it is no swing: the action of the next frame replaces it.
+static func is_striking(holder: Node3D) -> bool:
+	var figure := figure_of(holder)
+
+	return figure != null and _striking(figure)
 
 
 # ─── Private ────────────────────────────────────────────────────────────────
@@ -445,6 +505,47 @@ static func _stance_table() -> FigureStances:
 		_stances = FigureStances.read_file()
 
 	return _stances
+
+
+## The clip of an action of the frame. An action with no clip idles.
+static func _rest_clip(action: String) -> String:
+	var clip := _stance_table().clip_for("", action)
+
+	return _stance_table().clip_for("", FigureStances.ACTION_IDLE) if clip.is_empty() else clip
+
+
+## True while the player of a figure plays the clip of a swing, and the clip
+## does not loop.
+static func _striking(figure: Node3D) -> bool:
+	var clip: String = figure.get_meta(STRIKE_META, "")
+	var player := FigureClips.player_of(figure)
+
+	if clip.is_empty() or not player.is_playing() or player.current_animation != clip:
+		return false
+
+	return player.get_animation(clip).loop_mode == Animation.LOOP_NONE
+
+
+## Start `clip` at the end of the swing that a figure plays, with a blend.
+## The queue holds one clip: a new one takes the place of the old one.
+static func _queue_after_strike(figure: Node3D, clip: String) -> void:
+	var player := FigureClips.player_of(figure)
+	var strike_clip: String = figure.get_meta(STRIKE_META, "")
+
+	player.clear_queue()
+
+	if not player.has_animation(clip):
+		return
+
+	player.set_blend_time(strike_clip, clip, STRIKE_BLEND)
+	player.queue(clip)
+
+
+## True when the player of a figure plays `clip` now.
+static func _plays(figure: Node3D, clip: String) -> bool:
+	var player := FigureClips.player_of(figure)
+
+	return player.is_playing() and player.current_animation == clip
 
 
 ## Give each surface of a figure a material of its own. A shape of a shape

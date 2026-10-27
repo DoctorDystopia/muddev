@@ -25,7 +25,7 @@ Description: `read` -- the words on a thing, as opposed to the look of it.
              something to say.
 """
 
-from commands.command import Command
+from commands.command import Command, turn_to
 from commands.constants import HELP_CATEGORY_GENERAL
 from evennia import CmdSet
 from systems.interface.statefeed import constants as feed_const
@@ -105,6 +105,10 @@ class CmdRead(Command):
 
         if target is None:
             return
+
+        # A sign in the room turns the reader to it. A notice in the bag
+        # turns nobody, and turn_to owns that rule.
+        turn_to(caller, target)
 
         if not getattr(target, _READABLE_ATTR, False):
             caller.msg(

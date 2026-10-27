@@ -1,0 +1,6 @@
+source = "itch_stove_2"
+file   = "stove (2).vox"
+
+[fix]
+# A palette: one texel for each colour. A mipmap mixes two colours.
+filter = "nearest"

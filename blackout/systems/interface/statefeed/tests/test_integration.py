@@ -24,14 +24,17 @@ from unittest import mock
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaTest
 
+from commands.command import turn_to
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid.constants import FACING_ATTR, LOOK_ATTR, ROTATION_COUNT
 from systems.gameplay.banking.handler import BankHandler
 from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.combat.combat import ensure_combat_handler
 from systems.gameplay.combat.rules.context import ActionResult
+from systems.gameplay.exterminator import constants as ext_const
 from systems.interface.statefeed import constants as const
-from systems.interface.statefeed import events, resync, serializers, subscriptions
+from systems.interface.statefeed import (events, figure_catalog, resync, serializers,
+                                         subscriptions)
 from systems.interface.statefeed.payloads import (
     CharAvatarPayload,
     CharItemsPayload,
@@ -39,9 +42,12 @@ from systems.interface.statefeed.payloads import (
     CombatPayload,
     FacePayload,
 )
+from typeclasses.bank_nodes import BankNode
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.gathering_nodes import RustyPole
 from typeclasses.npc_spawners import spawn_npc
+from typeclasses.signs import Sign
+from typeclasses.skill_facilities import CuringChamberFacility, FurnaceFacility
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 
@@ -61,6 +67,9 @@ _TEST_ITEM_KEY = "rusty_scrap_spear"
 # A stackable ITEM_DB key, so a deposit can take the merging and partial
 # paths rather than the plain move_to one.
 _STACKABLE_ITEM_KEY = "rusty_metal_dust"
+
+# A Preceptor NPC def, the one that test_service.py of the exterminator uses.
+_PRECEPTOR_KEY = "atticus_quin"
 
 
 class _FeedRecorder:
@@ -437,18 +446,39 @@ class TestFaceFeed(EvenniaTest):
     def _command(self, line: str):
         """Run one command of char1, recording what the feed emitted.
 
-        The menu launcher is a stub. The event is the thing under test,
-        and an EvMenu on the character is noise beside it.
+        Each menu launcher is a stub: the one of the NPCs, of the stations,
+        and of the bank. The event is the thing under test, and an EvMenu on
+        the character is noise beside it.
         """
         recorder = _FeedRecorder()
 
         with mock.patch("systems.interface.statefeed.events.emit", recorder):
             with mock.patch("systems.interface.statefeed.events.emit_to_room",
                             return_value=0):
-                with mock.patch("typeclasses.npcs.start_blackout_menu"):
+                with mock.patch("typeclasses.npcs.start_blackout_menu"), \
+                        mock.patch("typeclasses.crafting_facilities.start_blackout_menu"), \
+                        mock.patch("typeclasses.bank_nodes.start_blackout_menu"):
                     self.char1.execute_cmd(line)
 
         return recorder
+
+    @staticmethod
+    def _carried_commands(thing) -> list:
+        """Every command that the cmdsets of a thing hold."""
+        commands = []
+
+        for cmdset in thing.cmdset.all():
+            commands.extend(cmdset.commands)
+
+        return commands
+
+    def _shopkeep(self):
+        """A shopkeep in room1, from the first NPC def that has a shop."""
+        for npc_def in NPC_DB.values():
+            if npc_def.shop_key is not None:
+                return spawn_npc(npc_def.key, self.room1)
+
+        self.fail("the NPC database holds no shopkeep")
 
     @staticmethod
     def _pairs(events) -> set:
@@ -546,6 +576,101 @@ class TestFaceFeed(EvenniaTest):
             handler.start_combat_state()
 
         self.assertFalse(recorder.of_type(FacePayload))
+
+    # ─── A thing that the player uses (10/20/2026) ──────────────────────────
+
+    def test_each_command_on_a_thing_turns_the_player_to_it(self):
+        # The relationship, not a list of verbs: every command that the
+        # cmdsets of a station, a bank terminal, or a shopkeep hold. A new
+        # command on one of them is in this loop with no edit here. Each
+        # line is bare, so most of them refuse. A refused line turns the
+        # player too.
+        things = [
+            create_object(FurnaceFacility, key="Foundry Furnace",
+                          location=self.room1),
+            create_object(CuringChamberFacility, key="Curing Chamber",
+                          location=self.room1),
+            create_object(BankNode, key="bank terminal", location=self.room1),
+            self._shopkeep(),
+        ]
+
+        for thing in things:
+            for command in self._carried_commands(thing):
+                with self.subTest(thing=thing.key, command=command.key):
+                    # Alone in the room, so each bare key reaches this thing.
+                    for other in things:
+                        other.location = self.room1 if other is thing else None
+
+                    recorder = self._command(command.key)
+                    events = recorder.of_type(FacePayload)
+
+                    self.assertEqual(self._pairs(events),
+                                     {(self.char1.id, thing.id)})
+
+    def test_a_read_turns_the_player_to_the_sign(self):
+        sign = create_object(Sign, key="signpost", location=self.room1)
+        sign.world_label = "NO ENTRY"
+
+        recorder = self._command("read signpost")
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(self.char1.id, sign.id)})
+
+    def test_a_get_turns_the_player_to_the_item(self):
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.room1)
+        item_id = item.id
+
+        recorder = self._command(f"get {item.key}")
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(self.char1.id, item_id)})
+
+    def test_a_new_task_turns_the_player_to_the_preceptor(self):
+        preceptor = NPC_DB[_PRECEPTOR_KEY].create(location=self.room1)
+
+        recorder = self._command(ext_const.TASK_NEW_COMMAND)
+        events = recorder.of_type(FacePayload)
+
+        self.assertEqual(self._pairs(events), {(self.char1.id, preceptor.id)})
+
+    def test_turn_to_skips_a_thing_in_the_bag(self):
+        # The egg and a writ have no figure in the world.
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.char1)
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            turn_to(self.char1, item)
+
+        self.assertFalse(recorder.of_type(FacePayload))
+
+    def test_turn_to_skips_a_thing_in_another_room(self):
+        item = ITEM_DB[_TEST_ITEM_KEY].create(location=self.room2)
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            turn_to(self.char1, item)
+
+        self.assertFalse(recorder.of_type(FacePayload))
+
+    def test_turn_to_skips_the_caller_and_nothing(self):
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            turn_to(self.char1, self.char1)
+            turn_to(self.char1, None)
+
+        self.assertFalse(recorder.of_type(FacePayload))
+
+    def test_a_failing_face_event_does_not_stop_the_command(self):
+        # The statefeed is a bystander. The craft menu still opens.
+        create_object(FurnaceFacility, key="Foundry Furnace", location=self.room1)
+
+        with mock.patch("systems.interface.statefeed.events.emit_face",
+                        side_effect=RuntimeError("boom")):
+            with mock.patch("typeclasses.crafting_facilities.start_blackout_menu") as menu:
+                self.char1.execute_cmd("craft")
+
+        menu.assert_called_once()
 
 
 class TestCombatFeed(EvenniaTest):
@@ -715,6 +840,69 @@ class TestCombatFeed(EvenniaTest):
 
         for key, value in body.items():
             self.assertIsInstance(value, (int, str, bool), msg=key)
+
+    def _expected_action(self, hands, event):
+        """The action that a swing with these hands and its attack type names."""
+        return const.FIGURE_ATTACK_ACTION_TEMPLATE.format(
+            hands=hands, attack_type=event.attack_type)
+
+    def test_a_bare_handed_swing_names_the_unarmed_action(self):
+        result = ActionResult(hit=True, damage=_SMALL_DAMAGE, hit_prob=1.0)
+
+        recorder, _target = self._swing(result)
+        event = recorder.of_type(CombatPayload)[0]
+        expected = self._expected_action(combat_const.ATTACK_HANDS_UNARMED, event)
+
+        self.assertEqual(event.figure_action, expected)
+
+    def test_a_miss_names_the_action_of_the_swing_too(self):
+        # A miss is a swing. The figure swings at the air.
+        result = ActionResult(hit=False, damage=0, hit_prob=0.0)
+
+        recorder, _target = self._swing(result)
+        event = recorder.of_type(CombatPayload)[0]
+        expected = self._expected_action(combat_const.ATTACK_HANDS_UNARMED, event)
+
+        self.assertEqual(event.figure_action, expected)
+
+    def test_a_swing_names_the_hands_of_the_held_weapon(self):
+        """
+        One weapon for each hand slot, from ITEM_DB: a melee weapon that a
+        new character can equip. The action names the hands of its slot.
+        Each action is one that the item catalog lists, so the Clips tab
+        has a row for it.
+        """
+        listed = set(figure_catalog.attack_actions())
+
+        for slot, hands in combat_const.ATTACK_HANDS_BY_SLOT.items():
+            with self.subTest(slot=slot.value):
+                weapon = self._equip_a_weapon_of(slot)
+                result = ActionResult(hit=True, damage=_SMALL_DAMAGE, hit_prob=1.0)
+
+                # The swing of the slot before charged the weapon cooldown.
+                ensure_combat_handler(self.char1).ndb.cooldown_ticks = 0
+                recorder, _target = self._swing(result)
+                event = recorder.of_type(CombatPayload)[0]
+
+                self.assertEqual(event.figure_action,
+                                 self._expected_action(hands, event))
+                self.assertIn(event.figure_action, listed)
+                self.char1.equipment.unequip(weapon)
+
+    def _equip_a_weapon_of(self, slot):
+        """Equip the first melee weapon of `slot` with no level gate."""
+        keys = [key for key in sorted(ITEM_DB)
+                if ITEM_DB[key].use_slot is slot
+                and ITEM_DB[key].combat_styles
+                and ITEM_DB[key].accepted_ammo is None
+                and not ITEM_DB[key].req_level]
+
+        self.assertTrue(keys, "ITEM_DB has no melee weapon for %s" % slot.value)
+
+        weapon = ITEM_DB[keys[0]].create(location=self.char1)
+        self.char1.equipment.equip(weapon)
+
+        return weapon
 
 
 class TestInventoryFeedDuringAMove(EvenniaTest):

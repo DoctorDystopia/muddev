@@ -335,7 +335,7 @@ func resolved(looks: Dictionary) -> FigureLook:
 	var chain := base_chain(looks)
 	var root: FigureLook = chain[-1]
 	var out := {"format": FORMAT, "key": key()}
-	var colors := {}
+	var merged_colors := {}
 	var hidden := {}
 
 	if root.base().is_empty():
@@ -344,13 +344,13 @@ func resolved(looks: Dictionary) -> FigureLook:
 				out[kept] = root.data[kept]
 
 	for index in range(chain.size() - 1, -1, -1):
-		colors.merge(chain[index].colors(), true)
+		merged_colors.merge(chain[index].colors(), true)
 
 		for region: String in chain[index].hides():
 			hidden[region] = true
 
-	if not colors.is_empty():
-		out["colors"] = colors
+	if not merged_colors.is_empty():
+		out["colors"] = merged_colors
 
 	if not hidden.is_empty():
 		out["hides"] = hidden.keys()
@@ -417,9 +417,9 @@ static func set_shape_transform(shape: Dictionary, xform: Transform3D) -> void:
 
 ## One shape of a shape list as [MeshBuilder] reads it: each vector is a
 ## [Vector3], the color role is the named color of the look, and a shape
-## with no count of sides or rings gets a low one. `colors` is the color
-## table of the look. [FigurePalette] gives the named color its color.
-static func builder_shape(shape: Dictionary, colors: Dictionary) -> Dictionary:
+## with no count of sides or rings gets a low one. `color_table` is the
+## color table of the look. [FigurePalette] gives the named color its color.
+static func builder_shape(shape: Dictionary, color_table: Dictionary) -> Dictionary:
 	var out := shape.duplicate()
 	var role: String = shape.get("color", MeshPalette.GENERIC)
 
@@ -427,7 +427,7 @@ static func builder_shape(shape: Dictionary, colors: Dictionary) -> Dictionary:
 		if out.has(vector_key):
 			out[vector_key] = FigureJson.vector3(out[vector_key])
 
-	out["color"] = colors.get(role, role)
+	out["color"] = color_table.get(role, role)
 
 	if not out.has("segments"):
 		out["segments"] = DEFAULT_SEGMENTS
@@ -515,10 +515,10 @@ static func _names_problem(parsed: Dictionary) -> String:
 			or (not group.is_empty() and plain.search(group) == null):
 		return "kit must be the name of a kit group: a-z, 0-9, and _"
 
-	var colors: Dictionary = parsed.get("colors", {})
+	var color_table: Dictionary = parsed.get("colors", {})
 
-	for role: Variant in colors:
-		if typeof(colors[role]) != TYPE_STRING or colors[role].is_empty():
+	for role: Variant in color_table:
+		if typeof(color_table[role]) != TYPE_STRING or color_table[role].is_empty():
 			return "the color role %s needs a named color" % role
 
 	return ""
@@ -636,11 +636,11 @@ static func _normal(parsed: Dictionary) -> Dictionary:
 				row.erase(name_key)
 
 	if out.has("served"):
-		var served: Dictionary = out["served"]
+		var served_row: Dictionary = out["served"]
 
 		for pair: Array in [["position", [0.0, 0.0, 0.0]], ["rotation", [0.0, 0.0, 0.0]],
 				["scale", [1.0, 1.0, 1.0]]]:
-			if not served.has(pair[0]):
-				served[pair[0]] = pair[1].duplicate()
+			if not served_row.has(pair[0]):
+				served_row[pair[0]] = pair[1].duplicate()
 
 	return out

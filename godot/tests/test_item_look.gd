@@ -26,6 +26,9 @@ extends Node
 ##     model part. The hit flash of one leaves the other.
 ## 11. The ground follows its facts: the figure set, the model of a part,
 ##     and the served model of the key.
+## 12. Each item fills its cell at the widest turn of its spin, and no turn
+##     draws past the edge of the cell: a worn look, a served model, and a
+##     family shape.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -52,6 +55,14 @@ const FIRST_ROW := 501
 ## directory is the model tree itself. The figure workbench does the same.
 const MODEL_TREE_ROOT := "/"
 
+## How many served models the cell case draws. A served model has some
+## thousands of triangles, so two keep the case short.
+const SERVED_CELL_CASES := 2
+
+## The turns of the spin that the cell case measures, over half a turn. The
+## second half of a turn mirrors the first.
+const SPIN_SAMPLES := 24
+
 var _failures := 0
 var _text := ""
 
@@ -71,6 +82,7 @@ func _ready() -> void:
 	_each_item_look_rests_on_its_tile()
 	_items_on_the_ground_own_their_materials()
 	_the_ground_follows_its_facts()
+	_each_item_fills_its_cell()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -392,6 +404,83 @@ func _check_stage_order(library: FigureLibrary, resolver: MeshResolver,
 	_expect(_is_ladder(_drawn(stage, 3)), "a stage with no library draws through the mesh ladder")
 	remove_child(stage)
 	stage.free()
+
+
+## The stage fits each item on its outline over the spin (10/21/2026). The
+## case reads each triangle of each mesh, not a hull, and it turns the item
+## as the stage does. Thus, it does not repeat the rule that it tests.
+func _each_item_fills_its_cell() -> void:
+	var library := _library()
+	var served := _served_resolver()
+	var ladder := _resolver()
+	var keys := _item_keys(library)
+	var stage := ItemStage.new()
+	var half := ItemStage.CELL_WORLD * 0.5
+	# The widest turn can fall between two samples.
+	var slack := cos(PI / SPIN_SAMPLES * 0.5)
+	var fill := ItemStage.ITEM_FILL * ItemStage.CELL_WORLD * slack
+
+	keys.append_array(_served_keys(served, SERVED_CELL_CASES))
+	add_child(stage)
+	stage.reserve(keys.size() + 1)
+
+	for index: int in keys.size():
+		stage.place(index, keys[index], _Const.FAMILY_GENERIC, served, library)
+
+	# The ladder has no model and no look, so it draws a family shape.
+	stage.place(keys.size(), NO_SUCH_ITEM, _Const.FAMILY_GENERIC, ladder)
+	keys.append(NO_SUCH_ITEM)
+
+	for index: int in keys.size():
+		var node := _drawn(stage, index)
+
+		_expect(node != null, "the stage draws %s" % keys[index])
+
+		if node == null:
+			continue
+
+		var box := _swept_cell_box(node, stage.cell_centre(index))
+		var reach := maxf(box.end.x, maxf(-box.position.y, box.end.y))
+
+		_expect(reach <= half + TOLERANCE,
+			"no turn of %s draws past its cell" % keys[index])
+		_expect(maxf(box.size.x, box.size.y) >= fill - TOLERANCE,
+			"%s fills its cell at its widest turn" % keys[index])
+
+	remove_child(stage)
+	stage.free()
+	served.free_models()
+	served.free()
+	ladder.free()
+	library.free()
+
+
+## The outline that one placed item sweeps over half a turn, from the
+## centre of its cell. The item turns as `_process` of the stage turns it.
+func _swept_cell_box(node: Node3D, centre: Vector3) -> Rect2:
+	var points := PackedVector3Array()
+	var reach := 0.0
+	var low := INF
+	var high := -INF
+
+	for part: Array in ModelLoader.mesh_parts(node):
+		var mesh: Mesh = part[0]
+		var to_node: Transform3D = part[1]
+
+		for point: Vector3 in mesh.get_faces():
+			points.append(to_node * point)
+
+	for _step in SPIN_SAMPLES:
+		node.rotate_y(PI / SPIN_SAMPLES)
+
+		for point: Vector3 in points:
+			var seen := node.transform * point - centre
+
+			reach = maxf(reach, absf(seen.x))
+			low = minf(low, seen.y)
+			high = maxf(high, seen.y)
+
+	return Rect2(-reach, low, reach * 2.0, high - low)
 
 
 ## True for a node of the mesh ladder that is no served model and no

@@ -53,12 +53,25 @@ const OBJECT_TEXT_KEY := "text"
 ## the look holds a key. [method look_problem] gives the rules of a look.
 const OBJECT_LOOK_KEY: String = _Const.OBJECT_LOOK_KEY
 
-## The two optional keys of an object.
-const OBJECT_OPTIONAL_KEYS := [OBJECT_TEXT_KEY, OBJECT_LOOK_KEY]
+## The key of the optional spawn of an item spawn object: the item, the
+## quantity, and the respawn in ticks (10/21/2026). The writer writes it last,
+## and only for an object with a spawn. [method spawn_problem] gives the rules.
+const OBJECT_SPAWN_KEY: String = _Const.OBJECT_SPAWN_KEY
+
+## The three optional keys of an object, in the order that the writer writes
+## them.
+const OBJECT_OPTIONAL_KEYS := [OBJECT_TEXT_KEY, OBJECT_LOOK_KEY, OBJECT_SPAWN_KEY]
 
 ## The keys of a look, in the order that the writer writes them.
 const LOOK_KEYS: Array = [_Const.LOOK_VARIANT_KEY, _Const.LOOK_SCALE_KEY,
 	_Const.LOOK_TURN_KEY, _Const.LOOK_OFFSET_KEY]
+
+## The keys of a spawn, in the order that the writer writes them.
+const SPAWN_KEYS: Array = [_Const.SPAWN_ITEM_KEY, _Const.SPAWN_QUANTITY_KEY,
+	_Const.SPAWN_RESPAWN_KEY]
+
+## The keys that each spawn must hold.
+const SPAWN_REQUIRED_KEYS: Array = [_Const.SPAWN_ITEM_KEY, _Const.SPAWN_RESPAWN_KEY]
 
 const _INDENT := "  "
 const _ROW_INDENT := "    "
@@ -90,9 +103,10 @@ var areas := PackedInt32Array()
 var wall_names := PackedStringArray([_Const.TILE_DEFAULT_WALL_STYLE])
 var walls := PackedInt32Array()
 
-## Each object is `{kind, x, y, rotation, text, look}`, at LOCAL tile
+## Each object is `{kind, x, y, rotation, text, look, spawn}`, at LOCAL tile
 ## coordinates. The text is "" for an object that carries none. The look is
-## `{}` for an object that draws the base model as it comes.
+## `{}` for an object that draws the base model as it comes. The spawn is `{}`
+## for each object that is no item spawn.
 var objects: Array[Dictionary] = []
 
 ## Empty for a good file. Otherwise the first reason the file was refused.
@@ -426,7 +440,23 @@ func _read_objects(value: Variant) -> void:
 				_Const.CHUNK_ROTATION_COUNT - 1, "object %d rotation" % index),
 			"text": _object_text(item, index),
 			"look": _object_look(item, index),
+			"spawn": _object_spawn(item, index),
 		})
+
+
+## The spawn of an object, or `{}`. The spawn must pass
+## [method spawn_problem]. The Python `_object_spawn_value` has the same rule.
+func _object_spawn(item: Dictionary, index: int) -> Dictionary:
+	if not item.has(OBJECT_SPAWN_KEY):
+		return {}
+
+	var problem := spawn_problem(item[OBJECT_SPAWN_KEY])
+
+	if not problem.is_empty():
+		_fail("object %d spawn: %s" % [index, problem])
+		return {}
+
+	return normal_spawn(item[OBJECT_SPAWN_KEY])
 
 
 ## The look of an object, or `{}`. The look must pass [method look_problem].
@@ -641,6 +671,126 @@ static func look_text(look: Dictionary) -> String:
 	return "{" + ",".join(parts) + "}"
 
 
+## Why `value` is no spawn of an object, or "" when it is one. The Python
+## `spawn_problem` has the same rule. The parity cases hold the two to it.
+## The reader and the terrain editor both ask here. Thus, the editor never
+## writes a spawn that the reader refuses.
+##
+## The rule does not know the items. The content check reads the item list.
+## A quantity of one unit is the default, and the rule refuses it. Thus, each
+## spawn has one text.
+static func spawn_problem(value: Variant) -> String:
+	if not (value is Dictionary):
+		return "a spawn must be a table"
+
+	var unknown: Array = []
+
+	for key: Variant in value:
+		if not key in SPAWN_KEYS:
+			unknown.append(str(key))
+
+	if not unknown.is_empty():
+		unknown.sort()
+		return "the key %s is not one of %s" % [unknown[0], ", ".join(SPAWN_KEYS)]
+
+	for key: String in SPAWN_REQUIRED_KEYS:
+		if not value.has(key):
+			return "a spawn must hold the key %s" % key
+
+	var item: Variant = value[_Const.SPAWN_ITEM_KEY]
+	var pattern := RegEx.create_from_string(_Const.CHUNK_NAME_PATTERN)
+
+	if not (item is String) or not _whole_match(pattern, item):
+		return "the item %s is not a name" % str(item)
+
+	var problem := ""
+
+	if value.has(_Const.SPAWN_QUANTITY_KEY):
+		problem = _quantity_problem(value[_Const.SPAWN_QUANTITY_KEY])
+
+	if problem.is_empty():
+		problem = _respawn_problem(value[_Const.SPAWN_RESPAWN_KEY])
+
+	return problem
+
+
+## Why `value` is no quantity of a spawn, or "". A quantity is [low, high],
+## low first. One unit is the default, and the rule refuses it.
+static func _quantity_problem(value: Variant) -> String:
+	if not (value is Array) or value.size() != _Const.SPAWN_QUANTITY_BOUNDS:
+		return "the quantity must be [low, high]"
+
+	var low: Variant = _int_or_none(value[0])
+	var high: Variant = _int_or_none(value[1])
+
+	if low == null or high == null:
+		return "the quantity must hold two integers"
+
+	if low < _Const.SPAWN_QUANTITY_UNIT or high > _Const.SPAWN_QUANTITY_MAX or low > high:
+		return "the quantity must stay in %d..%d, low first" % [
+			_Const.SPAWN_QUANTITY_UNIT, _Const.SPAWN_QUANTITY_MAX]
+
+	if high == _Const.SPAWN_QUANTITY_UNIT:
+		return "a quantity of one is the default. Leave the key out"
+
+	return ""
+
+
+static func _respawn_problem(value: Variant) -> String:
+	var number: Variant = _int_or_none(value)
+
+	if number == null:
+		return "the respawn must be an integer"
+
+	if number < _Const.SPAWN_RESPAWN_MIN or number > _Const.SPAWN_RESPAWN_MAX:
+		return "the respawn must stay in %d..%d ticks" % [_Const.SPAWN_RESPAWN_MIN,
+			_Const.SPAWN_RESPAWN_MAX]
+
+	return ""
+
+
+## A spawn that [method spawn_problem] accepts, in the form that the reader
+## stores: each number as an int, and the keys in the order of
+## [constant SPAWN_KEYS].
+static func normal_spawn(value: Dictionary) -> Dictionary:
+	var spawn := {_Const.SPAWN_ITEM_KEY: value[_Const.SPAWN_ITEM_KEY]}
+
+	if value.has(_Const.SPAWN_QUANTITY_KEY):
+		var bounds: Array = value[_Const.SPAWN_QUANTITY_KEY]
+
+		spawn[_Const.SPAWN_QUANTITY_KEY] = [_int_or_none(bounds[0]), _int_or_none(bounds[1])]
+
+	spawn[_Const.SPAWN_RESPAWN_KEY] = _int_or_none(value[_Const.SPAWN_RESPAWN_KEY])
+
+	return spawn
+
+
+## A spawn as the writer writes it: one JSON object with its keys in the
+## order of [constant SPAWN_KEYS], and no spaces. The Python `spawn_text`
+## writes the same bytes.
+static func spawn_text(spawn: Dictionary) -> String:
+	var parts := PackedStringArray(['"%s":"%s"' % [_Const.SPAWN_ITEM_KEY,
+		spawn[_Const.SPAWN_ITEM_KEY]]])
+
+	if spawn.has(_Const.SPAWN_QUANTITY_KEY):
+		var bounds: Array = spawn[_Const.SPAWN_QUANTITY_KEY]
+
+		parts.append('"%s":[%d,%d]' % [_Const.SPAWN_QUANTITY_KEY, int(bounds[0]),
+			int(bounds[1])])
+
+	parts.append('"%s":%d' % [_Const.SPAWN_RESPAWN_KEY, int(spawn[_Const.SPAWN_RESPAWN_KEY])])
+
+	return "{" + ",".join(parts) + "}"
+
+
+## The [low, high] quantity of a spawn. A spawn with no quantity key gives
+## one unit each time. The Python `spawn_quantity` gives the same.
+static func spawn_quantity(spawn: Dictionary) -> Array:
+	var unit: int = _Const.SPAWN_QUANTITY_UNIT
+
+	return spawn.get(_Const.SPAWN_QUANTITY_KEY, [unit, unit])
+
+
 ## True when `pattern` matches all of `text`. A `$` also matches before a last
 ## "\n". Thus, a plain search takes "sand\n". The writer then puts a raw line
 ## break in a JSON string. The Python reader uses `fullmatch` for this reason.
@@ -707,7 +857,8 @@ func has_wall_styles() -> bool:
 	return false
 
 
-## Each object as `{kind, x, y, rotation, text}` at WORLD tile coordinates.
+## Each object as `{kind, x, y, rotation, text, look, spawn}` at WORLD tile
+## coordinates.
 func global_objects() -> Array[Dictionary]:
 	var placed: Array[Dictionary] = []
 	var origin_x := cx * _Const.CHUNK_SIZE
@@ -716,7 +867,8 @@ func global_objects() -> Array[Dictionary]:
 	for thing: Dictionary in objects:
 		placed.append({"kind": thing["kind"], "x": origin_x + thing["x"],
 			"y": origin_y + thing["y"], "rotation": thing["rotation"],
-			"text": thing.get("text", ""), "look": thing.get("look", {})})
+			"text": thing.get("text", ""), "look": thing.get("look", {}),
+			"spawn": thing.get("spawn", {})})
 
 	return placed
 
@@ -817,16 +969,21 @@ func _object_lines() -> PackedStringArray:
 	return lines
 
 
-## The text key and the look key of one object line, each only when the
-## object has it: `,"text":"..."` then `,"look":{...}`. The template writer
-## uses the same tail. The Python `_object_text` writes the same bytes.
+## The optional keys of one object line: `,"text":"..."`, then
+## `,"look":{...}`, then `,"spawn":{...}`. Each one is there only when the
+## object has it. The template writer uses the same tail. The Python
+## `_object_text` writes the same bytes.
 static func optional_text(thing: Dictionary) -> String:
 	var text: String = thing.get("text", "")
 	var look: Dictionary = thing.get("look", {})
+	var spawn: Dictionary = thing.get("spawn", {})
 	var tail := "" if text.is_empty() else ',"%s":"%s"' % [OBJECT_TEXT_KEY, text]
 
 	if not look.is_empty():
 		tail += ',"%s":%s' % [OBJECT_LOOK_KEY, look_text(look)]
+
+	if not spawn.is_empty():
+		tail += ',"%s":%s' % [OBJECT_SPAWN_KEY, spawn_text(spawn)]
 
 	return tail
 
@@ -892,6 +1049,9 @@ func semantic_dump() -> String:
 		if not thing["look"].is_empty():
 			line += " " + look_text(thing["look"])
 
+		if not thing["spawn"].is_empty():
+			line += " " + spawn_text(thing["spawn"])
+
 		lines.append(line)
 
 	return "\n".join(lines) + "\n"
@@ -907,6 +1067,6 @@ func semantic_digest() -> String:
 	return context.finish().hex_encode()
 
 
-## True when `file_name` is the name of a chunk file.
-static func is_chunk_file_name(file_name: String) -> bool:
-	return file_name.begins_with(CHUNK_FILE_PREFIX) and file_name.ends_with(CHUNK_FILE_SUFFIX)
+## True when `text` is the name of a chunk file.
+static func is_chunk_file_name(text: String) -> bool:
+	return text.begins_with(CHUNK_FILE_PREFIX) and text.ends_with(CHUNK_FILE_SUFFIX)

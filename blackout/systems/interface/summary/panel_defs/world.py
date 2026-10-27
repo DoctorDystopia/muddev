@@ -31,9 +31,24 @@ DAY_SUFFIX = "d"
 HOUR_SUFFIX = "h"
 MINUTE_SUFFIX = "m"
 
-# Width the hour and minute components are zero-padded to when a larger unit
-# precedes them, so "6d 04h" columns line up against "6d 11h".
+# The zero-pad width of a unit after a larger unit. Thus, "6d 04h" lines up
+# with "6d 11h". The playtime clock pads all four of its units to it.
 DURATION_PAD = 2
+
+# The labels of the four units of the playtime clock, largest first, as
+# (singular, plural) pairs. The seconds use one label for each count.
+CLOCK_UNIT_LABELS = (
+    ("day", "days"),
+    ("hour", "hours"),
+    ("min", "mins"),
+    ("sec", "sec"),
+)
+
+# The count that takes the singular label, "01 day" but "02 days".
+SINGULAR_COUNT = 1
+
+# The mark between two units of the playtime clock.
+CLOCK_SEPARATOR = " : "
 
 # How many active quest titles are named before the row is truncated. The count
 # above it is always exact; this only caps the list.
@@ -122,6 +137,51 @@ class WorldPanel(BasePanel):
             return text
 
         text = f"{total_minutes}{MINUTE_SUFFIX}"
+
+        return text
+
+
+    @classmethod
+    def _format_clock(cls, seconds: int) -> str:
+        """
+        Purpose: Render a second count as a playtime clock of four units.
+
+        Entry:
+            seconds is a non-negative integer.
+
+        Exit/Returns:
+            Returns a display string, for example
+            "01 day : 04 hours : 12 mins : 33 sec". Each value pads to
+            DURATION_PAD digits. The days grow past that width.
+
+        Module Globals:
+            const.SECONDS_PER_MINUTE, const.MINUTES_PER_HOUR,
+            const.HOURS_PER_DAY read.
+            CLOCK_UNIT_LABELS, SINGULAR_COUNT, CLOCK_SEPARATOR,
+            DURATION_PAD read.
+
+        Methodology:
+            All four units show at all times, also a unit at zero. A value
+            of SINGULAR_COUNT takes the singular label of its unit.
+
+        Notes/References:
+            The text dossier keeps its two-unit form, _format_duration.
+
+        Author: Nick Hobar
+        Creation date: 10/21/2026
+        """
+        total_minutes, secs = divmod(seconds, const.SECONDS_PER_MINUTE)
+        total_hours, minutes = divmod(total_minutes, const.MINUTES_PER_HOUR)
+        days, hours = divmod(total_hours, const.HOURS_PER_DAY)
+
+        values = (days, hours, minutes, secs)
+        parts = []
+
+        for value, (singular, plural) in zip(values, CLOCK_UNIT_LABELS):
+            label = singular if value == SINGULAR_COUNT else plural
+            parts.append(f"{value:0{DURATION_PAD}d} {label}")
+
+        text = CLOCK_SEPARATOR.join(parts)
 
         return text
 
@@ -317,9 +377,10 @@ class WorldPanel(BasePanel):
             None.
 
         Methodology:
-            Playtime goes out as raw seconds, not as the formatted string -- a
-            client formats for its own locale, and a duration string is not a
-            value anything can compute with.
+            Playtime goes out as the clock text of _format_clock, not as raw
+            seconds. The Godot Character tab draws each field with one
+            generic rule and names no field. Thus, it cannot make a duration
+            from a second count. The server names, and the client draws.
 
         Notes/References:
             None
@@ -330,6 +391,7 @@ class WorldPanel(BasePanel):
         location = character.location
         active = character.quests.active_keys()
         completed = character.quests.completed_keys()
+        playtime = int(getattr(character, "playtime_seconds", 0))
 
         if location is None:
             room_name = ""
@@ -344,7 +406,7 @@ class WorldPanel(BasePanel):
             "quests_active": int(len(active)),
             "quests_completed": int(len(completed)),
             "active_quest_titles": cls._quest_titles(character),
-            "playtime_seconds": int(getattr(character, "playtime_seconds", 0)),
+            "playtime": cls._format_clock(playtime),
         }
 
         return payload

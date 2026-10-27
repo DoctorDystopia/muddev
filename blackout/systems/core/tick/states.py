@@ -146,18 +146,19 @@ TRANSITIONS: dict = {
     # Recovery elapsed.
     (ActivityState.RECOVERING, ActivityEvent.COOLDOWN_EXPIRED): ActivityState.ACTIVE,
 
-    # Nothing left to act on, so the activity is over. ENDING rather than
-    # IDLE because that is what Blackout actually does: a target vanishing
-    # tears the handler down, and a craft batch that runs out of materials
-    # halts and clears.
-    #
-    # IDLE is arguably the better GAME -- it would let a fighter re-target
-    # without leaving combat -- but that is a rules change, not a modelling
-    # decision, and this table describes the system as it is. Making that
-    # change means changing these four rows and then deciding what tears an
-    # idle handler down, which is why it is not smuggled in here.
-    (ActivityState.ACTIVE, ActivityEvent.TARGET_INVALID): ActivityState.ENDING,
-    (ActivityState.RECOVERING, ActivityEvent.TARGET_INVALID): ActivityState.ENDING,
+    # The target is gone. That alone does not end the activity. The actor
+    # goes IDLE, and the handler decides what an idle actor does
+    # (10/22/2026). A fight can hold more than two. A raider that killed
+    # one of its two attackers still has the other one on it. Until
+    # 10/22/2026 these two rows ended the fight, and that raider stood
+    # still while the second player hit it. The teardown of an idle fighter
+    # is BlackoutCombatHandler._release_target. It ends the fight at once
+    # when nobody is engaged, so a solo kill ends as before.
+    (ActivityState.ACTIVE, ActivityEvent.TARGET_INVALID): ActivityState.IDLE,
+    (ActivityState.RECOVERING, ActivityEvent.TARGET_INVALID): ActivityState.IDLE,
+
+    # The activity has no more of what it consumes, so it is over. A craft
+    # batch with no materials halts and clears. No wait refills a quiver.
     (ActivityState.ACTIVE, ActivityEvent.RESOURCES_EXHAUSTED): ActivityState.ENDING,
     (ActivityState.RECOVERING, ActivityEvent.RESOURCES_EXHAUSTED): ActivityState.ENDING,
 

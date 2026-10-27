@@ -76,6 +76,7 @@ const CATEGORY_COLORS := {
 	_Const.OBJECT_CATEGORY_TRANSITION: Color("4fc1e9"),
 	_Const.OBJECT_CATEGORY_CLIMB: Color("e9954f"),
 	_Const.OBJECT_CATEGORY_DECOR: Color("b0a48c"),
+	_Const.OBJECT_CATEGORY_ITEM_SPAWN: Color("e8d44d"),
 }
 
 ## The height of a link over the ground, and the highest point of an arc.

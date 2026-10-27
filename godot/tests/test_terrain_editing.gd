@@ -41,6 +41,7 @@ func _ready() -> void:
 	_undo_restores_the_state_before_the_stroke()
 	_undo_removes_a_placed_object()
 	_a_look_travels_with_its_object()
+	_a_spawn_travels_with_its_object()
 	_compact_names_drops_unused_names()
 	_a_ray_from_above_hits_the_tile_under_it()
 	_a_void_paint_blocks_and_a_floor_on_void_opens()
@@ -364,6 +365,44 @@ func _a_look_travels_with_its_object() -> void:
 
 	_expect(again.error.is_empty() and again.objects.size() == 1
 		and again.objects[0]["look"] == look, "the look reads back from the written chunk")
+
+
+## A placed item spawn keeps its spawn through the set, the undo log, and a
+## remove by spawn (10/21/2026). A remove with another spawn takes nothing.
+## The reader does not know the items, so the item is any name.
+func _a_spawn_travels_with_its_object() -> void:
+	var chunks := _block(Vector2i(0, 0))
+	var edit := TerrainEdit.new()
+	var tile := Vector2i(4, 5)
+	var kind: String = _Const.OBJECT_ITEM_SPAWN_KIND
+	var spawn := {_Const.SPAWN_ITEM_KEY: "scrap", _Const.SPAWN_QUANTITY_KEY: [2, 4],
+		_Const.SPAWN_RESPAWN_KEY: 30}
+	var other := {_Const.SPAWN_ITEM_KEY: "scrap", _Const.SPAWN_RESPAWN_KEY: 30}
+
+	edit.add_object(chunks, tile, kind, 0, "", {}, spawn)
+
+	var placed := chunks.objects_at(tile)
+
+	_expect(placed.size() == 1 and placed[0]["spawn"] == spawn,
+		"objects_at gives the spawn back")
+	_expect(not ChunkSet.same_object(placed[0],
+		{"kind": kind, "rotation": 0, "text": "", "look": {}, "spawn": other}),
+		"same_object tells two spawns apart")
+
+	edit.remove_object(chunks, tile, kind, 0, "", {}, other)
+	_expect(chunks.objects_at(tile).size() == 1, "another spawn removes nothing")
+
+	edit.replay(chunks, false)
+	_expect(chunks.objects_at(tile).is_empty(), "undo removes the object with its spawn")
+
+	edit.replay(chunks, true)
+	_expect(chunks.objects_at(tile).size() == 1
+		and chunks.objects_at(tile)[0]["spawn"] == spawn, "redo places it with its spawn")
+
+	var again := ChunkFile.parse_text(chunks.get_chunk(Vector2i(0, 0)).to_text())
+
+	_expect(again.error.is_empty() and again.objects.size() == 1
+		and again.objects[0]["spawn"] == spawn, "the spawn reads back from the written chunk")
 
 
 func _compact_names_drops_unused_names() -> void:

@@ -17,6 +17,7 @@ from evennia.utils.test_resources import EvenniaTest
 from evennia.utils.utils import class_from_module, mod_import
 
 from systems.core.tilegrid import constants as tile_const
+from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.exterminator.preceptors import PRECEPTOR_DB
 from typeclasses.mixins import CombatEntity
 from typeclasses.npc_defined import NpcDefined
@@ -68,6 +69,32 @@ class NpcDefRuleTests(unittest.TestCase):
                     if npc_def.combat is not None}
 
         self.assertEqual(set(combatant_defs()), expected)
+
+
+class NpcCombatBlockTests(unittest.TestCase):
+    """Every combat block uses the spellings that combat reads. No DB."""
+
+    def test_no_def_declares_a_bonus_key_the_game_cannot_read(self):
+        """A misspelled key is silent. Combat reads the real key as 0.
+
+        test_item_database.py makes the same check for each ItemDef.
+        UNARMED_DEFAULT_COMBAT_STATS holds the canonical spellings.
+        """
+        known = set(combat_const.UNARMED_DEFAULT_COMBAT_STATS)
+
+        for key, npc_def in combatant_defs().items():
+            unknown = set(npc_def.combat.combat_stat_bonuses) - known
+
+            with self.subTest(npc=key):
+                self.assertEqual(unknown, set())
+
+    def test_every_style_names_an_attack_type_with_a_category(self):
+        known = set(combat_const.COMBAT_CATEGORY_BY_ATTACK_TYPE)
+
+        for key, npc_def in combatant_defs().items():
+            for style_key, style in npc_def.combat.combat_styles.items():
+                with self.subTest(npc=key, style=style_key):
+                    self.assertIn(style["attack_type"], known)
 
     def test_every_dialogue_names_a_module_that_imports(self):
         for key, npc_def in NPC_DB.items():

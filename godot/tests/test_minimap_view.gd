@@ -41,6 +41,9 @@ func _ready() -> void:
 	_the_run_button_follows_the_walk_feed()
 	_a_press_of_run_sends_the_toggle_and_keeps_the_fact()
 	_a_ctrl_click_on_the_map_swaps_walk_and_run()
+	_the_xy_button_shows_the_position_readout()
+	_the_position_readout_follows_the_player()
+	_the_xy_choice_lives_in_the_settings()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -370,6 +373,70 @@ func _a_ctrl_click_on_the_map_swaps_walk_and_run() -> void:
 		"with the option off, a Ctrl click is a plain click")
 
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## The XY button is a toggle of the pane, not of the strip. Set, not read from
+## the default, so a change of the default breaks nothing here.
+func _the_xy_button_shows_the_position_readout() -> void:
+	_fresh()
+	_map.set_coordinates_shown(false)
+
+	_expect(_map.coordinates_text().is_empty(), "with XY off, the pane writes nothing")
+	_expect(_map._coordinates_button.get_parent() == _map,
+		"the XY button sits on the map square, not on the strip")
+
+	_map._coordinates_button.button_pressed = true
+	_expect(_map.coordinates_shown(), "a press of XY turns the readout on")
+	_expect(_map.coordinates_text() == _words(HOME, Const.TILE_GROUND_PLANE),
+		"and the pane writes the tile and the plane of the player")
+
+	_map._coordinates_button.button_pressed = false
+	_expect(_map.coordinates_text().is_empty(), "a second press turns it off")
+
+
+func _the_position_readout_follows_the_player() -> void:
+	_fresh()
+	_map.set_coordinates_shown(true)
+
+	var next := HOME + Vector2i(4, -2)
+
+	_stand(next)
+	_expect(_map.coordinates_text() == _words(next, Const.TILE_GROUND_PLANE),
+		"a step to another tile changes the readout")
+
+	_state.ingest(Const.CH_ROOM_INFO, {
+		"coords": [float(next.x), float(next.y), WorldState.plane_z(1)]})
+	_expect(_map.coordinates_text() == _words(next, 1),
+		"a climb to another plane changes the plane in the readout")
+
+	_state.ingest(Const.CH_ROOM_INFO, {"coords": [0.0, 0.0, "not_a_plane"]})
+	_expect(_map.coordinates_text().is_empty(),
+		"off the tile world, the readout is empty")
+
+
+## One setting serves both maps. The world map test checks the other half.
+func _the_xy_choice_lives_in_the_settings() -> void:
+	_fresh()
+
+	var path := "user://test_minimap_xy_settings.cfg"
+	var settings := ClientSettings.new(path)
+
+	settings.set_show_coordinates(false)
+	_map.bind_settings(settings)
+	_map._coordinates_button.button_pressed = true
+	_expect(settings.show_coordinates, "a press of XY reaches the settings")
+
+	settings.set_show_coordinates(false)
+	_expect(not _map.coordinates_shown()
+		and not _map._coordinates_button.button_pressed,
+		"a change in the settings reaches the pane and its button")
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## The words that the readout must show for a tile on a plane.
+func _words(tile: Vector2i, plane: int) -> String:
+	return MinimapView.COORDINATES_TEMPLATE % [tile.x, tile.y, plane]
 
 
 func _left_click(point: Vector2, ctrl: bool) -> InputEventMouseButton:

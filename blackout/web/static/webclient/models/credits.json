@@ -46,6 +46,17 @@
     ]
   },
   {
+    "title": "curing_chamber",
+    "author": "ghostguyhi",
+    "url": "https://ghostguyhi.itch.io/stoveoven",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "curing_chamber"
+    ]
+  },
+  {
     "title": "Free Blacksmith Tool Set - PBR Textures included",
     "author": "JordanHolmes",
     "url": "https://jordanholmes.itch.io/free-blacksmith-tool-set-pbr-textures-included",
@@ -55,6 +66,17 @@
     "models": [
       "anvil",
       "hammer"
+    ]
+  },
+  {
+    "title": "gunsmith_bench",
+    "author": "vaelsty",
+    "url": "https://vaelsty.itch.io/blacksmith-workbench",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "gunbench"
     ]
   },
   {
@@ -128,6 +150,17 @@
     "confirmed": true,
     "models": [
       "metal_pole"
+    ]
+  },
+  {
+    "title": "Pot Enamel 01 - Free CC0 GLB 3D Prop",
+    "author": "Kuutti Siitonen (Poly Haven), GLB by Eclair Assets",
+    "url": "https://eclair-assets.itch.io/pot-enamel-01-free-cc0-glb-3d-prop",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "rendering_cooker"
     ]
   },
   {

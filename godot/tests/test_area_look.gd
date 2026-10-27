@@ -26,6 +26,10 @@ const TOLERANCE := 0.001
 ## Physics frames to wait for a SpringArm3D to measure its length.
 const ARM_SETTLE_FRAMES := 3
 
+## A shadow minimum that is not the default, so the case shows that the
+## file value reaches the sun.
+const SHADOW_MINIMUM := 0.45
+
 
 func _ready() -> void:
 	_every_row_holds_every_field()
@@ -38,6 +42,7 @@ func _ready() -> void:
 	_a_second_area_blends()
 	_a_change_mid_blend_starts_from_the_screen()
 	_the_same_area_again_does_nothing()
+	_the_sun_lets_the_shadow_minimum_through()
 	await _the_node_reads_the_arm_length()
 
 	if _failures > 0:
@@ -218,6 +223,32 @@ func _the_same_area_again_does_nothing() -> void:
 	_expect(rig["emitted"].size() == 1, "the same area is not announced again")
 
 	_free_rig(rig)
+
+
+## The shadow minimum of the look file reaches the sun as the other share,
+## the opacity of the shadow. It holds for every area, so a blend does not
+## move it.
+func _the_sun_lets_the_shadow_minimum_through() -> void:
+	var content := LookFile.read(AreaLook.PATH).duplicate(true)
+
+	content[AreaLook.KEY_SHADOW_MINIMUM] = SHADOW_MINIMUM
+	LookFile.put(AreaLook.PATH, content)
+
+	var rig := _new_rig()
+	var node: AreaEnvironment = rig["node"]
+	var sun: DirectionalLight3D = rig["sun"]
+
+	node.set_area(FIRST_AREA)
+	_expect(is_equal_approx(sun.shadow_opacity, 1.0 - SHADOW_MINIMUM),
+		"the sun lets the shadow minimum through (opacity %.2f)" % sun.shadow_opacity)
+
+	node.set_area(SECOND_AREA)
+	node._process(AreaEnvironment.BLEND_SECONDS * 0.5)
+	_expect(is_equal_approx(sun.shadow_opacity, 1.0 - SHADOW_MINIMUM),
+		"a blend keeps the shadow minimum")
+
+	_free_rig(rig)
+	LookFile.forget(AreaLook.PATH)
 
 
 ## The arm is a real SpringArm3D here. It measures its length in a physics

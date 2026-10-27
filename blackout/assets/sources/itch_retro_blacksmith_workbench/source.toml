@@ -1,0 +1,12 @@
+title     = "gunsmith_bench"
+author    = "vaelsty"
+url       = "https://vaelsty.itch.io/blacksmith-workbench"
+site      = "itch.io"
+license   = "CC0-1.0"
+retrieved = 2026-10-25
+
+[files]
+"retro-blacksmith-workbench/LICENSE.pdf" = "sha256:e2c3324f31f2236f73855dda31a1590f914f5efbccd5b7f426fc6ede3a8ed9eb"
+"retro-blacksmith-workbench/blacksmith_workbench.fbx" = "sha256:26cf1b32d1a6155ded9bc969c95324a88cc93fc23a92197686e242af8b54d7da"
+"retro-blacksmith-workbench/textures/color.png" = "sha256:2431ed825807483492635d73368335ccefd13f206df41865aa73349646fcf8dc"
+"retro-blacksmith-workbench/textures/color_dark.png" = "sha256:66923c932aaee3dfe706e0d6b374a5e2f9fc690646510293248945e2e358549e"

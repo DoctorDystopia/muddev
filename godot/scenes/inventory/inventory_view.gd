@@ -55,6 +55,10 @@ var _bar: HoverBar
 ## not move, so the cell at the same key is the one under it now.
 var _hover_key: Array = []
 
+## True while the player holds Shift. The bar gives it to the cell, so that it
+## names the Drop that a Shift + left click sends. See [method _shift_after].
+var _shift_held := false
+
 ## Where every item's picture is drawn. One render target for the whole bag;
 ## see [ItemStage].
 var _stage: ItemStage
@@ -131,9 +135,10 @@ func bind_figures(library: FigureLibrary) -> void:
 
 ## Give the pane the player's settings, for the boxes its cells open.
 ##
-## No redraw and no `changed` hookup: nothing the pane DRAWS comes from here.
-## A cell reads the size of the amount box when a box opens, and the Shift
-## option when a click lands. Thus, a change in Options needs no rebuild.
+## No redraw and no `changed` hookup: the grid draws nothing from here.
+## A cell reads the size of the amount box when a box opens. It reads the
+## Shift option when a click lands, and when the hover bar asks for its text.
+## Thus, a change in Options needs no rebuild.
 func bind_settings(settings: ClientSettings) -> void:
 	_settings = settings
 
@@ -268,9 +273,44 @@ func _on_action_chosen(command: String) -> void:
 
 # ─── The hover bar ───────────────────────────────────────────────────────────
 
+## Name the Drop in the bar while Shift is down, as OSRS does.
+##
+## `_input`, not `_unhandled_input`: a focused chat line can take the key
+## first. This handler only reads the event and never marks it handled.
+func _input(event: InputEvent) -> void:
+	var held := _shift_after(event)
+
+	if held == _shift_held:
+		return
+
+	_shift_held = held
+	_restore_hover(_hover_key, _grid.get_children())
+
+
+## Whether Shift is down after this event.
+##
+## A press or a release of Shift itself gives the answer through `pressed`,
+## which is the fact itself. This code does not read the modifier flag of that
+## one event. Every other key and mouse event carries the flag. Thus, a mouse
+## move repairs a key release that the window did not get while it had no
+## focus.
+func _shift_after(event: InputEvent) -> bool:
+	var key := event as InputEventKey
+
+	if key != null and key.keycode == KEY_SHIFT:
+		return key.pressed
+
+	var modified := event as InputEventWithModifiers
+
+	if modified == null:
+		return _shift_held
+
+	return modified.shift_pressed
+
+
 func _on_cell_hovered(cell: InventorySlotCell) -> void:
 	_hover_key = [cell.kind, cell.key]
-	_bar.show_text(cell.hover_text())
+	_bar.show_text(cell.hover_text(_shift_held))
 
 
 ## Clears only when the cell that leaves is the one the bar names. Godot sends

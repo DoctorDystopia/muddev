@@ -600,7 +600,8 @@ static func _budget_of(store: FigureStore, names: FigureCatalog, budgets: Dictio
 # ─── The stances and the clips ──────────────────────────────────────────────
 
 ## Rule C7: each stance names a tool type of the server, and each action
-## names a clip of the clip library.
+## names a clip of the clip library. Each attack action is one that a swing
+## of the server can name (10/25/2026). A typed one never plays.
 static func _check_stances(store: FigureStore, names: FigureCatalog,
 		clips: AnimationLibrary) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
@@ -620,6 +621,13 @@ static func _check_stances(store: FigureStore, names: FigureCatalog,
 
 		for action: String in sets[tool_type]:
 			var clip: String = sets[tool_type][action]
+
+			if names != null and FigureStances.is_attack_action(action) \
+					and not action in names.attack_actions():
+				found.append(_finding(RULE_STANCE, FigureStore.KIND_STANCES,
+					FigureStances.KEY, "%s/%s" % [tool_type, action],
+					"%s names the action %s, and no swing of the server names it"
+					% [stance, action]))
 
 			if clips != null and not clips.has_animation(clip):
 				found.append(_finding(RULE_STANCE, FigureStore.KIND_STANCES,
@@ -664,7 +672,7 @@ static func _check_clearance(store: FigureStore, clip_name: String,
 			continue
 
 		var result := FigureClearance.check(store.rigs[body_key],
-			store.looks[body_key].resolved(store.looks), clip)
+			store.looks[body_key].resolved(store.looks), clip, store.held_in(clip_name))
 
 		if not FigureClearance.is_clear(result):
 			found.append(_finding(RULE_CLEARANCE, KIND_CLIP, clip_name, body_key,

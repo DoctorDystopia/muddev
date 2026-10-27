@@ -50,14 +50,15 @@ class TestTransitionTable(unittest.TestCase):
 
         self.assertEqual(result, ActivityState.RECOVERING)
 
-    def test_losing_a_target_ends_the_activity(self):
-        """Models what Blackout does: a target vanishing tears the handler
-        down. Staying IDLE and re-targetable would be a rules change."""
-        result = states.next_state(
-            ActivityState.ACTIVE, ActivityEvent.TARGET_INVALID
-        )
+    def test_losing_a_target_idles_the_actor(self):
+        """A lost target leaves the actor in the activity, with nothing
+        pending. The handler decides whether the activity ends: a fighter
+        with a second enemy on it stays in the fight (10/22/2026)."""
+        for state in (ActivityState.ACTIVE, ActivityState.RECOVERING):
+            with self.subTest(state=state):
+                result = states.next_state(state, ActivityEvent.TARGET_INVALID)
 
-        self.assertEqual(result, ActivityState.ENDING)
+                self.assertEqual(result, ActivityState.IDLE)
 
     def test_running_out_of_resources_ends_the_activity(self):
         """The same shape, for a gatherer whose vein is empty or a crafter

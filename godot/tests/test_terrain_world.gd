@@ -21,6 +21,9 @@ extends Node
 ## 9. A jump loads the block of a tile, and a selection knows its link.
 ## 10. A new chunk takes the shared corners of a saved neighbour, so a sculpt
 ##     of the ground opens no seam above.
+## 11. The side of the block is a choice with a cap (10/21/2026). A resize
+##     keeps the centre, saves the changed chunks first, and loads nothing
+##     for the same side.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -48,6 +51,7 @@ func _ready() -> void:
 	_a_save_writes_legal_files_and_skips_the_broken_one(world)
 	_undo_restores_the_heights(world)
 	_a_move_saves_first(world)
+	_the_block_side_is_a_choice_with_a_cap(world)
 	_a_new_upper_chunk_starts_from_the_chunk_below(world)
 	_an_edit_of_another_block_is_refused(world)
 	_a_plane_change_keeps_the_edits_of_every_plane(world)
@@ -100,7 +104,7 @@ func _write_existing_files() -> void:
 func _the_block_loads_what_exists(world: TerrainWorld) -> void:
 	var size: int = _Const.CHUNK_SIZE
 
-	var whole := TerrainWorld.BLOCK_SIDE * TerrainWorld.BLOCK_SIDE
+	var whole := world.block_side * world.block_side
 
 	_expect(world.chunks.chunk_coords().size() == whole - 1,
 		"all chunks but the broken one load, found %d" % world.chunks.chunk_coords().size())
@@ -155,6 +159,52 @@ func _a_move_saves_first(world: TerrainWorld) -> void:
 
 	_expect(west.heights[corner_index] == 0, "the undone height was saved on the move")
 	_expect(world.chunks.has_chunk(Vector2i(5, 5)), "the new block is loaded")
+
+
+## The side of the block is a choice, with a floor and a cap. A resize keeps
+## the centre, saves the changed chunks first, and loads nothing for the
+## same side. An even side puts the centre chunk south-west of the middle.
+func _the_block_side_is_a_choice_with_a_cap(world: TerrainWorld) -> void:
+	var centre := world.centre_chunk
+	var corner := centre * _Const.CHUNK_SIZE + Vector2i(8, 8)
+	var corner_index := 8 * _Const.CHUNK_CORNERS_PER_SIDE + 8
+	var edit := TerrainEdit.for_world(world)
+	var loads := [0]
+	var count_load := func() -> void: loads[0] += 1
+
+	world.block_loaded.connect(count_load)
+	world.block_side = TerrainWorld.BLOCK_SIDE_DEFAULT
+
+	_expect(loads[0] == 0, "the same side loads nothing")
+
+	edit.apply_heights(world.chunks, {corner: 4})
+	world.block_side = 6
+
+	_expect(loads[0] == 1, "a new side loads the block again")
+	_expect(world.block_side == 6 and world.block_coords().size() == 36,
+		"a side of 6 gives 36 chunks, found %d" % world.block_coords().size())
+	_expect(world.centre_chunk == centre and world.block_low() == centre - Vector2i(2, 2),
+		"the block keeps its centre, with two chunks west and south of it")
+	_expect(not world.has_unsaved_changes(), "the resize saved the edit first")
+	_expect(ChunkFile.read_file(_path(centre)).heights[corner_index] == 4,
+		"the saved file holds the edit")
+
+	world.block_side = 3
+
+	_expect(world.block_low() == centre - Vector2i.ONE, "an odd side has the centre in the middle")
+
+	world.block_side = TerrainWorld.BLOCK_SIDE_MAX + 5
+
+	_expect(world.block_side == TerrainWorld.BLOCK_SIDE_MAX, "the cap holds")
+
+	world.block_side = 0
+
+	_expect(world.block_side == TerrainWorld.BLOCK_SIDE_MIN
+		and world.block_coords().size() == 1 and world.block_low() == centre,
+		"the smallest block is the centre chunk alone")
+
+	world.block_side = TerrainWorld.BLOCK_SIDE_DEFAULT
+	world.block_loaded.disconnect(count_load)
 
 
 func _a_new_upper_chunk_starts_from_the_chunk_below(world: TerrainWorld) -> void:

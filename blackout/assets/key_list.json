@@ -1,0 +1,779 @@
+{
+	"format": 1,
+	"keys": [
+		{
+			"key": "anvil",
+			"kind": "station",
+			"name": "Metalsmith Anvil Facility",
+			"owner": "metalsmith_anvil"
+		},
+		{
+			"key": "atum_musa",
+			"kind": "npc",
+			"name": "Atum Musa",
+			"owner": "atum_musa"
+		},
+		{
+			"key": "bank_terminal",
+			"kind": "station",
+			"name": "Bank",
+			"owner": "bank"
+		},
+		{
+			"key": "big_mutant",
+			"kind": "npc",
+			"name": "Big Mutant",
+			"owner": "big_mutant"
+		},
+		{
+			"key": "bit_blade",
+			"kind": "weapon",
+			"name": "bit-blade",
+			"owner": "bit_blade"
+		},
+		{
+			"key": "broken_bit_blade",
+			"kind": "weapon",
+			"name": "broken bit-blade",
+			"owner": "broken_bit_blade"
+		},
+		{
+			"key": "copper_arrow",
+			"kind": "crafting_material",
+			"name": "copper arrow",
+			"owner": "copper_arrow"
+		},
+		{
+			"key": "copper_axe",
+			"kind": "crafting_tool",
+			"name": "copper axe",
+			"owner": "copper_axe"
+		},
+		{
+			"key": "copper_battleaxe",
+			"kind": "weapon",
+			"name": "copper battleaxe",
+			"owner": "copper_battleaxe"
+		},
+		{
+			"key": "copper_boots",
+			"kind": "armor",
+			"name": "copper boots",
+			"owner": "copper_boots"
+		},
+		{
+			"key": "copper_chainbody",
+			"kind": "armor",
+			"name": "copper chainbody",
+			"owner": "copper_chainbody"
+		},
+		{
+			"key": "copper_chunk",
+			"kind": "crafting_material",
+			"name": "copper chunk",
+			"owner": "copper_chunk"
+		},
+		{
+			"key": "copper_dagger",
+			"kind": "weapon",
+			"name": "copper dagger",
+			"owner": "copper_dagger"
+		},
+		{
+			"key": "copper_dust",
+			"kind": "crafting_material",
+			"name": "copper dust",
+			"owner": "copper_dust"
+		},
+		{
+			"key": "copper_great_helm",
+			"kind": "armor",
+			"name": "copper great helm",
+			"owner": "copper_great_helm"
+		},
+		{
+			"key": "copper_greatsword",
+			"kind": "weapon",
+			"name": "copper greatsword",
+			"owner": "copper_greatsword"
+		},
+		{
+			"key": "copper_hide_cape",
+			"kind": "armor",
+			"name": "copper hide cape",
+			"owner": "copper_hide_cape"
+		},
+		{
+			"key": "copper_platelegs",
+			"kind": "armor",
+			"name": "copper platelegs",
+			"owner": "copper_platelegs"
+		},
+		{
+			"key": "copper_pole",
+			"kind": "gatherable",
+			"name": "Copper pole clearing",
+			"owner": "copper_pole"
+		},
+		{
+			"key": "copper_scimitar",
+			"kind": "weapon",
+			"name": "copper scimitar",
+			"owner": "copper_scimitar"
+		},
+		{
+			"key": "copper_shortbow",
+			"kind": "weapon",
+			"name": "copper shortbow",
+			"owner": "copper_shortbow"
+		},
+		{
+			"key": "copper_shortsword",
+			"kind": "weapon",
+			"name": "copper shortsword",
+			"owner": "copper_shortsword"
+		},
+		{
+			"key": "copper_spear",
+			"kind": "weapon",
+			"name": "copper spear",
+			"owner": "copper_spear"
+		},
+		{
+			"key": "copper_square_shield",
+			"kind": "armor",
+			"name": "copper square shield",
+			"owner": "copper_square_shield"
+		},
+		{
+			"key": "credits",
+			"kind": "currency",
+			"name": "credits",
+			"owner": "credits"
+		},
+		{
+			"key": "curing_chamber",
+			"kind": "station",
+			"name": "Curing Chamber Facility",
+			"owner": "curing_chamber"
+		},
+		{
+			"key": "floating_eye",
+			"kind": "npc",
+			"name": "Floating Eye",
+			"owner": "floating_eye"
+		},
+		{
+			"key": "furnace",
+			"kind": "station",
+			"name": "Foundry Furnace Facility",
+			"owner": "foundry_furnace"
+		},
+		{
+			"key": "gastro_worktable",
+			"kind": "station",
+			"name": "Gastronomy Worktable Facility",
+			"owner": "gastronomy_worktable"
+		},
+		{
+			"key": "glass_cannon_amulet",
+			"kind": "jewellery",
+			"name": "Glass Cannon amulet",
+			"owner": "glass_cannon_amulet"
+		},
+		{
+			"key": "gunbench",
+			"kind": "station",
+			"name": "Gunsmith Bench Facility",
+			"owner": "gunsmith_bench"
+		},
+		{
+			"key": "hammer",
+			"kind": "crafting_tool",
+			"name": "hammer",
+			"owner": "hammer"
+		},
+		{
+			"key": "legendary_bit_blade",
+			"kind": "weapon",
+			"name": "0x7F",
+			"owner": "legendary_bit_blade"
+		},
+		{
+			"key": "lone_android",
+			"kind": "npc",
+			"name": "Lone Android",
+			"owner": "lone_android"
+		},
+		{
+			"key": "malfunctioning_gizmo",
+			"kind": "weapon",
+			"name": "malfunctioning gizmo",
+			"owner": "malfunctioning_gizmo"
+		},
+		{
+			"key": "map_transition",
+			"kind": "transition",
+			"name": "transition_azm_plains_to_outskirts",
+			"owner": "transition_azm_plains_to_outskirts"
+		},
+		{
+			"key": "map_transition",
+			"kind": "transition",
+			"name": "transition_oasis_to_outskirts",
+			"owner": "transition_oasis_to_outskirts"
+		},
+		{
+			"key": "map_transition",
+			"kind": "transition",
+			"name": "transition_outskirts_to_azm_plains",
+			"owner": "transition_outskirts_to_azm_plains"
+		},
+		{
+			"key": "map_transition",
+			"kind": "transition",
+			"name": "transition_outskirts_to_oasis",
+			"owner": "transition_outskirts_to_oasis"
+		},
+		{
+			"key": "metal_chunk",
+			"kind": "crafting_material",
+			"name": "metal chunk",
+			"owner": "metal_chunk"
+		},
+		{
+			"key": "metal_dust",
+			"kind": "crafting_material",
+			"name": "metal dust",
+			"owner": "metal_dust"
+		},
+		{
+			"key": "metal_pole",
+			"kind": "gatherable",
+			"name": "Metal pole clearing",
+			"owner": "metal_pole"
+		},
+		{
+			"key": "mk2_bit_blade",
+			"kind": "weapon",
+			"name": "MK.II bit-blade",
+			"owner": "mk2_bit_blade"
+		},
+		{
+			"key": "moderator_egg",
+			"kind": "generic",
+			"name": "Moderator Egg",
+			"owner": "moderator_egg"
+		},
+		{
+			"key": "mutant_crab",
+			"kind": "npc",
+			"name": "Mutant Crab",
+			"owner": "mutant_crab"
+		},
+		{
+			"key": "mutant_giant",
+			"kind": "npc",
+			"name": "Mutant Giant",
+			"owner": "mutant_giant"
+		},
+		{
+			"key": "mutant_giant_corpse",
+			"kind": "corpse",
+			"name": "Mutant Giant corpse",
+			"owner": "mutant_giant_corpse"
+		},
+		{
+			"key": "mutant_giant_cured_chuck",
+			"kind": "food",
+			"name": "mutant giant cured chuck",
+			"owner": "mutant_giant_cured_chuck"
+		},
+		{
+			"key": "mutant_giant_cured_fatless_meat",
+			"kind": "food",
+			"name": "mutant giant cured fatless meat",
+			"owner": "mutant_giant_cured_fatless_meat"
+		},
+		{
+			"key": "mutant_giant_cured_filet",
+			"kind": "food",
+			"name": "mutant giant cured filet",
+			"owner": "mutant_giant_cured_filet"
+		},
+		{
+			"key": "mutant_giant_cured_hide",
+			"kind": "crafting_material",
+			"name": "mutant giant cured hide",
+			"owner": "mutant_giant_cured_hide"
+		},
+		{
+			"key": "mutant_giant_cured_meat_sandwich",
+			"kind": "food",
+			"name": "mutant giant cured meat sandwich",
+			"owner": "mutant_giant_cured_meat_sandwich"
+		},
+		{
+			"key": "mutant_giant_cured_prime_meat",
+			"kind": "food",
+			"name": "mutant giant cured prime meat",
+			"owner": "mutant_giant_cured_prime_meat"
+		},
+		{
+			"key": "mutant_giant_fatless_meat",
+			"kind": "crafting_material",
+			"name": "mutant giant fatless meat",
+			"owner": "mutant_giant_fatless_meat"
+		},
+		{
+			"key": "mutant_giant_prime_cured_meat_sandwich",
+			"kind": "food",
+			"name": "mutant giant prime cured meat sandwich",
+			"owner": "mutant_giant_prime_cured_meat_sandwich"
+		},
+		{
+			"key": "mutant_giant_prime_meat",
+			"kind": "crafting_material",
+			"name": "mutant giant prime meat",
+			"owner": "mutant_giant_prime_meat"
+		},
+		{
+			"key": "mutant_giant_prime_raw_hide",
+			"kind": "crafting_material",
+			"name": "mutant giant prime raw hide",
+			"owner": "mutant_giant_prime_raw_hide"
+		},
+		{
+			"key": "mutant_giant_prime_steak",
+			"kind": "food",
+			"name": "mutant giant prime steak",
+			"owner": "mutant_giant_prime_steak"
+		},
+		{
+			"key": "mutant_giant_prime_tallow",
+			"kind": "crafting_material",
+			"name": "mutant giant prime tallow",
+			"owner": "mutant_giant_prime_tallow"
+		},
+		{
+			"key": "mutant_giant_raw_chuck",
+			"kind": "crafting_material",
+			"name": "mutant giant raw chuck",
+			"owner": "mutant_giant_raw_chuck"
+		},
+		{
+			"key": "mutant_giant_raw_filet",
+			"kind": "crafting_material",
+			"name": "mutant giant raw filet",
+			"owner": "mutant_giant_raw_filet"
+		},
+		{
+			"key": "mutant_giant_raw_hide",
+			"kind": "crafting_material",
+			"name": "mutant giant raw hide",
+			"owner": "mutant_giant_raw_hide"
+		},
+		{
+			"key": "mutant_giant_sinew",
+			"kind": "crafting_material",
+			"name": "mutant giant sinew",
+			"owner": "mutant_giant_sinew"
+		},
+		{
+			"key": "mutant_giant_steak",
+			"kind": "food",
+			"name": "mutant giant steak",
+			"owner": "mutant_giant_steak"
+		},
+		{
+			"key": "mutant_giant_tallow",
+			"kind": "crafting_material",
+			"name": "mutant giant tallow",
+			"owner": "mutant_giant_tallow"
+		},
+		{
+			"key": "mutant_raider",
+			"kind": "npc",
+			"name": "Mutant Raider",
+			"owner": "mutant_raider"
+		},
+		{
+			"key": "mutant_raider_corpse",
+			"kind": "corpse",
+			"name": "Mutant Raider corpse",
+			"owner": "mutant_raider_corpse"
+		},
+		{
+			"key": "mutant_raider_cured_chuck",
+			"kind": "food",
+			"name": "mutant raider cured chuck",
+			"owner": "mutant_raider_cured_chuck"
+		},
+		{
+			"key": "mutant_raider_cured_fatless_meat",
+			"kind": "food",
+			"name": "mutant raider cured fatless meat",
+			"owner": "mutant_raider_cured_fatless_meat"
+		},
+		{
+			"key": "mutant_raider_cured_filet",
+			"kind": "food",
+			"name": "mutant raider cured filet",
+			"owner": "mutant_raider_cured_filet"
+		},
+		{
+			"key": "mutant_raider_cured_hide",
+			"kind": "crafting_material",
+			"name": "mutant raider cured hide",
+			"owner": "mutant_raider_cured_hide"
+		},
+		{
+			"key": "mutant_raider_cured_meat_sandwich",
+			"kind": "food",
+			"name": "mutant raider cured meat sandwich",
+			"owner": "mutant_raider_cured_meat_sandwich"
+		},
+		{
+			"key": "mutant_raider_cured_prime_meat",
+			"kind": "food",
+			"name": "mutant raider cured prime meat",
+			"owner": "mutant_raider_cured_prime_meat"
+		},
+		{
+			"key": "mutant_raider_fatless_meat",
+			"kind": "crafting_material",
+			"name": "mutant raider fatless meat",
+			"owner": "mutant_raider_fatless_meat"
+		},
+		{
+			"key": "mutant_raider_prime_cured_hide",
+			"kind": "crafting_material",
+			"name": "mutant raider prime cured hide",
+			"owner": "mutant_raider_prime_cured_hide"
+		},
+		{
+			"key": "mutant_raider_prime_cured_meat_sandwich",
+			"kind": "food",
+			"name": "mutant raider prime cured meat sandwich",
+			"owner": "mutant_raider_prime_cured_meat_sandwich"
+		},
+		{
+			"key": "mutant_raider_prime_meat",
+			"kind": "crafting_material",
+			"name": "mutant raider prime meat",
+			"owner": "mutant_raider_prime_meat"
+		},
+		{
+			"key": "mutant_raider_prime_raw_hide",
+			"kind": "crafting_material",
+			"name": "mutant raider prime raw hide",
+			"owner": "mutant_raider_prime_raw_hide"
+		},
+		{
+			"key": "mutant_raider_prime_sinew",
+			"kind": "crafting_material",
+			"name": "mutant raider prime sinew",
+			"owner": "mutant_raider_prime_sinew"
+		},
+		{
+			"key": "mutant_raider_prime_steak",
+			"kind": "food",
+			"name": "mutant raider prime steak",
+			"owner": "mutant_raider_prime_steak"
+		},
+		{
+			"key": "mutant_raider_prime_tallow",
+			"kind": "crafting_material",
+			"name": "mutant raider prime tallow",
+			"owner": "mutant_raider_prime_tallow"
+		},
+		{
+			"key": "mutant_raider_raw_chuck",
+			"kind": "crafting_material",
+			"name": "mutant raider raw chuck",
+			"owner": "mutant_raider_raw_chuck"
+		},
+		{
+			"key": "mutant_raider_raw_filet",
+			"kind": "crafting_material",
+			"name": "mutant raider raw filet",
+			"owner": "mutant_raider_raw_filet"
+		},
+		{
+			"key": "mutant_raider_raw_hide",
+			"kind": "crafting_material",
+			"name": "mutant raider raw hide",
+			"owner": "mutant_raider_raw_hide"
+		},
+		{
+			"key": "mutant_raider_sinew",
+			"kind": "crafting_material",
+			"name": "mutant raider sinew",
+			"owner": "mutant_raider_sinew"
+		},
+		{
+			"key": "mutant_raider_steak",
+			"kind": "food",
+			"name": "mutant raider steak",
+			"owner": "mutant_raider_steak"
+		},
+		{
+			"key": "mutant_raider_tallow",
+			"kind": "crafting_material",
+			"name": "mutant raider tallow",
+			"owner": "mutant_raider_tallow"
+		},
+		{
+			"key": "rendering_cooker",
+			"kind": "station",
+			"name": "Rendering Cooker Facility",
+			"owner": "rendering_cooker"
+		},
+		{
+			"key": "rusty_metal_chunk",
+			"kind": "crafting_material",
+			"name": "rusty metal chunk",
+			"owner": "rusty_metal_chunk"
+		},
+		{
+			"key": "rusty_metal_dust",
+			"kind": "crafting_material",
+			"name": "rusty metal dust",
+			"owner": "rusty_metal_dust"
+		},
+		{
+			"key": "rusty_pole",
+			"kind": "gatherable",
+			"name": "Rusty pole clearing",
+			"owner": "rusty_pole"
+		},
+		{
+			"key": "rusty_scrap_arrow",
+			"kind": "crafting_material",
+			"name": "rusty scrap arrow",
+			"owner": "rusty_scrap_arrow"
+		},
+		{
+			"key": "rusty_scrap_axe",
+			"kind": "crafting_tool",
+			"name": "rusty scrap axe",
+			"owner": "rusty_scrap_axe"
+		},
+		{
+			"key": "rusty_scrap_battleaxe",
+			"kind": "weapon",
+			"name": "rusty scrap battleaxe",
+			"owner": "rusty_scrap_battleaxe"
+		},
+		{
+			"key": "rusty_scrap_boots",
+			"kind": "armor",
+			"name": "rusty scrap boots",
+			"owner": "rusty_scrap_boots"
+		},
+		{
+			"key": "rusty_scrap_chainbody",
+			"kind": "armor",
+			"name": "rusty scrap chainbody",
+			"owner": "rusty_scrap_chainbody"
+		},
+		{
+			"key": "rusty_scrap_dagger",
+			"kind": "weapon",
+			"name": "rusty scrap dagger",
+			"owner": "rusty_scrap_dagger"
+		},
+		{
+			"key": "rusty_scrap_great_helm",
+			"kind": "armor",
+			"name": "rusty scrap great helm",
+			"owner": "rusty_scrap_great_helm"
+		},
+		{
+			"key": "rusty_scrap_greatsword",
+			"kind": "weapon",
+			"name": "rusty scrap greatsword",
+			"owner": "rusty_scrap_greatsword"
+		},
+		{
+			"key": "rusty_scrap_hide_cape",
+			"kind": "armor",
+			"name": "rusty scrap hide cape",
+			"owner": "rusty_scrap_hide_cape"
+		},
+		{
+			"key": "rusty_scrap_metal",
+			"kind": "crafting_material",
+			"name": "rusty scrap metal",
+			"owner": "rusty_scrap_metal"
+		},
+		{
+			"key": "rusty_scrap_platelegs",
+			"kind": "armor",
+			"name": "rusty scrap platelegs",
+			"owner": "rusty_scrap_platelegs"
+		},
+		{
+			"key": "rusty_scrap_scimitar",
+			"kind": "weapon",
+			"name": "rusty scrap scimitar",
+			"owner": "rusty_scrap_scimitar"
+		},
+		{
+			"key": "rusty_scrap_shortbow",
+			"kind": "weapon",
+			"name": "rusty scrap shortbow",
+			"owner": "rusty_scrap_shortbow"
+		},
+		{
+			"key": "rusty_scrap_shortsword",
+			"kind": "weapon",
+			"name": "rusty scrap shortsword",
+			"owner": "rusty_scrap_shortsword"
+		},
+		{
+			"key": "rusty_scrap_spear",
+			"kind": "weapon",
+			"name": "rusty scrap spear",
+			"owner": "rusty_scrap_spear"
+		},
+		{
+			"key": "rusty_scrap_square_shield",
+			"kind": "armor",
+			"name": "rusty scrap square shield",
+			"owner": "rusty_scrap_square_shield"
+		},
+		{
+			"key": "scrap_arrow",
+			"kind": "crafting_material",
+			"name": "scrap arrow",
+			"owner": "scrap_arrow"
+		},
+		{
+			"key": "scrap_axe",
+			"kind": "crafting_tool",
+			"name": "scrap axe",
+			"owner": "scrap_axe"
+		},
+		{
+			"key": "scrap_battleaxe",
+			"kind": "weapon",
+			"name": "scrap battleaxe",
+			"owner": "scrap_battleaxe"
+		},
+		{
+			"key": "scrap_boots",
+			"kind": "armor",
+			"name": "scrap boots",
+			"owner": "scrap_boots"
+		},
+		{
+			"key": "scrap_chainbody",
+			"kind": "armor",
+			"name": "scrap chainbody",
+			"owner": "scrap_chainbody"
+		},
+		{
+			"key": "scrap_copper",
+			"kind": "crafting_material",
+			"name": "scrap copper",
+			"owner": "scrap_copper"
+		},
+		{
+			"key": "scrap_dagger",
+			"kind": "weapon",
+			"name": "scrap dagger",
+			"owner": "scrap_dagger"
+		},
+		{
+			"key": "scrap_great_helm",
+			"kind": "armor",
+			"name": "scrap great helm",
+			"owner": "scrap_great_helm"
+		},
+		{
+			"key": "scrap_greatsword",
+			"kind": "weapon",
+			"name": "scrap greatsword",
+			"owner": "scrap_greatsword"
+		},
+		{
+			"key": "scrap_hide_cape",
+			"kind": "armor",
+			"name": "scrap hide cape",
+			"owner": "scrap_hide_cape"
+		},
+		{
+			"key": "scrap_metal",
+			"kind": "crafting_material",
+			"name": "scrap metal",
+			"owner": "scrap_metal"
+		},
+		{
+			"key": "scrap_platelegs",
+			"kind": "armor",
+			"name": "scrap platelegs",
+			"owner": "scrap_platelegs"
+		},
+		{
+			"key": "scrap_scimitar",
+			"kind": "weapon",
+			"name": "scrap scimitar",
+			"owner": "scrap_scimitar"
+		},
+		{
+			"key": "scrap_shortbow",
+			"kind": "weapon",
+			"name": "scrap shortbow",
+			"owner": "scrap_shortbow"
+		},
+		{
+			"key": "scrap_shortsword",
+			"kind": "weapon",
+			"name": "scrap shortsword",
+			"owner": "scrap_shortsword"
+		},
+		{
+			"key": "scrap_spear",
+			"kind": "weapon",
+			"name": "scrap spear",
+			"owner": "scrap_spear"
+		},
+		{
+			"key": "scrap_square_shield",
+			"kind": "armor",
+			"name": "scrap square shield",
+			"owner": "scrap_square_shield"
+		},
+		{
+			"key": "shopkeeper",
+			"kind": "npc",
+			"name": "Shopkeeper",
+			"owner": "shopkeeper_oasis"
+		},
+		{
+			"key": "spray_can",
+			"kind": "crafting_tool",
+			"name": "spray can",
+			"owner": "spray_can"
+		},
+		{
+			"key": "talkative_npc",
+			"kind": "npc",
+			"name": "Atticus Quin",
+			"owner": "atticus_quin"
+		},
+		{
+			"key": "task_writ",
+			"kind": "generic",
+			"name": "Task Writ",
+			"owner": "task_writ"
+		},
+		{
+			"key": "toy_sword",
+			"kind": "weapon",
+			"name": "Toy Sword",
+			"owner": "toy_sword"
+		}
+	]
+}

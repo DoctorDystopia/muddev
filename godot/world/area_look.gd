@@ -46,11 +46,31 @@ extends RefCounted
 ## | `sun_azimuth` | Degrees about the vertical axis. Zero is the scene default |
 ## | `ambient_color`, `ambient_energy` | The light that has no direction |
 ##
+## ## The shadow minimum
+##
+## The share of the sun that still reaches a place in full shadow (Nick,
+## 10/20/2026). It is one number for every area, beside the area rows of
+## the look file. A hidden roof keeps its shadow ([TerrainView]), so the
+## inside of every structure is in full shadow. The shadow minimum sets how
+## dark that shadow is. It makes the shadow lighter, and the open ground
+## stays as it is. The ambient energy makes the open ground lighter too.
+##
+## [method apply_to] writes it to the sun as
+## [member Light3D.shadow_opacity], which is its other share. It is not a
+## field of a look, so a blend does not move it.
+##
 ## A RefCounted with only static members. Nothing makes an instance of it.
 
 const PATH := LookFile.DIRECTORY + "/area_looks.json"
 
 const KEY_AREAS := "areas"
+
+## The key of the shadow minimum in the look file.
+const KEY_SHADOW_MINIMUM := "shadow_minimum"
+
+## The shadow minimum when the look file has none. 0 gives the full shadow,
+## and 1 gives no shadow.
+const SHADOW_MINIMUM_DEFAULT := 0.3
 
 ## The fields that hold a colour. The file stores them as hex text.
 const COLOR_FIELDS := ["fog_color", "sun_color", "ambient_color"]
@@ -153,7 +173,7 @@ static func save_look(area: String, look: Dictionary) -> Error:
 	for field: String in FALLBACK:
 		var value: Variant = look.get(field, FALLBACK[field])
 
-		row[field] = LookFile.hex_of(value) if value is Color else float(value)
+		row[field] = LookFile.stored_of(value)
 
 	areas[area] = row
 	content["format"] = LookFile.FORMAT
@@ -173,6 +193,30 @@ static func reset_look(area: String) -> Error:
 
 	content["format"] = LookFile.FORMAT
 	content[KEY_AREAS] = areas
+
+	return LookFile.write(PATH, content)
+
+
+## The shadow minimum of every area, from 0 to 1: the look file, then
+## [constant SHADOW_MINIMUM_DEFAULT].
+static func shadow_minimum() -> float:
+	var value: Variant = LookFile.read(PATH).get(KEY_SHADOW_MINIMUM)
+	var is_number := typeof(value) in [TYPE_INT, TYPE_FLOAT]
+
+	if not is_number:
+		return SHADOW_MINIMUM_DEFAULT
+
+	return clampf(float(value), 0.0, 1.0)
+
+
+## Write the shadow minimum of every area into the look file. The Look tab
+## of the terrain editor calls it after each change. The area rows stay as
+## they are.
+static func save_shadow_minimum(value: float) -> Error:
+	var content := LookFile.read(PATH).duplicate(true)
+
+	content["format"] = LookFile.FORMAT
+	content[KEY_SHADOW_MINIMUM] = clampf(value, 0.0, 1.0)
 
 	return LookFile.write(PATH, content)
 
@@ -198,6 +242,8 @@ static func apply_to(environment: Environment, sun: DirectionalLight3D,
 
 	sun.light_color = look["sun_color"]
 	sun.light_energy = look["sun_energy"]
+	# The opacity is the share of the sun that a shadow stops.
+	sun.shadow_opacity = 1.0 - shadow_minimum()
 	# A light shines down its own -Z. A negative pitch points it at the ground,
 	# and the yaw turns it about the vertical axis.
 	sun.rotation = Vector3(-elevation, azimuth, 0.0)

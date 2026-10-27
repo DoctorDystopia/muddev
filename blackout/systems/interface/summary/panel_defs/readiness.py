@@ -27,16 +27,18 @@ LABEL_ATTACK = "Attack"
 LABEL_STRENGTH = "Strength"
 LABEL_DEFENCE = "Defence"
 
-# Attribute-key suffixes on a combat_stat_bonuses dict. Interpolated with the
-# ATTACK_TYPE_* strings exactly as the swing pipeline does -- see the warning in
-# combat/constants.py about not confusing these with the DAMAGE_TYPE_* names.
-ATTACK_BONUS_SUFFIX = "_attack_bonus"
-DEFENSE_BONUS_SUFFIX = "_defense_bonus"
-STRENGTH_BONUS_KEY = "melee_strength_bonus"
+# The bonus keys come from the builders in combat/constants.py, the same
+# builders that the swing uses. The strength key comes from the axes of the
+# style. Thus, a bow shows the strength bonus of its arrow.
+AXES_STRENGTH_KEY = "strength_bonus_key"
 
 # Rendered after the tick count on the weapon row, e.g. "speed 4t".
 SPEED_PREFIX = "speed "
 SPEED_SUFFIX = "t"
+
+# The one field of the structured band. The Character tab makes its group
+# label from this key: "Total Combat Stat Bonuses".
+TOTAL_BONUSES_KEY = "total_combat_stat_bonuses"
 
 
 class ReadinessPanel(BasePanel):
@@ -183,7 +185,6 @@ class ReadinessPanel(BasePanel):
 
         Module Globals:
             combat_const.MELEE_ATTACK_TYPES read.
-            DEFENSE_BONUS_SUFFIX read.
 
         Methodology:
             Driven off MELEE_ATTACK_TYPES rather than three hand-written rows,
@@ -201,11 +202,51 @@ class ReadinessPanel(BasePanel):
         items = []
 
         for attack_type in combat_const.MELEE_ATTACK_TYPES:
-            bonus_key = f"{attack_type}{DEFENSE_BONUS_SUFFIX}"
+            bonus_key = combat_const.defense_bonus_key(attack_type)
             value = bonuses.get(bonus_key, 0)
             items.append(f"{attack_type} {value:+d}")
 
         return items
+
+
+    @classmethod
+    def _swing_bonuses(cls, style: dict, bonuses: dict) -> tuple:
+        """
+        Purpose: Read the attack and strength bonus that the active style
+                 swings with.
+
+        Entry:
+            style is the active combat style. bonuses is a
+            combat_stat_bonuses dict.
+
+        Exit/Returns:
+            Returns (attack_bonus, strength_bonus) as two ints.
+
+        Module Globals:
+            AXES_STRENGTH_KEY read.
+
+        Methodology:
+            The attack key comes from attack_bonus_key, and the strength key
+            from style_combat_axes. ActionContext reads the same two. Thus,
+            the band shows the numbers that the swing uses.
+
+        Notes/References:
+            A bow reads projectile_strength_bonus. Until 10/21/2026 this
+            band read melee_strength_bonus for each style, and it showed +0
+            for every bow.
+
+        Author: Nick Hobar
+        Creation date: 10/21/2026
+        """
+        attack_type = str(style.get("attack_type", ""))
+        attack_key = combat_const.attack_bonus_key(attack_type)
+        axes = combat_const.style_combat_axes(style)
+        strength_key = axes[AXES_STRENGTH_KEY]
+
+        attack_bonus = int(bonuses.get(attack_key, 0))
+        strength_bonus = int(bonuses.get(strength_key, 0))
+
+        return attack_bonus, strength_bonus
 
 
     @classmethod
@@ -258,7 +299,6 @@ class ReadinessPanel(BasePanel):
 
         Module Globals:
             LABEL_* read, SPEED_PREFIX / SPEED_SUFFIX read.
-            STRENGTH_BONUS_KEY, ATTACK_BONUS_SUFFIX read.
 
         Methodology:
             Weapon, style and XP awards each get a wide row -- their values run
@@ -286,8 +326,7 @@ class ReadinessPanel(BasePanel):
         )
 
         attack_type = str(style.get("attack_type", ""))
-        attack_bonus = bonuses.get(f"{attack_type}{ATTACK_BONUS_SUFFIX}", 0)
-        strength_bonus = bonuses.get(STRENGTH_BONUS_KEY, 0)
+        attack_bonus, strength_bonus = cls._swing_bonuses(style, bonuses)
 
         pairs = [
             (LABEL_ATTACK, f"{attack_type} {attack_bonus:+d}"),
@@ -317,15 +356,19 @@ class ReadinessPanel(BasePanel):
             could not be resolved.
 
         Module Globals:
-            STRENGTH_BONUS_KEY, ATTACK_BONUS_SUFFIX read.
+            TOTAL_BONUSES_KEY read.
 
         Methodology:
-            The full bonuses dict is passed through rather than the two numbers
-            the text view picks out -- a graphical client can afford to draw
-            all of them, and the dict is already plain integers.
+            The band sends the full bonuses dict, not the two numbers that
+            the text view picks out. A graphical client can draw all of
+            them, and the dict holds plain integers.
 
         Notes/References:
-            None
+            Until 10/22/2026 the band also sent six more fields: the weapon,
+            the attack speed, the attack type, the weapon style, and two
+            bonuses. Nick removed them from the Character tab. The Combat
+            tab shows the weapon, the speed and the styles. The text view
+            keeps its rows.
 
         Author: Nick Hobar
         Creation date: 08/08/2026
@@ -335,18 +378,9 @@ class ReadinessPanel(BasePanel):
         if profile is None:
             return {}
 
-        style = profile["active_combat_style"]
         bonuses = profile["combat_stat_bonuses"]
-        attack_type = str(style.get("attack_type", ""))
+        totals = {key: int(value) for key, value in bonuses.items()}
 
-        payload = {
-            "weapon": cls._weapon_name(character),
-            "attack_speed": int(profile["attack_speed"]),
-            "attack_type": attack_type,
-            "weapon_style": str(style.get("weapon_style", "")),
-            "attack_bonus": int(bonuses.get(f"{attack_type}{ATTACK_BONUS_SUFFIX}", 0)),
-            "strength_bonus": int(bonuses.get(STRENGTH_BONUS_KEY, 0)),
-            "bonuses": {key: int(value) for key, value in bonuses.items()},
-        }
+        payload = {TOTAL_BONUSES_KEY: totals}
 
         return payload

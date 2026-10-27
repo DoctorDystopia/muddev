@@ -3,8 +3,8 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/24/2026
 Description: Make the objects on the tile grid match the chunk files: a
-             facility, a gathering node, an NPC, or a sign for each placed
-             object that stands something up.
+             facility, a gathering node, an NPC, a sign, or the item of an
+             item spawn for each placed object that stands something up.
 
 Why an operator step
 --------------------
@@ -29,6 +29,12 @@ the words of the sign that stands, so a typo fix demolishes nothing. A
 change would demolish the whole tile, and a sign often stands on the tile of
 a facility. A sign that loses all of its words is a change, because
 `place_signpost` cannot take the words away. `_entry_shape` holds this rule.
+
+An item spawn entry holds the item key of its spawn: `item_spawn:scrap`
+(10/21/2026). A new item is a refresh, as new words are. The refresh deletes
+the item of the old spawn and drops its clock (`item_spawns.clear_stale`).
+The record holds no quantity and no respawn. The respawn reads them from the
+chunk file, so a change of the two needs no sync.
 
 The four verbs
 --------------
@@ -89,7 +95,8 @@ class TileAction:
     One tile of a plan: its verb, its kinds now, its kinds before, and the
     plane of the tile (DESIGN-0011 Phase 7). The `facings` hold the rotation
     of each entry of `kinds`, in the same order. The `looks` hold the look
-    of each entry, in the same order, {} for an object with none.
+    of each entry, in the same order, {} for an object with none. The
+    `spawns` hold the spawn of each entry in the same way.
     """
 
     tile: tuple
@@ -99,21 +106,54 @@ class TileAction:
     plane: int = tile_const.GROUND_PLANE
     facings: tuple = ()
     looks: tuple = ()
+    spawns: tuple = ()
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
 
-def _is_sign(kind) -> bool:
-    """Return True if a kind stands a signpost with the text of its object."""
-    return kind.category == tile_const.OBJECT_TEXT_CATEGORY
+def _stand_sign(room, words: str, _spawn: dict, _facing, _look):
+    """Stand the signpost of a sign entry with its words."""
+    from typeclasses.signs import place_signpost
+
+    return place_signpost(room, words)
+
+
+def _stand_spawn(room, _words: str, spawn: dict, facing, look):
+    """Put the item of an item spawn entry on its tile, if it is empty."""
+    from systems.gameplay.spawning import item_spawns
+
+    if not spawn:
+        return None
+
+    return item_spawns.place(room, spawn, facing, look)
+
+
+# The categories whose object the chunk object itself describes, not a
+# spawner: category -> stander(room, words, spawn, facing, look). Each one
+# returns the object on the tile, or None.
+_STANDERS: dict = {
+    tile_const.OBJECT_TEXT_CATEGORY: _stand_sign,
+    tile_const.OBJECT_SPAWN_CATEGORY: _stand_spawn,
+}
 
 
 def _stands_something(kind) -> bool:
     """
-    Return True if a kind stands an object up: a spawner or a sign. A
-    transition and a landmark stand up nothing.
+    Return True if a kind stands an object up: a spawner, a sign, or an item
+    spawn. A transition and a landmark stand up nothing.
     """
-    return bool(kind.spawner) or _is_sign(kind)
+    return bool(kind.spawner) or kind.category in _STANDERS
+
+
+def _words(kind, text: str, spawn: dict) -> str:
+    """
+    Return the words of the kind list entry of one object: the item key of
+    an item spawn, else the text of the object.
+    """
+    if kind.category == tile_const.OBJECT_SPAWN_CATEGORY and spawn:
+        return spawn[tile_const.SPAWN_ITEM_KEY]
+
+    return text
 
 
 def _entry(key: str, text: str) -> str:
@@ -145,26 +185,29 @@ def _same_shapes(kinds: tuple, previous: tuple) -> bool:
 
 def _standing(world, x: int, y: int) -> tuple:
     """
-    Return (entries, facings, looks) of the kinds on a tile that stand
-    something up, in file order. The facing of an entry is the rotation of
-    its chunk object, and the look is its look. A name that is not a row is
-    left to `world/tests/test_tile_content.py`.
+    Return (entries, facings, looks, spawns) of the kinds on a tile that
+    stand something up, in file order. The facing of an entry is the
+    rotation of its chunk object. The look and the spawn are its look and
+    its spawn. A name that is not a row is left to
+    `world/tests/test_tile_content.py`.
     """
     entries = []
     facings = []
     looks = []
+    spawns = []
 
-    for key, rotation, text, look in world.placed_at(x, y):
+    for key, rotation, text, look, spawn in world.placed_at(x, y):
         kind = OBJECT_KINDS.get(key)
 
         if kind is None or not _stands_something(kind):
             continue
 
-        entries.append(_entry(key, text))
+        entries.append(_entry(key, _words(kind, text, spawn)))
         facings.append(rotation)
         looks.append(look)
+        spawns.append(spawn)
 
-    return tuple(entries), tuple(facings), tuple(looks)
+    return tuple(entries), tuple(facings), tuple(looks), tuple(spawns)
 
 
 def _records(world) -> dict:
@@ -180,27 +223,27 @@ def _records(world) -> dict:
     return found
 
 
-def _stand_up(room, entry: str, facing, look=None) -> None:
+def _stand_up(room, entry: str, facing, look=None, spawn=None) -> None:
     """
-    Run the spawner of one kind list entry in a room, or stand its sign.
-    Then give the entity on the tile its facing and its look. Each spawner
-    is idempotent. A sign with no words stands nothing, and
-    `world/tile_checks.py` reports it. A look of {} takes the attribute
-    away. A look of None leaves it as it is.
+    Run the spawner of one kind list entry in a room, or its stander in
+    `_STANDERS`. Then give the entity on the tile its facing and its look.
+    Each spawner and each stander is idempotent. A sign with no words and an
+    item spawn with no spawn stand nothing, and `world/tile_checks.py`
+    reports them. A look of {} takes the attribute away. A look of None
+    leaves it as it is.
     """
-    from typeclasses.signs import place_signpost
     from typeclasses.spawners import SPAWNER_REGISTRY, load_all_spawners
 
     load_all_spawners()
-    key, _separator, text = entry.partition(ENTRY_TEXT_SEPARATOR)
+    key, _separator, words = entry.partition(ENTRY_TEXT_SEPARATOR)
     kind = OBJECT_KINDS[key]
-
+    stander = _STANDERS.get(kind.category)
     standing = None
 
     if kind.spawner:
         standing = SPAWNER_REGISTRY[kind.spawner](room)
-    elif _is_sign(kind):
-        standing = place_signpost(room, text)
+    elif stander is not None:
+        standing = stander(room, words, spawn or {}, facing, look)
 
     if standing is None:
         return
@@ -226,16 +269,25 @@ def _demolish(room) -> int:
     return teardown.demolish_contents(room)
 
 
-def _stand_up_all(room, kinds: tuple, facings: tuple, looks: tuple) -> None:
+def _stand_up_all(room, kinds: tuple, facings: tuple, looks: tuple,
+                  spawns: tuple = ()) -> None:
     """
-    Stand up each kind list entry, and record the list on the room. An entry
-    with no facing (a TileAction built with none) keeps the facing it has.
-    The same holds for the look.
+    Remove the items of spawns that the tile lost. Then stand up each kind
+    list entry, and record the list on the room. An entry with no facing (a
+    TileAction built with none) keeps the facing it has. The same holds for
+    the look, and an action with no spawns removes no item.
     """
+    from systems.gameplay.spawning import item_spawns
+
+    if spawns:
+        item_spawns.clear_stale(room, [spawn[tile_const.SPAWN_ITEM_KEY]
+                                       for spawn in spawns if spawn])
+
     for index, entry in enumerate(kinds):
         facing = facings[index] if index < len(facings) else None
         look = looks[index] if index < len(looks) else None
-        _stand_up(room, entry, facing, look)
+        spawn = spawns[index] if index < len(spawns) else None
+        _stand_up(room, entry, facing, look, spawn)
 
     room.attributes.add(TILE_KINDS_ATTR, list(kinds))
 
@@ -280,7 +332,7 @@ def _plan_plane(view) -> list:
     placed = {(x, y) for _kind, x, y, _rotation in view.placed_objects()}
 
     for tile in sorted(placed | set(records)):
-        kinds, facings, looks = _standing(view, *tile)
+        kinds, facings, looks, spawns = _standing(view, *tile)
         previous = records.get(tile, (None, ()))[1]
 
         if not kinds and tile not in records:
@@ -296,7 +348,7 @@ def _plan_plane(view) -> list:
             verb = VERB_CHANGED
 
         actions.append(TileAction(tile, verb, kinds, previous, view.plane,
-                                  facings, looks))
+                                  facings, looks, spawns))
 
     return actions
 
@@ -343,6 +395,7 @@ def apply(world, actions: list) -> int:
         if action.verb == VERB_CHANGED:
             destroyed += _demolish(room)
 
-        _stand_up_all(room, action.kinds, action.facings, action.looks)
+        _stand_up_all(room, action.kinds, action.facings, action.looks,
+                      action.spawns)
 
     return destroyed

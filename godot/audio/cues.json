@@ -1,0 +1,60 @@
+{
+  "format": 1,
+  "cues": {
+    "butcher_attempt": {
+      "kind": "sfx",
+      "clip": "sfx/butcher_attempt.wav",
+      "note": "One Butchery attempt at a node, a hit or a miss. The cue repeats until the gathering stops."
+    },
+    "cut_attempt": {
+      "kind": "sfx",
+      "clip": "sfx/cut_attempt.wav",
+      "note": "One Cutting attempt at a node, a hit or a miss. The cue repeats until the gathering stops."
+    },
+    "foundry_craft": {
+      "kind": "sfx",
+      "clip": "sfx/foundry_craft.wav",
+      "note": "One finished craft under Foundry. The cue repeats until the batch stops."
+    },
+    "guns_shot": {
+      "kind": "sfx",
+      "clip": "sfx/guns_shot.wav",
+      "note": "One shot of a weapon whose combat style reads Guns, a hit or a miss. The shooter hears it."
+    },
+    "level_up": {
+      "kind": "sfx",
+      "clip": "sfx/level_up.wav",
+      "note": "A level of a skill rose. The client cues it from SkillsState.levelled, not from a moment."
+    },
+    "melee_swing": {
+      "kind": "sfx",
+      "clip": "sfx/melee_swing.wav",
+      "note": "One melee swing, a hit or a miss. Each melee style reads Strike, a fist included. The attacker hears it."
+    },
+    "metalsmith_craft": {
+      "kind": "sfx",
+      "clip": "sfx/metalsmith_craft.wav",
+      "note": "One finished craft under Metalsmith. The cue repeats until the batch stops."
+    },
+    "task_complete": {
+      "kind": "sfx",
+      "clip": "sfx/task_complete.wav",
+      "note": "The last kill of an Exterminator task."
+    },
+    "transition": {
+      "kind": "sfx",
+      "clip": "sfx/transition.wav",
+      "note": "A transition tile moved the player to its target tile. The player who moved hears it."
+    }
+  },
+  "moments": {
+    "butcher_attempt": "butcher_attempt",
+    "cut_attempt": "cut_attempt",
+    "foundry_craft": "foundry_craft",
+    "guns_shot": "guns_shot",
+    "melee_swing": "melee_swing",
+    "metalsmith_craft": "metalsmith_craft",
+    "task_complete": "task_complete",
+    "transition": "transition"
+  }
+}

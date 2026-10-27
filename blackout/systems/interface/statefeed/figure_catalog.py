@@ -23,12 +23,15 @@ Description: Render the item catalog of the figure workbench.
 
              THE FILE:
 
-                 format      1
-                 slots       [{key, label, clears}, ...], in display order
-                 items       [{key, name, slot, tool_type, tier, family},
-                             ...], sorted by key
-                 tool_types  each tool type of the server, sorted
-                 npcs        [{key, name, outfit}, ...], sorted by key
+                 format          1
+                 slots           [{key, label, clears}, ...], in display
+                                 order
+                 items           [{key, name, slot, tool_type, tier,
+                                 family}, ...], sorted by key
+                 tool_types      each tool type of the server, sorted
+                 npcs            [{key, name, outfit}, ...], sorted by key
+                 attack_actions  each action that a swing can name,
+                                 sorted
 
              `clears` names each other slot that an item in this slot
              empties (SLOT_CONFLICTS). The outfit bar of the workbench
@@ -44,6 +47,12 @@ Description: Render the item catalog of the figure workbench.
              DESIGN-0014 decision 8). `outfit` is slot -> item key. The
              server owns the outfit. The workbench only shows it.
              outfit_problems() gives the rules of an outfit.
+
+             `attack_actions` is each action that the swing of a weapon, of
+             bare hands, or of an NPC can name (10/25/2026). The Clips tab
+             shows one row for each, so the author gives each one a clip.
+             The same two reads name the action of a live swing
+             (events._figure_action).
 
              THE STANCE TABLE (Phase W5) is a file of the Godot project that
              names a server fact: each stance has a tool_type as its key.
@@ -64,6 +73,7 @@ from items.equipment.skill_requirements import (
     ARMOR_SKILL_MAP,
     WEAPON_SKILL_MAP,
 )
+from systems.gameplay.combat import constants as combat_const
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 
@@ -100,37 +110,6 @@ _CLIPS_DIR: str = os.path.join(_GODOT_FIGURE_DIR, "clips")
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
-
-def _family_of(item_def) -> str:
-    """
-    Purpose: Name the family that the client resolves an item to.
-
-    Entry:
-        item_def is an ItemDef.
-
-    Exit/Returns:
-        Returns one of const.ITEM_FAMILY_PRIORITY, or ITEM_FAMILY_GENERIC
-        for an item with no family tag.
-
-    Module Globals:
-        const.ITEM_FAMILY_PRIORITY and const.ITEM_FAMILY_GENERIC read.
-
-    Methodology:
-        Walk the priority tuple, not the tags, as serializers._item_family
-        does for a live object. An item with two families then gets the same
-        answer here and on the wire.
-
-    Author: Nick Hobar
-    Creation date: 10/12/2026
-    """
-    categories = {category for _key, category in item_def.tags}
-
-    for family in const.ITEM_FAMILY_PRIORITY:
-        if family in categories:
-            return str(family)
-
-    return const.ITEM_FAMILY_GENERIC
-
 
 def _slot_rows() -> list:
     """
@@ -190,7 +169,7 @@ def _item_rows() -> list:
             "slot": item_def.use_slot.value,
             "tool_type": item_def.tool_type or _NO_TOOL_TYPE,
             "tier": item_def.tier,
-            "family": _family_of(item_def),
+            "family": family_of(item_def),
         })
 
     return rows
@@ -229,6 +208,48 @@ def _npc_rows() -> list:
     return rows
 
 
+def _swing_kinds() -> set:
+    """
+    Purpose: Give each pair of hands and attack type that a swing can have.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a set of (hands, attack_type) tuples.
+
+    Module Globals:
+        ITEM_DB, NPC_DB, combat_const.UNARMED_COMBAT_STYLES,
+        combat_const.ATTACK_HANDS_BY_SLOT read.
+
+    Methodology:
+        Three sources of a combat style: bare hands, an item in a hand slot,
+        and the combat block of an NPC def. An NPC holds no item, so its
+        swing is a swing of bare hands. An item in another slot is not a
+        held weapon (combat.held_weapon), so its styles never swing.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    unarmed = combat_const.ATTACK_HANDS_UNARMED
+    kinds = {(unarmed, style["attack_type"])
+             for style in combat_const.UNARMED_COMBAT_STYLES.values()}
+
+    for item_def in ITEM_DB.values():
+        if item_def.use_slot not in combat_const.ATTACK_HANDS_BY_SLOT:
+            continue
+
+        hands = combat_const.attack_hands(item_def.use_slot)
+        styles = (item_def.combat_styles or {}).values()
+        kinds.update((hands, style["attack_type"]) for style in styles)
+
+    for npc_def in NPC_DB.values():
+        styles = getattr(npc_def.combat, "combat_styles", None) or {}
+        kinds.update((unarmed, style["attack_type"]) for style in styles.values())
+
+    return kinds
+
+
 # ─── Public interface ────────────────────────────────────────────────────────
 
 def tool_types() -> list:
@@ -256,6 +277,35 @@ def tool_types() -> list:
     found = set(WEAPON_SKILL_MAP) | set(ARMOR_SKILL_MAP)
     found.update(item_def.tool_type for item_def in ITEM_DB.values()
                  if item_def.tool_type)
+
+    return sorted(found)
+
+
+def attack_actions() -> list:
+    """
+    Purpose: Give each action that a swing can name for a figure.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a sorted list of names, for example attack_one_hand_slash.
+
+    Module Globals:
+        const.FIGURE_ATTACK_ACTION_TEMPLATE read.
+
+    Methodology:
+        The template and combat_const.attack_hands give the spelling, as
+        they do for a live swing (events._figure_action). The Clips tab of
+        the workbench shows one row for each name. The stance check refuses
+        an attack action of the stance table that no swing names.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    template = const.FIGURE_ATTACK_ACTION_TEMPLATE
+    found = {template.format(hands=hands, attack_type=attack_type)
+             for hands, attack_type in _swing_kinds()}
 
     return sorted(found)
 
@@ -309,6 +359,41 @@ def outfit_problems(outfit) -> list:
     return problems
 
 
+def family_of(item_def) -> str:
+    """
+    Purpose: Name the family that the client resolves an item to.
+
+    Entry:
+        item_def is an ItemDef.
+
+    Exit/Returns:
+        Returns one of const.ITEM_FAMILY_PRIORITY, or ITEM_FAMILY_GENERIC
+        for an item with no family tag.
+
+    Module Globals:
+        const.ITEM_FAMILY_PRIORITY and const.ITEM_FAMILY_GENERIC read.
+
+    Methodology:
+        Walk the priority tuple, not the tags, as serializers._item_family
+        does for a live object. An item with two families then gets the same
+        answer here and on the wire.
+
+    Notes/References:
+        Public since 10/21/2026: the item list of the terrain editor
+        (`spawn_items.py`) gives the same family.
+
+    Author: Nick Hobar
+    Creation date: 10/12/2026
+    """
+    categories = {category for _key, category in item_def.tags}
+
+    for family in const.ITEM_FAMILY_PRIORITY:
+        if family in categories:
+            return str(family)
+
+    return const.ITEM_FAMILY_GENERIC
+
+
 def build() -> dict:
     """
     Purpose: Give the content of the item catalog.
@@ -317,8 +402,8 @@ def build() -> dict:
         No conditions.
 
     Exit/Returns:
-        Returns {format, slots, items, tool_types, npcs}. The module
-        docstring gives each key.
+        Returns {format, slots, items, tool_types, npcs, attack_actions}.
+        The module docstring gives each key.
 
     Module Globals:
         _FORMAT read.
@@ -332,6 +417,7 @@ def build() -> dict:
         "items": _item_rows(),
         "tool_types": tool_types(),
         "npcs": _npc_rows(),
+        "attack_actions": attack_actions(),
     }
 
     return catalog

@@ -113,3 +113,12 @@ static func color_of(value: Variant, fallback: Color) -> Color:
 ## The hex text of a colour, six digits, as the files store it.
 static func hex_of(color: Color) -> String:
 	return color.to_html(false)
+
+
+## One field of a look as the files store it: the hex text of a colour, or
+## a number.
+static func stored_of(value: Variant) -> Variant:
+	if value is Color:
+		return hex_of(value)
+
+	return float(value)

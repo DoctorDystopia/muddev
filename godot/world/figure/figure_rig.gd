@@ -355,22 +355,22 @@ static func _tables_problem(parsed: Dictionary) -> String:
 	if not FigureJson.is_strings(parsed.get("sockets", [])):
 		return "sockets must be a list of bone names"
 
-	var regions: Variant = parsed.get("regions", {})
+	var region_table: Variant = parsed.get("regions", {})
 
-	if typeof(regions) != TYPE_DICTIONARY:
+	if typeof(region_table) != TYPE_DICTIONARY:
 		return "regions must map a region to its bones"
 
-	for region: String in regions:
-		if not FigureJson.is_strings(regions[region]):
+	for region: String in region_table:
+		if not FigureJson.is_strings(region_table[region]):
 			return "the region %s must be a list of bone names" % region
 
-	var slots: Variant = parsed.get("slots", {})
+	var slot_table: Variant = parsed.get("slots", {})
 
-	if typeof(slots) != TYPE_DICTIONARY:
+	if typeof(slot_table) != TYPE_DICTIONARY:
 		return "slots must map a slot to its bone"
 
-	for slot: String in slots:
-		if typeof(slots[slot]) != TYPE_STRING:
+	for slot: String in slot_table:
+		if typeof(slot_table[slot]) != TYPE_STRING:
 			return "the slot %s must name one bone" % slot
 
 	return ""

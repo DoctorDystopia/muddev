@@ -136,6 +136,43 @@ LOOK_AXES: int = 3
 
 LOOK_ATTR: str = "look"
 
+# ─── The spawn of one object (10/21/2026) ────────────────────────────────────
+# An item spawn object carries a `spawn`: the item that lies on its tile, the
+# quantity of it, and the ticks until a new one comes after the item leaves
+# the tile. Nick chose four rules on 10/21/2026:
+#
+# 1. The spawn is a fact of each placement, as the words of a sign are.
+# 2. The respawn is a count of game ticks, as OSRS gives a ground spawn.
+# 3. The clock starts when the item leaves its tile.
+# 4. Each new item rolls its quantity in the range of the spawn.
+#
+# The item is an ItemDef key. The quantity is [low, high], with
+# SPAWN_QUANTITY_UNIT <= low <= high <= SPAWN_QUANTITY_MAX. A range of one
+# unit is the default, and the reader refuses it, so each spawn has one text.
+# The respawn is in SPAWN_RESPAWN_MIN..SPAWN_RESPAWN_MAX ticks. The item and
+# the respawn are required. Every number is an int, as in a look.
+OBJECT_SPAWN_KEY: str = "spawn"
+SPAWN_ITEM_KEY: str = "item"
+SPAWN_QUANTITY_KEY: str = "quantity"
+SPAWN_RESPAWN_KEY: str = "respawn"
+SPAWN_KEYS: tuple = (SPAWN_ITEM_KEY, SPAWN_QUANTITY_KEY, SPAWN_RESPAWN_KEY)
+SPAWN_REQUIRED_KEYS: tuple = (SPAWN_ITEM_KEY, SPAWN_RESPAWN_KEY)
+
+SPAWN_QUANTITY_UNIT: int = 1
+SPAWN_QUANTITY_MAX: int = 100000
+
+# The two numbers of a quantity: the low end and the high end.
+SPAWN_QUANTITY_BOUNDS: int = 2
+SPAWN_RESPAWN_MIN: int = 1
+
+# One day of ticks, at 0.6 seconds for each tick.
+SPAWN_RESPAWN_MAX: int = 144000
+
+# The attribute on an item that an item spawn put down. It holds the item key
+# of the spawn. `TileRoom.at_object_leave` reads it, and the clock of the
+# spawn starts when the item leaves (`systems/gameplay/spawning/item_spawns.py`).
+SPAWN_ITEM_ATTR: str = "spawn_item"
+
 # A floor name, an area name, and an object kind. Lower case, digits, and
 # underscores. Thus, no name needs a JSON escape, and the two writers cannot
 # escape a name differently.
@@ -196,6 +233,10 @@ STREAM_RADIUS_CHUNKS: int = 1
 # (DESIGN-0013 section 6.5). It stands nothing up, it pins no tile room, and
 # it may stand on a Blocked tile. An author sets Blocked under a table to
 # stop a walk through it.
+#
+# An item spawn puts an item on its tile, and puts a new one there a number
+# of ticks after the item leaves (10/21/2026). Its chunk object holds the
+# item and the ticks.
 
 OBJECT_CATEGORY_FACILITY: str = "facility"
 OBJECT_CATEGORY_GATHERING: str = "gathering"
@@ -205,12 +246,14 @@ OBJECT_CATEGORY_SIGN: str = "sign"
 OBJECT_CATEGORY_TRANSITION: str = "transition"
 OBJECT_CATEGORY_CLIMB: str = "climb"
 OBJECT_CATEGORY_DECOR: str = "decor"
+OBJECT_CATEGORY_ITEM_SPAWN: str = "item_spawn"
 
 OBJECT_CATEGORIES: tuple = (
     OBJECT_CATEGORY_CLIMB,
     OBJECT_CATEGORY_DECOR,
     OBJECT_CATEGORY_FACILITY,
     OBJECT_CATEGORY_GATHERING,
+    OBJECT_CATEGORY_ITEM_SPAWN,
     OBJECT_CATEGORY_LANDMARK,
     OBJECT_CATEGORY_NPC,
     OBJECT_CATEGORY_SIGN,
@@ -225,6 +268,7 @@ OBJECT_CATEGORY_LABELS: dict = {
     OBJECT_CATEGORY_DECOR: "Decor",
     OBJECT_CATEGORY_FACILITY: "Facility",
     OBJECT_CATEGORY_GATHERING: "Gathering node",
+    OBJECT_CATEGORY_ITEM_SPAWN: "Item spawn",
     OBJECT_CATEGORY_LANDMARK: "Landmark",
     OBJECT_CATEGORY_NPC: "NPC",
     OBJECT_CATEGORY_SIGN: "Sign",
@@ -235,6 +279,11 @@ OBJECT_CATEGORY_LABELS: dict = {
 # signpost. A kind of any other category carries none. The chunk file reader
 # does not know the kinds, so `world/tile_checks.py` holds this rule.
 OBJECT_TEXT_CATEGORY: str = OBJECT_CATEGORY_SIGN
+
+# A kind of this category carries a spawn in the chunk file. A kind of any
+# other category carries none. `world/tile_checks.py` holds this rule, as it
+# holds the rule of the text.
+OBJECT_SPAWN_CATEGORY: str = OBJECT_CATEGORY_ITEM_SPAWN
 
 # ─── Scenery primitives ──────────────────────────────────────────────────────
 # The scenery keys that the client draws as a plain shape, with no model

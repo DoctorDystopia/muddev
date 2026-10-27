@@ -80,6 +80,11 @@ the name.
 | chat mode | where a typed line goes: Command, or a mode that `char_chat` names, for example Say (`ChatModes`) | chat channel, talk mode |
 | Command mode | the chat mode that sends a typed line as it is. The default | raw mode, normal mode |
 | cue | the name of one sound that the client plays, mapped to one clip (`SoundCues`) | sound effect, SFX key |
+| sound clip | one audio file under `godot/audio/` that a cue plays. "Clip" alone is also an animation of the rig | audio file, sample, SFX file |
+| cue table | the file `godot/audio/cues.json`: each cue with its sound kind, sound clip and note, and the cue of each moment. `SoundCues` reads it, and the sound wizard writes it | sound table, SFX list, cue map |
+| sound kind | what a cue is: a sound effect (`sfx`) today, and music later. It sets the folder, the import settings and the bus (`assets/audio/kinds.py`) | sound type, audio category |
+| sound pack | one download of sound clips. It stays outside the repo, and `godot/audio/CREDITS.md` has one section for each | source, audio pack, SFX library |
+| sound wizard | the `add` command of `assets.audio`: it asks the questions of "To add a sound", then copies the sound clip and writes its `.import` file, its cue and its credits row | audio wizard, sound import script |
 | saved login | the login token and the account name that the Godot client keeps on one device (`SavedLogin`, `user://login.cfg`) | stored credentials, remembered login, auto-login |
 
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
@@ -128,6 +133,7 @@ Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
 | combat style | one entry in a weapon's `combat_styles` table, for example snipe | stance, attack mode |
 | weapon style | the manner a style fights in: accurate, aggressive, defensive, controlled | style class |
 | attack type | the bonus a style reads: stab, slash, crush, light, standard, heavy | damage class |
+| combat category | the group of an attack type, and the first word of each bonus key: melee or projectile (`COMBAT_CATEGORY_BY_ATTACK_TYPE`) | attack class, bonus family, damage type |
 | damage type | what `at_damage` is told the hit was, for example projectile | attack type |
 | grace | the ticks an attacker holds after its target leaves reach | grace period, timeout |
 | leash | the tiles a chasing NPC follows before it returns | tether, aggro range |
@@ -185,6 +191,9 @@ model file is never a recipe.
 | source record | the `source.toml` of a source: author, URL, license, file hashes | license file, SOURCE.md |
 | model record | the `.toml` in `assets/models/<family>/` that says how to build one served model | recipe, manifest row, model config |
 | alias | a second asset key that draws the same served model | duplicate, copy |
+| model wizard | the `add` command of the model pipeline: it asks the questions of "Add a model", then writes the source and the model record | import wizard, add script, asset wizard |
+| key list | the generated file `assets/key_list.json`: each asset key that the server names, with its owner (an `ItemDef`, an NPC def or an object kind). `key_list.py` in the statefeed writes it, and the model wizard reads it | asset list, wanted keys, key catalog |
+| format script | a script that runs inside Blender for one format only, in `blender.FORMAT_SCRIPTS`: `blender_vox.py` for `.vox`. Only the digest of a model in that format reads it | importer plugin, converter script |
 | fix | a correction to a bad export, baked into the served file by the build | presentation, override |
 | license gate | the build's refusal of a source whose license is not allowed | license check, whitelist |
 | exception | a reason in a source record that waives the license gate | override, waiver |
@@ -252,7 +261,9 @@ served place, and stand-in.
 | base | the worn look whose parts a tier draws (`base`) | parent look, template look |
 | stance table | the file that gives each tool type its clip set (`godot/world/figure/stances.json`) | animation table, stance config |
 | clip set | the clip of each action, for one stance or for a figure with no stance | animation set, clip group |
-| action | what a figure does, as the key of one clip in a clip set: `idle`, `walk`, `run`, `attack` | animation state, move, pose name |
+| action | what a figure does, as the key of one clip in a clip set: `idle`, `walk`, `run`, `attack`, or an attack action | animation state, move, pose name |
+| attack action | the action that the server names for one swing: `attack_<hands>_<attack type>`, for example `attack_one_hand_slash` (`figure_action` of `blackout_combat`). An attack action with no clip plays the clip of `attack` | swing animation, attack clip, motion |
+| hands | how an attacker holds what it swings: `unarmed`, `one_hand`, or `two_hands`. The slot of the held weapon gives it (`attack_hands`) | grip, handedness, wield type |
 | kit part | a worn look that is one choice of a character and no item: a hair shape, a head, a beard. Its file has a `kit` key | cosmetic, style, hair model |
 | kit group | the name that the kit parts of one choice share: `hair`, `beard`. A character has one kit part of each kit group, or none | kit slot, style category |
 | kit | the kit parts of one character: kit group -> the key of a kit part | appearance, style set, cosmetics |
@@ -272,6 +283,7 @@ a room.
 | tile grid | the world-wide grid of heights, floor types, and walk flags | heightmap, world grid, terrain grid |
 | chunk | a 64 x 64 part of the tile grid, stored in one chunk file | map square, region, sector |
 | look file | one JSON file under `godot/world/look/` that holds a look of the game, with a client table as its fallback (`LookFile`) | look table, theme file, style file |
+| shadow minimum | the share of the sun that still reaches a place in full shadow. One number for every area, in `area_looks.json` (`AreaLook.shadow_minimum`) | shadow floor, shade level, ambient floor |
 | fallback table | the client table of a look reader, for a key with no row in its look file. An example is `AreaLook.LOOKS`. A rename on the Tables tab renames its row too (`SourceTable`) | default table, backup table |
 | table file | one JSON file under `blackout/world/tables/` that holds the rows of one server table: the areas, the floor types, the wall styles, or the decor kinds. `world/table_file.py` reads it, and `TileTables` is its GDScript reader | data file, table JSON, registry file |
 | Tables tab | the tab of the terrain editor that adds, saves, renames, and removes a row of a table file (`tables_panel.gd`, `TableEdits`) | table editor, rows tab, database tab |
@@ -289,6 +301,10 @@ a room.
 | semantic dump | the text that says what a chunk file means, one fact on each line. The parity test compares its digest | canonical dump, meaning file |
 | object kind | the key of a placed object in a chunk file, a row of `world/object_kinds.py`. One kind for each variant, except the words of a signpost: one `signpost` kind, and each placement holds its own `text` | object type, prefab, object ID |
 | sign text | the words of one `signpost` object, in the `text` of its chunk object. The terrain editor edits it | label field, caption, sign string |
+| item spawn | an object of the kind `item_spawn`: it puts an item on its tile, and a new item there a number of ticks after the item leaves (`systems/gameplay/spawning/item_spawns.py`, 10/21/2026) | ground spawn, item spawner, loot spawn, pickup point |
+| spawn | the item, the quantity range, and the respawn of one item spawn, in the `spawn` of its chunk object. The terrain editor edits it | spawn data, spawn settings, spawn config |
+| respawn (of an item spawn) | the ticks from the time the item of a spawn leaves its tile to the next item. The respawn queue keeps the clock | respawn rate, respawn time, cooldown, timer |
+| item list | the items that an item spawn may name: each `ItemDef` except a dev tool. `spawn_items.py` owns it, and `spawn_items.json` is its copy for the terrain editor | item catalog (that is the figure workbench), spawn table |
 | terrain editor | the Godot editor plugin in `godot/addons/blackout_terrain/` that writes the chunk files | map editor, world editor, terrain tool |
 | block | the 4 x 4 chunks that the terrain editor loads around its centre chunk | chunk window, loaded area, scene |
 | brush | one tool of the terrain editor that changes the corners or tiles in a circle | tool (for a brush), stamp |
@@ -372,6 +388,8 @@ its name: tile map.
 | map icon | a symbol for a chunk object (a bank, a node, a transition) on either map | map marker, POI icon, map symbol |
 | legend | the column of the world map that names each map icon and each marker. A click on an icon row hides that category of map icon (`WorldMapLegend`) | key, map key, guide |
 | world map summary | the compact form of one chunk for the world map: one character for each tile, and its objects | map chunk, thumbnail, overview chunk |
+| position readout | the tile and the plane of the player, as text on either map, for example `(20, 30), plane 0` (10/21/2026) | coords, location text, position display |
+| XY button | the toggle on each map that shows or hides the position readout. One setting serves both maps | coords button, coordinates toggle |
 
 ## Movement
 

@@ -11,17 +11,27 @@ assets/
 ├── models/<family>/<asset_key>.toml     one served model = one model record
 ├── figure/                              the rigs, the worn looks, the clip lists and the palette
 ├── pipeline/                            the build (python -m assets.pipeline)
+├── audio/                               the sound wizard (python -m assets.audio)
 ├── build.lock.json                      what each served model was built from
 ├── package.json, package-lock.json      the Node half of the build
 └── README.md
 ```
+
+A sound clip is not a model. `audio/` holds the sound wizard, which adds one
+sound clip to `godot/audio/`. It shares the questions and the license list
+with the model wizard (`pipeline/questions.py`, `pipeline/licenses.py`).
+"To add a sound" in `godot/README.md` is its procedure.
 
 ## Setup (one time, 5 minutes)
 
 1. Install Node 20 or later.
 2. In `blackout/assets/`, run `npm ci`.
 3. Install Blender. You need it only for a source that is not glTF (FBX, OBJ,
-   `.blend`). Set `BLENDER_EXE` if Blender is not in a standard location.
+   `.blend`, `.vox`). Set `BLENDER_EXE` if Blender is not in a standard
+   location.
+4. For a `.vox` source only: in Blender, install the extension "MagicaVoxel
+   VOX format", version 1.6.0. Use Edit > Preferences > Get Extensions. See
+   "A .vox file".
 
 The check (`python -m assets.pipeline check`) and the test suite need neither
 Node nor Blender.
@@ -48,6 +58,10 @@ Run each command from `blackout/`.
    ../evenv/Scripts/python.exe -m assets.pipeline new items rusty_scrap_shortsword sketchfab_rusty_sword scene.gltf
    ```
 
+   The asset key must be the key that the game sends for the entity. The key
+   list (`key_list.json`) gives each one. The key of an object kind is not
+   always its asset key: the object kind `gunsmith_bench` draws `gunbench`.
+
 4. Build it:
 
    ```bash
@@ -62,6 +76,87 @@ Run each command from `blackout/`.
 The format of the download does not change a step. The build reads glTF and
 GLB directly, runs a picoCAD save file (`.txt`) through `pipeline/picocad.py`,
 and runs every other format through Blender.
+
+## The model wizard
+
+One command asks the questions of "Add a model", and does steps 1 to 4 for
+you (10/25/2026):
+
+```bash
+../evenv/Scripts/python.exe -m assets.pipeline add
+```
+
+It takes a model from one of three origins:
+
+| Origin | What the wizard does |
+|---|---|
+| A file, a folder or a `.zip` on this machine | It asks for the license and the credit, and copies the download in. Enter at the path question opens a file dialog. You can also drag the file into the terminal |
+| A Poly Haven model | It reads each field from the API. It downloads the files after the confirm |
+| A source in `sources/` | It writes one more model record for that source. A source that fails the license gate needs a yes |
+
+Then it asks for the model file, the family, the asset key, the aliases, and
+the base of a model variant. It shows the text of each record. It writes
+nothing before you confirm, and Ctrl+C at a question stops it.
+
+The rules of the wizard:
+
+- **A question refuses what the build refuses:** a key that another record
+  has, a base that is an alias or a variant, another license with no
+  exception. The wizard reads each rule from the module that owns it
+  (`pipeline/wizard.py`).
+- **The asset key comes from the game.** Before the asset key question, the
+  wizard shows each asset key that the server names and no model record
+  draws yet. A number picks one. A key with a worn look comes after the
+  others, and its row says so.
+- **A key that the game does not name gets a warning.** The warning names
+  the asset key of an object kind if you type the kind. Enter at "Keep it?"
+  asks the question again. The client names some keys itself, for example
+  a family shape. For one of those keys, type y. An alias gets the same
+  warning.
+- **The server writes the key list.** The pipeline runs with no Django, so
+  it cannot read `ITEM_DB` or the object kinds. `python
+  scripts/export_client_constants.py` writes `key_list.json`, and a test
+  fails when the file is stale. Run the script after you add an item, an NPC
+  def, or an object kind.
+- **A bought pack becomes a local source.** `LicenseRef-Purchased` sets
+  `local = true`, and the seal writes the `.gitignore`.
+- **The build question comes last.** The wizard asks it only when this
+  machine has Node, the Node packages, and Blender for a format that is not
+  glTF.
+- **A `.vox` model gets one fix: `filter = "nearest"`.** Its texture is a
+  palette. See "A .vox file".
+- **The wizard writes no other `[fix]`.** Look at the model in the client
+  first, as in step 5 of "Add a model".
+
+A figure model keeps its own command, `figure-model`. See "A figure model".
+
+## A .vox file
+
+A MagicaVoxel `.vox` file goes through Blender, with the extension
+"MagicaVoxel VOX format" (`blender_magicavoxel`, 10/25/2026). The build
+starts Blender with every add-on off. Thus, `pipeline/blender_vox.py` turns
+that extension on for each run.
+
+| Rule | Why |
+|---|---|
+| The script accepts version 1.6.0 of the extension only | The served bytes depend on the version, and the lock file cannot see it. A new pin in `blender_vox.py` builds each `.vox` model again |
+| Greedy watertight meshing | It joins the faces of one colour on one plane, and no crack shows. The priest has 10,560 triangles as plain quads, and 3,194 with this meshing |
+| The palette is one 256 x 1 texture. The record needs `filter = "nearest"` | A mipmap of a palette mixes two colours. The wizard writes the field |
+| Each model of the file is one node, in the place that the file gives | A record can take one node with `node` |
+| No camera, and no glass, glow or metal | glTF has no direct match |
+
+The facing depends on the tool that made the file. The VoxEdit priest faces
+-Z, as its glTF export does. Give such a model `rotate = [0, 180, 0]`.
+
+A `.vox` file has no rig and no animation. Use it for a prop, an item or a
+tile.
+
+**Only the digest of a `.vox` model reads `blender_vox.py`.** The text of
+`blender_ingest.py` and of `picocad.py` feeds the digest of every model, so
+an edit there makes every model stale. A format script
+(`blender.FORMAT_SCRIPTS`) feeds only the digest of a model in its format.
+Thus, a new format is a new format script, not an edit of
+`blender_ingest.py`.
 
 ## The source record
 

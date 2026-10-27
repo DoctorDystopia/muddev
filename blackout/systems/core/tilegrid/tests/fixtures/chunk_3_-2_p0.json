@@ -338,6 +338,8 @@
     [2,1,1,1,2,1,0,1,0,1,2,0,2,2,0,1,2,0,2,1,1,1,1,0,2,2,2,1,2,2,0,1,1,2,1,1,0,1,1,0,1,1,2,0,0,1,0,2,2,2,1,0,2,1,1,0,1,0,0,0,2,1,0,0]
   ],
   "objects": [
-    {"kind":"bank_booth","x":1,"y":2,"rotation":3}
+    {"kind":"bank_booth","x":1,"y":2,"rotation":3},
+    {"kind":"item_spawn","x":9,"y":4,"rotation":1,"look":{"variant":"*"},"spawn":{"item":"fixture_scrap","quantity":[2,7],"respawn":150}},
+    {"kind":"item_spawn","x":10,"y":4,"rotation":0,"spawn":{"item":"fixture_blade","respawn":144000}}
   ]
 }

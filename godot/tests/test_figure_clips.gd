@@ -17,7 +17,8 @@ extends Node
 ## 5. A clip list reads, writes the same bytes, and refuses a bad form.
 ## 6. A clip list takes a clip, changes it, and loses it.
 ## 7. The probe of a hand that goes into the other arm is not clear. In
-##    the rest pose it is clear.
+##    the rest pose it is clear. A clip holds a probe only in the bone of
+##    each slot that holds an item (`held_in`).
 ## 8. The workbench plays one clip on each stand, holds it, and stops.
 ## 9. The probe shows on each stand, and a ray goes through it.
 ## 10. Each clip of the repository moves only bones of each rig, keeps one
@@ -190,14 +191,23 @@ func _a_clip_list_reads_and_writes() -> void:
 	_expect(list.error.is_empty() and list.key() == "pack", "a clip list reads: " + list.error)
 	_expect(list.source_clip("walk") == "Walking" and list.loops("walk")
 		and not list.loops("none"), "a clip list gives the row of a clip")
+	_expect(list.held_in("walk") == PackedStringArray(FigureClearance.HAND_SLOTS),
+		"a clip with no held_in holds an item in each hand slot")
 	_expect(FigureClipList.from_text(list.to_text()).to_text() == list.to_text(),
 		"a clip list text that is read and written gives the same bytes")
+
+	var held := _clip_list()
+
+	held["clips"]["walk"]["held_in"] = ["two_hands"]
+	_expect(FigureClipList.from_data(held).held_in("walk") == PackedStringArray(["two_hands"]),
+		"a clip with a held_in holds an item in those slots only")
 	_expect(list.write_file(path) == OK and FigureClipList.read_file(path).error.is_empty(),
 		"a clip list file with its key as its name reads")
 
 	for change: Array in [["format", 99], ["file", ""], ["skeleton", null], ["bones", {}],
 			["clips", {"Bad Name": {"from": "x"}}], ["clips", {"walk": {"loop": true}}],
-			["clips", {"walk": {"from": "x", "loop": "yes"}}]]:
+			["clips", {"walk": {"from": "x", "loop": "yes"}}],
+			["clips", {"walk": {"from": "x", "held_in": "two_hands"}}]]:
 		var data := _clip_list()
 
 		if change[1] == null:
@@ -217,6 +227,11 @@ func _a_clip_list_takes_and_loses_a_clip() -> void:
 		"a clip list takes a clip")
 	_expect(FigureEdits.set_clip(data, "run", "Running_B", false).is_empty()
 		and data["clips"]["run"]["from"] == "Running_B", "a clip of the list takes a new row")
+
+	data["clips"]["run"]["held_in"] = ["two_hands"]
+	_expect(FigureEdits.set_clip(data, "run", "Running_A", false).is_empty()
+		and data["clips"]["run"]["held_in"] == ["two_hands"],
+		"a new source clip keeps the held_in of the row")
 	_expect(not FigureEdits.set_clip(data, "Run Fast", "x", true).is_empty()
 		and not FigureEdits.set_clip(data, "sprint", "", true).is_empty(),
 		"a clip needs a good name and a source clip")
@@ -255,6 +270,16 @@ func _the_probe_finds_a_hand_in_an_arm() -> void:
 	_expect(not FigureClearance.is_clear(hit) and hit["hand"] == "hand_r"
 		and hit["time"] > SECONDS * 0.5,
 		"a probe inside the other arm is not clear: %s" % [hit])
+
+	# A clip that holds an item in the off hand only holds no probe in the
+	# hand that goes into the other arm.
+	var off_only := FigureClearance.check(rig, body, bad, PackedStringArray(["off_hand"]))
+
+	_expect(off_only.is_empty() or off_only["hand"] != rig.slots()["main_hand"],
+		"a probe is only in the bone of each slot that holds an item: %s" % [off_only])
+	_expect(FigureClearance.hand_bones(rig, PackedStringArray(["two_hands"]))
+		== PackedStringArray([rig.slots()["two_hands"]]),
+		"a two-handed clip holds one probe, in the bone of the two_hands slot")
 	_expect(FigureClearance.line_of("bad", hit).contains(hit["part"])
 		and FigureClearance.line_of("rest", clear).contains("clear"),
 		"the line of a result names the part, or says clear")
@@ -375,7 +400,8 @@ func _the_repository_clips_fit_each_rig() -> void:
 				_expect(rig.has_bone(bone), "%s moves the bone %s, which %s has"
 					% [clip_name, bone, key])
 
-			var result := FigureClearance.check(rig, store.looks[key], clip)
+			var result := FigureClearance.check(rig, store.looks[key], clip,
+				store.held_in(clip_name))
 
 			_expect(FigureClearance.is_clear(result), "%s on %s: %s"
 				% [clip_name, key, FigureClearance.line_of(clip_name, result)])

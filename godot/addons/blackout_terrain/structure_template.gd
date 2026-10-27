@@ -23,7 +23,7 @@ extends RefCounted
 ## size         [W, H] tiles
 ## floor_names, area_names, wall_names
 ## planes       [{plane, cover, heights, floors, flags, areas, walls}, ...]
-## objects      [{kind, x, y, plane, rotation, text, look}, ...]
+## objects      [{kind, x, y, plane, rotation, text, look, spawn}, ...]
 ## ```
 ##
 ## - `plane` is relative: 0 is the plane where the Place tool writes it. The
@@ -32,8 +32,8 @@ extends RefCounted
 ##   a covered tile. The other tiles of the footprint keep their facts.
 ## - `heights` is (W + 1) x (H + 1) corners, in height steps above the base:
 ##   the lowest corner of a covered tile of plane 0.
-## - An object stands on a covered tile. `text` and `look` are optional, as
-##   in a chunk file.
+## - An object stands on a covered tile. `text`, `look`, and `spawn` are
+##   optional, as in a chunk file.
 ##
 ## ## Cover
 ##
@@ -60,9 +60,9 @@ const PLANE_KEYS := ["plane", "cover", "heights", "floors", "flags", "areas", "w
 ## words.
 const OBJECT_KEYS := ["kind", "x", "y", "plane", "rotation"]
 
-## The largest side of a template, in tiles: the side of the block. A larger
-## footprint cannot fit in the editor.
-const SIDE_MAX: int = _Const.CHUNK_SIZE * TerrainWorld.BLOCK_SIDE
+## The largest side of a template, in tiles: the side of the largest
+## block. A larger footprint cannot fit in the editor.
+const SIDE_MAX: int = _Const.CHUNK_SIZE * TerrainWorld.BLOCK_SIDE_MAX
 
 ## The largest relative height: the full range of a corner.
 const RELATIVE_HEIGHT_MAX: int = _Const.CHUNK_HEIGHT_MAX - _Const.CHUNK_HEIGHT_MIN
@@ -527,6 +527,7 @@ func _read_object(item: Variant, index: int) -> Dictionary:
 			"object %d rotation" % index),
 		"text": _object_text(item, index),
 		"look": _object_look(item, index),
+		"spawn": _object_spawn(item, index),
 	}
 
 	_check_object_place(thing, item["kind"], index)
@@ -564,6 +565,20 @@ func _object_look(item: Dictionary, index: int) -> Dictionary:
 		return {}
 
 	return ChunkFile.normal_look(item[ChunkFile.OBJECT_LOOK_KEY])
+
+
+## The spawn of an object, or `{}`. The rule is that of the chunk file.
+func _object_spawn(item: Dictionary, index: int) -> Dictionary:
+	if not item.has(ChunkFile.OBJECT_SPAWN_KEY):
+		return {}
+
+	var problem := ChunkFile.spawn_problem(item[ChunkFile.OBJECT_SPAWN_KEY])
+
+	if not problem.is_empty():
+		_fail("object %d spawn: %s" % [index, problem])
+		return {}
+
+	return ChunkFile.normal_spawn(item[ChunkFile.OBJECT_SPAWN_KEY])
 
 
 func _object_text(item: Dictionary, index: int) -> String:
@@ -822,7 +837,7 @@ func _capture_objects(sets: Dictionary, bounds: Rect2i, low_plane: int) -> void:
 			for thing: Dictionary in chunks.objects_at(bounds.position + tile):
 				objects.append({"kind": thing["kind"], "x": tile.x, "y": tile.y,
 					"plane": layer.plane, "rotation": thing["rotation"],
-					"text": thing["text"], "look": thing["look"]})
+					"text": thing["text"], "look": thing["look"], "spawn": thing["spawn"]})
 
 
 # ─── Turn and mirror ────────────────────────────────────────────────────────
@@ -878,7 +893,8 @@ func _remapped(new_size: Vector2i, tile_map: Callable, corner_map: Callable,
 		# map turns. The nudge stays in the frame of the tile.
 		result.objects.append({"kind": thing["kind"], "x": moved.x, "y": moved.y,
 			"plane": thing["plane"], "rotation": rotation_map.call(thing["rotation"]),
-			"text": thing["text"], "look": thing["look"].duplicate(true)})
+			"text": thing["text"], "look": thing["look"].duplicate(true),
+			"spawn": thing.get("spawn", {}).duplicate(true)})
 
 	return result
 

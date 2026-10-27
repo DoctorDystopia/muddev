@@ -1,0 +1,11 @@
+title     = "Pot Enamel 01 - Free CC0 GLB 3D Prop"
+author    = "Kuutti Siitonen (Poly Haven), GLB by Eclair Assets"
+url       = "https://eclair-assets.itch.io/pot-enamel-01-free-cc0-glb-3d-prop"
+site      = "itch.io"
+license   = "CC0-1.0"
+retrieved = 2026-10-20
+notes     = "eclair_assets_pot_enamel_01_cc0_glb_v1.zip, unpacked by the fetch. The itch.io page lists CC0 (checked 10/20/2026). The .glb is a conversion of Pot Enamel 01 from Poly Haven (https://polyhaven.com/a/pot_enamel_01), which is CC0 too. Thus, the license of the art does not depend on the converter."
+
+[files]
+"README_CC0_SOURCE.md" = "sha256:623e040c7aeb2f379ef54ce3ed59ccd1b75c6723c62e76ed0fbbfb58773feeef"
+"pot_enamel_01_cc0_clip_ready_v1.glb" = "sha256:22dbcc97e7e10accc3ccc0b58112c979d40ed72a0f26aa14fb25d632e27ab291"

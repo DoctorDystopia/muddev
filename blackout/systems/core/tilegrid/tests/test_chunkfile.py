@@ -140,6 +140,10 @@ def _plain_walls_in_format_one(data):
     data["format"] = const.CHUNK_FORMAT_PLAIN_WALLS
 
 
+# A spawn that the reader accepts. Each spawn case breaks one key of it.
+_GOOD_SPAWN = {const.SPAWN_ITEM_KEY: "scrap", const.SPAWN_RESPAWN_KEY: 10}
+
+
 # ─── Public constant definitions ─────────────────────────────────────────────
 
 # Each case: a name, and a change to the parsed base fixture that makes it
@@ -201,6 +205,34 @@ INVALID_CASES: dict = {
         "look", {const.LOOK_OFFSET_KEY: [0, 0.5, 0]}),
     "object_look_offset_too_far": _set_object(
         "look", {const.LOOK_OFFSET_KEY: [-const.LOOK_OFFSET_MAX - 1, 0, 0]}),
+    # The spawn of an item spawn (10/21/2026).
+    "object_spawn_not_table": _set_object("spawn", "scrap"),
+    "object_spawn_unknown_key": _set_object(
+        "spawn", dict(_GOOD_SPAWN, chance=50)),
+    "object_spawn_no_item": _set_object(
+        "spawn", {const.SPAWN_RESPAWN_KEY: 10}),
+    "object_spawn_no_respawn": _set_object(
+        "spawn", {const.SPAWN_ITEM_KEY: "scrap"}),
+    "object_spawn_bad_item": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_ITEM_KEY: "Scrap Metal"})),
+    "object_spawn_quantity_not_pair": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_QUANTITY_KEY: [3]})),
+    "object_spawn_quantity_backwards": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_QUANTITY_KEY: [5, 2]})),
+    "object_spawn_quantity_zero": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_QUANTITY_KEY: [0, 2]})),
+    "object_spawn_quantity_default": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_QUANTITY_KEY: [1, 1]})),
+    "object_spawn_quantity_too_large": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{
+            const.SPAWN_QUANTITY_KEY: [1, const.SPAWN_QUANTITY_MAX + 1]})),
+    "object_spawn_respawn_zero": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_RESPAWN_KEY: 0})),
+    "object_spawn_respawn_too_long": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{
+            const.SPAWN_RESPAWN_KEY: const.SPAWN_RESPAWN_MAX + 1})),
+    "object_spawn_respawn_fraction": _set_object(
+        "spawn", dict(_GOOD_SPAWN, **{const.SPAWN_RESPAWN_KEY: 2.5})),
     # Format 2, the wall styles (DESIGN-0013 section 6.4).
     "format_one_with_walls": _plain_walls_in_format_one,
     "format_two_without_walls": _set("format", const.CHUNK_FORMAT_VERSION),
@@ -473,6 +505,61 @@ class DirectoryTests(unittest.TestCase):
         found = chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY)
 
         self.assertEqual(chunkfile.seam_mismatches(found), [])
+
+
+class SpawnTests(unittest.TestCase):
+    """The spawn of an item spawn object (10/21/2026)."""
+
+    _SPAWN_FIXTURE = "chunk_3_-2_p0.json"
+
+    def setUp(self):
+        self.chunk_file = chunkfile.parse_text(_fixture_text(self._SPAWN_FIXTURE))
+        self.spawns = [thing.spawn for thing in self.chunk_file.objects
+                       if thing.spawn]
+
+    def test_the_fixture_holds_a_spawn_with_and_without_a_quantity(self):
+        with_range = [spawn for spawn in self.spawns
+                      if const.SPAWN_QUANTITY_KEY in spawn]
+
+        self.assertTrue(with_range)
+        self.assertLess(len(with_range), len(self.spawns))
+
+    def test_a_spawn_keeps_its_keys_in_order_and_reads_back(self):
+        written = json.loads(chunkfile.to_text(self.chunk_file))["objects"]
+
+        for thing, item in zip(self.chunk_file.objects, written):
+            with self.subTest(kind=thing.kind):
+                self.assertEqual(item.get(chunkfile.OBJECT_SPAWN_KEY, {}),
+                                 thing.spawn)
+                self.assertEqual(list(thing.spawn), [
+                    key for key in const.SPAWN_KEYS if key in thing.spawn])
+
+    def test_an_integral_float_in_a_spawn_reads_as_an_int(self):
+        # The JSON parser of Godot gives floats. The two readers must agree.
+        data = _fixture_dict(_BASE_FIXTURE)
+        data["objects"][0]["spawn"] = {const.SPAWN_ITEM_KEY: "scrap",
+                                       const.SPAWN_QUANTITY_KEY: [2.0, 4.0],
+                                       const.SPAWN_RESPAWN_KEY: 30.0}
+
+        spawn = chunkfile.from_dict(data).objects[0].spawn
+
+        self.assertEqual(spawn[const.SPAWN_QUANTITY_KEY], [2, 4])
+        self.assertIs(type(spawn[const.SPAWN_RESPAWN_KEY]), int)
+
+    def test_spawn_problem_accepts_each_fixture_spawn_and_names_a_fault(self):
+        for spawn in self.spawns:
+            with self.subTest(spawn=spawn):
+                self.assertEqual(chunkfile.spawn_problem(spawn), "")
+
+        self.assertIn("default", chunkfile.spawn_problem(
+            dict(_GOOD_SPAWN, **{const.SPAWN_QUANTITY_KEY: [1, 1]})))
+        self.assertIn(const.SPAWN_RESPAWN_KEY, chunkfile.spawn_problem(
+            {const.SPAWN_ITEM_KEY: "scrap"}))
+
+    def test_a_spawn_with_no_quantity_gives_one_unit(self):
+        unit = const.SPAWN_QUANTITY_UNIT
+
+        self.assertEqual(chunkfile.spawn_quantity(_GOOD_SPAWN), (unit, unit))
 
 
 class GodotParityGuardTests(unittest.TestCase):

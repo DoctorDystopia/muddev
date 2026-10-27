@@ -158,7 +158,19 @@ class BlackoutAuraHandler(TickableHandler):
         message that names the target must be built and sent BEFORE the damage
         lands, and the post-hit HP must be computed arithmetically rather than
         read back. This is the same trap documented on _land_hit in combat.py.
+
+        A pulse starts a fight (Nick, 10/22/2026). The target gets a
+        combat handler before the damage lands. A target of `attack` gets
+        one the same way. Then at_damage records the caster as the last
+        attacker, and the controller of the target answers. Without the
+        handler, a hostile burned for free, because nothing asked its AI.
         """
+        # A deferred import, for the cycle. combat.py reaches this package
+        # through reach.py, while combat.py is half built.
+        from ..combat import ensure_combat_handler
+
+        ensure_combat_handler(target)
+
         hp_before = target.hp
         dealt = min(damage, hp_before)
         hp_after = hp_before - dealt

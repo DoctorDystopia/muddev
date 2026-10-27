@@ -39,8 +39,11 @@ const COLUMNS := 8
 ## One world unit per cell, so a cell's world position is its grid position.
 const CELL_WORLD := 1.0
 
-## How much of its cell one item fills. Matches the browser's ITEM_SCALE.
-const ITEM_SCALE := 0.84
+## How much of its cell one item fills, at the widest turn of its spin
+## (10/21/2026). The fit reads the outline of the item, not its longest side.
+## Two pixels a side stay empty, so the soft edge of the widest turn never
+## draws in the next cell. See [method _swept_outline].
+const ITEM_FILL := 0.96
 
 ## A fixed tilt is what makes a flat-on orthographic camera read as 3D. Matches
 ## the browser, which tilts the ITEM and leaves the frame square because the
@@ -147,12 +150,23 @@ func place(index: int, asset: String, family: String,
 
 	if node == null:
 		return
-	# A cell shows one item alone, so a model that PRESENTATION shrinks for
-	# the world still fills its cell like every other item.
-	var fill := ITEM_SCALE / ModelLoader.presentation_scale(node)
+	# The fit reads the outline that the camera sees. Thus, a model that
+	# PRESENTATION shrinks for the world still fills its cell. A sword fills
+	# the height that its tilt leaves.
+	var outline := _swept_outline(node)
+	var longest := maxf(outline.size.x, outline.size.y)
+	var fill := ITEM_FILL * CELL_WORLD
+
+	if longest > ModelLoader.MIN_EXTENT:
+		fill /= longest
+
+	# The tilt moves the middle of the item off its origin. The lift puts the
+	# middle back on the cell centre. The spin turns about the vertical, so
+	# it keeps the lift.
+	var lift := outline.get_center().y * fill
 
 	node.scale = Vector3.ONE * fill
-	node.position = cell_centre(index)
+	node.position = cell_centre(index) - Vector3(0.0, lift, 0.0)
 	node.rotation = Vector3(ITEM_TILT_X, 0.0, 0.0)
 
 	_root.add_child(node)
@@ -224,6 +238,46 @@ func _item_node(asset: String, family: String, resolver: MeshResolver,
 		node = resolver.resolve_entity(asset, family)
 
 	return node
+
+
+## The outline of a node over its whole spin, as the camera sees it, in the
+## units of the node. X is the horizontal and Y is the vertical.
+##
+## The tilt comes first. The spin then turns the item about the vertical
+## through its origin. Thus, the widest reach of a point is its distance
+## from that axis. The spin does not change the height of a point.
+##
+## The hull of each mesh gives the same outline as all of its vertices. A
+## reach and a height are largest at a corner of the hull. A served model
+## has thousands of vertices and a hull of some hundreds.
+##
+## An empty rectangle for a node with no mesh.
+func _swept_outline(node: Node3D) -> Rect2:
+	var tilt := Transform3D(Basis.from_euler(Vector3(ITEM_TILT_X, 0.0, 0.0)))
+	var radius := 0.0
+	var low := INF
+	var high := -INF
+
+	for part: Array in ModelLoader.mesh_parts(node):
+		var mesh: Mesh = part[0]
+		var to_camera: Transform3D = tilt * (part[1] as Transform3D)
+		var hull := mesh.create_convex_shape(true, false)
+
+		# Null when a surface gives no arrays. The mesh then adds nothing.
+		if hull == null:
+			continue
+
+		for point: Vector3 in hull.points:
+			var seen := to_camera * point
+
+			radius = maxf(radius, Vector2(seen.x, seen.z).length())
+			low = minf(low, seen.y)
+			high = maxf(high, seen.y)
+
+	if high < low:
+		return Rect2()
+
+	return Rect2(-radius, low, radius * 2.0, high - low)
 
 
 func _row_count() -> int:

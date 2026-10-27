@@ -75,8 +75,8 @@ func _rebuild() -> void:
 ## An EMPTY panel still draws its heading. A panel reporting nothing is a real
 ## state — the system behind it has nothing to say today — and silently omitting
 ## the section would make a temporarily-quiet band indistinguishable from one
-## that was removed. A panel with no scalar rows (Combat Readiness's Bonuses
-## group, alone, would count) skips the empty grid rather than drawing one
+## that was removed. A panel with no scalar rows (Combat Readiness, which
+## sends one group only) skips the empty grid rather than drawing one
 ## with nothing in it.
 func _add_panel(panel_key: String) -> void:
 	_body.add_child(_row_label(
@@ -108,8 +108,8 @@ func _grid(rows: Array) -> GridContainer:
 
 
 ## A nested-dictionary field, boxed so its rows read as one cluster of related
-## numbers -- "Bonuses" -- rather than seven more lines in the panel's own
-## table with no visual break from what precedes them.
+## numbers -- "Total Combat Stat Bonuses" -- rather than more lines in the
+## panel's own table with no visual break from what precedes them.
 func _add_group(group: Dictionary) -> void:
 	var box := PanelContainer.new()
 	box.theme_type_variation = &"BonusGroup"

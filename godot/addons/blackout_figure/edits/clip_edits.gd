@@ -76,7 +76,13 @@ static func set_clip(list: Dictionary, clip_name: String, from: String,
 	if not list.has("clips"):
 		list["clips"] = {}
 
-	list["clips"][clip_name] = {"from": from, "loop": loop}
+	# A change of the source clip or of the loop keeps each other field of
+	# the row: the held_in of a two-handed clip, for example.
+	var row: Dictionary = list["clips"].get(clip_name, {}).duplicate()
+
+	row["from"] = from
+	row["loop"] = loop
+	list["clips"][clip_name] = row
 
 	return ""
 

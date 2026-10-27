@@ -198,7 +198,7 @@ func _refresh_clips() -> void:
 	clips_panel.set_clips(_bench.clips)
 	clips_panel.set_clip_lists(_bench.store.clip_lists, source_clips)
 	clips_panel.set_stances(_bench.store.stances(), _bench.catalog.tool_types(),
-		_bench.stance_of_outfit())
+		_bench.stance_of_outfit(), _bench.catalog.attack_actions())
 
 
 # ─── The selection ──────────────────────────────────────────────────────────

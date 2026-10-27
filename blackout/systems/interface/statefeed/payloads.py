@@ -660,6 +660,10 @@ class CombatPayload(_Payload):
     0 on every other swing. Thus, a client never learns a max hit that the
     hit line does not show. A `damage` that differs from `max_hit_roll`
     tells the client that the damage channel changed the roll.
+
+    `figure_action` is the action of the figure of the attacker for this
+    swing, for example attack_one_hand_slash (10/25/2026). The client plays
+    its clip. const.FIGURE_ATTACK_ACTION_TEMPLATE gives the spelling.
     """
 
     channel = const.CHANNEL_COMBAT
@@ -673,6 +677,7 @@ class CombatPayload(_Payload):
     damage_type: str = ""
     attack_type: str = ""
     style: str = ""
+    figure_action: str = ""
     hp_after: int = 0
     max_hp: int = 0
     killed: bool = False

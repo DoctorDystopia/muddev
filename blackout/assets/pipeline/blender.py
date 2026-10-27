@@ -9,6 +9,14 @@ Description: Find Blender and run blender_ingest.py in it.
              Blender: the Node step reads it directly, with no round trip that
              could change its materials.
 
+             A FORMAT WITH ITS OWN SCRIPT (10/25/2026). A format that needs
+             more than a factory Blender gets a script of its own, in
+             FORMAT_SCRIPTS. The .vox format needs an add-on, so it runs
+             blender_vox.py. The text of blender_ingest.py feeds the input
+             digest of every model. The text of a format script feeds only
+             the digest of a model in its format. Thus, a new format makes
+             no other model stale.
+
              Set BLENDER_EXE when Blender is installed in an unusual place.
 """
 
@@ -24,6 +32,24 @@ from assets.pipeline import paths
 # The suffixes that glTF Transform reads directly. Every other suffix goes
 # through Blender first.
 GLTF_SUFFIXES: tuple = (".gltf", ".glb")
+
+# The suffix of a format with a script of its own -> that script. The script
+# runs inside Blender, as blender_ingest.py does (see the module docstring).
+FORMAT_SCRIPTS: dict = {
+    ".vox": paths.BLENDER_VOX_SCRIPT,
+}
+
+# The other suffixes that Blender reads: the keys of the _IMPORTERS of
+# blender_ingest.py, .blend, and each format with a script of its own. That
+# script runs inside Blender only, so this Python cannot read its table.
+# test_model_wizard.py compares the two.
+BLENDER_SUFFIXES: tuple = (".fbx", ".obj", ".dae", ".stl", ".ply", ".usd",
+                           ".usdc", ".usdz", ".blend") + tuple(FORMAT_SCRIPTS)
+
+# A format whose texture is always a palette: one texel for each colour.
+# The model wizard gives its record `filter = "nearest"`, so the build
+# samples it with no mipmap. A mipmap of a palette mixes two colours.
+PALETTE_SUFFIXES: tuple = (".vox",)
 
 
 class BlenderError(RuntimeError):
@@ -99,14 +125,20 @@ def to_glb(input_path: str, output_path: str) -> str:
         lines when the conversion fails or writes nothing.
 
     Module Globals:
-        paths.BLENDER_SCRIPT, _BLENDER_FLAGS, _ARGUMENT_SEPARATOR,
-        _TIMEOUT_SECONDS read.
+        paths.BLENDER_SCRIPT, FORMAT_SCRIPTS, _BLENDER_FLAGS,
+        _ARGUMENT_SEPARATOR, _TIMEOUT_SECONDS read.
+
+    Notes:
+        A suffix in FORMAT_SCRIPTS runs its own script. Every other suffix
+        runs blender_ingest.py.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
     """
     executable = find_blender()
-    command = [executable, *_BLENDER_FLAGS, paths.BLENDER_SCRIPT,
+    suffix = os.path.splitext(input_path)[1].lower()
+    script = FORMAT_SCRIPTS.get(suffix, paths.BLENDER_SCRIPT)
+    command = [executable, *_BLENDER_FLAGS, script,
                _ARGUMENT_SEPARATOR, input_path, output_path]
     finished = subprocess.run(command, capture_output=True, text=True,
                               timeout=_TIMEOUT_SECONDS, check=False)

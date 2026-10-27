@@ -70,8 +70,14 @@ class _RecordingSessionHandler:
 
 # ─── Test cases ──────────────────────────────────────────────────────────────
 
-class RoomContentsDeltaTests(EvenniaTest):
-    """The decision, against real rooms and a real serialiser."""
+class _DeltaFixture(EvenniaTest):
+    """Real rooms, a real serialiser, and a tap on the `msg` of the observer.
+
+    The tap sits AFTER the buffer. Thus, a test on this fixture sees the
+    messages that a client receives, in their order. The tap of
+    test_freshness.py is on events.emit, before the buffer. That tap cannot
+    see a held snapshot that goes out after an event.
+    """
 
     def setUp(self):
         super().setUp()
@@ -155,6 +161,10 @@ class RoomContentsDeltaTests(EvenniaTest):
                 names.append(key)
 
         return names
+
+
+class RoomContentsDeltaTests(_DeltaFixture):
+    """The decision, against real rooms and a real serialiser."""
 
     # ─── The full-list paths ─────────────────────────────────────────────
 
@@ -326,6 +336,84 @@ class RoomContentsDeltaTests(EvenniaTest):
         events.emit_room_contents(self.observer)
 
         self.assertEqual(self._channels_sent(), [const.CHANNEL_ROOM_PLAYERS])
+
+
+class ArrivalTickTests(_DeltaFixture):
+    """What a client draws after a tick that both arrives and picks up.
+
+    The defect (10/21/2026): `goto (x,y) then get credits` runs its get in
+    the tick that reaches the tile. The arrival built the whole list at once,
+    and the buffer held it. The get sent its remove at once. Then the flush
+    sent the held list, and the list still named the stack. The client drew
+    a stack that the player carried.
+    """
+
+    def _client_view(self) -> set:
+        """Replay every message in its order, as the client does. Returns the
+        ids that the client holds at the end."""
+        ids = set()
+
+        for message in self.sent:
+            for channel, body in message.items():
+                if channel == const.CHANNEL_ROOM_PLAYERS:
+                    ids = {entity["id"] for entity in body["entities"]}
+                elif channel == const.CHANNEL_ROOM_PLAYERS_DELTA:
+                    ids -= set(body["removed"])
+                    ids |= {entity["id"] for entity in body["added"]}
+                elif channel == const.CHANNEL_ROOM_PLAYER_ADD:
+                    ids.add(body["entity"]["id"])
+                elif channel == const.CHANNEL_ROOM_PLAYER_REMOVE:
+                    ids.discard(body["entity_id"])
+
+        return ids
+
+    def _tick(self, *moves) -> None:
+        """Open a tick, run the moves in it, and flush the buffer."""
+        from systems.interface.statefeed import buffer
+
+        buffer.reset()
+        self.addCleanup(buffer.reset)
+        buffer.begin_tick()
+
+        for mover, destination, move_type in moves:
+            mover.move_to(destination, quiet=True, move_type=move_type)
+
+        buffer.flush()
+
+    def test_a_pickup_in_the_arrival_tick_leaves_no_stack_drawn(self):
+        # No snapshot yet, so the arrival sends the whole list. That is the
+        # path that held the stale list. A sparse area takes the same path
+        # on most steps. There, a change of one entity is more than half of
+        # the list.
+        stack = self._spawn("delta_credits", self.tiles[(2, 2)])
+
+        self._tick((self.observer, self.tiles[(2, 2)], "move"),
+                   (stack, self.observer, "get"))
+
+        self.assertNotIn(stack.id, self._client_view())
+
+    def test_the_arrival_list_still_reaches_the_mover(self):
+        """The list waits for the flush. It must not wait for ever."""
+        bystander = self._spawn("delta_bystander", self.tiles[(2, 2)])
+
+        self._tick((self.observer, self.tiles[(2, 2)], "move"))
+
+        self.assertIn(bystander.id, self._client_view())
+
+    def test_a_pickup_outside_a_tick_leaves_no_stack_drawn(self):
+        """A typed `get` runs outside the tick. The list comes at the end of
+        the reactor turn. Here, a direct drain of the buffer is that end."""
+        from systems.interface.statefeed import buffer
+
+        buffer.reset()
+        self.addCleanup(buffer.reset)
+        stack = self._spawn("delta_credits", self.tiles[(2, 2)])
+
+        self.observer.move_to(self.tiles[(2, 2)], quiet=True)
+        stack.move_to(self.observer, quiet=True, move_type="get")
+        buffer.drain_stale()
+
+        self.assertNotIn(stack.id, self._client_view())
 
 
 class DeltaThresholdTests(unittest.TestCase):

@@ -1210,6 +1210,47 @@ statefeed sends it. A look edit is a refresh, not a destroyed tile. The
 respawn queue keeps the look of a dead NPC, as it keeps the facing. The
 server reads no value of a look for a rule.
 
+### Item spawns (10/21/2026)
+
+An item spawn puts an item on its tile. When a player takes the item, a new
+one comes after the respawn. The object kind is `item_spawn`, and each
+placement holds its own `spawn`:
+
+```json
+{"kind":"item_spawn","x":4,"y":9,"rotation":0,"spawn":{"item":"rusty_metal_chunk","quantity":[2,5],"respawn":100}}
+```
+
+| Key | Holds |
+|---|---|
+| `item` | The `ItemDef` key. Any item except a dev tool |
+| `quantity` | Optional. `[low, high]`. Each new item rolls a quantity in the range. Only an item that stacks may have a range |
+| `respawn` | The game ticks from the time the item leaves the tile to the next item. 100 ticks is 60 seconds |
+
+To place one:
+
+1. In the terrain editor, pick the Object tool and the kind `item_spawn`.
+2. Set the Item, the Quantity, and the Respawn fields.
+3. Click a tile. The editor draws the model of the item there.
+4. Save, and run **Check world**.
+5. Run the tile sync (see "World Building Workflow").
+
+The Objects tab edits the spawn of a selected item spawn.
+
+Nick chose four rules on 10/21/2026:
+
+1. The spawn is a fact of each placement, as the words of a sign are.
+2. The respawn is in game ticks, as OSRS gives a ground spawn.
+3. The clock starts when the item leaves its tile. A player who drops an
+   item of the same kind on the tile does not stop the clock.
+4. Each new item rolls its quantity in the range.
+
+The chunk file owns the spawn. The respawn reads the item, the quantity, and
+the ticks from the chunk file when the clock comes due. Thus, a new respawn
+or a new quantity needs only a server restart. A new item on the tile needs
+the tile sync too. The sync deletes the item of the old spawn and puts the
+new item down. The respawn queue sweeps every 2 seconds, so an item can come
+up to 2 seconds late.
+
 ### Player graffiti (`write`)
 
 ```bash
@@ -1353,7 +1394,8 @@ The server keeps the tile room index in memory. Thus, stop the server before
 | removed | A record, but the chunk file places nothing | Demolishes the contents and frees the tile |
 
 A demolition spares player characters. A transition and a landmark stand
-nothing up, so the sync ignores them.
+nothing up, so the sync ignores them. An item spawn stands its item up. A
+new item on an item spawn is a refresh, not a change (see "Item spawns").
 
 ### Move as staff
 
@@ -1457,7 +1499,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3579 tests, ~32 minutes** (measured 10/16/2026). Run it before a merge, or
+**3765 tests, ~33 minutes** (measured 10/21/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

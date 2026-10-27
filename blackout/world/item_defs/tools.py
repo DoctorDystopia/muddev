@@ -26,7 +26,7 @@ from items.equipment.constants import WieldLocation
 _AXE_COMBAT_STYLES = {
     # Chop: the woodcutting stroke, aimed rather than thrown.
     "chop": {
-        "attack_type": combat_constants.ATTACK_TYPE_SLASH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_SLASH,
         "weapon_style": "accurate",
         "weapon_style_xp_skill": combat_constants.ACCURATE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -35,7 +35,7 @@ _AXE_COMBAT_STYLES = {
     },
     # Hack: the same stroke with the shoulders behind it and nothing held back.
     "hack": {
-        "attack_type": combat_constants.ATTACK_TYPE_SLASH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_SLASH,
         "weapon_style": "aggressive",
         "weapon_style_xp_skill": combat_constants.AGGRESSIVE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -44,7 +44,7 @@ _AXE_COMBAT_STYLES = {
     },
     # Smash: the same stroke with the shoulders behind it and nothing held back.
     "smash": {
-        "attack_type": combat_constants.ATTACK_TYPE_CRUSH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_CRUSH,
         "weapon_style": "aggressive",
         "weapon_style_xp_skill": combat_constants.AGGRESSIVE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -53,7 +53,7 @@ _AXE_COMBAT_STYLES = {
     },
     # Block: the haft held crosswise to catch what is coming in.
     "block": {
-        "attack_type": combat_constants.ATTACK_TYPE_SLASH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_SLASH,
         "weapon_style": "defensive",
         "weapon_style_xp_skill": combat_constants.DEFENSIVE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -109,24 +109,24 @@ ITEMS = {
         attack_speed=5,
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": -2,
-            "slash_attack_bonus": 4,
-            "crush_attack_bonus": 2,
+            "melee_stab_attack_bonus": -2,
+            "melee_slash_attack_bonus": 4,
+            "melee_crush_attack_bonus": 2,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 1,
-            "crush_defense_bonus": 0,
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 0,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 0,
-            "standard_defense_bonus": 1,
-            "heavy_defense_bonus": 0,
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 0,
 
             # Other bonuses
             "melee_strength_bonus": 5,
@@ -162,24 +162,24 @@ ITEMS = {
         attack_speed=5,
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": -2,
-            "slash_attack_bonus": 5,
-            "crush_attack_bonus": 3,
+            "melee_stab_attack_bonus": -2,
+            "melee_slash_attack_bonus": 5,
+            "melee_crush_attack_bonus": 3,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 1,
-            "crush_defense_bonus": 0,
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 0,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 0,
-            "standard_defense_bonus": 1,
-            "heavy_defense_bonus": 0,
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 0,
 
             # Other bonuses
             "melee_strength_bonus": 7,
@@ -215,24 +215,24 @@ ITEMS = {
         attack_speed=5,
         combat_stat_bonuses={
             # Melee attack bonuses
-            "stab_attack_bonus": -2,
-            "slash_attack_bonus": 8,
-            "crush_attack_bonus": 6,
+            "melee_stab_attack_bonus": -2,
+            "melee_slash_attack_bonus": 8,
+            "melee_crush_attack_bonus": 6,
 
             # Projectile attack bonuses
-            "light_attack_bonus": 0,
-            "standard_attack_bonus": 0,
-            "heavy_attack_bonus": 0,
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
 
             # Melee defense bonuses
-            "stab_defense_bonus": 0,
-            "slash_defense_bonus": 1,
-            "crush_defense_bonus": 0,
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 0,
 
             # Projectile defense bonuses
-            "light_defense_bonus": 0,
-            "standard_defense_bonus": 1,
-            "heavy_defense_bonus": 0,
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 0,
 
             # Other bonuses
             "melee_strength_bonus": 9,

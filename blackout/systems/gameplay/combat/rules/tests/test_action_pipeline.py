@@ -41,16 +41,16 @@ _EQUIVALENCE_SEEDS = 50
 # formula that dropped one of them shows up as a difference rather than a
 # coincidental match on zero.
 _ATTACKER_STATS = {
-    "stab_attack_bonus": 7,
-    "slash_attack_bonus": 4,
-    "crush_attack_bonus": -2,
+    "melee_stab_attack_bonus": 7,
+    "melee_slash_attack_bonus": 4,
+    "melee_crush_attack_bonus": -2,
     "melee_strength_bonus": 9,
 }
 
 _DEFENDER_STATS = {
-    "stab_defense_bonus": 5,
-    "slash_defense_bonus": 3,
-    "crush_defense_bonus": 11,
+    "melee_stab_defense_bonus": 5,
+    "melee_slash_defense_bonus": 3,
+    "melee_crush_defense_bonus": 11,
     "melee_strength_bonus": 0,
 }
 
@@ -86,7 +86,7 @@ def _build_context(rng=None, attacker_rules=(), defender_rules=(),
         weapon=None,
         weapon_data={},
         style={},
-        attack_type=const.ATTACK_TYPE_STAB,
+        attack_type=const.MELEE_ATTACK_TYPE_STAB,
         attacker_stats=dict(_ATTACKER_STATS),
         defender_stats=dict(_DEFENDER_STATS),
         attacker_levels=dict(attacker_levels or _ATTACKER_LEVELS),
@@ -109,11 +109,11 @@ def _reference_swing(rng):
 
     return combat_calc.resolve_melee_swing(
         attacker_eff_atk=eff_atk,
-        attacker_equip_atk=_ATTACKER_STATS["stab_attack_bonus"],
+        attacker_equip_atk=_ATTACKER_STATS["melee_stab_attack_bonus"],
         attacker_eff_str=eff_str,
         attacker_equip_str=_ATTACKER_STATS["melee_strength_bonus"],
         defender_eff_def=eff_def,
-        defender_equip_def=_DEFENDER_STATS["stab_defense_bonus"],
+        defender_equip_def=_DEFENDER_STATS["melee_stab_defense_bonus"],
         rng=rng,
     )
 

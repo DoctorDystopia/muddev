@@ -5,8 +5,9 @@ Creation date: 06/17/2026
 Description: BankNode typeclass and the banking commands attached to it.
 """
 
-from evennia import Command, CmdSet
+from evennia import CmdSet
 
+from commands.command import FacingCommand
 from commands.constants import HELP_CATEGORY_BANKING
 from systems.gameplay.banking import messages
 from systems.gameplay.banking import verbs as bank_verbs
@@ -375,7 +376,7 @@ def perform_deposit(caller, args):
     return bool(result.success)
 
 
-class CmdDeposit(Command):
+class CmdDeposit(FacingCommand):
     """
     Deposit items from your inventory into the bank for safe keeping.
 
@@ -401,7 +402,7 @@ class CmdDeposit(Command):
         perform_deposit(self.caller, self.args)
 
 
-class CmdWithdraw(Command):
+class CmdWithdraw(FacingCommand):
     """
     Withdraw items from the bank into your inventory.
 
@@ -460,7 +461,7 @@ class CmdWithdraw(Command):
             caller.msg((line, _MSG_COMMERCE))
 
 
-class CmdBalance(Command):
+class CmdBalance(FacingCommand):
     """
     List all items stored in your bank account.
 
@@ -509,7 +510,7 @@ class CmdBalance(Command):
         caller.msg(("\n".join(lines), _MSG_COMMERCE))
 
 
-class CmdBank(Command):
+class CmdBank(FacingCommand):
     """
     Open the bank to deposit, withdraw, and browse items.
 

@@ -28,6 +28,7 @@ from assets.pipeline import records as model_records
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import spawn_items
 from typeclasses import spawners
 from world import areas
 from world import decor_kinds
@@ -170,9 +171,11 @@ class ObjectKindTests(unittest.TestCase):
 
     def test_every_kind_that_stands_something_up_has_a_spawner(self):
         # A sign, a landmark, a transition, a climb, and decor stand up
-        # nothing of their own. Every other kind must name its spawner.
+        # nothing of their own. The chunk object of an item spawn names its
+        # item. Every other kind must name its spawner.
         spawnless = (tile_const.OBJECT_CATEGORY_CLIMB,
                      tile_const.OBJECT_CATEGORY_DECOR,
+                     tile_const.OBJECT_CATEGORY_ITEM_SPAWN,
                      tile_const.OBJECT_CATEGORY_LANDMARK,
                      tile_const.OBJECT_CATEGORY_SIGN,
                      tile_const.OBJECT_CATEGORY_TRANSITION)
@@ -368,7 +371,8 @@ class WorldChunkTests(unittest.TestCase):
     def test_every_pinned_variant_in_the_world_is_a_variant_of_its_model(self):
         """A look that pins a variant names a model record whose
         `variant_of` is the model of the kind: the preview of an entity
-        kind, or the scenery of a decor kind (10/16/2026). The auto variant
+        kind, or the scenery of a decor kind (10/16/2026). The model of an
+        item spawn is the model of its item (10/21/2026). The auto variant
         names no record. The editor lists only the real variants, and this
         catches a hand edit."""
         by_key = {}
@@ -389,6 +393,9 @@ class WorldChunkTests(unittest.TestCase):
                     kind = object_kinds.OBJECT_KINDS[thing.kind]
                     base = kind.preview[0] if kind.preview else kind.scenery
 
+                    if thing.spawn:
+                        base = thing.spawn[tile_const.SPAWN_ITEM_KEY]
+
                     self.assertIn(variant, by_key)
                     self.assertEqual(by_key[variant].variant_of, base)
 
@@ -396,9 +403,11 @@ class WorldChunkTests(unittest.TestCase):
         """Each transition and each climb lands on an open tile. Each void
         tile has the Blocked flag. The world has one respawn point. The rules live in
         `world/tile_checks.py`. The editor runs the same rules. A note warns
-        and does not fail: the world may hold a closed pocket on purpose."""
+        and does not fail: the world may hold a closed pocket on purpose.
+        Each item spawn names an item of the item list of the game."""
         found = tile_checks.check_world(
-            chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY))
+            chunkfile.load_directory(_WORLD_CHUNK_DIRECTORY),
+            spawn_items.stacking())
 
         self.assertEqual([finding.message for finding in found
                           if not finding.is_note()], [])

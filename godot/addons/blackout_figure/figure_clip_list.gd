@@ -18,10 +18,16 @@ extends RefCounted
 ##     file      the file of the source that holds the rig and its clips
 ##     skeleton  the path of the skeleton node in that file, after an import
 ##     bones     bone of a figure -> bone of the source rig
-##     clips     clip name -> {from, loop}
+##     clips     clip name -> {from, loop, held_in}
 ##
 ## `from` is the name of the clip in the source. `loop` is true for a clip
 ## that plays again from its start, such as a walk.
+##
+## `held_in` is optional (10/25/2026). It names each slot that holds an item
+## through the clip, for the clearance check ([FigureClearance]). A clip
+## with no `held_in` holds an item in each hand slot. A two-handed swing
+## holds one item in `two_hands`: the off hand grips that item and holds no
+## item of its own.
 ##
 ## A bone of a figure with no row in `bones` keeps its rest pose in each
 ## clip of this list.
@@ -147,6 +153,13 @@ func loops(clip_name: String) -> bool:
 	return clips().get(clip_name, {}).get("loop", false)
 
 
+## The slots that hold an item through one clip. A clip with no `held_in`
+## gives [constant FigureClearance.HAND_SLOTS].
+func held_in(clip_name: String) -> PackedStringArray:
+	return PackedStringArray(clips().get(clip_name, {}).get("held_in",
+		FigureClearance.HAND_SLOTS))
+
+
 # ─── The form of a clip list file ───────────────────────────────────────────
 
 ## Why a parsed clip list file has a bad form, or "".
@@ -194,5 +207,8 @@ static func _clips_problem(clips: Variant) -> String:
 
 		if typeof(row.get("loop", false)) != TYPE_BOOL:
 			return "the loop of the clip %s must be true or false" % clip_name
+
+		if not FigureJson.is_strings(row.get("held_in", [])):
+			return "the held_in of the clip %s must be a list of slots" % clip_name
 
 	return ""

@@ -28,7 +28,8 @@ xyzgrid map at its range of 6 today. North is up.
 
 The object glyphs come from `CATEGORY_GLYPHS`, one for each category. A new
 category with no row draws `*`. A category of `SILENT_CATEGORIES` draws no
-glyph: decor is a look, and the tile shows what is under it.
+glyph: decor is a look, and the tile shows what is under it. An item spawn
+draws none, because its item comes and goes (10/21/2026).
 
 The aura tint
 -------------
@@ -69,8 +70,11 @@ CATEGORY_GLYPHS: dict = {
 }
 
 # The categories that draw no glyph. A crate or a table is a look, as a floor
-# colour is, and the telnet map draws no look.
-SILENT_CATEGORIES: tuple = (tile_const.OBJECT_CATEGORY_DECOR,)
+# colour is, and the telnet map draws no look. An item spawn draws none too
+# (10/21/2026): the map draws the chunk object, and the item comes and goes.
+# A glyph would mark the tile while its clock runs and no item lies there.
+SILENT_CATEGORIES: tuple = (tile_const.OBJECT_CATEGORY_DECOR,
+                            tile_const.OBJECT_CATEGORY_ITEM_SPAWN)
 
 # The default radius of the window, in tiles.
 MAP_RADIUS: int = 6

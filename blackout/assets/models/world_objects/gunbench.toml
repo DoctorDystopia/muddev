@@ -1,0 +1,8 @@
+source = "itch_retro_blacksmith_workbench"
+file   = "retro-blacksmith-workbench/blacksmith_workbench.fbx"
+# The file name is the asset key. GunbenchFacility.asset_key and the
+# gunsmith_bench row of world/object_kinds.py name "gunbench".
+
+[texture]
+# The FBX names no image. Its four materials share this one atlas.
+image = "retro-blacksmith-workbench/textures/color.png"

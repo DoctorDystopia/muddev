@@ -26,7 +26,7 @@ from world.item_database import ItemDef
 # four names for the same outcome. One style keeps the profile path happy.
 _GADGET_COMBAT_STYLES = {
     "discharge": {
-        "attack_type": combat_constants.ATTACK_TYPE_CRUSH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_CRUSH,
         "weapon_style": "accurate",
         "weapon_style_xp_skill": combat_constants.ACCURATE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -39,7 +39,7 @@ _GADGET_COMBAT_STYLES = {
 
 _TOY_SWORD_COMBAT_STYLES = {
     "bonk": {
-        "attack_type": combat_constants.ATTACK_TYPE_CRUSH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_CRUSH,
         "weapon_style": "aggressive",
         "weapon_style_xp_skill": combat_constants.AGGRESSIVE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -52,7 +52,7 @@ _TOY_SWORD_COMBAT_STYLES = {
 
 _BIT_BLADE_COMBAT_STYLES = {
     "rend": {
-        "attack_type": combat_constants.ATTACK_TYPE_SLASH,
+        "attack_type": combat_constants.MELEE_ATTACK_TYPE_SLASH,
         "weapon_style": "accurate",
         "weapon_style_xp_skill": combat_constants.ACCURATE_XP_SKILLS,
         "weapon_style_level_boost": (
@@ -66,24 +66,24 @@ _BIT_BLADE_COMBAT_STYLES = {
 # A gadget carries no stat bonuses of its own.
 _NO_COMBAT_BONUSES = {
     # Melee attack bonuses
-    "stab_attack_bonus": 0,
-    "slash_attack_bonus": 0,
-    "crush_attack_bonus": 0,
+    "melee_stab_attack_bonus": 0,
+    "melee_slash_attack_bonus": 0,
+    "melee_crush_attack_bonus": 0,
 
     # Projectile attack bonuses
-    "light_attack_bonus": 0,
-    "standard_attack_bonus": 0,
-    "heavy_attack_bonus": 0,
+    "projectile_light_attack_bonus": 0,
+    "projectile_standard_attack_bonus": 0,
+    "projectile_heavy_attack_bonus": 0,
 
     # Melee defense bonuses
-    "stab_defense_bonus": 0,
-    "slash_defense_bonus": 0,
-    "crush_defense_bonus": 0,
+    "melee_stab_defense_bonus": 0,
+    "melee_slash_defense_bonus": 0,
+    "melee_crush_defense_bonus": 0,
 
     # Projectile defense bonuses
-    "light_defense_bonus": 0,
-    "standard_defense_bonus": 0,
-    "heavy_defense_bonus": 0,
+    "projectile_light_defense_bonus": 0,
+    "projectile_standard_defense_bonus": 0,
+    "projectile_heavy_defense_bonus": 0,
 
     # Other bonuses
     "melee_strength_bonus": 0,

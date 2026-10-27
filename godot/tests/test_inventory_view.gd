@@ -16,6 +16,13 @@ const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
 ## Longer than the 14 characters the bag used to cut a name at.
 const LONG_NAME := "rusty scrap metal dust chunk"
 
+## The Drop of the sword, under its own key. SECOND in its list, so a bar that
+## named the first action by mistake cannot pass.
+const SWORD_DROP := {"label": "Drop", "command": "drop 1"}
+
+## Disposable, rather than the real profile: one case turns on the Shift option.
+const SETTINGS_PATH := "user://test_inventory_view.cfg"
+
 var _failures := 0
 var _view: InventoryView
 var _resolver: MeshResolver
@@ -48,6 +55,7 @@ func _ready() -> void:
 	_leaving_a_cell_clears_the_bar()
 	_a_stale_exit_does_not_clear_a_newer_hover()
 	_the_bar_follows_a_rebuild_under_the_mouse()
+	_the_bar_follows_the_shift_key()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -199,6 +207,62 @@ func _the_bar_follows_a_rebuild_under_the_mouse() -> void:
 		"and the new cell's exit still clears it")
 
 
+## With the option on, the bar names what a click sends at this moment: the
+## Drop while Shift is down, and the first action when it is up.
+func _the_bar_follows_the_shift_key() -> void:
+	_clean_settings()
+	var settings := ClientSettings.new(SETTINGS_PATH)
+	settings.set_shift_click_drop(true)
+	_view.bind_settings(settings)
+	# A rebuild, so each new cell holds the settings.
+	_state.ingest(_Const.CH_CHAR_ITEMS, _payload())
+
+	var drop_text := "Click: Drop sword"
+	var first_text := "Click: Equip sword"
+	_carried_cell(0).hovered.emit()
+	_expect(_view._bar.text.contains(first_text),
+		"with Shift up, the bar names the first action")
+
+	_view._input(_shift_key(true))
+	_expect(_view._bar.text.contains(drop_text), "a Shift press names the Drop")
+
+	_view._input(_shift_key(false))
+	_expect(_view._bar.text.contains(first_text),
+		"a Shift release names the first action again")
+
+	_carried_cell(0).unhovered.emit()
+	_view._input(_shift_key(true))
+	_carried_cell(0).hovered.emit()
+	_expect(_view._bar.text.contains(drop_text),
+		"a cell that the mouse enters with Shift down names the Drop")
+
+	# The release that a window with no focus never got. The next mouse move
+	# carries the true flag.
+	var motion := InputEventMouseMotion.new()
+	motion.shift_pressed = false
+	_view._input(motion)
+	_expect(_view._bar.text.contains(first_text),
+		"a mouse move with Shift up repairs the bar")
+
+	_carried_cell(0).unhovered.emit()
+	_view.bind_settings(null)
+	_state.ingest(_Const.CH_CHAR_ITEMS, _payload())
+	_clean_settings()
+
+
+func _shift_key(pressed: bool) -> InputEventKey:
+	var key := InputEventKey.new()
+	key.keycode = KEY_SHIFT
+	key.pressed = pressed
+
+	return key
+
+
+func _clean_settings() -> void:
+	if FileAccess.file_exists(SETTINGS_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
+
+
 func _carried_cell(index: int) -> InventorySlotCell:
 	return _view._grid.get_child(index)
 
@@ -209,8 +273,8 @@ func _payload() -> Dictionary:
 		"items": [
 			{"id": 101.0, "slot": 0.0, "name": "sword", "asset": "", "family": "weapon",
 			 "quantity": 1.0, "stackable": false, "equip_slot": "weapon_hand",
-			 "actions": [{"label": "Equip", "command": "equip 1"},
-						 {"label": "Drop", "command": "drop 1"}]},
+			 "actions": [{"label": "Equip", "command": "equip 1"}, SWORD_DROP],
+			 _Const.INVENTORY_DROP_KEY: SWORD_DROP},
 			{"id": 102.0, "slot": 3.0, "name": LONG_NAME, "asset": "", "family": "material",
 			 "quantity": 12.0, "stackable": true, "equip_slot": "",
 			 "actions": [{"label": "Drop", "command": "drop 4"}]},

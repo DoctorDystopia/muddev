@@ -5,10 +5,9 @@ Creation date: 07/30/2026
 Description: Blackout hostile NPC NpcDef entries. Stats are faithful OSRS
               translations to the 0..127 scale (the formulas are
               scale-agnostic, so raw integer skill levels and bonuses
-              transfer directly). combat_stat_bonuses keys match those
-              used by weapon ItemDefs (stab/slash/crush_attack_bonus,
-              *_defense_bonus, melee_strength_bonus) so the same combat
-              math path resolves both PC swings and NPC defenders.
+              transfer directly). The combat_stat_bonuses keys are the keys
+              of the weapon ItemDefs, for example melee_stab_attack_bonus.
+              Thus, one combat path resolves a PC swing and an NPC defender.
 """
 
 import systems.gameplay.combat.constants as combat_constants
@@ -72,16 +71,16 @@ NPCS = {
             attack_speed=4,
             combat_stat_bonuses={
                 # Attack bonuses (per-damage-type; goblin is crush-only but the
-                # math reads whichever *_attack_bonus the active style names, so
+                # math reads whichever attack bonus the active style names, so
                 # we stamp the same bonus on stab/slash to match the wiki's
                 # "Monster attack bonus" of -21 across the board).
-                "stab_attack_bonus": -21,
-                "slash_attack_bonus": -21,
-                "crush_attack_bonus": -21,
+                "melee_stab_attack_bonus": -21,
+                "melee_slash_attack_bonus": -21,
+                "melee_crush_attack_bonus": -21,
                 # Defense bonuses
-                "stab_defense_bonus": -15,
-                "slash_defense_bonus": -15,
-                "crush_defense_bonus": -15,
+                "melee_stab_defense_bonus": -15,
+                "melee_slash_defense_bonus": -15,
+                "melee_crush_defense_bonus": -15,
                 # Other bonuses
                 "melee_strength_bonus": -15,
             },
@@ -141,15 +140,15 @@ NPCS = {
             attack_speed=6,
             combat_stat_bonuses={
                 # Attack bonuses. The Hill Giant is crush-only, and the math reads
-                # whichever *_attack_bonus the active style names, so the wiki's
+                # whichever attack bonus the active style names, so the wiki's
                 # single "Monster attack bonus" of +18 is stamped across all three.
-                "stab_attack_bonus": 18,
-                "slash_attack_bonus": 18,
-                "crush_attack_bonus": 18,
+                "melee_stab_attack_bonus": 18,
+                "melee_slash_attack_bonus": 18,
+                "melee_crush_attack_bonus": 18,
                 # Defense bonuses
-                "stab_defense_bonus": 0,
-                "slash_defense_bonus": 0,
-                "crush_defense_bonus": 0,
+                "melee_stab_defense_bonus": 0,
+                "melee_slash_defense_bonus": 0,
+                "melee_crush_defense_bonus": 0,
                 # Other bonuses
                 "melee_strength_bonus": 16,
             },
@@ -181,13 +180,13 @@ NPCS = {
             attack_speed=4,
             combat_stat_bonuses={
                 # stats based on OSRS Greater Demon
-                "stab_attack_bonus": 0,
-                "slash_attack_bonus": 0,
-                "crush_attack_bonus": 0,
+                "melee_stab_attack_bonus": 0,
+                "melee_slash_attack_bonus": 0,
+                "melee_crush_attack_bonus": 0,
                 # Defense bonuses
-                "stab_defense_bonus": 0,
-                "slash_defense_bonus": 0,
-                "crush_defense_bonus": 0,
+                "melee_stab_defense_bonus": 0,
+                "melee_slash_defense_bonus": 0,
+                "melee_crush_defense_bonus": 0,
                 # Other bonuses
                 "melee_strength_bonus": 0,
             },
@@ -215,13 +214,13 @@ NPCS = {
             combat_stat_bonuses={
                 # stats based on OSRS chaos druid, defenses lowered for flavor
                 # https://oldschool.runescape.wiki/w/Chaos_druid
-                "stab_attack_bonus": 0,
-                "slash_attack_bonus": 0,
-                "crush_attack_bonus": 0,
+                "melee_stab_attack_bonus": 0,
+                "melee_slash_attack_bonus": 0,
+                "melee_crush_attack_bonus": 0,
                 # Defense bonuses
-                "stab_defense_bonus": -42, # based on OSRS gnome child
-                "slash_defense_bonus": -15,
-                "crush_defense_bonus": 0,
+                "melee_stab_defense_bonus": -42, # based on OSRS gnome child
+                "melee_slash_defense_bonus": -15,
+                "melee_crush_defense_bonus": 0,
                 # Other bonuses
                 "melee_strength_bonus": 8,
             },
@@ -248,13 +247,13 @@ NPCS = {
             combat_stat_bonuses={
                 # stats based on OSRS chaos druid, defenses lowered for flavor
                 # https://oldschool.runescape.wiki/w/Chaos_druid
-                "stab_attack_bonus": 0,
-                "slash_attack_bonus": 0,
-                "crush_attack_bonus": 0,
+                "melee_stab_attack_bonus": 0,
+                "melee_slash_attack_bonus": 0,
+                "melee_crush_attack_bonus": 0,
                 # Defense bonuses
-                "stab_defense_bonus": 0,
-                "slash_defense_bonus": 0,
-                "crush_defense_bonus": 0,
+                "melee_stab_defense_bonus": 0,
+                "melee_slash_defense_bonus": 0,
+                "melee_crush_defense_bonus": 0,
                 # Other bonuses
                 "melee_strength_bonus": 0,
             },

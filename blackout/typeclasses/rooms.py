@@ -401,7 +401,11 @@ class GridTile(ObjectParent, XYZRoom):
         try:
             if subscriptions.has_subscribers(moved_obj):
                 feed.emit_room_info(moved_obj)
-                feed.emit_room_contents(moved_obj)
+                # Marked, not built. The follow-up of `goto (x,y) then get`
+                # runs in the tick of the arrival. A list built here is
+                # older than the remove that the get sends, and the flush
+                # sends the list last. The mark builds after the get.
+                feed.refresh_room_contents(moved_obj, whole=False)
                 feed.emit_inventory(moved_obj)
 
             feed.emit_entity_arrived(self, moved_obj)
@@ -782,3 +786,22 @@ class TileRoom(GridTile):
             framed = f"|wPlane {plane}|n\n{framed}"
 
         looker.msg(text=(framed, _MSG_MAP), options=None)
+
+    def at_object_leave(self, moved_obj, target_location, move_type="move", **kwargs):
+        """
+        Mirror the departure into the statefeed, as every grid tile does.
+        Then start the clock of an item spawn if its item leaves
+        (`item_spawns.on_leave`, 10/21/2026). Every walker passes here, so
+        the common case is one attribute read. Never raises.
+        """
+        super().at_object_leave(moved_obj, target_location, move_type=move_type, **kwargs)
+
+        if not moved_obj.attributes.has(tile_const.SPAWN_ITEM_ATTR):
+            return
+
+        try:
+            from systems.gameplay.spawning import item_spawns
+
+            item_spawns.on_leave(self, moved_obj)
+        except Exception:
+            logger.log_trace()

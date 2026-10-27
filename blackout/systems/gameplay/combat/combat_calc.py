@@ -282,8 +282,8 @@ def resolve_melee_swing(
     Entry:
         attacker_eff_atk   - effective_level on the Strike skill axis (boosted
                               per the active style's weapon_style_level_boost).
-        attacker_equip_atk - combat_stat_bonuses[attack_type + "_attack_bonus"]
-                              from the weapon (e.g. "stab_attack_bonus").
+        attacker_equip_atk - combat_stat_bonuses[attack_bonus_key(attack_type)]
+                              from the weapon (e.g. "melee_stab_attack_bonus").
         attacker_eff_str   - effective_level on the Brawn skill axis (boosted
                               per the active style's weapon_style_level_boost).
         attacker_equip_str - cumulative strength bonus (weapon + armor);
@@ -291,7 +291,7 @@ def resolve_melee_swing(
         defender_eff_def   - effective_level on the Defense skill axis (or NPC's
                               combat_stats.defense_level).
         defender_equip_def - defender's combat_stat_bonuses for the relevant
-                              damage-type defense (e.g. "stab_defense_bonus").
+                              damage-type defense (e.g. "melee_stab_defense_bonus").
         rng                - optional random.Random for tests.
 
     Exit/Returns:
@@ -346,8 +346,8 @@ def resolve_projectile_shot(
         attacker_eff_guns       - effective_level on the Guns skill axis
                                   (boosted per the active style's
                                   weapon_style_level_boost).
-        attacker_equip_atk      - combat_stat_bonuses[attack_type +
-                                  "_attack_bonus"], where attack_type is one
+        attacker_equip_atk      - combat_stat_bonuses[attack_bonus_key(
+                                  attack_type)], where attack_type is one
                                   of light / standard / heavy.
         attacker_eff_ballistics - effective_level on the Ballistics skill
                                   axis (boosted per the same style).
@@ -357,7 +357,7 @@ def resolve_projectile_shot(
                                   (or NPC's combat_stats.defense_level).
         defender_equip_def      - defender's combat_stat_bonuses for the
                                   matching projectile defense key, e.g.
-                                  "standard_defense_bonus".
+                                  "projectile_standard_defense_bonus".
         rng                     - optional random.Random for tests.
 
     Exit/Returns:

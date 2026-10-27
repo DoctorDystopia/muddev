@@ -76,6 +76,15 @@ Description: The object kinds of the tile grid, one row for each kind.
              tile, so an author can stop a walk through a table. The tile
              sync stands nothing up for it, as for a landmark.
 
+             AN ITEM SPAWN puts an item on its tile (Nick, 10/21/2026). One
+             kind, `item_spawn`, serves every placement. Each chunk object
+             holds its own `spawn`: the item, the quantity, and the ticks
+             to the next item after one leaves the tile. A signpost holds
+             its words in the same way. The kind has no spawner, because
+             `systems/gameplay/spawning/item_spawns.py` reads the spawn of
+             the object. It has no preview, because the editor draws the
+             model of the item of each spawn.
+
              PREVIEW. A kind that stands up an entity names the model of
              that entity in `preview`: the asset key and the family that
              the statefeed sends for it. Only the terrain editor reads it,
@@ -135,6 +144,7 @@ _SIGN = tile_const.OBJECT_CATEGORY_SIGN
 _TRANSITION = tile_const.OBJECT_CATEGORY_TRANSITION
 _CLIMB = tile_const.OBJECT_CATEGORY_CLIMB
 _DECOR = tile_const.OBJECT_CATEGORY_DECOR
+_ITEM_SPAWN = tile_const.OBJECT_CATEGORY_ITEM_SPAWN
 
 # The families of the entities, for the `preview` of each kind.
 _STATION = feed_const.ASSET_KIND_STATION
@@ -150,6 +160,10 @@ RESPAWN_KIND: str = "respawn_point"
 # The one signpost kind. Each placement holds its own words in its chunk
 # object text.
 SIGNPOST_KIND: str = "signpost"
+
+# The one item spawn kind. Each placement holds its own spawn in its chunk
+# object.
+ITEM_SPAWN_KIND: str = "item_spawn"
 
 # The teleporter pad that the client stands on each transition tile. The key
 # of assets/models/world_objects/map_transition.toml. The xyzgrid maps drew
@@ -255,6 +269,10 @@ _KIND_ROWS: tuple = (
     # A signpost. Its words are the `text` of each chunk object.
     ObjectKind(SIGNPOST_KIND, _SIGN,
                preview=(feed_const.ASSET_KEY_GENERIC, feed_const.ASSET_KIND_SIGN)),
+
+    # An item spawn. Its item and its respawn are the `spawn` of each chunk
+    # object (Nick, 10/21/2026).
+    ObjectKind(ITEM_SPAWN_KIND, _ITEM_SPAWN),
 
     # The respawn point. world/respawn.py finds it by this key. The words are
     # those of the xyzgrid room at (0, 0) of the oasis map.

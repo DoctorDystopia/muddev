@@ -52,6 +52,7 @@ const KEY_AMOUNT_SIZE := "amount_size"
 const KEY_POPUP_RECT := "popup_rect"
 const KEY_MINIMAP_RADIUS := "minimap_radius"
 const KEY_SHOW_WALK_PATH := "show_walk_path"
+const KEY_SHOW_COORDINATES := "show_coordinates"
 const KEY_SHOW_PERFORMANCE := "show_performance"
 const KEY_SHIFT_CLICK_DROP := "shift_click_drop"
 
@@ -251,6 +252,9 @@ const DEFAULT_CTRL_CLICK_SWAPS_RUN := true
 ## the OSRS "Hide roofs" setting does. On by default (Nick, 09/26/2026): with
 ## it off, the floor above hides a player who stands indoors.
 ##
+## A hidden plane keeps its shadow (Nick, 10/20/2026). Thus a room keeps the
+## light that its roof gives it. [TerrainView] owns the hide.
+##
 ## A LOOK, like [constant DEFAULT_SMOOTH_MOVEMENT]. The server sends every
 ## plane either way.
 const DEFAULT_HIDE_ROOFS := true
@@ -269,6 +273,15 @@ const DEFAULT_MINIMAP_RADIUS := 20
 ## the extra that Nick asked for as a toggle. The server sends the path either
 ## way, so the toggle hides a line and changes no fact.
 const DEFAULT_SHOW_WALK_PATH := false
+
+## Whether the minimap and the world map show the position readout
+## (10/21/2026). The readout gives the tile and the plane of the player.
+##
+## Off by default, so the corner of the minimap stays clear. The XY button on
+## each map turns it on or off. Both buttons write this one setting, as both
+## maps read [member show_walk_path]. Thus, the two buttons cannot disagree. The server sends the position either way, so the toggle hides
+## text and changes no fact.
+const DEFAULT_SHOW_COORDINATES := false
 
 ## Whether Shift + left click on a carried item drops it (10/20/2026). The
 ## OSRS setting "Shift click to drop items" does the same.
@@ -386,6 +399,7 @@ var ctrl_click_swaps_run := DEFAULT_CTRL_CLICK_SWAPS_RUN
 var hide_roofs := DEFAULT_HIDE_ROOFS
 var minimap_radius := DEFAULT_MINIMAP_RADIUS
 var show_walk_path := DEFAULT_SHOW_WALK_PATH
+var show_coordinates := DEFAULT_SHOW_COORDINATES
 var show_performance := DEFAULT_SHOW_PERFORMANCE
 var shift_click_drop := DEFAULT_SHIFT_CLICK_DROP
 var amount_size := DEFAULT_AMOUNT_SIZE
@@ -455,6 +469,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_MINIMAP_RADIUS, DEFAULT_MINIMAP_RADIUS)))
 	show_walk_path = bool(config.get_value(
 		SECTION, KEY_SHOW_WALK_PATH, DEFAULT_SHOW_WALK_PATH))
+	show_coordinates = bool(config.get_value(
+		SECTION, KEY_SHOW_COORDINATES, DEFAULT_SHOW_COORDINATES))
 	show_performance = bool(config.get_value(
 		SECTION, KEY_SHOW_PERFORMANCE, DEFAULT_SHOW_PERFORMANCE))
 	shift_click_drop = bool(config.get_value(
@@ -504,6 +520,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_HIDE_ROOFS, hide_roofs)
 	config.set_value(SECTION, KEY_MINIMAP_RADIUS, minimap_radius)
 	config.set_value(SECTION, KEY_SHOW_WALK_PATH, show_walk_path)
+	config.set_value(SECTION, KEY_SHOW_COORDINATES, show_coordinates)
 	config.set_value(SECTION, KEY_SHOW_PERFORMANCE, show_performance)
 	config.set_value(SECTION, KEY_SHIFT_CLICK_DROP, shift_click_drop)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
@@ -801,6 +818,16 @@ func set_show_walk_path(value: bool) -> void:
 	changed.emit()
 
 
+## Show or hide the position readout on the maps, and persist it.
+func set_show_coordinates(value: bool) -> void:
+	if value == show_coordinates:
+		return
+
+	show_coordinates = value
+	save_to_disk()
+	changed.emit()
+
+
 ## Remember how big the player made the amount box, and persist it.
 ##
 ## Called when the box closes, so a resize drag writes the file one time. A
@@ -925,6 +952,7 @@ func reset() -> void:
 	hide_roofs = DEFAULT_HIDE_ROOFS
 	minimap_radius = DEFAULT_MINIMAP_RADIUS
 	show_walk_path = DEFAULT_SHOW_WALK_PATH
+	show_coordinates = DEFAULT_SHOW_COORDINATES
 	show_performance = DEFAULT_SHOW_PERFORMANCE
 	shift_click_drop = DEFAULT_SHIFT_CLICK_DROP
 	amount_size = DEFAULT_AMOUNT_SIZE

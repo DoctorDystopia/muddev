@@ -32,7 +32,12 @@ const FIXTURES_FROM_GAME := "world/tests/fixtures/checks"
 
 ## Check the content rules over every chunk file of a world. Returns the
 ## findings, sorted by rule, plane, y, and x. Empty means the world is good.
-static func check_world(chunk_files: Array[ChunkFile]) -> Array[Dictionary]:
+##
+## `items` maps each item that an item spawn may name to true when it stacks
+## ([method SpawnItems.stacking]). The editor gives the list of the game. An
+## empty table is no item, so each spawn then gives a finding.
+static func check_world(chunk_files: Array[ChunkFile],
+		items: Dictionary = {}) -> Array[Dictionary]:
 	var planes := _plane_sets(chunk_files)
 	var wells := _stairwells(chunk_files)
 	var found: Array[Dictionary] = []
@@ -41,8 +46,11 @@ static func check_world(chunk_files: Array[ChunkFile]) -> Array[Dictionary]:
 	for chunk: ChunkFile in chunk_files:
 		found.append_array(_check_floors(chunk, wells.get(chunk.plane, {})))
 
+		var seen := {}
+
 		for thing: Dictionary in chunk.global_objects():
 			found.append_array(_check_object(planes, chunk.plane, thing))
+			found.append_array(_spawn_findings(chunk.plane, thing, items, seen))
 
 			if thing["kind"] == _Const.TILE_RESPAWN_KIND:
 				respawns.append(Vector3i(thing["x"], thing["y"], chunk.plane))
@@ -87,6 +95,12 @@ static func is_note(finding: Dictionary) -> bool:
 ## sign text rule and the editor both ask here.
 static func takes_text(kind: String) -> bool:
 	return TileTables.object_category(kind) == _Const.OBJECT_TEXT_CATEGORY
+
+
+## True when an object of `kind` carries a spawn: an item spawn. The spawn
+## rules and the editor both ask here.
+static func takes_spawn(kind: String) -> bool:
+	return TileTables.object_category(kind) == _Const.OBJECT_SPAWN_CATEGORY
 
 
 # ─── The rules ───────────────────────────────────────────────────────────────
@@ -152,6 +166,51 @@ static func _check_object(planes: Dictionary, plane: int,
 			found.append(_finding(_Const.TILE_CHECK_CLIMB_LANDING, tile, plane,
 				where + ": climb %s lands on no open tile at %s of plane %d"
 				% [way, top, landing]))
+
+	return found
+
+
+## The findings of the spawn of one object: a spawn on the wrong kind, or
+## none on an item spawn, then the item of the spawn. `seen` holds each
+## `x,y,item` before this one in the chunk: two spawns of one item on one
+## tile would share one clock. The twin of `_spawn_findings` in
+## `tile_checks.py`.
+static func _spawn_findings(plane: int, thing: Dictionary, items: Dictionary,
+		seen: Dictionary) -> Array[Dictionary]:
+	var kind: String = thing["kind"]
+	var tile := Vector2i(thing["x"], thing["y"])
+	var where := "%s at %s plane %d" % [kind, tile, plane]
+	var spawn: Dictionary = thing.get("spawn", {})
+	var found: Array[Dictionary] = []
+
+	if not TileTables.object_kinds().has(kind):
+		return found
+
+	if takes_spawn(kind) == spawn.is_empty():
+		var problem := "has no spawn" if takes_spawn(kind) else "has a spawn, but is no item spawn"
+
+		found.append(_finding(_Const.TILE_CHECK_SPAWN_TABLE, tile, plane, where + ": " + problem))
+		return found
+
+	if spawn.is_empty():
+		return found
+
+	var item: String = spawn[_Const.SPAWN_ITEM_KEY]
+	var high: int = ChunkFile.spawn_quantity(spawn)[1]
+	var key := "%d,%d,%s" % [tile.x, tile.y, item]
+	var problem := ""
+
+	if not items.has(item):
+		problem = "no item %s may spawn" % item
+	elif high > _Const.SPAWN_QUANTITY_UNIT and not items[item]:
+		problem = "%s does not stack, so its quantity must be one" % item
+	elif seen.has(key):
+		problem = "a second spawn of %s on the tile" % item
+
+	if problem.is_empty():
+		seen[key] = true
+	else:
+		found.append(_finding(_Const.TILE_CHECK_SPAWN_ITEM, tile, plane, where + ": " + problem))
 
 	return found
 

@@ -219,10 +219,11 @@ _TILE_KIND_EXPORTS: tuple = (
     ("KIND_CANCEL", const.TILE_ACTION_KIND_CANCEL),
 )
 
-# The game moments on CHANNEL_MOMENT. The client keys its sound table on
-# these. Thus, a new name here breaks the generated file, not the sound.
-# One row for each name in const.MOMENTS. test_client_constants.py fails
-# when the two sets differ.
+# The game moments on CHANNEL_MOMENT. The sound wizard (assets/audio) reads
+# them from the generated file, because it runs with no Django. The cue
+# table of the client keys on plain strings, so test_cue_table.py checks each
+# one against const.MOMENTS. One row for each name in const.MOMENTS.
+# test_client_constants.py fails when the two sets differ.
 _MOMENT_EXPORTS: tuple = (
     ("MOMENT_TASK_COMPLETE", const.MOMENT_TASK_COMPLETE),
     ("MOMENT_CUT_ATTEMPT", const.MOMENT_CUT_ATTEMPT),
@@ -230,6 +231,8 @@ _MOMENT_EXPORTS: tuple = (
     ("MOMENT_METALSMITH_CRAFT", const.MOMENT_METALSMITH_CRAFT),
     ("MOMENT_FOUNDRY_CRAFT", const.MOMENT_FOUNDRY_CRAFT),
     ("MOMENT_TRANSITION", const.MOMENT_TRANSITION),
+    ("MOMENT_GUNS_SHOT", const.MOMENT_GUNS_SHOT),
+    ("MOMENT_MELEE_SWING", const.MOMENT_MELEE_SWING),
 )
 
 # Single-value exports that are neither a channel nor a vocabulary.
@@ -403,6 +406,17 @@ _TILE_GRID_EXPORTS: tuple = (
     ("LOOK_OFFSET_UNIT", tile_const.LOOK_OFFSET_UNIT),
     ("LOOK_OFFSET_MAX", tile_const.LOOK_OFFSET_MAX),
     ("LOOK_AXES", tile_const.LOOK_AXES),
+    # The spawn of an item spawn object (10/21/2026). Both chunk file
+    # readers and the terrain editor read these.
+    ("OBJECT_SPAWN_KEY", tile_const.OBJECT_SPAWN_KEY),
+    ("SPAWN_ITEM_KEY", tile_const.SPAWN_ITEM_KEY),
+    ("SPAWN_QUANTITY_KEY", tile_const.SPAWN_QUANTITY_KEY),
+    ("SPAWN_RESPAWN_KEY", tile_const.SPAWN_RESPAWN_KEY),
+    ("SPAWN_QUANTITY_UNIT", tile_const.SPAWN_QUANTITY_UNIT),
+    ("SPAWN_QUANTITY_MAX", tile_const.SPAWN_QUANTITY_MAX),
+    ("SPAWN_QUANTITY_BOUNDS", tile_const.SPAWN_QUANTITY_BOUNDS),
+    ("SPAWN_RESPAWN_MIN", tile_const.SPAWN_RESPAWN_MIN),
+    ("SPAWN_RESPAWN_MAX", tile_const.SPAWN_RESPAWN_MAX),
     ("CHUNK_FILE_TEMPLATE", tile_const.CHUNK_FILE_TEMPLATE),
     ("CHUNK_DIRECTORY", tile_const.CHUNK_DIRECTORY),
     ("STRUCTURE_DIRECTORY", tile_const.STRUCTURE_DIRECTORY),
@@ -434,8 +448,11 @@ _TILE_GRID_EXPORTS: tuple = (
     ("OBJECT_CATEGORY_TRANSITION", tile_const.OBJECT_CATEGORY_TRANSITION),
     ("OBJECT_CATEGORY_CLIMB", tile_const.OBJECT_CATEGORY_CLIMB),
     ("OBJECT_CATEGORY_DECOR", tile_const.OBJECT_CATEGORY_DECOR),
+    ("OBJECT_CATEGORY_ITEM_SPAWN", tile_const.OBJECT_CATEGORY_ITEM_SPAWN),
     ("OBJECT_TEXT_CATEGORY", tile_const.OBJECT_TEXT_CATEGORY),
+    ("OBJECT_SPAWN_CATEGORY", tile_const.OBJECT_SPAWN_CATEGORY),
     ("OBJECT_SIGNPOST_KIND", kind_table.SIGNPOST_KIND),
+    ("OBJECT_ITEM_SPAWN_KIND", kind_table.ITEM_SPAWN_KIND),
     ("SCENERY_LADDER", tile_const.SCENERY_LADDER),
     ("SCENERY_STAIRS", tile_const.SCENERY_STAIRS),
     ("SCENERY_HATCH", tile_const.SCENERY_HATCH),
@@ -468,6 +485,8 @@ _TILE_GRID_EXPORTS: tuple = (
     ("TILE_CHECK_WALL_ON_VOID", tile_checks.RULE_WALL_ON_VOID),
     ("TILE_CHECK_UNREACHABLE", tile_checks.RULE_UNREACHABLE),
     ("TILE_CHECK_ROOF_WALKABLE", tile_checks.RULE_ROOF_WALKABLE),
+    ("TILE_CHECK_SPAWN_TABLE", tile_checks.RULE_SPAWN_TABLE),
+    ("TILE_CHECK_SPAWN_ITEM", tile_checks.RULE_SPAWN_ITEM),
 )
 
 # The names that the Godot editor paints and places (DESIGN-0011 section 6.3).

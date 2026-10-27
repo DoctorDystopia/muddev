@@ -144,14 +144,16 @@ static func player_of(figure: Node3D, clips: AnimationLibrary = null) -> Animati
 
 
 ## Play one clip on a figure, from its start. Returns false for a clip that
-## the library of the figure does not have.
-static func play(figure: Node3D, clip_name: String, speed := 1.0) -> bool:
+## the library of the figure does not have. `blend` is the seconds that the
+## clip takes to blend in from the clip before it. The default of the player
+## (-1.0) gives no blend.
+static func play(figure: Node3D, clip_name: String, speed := 1.0, blend := -1.0) -> bool:
 	var player := player_of(figure)
 
 	if not player.has_animation(clip_name):
 		return false
 
-	player.play(clip_name, -1.0, speed)
+	player.play(clip_name, blend, speed)
 
 	return true
 

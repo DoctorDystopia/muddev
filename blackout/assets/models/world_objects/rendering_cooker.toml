@@ -1,0 +1,7 @@
+source = "itch_eclair_pot_enamel"
+file   = "pot_enamel_01_cc0_clip_ready_v1.glb"
+
+[output]
+# The download has 11,416 triangles. The world_objects budget is 10,000.
+# The furnace record set the model: a simplify step, not a higher budget.
+max_triangles = 8000

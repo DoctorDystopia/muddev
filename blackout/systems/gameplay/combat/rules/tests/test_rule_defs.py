@@ -71,12 +71,12 @@ _NEVER_HITS = 0.9999999
 
 # Stat blocks. Kept minimal: these tests are about the definitions, not about
 # the equipment maths, which test_action_pipeline already covers.
-_ATTACKER_STATS = {"stab_attack_bonus": 5, "melee_strength_bonus": 4}
-_DEFENDER_STATS = {"stab_defense_bonus": 2}
+_ATTACKER_STATS = {"melee_stab_attack_bonus": 5, "melee_strength_bonus": 4}
+_DEFENDER_STATS = {"melee_stab_defense_bonus": 2}
 
 # A defender with enough armour that a normal swing would almost never land.
 # Used to prove a whole-swing override bypasses accuracy entirely.
-_ARMOURED_DEFENDER_STATS = {"stab_defense_bonus": 5000}
+_ARMOURED_DEFENDER_STATS = {"melee_stab_defense_bonus": 5000}
 
 
 def _levels(strike=40, brawn=35, defense=20, fortitude=30) -> dict:
@@ -98,7 +98,7 @@ def _context(rng, attacker_rules=(), defender_rules=(),
         weapon=None,
         weapon_data={},
         style={},
-        attack_type=const.ATTACK_TYPE_STAB,
+        attack_type=const.MELEE_ATTACK_TYPE_STAB,
         attacker_stats=dict(_ATTACKER_STATS),
         defender_stats=dict(defender_stats or _DEFENDER_STATS),
         attacker_levels=attacker_levels or _levels(),

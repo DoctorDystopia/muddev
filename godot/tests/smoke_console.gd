@@ -96,6 +96,7 @@ func _ready() -> void:
 	_the_world_map_sits_under_the_docks_and_over_the_pop_up(console)
 	_the_minimap_strip_stays_inside_the_minimap(console)
 	_the_keys_follow_the_camera_only_when_asked(console)
+	_an_arrow_key_turns_the_real_camera(console)
 	_the_layout_editor_opens_from_options(console)
 
 	console.queue_free()
@@ -211,6 +212,42 @@ func _the_keys_follow_the_camera_only_when_asked(console: Node) -> void:
 		"with the box on, W walks where the camera looks")
 
 	settings.camera_relative_keys = was
+
+
+## An arrow key turns the camera while the map has the keyboard (10/26/2026),
+## for a trackpad with no middle button.
+##
+## The press goes through the viewport, not into the handler. Arrow keys are
+## the `ui_*` focus keys of Godot. A focus move that took the key first would
+## leave the console handler with nothing.
+func _an_arrow_key_turns_the_real_camera(console: Node) -> void:
+	var keys: CameraKeys = console._camera_keys
+	console._set_typing(false)
+
+	get_viewport().push_input(_key(KEY_LEFT, true))
+	_expect(keys.is_holding(), "with the map on the keyboard, Left reaches the camera keys")
+
+	var before: Vector2 = console._world.camera_forward()
+	console._process(0.25)
+	var after: Vector2 = console._world.camera_forward()
+
+	_expect(before.cross(after) < 0.0, "a held Left moves the camera left, so the view turns right")
+
+	get_viewport().push_input(_key(KEY_LEFT, false))
+	_expect(not keys.is_holding(), "and the release stops the turn")
+
+	get_viewport().push_input(_key(KEY_UP, true))
+	console._set_typing(true)
+	_expect(not keys.is_holding(), "the input taking the keyboard forgets a held key")
+
+	keys.clear()
+
+
+func _key(keycode: Key, pressed: bool) -> InputEventKey:
+	var key := InputEventKey.new()
+	key.keycode = keycode
+	key.pressed = pressed
+	return key
 
 
 func _the_minimap_strip_stays_inside_the_minimap(console: Node) -> void:

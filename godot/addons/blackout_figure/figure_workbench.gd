@@ -1084,7 +1084,7 @@ func clearance_lines(clip_name: String) -> PackedStringArray:
 			lines.append("%s, %s" % [body_key, FigureClearance.line_of(clip_name,
 				FigureClearance.check(store.rigs[body_key],
 					store.looks[body_key].resolved(store.looks),
-					clips.get_animation(clip_name)))])
+					clips.get_animation(clip_name), store.held_in(clip_name)))])
 
 	return lines
 

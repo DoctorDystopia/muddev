@@ -55,7 +55,7 @@ where there is art, and the silhouette of the family where there is not.
 | **Left-click a player** | Nothing — an empty `interact`, which the server decides and this pane does not |
 | **Drag an inventory cell** | Swaps two carried squares. The one command this client composes, because a drag knows two endpoints |
 | **Left-click an inventory cell** | The server's first action on that row: `Equip` on a wearable, `Deposit` or `Sell` while a pop-up is open |
-| **Shift + left-click an inventory cell** | Drops the item, when **Shift + left click drops an item** is on in Options. Off by default, as in OSRS. The cell sends the Drop action of the row (`INVENTORY_DROP_KEY`), never a verb of its own. A worn item has no Drop, so the click does what a plain click does. Remembered |
+| **Shift + left-click an inventory cell** | Drops the item, when **Shift + left click drops an item** is on in Options. Off by default, as in OSRS. The cell sends the Drop action of the row (`INVENTORY_DROP_KEY`), never a verb of its own. A worn item has no Drop, so the click does what a plain click does. While Shift is down, the hover bar names the Drop, because it reads the same action as the click. The delayed tooltip names the plain click. Remembered |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
 | **Edit layout** in Options | Opens the layout editor. Drag a frame to move a HUD element, and drag a grip to size it. Click a frame to hide, fade or scale the element. Save and load layouts by name. `Done` or Esc closes it. Remembered |
@@ -68,6 +68,7 @@ where there is art, and the silhouette of the family where there is not.
 | **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, `Close` or Esc to close |
 | **Drag the world map title bar or a grip** | Moves or resizes the world map, as for the pop-up. Remembered |
 | **`Legend` on the world map** | Shows or hides the legend. A click on an icon row hides that category of map icon on the world map. Remembered |
+| **`XY` on the minimap or the world map** | Shows or hides the position readout: your tile and your plane, as `(20, 30), plane 0`. One setting serves both maps, so a press on one map changes the other. Off by default. Remembered |
 | **Combat tab** | Your weapon, combat level, attack speed, and a button per style — OSRS's Combat Options |
 | **Click a style** | Sends the row's `combatoptions <style>`. The highlight moves when the server republishes, not on the click |
 | **Character tab** | The sheet — whatever panels `char_summary` sent |
@@ -88,6 +89,7 @@ where there is art, and the silhouette of the family where there is not.
 | **Ctrl+F** | Find in the log. Enter steps, Escape closes |
 | **Help tab** | Client help — gestures and keys, not the game's `help` |
 | **Middle-drag** | Orbit the camera. It was right-drag until 09/10/2026, when the right button became Choose Option |
+| **Arrow keys, in move mode** | Turn and tilt the camera while held, the same as a middle-drag. For a trackpad with no middle button. See "The arrow keys turn the camera" |
 | **Right-click the world** | Choose Option: every verb the server said a thing affords, at the cursor |
 | **Wheel** | Zoom |
 
@@ -164,6 +166,35 @@ buttons (Nick, 09/28/2026).
 
 **A click on the next tile sends `goto (x,y)`,** not a direction word. With run
 on, a direction word moves two tiles. A `goto` of one tile moves one tile.
+
+## The arrow keys turn the camera
+
+A middle drag turns the camera, and most trackpads have no middle button.
+Since 10/26/2026, a held arrow key turns or tilts the camera. Left moves the
+camera to its own left around the avatar, so the view turns to the right
+(Nick, 10/26/2026: the first build had Left and Right flipped). Up lifts the
+camera, so it looks down more steeply. A two-finger scroll on a trackpad is a wheel, so the zoom needs no key.
+
+Four rules:
+
+- **The keys work in move mode only.** In the input, Up and Down walk the
+  command history, and Left and Right move the caret. The console reads the
+  arrow keys in `_unhandled_key_input`, beside WASD. Thus, focus decides for
+  the camera as it decides for a walk.
+- **A held key is a rate.** `CameraKeys` holds the arrow keys, as
+  `HeldMovement` holds WASD. On each frame, the console calls
+  `WorldView.turn_camera`. `OrbitCamera.turn` multiplies the turn by
+  `KEY_YAW_SPEED` or `KEY_PITCH_SPEED` (radians per second) and by the frame
+  time. The turn thus has one speed at every frame rate. The tilt keeps the
+  clamp of the drag.
+- **A loss of focus forgets the held keys,** for the reason in the section
+  above. The console clears `CameraKeys` where it clears `HeldMovement`: the
+  input takes the keyboard, the window loses focus, or the layout editor
+  opens.
+- **Nothing goes to the server.** The camera belongs to the client.
+
+The speeds are a first pick: a full turn in about three seconds, and the full
+tilt in under two.
 
 ## Where meshes come from
 
@@ -560,6 +591,13 @@ Python `planes.plane_of_z`, from the same generated names.
   that is not void on the tile of the player (DESIGN-0013 decision 4). A
   player outside a house sees its roof. `TerrainView.under_roof` owns the
   rule.
+- **A hidden roof keeps its shadow** (Nick, 10/20/2026). The meshes of a
+  hidden plane cast `SHADOW_CASTING_SETTING_SHADOWS_ONLY`: the camera does
+  not draw them, and the sun does. Thus a room has the same light with the
+  roof hidden as with the roof drawn. A player who walks in does not step
+  into sunlight. The rule covers the ground, the walls, the water, the
+  props, and the scenery of the plane. The shadow minimum of the Look tab
+  sets how dark that shadow is.
 - **A roof is never a cliff.** A roof floor type (`TILE_ROOF_FLOOR_TYPES`)
   never takes the cliff colour, so a steep roof keeps its own colour.
 - **The reads of the player read the plane of the player.** The ground
@@ -1522,7 +1560,8 @@ To use it:
 2. Select the `TerrainWorld` node. The Terrain panel opens on the right.
 3. In the block strip, set the centre chunk and the plane. Click **Load**.
    The four pan buttons move the block one chunk. **Go to tile** loads the
-   block of a tile and puts the beacon on it.
+   block of a tile and puts the beacon on it. **Side** sets how many chunks
+   the block has on each side, 1 to 8. A new side loads the block again.
 4. On the **Paint** tab, click a tool, or press its number key. Drag with
    the left button. Shift lowers with the Raise brush, clears the flags with
    the Flags brush, and picks the floor or the area under the mouse with
@@ -1541,18 +1580,18 @@ Three strips sit above the tabs:
 | Strip | Holds |
 |---|---|
 | File | **Save (N changed)**, **Revert** (reads the chunk files again, after a question that counts the unsaved chunks), **Open workbench** or **Open world**, and in the workbench **Clear workbench** |
-| Block | The centre chunk, **Load**, the four pan buttons, the plane, **Go to tile**, and **Walls down (V)** |
+| Block | The centre chunk, **Side**, **Load**, the four pan buttons, the plane, **Go to tile**, and **Walls down (V)** |
 | Paint values | The **Floor**, the **Area**, and the **Wall** style that the tools of the Paint tab and of the Build tab write. One list for each, so a pick from either tab lands here. **(keep)** leaves the floor or the area of each tile: the Room and the Place tool use it, and the Floor brush and the Area brush paint nothing with it. **New** beside each list opens the Tables tab on its table |
 
 The panel has six tabs:
 
 | Tab | Holds |
 |---|---|
-| Paint | The tool row, and the options of the current tool only: the radius, the brush shape, the strength, the flags, the object kind, rotation, and variant, the sign text, the noise, and **Protect structures** |
+| Paint | The tool row, and the options of the current tool only: the radius, the brush shape, the strength, the flags, the object kind, rotation, and variant, the sign text, the **Item spawn** fields for the kind `item_spawn`, the noise, and **Protect structures** |
 | Build | The structure tools (DESIGN-0013): Wall line, Room, Doorway, Level above, Ladder, Stairs, Roof, Wall style, Decor, Select tiles, and Place, with the options of the current tool only. See "The Build tab" below |
-| Objects | The selected object with its **Kind**, **Rotation**, **Sign text**, **Variant**, **Scale**, **Tilt**, and **Nudge** fields (a change applies at once), **Turn**, **Turn back**, **Delete**, and **Follow link**. A filter, and a list of every object in the block. A click on a row selects it, and the Paint tool stays. **Show decor** off keeps the decor out of the list. See "A variant and a look" |
+| Objects | The selected object with its **Kind**, **Rotation**, **Sign text**, **Item spawn** (an item spawn only), **Variant**, **Scale**, **Tilt**, and **Nudge** fields (a change applies at once), **Turn**, **Turn back**, **Delete**, and **Follow link**. A filter, and a list of every object in the block. A click on a row selects it, and the Paint tool stays. **Show decor** off keeps the decor out of the list. See "A variant and a look" |
 | World | The **Block** report (the load errors and the seam faults, kept until the next load), the marks to show with a legend, how the planes above show, **Check world** and its findings, and the state of the tile sync |
-| Look | The colour of each floor type, the cliff, the water, and each prop, the colour and the height of each wall style, the fog and the light of each area with **Preview the area light**, and the colours of the editor marks. See "The Look tab" below |
+| Look | The colour of each floor type, the cliff, the water, and each prop, the colour and the height of each wall style, the **Shadow minimum** of every area, the fog and the light of each area with **Preview the area light**, and the colours of the editor marks. See "The Look tab" below |
 | Tables | The rows of the areas, the floor types, the wall styles, and the decor kinds: **New row**, **Save row**, **Rename row**, **Remove row**, and **Read files again**. See "The Tables tab" below |
 
 The **Shape** of the Paint brush is a circle or a square. The side of a
@@ -1560,6 +1599,21 @@ square is twice the radius, and its edges lie on the tile edges. An odd side
 centres on the tile under the mouse, and an even side on the nearest corner.
 The ring shows the tiles of the square. The Ramp has no shape, because it
 reads the radius as the half of its width.
+
+An **item spawn** (10/21/2026) puts an item on its tile in the game. The
+**Item spawn** fields set its item, its quantity range, and its respawn in
+game ticks. The time in seconds shows below them. An item that does not
+stack locks its quantity at one. The items come from `spawn_items.json`,
+which `export_client_constants.py` writes from `ITEM_DB` (`SpawnItems`). The
+editor draws the model of the item on the tile, as the client draws an item
+on the ground. The marker label and the object list name the item.
+**Check world** refuses three faults:
+
+- An item that is not in the list
+- A range on an item that does not stack
+- Two spawns of one item on one tile.
+
+`blackout/README.md` ("Item spawns") gives the rules of the game.
 
 The **Pick object** tool of the Paint tab picks an object on a click. A
 second click on the same tile picks the next object there. A drag moves the
@@ -1582,11 +1636,15 @@ The rules that the editor keeps:
 
 - **The scene holds no terrain.** Every mesh is made at load and has no owner.
   The chunk files are the only store.
-- **The block is 4 x 4 chunks.** The centre chunk is the south-west chunk of
-  the middle four. A brush writes a shared corner to every chunk
-  that stores it, so a seam behaves like any other place. The outer edge of the
-  block shows red, and no brush writes it: its corners also belong to chunks
-  that are not loaded.
+- **The block is N x N chunks, 4 x 4 unless the author says otherwise**
+  (10/21/2026). The **Side** field of the block strip sets N, from 1 to
+  `TerrainWorld.BLOCK_SIDE_MAX` (8). The cap bounds the cost of a load and
+  of a redraw: an 8 x 8 block holds 256 chunk views over the four planes.
+  The session file keeps the choice, so the scene stores none of it. With an
+  even side, the centre chunk is the south-west chunk of the middle four. A
+  brush writes a shared corner to every chunk that stores it, so a seam
+  behaves like any other place. The outer edge of the block shows red, and
+  no brush writes it: its corners also belong to chunks that are not loaded.
 - **What the author sees is what the player sees.** The ground comes from
   `world/terrain/chunk_mesh_builder.gd`, and Phase 5 draws the client with the
   same class. The flag, area, and object marks are the editor's own.
@@ -1803,7 +1861,7 @@ the client keeps its old values as the fallback, and a JSON file under
 | File | Holds | Fallback |
 |---|---|---|
 | `terrain_palette.json` | The colour of each floor type, the cliff, the water, and each prop. The colour and the height of each wall style, in height steps. The wall top lighten | `world/terrain/floor_palette.gd`, `wall_palette.gd` |
-| `area_looks.json` | The nine fields of the fog and the light of each area | `world/area_look.gd` |
+| `area_looks.json` | The nine fields of the fog and the light of each area. The shadow minimum of every area (10/20/2026) | `world/area_look.gd` |
 | `lights.json` | The light of each scenery key: the colour, the energy, the range in tiles, and the height of the bulb (10/18/2026) | `world/look/light_look.gd` |
 
 `world/look/look_file.gd` reads and writes them, with a cache, so a mesh
@@ -1825,6 +1883,26 @@ the scene. Thus, the plugin ends it before each save (`_apply_changes`), and
 starts it again on the next frame. A save with the preview on stored the
 look as the sky of the scene until 10/14/2026. "Reset colours" and "Reset
 area" take the rows out of the file after a question.
+
+**Shadow minimum** (Nick, 10/20/2026) is one field for every area, above
+the area list. It is the share of the sun that still reaches a place in
+full shadow: 0 gives a full shadow, and 1 gives no shadow.
+
+A hidden roof keeps its shadow, so the inside of every structure is in full
+shadow. The shadow minimum sets how dark that shadow is, and the open
+ground keeps its light. The ambient energy of an area makes the open ground
+lighter too.
+
+- `AreaLook.shadow_minimum` reads it from `area_looks.json`, beside the
+  area rows. A file with no value gives `SHADOW_MINIMUM_DEFAULT` (0.3).
+- `AreaLook.apply_to` writes it to the sun as `shadow_opacity`, which is
+  the other share. Thus the game and the preview draw it the same.
+- It is no field of a look. A blend does not move it, and "Reset area"
+  keeps it.
+- The compatibility renderer of 4.7.2 obeys `shadow_opacity`. A scratch
+  scene measured a grey ground under a roof and in the open. Under the roof
+  it gave 0.084 at a minimum of 0, and 0.254 at 0.3. The open ground gave
+  0.404.
 
 The colours of the editor marks are the last section of the tab: the
 Blocked and water tiles, the walls, the borders, the brush ring, the Build
@@ -2116,6 +2194,32 @@ To give a stance an action that the table does not have, type the name of
 the action below the stance table. Select a clip in the clip list, and
 click **Add action**.
 
+To give a swing its clip (10/25/2026):
+
+1. On the **Clips** tab, select the default clip set in the stance list.
+2. Find the row of the attack action, for example `attack_two_hands_slash`.
+   The table has one row for each attack action of the item catalog.
+3. Pick the clip, and click **Play** to see it.
+4. Press Ctrl+S.
+
+The server names the attack action of each swing:
+`attack_<hands>_<attack type>`. The slot of the held weapon gives the hands:
+`unarmed`, `one_hand`, or `two_hands`. The combat style gives the attack
+type. `figure_action` of `blackout_combat` carries the name, and
+`FigureLibrary.strike` plays its clip one time on the attacker.
+
+The idle and the walk of each frame wait for the end of the swing. An
+attack action with no clip plays the clip of `attack`. Thus, a new weapon
+needs no client edit.
+
+A clip of an attack action must not loop, because a swing waits for the end
+of its clip. `test_figure_files.py` fails on a clip that loops.
+
+A two-handed clip holds one item. Its row in the clip list file has
+`"held_in": ["two_hands"]`. The clearance check then holds a probe in the
+bone of the `two_hands` slot only. Without the field, the probe of the off
+hand goes through the chest. **Put clip in list** keeps the field.
+
 To check the figure files (Phase W6):
 
 1. On the **Check** tab, click **Check the figure files**. One check of the
@@ -2215,7 +2319,7 @@ To add a clip from a source that has a clip list:
 | `blackout/assets/figure/clips/<source_id>.json` | One clip list: the clips that the workbench takes from one source of `blackout/assets/sources/` |
 | `blackout/assets/figure/palette.json` | The palette: each named color with its color and its finish, and the named color of each color role |
 | `world/figure/clips/<clip>.res` | One clip. The file name is the clip name. The game export holds these files |
-| `world/figure/stances.json` | The stance table: the default clip set, and the clip set of each tool type |
+| `world/figure/stances.json` | The stance table: the default clip set with the clip of each attack action, and the clip set of each tool type |
 | `world/figure/figure_palette.gd` | `FigurePalette`: the reader and the writer of the palette, and the color of a color role on a figure |
 | `world/figure/figure_stances.gd` | `FigureStances`: the reader and the writer of the stance table, and the clip of one action |
 | `world/figure/figure_rig.gd`, `figure_look.gd`, `figure_json.gd` | The readers and the writers. The game and the workbench use the same classes |
@@ -2726,8 +2830,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All one hundred and one tests are headless and exit non-zero on failure.
-Ninety-eight need nothing running (counted 10/20/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All one hundred and three tests are headless and exit non-zero on failure.
+One hundred need nothing running (counted 10/26/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -3008,8 +3112,9 @@ either. Both write only to a scratch file under `user://`:
 
 `test_command_history.tscn`, `test_client_settings.tscn`,
 `test_scrollback_find.tscn`, `test_server_endpoint.tscn`,
-`test_movement_keys.tscn`, `test_held_movement.tscn` and
-`test_reconnect_policy.tscn` need nothing running either:
+`test_movement_keys.tscn`, `test_held_movement.tscn`,
+`test_camera_keys.tscn` and `test_reconnect_policy.tscn` need nothing running
+either:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
@@ -3257,6 +3362,7 @@ Since 09/28/2026, the minimap follows the OSRS minimap:
 | Walk path | A line through the tiles still to walk. A box in Options, and no button on the minimap (Nick, 09/28/2026: less clutter) | `blackout_walk`, `ClientSettings.show_walk_path` |
 | World map | The `Map` button opens the world map | `WorldMapView` |
 | Run | A toggle in the top-left corner of the map square, as the OSRS run orb | `blackout_walk` `running` |
+| Position readout | Your tile and your plane, at the bottom of the map square (10/21/2026). The `XY` toggle in the top-right corner shows it. The world map has the same toggle, and the two share one setting | `WorldState.current_cell`, `ClientSettings.show_coordinates` |
 
 Four rules hold it together:
 
@@ -3336,10 +3442,18 @@ over the world pane, as the pop-up is, and it shows every chunk of one plane:
 - the name of each area,
 - your tile, the destination marker, and the walk path,
 - the tile under the cursor, as `(x, y)`, for a player who types `goto x,y`,
-- the legend (10/19/2026).
+- the legend (10/19/2026),
+- the position readout, beside the tile under the cursor (10/21/2026).
 
 A drag pans, and the mouse wheel zooms around the cursor. `Up` and `Down`
-change the plane, `Me` centres on you, and `Close` or Esc closes it. **A click
+change the plane, and `Me` centres on you. `XY` shows or hides the position
+readout, and `Close` or Esc closes the map.
+
+**The position readout says where you stand (10/21/2026).** It shows your
+tile and your plane, as `You: (20, 30), plane 0`. The `XY` button on each map
+writes one setting, `ClientSettings.show_coordinates`, so the two maps cannot
+disagree. `MinimapView.coordinates_of` owns the words for both maps. Off the
+tile world, the readout is empty. **A click
 walks nowhere** (Nick, 09/28/2026). A walk across the world can hit the limit
 of the A* search, so a click that walked would often fail.
 
@@ -3688,11 +3802,21 @@ the fight comes back when it stands.
 
 ## Sound is the client's, and a cue hangs off a fact
 
-`world/sound_cues.gd` is the whole table: a cue NAME (`SoundCues.LEVEL_UP`)
-mapped to a clip under `audio/sfx/`. Callers ask for the moment, never the
-file, so a clip swap is one line, and no caller moves. The server names no
-sound and must not start. Which clip a level-up plays is a look, on the same
-side of the line as a mesh or a color.
+`audio/cues.json` is the whole table: each cue NAME mapped to its sound kind
+and its sound clip under `audio/`, and each moment mapped to its cue.
+`world/sound_cues.gd` reads it. Callers ask for the cue, never the file, so
+a clip swap is one line, and no caller moves. The server names no sound and
+must not start. Which clip a level-up plays is a look, on the same side of
+the line as a mesh or a color.
+
+**The cue table is a table file** (10/26/2026). Until then, it was two
+GDScript tables of `preload()` rows in `sound_cues.gd`. A table that an
+author grows is a table file, and the sound wizard writes it.
+`blackout/assets/audio/cue_table.py` owns its format. A moment key in the
+file is a plain string, not a generated constant. Thus,
+`statefeed/tests/test_cue_table.py` runs the check of `assets.audio` on the
+files in git. The check refuses a moment that the server does not send, a
+sound clip that is not there, and a sound clip with no credits row.
 
 **A cue hangs off state, never off a line of prose.** The level-up cue is
 `SkillsState.levelled`, which compares each `char_skills` roster with the one
@@ -3709,16 +3833,16 @@ in `statefeed/constants.py`, regenerated into `blackout_constants.gd`.
 
 **A moment is that event.** The `blackout_moment` channel sends one moment
 name, for example `task_complete`, to the player of the moment. `MomentFeed`
-turns each message into its `happened` signal. The `_MOMENT_CUES` table in
-`sound_cues.gd` maps the moment to a cue. The server names no clip. A new
+turns each message into its `happened` signal. The `moments` section of
+`audio/cues.json` maps the moment to a cue. The server names no clip. A new
 moment needs three edits:
 
 1. Add a `MOMENT_*` constant and its `MOMENTS` entry in `statefeed/constants.py`.
 2. Add its export row in `clientexport.py`, and run `export_client_constants.py`.
 3. Call `events.emit_moment` where the moment occurs.
 
-A sound for it is one more row in `_MOMENT_CUES`. A moment with no row plays
-nothing.
+Then the sound wizard offers the new moment, and it adds the sound for it
+(see "To add a sound"). A moment with no row plays nothing.
 
 The last kill of an Exterminator task is the first moment.
 `ExterminatorHandler._complete` sends `task_complete`, and the client plays
@@ -3731,8 +3855,8 @@ Cutting names `cut_attempt`, and Butchery names `butcher_attempt`. The client
 plays `cut_attempt.wav` or `butcher_attempt.wav`. The repeat comes from the
 channel, not from the clip. The clip does not loop, and the sound stops when
 the channel stops. A sound for another gathering skill is one moment, one
-class attribute, and one row in each table of `sound_cues.gd`. A skill with
-no `attempt_moment` is silent.
+class attribute, and one run of the sound wizard. A skill with no
+`attempt_moment` is silent.
 
 **A crafting skill has one sound for each finished craft.** A skill names
 its moment in the `craft_moment` class attribute of `BaseSkill`.
@@ -3741,8 +3865,8 @@ refused craft sends nothing. Metalsmith names `metalsmith_craft`, and
 Foundry names `foundry_craft`. The client plays `metalsmith_craft.wav` or
 `foundry_craft.wav`. A batch makes one item every
 `craft_seconds`. Thus, the sound repeats until the batch stops. A sound for
-another crafting skill is one moment, one class attribute, and one row in
-each table of `sound_cues.gd`.
+another crafting skill is one moment, one class attribute, and one run of
+the sound wizard.
 
 **A transition has one sound for each move.** `walk.advance` sends
 `transition` when a hop onto a transition tile moves the walker to the
@@ -3751,9 +3875,20 @@ walk all move on the tick, so all three send it. The moment goes to the
 walker only, as every moment does. A transition with a blocked target moves
 nobody, and it sends nothing.
 
-**Every clip plays on the `SFX` bus** declared in `default_bus_layout.tres`.
-An audio player that names a bus that does not exist plays on Master with no
-warning. For that reason, `test_sound_cues` checks the bus by name.
+**An attack has one sound for each shot or swing.** The accuracy skill of a
+combat style names its moment in the `attack_moment` class attribute of
+`BaseSkill`. `ActionAttack.resolve` sends it after each attack, a hit or a
+miss. Each style of a gun reads Guns, and Guns names `guns_shot`. The client
+plays `guns_shot.wav`. An empty quiver fires nothing, so it sends nothing.
+Each melee style reads Strike, a fist included, and Strike names
+`melee_swing`. The client plays `melee_swing.wav`. The moment goes to the
+attacker only. A target and the onlookers hear nothing.
+
+**Every clip plays on the bus of its sound kind.** A sound effect plays on
+the `SFX` bus declared in `default_bus_layout.tres`. `_KIND_BUSES` in
+`sound_cues.gd` maps each kind to its bus, and a kind with no row plays on
+`SFX`. An audio player that names a bus that does not exist plays on Master
+with no warning. For that reason, `test_sound_cues` checks each bus by name.
 
 **The Options slider sets that bus, and nothing else does.** It writes
 `ClientSettings.sfx_volume`, LINEAR from 0.0 to 1.0, because a slider in
@@ -3782,12 +3917,37 @@ Pack is at `C:\Users\NickR\Games\Projects\Godot\Assets\`.
   against a ~38 MiB client. If someone unzipped it into `godot/`, the next
   export would include it.
 
-To add a sound:
+### To add a sound
 
-1. Copy the one clip to `audio/sfx/<cue>.wav`.
-2. Unless the clip is positional, tick Force → Mono in the Import dock.
-3. Add a row to `audio/CREDITS.md`.
-4. Add one constant and one `_STREAMS` row in `sound_cues.gd`.
+Run the sound wizard from `blackout/` (about 2 minutes):
+
+```bash
+../evenv/Scripts/python.exe -m assets.audio add
+```
+
+It asks one question at a time, and it writes nothing before you confirm:
+
+1. The sound clip. Drag it in, or press Enter for a file dialog that opens
+   in the folder of the sound packs (`BLACKOUT_SOUND_PACKS` changes it).
+2. The sound pack. A sound clip from a pack folder that a heading of
+   `audio/CREDITS.md` names needs only a yes. A new pack asks for its title,
+   author, license and store page.
+3. The cue. The wizard shows each moment that the server sends and no cue
+   plays. A number picks one.
+4. The note: when the cue plays.
+
+After the confirm, it copies the sound clip to `audio/sfx/<cue>.wav`, and it
+writes the `.import` file with Force → Mono on. It adds the credits row and
+the cue. Then it offers a headless Godot import (`GODOT_BIN` names Godot).
+Godot keeps the settings of that `.import` file, and adds the uid.
+
+`python -m assets.audio check` checks the cue table, the sound clips and the
+credits. The test suite runs the same check.
+
+A sound kind is one row of `assets/audio/kinds.py`: its folder, its
+suffixes and its import settings. Music is a later kind. It needs one row
+there, one bus row in `_KIND_BUSES`, and one bus in
+`default_bus_layout.tres`.
 
 ## Layout
 
@@ -3826,6 +3986,7 @@ To add a sound:
 | `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
 | `world/movement_keys.gd` | Which key means which direction. Knows nothing about focus. |
 | `world/held_movement.gd` | The movement keys held now, and when to send their direction again. Pure state, no clock. |
+| `world/camera_keys.gd` | The arrow keys held now, and which way they turn the camera. Pure state, no clock. |
 | `world/reconnect_policy.gd` | How long to wait before redialing. Pure schedule, no clock. |
 | `world/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
 | `scenes/quests/quests_view.gd` | The quest tab: a bar per objective, drawn from numbers rather than prose. |
@@ -3834,7 +3995,7 @@ To add a sound:
 | `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/stable_hash.gd` | A string hash that gives the same number on every client. `EntityPool` turns the ring of figures on a tile by it. |
-| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button. |
+| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button, the XY button and the position readout. |
 | `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane, in a floating box. Pans, zooms, and changes the plane. Walks nowhere. |
 | `scenes/worldmap/world_map_legend.gd` | The legend of the world map: a row for each map icon and each marker. A click on an icon row hides that category of map icon. |
 | `world/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |
@@ -3871,8 +4032,9 @@ To add a sound:
 | `world/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash, hover, and the pick. |
 | `world/entity_picking.gd` | The ray against the faces and the box of one node. See "The pick of an entity" |
 | `world/hitsplats/` | The hitsplats. `hitsplat_layer.gd` picks a style and draws. `hitsplat_style.gd` and `styles/*.tres` hold the look. |
-| `world/orbit_camera.gd` | The `SpringArm3D` follow rig. |
-| `world/sound_cues.gd` | Which clip each cue plays, on the SFX bus. The server names no sound. |
+| `world/orbit_camera.gd` | The `SpringArm3D` follow rig. A middle drag and the arrow keys turn it. |
+| `world/sound_cues.gd` | The reader of the cue table: which clip each cue plays, on the bus of its kind. The server names no sound. |
+| `audio/cues.json` | The cue table: each cue with its kind and clip, and the cue of each moment. The sound wizard writes it. |
 | `audio/sfx/`, `audio/CREDITS.md` | The clips in use, and where each came from. Source packs live outside the repo. |
 | `default_bus_layout.tres` | The audio buses. Every cue plays on `SFX`. |
 

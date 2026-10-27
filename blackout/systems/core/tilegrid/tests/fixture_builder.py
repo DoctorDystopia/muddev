@@ -26,7 +26,7 @@ Every feature that a reader can get wrong, in four files:
 | chunk_-1_2_p0.json | Negative chunk x, every flag bit, negative heights, three floors, two areas. Objects in all four rotations. One object with text. One with a full look. One with the auto variant alone |
 | chunk_0_2_p0.json | The east neighbour of the first. Its west edge corners equal the first's east edge, so the seam matches |
 | chunk_0_0_p1.json | Plane 1, one floor, one area, no objects |
-| chunk_3_-2_p0.json | Format 2. Three wall styles, and the default style is not first. Some tiles have a style and no wall bit |
+| chunk_3_-2_p0.json | Format 2. Three wall styles, and the default style is not first. Some tiles have a style and no wall bit. Two item spawns: one with each spawn key and a look, and one with no quantity |
 
 The first three are format 1. Their text and their digests did not change
 with format 2, which proves that a format 1 file reads as before.
@@ -76,6 +76,17 @@ _FULL_LOOK = {const.LOOK_VARIANT_KEY: "rusty_pole_bent",
 
 # The look of a second object: the auto variant and nothing else.
 _ANY_LOOK = {const.LOOK_VARIANT_KEY: const.LOOK_VARIANT_ANY}
+
+# The spawn of one object: every key (10/21/2026). The reader does not know
+# the items, so the item is any name. The two ends of the quantity differ,
+# so a reader that swaps them fails.
+_FULL_SPAWN = {const.SPAWN_ITEM_KEY: "fixture_scrap",
+               const.SPAWN_QUANTITY_KEY: [2, 7],
+               const.SPAWN_RESPAWN_KEY: 150}
+
+# The spawn of a second object: no quantity, and the longest respawn.
+_PLAIN_SPAWN = {const.SPAWN_ITEM_KEY: "fixture_blade",
+                const.SPAWN_RESPAWN_KEY: const.SPAWN_RESPAWN_MAX}
 
 _WEST_CHUNK = (-1, 2)
 _EAST_CHUNK = (0, 2)
@@ -173,7 +184,12 @@ def _styled_chunk() -> chunkfile.ChunkFile:
         floors=[0] * (size * size),
         flags=_flag_grid(rng),
         areas=[0] * (size * size),
-        objects=[chunkfile.ChunkObject("bank_booth", 1, 2, 3)],
+        objects=[chunkfile.ChunkObject("bank_booth", 1, 2, 3),
+                 chunkfile.ChunkObject("item_spawn", 9, 4, 1,
+                                       look=dict(_ANY_LOOK),
+                                       spawn=dict(_FULL_SPAWN)),
+                 chunkfile.ChunkObject("item_spawn", 10, 4, 0,
+                                       spawn=dict(_PLAIN_SPAWN))],
         wall_names=list(_STYLED_WALL_NAMES),
         walls=_random_grid(rng, size, 0, len(_STYLED_WALL_NAMES) - 1))
 

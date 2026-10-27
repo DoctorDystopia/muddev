@@ -92,6 +92,24 @@ class TestGetCmdDuplicateGroundItems(EvenniaCommandTest):
         remaining_on_ground = self.room1.search(item_def.name, location=self.room1, quiet=True)
         self.assertEqual(len(remaining_on_ground), DUPLICATE_DROP_COUNT - 1)
 
+    def test_get_takes_one_of_two_stacks_of_different_sizes(self):
+        # Two kills on one tile left "credits (x63)" and "credits (x40)".
+        # The two display names differ, and the get failed on every try.
+        item_def = ITEM_DB[STACKABLE_KEY]
+        item_def.create(location=self.room1, quantity=GROUND_STACK_QTY)
+        item_def.create(location=self.room1, quantity=EXISTING_STACK_QTY)
+
+        response = self.call(GetCmd(), item_def.name, caller=self.char1)
+
+        self.assertNotIn("more than one match", response.lower())
+        self.assertIn("pick up", response.lower())
+        carried = self.char1.search(item_def.name, location=self.char1, quiet=True)
+        self.assertEqual(len(carried), 1)
+        remaining_on_ground = self.room1.search(item_def.name, location=self.room1, quiet=True)
+        self.assertEqual(len(remaining_on_ground), 1)
+        both_stacks = {GROUND_STACK_QTY, EXISTING_STACK_QTY}
+        self.assertEqual({carried[0].quantity, remaining_on_ground[0].quantity}, both_stacks)
+
 
 class TestGetCmdFullInventory(EvenniaCommandTest):
     """
@@ -158,16 +176,23 @@ class TestIsSingleStackedGroup(EvenniaCommandTest):
         first = item_def.create(location=self.room1)
         second = item_def.create(location=self.room1)
 
-        self.assertTrue(_is_single_stacked_group(self.char1, [first, second]))
+        self.assertTrue(_is_single_stacked_group([first, second]))
+
+    def test_true_for_two_stacks_of_different_sizes(self):
+        item_def = ITEM_DB[STACKABLE_KEY]
+        first = item_def.create(location=self.room1, quantity=GROUND_STACK_QTY)
+        second = item_def.create(location=self.room1, quantity=EXISTING_STACK_QTY)
+
+        self.assertTrue(_is_single_stacked_group([first, second]))
 
     def test_false_for_a_single_match(self):
         item_def = ITEM_DB[DUPLICATE_DROP_KEY]
         only = item_def.create(location=self.room1)
 
-        self.assertFalse(_is_single_stacked_group(self.char1, [only]))
+        self.assertFalse(_is_single_stacked_group([only]))
 
     def test_false_for_distinct_items(self):
         chunk = ITEM_DB[DUPLICATE_DROP_KEY].create(location=self.room1)
         hammer = ITEM_DB[NON_STACKABLE_KEY].create(location=self.room1)
 
-        self.assertFalse(_is_single_stacked_group(self.char1, [chunk, hammer]))
+        self.assertFalse(_is_single_stacked_group([chunk, hammer]))

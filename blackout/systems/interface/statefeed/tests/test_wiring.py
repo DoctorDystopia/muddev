@@ -230,7 +230,11 @@ class TestMovementHooks(EvenniaTest):
             with mock.patch("typeclasses.rooms.feed") as mocked:
                 self.char1.move_to(self.destination, quiet=True)
 
-        self.assertTrue(mocked.emit_room_contents.called)
+        # A mark, not a build. The list of a tick must be newer than the
+        # events of that tick (see ArrivalTickTests).
+        mocked.refresh_room_contents.assert_called_once_with(
+            self.char1, whole=False)
+        self.assertFalse(mocked.emit_room_contents.called)
 
     def test_arriving_announces_the_mover_to_everyone_already_there(self):
         with mock.patch("typeclasses.rooms.feed") as mocked:

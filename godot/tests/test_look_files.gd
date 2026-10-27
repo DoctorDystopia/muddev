@@ -24,6 +24,9 @@ extends Node
 ##    a part goes into its shapes.
 ## 7. A presentation row of the file wins over the table of
 ##    [ModelRegistry]. A model with no row draws the table (step L6).
+## 8. The shadow minimum comes from the file, then from the default. A
+##    value out of range clamps, and a value that is no number gives the
+##    default. The value of the repository is in range.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -35,6 +38,7 @@ func _ready() -> void:
 	_the_file_wins_over_the_table()
 	_the_wall_height_falls_back()
 	_an_area_row_wins_field_by_field()
+	_the_shadow_minimum_falls_back()
 	_a_family_row_wins_over_the_table()
 	_a_presentation_row_wins_over_the_table()
 	_a_variant_choice_picks_a_served_key()
@@ -121,6 +125,24 @@ func _an_area_row_wins_field_by_field() -> void:
 		"a field the row lacks comes from the table")
 	_expect(AreaLook.look_for("no_such_area") == AreaLook.FALLBACK.duplicate(),
 		"an area nothing has gets the fallback")
+	LookFile.forget(AreaLook.PATH)
+
+
+func _the_shadow_minimum_falls_back() -> void:
+	var key := AreaLook.KEY_SHADOW_MINIMUM
+
+	LookFile.put(AreaLook.PATH, {"format": 1, "areas": {}, key: 0.65})
+	_expect(is_equal_approx(AreaLook.shadow_minimum(), 0.65), "the shadow minimum of the file wins")
+	LookFile.put(AreaLook.PATH, {"format": 1, "areas": {}})
+	_expect(AreaLook.shadow_minimum() == AreaLook.SHADOW_MINIMUM_DEFAULT,
+		"a file with no shadow minimum gives the default")
+	LookFile.put(AreaLook.PATH, {"format": 1, key: 1.5})
+	_expect(AreaLook.shadow_minimum() == 1.0, "a shadow minimum over 1 clamps to 1")
+	LookFile.put(AreaLook.PATH, {"format": 1, key: -0.5})
+	_expect(AreaLook.shadow_minimum() == 0.0, "a shadow minimum under 0 clamps to 0")
+	LookFile.put(AreaLook.PATH, {"format": 1, key: "dark"})
+	_expect(AreaLook.shadow_minimum() == AreaLook.SHADOW_MINIMUM_DEFAULT,
+		"a shadow minimum that is no number gives the default")
 	LookFile.forget(AreaLook.PATH)
 
 
@@ -235,6 +257,13 @@ func _the_repository_files_read() -> void:
 	_expect(not palette.is_empty() and palette.get("format") == LookFile.FORMAT,
 		"the terrain palette of the repository reads")
 	_expect(not looks.is_empty(), "the area looks of the repository read")
+
+	if looks.has(AreaLook.KEY_SHADOW_MINIMUM):
+		var minimum: Variant = looks[AreaLook.KEY_SHADOW_MINIMUM]
+		var in_range: bool = typeof(minimum) in [TYPE_INT, TYPE_FLOAT] and minimum >= 0.0 \
+			and minimum <= 1.0
+
+		_expect(in_range, "the shadow minimum of the repository is a number from 0 to 1")
 	_expect(families.error.is_empty() and not families.family_names().is_empty(),
 		"the family file of the repository reads: " + families.error)
 	_expect(presentation.error.is_empty() and not presentation.models().is_empty(),

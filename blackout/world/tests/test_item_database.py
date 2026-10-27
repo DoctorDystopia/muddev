@@ -12,6 +12,8 @@ Run with:
 
 
 
+import unittest
+
 from evennia.prototypes.spawner import spawn
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
@@ -420,6 +422,30 @@ class TestCombatStatBonusKeys(EvenniaTestCase):
                     msg=f"{item_key} declares a combat block but omits "
                         f"{sorted(missing)}.",
                 )
+
+
+class TestStyleAttackTypes(unittest.TestCase):
+    """Every style names an attack type with a combat category. No DB."""
+
+    def test_every_item_style_names_an_attack_type_with_a_category(self):
+        """An unknown attack type reads no bonus at all.
+
+        The scimitar style chop named "sllash" until 10/21/2026. Thus, each
+        chop read 0 for the attack bonus and for the defense bonus.
+        """
+        known = set(combat_constants.COMBAT_CATEGORY_BY_ATTACK_TYPE)
+
+        for item_key, item_def in ITEM_DB.items():
+            for style_key, style in item_def.combat_styles.items():
+                with self.subTest(item=item_key, style=style_key):
+                    self.assertIn(style["attack_type"], known)
+
+    def test_every_unarmed_style_names_an_attack_type_with_a_category(self):
+        known = set(combat_constants.COMBAT_CATEGORY_BY_ATTACK_TYPE)
+
+        for style_key, style in combat_constants.UNARMED_COMBAT_STYLES.items():
+            with self.subTest(style=style_key):
+                self.assertIn(style["attack_type"], known)
 
 
 class TestPrototypeContent(EvenniaTestCase):

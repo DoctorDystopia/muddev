@@ -163,12 +163,12 @@ static func row_from(offset: Vector3, turn: Vector3, scale: float) -> Dictionary
 ## The row of the file for one model, read from the cache of [LookFile].
 ## An empty dictionary for no row.
 static func file_row(asset_key: String) -> Dictionary:
-	var models: Variant = LookFile.read(PATH).get(KEY_MODELS, {})
+	var model_rows: Variant = LookFile.read(PATH).get(KEY_MODELS, {})
 
-	if typeof(models) != TYPE_DICTIONARY:
+	if typeof(model_rows) != TYPE_DICTIONARY:
 		return {}
 
-	var row: Variant = models.get(asset_key, {})
+	var row: Variant = model_rows.get(asset_key, {})
 
 	return row if typeof(row) == TYPE_DICTIONARY else {}
 

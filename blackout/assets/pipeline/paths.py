@@ -51,6 +51,11 @@ NODE_MODULES_DIR: str = os.path.join(ASSETS_DIR, "node_modules")
 # The script that runs INSIDE Blender. It never runs in this Python.
 BLENDER_SCRIPT: str = os.path.join(ASSETS_DIR, "pipeline", "blender_ingest.py")
 
+# The script that runs INSIDE Blender for a .vox file (10/25/2026). It needs
+# an add-on, so it is a script of its own (blender.FORMAT_SCRIPTS).
+BLENDER_VOX_SCRIPT: str = os.path.join(ASSETS_DIR, "pipeline",
+                                       "blender_vox.py")
+
 # The served tree. Evennia serves it in development, and publish.sh copies it
 # to R2 for the public site.
 SERVED_DIR: str = os.path.join(
@@ -67,6 +72,12 @@ CLIENT_VARIANTS_PATH: str = os.path.join(SERVED_DIR, "variants.json")
 FIGURE_SET_PATH: str = os.path.join(SERVED_DIR, "figure.json")
 CREDITS_MARKDOWN_PATH: str = os.path.join(SERVED_DIR, "CREDITS.md")
 CREDITS_JSON_PATH: str = os.path.join(SERVED_DIR, "credits.json")
+
+# The key list (10/25/2026): each asset key that the server names. The
+# client export writes it (systems/interface/statefeed/key_list.py), and the
+# model wizard reads it. The pipeline runs with no Django, so it cannot read
+# ITEM_DB or the object kinds itself.
+KEY_LIST_PATH: str = os.path.join(ASSETS_DIR, "key_list.json")
 
 # The file name of a source record, inside each source directory.
 SOURCE_RECORD_NAME: str = "source.toml"

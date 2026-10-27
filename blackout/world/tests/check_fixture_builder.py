@@ -36,11 +36,13 @@ The fixture world
 |---|---|
 | chunk_0_0_p0.json | Sand, a few Blocked tiles, two respawn points, one object that breaks each object rule, decor on a Blocked tile, and three closed pockets |
 | chunk_0_0_p1.json | Void and Blocked, but two tiles of the default floor, one void tile with no Blocked flag, one void tile with a wall, and two roof tiles |
+| items.json | The item list of the fixture world: one item that stacks, and one that does not (10/21/2026) |
 
 Every rule gives at least one finding. Every good case gives none. The good
 cases are a ladder that lands, the down way of a ladder, a sign with words,
-a roof tile with the Blocked flag, decor on a Blocked tile, and a flight of
-stairs whose two ways land.
+a roof tile with the Blocked flag, decor on a Blocked tile, a flight of
+stairs whose two ways land, a range on an item that stacks, and one unit of
+an item that does not stack.
 
 The two flights test the landing ahead of `climb_landing` in both
 languages (Nick, 10/16/2026). The good flight faces north. The tile over
@@ -63,6 +65,7 @@ import os
 from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as const
 from systems.core.tilegrid import syncstamp
+from systems.interface.statefeed import spawn_items
 from world import areas
 from world import decor_kinds
 from world import floor_types
@@ -76,6 +79,14 @@ FIXTURE_DIRECTORY: str = os.path.join(os.path.dirname(os.path.abspath(__file__))
                                       "fixtures", "checks")
 
 EXPECTED_FILE: str = "expected.json"
+
+# The item list of the fixture world: the `items` of check_world, in the
+# layout of `spawn_items.json`. The GDScript test reads it with the reader of
+# the editor. Thus, the fixture names no real item (10/21/2026).
+ITEMS_FILE: str = "items.json"
+
+# Item key -> True if the item stacks. One item stacks and one does not.
+ITEMS: dict = {"fixture_scrap": True, "fixture_blade": False}
 
 # A tile sync stamp of the fixture files (`syncstamp.py`). The GDScript
 # `TerrainSyncState` must find no changed file against it: the parity of the
@@ -115,6 +126,12 @@ EXPECTED: list = sorted([
     (tile_checks.RULE_SIGN_TEXT, 24, 20, 0),
     (tile_checks.RULE_WALL_ON_VOID, 31, 31, 1),
     (tile_checks.RULE_ROOF_WALKABLE, 30, 31, 1),
+    # The item spawns (10/21/2026). See `_spawn_objects` for each fault.
+    (tile_checks.RULE_SPAWN_TABLE, 32, 20, 0),
+    (tile_checks.RULE_SPAWN_TABLE, 34, 20, 0),
+    (tile_checks.RULE_SPAWN_ITEM, 36, 20, 0),
+    (tile_checks.RULE_SPAWN_ITEM, 38, 20, 0),
+    (tile_checks.RULE_SPAWN_ITEM, 30, 22, 0),
     # The three pockets of plane 0: walls, corners, and a slope.
     (tile_checks.RULE_UNREACHABLE, 40, 40, 0),
     (tile_checks.RULE_UNREACHABLE, 50, 50, 0),
@@ -142,6 +159,15 @@ SLOPE_POCKET_HEIGHT: int = const.WALK_LIMIT * 3
 # so it gives no finding. The first decor kind of the table.
 DECOR_KIND: str = next(iter(decor_kinds.DECOR_KINDS))
 DECOR_ON_BLOCKED: tuple = (4, 3)
+
+# The respawn of each fixture spawn. No rule reads it.
+SPAWN_RESPAWN_TICKS: int = 50
+
+# The tile of a good item spawn: a range on an item that stacks.
+GOOD_SPAWN: tuple = (30, 20)
+
+# The family of each fixture item. No rule reads it.
+ITEM_FAMILY: str = "generic"
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -215,9 +241,49 @@ def _ground() -> chunkfile.ChunkFile:
                               text="Oasis Market"),
         # Decor on a Blocked tile: good (DESIGN-0013 section 6.5).
         chunkfile.ChunkObject(DECOR_KIND, *DECOR_ON_BLOCKED),
-    ]
+    ] + _spawn_objects()
 
     return ground
+
+
+def _spawn(item_key: str, quantity: list = None) -> dict:
+    """A spawn of `item_key` that the reader accepts, with a quantity."""
+    spawn = {const.SPAWN_ITEM_KEY: item_key}
+
+    if quantity:
+        spawn[const.SPAWN_QUANTITY_KEY] = list(quantity)
+
+    spawn[const.SPAWN_RESPAWN_KEY] = SPAWN_RESPAWN_TICKS
+
+    return spawn
+
+
+def _spawn_objects() -> list:
+    """The item spawns of plane 0. Each sits at its tile of EXPECTED, or is good."""
+    spawn_kind = object_kinds.ITEM_SPAWN_KIND
+    scrap, blade = ITEMS
+
+    return [
+        # A range on an item that stacks: good.
+        chunkfile.ChunkObject(spawn_kind, *GOOD_SPAWN,
+                              spawn=_spawn(scrap, [2, 5])),
+        # An item spawn with no spawn.
+        chunkfile.ChunkObject(spawn_kind, 32, 20),
+        # A spawn on a kind that is no item spawn.
+        chunkfile.ChunkObject("metal_pole", 34, 20, spawn=_spawn(scrap)),
+        # An item that is not in the list.
+        chunkfile.ChunkObject(spawn_kind, 36, 20,
+                              spawn=_spawn("no_such_item")),
+        # A range on an item that does not stack.
+        chunkfile.ChunkObject(spawn_kind, 38, 20,
+                              spawn=_spawn(blade, [1, 3])),
+        # One unit of an item that does not stack: good.
+        chunkfile.ChunkObject(spawn_kind, 28, 22, spawn=_spawn(blade)),
+        # Two spawns of one item on one tile: the second is the finding.
+        chunkfile.ChunkObject(spawn_kind, 30, 22, spawn=_spawn(scrap)),
+        chunkfile.ChunkObject(spawn_kind, 30, 22, rotation=1,
+                              spawn=_spawn(scrap)),
+    ]
 
 
 def _upper() -> chunkfile.ChunkFile:
@@ -264,18 +330,28 @@ def expected_text() -> str:
     return "[\n" + ",\n".join(rows) + "\n]\n"
 
 
+def items_text() -> str:
+    """Return the text of items.json, in the layout of spawn_items.json."""
+    rows = [{"key": key, "name": key, "family": ITEM_FAMILY,
+             "stackable": stacks} for key, stacks in sorted(ITEMS.items())]
+
+    return spawn_items.text_of(rows)
+
+
 def write_fixtures() -> None:
-    """Write the fixture files and expected.json."""
+    """Write the fixture files, expected.json, and items.json."""
     os.makedirs(FIXTURE_DIRECTORY, exist_ok=True)
 
     for chunk_file in build_fixtures():
         path = os.path.join(FIXTURE_DIRECTORY, chunk_file.file_name())
         chunkfile.write_file(path, chunk_file)
 
-    path = os.path.join(FIXTURE_DIRECTORY, EXPECTED_FILE)
+    for name, text in ((EXPECTED_FILE, expected_text()),
+                       (ITEMS_FILE, items_text())):
+        path = os.path.join(FIXTURE_DIRECTORY, name)
 
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(expected_text())
+        with open(path, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
 
     syncstamp.write_stamp(FIXTURE_DIRECTORY,
                           os.path.join(FIXTURE_DIRECTORY, STAMP_FILE))

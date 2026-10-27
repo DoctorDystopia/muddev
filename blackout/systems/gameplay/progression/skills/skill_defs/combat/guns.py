@@ -9,6 +9,7 @@ Description: Implementation of the guns combat skill (accuracy axis).
 
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.skill_defs.base_skill import BaseSkill
+from systems.interface.statefeed import constants as feed_const
 
 
 
@@ -39,3 +40,4 @@ class Guns(BaseSkill):
     name = "Guns"
     category = skill_constants.SKILL_CATEGORY_COMBAT
     description = "Proficiency with guns. Determines how often a shot lands."
+    attack_moment = feed_const.MOMENT_GUNS_SHOT

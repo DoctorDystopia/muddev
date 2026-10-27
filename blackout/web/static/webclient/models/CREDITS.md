@@ -35,6 +35,13 @@ Options pane.
 - License: Made for Blackout
 - Models: `copper_shortbow`
 
+## curing_chamber
+
+- Author: ghostguyhi
+- Source: https://ghostguyhi.itch.io/stoveoven
+- License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- Models: `curing_chamber`
+
 ## Free Blacksmith Tool Set - PBR Textures included
 
 - Author: JordanHolmes
@@ -42,6 +49,13 @@ Options pane.
 - License: License not confirmed
 - Models: `anvil`, `hammer`
 - **License not confirmed.** See the source record for the reason.
+
+## gunsmith_bench
+
+- Author: vaelsty
+- Source: https://vaelsty.itch.io/blacksmith-workbench
+- License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- Models: `gunbench`
 
 ## Low Poly Food Asset Pack
 
@@ -78,6 +92,13 @@ Options pane.
 - Source: TODO
 - License: Made for Blackout
 - Models: `metal_pole`
+
+## Pot Enamel 01 - Free CC0 GLB 3D Prop
+
+- Author: Kuutti Siitonen (Poly Haven), GLB by Eclair Assets
+- Source: https://eclair-assets.itch.io/pot-enamel-01-free-cc0-glb-3d-prop
+- License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- Models: `rendering_cooker`
 
 ## PSX Low Poly Skeleton
 

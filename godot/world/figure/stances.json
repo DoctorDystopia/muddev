@@ -1,8 +1,23 @@
 {
 	"default": {
+		"attack": "attack",
+		"attack_one_hand_crush": "one_hand_chop",
+		"attack_one_hand_slash": "attack",
+		"attack_one_hand_stab": "one_hand_stab",
+		"attack_two_hands_crush": "two_hands_chop",
+		"attack_two_hands_heavy": "two_hands_shoot",
+		"attack_two_hands_light": "two_hands_shoot",
+		"attack_two_hands_slash": "two_hands_slice",
+		"attack_two_hands_stab": "two_hands_stab",
+		"attack_two_hands_standard": "two_hands_shoot",
+		"attack_unarmed_crush": "punch",
 		"idle": "idle",
 		"walk": "walk"
 	},
 	"format": 1,
-	"stances": {}
+	"stances": {
+		"shortsword": {
+			"attack": "attack"
+		}
+	}
 }

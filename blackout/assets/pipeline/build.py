@@ -42,6 +42,17 @@ from assets.pipeline import (blender, budgets, glb, paths, picocad, records,
 
 LOCK_PATH: str = os.path.join(paths.ASSETS_DIR, "build.lock.json")
 
+# A source file with this suffix is a picoCAD save file, and picocad.py
+# converts it. A readme has the suffix too. A save file starts with
+# PICOCAD_HEADER, the first field of its header line and the separator.
+#
+# These two live here, not in picocad.py. The text of picocad.py feeds the
+# input digest of every model, so an edit there makes every model stale.
+# test_model_wizard.py compares PICOCAD_HEADER with the constants of
+# picocad.py.
+PICOCAD_SUFFIX: str = ".txt"
+PICOCAD_HEADER: str = "picocad;"
+
 
 class BuildError(RuntimeError):
     """One model could not be built. The message names the step."""
@@ -61,7 +72,6 @@ class BuildResult:
 
 # ─── Private constant definitions ────────────────────────────────────────────
 
-_PICOCAD_SUFFIX: str = ".txt"
 _PICOCAD_GLTF: str = "scene.gltf"
 _NODE_EXECUTABLE: str = "node"
 _NODE_TIMEOUT_SECONDS: int = 300
@@ -73,6 +83,7 @@ _HASH_PREFIX: str = "sha256:"
 
 # The files whose content decides how a record becomes a .glb. A change to
 # any of them changes every input digest, so the check asks for a rebuild.
+# A script for one format is not here: see blender.FORMAT_SCRIPTS.
 _PIPELINE_FILES: tuple = (
     paths.NODE_SCRIPT,
     paths.BLENDER_SCRIPT,
@@ -188,8 +199,8 @@ def _ingest(record, source, work_dir) -> str:
         source file is missing or the conversion fails.
 
     Module Globals:
-        _PICOCAD_SUFFIX, _PICOCAD_DIRNAME, _PICOCAD_GLTF, _BLENDER_FILENAME
-        read.
+        PICOCAD_SUFFIX, _PICOCAD_DIRNAME, _PICOCAD_GLTF,
+        _BLENDER_FILENAME read.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
@@ -210,7 +221,7 @@ def _ingest(record, source, work_dir) -> str:
     if suffix in blender.GLTF_SUFFIXES:
         return original
 
-    if suffix == _PICOCAD_SUFFIX:
+    if suffix == PICOCAD_SUFFIX:
         picocad_dir = os.path.join(work_dir, _PICOCAD_DIRNAME)
         picocad.convert(original, picocad_dir)
 
@@ -314,10 +325,15 @@ def inputs_digest(record: records.ModelRecord,
 
     Exit/Returns:
         Returns "sha256:<hex>" over the record file, the sealed file hashes
-        of its source, the family budget, and the pipeline code.
+        of its source, the family budget, and the pipeline code. A model in
+        a format with a script of its own adds that script.
 
     Module Globals:
-        _PIPELINE_FILES, _HASH_PREFIX read.
+        _PIPELINE_FILES, _HASH_PREFIX, blender.FORMAT_SCRIPTS read.
+
+    Notes:
+        The format script comes LAST, and only for its own format. Thus, the
+        digest of every other model stays the same as before 10/25/2026.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
@@ -326,6 +342,8 @@ def inputs_digest(record: records.ModelRecord,
     record_digest = _text_digest(record.record_path)
     sealed = json.dumps(source.files, sort_keys=True)
     budget = repr(budgets.budget_for(record.family))
+    suffix = os.path.splitext(record.file)[1].lower()
+    format_script = blender.FORMAT_SCRIPTS.get(suffix)
     digest.update(record_digest.encode("utf-8"))
     digest.update(sealed.encode("utf-8"))
     digest.update(budget.encode("utf-8"))
@@ -333,6 +351,10 @@ def inputs_digest(record: records.ModelRecord,
     for path in _PIPELINE_FILES:
         code_digest = _text_digest(path)
         digest.update(code_digest.encode("utf-8"))
+
+    if format_script:
+        script_digest = _text_digest(format_script)
+        digest.update(script_digest.encode("utf-8"))
 
     hex_digest = digest.hexdigest()
 
@@ -384,6 +406,51 @@ def write_lock(lock: dict) -> None:
     with open(LOCK_PATH, "w", encoding="utf-8", newline="\n") as handle:
         json.dump(lock, handle, indent=2, sort_keys=True)
         handle.write("\n")
+
+
+def tools_problem(source_file: str) -> str:
+    """
+    Purpose: Tell what this machine lacks to build a model of one source
+    file.
+
+    Entry:
+        source_file is a file name. Only its suffix counts.
+
+    Exit/Returns:
+        Returns "" when Node, the Node packages and, for a format that is
+        not glTF, Blender are there. Returns one sentence otherwise.
+
+    Module Globals:
+        _NODE_EXECUTABLE, paths.NODE_MODULES_DIR read.
+
+    Notes:
+        The model wizard asks it before it offers a build. A picoCAD file
+        needs no Blender, because picocad.py converts it. It does not look
+        for an add-on that a format script needs. blender_vox.py says so
+        when the add-on is not there.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    node = shutil.which(_NODE_EXECUTABLE)
+    packages = os.path.isdir(paths.NODE_MODULES_DIR)
+    suffix = os.path.splitext(source_file)[1].lower()
+
+    if node is None:
+        return "Node is not on the PATH. See Setup in assets/README.md"
+
+    if not packages:
+        return "the Node packages are not there. Run `npm ci` in assets/"
+
+    if suffix not in blender.BLENDER_SUFFIXES:
+        return ""
+
+    try:
+        blender.find_blender()
+    except blender.BlenderError as problem:
+        return str(problem)
+
+    return ""
 
 
 def build_one(record: records.ModelRecord, force: bool = False) -> BuildResult:

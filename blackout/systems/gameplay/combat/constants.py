@@ -7,6 +7,7 @@ Description: Global tunables for the OSRS-derived Blackout combat engine (0-127 
 
 
 
+from items.equipment.constants import WieldLocation
 from systems.core.tick.scheduler import seconds_to_ticks
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.constants import (
@@ -94,27 +95,26 @@ HIT_CHANCE_FLOOR: float = 0.0
 HIT_CHANCE_CEILING: float = 0.99
 
 # ─── Melee attack types ──────────────────────────────────────────────────────
-# Which equipment bonus a melee swing reads. These strings are INTERPOLATED into
-# attribute keys — f"{attack_type}_attack_bonus" — so they must match the key
-# spellings in UNARMED_DEFAULT_COMBAT_STATS below and in world/item_defs/.
+# Which equipment bonus a melee swing reads. attack_bonus_key and
+# defense_bonus_key below put these strings into the bonus keys, so they must
+# match the key spellings in UNARMED_DEFAULT_COMBAT_STATS and in
+# world/item_defs/.
 
 # NOT interchangeable with the DAMAGE_TYPE_* constants further down: those name
 # a KIND of damage for attribution and are never interpolated into anything.
-ATTACK_TYPE_STAB: str = "stab"
-ATTACK_TYPE_SLASH: str = "slash"
-ATTACK_TYPE_CRUSH: str = "crush"
+MELEE_ATTACK_TYPE_STAB: str = "stab"
+MELEE_ATTACK_TYPE_SLASH: str = "slash"
+MELEE_ATTACK_TYPE_CRUSH: str = "crush"
 
 MELEE_ATTACK_TYPES: tuple = (
-    ATTACK_TYPE_STAB,
-    ATTACK_TYPE_SLASH,
-    ATTACK_TYPE_CRUSH,
+    MELEE_ATTACK_TYPE_STAB,
+    MELEE_ATTACK_TYPE_SLASH,
+    MELEE_ATTACK_TYPE_CRUSH,
 )
 
 # ─── Projectile attack types ─────────────────────────────────────────────────────
-# The projectile mirror of the three strings above, and interpolated the same way:
-# f"{attack_type}_attack_bonus" gives "light_attack_bonus", and
-# f"{attack_type}_defense_bonus" gives "light_defense_bonus". Three types
-# therefore produce all six keys, and no key is written out anywhere.
+# The projectile mirror of the three strings above, and put into the keys the
+# same way: attack_bonus_key("light") gives "projectile_light_attack_bonus".
 #
 # A sub-type, not a damage kind. A bow declares an attack bonus for each of
 # the three and its styles pick one, exactly as a sword picks stab or slash.
@@ -130,12 +130,135 @@ PROJECTILE_ATTACK_TYPES: tuple = (
     PROJECTILE_ATTACK_TYPE_HEAVY,
 )
 
-# The equipment key carrying a projectile shot's damage bonus, the mirror of
-# "melee_strength_bonus". Named here rather than typed at its two readers
-# because the AMMUNITION carries it, not the bow -- so the key travels from
-# an ItemDef in one slot to a formula that never names that slot.
-PROJECTILE_STRENGTH_BONUS_KEY: str = "projectile_strength_bonus"
-MELEE_STRENGTH_BONUS_KEY: str = "melee_strength_bonus"
+# ─── Combat categories ───────────────────────────────────────────────────────
+# The group of an attack type: melee or projectile. Each bonus key starts
+# with its combat category, so "melee_stab_attack_bonus" and
+# "projectile_light_attack_bonus" tell the two groups apart.
+#
+# The attack type gives the category, because no attack type is in two
+# groups. The category is NOT a field of the axes tables below. Each bow
+# keeps a copy of PROJECTILE_COMBAT_AXES in its db.combat_styles row, and a
+# new field in that table never reaches the copy. This table is in the code,
+# so a change to it reaches every object at once.
+COMBAT_CATEGORY_MELEE: str = "melee"
+COMBAT_CATEGORY_PROJECTILE: str = "projectile"
+
+ATTACK_TYPES_BY_COMBAT_CATEGORY: dict = {
+    COMBAT_CATEGORY_MELEE: MELEE_ATTACK_TYPES,
+    COMBAT_CATEGORY_PROJECTILE: PROJECTILE_ATTACK_TYPES,
+}
+
+COMBAT_CATEGORY_BY_ATTACK_TYPE: dict = {
+    attack_type: category
+    for category, attack_types in ATTACK_TYPES_BY_COMBAT_CATEGORY.items()
+    for attack_type in attack_types
+}
+
+# The three spellings of a combat_stat_bonuses key. Only the builders below
+# fill them.
+ATTACK_BONUS_KEY_TEMPLATE: str = "{category}_{attack_type}_attack_bonus"
+DEFENSE_BONUS_KEY_TEMPLATE: str = "{category}_{attack_type}_defense_bonus"
+STRENGTH_BONUS_KEY_TEMPLATE: str = "{category}_strength_bonus"
+
+
+def _typed_bonus_key(template: str, attack_type: str):
+    """
+    Purpose: Fill a bonus key template that names an attack type.
+
+    Entry:
+        template is ATTACK_BONUS_KEY_TEMPLATE or DEFENSE_BONUS_KEY_TEMPLATE.
+        attack_type is the attack_type of a combat style.
+
+    Exit/Returns:
+        Returns the key, or None for an attack type with no combat category.
+
+    Module Globals:
+        COMBAT_CATEGORY_BY_ATTACK_TYPE read.
+
+    Methodology:
+        None is not a key of any bonus dict. Thus, a read with .get(key, 0)
+        gives 0 for an unknown attack type, and the swing does not raise.
+
+    Notes/References:
+        The stored styles of three live scimitars named "sllash" on
+        10/21/2026. A raise here would stop each of their swings.
+        test_item_database.py refuses an unknown attack type in a def.
+
+    Author: Nick Hobar
+    Creation date: 10/21/2026
+    """
+    category = COMBAT_CATEGORY_BY_ATTACK_TYPE.get(attack_type)
+
+    if category is None:
+        return None
+
+    return template.format(category=category, attack_type=attack_type)
+
+
+def attack_bonus_key(attack_type: str):
+    """Return the attack bonus key of an attack type, or None if unknown."""
+    return _typed_bonus_key(ATTACK_BONUS_KEY_TEMPLATE, attack_type)
+
+
+def defense_bonus_key(attack_type: str):
+    """Return the defense bonus key of an attack type, or None if unknown."""
+    return _typed_bonus_key(DEFENSE_BONUS_KEY_TEMPLATE, attack_type)
+
+
+def strength_bonus_key(category: str) -> str:
+    """Return the strength bonus key of a combat category."""
+    return STRENGTH_BONUS_KEY_TEMPLATE.format(category=category)
+
+
+# The equipment key that carries the damage bonus of a projectile shot. The
+# AMMUNITION carries it, not the bow. Thus, the key goes from an ItemDef in
+# one slot to a formula that never names that slot.
+PROJECTILE_STRENGTH_BONUS_KEY: str = strength_bonus_key(COMBAT_CATEGORY_PROJECTILE)
+MELEE_STRENGTH_BONUS_KEY: str = strength_bonus_key(COMBAT_CATEGORY_MELEE)
+
+# ─── The hands of a swing ────────────────────────────────────────────────────
+# How an attacker holds what it swings: bare hands, one hand, or two hands.
+# The statefeed names the action of the figure from the hands and the attack
+# type, for example attack_one_hand_slash (10/25/2026).
+#
+# The slot of the weapon gives the hands, not its tool type. Thus, a new
+# weapon needs no row here. An attacker with no held weapon swings with bare
+# hands. So does each NPC: it carries its style on itself and holds no item.
+ATTACK_HANDS_UNARMED: str = "unarmed"
+ATTACK_HANDS_ONE: str = "one_hand"
+ATTACK_HANDS_TWO: str = "two_hands"
+
+ATTACK_HANDS_BY_SLOT: dict = {
+    WieldLocation.MAIN_HAND: ATTACK_HANDS_ONE,
+    WieldLocation.TWO_HANDS: ATTACK_HANDS_TWO,
+}
+
+
+def attack_hands(use_slot) -> str:
+    """
+    Purpose: Name the hands of a swing from the slot of the weapon.
+
+    Entry:
+        use_slot is the WieldLocation of the held weapon, or None for an
+        attacker that holds no weapon.
+
+    Exit/Returns:
+        Returns one of the ATTACK_HANDS_* names. A slot with no row gives
+        ATTACK_HANDS_UNARMED.
+
+    Module Globals:
+        ATTACK_HANDS_BY_SLOT, ATTACK_HANDS_UNARMED read.
+
+    Methodology:
+        combat.held_weapon reads the two hand slots only, so a held weapon
+        always has a row. The item catalog of the figure workbench reads an
+        ItemDef through this function too. Thus, the list of attack actions
+        and the action of a live swing cannot disagree.
+
+    Author: Nick Hobar
+    Creation date: 10/25/2026
+    """
+    return ATTACK_HANDS_BY_SLOT.get(use_slot, ATTACK_HANDS_UNARMED)
 
 # ─── Weapon Style invisible bonuses ────────────────────────
 # Four combat styles map to four discrete bonus profiles. Each dict maps
@@ -363,8 +486,8 @@ COMBAT_LEVEL_AUGMENTATION_SKILL: str = "augmentation"
 # attribution and messaging can tell a sword from fire, etc.
 
 # Read the warning on ATTACK_TYPE_* above before adding one here: these two
-# vocabularies look interchangeable and are not. An ATTACK_TYPE_* string is
-# interpolated into "<type>_attack_bonus".
+# vocabularies look interchangeable and are not. An ATTACK_TYPE_* string goes
+# into a bonus key, for example "melee_stab_attack_bonus".
 DAMAGE_TYPE_MELEE: str = "melee"    # a connecting weapon or unarmed swing
 DAMAGE_TYPE_PROJECTILE: str = "projectile"  # a projectile that reached its target
 DAMAGE_TYPE_ENERGY: str = "energy"  # a gadget discharging at a target -- itself included
@@ -378,21 +501,6 @@ DAMAGE_TYPE_TOXIN: str = "toxin"    # reserved for poison / venom / etc. mechani
 # (CombatEntity.at_death / combat_msg.format_death), not a damage type.
 
 
-
-# ─── Miss vocabulary ─────────────────────────────────────────────────────────
-# WHAT AN ACTION THAT CONNECTED WITH NOTHING IS CALLED, one row per damage
-# type. A bow that "swings at" its target is the only thing a player can read
-# on a missed shot, and the line had that word baked into it because melee was
-# the only action there was.
-#
-# The damage type is the right owner rather than the weapon or the style: it
-# is already what the action carries to at_damage and to the death line, and
-# it is the axis that actually changes the word. Two bows and four styles miss
-# in exactly the same way.
-#
-# BOTH PERSONS ARE WRITTEN OUT. Deriving "swings" from "swing" is a rule that
-# holds for these three verbs and breaks on the first irregular one, and the
-# breakage would be a typo shipped to players rather than an error.
 
 # Keys into one row of MISS_VERBS.
 MISS_VERB_SELF_KEY: str = "self"    # what the actor reads: "You swing at ..."
@@ -497,6 +605,40 @@ PROJECTILE_COMBAT_AXES: dict = {
 
 # The optional style key naming one of the two tables above.
 STYLE_COMBAT_AXES_KEY: str = "combat_axes"
+
+
+def style_combat_axes(style: dict) -> dict:
+    """
+    Purpose: Give the axes table that a combat style resolves against.
+
+    Entry:
+        style is one combat style dict.
+
+    Exit/Returns:
+        Returns the table under STYLE_COMBAT_AXES_KEY, or MELEE_COMBAT_AXES
+        when the style names none.
+
+    Module Globals:
+        STYLE_COMBAT_AXES_KEY, MELEE_COMBAT_AXES read.
+
+    Methodology:
+        One reader for a melee swing (ActionContext.combat_axes) and the
+        readiness panel. Thus, the panel shows the strength bonus that the
+        melee swing reads.
+
+    Notes/References:
+        Until 10/21/2026 the panel read "melee_strength_bonus" for each
+        style. Thus, it showed +0 strength for every bow.
+
+    Author: Nick Hobar
+    Creation date: 10/21/2026
+    """
+    axes = style.get(STYLE_COMBAT_AXES_KEY)
+
+    if not axes:
+        return MELEE_COMBAT_AXES
+
+    return axes
 
 # Every channel the action pipeline knows about, for validation and iteration.
 ACTION_MODIFIER_CHANNELS: tuple = (
@@ -623,31 +765,26 @@ AMMO_RECOVERY_CHANCE: float = 0.8
 # When a CombatEntity has nothing in either hand, the combat handler substitutes
 # these unarmed defaults.
 #
-# EVERY BONUS KEY THE GAME READS APPEARS HERE. The ATTACK_TYPE_* warning above
-# points at this dict for the canonical spellings, so the six projectile keys are
-# listed even though no unarmed action reads one. A key missing from an
-# item's own block still reads 0 through .get, but a key missing from HERE has
-# no spelling anyone can check against.
+# EVERY BONUS KEY THE GAME READS IS HERE. This dict holds the canonical
+# spellings. Thus, it holds the six projectile keys too, and no unarmed action
+# reads them. A key that the block of an item omits still reads 0 through
+# .get. A key that this dict omits has no spelling that a test can check.
+#
+# The builders make each key, so a new attack type gets its keys here with no
+# edit. The order is the display order of the equipment menu: the attack
+# bonuses, then the defense bonuses, of each category in turn, then the
+# strength bonuses.
 UNARMED_DEFAULT_COMBAT_STATS: dict = {
-    # melee attack bonuses
-    "stab_attack_bonus": 0,
-    "slash_attack_bonus": 0,
-    "crush_attack_bonus": 0,
-    # melee defense bonuses
-    "stab_defense_bonus": 0,
-    "slash_defense_bonus": 0,
-    "crush_defense_bonus": 0,
-    # projectile attack bonuses
-    "light_attack_bonus": 0,
-    "standard_attack_bonus": 0,
-    "heavy_attack_bonus": 0,
-    # projectile defense bonuses
-    "light_defense_bonus": 0,
-    "standard_defense_bonus": 0,
-    "heavy_defense_bonus": 0,
-    # other bonuses
-    "melee_strength_bonus": 0,
-    "projectile_strength_bonus": 0,
+    **{
+        bonus_key(attack_type): 0
+        for attack_types in ATTACK_TYPES_BY_COMBAT_CATEGORY.values()
+        for bonus_key in (attack_bonus_key, defense_bonus_key)
+        for attack_type in attack_types
+    },
+    **{
+        strength_bonus_key(category): 0
+        for category in ATTACK_TYPES_BY_COMBAT_CATEGORY
+    },
 }
 UNARMED_ATTACK_SPEED_TICKS: int = 4  # 2.4s no weapons equipped cycle
 UNARMED_DEFAULT_COMBAT_STYLE: str = "punch"

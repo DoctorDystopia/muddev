@@ -23,8 +23,16 @@ extends Node
 ##     slot shape for an item with no look. A new worn record is a new look.
 ## 11. A served model of a worn item wins over its worn look when it is in
 ##     hand (10/17/2026). Until then, the worn look stands in.
+## 12. A swing plays the clip of its attack action one time (10/25/2026).
+##     The action of the frame does not cut it, and it follows at the end
+##     of the swing. An attack action with no clip of its own plays the clip
+##     of `attack`.
 
 const TOLERANCE := 0.001
+
+## Seconds past the end of a clip that a test moves its player, so the end
+## of the clip is behind it.
+const PAST_THE_END := 0.01
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -48,6 +56,7 @@ func _ready() -> void:
 	_the_figure_colors_color_the_skin()
 	_two_figures_share_no_material()
 	await _a_figure_walks_and_idles()
+	await _a_swing_plays_one_time()
 	_a_pool_row_with_a_body_type_is_a_figure()
 	await _two_figures_in_one_parent_both_walk()
 	_new_colors_are_a_new_look()
@@ -237,6 +246,67 @@ func _a_figure_walks_and_idles() -> void:
 	FigureLibrary.play(holder, FigureStances.ACTION_IDLE)
 	_expect(player.current_animation == stances.clip_for("", FigureStances.ACTION_IDLE),
 		"a figure on its tile idles again")
+
+	holder.queue_free()
+	library.free()
+
+
+## The first attack action that the stance table gives a clip of its own.
+static func _an_attack_action(stances: FigureStances) -> String:
+	var actions: Array = stances.default_set().keys()
+
+	actions.sort()
+
+	for action: String in actions:
+		if FigureStances.is_attack_action(action):
+			return action
+
+	return ""
+
+
+func _a_swing_plays_one_time() -> void:
+	var library := _library()
+	var body_type: String = library.figure_set.rigs.keys()[0]
+	var holder := library.build(body_type, {})
+	var figure := FigureLibrary.figure_of(holder)
+	var stances := FigureStances.read_file()
+	var action := _an_attack_action(stances)
+	var swing := stances.attack_clip_for("", action)
+	var walk := stances.clip_for("", FigureStances.ACTION_WALK)
+
+	_expect(not action.is_empty(), "the stance table gives an attack action a clip")
+	add_child(holder)
+	await get_tree().process_frame
+
+	var player := FigureClips.player_of(figure)
+	var length := player.get_animation(swing).length
+
+	FigureLibrary.strike(holder, action)
+	_expect(player.current_animation == swing and FigureLibrary.is_striking(holder),
+		"a swing plays the clip of its attack action")
+
+	FigureLibrary.play(holder, FigureStances.ACTION_IDLE)
+	_expect(player.current_animation == swing, "the idle of the frame does not cut a swing")
+
+	player.advance(length + PAST_THE_END)
+	_expect(player.current_animation == stances.clip_for("", FigureStances.ACTION_IDLE)
+		and not FigureLibrary.is_striking(holder),
+		"with no frame that plays it, the figure idles again at the end of a swing")
+
+	FigureLibrary.strike(holder, action)
+	FigureLibrary.play(holder, FigureStances.ACTION_WALK)
+	_expect(player.current_animation == swing, "a walk waits for the end of a swing")
+
+	player.advance(length + PAST_THE_END)
+	_expect(player.current_animation == walk, "at the end of a swing, the figure walks")
+
+	FigureLibrary.play(holder, FigureStances.ACTION_WALK)
+	_expect(player.current_animation == walk and player.is_playing(),
+		"the walk of the next frame goes on with the clip")
+
+	FigureLibrary.strike(holder, FigureStances.ATTACK_PREFIX + "with_no_clip")
+	_expect(player.current_animation == stances.clip_for("", FigureStances.ACTION_ATTACK),
+		"an attack action with no clip of its own plays the clip of attack")
 
 	holder.queue_free()
 	library.free()

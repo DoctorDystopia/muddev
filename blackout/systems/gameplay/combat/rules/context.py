@@ -280,15 +280,15 @@ class ActionContext:
 
 
     def attack_equip_bonus(self) -> int:
-        """Return the attacker's equipment attack bonus for the active type."""
-        bonus_key = f"{self.attack_type}_attack_bonus"
+        """Return the equipment attack bonus of the attacker for the active type."""
+        bonus_key = const.attack_bonus_key(self.attack_type)
 
         return self.attacker_stats.get(bonus_key, 0)
 
 
     def defense_equip_bonus(self) -> int:
-        """Return the DEFENDER's equipment defense bonus for the active type."""
-        bonus_key = f"{self.attack_type}_defense_bonus"
+        """Return the equipment defense bonus of the DEFENDER for the active type."""
+        bonus_key = const.defense_bonus_key(self.attack_type)
 
         return self.defender_stats.get(bonus_key, 0)
 
@@ -297,16 +297,11 @@ class ActionContext:
         """Return the axes table the active style resolves against.
 
         Melee for every style that names none, which is every style written
-        before projectile weapons existed. See MELEE_COMBAT_AXES and
-        PROJECTILE_COMBAT_AXES in the combat constants for what a table holds
-        and why a projectile shot needs no rules subclass of its own.
+        before projectile weapons existed. MELEE_COMBAT_AXES in the combat
+        constants tells what a table holds. It also tells why a projectile
+        shot needs no rules subclass of its own.
         """
-        axes = self.style.get(const.STYLE_COMBAT_AXES_KEY)
-
-        if not axes:
-            return const.MELEE_COMBAT_AXES
-
-        return axes
+        return const.style_combat_axes(self.style)
 
 
     def accuracy_skill(self) -> str:

@@ -30,7 +30,14 @@ Description: The content rules of a tile world, checked over its chunk files.
 
              DESIGN-0011 Phase 7c. DESIGN-0013 Phase S1 added `wall_on_void`
              and `unreachable`, and Phase S2 added `roof_walkable`. Phase S4
-             exempts decor from `object_unwalkable`.
+             exempts decor from `object_unwalkable`. The item spawns added
+             `spawn_table` and `spawn_item` (10/21/2026).
+
+             THE ITEMS OF A SPAWN. This module does not know the items, so
+             `check_world` takes them as `items`. The parity fixture gives
+             its own short list (`fixtures/checks/items.json`). Thus, the
+             fixture names no real item, and a rename of an item breaks no
+             parity test.
 """
 
 from collections import deque
@@ -91,6 +98,18 @@ RULE_UNREACHABLE: str = "unreachable"
 # 6.2). The Roof tool sets both at once.
 RULE_ROOF_WALKABLE: str = "roof_walkable"
 
+# An item spawn has no spawn, or an object of another kind has one. The spawn
+# of another kind has no reader (10/21/2026).
+RULE_SPAWN_TABLE: str = "spawn_table"
+
+# A spawn names an item that is not in the item list. Or it gives a quantity
+# above one unit to an item that does not stack. Or a second spawn of its
+# item stands on its tile, and the two would share one clock. The item list
+# is the
+# `items` of check_world: `spawn_items.stacking()` in the game, and
+# `spawn_items.json` in the editor.
+RULE_SPAWN_ITEM: str = "spawn_item"
+
 # Every rule, in the order the editor lists them.
 RULES: tuple = (
     RULE_UNKNOWN_KIND,
@@ -103,6 +122,8 @@ RULES: tuple = (
     RULE_WALL_ON_VOID,
     RULE_UNREACHABLE,
     RULE_ROOF_WALKABLE,
+    RULE_SPAWN_TABLE,
+    RULE_SPAWN_ITEM,
 )
 
 # The rules that give a note. A note warns and fails no test. Nick may make
@@ -154,9 +175,49 @@ def _walkable(grids: dict, plane: int, x: int, y: int) -> bool:
     return not flags & tile_const.FLAGS_UNWALKABLE
 
 
+def _spawn_findings(kind, spawn: dict, items: dict, plane: int, x: int,
+                    y: int, seen: set) -> list:
+    """
+    Return the findings of the spawn of one placed object: a spawn on the
+    wrong kind, or none on an item spawn, then the item of the spawn.
+    `items` is {item key: True if it stacks}. `seen` holds (x, y, item) of
+    each spawn before this one on the plane. Two spawns of one item on one
+    tile would share one clock.
+    """
+    where = f"{kind.key} at ({x}, {y}) plane {plane}"
+    takes_spawn = kind.category == tile_const.OBJECT_SPAWN_CATEGORY
+
+    if takes_spawn != bool(spawn):
+        problem = "has no spawn" if takes_spawn else "has a spawn, but is no item spawn"
+        return [Finding(RULE_SPAWN_TABLE, plane, y, x, f"{where}: {problem}")]
+
+    if not spawn:
+        return []
+
+    item_key = spawn[tile_const.SPAWN_ITEM_KEY]
+    _low, high = chunkfile.spawn_quantity(spawn)
+
+    if item_key not in items:
+        return [Finding(RULE_SPAWN_ITEM, plane, y, x,
+                        f"{where}: no item {item_key} may spawn")]
+
+    if high > tile_const.SPAWN_QUANTITY_UNIT and not items[item_key]:
+        return [Finding(RULE_SPAWN_ITEM, plane, y, x,
+                        f"{where}: {item_key} does not stack, so its "
+                        f"quantity must be one")]
+
+    if (x, y, item_key) in seen:
+        return [Finding(RULE_SPAWN_ITEM, plane, y, x,
+                        f"{where}: a second spawn of {item_key} on the tile")]
+
+    seen.add((x, y, item_key))
+
+    return []
+
+
 def _check_object(grids: dict, plane: int, kind_key: str, x: int,
                   y: int, rotation: int, text: str) -> list:
-    """Return the findings of one placed object."""
+    """Return the findings of one placed object, but not of its spawn."""
     kind = object_kinds.OBJECT_KINDS.get(kind_key)
     where = f"{kind_key} at ({x}, {y}) plane {plane}"
 
@@ -393,15 +454,45 @@ def _check_respawn(respawns: list) -> list:
             for plane, x, y in respawns]
 
 
+def _check_objects(grids: dict, chunk_file, items: dict,
+                   respawns: list) -> list:
+    """
+    Return the findings of each object of one chunk file, its spawn
+    included. Add the tile of each respawn point to `respawns`.
+    """
+    found = []
+    seen = set()
+    placed = zip(chunk_file.global_objects(), chunk_file.global_texts(),
+                 chunk_file.global_spawns())
+
+    for (kind_key, x, y, rotation), (*_tile, text), (*_at, spawn) in placed:
+        found.extend(_check_object(grids, chunk_file.plane, kind_key, x, y,
+                                   rotation, text))
+        kind = object_kinds.OBJECT_KINDS.get(kind_key)
+
+        if kind is not None:
+            found.extend(_spawn_findings(kind, spawn, items,
+                                         chunk_file.plane, x, y, seen))
+
+        if kind_key == object_kinds.RESPAWN_KIND:
+            respawns.append((chunk_file.plane, x, y))
+
+    return found
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
-def check_world(chunk_files: list) -> list:
+def check_world(chunk_files: list, items: dict = None) -> list:
     """
     Purpose: Check the content rules over every chunk file of a world.
 
     Entry:
         chunk_files - checked ChunkFile objects, of any planes. A world with
                       no file gives one finding: no respawn point.
+        items       - {item key: True if the item stacks}: each item that an
+                      item spawn may name. The game gives
+                      `spawn_items.stacking()`. None is no item, so each
+                      spawn then gives a finding.
 
     Exit/Returns:
         A sorted list of Finding, notes included. Empty means the world is
@@ -413,7 +504,8 @@ def check_world(chunk_files: list) -> list:
     Methodology:
         1. Build one grid for each plane (chunkfile.build_grid).
         2. Check each placed object: its kind, its tile, the landing of a
-           transition on the same plane, and the landing of each climb way.
+           transition on the same plane, the landing of each climb way, and
+           its spawn.
         3. Check each tile by its floor: a void tile is Blocked and has no
            wall, and a roof tile is Blocked.
         4. Count the respawn points of the whole world.
@@ -424,6 +516,7 @@ def check_world(chunk_files: list) -> list:
     Notes/References:
         The GDScript twin is TerrainChecks.check_world. The world has no
         chunk outside the files given, so a landing in a missing chunk fails.
+        This module imports no game code, so the caller gives the items.
 
     Author: Nick Hobar
     Creation date: 09/26/2026
@@ -436,15 +529,7 @@ def check_world(chunk_files: list) -> list:
 
     for chunk_file in chunk_files:
         found.extend(_check_floors(chunk_file, wells))
-
-        placed = zip(chunk_file.global_objects(), chunk_file.global_texts())
-
-        for (kind_key, x, y, rotation), (_kind, _x, _y, text) in placed:
-            found.extend(_check_object(grids, chunk_file.plane, kind_key, x, y,
-                                       rotation, text))
-
-            if kind_key == object_kinds.RESPAWN_KIND:
-                respawns.append((chunk_file.plane, x, y))
+        found.extend(_check_objects(grids, chunk_file, items or {}, respawns))
 
     found.extend(_check_respawn(respawns))
     found.extend(_check_reach(chunk_files, grids, respawns))

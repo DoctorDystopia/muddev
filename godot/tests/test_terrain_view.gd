@@ -44,6 +44,7 @@ func _ready() -> void:
 	_roofs_hide_the_planes_above_the_player()
 	_a_player_outside_sees_the_roof()
 	_walking_under_a_roof_hides_it()
+	_a_hidden_roof_keeps_its_shadow()
 	_a_climb_shows_the_plane_it_reaches()
 	_the_chunk_under_the_player_builds_first()
 	_a_chunk_with_walls_gets_a_walls_layer()
@@ -157,13 +158,13 @@ func _roofs_hide_the_planes_above_the_player() -> void:
 	state.ingest(_Const.CH_TILE_CHUNK, _payload(ChunkFile.blank(0, 0, 1)))
 	view.flush()
 
-	_expect(view.chunk_node(Vector2i.ZERO, 0).visible, "the plane of the player shows")
-	_expect(not view.chunk_node(Vector2i.ZERO, 1).visible,
+	_expect(_drawn(view.chunk_node(Vector2i.ZERO, 0)), "the plane of the player shows")
+	_expect(not _drawn(view.chunk_node(Vector2i.ZERO, 1)),
 		"the plane above hides by default")
 
 	view.set_hide_roofs(false)
 
-	_expect(view.chunk_node(Vector2i.ZERO, 1).visible,
+	_expect(_drawn(view.chunk_node(Vector2i.ZERO, 1)),
 		"with Hide roofs off, the plane above shows")
 	view.queue_free()
 
@@ -181,7 +182,7 @@ func _a_player_outside_sees_the_roof() -> void:
 	view.flush()
 
 	_expect(not view.under_roof(), "a player on a void tile of plane 1 is outside")
-	_expect(view.chunk_node(Vector2i.ZERO, 1).visible,
+	_expect(_drawn(view.chunk_node(Vector2i.ZERO, 1)),
 		"a player outside sees the plane above")
 	view.queue_free()
 
@@ -201,14 +202,61 @@ func _walking_under_a_roof_hides_it() -> void:
 		_Const.TILE_WORLD_Z]})
 
 	_expect(view.under_roof(), "a player under the roof tile is under a roof")
-	_expect(not view.chunk_node(Vector2i.ZERO, 1).visible,
+	_expect(not _drawn(view.chunk_node(Vector2i.ZERO, 1)),
 		"a player under a roof does not see the plane above")
 
 	state.ingest(_Const.CH_ROOM_INFO, {"coords": [5.0, 5.0, _Const.TILE_WORLD_Z]})
 
-	_expect(view.chunk_node(Vector2i.ZERO, 1).visible,
+	_expect(_drawn(view.chunk_node(Vector2i.ZERO, 1)),
 		"a step out from under the roof shows the plane above again")
 	view.queue_free()
+
+
+## Nick, 10/20/2026. The camera does not draw a hidden plane, but the sun
+## does. Thus the room under it keeps the shade of its roof. The layers and
+## the scenery of the plane cast with it, and so does art that arrives while
+## it hides.
+func _a_hidden_roof_keeps_its_shadow() -> void:
+	var fixture := _bound()
+	var state: WorldState = fixture[0]
+	var view: TerrainView = fixture[1]
+	var resolver := _FakeResolver.new()
+	var roofed := Vector2i(20, 20)
+	var roof := _roof_over(roofed)
+	var kind := _a_scenery_kind()
+	var asset_key: String = _Const.OBJECT_KIND_SCENERY[kind]
+
+	roof.flags[roofed.y * _Const.CHUNK_SIZE + roofed.x] |= _Const.TILE_FLAG_WALL_NORTH
+	roof.objects.append({"kind": kind, "x": 2, "y": 2, "rotation": 0})
+	resolver.pending[asset_key] = true
+	view.bind_meshes(resolver)
+	state.ingest(_Const.CH_ROOM_INFO, {"coords": [float(roofed.x), float(roofed.y),
+		_Const.TILE_WORLD_Z]})
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(ChunkFile.blank(0, 0)))
+	state.ingest(_Const.CH_TILE_CHUNK, _payload(roof))
+	view.flush()
+
+	var upper := view.chunk_node(Vector2i.ZERO, 1)
+	var walls: GeometryInstance3D = upper.get_node("Walls")
+
+	_expect(upper.visible, "a hidden plane stays in the scene")
+	_expect(_shadow_only(upper), "the ground of a hidden plane casts its shadow only")
+	_expect(_shadow_only(walls), "and its walls cast their shadow only")
+
+	resolver.pending.clear()
+	resolver.refreshed.emit(asset_key)
+
+	var scenery := view.scenery_of(Vector2i.ZERO, 1)
+
+	_expect(scenery.size() == 1 and _shadow_only(scenery[0]),
+		"art that arrives while the plane hides casts its shadow only")
+
+	view.set_hide_roofs(false)
+
+	_expect(_drawn(upper) and _drawn(walls) and _drawn(scenery[0]),
+		"with Hide roofs off, the plane draws in full again")
+	view.queue_free()
+	resolver.free()
 
 
 ## A plane-1 chunk of void and Blocked, with one roof tile at `tile`.
@@ -236,8 +284,8 @@ func _a_climb_shows_the_plane_it_reaches() -> void:
 	view.flush()
 	state.ingest(_Const.CH_ROOM_INFO, {"coords": [5.0, 5.0, upper_z]})
 
-	_expect(view.chunk_node(Vector2i.ZERO, 1).visible, "a climb shows plane 1")
-	_expect(view.chunk_node(Vector2i.ZERO, 0).visible, "and the ground below")
+	_expect(_drawn(view.chunk_node(Vector2i.ZERO, 1)), "a climb shows plane 1")
+	_expect(_drawn(view.chunk_node(Vector2i.ZERO, 0)), "and the ground below")
 	view.queue_free()
 
 
@@ -431,6 +479,16 @@ func _bound() -> Array:
 	view.bind(state)
 
 	return [state, view]
+
+
+## True when the camera draws `node`. A hidden plane stays in the scene and
+## casts its shadow only.
+func _drawn(node: GeometryInstance3D) -> bool:
+	return node.visible and not _shadow_only(node)
+
+
+func _shadow_only(node: GeometryInstance3D) -> bool:
+	return node.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 
 
 func _payload(chunk: ChunkFile) -> Dictionary:

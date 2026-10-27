@@ -98,9 +98,9 @@ func rows_for(panel_key: String) -> Array:
 ##
 ## Groups are handed to the view SEPARATELY from the scalar rows and drawn
 ## after them, regardless of where the field fell among its scalar siblings —
-## see [SummaryView._add_panel]. A panel mixing both is real (Combat Readiness
-## does today), and clustering every boxed group at the end of its panel reads
-## better than breaking the scalar grid apart around it.
+## see [SummaryView._add_panel]. A panel can mix both, as Combat Readiness did
+## until 10/22/2026. The boxed groups go at the end of the panel. That reads
+## better than a scalar grid broken apart around each group.
 func groups_for(panel_key: String) -> Array:
 	var data: Dictionary = panels.get(panel_key, {})
 	var groups: Array = []

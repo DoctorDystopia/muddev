@@ -258,6 +258,47 @@ def find_mergeable(candidates, obj):
     return None
 
 
+def is_one_item(objs) -> bool:
+    """
+    Purpose: Answer whether several objects are all copies of one item, so
+             that a bare name which finds all of them names one thing.
+
+    Entry:
+        objs is any iterable of Evennia Objects. None entries count as a
+        different item.
+
+    Exit/Returns:
+        Returns True when objs is not empty and every object has the same key,
+        ignoring case. Returns False otherwise.
+
+    Module Globals:
+        None
+
+    Methodology:
+        Compares the key that is_mergeable compares, never the display name.
+        BaseItem.get_display_name adds the quantity to a stack, so two credit
+        stacks of 23 and 46 have two display names and one key.
+
+    Notes/References:
+        commands/get_cmds.py and commands/drop_cmds.py use this to choose one
+        copy when a name finds several.
+
+    Author: Nick Hobar
+    Creation date: 10/22/2026
+    """
+    keys = set()
+
+    for obj in objs:
+        if obj is None:
+            return False
+
+        keys.add(_normalized_key(obj))
+
+    one_key = len(keys) == 1
+
+    return one_key
+
+
 def available_units(items) -> int:
     """
     Purpose: Total the units held across a run of interchangeable objects.

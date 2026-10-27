@@ -45,5 +45,6 @@
 			"sun_energy": 1.0
 		}
 	},
-	"format": 1
+	"format": 1,
+	"shadow_minimum": 0.3
 }

@@ -11,7 +11,8 @@ extends Node
 ##    writer leaves out an action with no clip, and a stance with no action.
 ## 2. The reader refuses a file with a bad form, and a newer format.
 ## 3. An action takes the clip of its stance, then the clip of the default
-##    clip set, then no clip.
+##    clip set, then no clip. An attack action with no clip takes the clip
+##    of `attack` (10/25/2026).
 ## 4. The first worn item whose tool type has a stance decides the stance
 ##    of a figure.
 ## 5. The item catalog gives each tool type, and the tool types of an
@@ -114,6 +115,22 @@ func _an_action_takes_its_clip_in_order() -> void:
 		== PackedStringArray(["idle", "spear_thrust", "spear_walk", "walk"]),
 		"the table names each clip one time, in sorted order")
 
+	var swing := FigureStances.ATTACK_PREFIX + "two_hands_stab"
+	var with_swing := FigureStances.from_data({"format": 1,
+		"default": {"attack": "slash", swing: "thrust"}})
+
+	_expect(with_swing.attack_clip_for("", swing) == "thrust",
+		"an attack action with a clip of its own takes it")
+	_expect(table.attack_clip_for("spear", swing) == "spear_thrust"
+		and with_swing.attack_clip_for("", FigureStances.ATTACK_PREFIX + "unarmed_crush") == "slash",
+		"an attack action with no clip of its own takes the clip of attack")
+	_expect(table.attack_clip_for("", swing).is_empty(),
+		"with no clip of attack either, an attack action has no clip")
+	_expect(FigureStances.is_attack_action(swing)
+		and not FigureStances.is_attack_action(FigureStances.ACTION_ATTACK)
+		and not FigureStances.is_attack_action(FigureStances.ACTION_WALK),
+		"an attack action of the server starts with the attack prefix")
+
 
 func _the_first_item_with_a_stance_decides() -> void:
 	var table := _table()
@@ -137,9 +154,16 @@ func _the_catalog_gives_the_tool_types() -> void:
 			{"key": "wood_spear", "name": "wood spear", "slot": "main_hand",
 				"tool_type": "spear", "tier": 0, "family": "weapon"},
 			{"key": "charm", "name": "charm", "slot": "neck", "tool_type": "", "tier": 0,
-				"family": "generic"}]})
+				"family": "generic"}],
+		"attack_actions": ["attack_unarmed_crush", "attack_one_hand_stab"]})
 
 	_expect(catalog.error.is_empty(), "the catalog reads: " + catalog.error)
+	_expect(catalog.attack_actions()
+		== PackedStringArray(["attack_one_hand_stab", "attack_unarmed_crush"]),
+		"the catalog gives each attack action, in sorted order")
+	_expect(FigureCatalog.from_data({"format": 1, "slots": [], "items": [],
+		"attack_actions": "attack"}).error.contains("attack_actions"),
+		"a catalog whose attack actions are no list does not read")
 	_expect(catalog.tool_types() == PackedStringArray(["helmet", "spear"]),
 		"the catalog gives each tool type one time, in sorted order")
 	_expect(catalog.tool_type_of("iron_spear") == "spear" and catalog.tool_type_of("charm").is_empty()

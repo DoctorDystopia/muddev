@@ -44,13 +44,15 @@ extends VBoxContainer
 
 signal load_requested(centre: Vector2i, plane: int)
 signal plane_requested(plane: int)
+signal block_side_requested(side: int)
 signal tile_requested(tile: Vector2i)
 signal save_requested
 signal revert_requested
 signal noise_fill_requested
 signal overlays_changed
 signal selection_action(action: String)
-signal selection_edited(kind: String, rotation: int, text: String, look: Dictionary)
+signal selection_edited(kind: String, rotation: int, text: String, look: Dictionary,
+	spawn: Dictionary)
 signal object_chosen(thing: Dictionary)
 signal check_requested
 signal finding_chosen(finding: Dictionary)
@@ -182,6 +184,7 @@ var _clear_workbench := Button.new()
 # The block strip
 var _centre_x := SpinBox.new()
 var _centre_y := SpinBox.new()
+var _block_side := SpinBox.new()
 var _plane := SpinBox.new()
 var _go_x := SpinBox.new()
 var _go_y := SpinBox.new()
@@ -195,6 +198,7 @@ var _kind := OptionButton.new()
 var _rotation := SpinBox.new()
 var _text := LineEdit.new()
 var _variant := OptionButton.new()
+var _spawn := SpawnFields.new()
 var _flag_boxes: Array[CheckBox] = []
 var _seed := SpinBox.new()
 var _frequency := SpinBox.new()
@@ -213,7 +217,12 @@ var _sel_variant := OptionButton.new()
 var _sel_scale := SpinBox.new()
 var _sel_turn: HBoxContainer
 var _sel_offset: HBoxContainer
+var _sel_spawn := SpawnFields.new()
 var _sel_rows: Array[Control] = []
+
+## The label and the fields of the spawn of the selection. They show for a
+## selected item spawn only.
+var _sel_spawn_rows: Array[Control] = []
 
 ## The variant keys of the model of a kind: `func(kind: String) ->
 ## PackedStringArray`. The plugin gives it, from the served tree of the
@@ -254,6 +263,7 @@ var _tables := _TablesPanel.new()
 var _tables_page: Control
 var _confirm := ConfirmationDialog.new()
 var _confirm_action := Callable()
+var _confirm_cancel := Callable()
 var _status := Label.new()
 
 
@@ -284,6 +294,9 @@ func _init() -> void:
 	_confirm.confirmed.connect(func() -> void:
 		if _confirm_action.is_valid():
 			_confirm_action.call())
+	_confirm.canceled.connect(func() -> void:
+		if _confirm_cancel.is_valid():
+			_confirm_cancel.call())
 	add_child(_confirm)
 	_load_noise_settings()
 	_load_session()
@@ -343,6 +356,12 @@ func object_text() -> String:
 ## The look of a new object: its variant choice, or `{}` for the base.
 func object_look() -> Dictionary:
 	return _look_with_variant({}, _variant)
+
+
+## The spawn of a new item spawn, from the Item spawn fields (10/21/2026).
+## The plugin gives it to an item spawn kind only.
+func object_spawn() -> Dictionary:
+	return _spawn.spawn()
 
 
 ## Fill a Variant list for `kind`: Base, Any, then each variant of the
@@ -468,6 +487,15 @@ func refresh_tables(rename := {}, select := "") -> void:
 	_Fields.refill(_sel_kind, TileTables.object_kinds().keys(), follow)
 	_refill_variants(_variant, kind())
 	_refill_variants(_sel_variant, _Fields.text_of(_sel_kind))
+	_show_tool_options()
+
+
+## Read the item list of the game again, and fill both Item lists from it.
+## The plugin calls it after the client export writes the list.
+func refresh_items() -> void:
+	SpawnItems.forget()
+	_spawn.refill_items()
+	_sel_spawn.refill_items()
 
 
 ## True while the Build tab shows.
@@ -490,9 +518,18 @@ func paint_hint(plane: int) -> String:
 		Tool.FLOOR, Tool.AREA:
 			line = _paint_value_hint()
 		Tool.OBJECT:
-			line = line % [kind(), object_rotation()]
+			line = line % [_object_hint_kind(), object_rotation()]
 
 	return line + "\n" + KEYS_HINT % plane
+
+
+## The kind in the hint of the Object tool. An item spawn names its spawn
+## too, so the author sees the item before the click.
+func _object_hint_kind() -> String:
+	if TerrainChecks.takes_spawn(kind()):
+		return "%s (%s)" % [kind(), TerrainWorld.spawn_label(object_spawn())]
+
+	return kind()
 
 
 ## The hint of the Floor brush or the Area brush: the value, or the
@@ -518,10 +555,18 @@ func pick_area(picked: String) -> void:
 	_build.values.pick_area(picked)
 
 
-func set_block(centre: Vector2i, plane: int) -> void:
+func set_block(centre: Vector2i, plane: int, side: int = -1) -> void:
 	_centre_x.set_value_no_signal(centre.x)
 	_centre_y.set_value_no_signal(centre.y)
 	_plane.set_value_no_signal(plane)
+
+	if side > 0:
+		_block_side.set_value_no_signal(side)
+
+
+## How many chunks the author wants on each side of the block.
+func block_side() -> int:
+	return int(_block_side.value)
 
 
 func set_status(text: String) -> void:
@@ -564,12 +609,18 @@ func set_objects(things: Array[Dictionary]) -> void:
 
 
 ## One row of the object list. A look shows as its text, so a filter on
-## a variant key or on "scale" finds the row.
+## a variant key or on "scale" finds the row. A spawn shows its item, so a
+## filter on an item key finds each spawn of it.
 static func describe_object(thing: Dictionary) -> String:
 	var line := "%s  %s  r%d" % [thing["kind"], thing["tile"], thing["rotation"]]
 
 	if not thing["text"].is_empty():
 		line += "  \"%s\"" % thing["text"]
+
+	var spawn: Dictionary = thing.get("spawn", {})
+
+	if not spawn.is_empty():
+		line += "  " + TerrainWorld.spawn_label(spawn)
 
 	var look: Dictionary = thing.get("look", {})
 
@@ -599,13 +650,19 @@ static func listed_objects(things: Array[Dictionary], show_decor: bool,
 
 
 ## Show the selected object, and whether it leads anywhere. The fields take
-## its kind, its rotation, and its text, and send nothing.
+## its kind, its rotation, its text, its look, and its spawn, and send
+## nothing.
 func set_selection(selected: Dictionary, link_end: Dictionary) -> void:
 	for button: Button in _selection_buttons:
 		button.disabled = selected.is_empty()
 
 	for control: Control in _sel_rows:
 		control.visible = not selected.is_empty()
+
+	var spawned := not selected.is_empty() and TerrainChecks.takes_spawn(selected["kind"])
+
+	for control: Control in _sel_spawn_rows:
+		control.visible = spawned
 
 	_follow.disabled = link_end.is_empty()
 
@@ -630,6 +687,7 @@ func set_selection(selected: Dictionary, link_end: Dictionary) -> void:
 	_sel_scale.set_value_no_signal(look.get(_Const.LOOK_SCALE_KEY, _Const.LOOK_SCALE_UNIT))
 	_Fields.set_axes(_sel_turn, look.get(_Const.LOOK_TURN_KEY, [0, 0, 0]))
 	_Fields.set_axes(_sel_offset, look.get(_Const.LOOK_OFFSET_KEY, [0, 0, 0]))
+	_sel_spawn.set_spawn(selected.get("spawn", {}))
 	_filling = false
 
 
@@ -689,10 +747,11 @@ func step_radius(steps: int) -> void:
 	_radius.value = _radius.value + steps * RADIUS_STEP
 
 
-## Ask `text`, and run `action` on Yes.
-func confirm(text: String, action: Callable) -> void:
+## Ask `text`, and run `action` on Yes. `on_cancel` runs on No.
+func confirm(text: String, action: Callable, on_cancel: Callable = Callable()) -> void:
 	_confirm.dialog_text = text
 	_confirm_action = action
+	_confirm_cancel = on_cancel
 	_confirm.popup_centered()
 
 
@@ -724,8 +783,14 @@ func _build_block_strip() -> void:
 	var strip := HFlowContainer.new()
 
 	_pair(strip, "Chunk", _Fields.spin(_centre_x, -4096.0, 4096.0, 1.0, 0.0),
-		"The centre chunk of the block: the south-west chunk of the middle four.")
+		"The centre chunk of the block. With an even side, the south-west of the middle four.")
 	strip.add_child(_Fields.spin(_centre_y, -4096.0, 4096.0, 1.0, 0.0))
+	_pair(strip, "Side", _Fields.spin(_block_side, TerrainWorld.BLOCK_SIDE_MIN,
+		TerrainWorld.BLOCK_SIDE_MAX, 1.0, TerrainWorld.BLOCK_SIDE_DEFAULT),
+		"Chunks on each side of the block. A larger block costs more to load and to draw.")
+	_block_side.value_changed.connect(func(value: float) -> void:
+		_save_session()
+		block_side_requested.emit(int(value)))
 	strip.add_child(_Fields.button("Load", func() -> void:
 		load_requested.emit(_centre(), int(_plane.value)),
 		"Load the block around the chunk. A move saves the old block first."))
@@ -804,10 +869,17 @@ func _build_object_option_rows() -> void:
 	_text.placeholder_text = "The words of a new %s" % _Const.OBJECT_SIGNPOST_KIND
 	_option_row([Tool.OBJECT], "Sign text", _text, "A sign kind takes these words.")
 	_refill_variants(_variant, kind())
-	_kind.item_selected.connect(func(_index: int) -> void: _refill_variants(_variant, kind()))
+	_kind.item_selected.connect(func(_index: int) -> void:
+		_refill_variants(_variant, kind())
+		_show_tool_options()
+		_save_session())
 	_option_row([Tool.OBJECT], "Variant", _variant,
 		"The model that a new object draws: the base, any variant by a hash of the tile, "
 		+ "or one variant. The Objects tab edits the rest of the look.")
+	_spawn.changed.connect(_save_session)
+	_option_row([Tool.OBJECT], "Item spawn", _spawn,
+		"The item, the quantity, and the respawn of a new item spawn (10/21/2026).",
+		func() -> bool: return TerrainChecks.takes_spawn(kind()))
 
 
 func _build_flag_rows() -> void:
@@ -843,22 +915,26 @@ func _build_noise_rows() -> void:
 	_option([Tool.NOISE], [fill])
 
 
-## Register `controls` as the options of `tools`.
-func _option(tools: Array, controls: Array) -> void:
-	_options.append({"controls": controls, "tools": tools})
+## Register `controls` as the options of `tools`. The controls show only
+## when `when` gives true too. An empty Callable is no test. The spawn row
+## uses it: it shows for an item spawn kind only.
+func _option(tools: Array, controls: Array, when := Callable()) -> void:
+	_options.append({"controls": controls, "tools": tools, "when": when})
 
 
-func _option_row(tools: Array, label_text: String, control: Control, tip := "") -> void:
+func _option_row(tools: Array, label_text: String, control: Control, tip := "",
+		when := Callable()) -> void:
 	var label := _Fields.row(_page, label_text, control, tip)
 
-	_option(tools, [label, control])
+	_option(tools, [label, control], when)
 
 
 func _show_tool_options() -> void:
 	var tool_index := current_tool()
 
 	for option: Dictionary in _options:
-		var shown: bool = tool_index in option["tools"]
+		var when: Callable = option["when"]
+		var shown: bool = tool_index in option["tools"] and (not when.is_valid() or when.call())
 
 		for control: Control in option["controls"]:
 			control.visible = shown
@@ -906,6 +982,10 @@ func _build_selection_fields() -> void:
 	_sel_rows.append(_Fields.row(_page, "Sign text", _sel_text,
 		"The words of a sign. Enter applies them."))
 	_sel_rows.append(_sel_text)
+	_sel_spawn.changed.connect(_send_selection)
+	_sel_spawn_rows.append(_Fields.row(_page, "Item spawn", _sel_spawn,
+		"The item, the quantity, and the respawn of this item spawn (10/21/2026)."))
+	_sel_spawn_rows.append(_sel_spawn)
 	_build_look_fields()
 
 
@@ -957,7 +1037,7 @@ func _selection_look() -> Dictionary:
 func _send_selection() -> void:
 	if not _filling:
 		selection_edited.emit(_Fields.text_of(_sel_kind), int(_sel_rotation.value),
-			_sel_text.text.strip_edges(), _selection_look())
+			_sel_text.text.strip_edges(), _selection_look(), _sel_spawn.spawn())
 
 
 func _build_selection_buttons() -> void:
@@ -1109,12 +1189,14 @@ func _load_session() -> void:
 	_radius.value = _Session.read(_SECTION, "radius", _radius.value)
 	_shape.select(_Session.read(_SECTION, "shape", TerrainBrushes.Shape.CIRCLE))
 	_strength.value = _Session.read(_SECTION, "strength", int(_strength.value))
+	_block_side.set_value_no_signal(_Session.read(_SECTION, "block_side", block_side()))
 	_protect.button_pressed = _Session.read(_SECTION, "protect", false)
 	_show_flags.button_pressed = _Session.read(_SECTION, "show_flags", true)
 	_show_areas.button_pressed = _Session.read(_SECTION, "show_areas", false)
 	_show_links.button_pressed = _Session.read(_SECTION, "show_links", true)
 	_show_lower.button_pressed = _Session.read(_SECTION, "show_lower", true)
 	_upper.select(_Session.read(_SECTION, "upper_planes", 0))
+	_spawn.set_spawn(_Session.read(_SECTION, "spawn", {}))
 
 	for spin: SpinBox in [_radius, _strength]:
 		spin.value_changed.connect(func(_value: float) -> void: _save_session())
@@ -1132,10 +1214,12 @@ func _save_session() -> void:
 		"radius": _radius.value,
 		"shape": _shape.selected,
 		"strength": int(_strength.value),
+		"block_side": block_side(),
 		"protect": _protect.button_pressed,
 		"show_flags": _show_flags.button_pressed,
 		"show_areas": _show_areas.button_pressed,
 		"show_links": _show_links.button_pressed,
 		"show_lower": _show_lower.button_pressed,
 		"upper_planes": _upper.selected,
+		"spawn": _spawn.spawn(),
 	})

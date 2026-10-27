@@ -196,16 +196,16 @@ class TestIsSingleStackedGroupForDrop(EvenniaCommandTest):
         first = item_def.create(location=self.char1)
         second = item_def.create(location=self.char1)
 
-        self.assertTrue(_is_single_stacked_group(self.char1, [first, second]))
+        self.assertTrue(_is_single_stacked_group([first, second]))
 
     def test_false_for_a_single_match(self):
         item_def = ITEM_DB[DUPLICATE_DROP_KEY]
         only = item_def.create(location=self.char1)
 
-        self.assertFalse(_is_single_stacked_group(self.char1, [only]))
+        self.assertFalse(_is_single_stacked_group([only]))
 
     def test_false_for_distinct_items(self):
         chunk = ITEM_DB[DUPLICATE_DROP_KEY].create(location=self.char1)
         hammer = ITEM_DB[NON_STACKABLE_KEY].create(location=self.char1)
 
-        self.assertFalse(_is_single_stacked_group(self.char1, [chunk, hammer]))
+        self.assertFalse(_is_single_stacked_group([chunk, hammer]))

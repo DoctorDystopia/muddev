@@ -63,10 +63,10 @@ func release() -> void:
 	_resolver = null
 
 
-## True when `kind` draws a model here: an entity kind, or a kind with
-## scenery that is not a primitive.
+## True when `kind` draws a model here: an entity kind, an item spawn, or a
+## kind with scenery that is not a primitive.
 static func has_model(kind: String) -> bool:
-	if _Const.OBJECT_KIND_PREVIEW.has(kind):
+	if _Const.OBJECT_KIND_PREVIEW.has(kind) or TerrainChecks.takes_spawn(kind):
 		return true
 
 	var scenery: String = TileTables.scenery_of(kind)
@@ -74,10 +74,10 @@ static func has_model(kind: String) -> bool:
 	return not scenery.is_empty() and not scenery in _Const.SCENERY_PRIMITIVES
 
 
-## The model of one object (`{kind, x, y, rotation, look}` at world tiles),
-## on the ground of its tile, turned as its object, and scaled, tilted, and
-## nudged by its look (10/16/2026). Null for a kind with no model, and for
-## scenery with no served model.
+## The model of one object (`{kind, x, y, rotation, look, spawn}` at world
+## tiles), on the ground of its tile, turned as its object, and scaled,
+## tilted, and nudged by its look (10/16/2026). Null for a kind with no
+## model, and for scenery with no served model.
 func stand(chunks: ChunkSet, thing: Dictionary) -> Node3D:
 	var kind: String = thing["kind"]
 
@@ -86,16 +86,16 @@ func stand(chunks: ChunkSet, thing: Dictionary) -> Node3D:
 
 	var model: Node3D = null
 	var size := TerrainView.SCENERY_SCALE
-	var preview: Array = _Const.OBJECT_KIND_PREVIEW.get(kind, [])
+	var preview: Array = preview_of(kind, thing.get("spawn", {}))
 	var look: Dictionary = thing.get("look", {})
 	var tile := Vector2i(thing["x"], thing["y"])
-	var seed := ObjectLook.seed_of(tile, chunks.plane)
+	var variant_seed := ObjectLook.seed_of(tile, chunks.plane)
 
 	if not preview.is_empty():
-		model = _resolver.resolve_entity(preview[0], preview[1], look, seed)
+		model = _resolver.resolve_entity(preview[0], preview[1], look, variant_seed)
 		size = EntityPool.ENTITY_SCALE
 	else:
-		model = _resolver.resolve_scenery(TileTables.scenery_of(kind), look, seed)
+		model = _resolver.resolve_scenery(TileTables.scenery_of(kind), look, variant_seed)
 
 	if model == null:
 		return null
@@ -106,6 +106,20 @@ func stand(chunks: ChunkSet, thing: Dictionary) -> Node3D:
 	model.position = base + Vector3.UP * ObjectLook.rest_lift(model) + ObjectLook.offset_of(look)
 
 	return model
+
+
+## The entity of an object: `[asset key, family]`, or an empty Array for an
+## object that stands no entity. An item spawn draws its item as the client
+## draws an item on the ground: the item key and the family of the item
+## ([SpawnItems], 10/21/2026). Every other kind has its
+## [code]OBJECT_KIND_PREVIEW[/code] row.
+static func preview_of(kind: String, spawn: Dictionary) -> Array:
+	if not spawn.is_empty():
+		var item: String = spawn[_Const.SPAWN_ITEM_KEY]
+
+		return [item, SpawnItems.game().family(item)]
+
+	return _Const.OBJECT_KIND_PREVIEW.get(kind, [])
 
 
 ## The model key of a kind: the entity of a kind with a preview, or its

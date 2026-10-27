@@ -49,6 +49,15 @@ extends Control
 ## (Nick, 09/28/2026). The walk feed says whether run is on, and the button
 ## shows that. A press sends the run command and puts the button back to the
 ## server fact until the feed answers.
+##
+## ## The position readout (10/21/2026)
+##
+## The XY button sits in the top-right corner of the map square, across from
+## Run. Thus, the strip stays at three buttons. With the button on, the pane
+## writes the tile and the plane of the player. The words stand at the bottom
+## of the map square. The world map has the same button. Both buttons write
+## [member ClientSettings.show_coordinates]. [method coordinates_of] owns the
+## words, so the two maps cannot differ.
 
 ## Emitted with a whole command a telnet player could have typed. The server
 ## named it, or spelled its template. Same contract as a clicked tile in the
@@ -91,6 +100,21 @@ const COLOR_FLAG := Color(0.93, 0.16, 0.16)
 const COLOR_FLAG_POLE := Color(0.95, 0.95, 0.95)
 const COLOR_PATH := Color(1.0, 0.95, 0.55, 0.75)
 const COLOR_DOT_OUTLINE := Color(0, 0, 0, 0.8)
+const COLOR_COORDINATES := Color(0.95, 0.95, 0.95)
+const COLOR_COORDINATES_OUTLINE := Color(0, 0, 0, 0.85)
+
+## The XY button, and the words of the position readout: the tile, then the
+## plane. The world map uses all three.
+const COORDINATES_BUTTON_TEXT := "XY"
+const COORDINATES_TIP := "Show your coordinates"
+const COORDINATES_TEMPLATE := "(%d, %d), plane %d"
+
+## The look of the position readout, in pixels. A fixed size, as for the area
+## names on the world map. At the largest font, a long position is wider than
+## the pane.
+const COORDINATES_FONT_SIZE := 13
+const COORDINATES_OUTLINE := 4
+const COORDINATES_INSET := 3.0
 
 const MARKER_WIDTH := 2.0
 const PATH_WIDTH := 2.0
@@ -114,6 +138,10 @@ var _radius := ClientSettings.DEFAULT_MINIMAP_RADIUS
 ## Whether the walk path is drawn. Without settings, the shipped default.
 var _show_path := ClientSettings.DEFAULT_SHOW_WALK_PATH
 
+## Whether the pane draws the position readout. Without settings, the shipped
+## default.
+var _show_coordinates := ClientSettings.DEFAULT_SHOW_COORDINATES
+
 ## ChunkFile -> the ImageTexture of its ground. See [method _texture_of].
 var _chunk_textures := {}
 
@@ -126,6 +154,8 @@ var _zoom_out_button: Button
 var _zoom_in_button: Button
 var _world_map_button: Button
 var _run_button: Button
+var _coordinates_button: Button
+var _strip: HBoxContainer
 
 
 func _init() -> void:
@@ -139,6 +169,7 @@ func _init() -> void:
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 	_build_strip()
+	_build_coordinates_button()
 
 
 ## Bind to the world model and follow it.
@@ -167,7 +198,7 @@ func bind_entities(roster: EntityRoster) -> void:
 	queue_redraw()
 
 
-## Read the zoom and the path toggle from the settings, and write them back
+## Read the zoom and the two toggles from the settings, and write them back
 ## when the player uses the buttons.
 func bind_settings(settings: ClientSettings) -> void:
 	_settings = settings
@@ -178,7 +209,9 @@ func bind_settings(settings: ClientSettings) -> void:
 func _apply_settings() -> void:
 	_radius = nearest_zoom(_settings.minimap_radius)
 	_show_path = _settings.show_walk_path
+	_show_coordinates = _settings.show_coordinates
 	_sync_zoom_buttons()
+	_sync_coordinates_button()
 	queue_redraw()
 
 
@@ -197,6 +230,11 @@ func _build_strip() -> void:
 	strip.alignment = BoxContainer.ALIGNMENT_CENTER
 	strip.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(strip)
+
+	# The position readout stands on the top of the strip. See
+	# [method _draw_coordinates].
+	_strip = strip
+	strip.item_rect_changed.connect(queue_redraw)
 
 	_zoom_out_button = _strip_button(strip, "-", "Zoom out")
 	_zoom_out_button.pressed.connect(zoom_out)
@@ -253,6 +291,69 @@ func _sync_run_button() -> void:
 ## True while the Run button shows run on.
 func run_shown() -> bool:
 	return _run_button.button_pressed
+
+
+# ─── The position readout ────────────────────────────────────────────────────
+
+func _build_coordinates_button() -> void:
+	_coordinates_button = Button.new()
+	_coordinates_button.name = "Coordinates"
+	_coordinates_button.text = COORDINATES_BUTTON_TEXT
+	_coordinates_button.tooltip_text = COORDINATES_TIP
+	_coordinates_button.toggle_mode = true
+	_coordinates_button.focus_mode = Control.FOCUS_NONE
+
+	# Held to the right edge, so it stays in the corner when the pane grows.
+	# A zero width grows to the minimum size of the button, to the left.
+	_coordinates_button.anchor_left = 1.0
+	_coordinates_button.anchor_right = 1.0
+	_coordinates_button.offset_left = -PADDING
+	_coordinates_button.offset_right = -PADDING
+	_coordinates_button.offset_top = PADDING
+	_coordinates_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	_coordinates_button.toggled.connect(set_coordinates_shown)
+	add_child(_coordinates_button)
+
+	_sync_coordinates_button()
+
+
+## The words of the position of the player: the tile, then the plane. Empty
+## off the tile world. The world map shows the same words.
+static func coordinates_of(state: WorldState) -> String:
+	if state == null or not state.on_tile_world():
+		return ""
+
+	return COORDINATES_TEMPLATE % [
+		state.current_cell.x, state.current_cell.y, state.current_plane]
+
+
+## The position readout that the pane draws now. Empty while the XY button
+## is off. Public, so a test can read it with no canvas.
+func coordinates_text() -> String:
+	if not _show_coordinates:
+		return ""
+
+	return coordinates_of(_state)
+
+
+## True while the XY button is on.
+func coordinates_shown() -> bool:
+	return _show_coordinates
+
+
+## Show or hide the position readout, as the XY button does. With settings,
+## the settings keep the choice, and the world map follows it.
+func set_coordinates_shown(shown: bool) -> void:
+	if _settings != null:
+		_settings.set_show_coordinates(shown)
+
+	_show_coordinates = shown
+	_sync_coordinates_button()
+	queue_redraw()
+
+
+func _sync_coordinates_button() -> void:
+	_coordinates_button.set_pressed_no_signal(_show_coordinates)
 
 
 # ─── Zoom ────────────────────────────────────────────────────────────────────
@@ -330,6 +431,7 @@ func _draw() -> void:
 
 	_draw_self(cell_px, origin)
 	_draw_flag(cell_px, origin)
+	_draw_coordinates(cell_px, origin)
 
 
 ## Draw the part of each chunk image that the window covers.
@@ -474,6 +576,29 @@ func _draw_walk_path(cell_px: float, origin: Vector2) -> void:
 				_centre_of(tile, cell_px, origin), COLOR_PATH, PATH_WIDTH)
 
 		previous = tile
+
+
+## The position readout, centred at the bottom of the window, over the
+## ground. A large font makes the strip grow up over the map. Then the words
+## stand on the top of the strip, not under its buttons.
+func _draw_coordinates(cell_px: float, origin: Vector2) -> void:
+	var text := coordinates_text()
+
+	if text.is_empty():
+		return
+
+	var font := get_theme_default_font()
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		COORDINATES_FONT_SIZE).x
+	var window_bottom := origin.y + float(window_side()) * cell_px
+	var bottom := minf(window_bottom, _strip.position.y)
+	var at := Vector2((size.x - width) * 0.5,
+		bottom - COORDINATES_INSET - font.get_descent(COORDINATES_FONT_SIZE))
+
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		COORDINATES_FONT_SIZE, COORDINATES_OUTLINE, COLOR_COORDINATES_OUTLINE)
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		COORDINATES_FONT_SIZE, COLOR_COORDINATES)
 
 
 func _draw_cell_outline(cell: Vector2i, cell_px: float, origin: Vector2,

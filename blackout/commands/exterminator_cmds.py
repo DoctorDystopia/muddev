@@ -18,6 +18,7 @@ Description: The `task` command of the Exterminator skill.
 
 from evennia import CmdSet, Command
 
+from commands.command import turn_to
 from commands.constants import HELP_CATEGORY_PROGRESSION
 from systems.gameplay.exterminator import constants as ext_const
 from systems.gameplay.exterminator import service
@@ -189,6 +190,7 @@ class CmdTask(Command):
             self._say(ext_const.MSG_NO_PRECEPTOR_HERE)
             return
 
+        turn_to(self.caller, preceptor_npc)
         lines = service.take_task(self.caller, preceptor_npc)
         self._say("\n".join(lines))
 
@@ -207,6 +209,7 @@ class CmdTask(Command):
             self._say(ext_const.MSG_NO_PRECEPTOR_HERE)
             return
 
+        turn_to(self.caller, preceptor_npc)
         writ_line = service.give_writ(self.caller, preceptor_npc)
         self._say(writ_line)
 

@@ -135,6 +135,7 @@ func _enter_tree() -> void:
 	_dock = TerrainDock.new()
 	_dock.load_requested.connect(_on_load_requested)
 	_dock.plane_requested.connect(_on_plane_requested)
+	_dock.block_side_requested.connect(_on_block_side_requested)
 	_dock.tile_requested.connect(_on_tile_requested)
 	_dock.save_requested.connect(_on_save_requested)
 	_dock.revert_requested.connect(_on_revert_requested)
@@ -188,7 +189,9 @@ func _edit(object: Object) -> void:
 	_world.plane_changed.connect(_on_plane_changed)
 	_dock.variants_for = _world.variants_for
 	_dock.refresh_tables()
+	_dock.refresh_items()
 	_build.world = _world
+	_world.block_side = _dock.block_side()
 	_dock.set_workbench(not _world.writes_world())
 	_on_overlays_changed()
 	_refresh_dock()
@@ -279,6 +282,29 @@ func _on_load_requested(centre: Vector2i, plane: int) -> void:
 func _on_plane_requested(plane: int) -> void:
 	if _world != null:
 		_world.plane = plane
+
+
+## The Side field of the block strip. The same rule as [method _move_block]
+## for the dialog: a new side loads the block again and drops the undo
+## history. A No puts the old side back in the field.
+func _on_block_side_requested(side: int) -> void:
+	if _world == null:
+		return
+
+	if not _world.has_unsaved_changes():
+		_world.block_side = side
+		return
+
+	var count := _world.unsaved_count()
+	var keep := func() -> void:
+		_dock.set_block(_world.centre_chunk, _world.plane, _world.block_side)
+
+	_dock.confirm("Save %d changed chunk file(s) and drop the undo history? " % count
+		+ "Undo cannot cross a change of the block side.", func() -> void:
+			var saved := _save(_world)
+
+			_world.block_side = side
+			_dock.set_status(saved), keep)
 
 
 ## "Go to tile".
@@ -402,8 +428,8 @@ func _on_tab_changed() -> void:
 ## seam faults. The status box gets one line, so the next stroke replaces
 ## only that line.
 func _report_block() -> void:
-	var lines := PackedStringArray(["Block around chunk %s, plane %d."
-		% [_world.centre_chunk, _world.plane]])
+	var lines := PackedStringArray(["Block of %d x %d chunks around chunk %s, plane %d."
+		% [_world.block_side, _world.block_side, _world.centre_chunk, _world.plane]])
 
 	if not _world.writes_world():
 		lines.insert(0, "The structure workbench: scratch chunk files in %s. "
@@ -425,7 +451,7 @@ func _report_block() -> void:
 ## The block, the objects, the selection, the unsaved count, and the sync
 ## state in the dock.
 func _refresh_dock() -> void:
-	_dock.set_block(_world.centre_chunk, _world.plane)
+	_dock.set_block(_world.centre_chunk, _world.plane, _world.block_side)
 	_dock.set_objects(_world.objects_in_block())
 	_dock.set_selection(_world.selected, _world.selected_link_end())
 	_dock.set_unsaved(_world.unsaved_count())
@@ -874,17 +900,19 @@ func _object_click(point: Vector2) -> void:
 		var last: Dictionary = here[here.size() - 1]
 
 		edit.remove_object(chunks, tile, last["kind"], last["rotation"], last["text"],
-			last["look"])
+			last["look"], last["spawn"])
 	else:
 		var text: Variant = _text_for(_dock.kind(), _dock.object_text())
+		var spawn: Variant = _spawn_for(_dock.kind(), _dock.object_spawn())
 
-		if text == null:
+		if text == null or spawn == null:
 			return
 
 		var look := _dock.object_look()
 
-		edit.add_object(chunks, tile, _dock.kind(), _dock.object_rotation(), text, look)
-		_world.select(tile, _dock.kind(), _dock.object_rotation(), text, look)
+		edit.add_object(chunks, tile, _dock.kind(), _dock.object_rotation(), text, look,
+			spawn)
+		_world.select(tile, _dock.kind(), _dock.object_rotation(), text, look, spawn)
 
 	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, "Object")
@@ -909,6 +937,46 @@ func _text_for(kind: String, words: String) -> Variant:
 		return null
 
 	return words
+
+
+## The spawn that an object of `kind` gets: `{}` for a kind with no spawn,
+## else `spawn` (10/21/2026). Null, with a status line, when an item spawn
+## would get no legal spawn. The reader refuses what
+## [method ChunkFile.spawn_problem] refuses, and "Check world" refuses what
+## [method _item_problem] refuses. Thus, the editor writes neither.
+func _spawn_for(kind: String, spawn: Dictionary) -> Variant:
+	if not TerrainChecks.takes_spawn(kind):
+		return {}
+
+	var problem := ChunkFile.spawn_problem(spawn)
+
+	if problem.is_empty():
+		problem = _item_problem(spawn)
+
+	if not problem.is_empty():
+		_dock.set_status("Item spawn: " + problem)
+		return null
+
+	return ChunkFile.normal_spawn(spawn)
+
+
+## Why the item list refuses the item of `spawn`, or "". The rules of
+## `spawn_item` in [TerrainChecks], with the item list of the game.
+func _item_problem(spawn: Dictionary) -> String:
+	var items := SpawnItems.game()
+	var item: String = spawn[_Const.SPAWN_ITEM_KEY]
+
+	if not items.error.is_empty():
+		return items.error
+
+	if not items.has(item):
+		return "no item %s may spawn. Pick one in the Item list." % item
+
+	if ChunkFile.spawn_quantity(spawn)[1] > _Const.SPAWN_QUANTITY_UNIT \
+			and not items.stacks(item):
+		return "%s does not stack, so its quantity must be one." % item
+
+	return ""
 
 
 func _on_noise_fill_requested() -> void:
@@ -970,21 +1038,22 @@ func _end_drag(point: Variant) -> void:
 		return
 
 	_replace_selected(to, _world.selected["kind"], _world.selected["rotation"],
-		_world.selected["text"], _world.selected["look"], "Move object")
+		_world.selected["text"], _world.selected["look"], _world.selected["spawn"],
+		"Move object")
 
 
 ## Replace the selected object with one at `tile` of `kind`, `rotation`,
-## `text`, and `look`, as one undo entry, and select the new one.
+## `text`, `look`, and `spawn`, as one undo entry, and select the new one.
 func _replace_selected(tile: Vector2i, kind: String, rotation: int, text: String,
-		look: Dictionary, label: String) -> void:
+		look: Dictionary, spawn: Dictionary, label: String) -> void:
 	var chunks := _world.chunks
 	var edit := TerrainEdit.for_world(_world)
 	var old: Dictionary = _world.selected
 
 	edit.remove_object(chunks, old["tile"], old["kind"], old["rotation"], old["text"],
-		old["look"])
-	edit.add_object(chunks, tile, kind, rotation, text, look)
-	_world.select(tile, kind, rotation, text, look)
+		old["look"], old["spawn"])
+	edit.add_object(chunks, tile, kind, rotation, text, look, spawn)
+	_world.select(tile, kind, rotation, text, look, spawn)
 	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, label)
 
@@ -999,11 +1068,11 @@ func _on_selection_action(action: String) -> void:
 	match action:
 		TerrainDock.ACTION_TURN:
 			_replace_selected(chosen["tile"], chosen["kind"], (chosen["rotation"] + 1) % count,
-				chosen["text"], chosen["look"], "Turn object")
+				chosen["text"], chosen["look"], chosen["spawn"], "Turn object")
 		TerrainDock.ACTION_TURN_BACK:
 			_replace_selected(chosen["tile"], chosen["kind"],
 				posmod(chosen["rotation"] - 1, count), chosen["text"], chosen["look"],
-				"Turn object back")
+				chosen["spawn"], "Turn object back")
 		TerrainDock.ACTION_DELETE:
 			_delete_selected()
 		TerrainDock.ACTION_FOLLOW:
@@ -1011,19 +1080,21 @@ func _on_selection_action(action: String) -> void:
 
 
 ## The fields of the Objects tab changed: the kind, the rotation, the text,
-## or the look of the selected object. A sign keeps its words through a
-## change of the kind to another sign kind. A kind with no text drops them.
-## The reader refuses what [method ChunkFile.look_problem] refuses, so a bad
+## the look, or the spawn of the selected object. A sign keeps its words
+## through a change of the kind to another sign kind. A kind with no text
+## drops them. A kind with no spawn drops its spawn in the same way. The
+## reader refuses what [method ChunkFile.look_problem] refuses, so a bad
 ## look stops here with a status line.
 func _on_selection_edited(kind: String, rotation: int, text: String,
-		look: Dictionary) -> void:
+		look: Dictionary, spawn: Dictionary) -> void:
 	if _world == null or _world.selected.is_empty():
 		return
 
 	var chosen: Dictionary = _world.selected
 	var words: Variant = _text_for(kind, text if not text.is_empty() else chosen["text"])
+	var spawned: Variant = _spawn_for(kind, spawn)
 
-	if words == null:
+	if words == null or spawned == null:
 		return
 
 	if not look.is_empty():
@@ -1033,11 +1104,13 @@ func _on_selection_edited(kind: String, rotation: int, text: String,
 			_dock.set_status("Look: " + problem)
 			return
 
-	if kind == chosen["kind"] and rotation == chosen["rotation"] and words == chosen["text"] \
-			and ChunkFile.look_text(look) == ChunkFile.look_text(chosen["look"]):
+	var edited := {"kind": kind, "rotation": rotation, "text": words, "look": look,
+		"spawn": spawned}
+
+	if ChunkSet.same_object(edited, chosen):
 		return
 
-	_replace_selected(chosen["tile"], kind, rotation, words, look, "Edit object")
+	_replace_selected(chosen["tile"], kind, rotation, words, look, spawned, "Edit object")
 
 
 func _delete_selected() -> void:
@@ -1045,7 +1118,7 @@ func _delete_selected() -> void:
 	var edit := TerrainEdit.for_world(_world)
 
 	edit.remove_object(_world.chunks, chosen["tile"], chosen["kind"], chosen["rotation"],
-		chosen["text"], chosen["look"])
+		chosen["text"], chosen["look"], chosen["spawn"])
 	_world.clear_selection()
 	_world.queue_rebuild(edit.chunk_keys())
 	_commit(edit, "Delete object")
@@ -1077,7 +1150,16 @@ func _on_check_requested() -> void:
 
 	var errors := PackedStringArray()
 	var files := _world.world_chunk_files(errors)
-	var found := TerrainChecks.check_world(files)
+
+	# The item list may be new since the last check: the export writes it.
+	SpawnItems.forget()
+
+	var items := SpawnItems.game()
+
+	if not items.error.is_empty():
+		errors.append(items.error)
+
+	var found := TerrainChecks.check_world(files, items.stacking())
 
 	if not _world.writes_world():
 		found = TerrainChecks.for_workbench(found)
@@ -1146,6 +1228,7 @@ func _connect_look_panel() -> void:
 	look.palette_changed.connect(_on_palette_changed)
 	look.light_changed.connect(_on_light_changed)
 	look.area_look_changed.connect(_on_area_look_changed)
+	look.shadow_minimum_changed.connect(_on_shadow_minimum_changed)
 	look.preview_changed.connect(_on_preview_changed)
 	look.reset_requested.connect(_on_reset_palette_asked)
 	look.area_reset_requested.connect(_on_reset_area_asked)
@@ -1190,6 +1273,17 @@ func _on_area_look_changed(area: String) -> void:
 		_world.preview_look(AreaLook.look_for(area))
 
 	_dock.set_status("The look of the area %s changed: %s." % [area, AreaLook.PATH])
+
+
+## The shadow minimum of every area changed in the file. A preview follows,
+## because the sun of the preview carries it.
+func _on_shadow_minimum_changed() -> void:
+	var look := _dock.look_panel()
+
+	if _world != null and look.preview_on():
+		_world.preview_look(AreaLook.look_for(look.area()))
+
+	_dock.set_status("The shadow minimum of every area changed: %s." % AreaLook.PATH)
 
 
 ## The preview went on for `area`, or off.

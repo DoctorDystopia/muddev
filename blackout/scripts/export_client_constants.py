@@ -16,13 +16,18 @@ Description: Write the generated client constant modules to disk.
              because CLAUDE.md marks this whole directory import-unsafe and one
              safe file does not change how the directory should be treated.
 
-             It also writes the item catalog of the figure workbench
-             (systems/interface/statefeed/figure_catalog.py), which renders
-             the items of ITEM_DB that a character can equip.
+             It also writes two editor files and one pipeline file:
+
+             - figure_catalog.py: each item that a character can equip.
+             - spawn_items.py: each item that an item spawn may name.
+             - key_list.py: each asset key that the server names. The model
+               wizard reads it (assets/key_list.json).
+
+             The three modules are in systems/interface/statefeed/.
 
              Run it after changing any exported name in
-             systems/interface/statefeed/constants.py, or an ItemDef with a
-             use_slot:
+             systems/interface/statefeed/constants.py, an ItemDef, an NPC
+             def, or an object kind:
 
                  python scripts/export_client_constants.py
 
@@ -203,14 +208,16 @@ def _targets():
         Render each language clientexport declares and look up its
         destination. A language with no destination is a loud failure rather
         than a skip, because it means a client was added to the renderer and
-        nobody said where its file goes. Then add the item catalog of the
-        figure workbench, which has one destination and no language.
+        nobody said where its file goes. Then add three more files: the item
+        catalog, the item list, and the key list. Each one has one
+        destination and no language.
 
     Notes/References:
         Iterates clientexport.languages() rather than the path table, so the
         renderer stays the authority on what can be rendered.
     """
-    from systems.interface.statefeed import clientexport, figure_catalog
+    from systems.interface.statefeed import (clientexport, figure_catalog,
+                                             key_list, spawn_items)
 
     outputs = clientexport.output_paths()
     targets = []
@@ -226,6 +233,8 @@ def _targets():
         targets.append((path, clientexport.render(language)))
 
     targets.append((figure_catalog.output_path(), figure_catalog.render()))
+    targets.append((spawn_items.output_path(), spawn_items.render()))
+    targets.append((key_list.output_path(), key_list.render()))
 
     return targets
 

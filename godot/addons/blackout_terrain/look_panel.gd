@@ -18,6 +18,9 @@ extends VBoxContainer
 ## and the environment of the editor scene. The game draws the same row
 ## through the same routine, [method AreaLook.apply_to].
 ##
+## The shadow minimum is one field for every area, above the area list. It
+## is no field of an area row, so "Reset area" keeps it.
+##
 ## This panel makes no undo entry. The look file is the state, and the two
 ## Reset buttons give the fallback back.
 
@@ -29,6 +32,9 @@ signal light_changed(scenery: String)
 
 ## The look of one area changed in the file.
 signal area_look_changed(area: String)
+
+## The shadow minimum of every area changed in the file.
+signal shadow_minimum_changed
 
 ## The preview went on for `area`, or off with "".
 signal preview_changed(area: String)
@@ -65,6 +71,9 @@ const ENERGY_MAX := 4.0
 const ENERGY_STEP := 0.05
 const ELEVATION_LIMIT := 90.0
 const AZIMUTH_LIMIT := 180.0
+
+## The step of the shadow minimum. Its range is 0 to 1.
+const SHADOW_MINIMUM_STEP := 0.05
 
 ## The fields of a light, in the order of the tab, in the shape of
 ## [constant AREA_FIELDS]. An energy of zero gives no light.
@@ -110,11 +119,13 @@ var _wall_heights := {}
 var _lighten := SpinBox.new()
 var _light_key := OptionButton.new()
 var _light_controls := {}
+var _shadow_minimum := SpinBox.new()
 var _area := OptionButton.new()
 var _area_controls := {}
 var _preview := CheckBox.new()
 var _palette_timer := Timer.new()
 var _light_timer := Timer.new()
+var _shadow_timer := Timer.new()
 var _area_timer := Timer.new()
 
 ## True while [method refresh] fills the controls, so they send nothing.
@@ -157,6 +168,11 @@ func area_look() -> Dictionary:
 			look[row[0]] = (control as SpinBox).value
 
 	return look
+
+
+## The shadow minimum of the field, for every area.
+func shadow_minimum() -> float:
+	return _shadow_minimum.value
 
 
 func preview_on() -> bool:
@@ -203,6 +219,7 @@ func refresh() -> void:
 		_wall_heights[style].value = WallPalette.height_steps(style)
 
 	_lighten.value = WallPalette.top_lighten()
+	_shadow_minimum.value = AreaLook.shadow_minimum()
 	_show_light()
 	_show_area()
 
@@ -377,6 +394,13 @@ func _build_light_rows() -> void:
 
 
 func _build_area_rows() -> void:
+	_Fields.spin(_shadow_minimum, 0.0, 1.0, SHADOW_MINIMUM_STEP,
+		AreaLook.SHADOW_MINIMUM_DEFAULT)
+	_shadow_minimum.value_changed.connect(func(_value: float) -> void: _shadow_touched())
+	_Fields.row(self, "Shadow minimum (every area)", _shadow_minimum,
+		"The share of the sun that reaches a place in full shadow, for example "
+		+ "the inside of a structure. 0 gives a full shadow, and 1 gives no shadow.")
+
 	_Fields.fill(_area, Array(TileTables.keys(TileTables.AREAS)))
 	_area.item_selected.connect(func(_index: int) -> void: _show_area())
 	_Fields.row(self, "Area: the fog and the light", _area,
@@ -437,13 +461,15 @@ func _mark_picker(grid: GridContainer, key: String, label_text: String) -> Color
 
 
 func _build_timers() -> void:
-	for timer: Timer in [_palette_timer, _light_timer, _area_timer, _marks_timer]:
+	for timer: Timer in [_palette_timer, _light_timer, _shadow_timer, _area_timer,
+			_marks_timer]:
 		timer.one_shot = true
 		timer.wait_time = DEBOUNCE
 		add_child(timer)
 
 	_palette_timer.timeout.connect(_write_palette)
 	_light_timer.timeout.connect(_write_light)
+	_shadow_timer.timeout.connect(_write_shadow_minimum)
 	_area_timer.timeout.connect(_write_area)
 	_marks_timer.timeout.connect(_write_marks)
 
@@ -483,6 +509,11 @@ func _palette_touched() -> void:
 func _light_touched() -> void:
 	if not _filling and is_inside_tree():
 		_light_timer.start()
+
+
+func _shadow_touched() -> void:
+	if not _filling and is_inside_tree():
+		_shadow_timer.start()
 
 
 func _area_touched() -> void:
@@ -553,6 +584,13 @@ func _write_light() -> void:
 		LightLook.save_light(light_scenery(), light_row())
 
 	light_changed.emit(light_scenery())
+
+
+func _write_shadow_minimum() -> void:
+	if writes_files:
+		AreaLook.save_shadow_minimum(shadow_minimum())
+
+	shadow_minimum_changed.emit()
 
 
 func _write_area() -> void:

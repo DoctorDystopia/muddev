@@ -71,7 +71,7 @@ Inside `blackout/`:
 | `typeclasses/` | Evennia typeclasses; `mixins.py` holds `CombatEntity` |
 | `world/` | Data registries: `item_database.py`, `npc_database.py`, `item_defs/`, `npc_defs/`, `npc_dialogues/`, `shop_defs/`, `maps/`, and `tables/` (the table files of the tile grid) |
 | `commands/` | Command classes and cmdsets |
-| `assets/` | The 3D model pipeline: downloads, model records, the build. See "3D models" |
+| `assets/` | The 3D model pipeline: downloads, model records, the build. See "3D models". Also the sound wizard, `assets/audio/` |
 | `web/` | Django site + statefeed-adjacent static assets (the served `.glb` model tree, which the pipeline writes) |
 | `scripts/` | **Destructive operator CLI scripts. See Danger below.** |
 
@@ -182,8 +182,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3579 tests, ~32 min,
-measured 10/16/2026):
+**Before a merge or a major change**, run the full suite (3765 tests, ~33 min,
+measured 10/21/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -1016,6 +1016,7 @@ Read the handoff before you continue this work.
 | The primitives: ladder, stairs, hatch, the top of a flight | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
 | Ladders and stairs (10/16/2026): the run of a flight, the landing past the top step, the stairwell, the click that climbs, and the Ladder and Stairs tools | `climb_landing` and `flight_tiles` in `world/object_kinds.py`, and their twin `godot/world/terrain/climb_rule.gd`. `STAIRS_RUN` and `ROTATION_STEPS` in `systems/core/tilegrid/constants.py`, `climb_target` in `world/tile_travel.py`, `_add_tile_world_climbs` in `systems/interface/statefeed/serializers.py`, `StructureTools.climb` |
 | The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
+| Item spawns (10/21/2026): the `spawn` of a chunk object (item, quantity range, respawn in ticks), the item on the tile, the clock that starts when it leaves, the item list, and the spawn fields of the editor. Nick's four rules are in the docstring of `item_spawns.py` | `spawn_problem` and `spawn_text` in `chunkfile.py` and `chunk_file.gd`, the `SPAWN_*` constants in `systems/core/tilegrid/constants.py`, `systems/gameplay/spawning/item_spawns.py`, the item entries of `respawn.py`, `TileRoom.at_object_leave`, `systems/interface/statefeed/spawn_items.py` with `godot/addons/blackout_terrain/spawn_items.json`, the `spawn_table` and `spawn_item` rules in `world/tile_checks.py`, `spawn_fields.gd` and `spawn_items.gd` in `godot/addons/blackout_terrain/` |
 | The look of a chunk object (10/16/2026): its model variant, scale, tilt, and nudge, the model variants, and the Variant, Scale, Tilt, and Nudge fields | `look_problem` and `look_text` in `chunkfile.py` and `chunk_file.gd`, the `LOOK_*` constants in `systems/core/tilegrid/constants.py`, `LOOK_ATTR` in `tile_sync.py` and `respawn.py`, `ENTITY_LOOK_KEY` in `statefeed/serializers.py`, `variant_of` in `assets/pipeline/records.py` with `variants.json`, `godot/world/object_look.gd`, `ModelRegistry.variant_for`, `terrain_dock.gd` |
 | The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
 | The GDScript twin of the step rule, for the `unreachable` note | `godot/addons/blackout_terrain/step_grid.gd` |
@@ -1025,6 +1026,7 @@ Read the handoff before you continue this work.
 | The look files (10/13/2026): the terrain palette, the area looks, the editor marks, and the Look tab | `godot/world/look/` (`look_file.gd`, `terrain_palette.gd`, the JSON files), `godot/world/area_look.gd`, `godot/addons/blackout_terrain/look_panel.gd`, `LookFileTests` in `test_client_constants.py` |
 | The lamp light (10/18/2026): the light of a scenery key, the bake into the ground, the walls, and the props, the terrain shader, and the real lights of the figures | `godot/world/look/light_look.gd` with `lights.json`, `godot/world/terrain/tile_lights.gd`, `terrain_material.gd`, `terrain.gdshader`, `godot/world/figure_lights.gd`, the light section of `look_panel.gd`, `test_the_lights_name_real_scenery` in `test_client_constants.py` |
 | The session file of each editor: the choices of the author between sessions, outside the repo | `godot/addons/blackout_terrain/terrain_session.gd` (`user://blackout_terrain_session.cfg`), `FigureDock` (`user://blackout_figure_session.cfg`) |
+| The side of the editor block (10/21/2026): N x N chunks, 4 unless the Side field says otherwise, capped at 8. The session file keeps it, never the scene | `block_side`, `BLOCK_SIDE_MAX`, and `resize_block` in `terrain_world.gd`, the Side field of the block strip in `terrain_dock.gd`, `StructureTemplate.SIDE_MAX` |
 | Decor (DESIGN-0013 S4): the `decor` category, the pin rule, the check exemption, the decor primitives, and the Decor tool | `world/object_kinds.py` (`UNPINNED_KINDS`), `TilePlane` in `systems/core/tilegrid/world.py`, `world/tile_checks.py`, `godot/world/terrain/prop_mesh_builder.gd`, `StructureTools.decor` in `structure_tools.gd` |
 | Templates (DESIGN-0013 S5): the template file, the copy and its plan, the tile selection, the Select and Place tools, and "Protect structures" | `structure_template.gd`, `structure_place.gd`, `tile_selection.gd`, `template_input.gd`, `TerrainBrushes.protect` in `godot/addons/blackout_terrain/`, `blackout/world/structures/`, `world/tests/test_structure_templates.py` |
 | The structure workbench (DESIGN-0013 S6): the scene, the scratch directory, the clear, and the check without the world rules | `structure_workbench.tscn`, `TerrainWorld.writes_world` and `clear_workbench`, `TerrainChecks.for_workbench` in `godot/addons/blackout_terrain/` |
