@@ -8,6 +8,10 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
 config/name="Blackout"
@@ -31,7 +35,7 @@ window/size/viewport_height=720
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/blackout_terrain/plugin.cfg", "res://addons/blackout_figure/plugin.cfg", "res://addons/blackout_gear/plugin.cfg")
+enabled=PackedStringArray("res://addons/blackout_figure/plugin.cfg", "res://addons/blackout_gear/plugin.cfg", "res://addons/blackout_terrain/plugin.cfg")
 
 [gui]
 

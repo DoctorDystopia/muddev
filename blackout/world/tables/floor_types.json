@@ -60,6 +60,11 @@
 			"key": "void",
 			"note": "No floor: a gap in plane 1 and up. Always Blocked.",
 			"roof": false
+		},
+		{
+			"key": "slime",
+			"note": "It's Aways the Slime...",
+			"roof": false
 		}
 	]
 }
