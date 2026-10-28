@@ -217,7 +217,7 @@ const TILE_CHECK_SPAWN_ITEM := "spawn_item"
 
 # What the terrain editor paints and places. The order is
 # the order of each table under world/.
-const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void"]
+const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void", "slime"]
 const TILE_ROOF_FLOOR_TYPES := ["roof_sheet_metal", "roof_tile", "roof_concrete"]
 const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta"]
 const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_link", "rubble"]
