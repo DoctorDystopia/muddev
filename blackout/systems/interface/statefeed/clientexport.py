@@ -233,6 +233,8 @@ _MOMENT_EXPORTS: tuple = (
     ("MOMENT_TRANSITION", const.MOMENT_TRANSITION),
     ("MOMENT_GUNS_SHOT", const.MOMENT_GUNS_SHOT),
     ("MOMENT_MELEE_SWING", const.MOMENT_MELEE_SWING),
+    ("MOMENT_SHOP_BUY", const.MOMENT_SHOP_BUY),
+    ("MOMENT_SHOP_SELL", const.MOMENT_SHOP_SELL),
 )
 
 # Single-value exports that are neither a channel nor a vocabulary.

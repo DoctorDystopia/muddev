@@ -738,6 +738,16 @@ def _publish_stock(npc) -> None:
         logger.log_trace()
 
 
+def _send_trade_moment(caller, moment: str) -> None:
+    """Tell the client of the trader that a trade moved goods, so that it
+    plays the sound of the moment. Only a trade that moved one item or more
+    sends it. emit_moment never raises.
+    """
+    from systems.interface.statefeed import events as feed
+
+    feed.emit_moment(caller, moment)
+
+
 def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
     """
     Purpose: Charge for and hand over up to `buy_count` of one ware.
@@ -802,6 +812,8 @@ def execute_buy(caller, npc, entry: BuyEntry, buy_count: int = 1) -> BuyResult:
     if bought == 0:
         error = _NO_ROOM_ERROR if refused else _OUT_OF_STOCK_ERROR
         return BuyResult(success=False, error=error)
+
+    _send_trade_moment(caller, feed_const.MOMENT_SHOP_BUY)
 
     stats = getattr(caller, "stats", None)
     if stats is not None and total_price:
@@ -909,6 +921,9 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
         _publish_stock(npc)
 
     _publish_inventory(caller)
+
+    if sold_count > 0:
+        _send_trade_moment(caller, feed_const.MOMENT_SHOP_SELL)
 
     return SellResult(
         success=True,

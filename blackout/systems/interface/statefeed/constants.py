@@ -326,6 +326,13 @@ MOMENT_TRANSITION: str = "transition"
 MOMENT_GUNS_SHOT: str = "guns_shot"
 MOMENT_MELEE_SWING: str = "melee_swing"
 
+# One trade with a shopkeeper that moved one item or more. shop_service
+# execute_buy and execute_sell send it, to the trader only. The menu, the
+# pop-up and the typed command all trade through those two. The client
+# plays one cue for both today. Two names let it give each one a sound.
+MOMENT_SHOP_BUY: str = "shop_buy"
+MOMENT_SHOP_SELL: str = "shop_sell"
+
 MOMENTS: frozenset = frozenset((
     MOMENT_TASK_COMPLETE,
     MOMENT_CUT_ATTEMPT,
@@ -335,6 +342,8 @@ MOMENTS: frozenset = frozenset((
     MOMENT_TRANSITION,
     MOMENT_GUNS_SHOT,
     MOMENT_MELEE_SWING,
+    MOMENT_SHOP_BUY,
+    MOMENT_SHOP_SELL,
 ))
 
 # The command that asks for the world map. The key of CmdWorldMap, and the

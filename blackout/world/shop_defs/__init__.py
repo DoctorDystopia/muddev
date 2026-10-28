@@ -1,3 +1,5 @@
+import importlib
+import pkgutil
 from dataclasses import dataclass, field
 
 
@@ -35,11 +37,58 @@ class ShopDef:
     stock: dict[str, WareStock] = field(default_factory=dict)
 
 
-from .oasis_shop import ITEMS as _OASIS
+# The dict that each shop module exports.
+_SHOPS_ATTR: str = "ITEMS"
 
-SHOP_DB: dict[str, ShopDef] = {}
-for _d in [_OASIS]:
-    SHOP_DB.update(_d)
+
+def _discover_shops() -> dict[str, ShopDef]:
+    """
+    Purpose: Build SHOP_DB from every module in this package.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a dict of shop key -> ShopDef.
+
+    Module Globals:
+        _SHOPS_ATTR read.
+
+    Methodology:
+        Each module exports a dict named ITEMS. A new shop file needs no
+        registration. Until 10/27/2026 this was a list of imports, and a new
+        file that nobody added to the list was not a shop. Two faults raise
+        at import: a key that two modules define, and an entry whose dict
+        key differs from its own `key`.
+
+    Notes/References:
+        world/npc_database.py walks world/npc_defs the same way. The modules
+        import ShopDef from this package, so this runs after the classes
+        exist.
+
+    Author: Nick Hobar
+    Creation date: 10/27/2026
+    """
+    registry = {}
+
+    for info in pkgutil.iter_modules(__path__):
+        module = importlib.import_module(f"{__name__}.{info.name}")
+        entries = getattr(module, _SHOPS_ATTR, {})
+
+        for key, shop_def in entries.items():
+            if key != shop_def.key:
+                raise ValueError(
+                    f"SHOP_DB: {info.name} files {shop_def.key!r} under {key!r}.")
+
+            if key in registry:
+                raise ValueError(f"SHOP_DB: {key!r} is defined two times.")
+
+            registry[key] = shop_def
+
+    return registry
+
+
+SHOP_DB: dict[str, ShopDef] = _discover_shops()
 
 
 def shop_def_for(shopkeep) -> ShopDef | None:

@@ -103,13 +103,17 @@ its place:
 1. Pick the row of the item.
 2. Click the model on a stand. The status box says "The served model of
    ...".
-3. Move it with W, turn it with E, and scale it with R. The other stand
-   follows.
-4. Press Ctrl+S. The look file of the item keeps the place in its
+3. Move it with W, and turn it with E. The other stand follows.
+4. To scale the whole model, type a number in **Scale in the hand** in
+   the **Model** fold. R scales one axis only.
+5. Press Ctrl+S. The look file of the item keeps the place in its
    `served` row. An item with no look gets a look with that row only.
 
 **Fit served model to look** in the **Model** fold takes the place away.
 The model then takes the box of the look again.
+
+The presentation fields below it change the model on the ground, not in
+the hand.
 
 **Import model** is off for such a row. The import does not write over a
 model that it did not bring. To import a model of the look, type another

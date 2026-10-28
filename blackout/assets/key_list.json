@@ -32,6 +32,12 @@
 			"owner": "bit_blade"
 		},
 		{
+			"key": "blood_sword",
+			"kind": "weapon",
+			"name": "blood sword",
+			"owner": "blood_sword"
+		},
+		{
 			"key": "broken_bit_blade",
 			"kind": "weapon",
 			"name": "broken bit-blade",
@@ -750,6 +756,18 @@
 			"kind": "npc",
 			"name": "Shopkeeper",
 			"owner": "shopkeeper_oasis"
+		},
+		{
+			"key": "shopkeeper_al_wasta",
+			"kind": "npc",
+			"name": "Shopkeeper",
+			"owner": "shopkeeper_al_wasta"
+		},
+		{
+			"key": "shopkeeper_ephiri",
+			"kind": "npc",
+			"name": "Ephiri",
+			"owner": "shopkeeper_ephiri"
 		},
 		{
 			"key": "spray_can",

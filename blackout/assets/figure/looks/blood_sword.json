@@ -1,0 +1,22 @@
+{
+	"format": 1,
+	"key": "blood_sword",
+	"served": {
+		"bone": "hand_r",
+		"position": [
+			0.0,
+			0.41156,
+			0.0
+		],
+		"rotation": [
+			0.0,
+			0.0,
+			1.51329
+		],
+		"scale": [
+			1.0,
+			1.0,
+			1.0
+		]
+	}
+}

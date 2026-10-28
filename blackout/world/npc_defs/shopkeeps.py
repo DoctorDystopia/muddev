@@ -10,7 +10,10 @@ Description: The shopkeep NpcDef entries.
              names the ShopDef in world/shop_defs that gives the wares.
 """
 
+
+
 from world.npc_database import NPC_TYPECLASS_SHOPKEEP, NpcDef
+
 
 
 NPCS = {
@@ -25,5 +28,23 @@ NPCS = {
         asset_key="shopkeeper",
         dialogue="shopkeep",
         shop_key="oasis_shop",
+    ),
+    "shopkeeper_al_wasta": NpcDef(
+        key="shopkeeper_al_wasta",
+        name="Shopkeeper",
+        typeclass=NPC_TYPECLASS_SHOPKEEP,
+        desc="A rough looking human with a building full of salvaged goods.",
+        asset_key="shopkeeper_al_wasta",
+        dialogue="shopkeep",
+        shop_key="al_wasta_shop",
+    ),
+    "shopkeeper_ephiri": NpcDef(
+        key="shopkeeper_ephiri",
+        name="Ephiri",
+        typeclass=NPC_TYPECLASS_SHOPKEEP,
+        desc="A rough looking human with a lot of sharp things on the wall.",
+        asset_key="shopkeeper_ephiri",
+        dialogue="shopkeep",
+        shop_key="ephiri_shop",
     ),
 }

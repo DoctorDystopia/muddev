@@ -9,6 +9,12 @@
 		},
 		{
 			"family": "weapon",
+			"key": "blood_sword",
+			"name": "blood sword",
+			"stackable": false
+		},
+		{
+			"family": "weapon",
 			"key": "broken_bit_blade",
 			"name": "broken bit-blade",
 			"stackable": false

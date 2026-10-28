@@ -137,6 +137,16 @@ class NpcObjectKindTests(unittest.TestCase):
             with self.subTest(kind=kind.key):
                 self.assertIn(kind.spawner, NPC_DB)
 
+    def test_every_def_has_a_kind_that_places_it(self):
+        """The terrain editor places only an object kind. A def with no kind
+        cannot stand in the world."""
+        placed = {kind.spawner for kind in OBJECT_KINDS.values()
+                  if kind.category == tile_const.OBJECT_CATEGORY_NPC}
+
+        for key in NPC_DB:
+            with self.subTest(npc=key):
+                self.assertIn(key, placed)
+
     def test_every_npc_kind_previews_the_model_of_its_def(self):
         for kind in OBJECT_KINDS.values():
             if kind.spawner not in NPC_DB:

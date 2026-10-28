@@ -342,7 +342,6 @@
     {"kind":"oil_lamp","x":35,"y":44,"rotation":0},
     {"kind":"oil_lamp","x":35,"y":48,"rotation":2},
     {"kind":"ladder_up","x":35,"y":7,"rotation":0},
-    {"kind":"shopkeeper_oasis","x":31,"y":9,"rotation":0},
     {"kind":"lamp_post","x":29,"y":13,"rotation":0},
     {"kind":"lamp_post","x":33,"y":13,"rotation":0},
     {"kind":"lamp_post","x":33,"y":43,"rotation":2},
@@ -353,6 +352,11 @@
     {"kind":"lamp_post","x":17,"y":19,"rotation":0},
     {"kind":"lamp_post","x":13,"y":19,"rotation":0},
     {"kind":"lamp_post","x":54,"y":33,"rotation":2},
-    {"kind":"lamp_post","x":50,"y":33,"rotation":2}
+    {"kind":"lamp_post","x":50,"y":33,"rotation":2},
+    {"kind":"shopkeeper_al_wasta","x":31,"y":9,"rotation":0},
+    {"kind":"shopkeeper_ephiri","x":15,"y":15,"rotation":0},
+    {"kind":"bank","x":30,"y":48,"rotation":3},
+    {"kind":"bank","x":31,"y":48,"rotation":3},
+    {"kind":"bank","x":32,"y":48,"rotation":3}
   ]
 }

@@ -58,6 +58,31 @@ extends Control
 ## of the map square. The world map has the same button. Both buttons write
 ## [member ClientSettings.show_coordinates]. [method coordinates_of] owns the
 ## words, so the two maps cannot differ.
+##
+## ## North up, or the camera up (10/27/2026)
+##
+## "Minimap turns with the camera" in Options turns the ground. Then the way
+## the camera looks is at the top, as on the OSRS minimap. Off by default:
+## north stays up. The console gives the pane the flat view direction on
+## each turn of the camera, through [method set_heading].
+## [member ClientSettings.minimap_rotates] says whether the pane uses it.
+## The world map never turns.
+##
+## The turn is one [Transform2D] about the tile of the player, from
+## [method _window_transform]. The tile maths stays north up. [method
+## _to_pixels] never turns, and [method _to_cell] turns a point back before
+## it reads the cell. A map icon, a map dot, the flag, and the readout stand
+## upright at their turned points. The ground, the path, the hover outline,
+## and the player square turn with the tiles. A turned square shows its
+## corners past the map square. Thus, a child that clips, [member _window],
+## draws the map, and the ground reaches [method _drawn_radius].
+##
+## ## The compass (10/27/2026)
+##
+## A small compass at the top centre of the map square, between Run and XY,
+## says where north is. Its needle points to north on the drawn map, from
+## [method compass_needle]. With north up, it points up. With the turn on,
+## it turns with the ground. It is a drawn mark, not a button.
 
 ## Emitted with a whole command a telnet player could have typed. The server
 ## named it, or spelled its template. Same contract as a clicked tile in the
@@ -119,6 +144,21 @@ const COORDINATES_INSET := 3.0
 const MARKER_WIDTH := 2.0
 const PATH_WIDTH := 2.0
 
+## The look of the compass, in pixels. The ring, the gap from the top edge
+## of the map square, and the half width of the needle. The reach is how far
+## the letter stands past the ring. The letter is the size of the readout.
+const COMPASS_RADIUS := 9.0
+const COMPASS_INSET := 3.0
+const COMPASS_REACH := 7.0
+const COMPASS_NEEDLE_HALF_WIDTH := 3.0
+const COMPASS_LETTER := "N"
+const COMPASS_RING_WIDTH := 1.5
+const COMPASS_RING_POINTS := 24
+const COLOR_COMPASS_FACE := Color(0.043, 0.059, 0.078, 0.85)
+const COLOR_COMPASS_RING := Color(0.85, 0.85, 0.85)
+const COLOR_COMPASS_NORTH := Color(0.93, 0.16, 0.16)
+const COLOR_COMPASS_SOUTH := Color(0.75, 0.75, 0.75)
+
 ## The size of a dot and of an icon, as a part of a cell, and their limits in
 ## pixels. A dot stays visible at the widest zoom and small at the closest.
 const DOT_SHARE := 0.4
@@ -141,6 +181,18 @@ var _show_path := ClientSettings.DEFAULT_SHOW_WALK_PATH
 ## Whether the pane draws the position readout. Without settings, the shipped
 ## default.
 var _show_coordinates := ClientSettings.DEFAULT_SHOW_COORDINATES
+
+## Whether the pane turns with the camera. Without settings, the shipped
+## default.
+var _rotates := ClientSettings.DEFAULT_MINIMAP_ROTATES
+
+## Where the camera looks, flat on the grid, with Y to the north. Zero before
+## a camera gives one, and north stays up then.
+var _heading := Vector2.ZERO
+
+## The square of the map, as a child that clips its drawing. It draws the
+## whole map, and the pane itself draws nothing.
+var _window: Control
 
 ## ChunkFile -> the ImageTexture of its ground. See [method _texture_of].
 var _chunk_textures := {}
@@ -168,8 +220,32 @@ func _init() -> void:
 	# One pixel of a chunk image is one tile. A blur would smear the tiles.
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
+	_build_window()
 	_build_strip()
 	_build_coordinates_button()
+
+
+## The square of the map, as the first child, so the buttons stay on top. The
+## clip keeps a turned ground off the padding and the strip. The child takes
+## no click: the pane reads the clicks, and the child only draws.
+func _build_window() -> void:
+	_window = Control.new()
+	_window.name = "Window"
+	_window.clip_contents = true
+	_window.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_window.draw.connect(_draw_window)
+	add_child(_window)
+
+
+## Fit the window to the map square and draw it again. Every change of the
+## map comes here, because the child draws the map, not the pane.
+func _redraw() -> void:
+	var cell_px := _cell_pixels()
+	var side := float(window_side()) * cell_px
+
+	_window.position = _origin(cell_px)
+	_window.size = Vector2(side, side)
+	_window.queue_redraw()
 
 
 ## Bind to the world model and follow it.
@@ -180,22 +256,22 @@ func _init() -> void:
 func bind(state: WorldState, _meshes: MeshResolver = null) -> void:
 	_state = state
 	_state.chunks_changed.connect(_on_chunks_changed)
-	_state.chunks_changed.connect(queue_redraw)
-	_state.room_changed.connect(queue_redraw)
-	_state.walk_changed.connect(queue_redraw)
+	_state.chunks_changed.connect(_redraw)
+	_state.room_changed.connect(_redraw)
+	_state.walk_changed.connect(_redraw)
 	_state.walk_changed.connect(_sync_run_button)
 
 	_sync_run_button()
-	queue_redraw()
+	_redraw()
 
 
 ## Draw a map dot for each entity of the roster. The console owns the roster,
 ## and the 3D pane draws the same one.
 func bind_entities(roster: EntityRoster) -> void:
 	_roster = roster
-	_roster.changed.connect(queue_redraw)
+	_roster.changed.connect(_redraw)
 
-	queue_redraw()
+	_redraw()
 
 
 ## Read the zoom and the two toggles from the settings, and write them back
@@ -210,9 +286,10 @@ func _apply_settings() -> void:
 	_radius = nearest_zoom(_settings.minimap_radius)
 	_show_path = _settings.show_walk_path
 	_show_coordinates = _settings.show_coordinates
+	_rotates = _settings.minimap_rotates
 	_sync_zoom_buttons()
 	_sync_coordinates_button()
-	queue_redraw()
+	_redraw()
 
 
 # ─── The strip ───────────────────────────────────────────────────────────────
@@ -234,7 +311,7 @@ func _build_strip() -> void:
 	# The position readout stands on the top of the strip. See
 	# [method _draw_coordinates].
 	_strip = strip
-	strip.item_rect_changed.connect(queue_redraw)
+	strip.item_rect_changed.connect(_redraw)
 
 	_zoom_out_button = _strip_button(strip, "-", "Zoom out")
 	_zoom_out_button.pressed.connect(zoom_out)
@@ -349,7 +426,7 @@ func set_coordinates_shown(shown: bool) -> void:
 
 	_show_coordinates = shown
 	_sync_coordinates_button()
-	queue_redraw()
+	_redraw()
 
 
 func _sync_coordinates_button() -> void:
@@ -398,7 +475,7 @@ func _set_zoom_index(index: int) -> void:
 	if _settings != null:
 		_settings.set_minimap_radius(chosen)
 
-	queue_redraw()
+	_redraw()
 
 
 func _sync_zoom_buttons() -> void:
@@ -406,39 +483,119 @@ func _sync_zoom_buttons() -> void:
 	_zoom_out_button.disabled = _radius == ZOOM_RADII[ZOOM_RADII.size() - 1]
 
 
-# ─── Drawing ─────────────────────────────────────────────────────────────────
+# ─── The heading ─────────────────────────────────────────────────────────────
 
-func _draw() -> void:
+## Where the camera looks, flat on the grid with Y to the north, from
+## [method WorldView.camera_forward]. The pane keeps it whether or not it
+## turns. Thus, a later tick of the option turns the map at once.
+func set_heading(forward: Vector2) -> void:
+	if forward.is_equal_approx(_heading):
+		return
+
+	_heading = forward
+
+	if _rotates:
+		_redraw()
+
+
+## True while the pane turns with the camera.
+func rotates() -> bool:
+	return _rotates
+
+
+## The turn of the drawn ground, in radians. Zero with north up.
+##
+## With the option on, the way the camera looks goes to the top. The angle
+## runs COUNTER to the heading. A camera that looks east, heading (1, 0),
+## turns the map a quarter turn to the left. Then the east tile stands above
+## the player. A heading of zero, before a camera gives one, keeps north up.
+func heading_angle() -> float:
+	if not _rotates or _heading.is_zero_approx():
+		return 0.0
+
+	return -atan2(_heading.x, _heading.y)
+
+
+## The turn of the window, about its centre: the tile of the player. The
+## identity with north up. In the space of the window, not of the pane.
+func _window_transform(cell_px: float) -> Transform2D:
+	var angle := heading_angle()
+
+	if is_zero_approx(angle):
+		return Transform2D.IDENTITY
+
+	var centre := Vector2.ONE * float(window_side()) * cell_px * 0.5
+
+	return Transform2D(angle, centre) * Transform2D(0.0, -centre)
+
+
+## The centre of a cell as the pane draws it, after the turn, in the space
+## of the pane. Public, so a test can check the turn with no canvas.
+func drawn_point_of(cell: Vector2i) -> Vector2:
 	var cell_px := _cell_pixels()
 	var origin := _origin(cell_px)
-	var side := float(window_side()) * cell_px
 
-	draw_rect(Rect2(origin, Vector2(side, side)), COLOR_BACKGROUND)
+	return origin + _window_transform(cell_px) * _centre_of(cell, cell_px, Vector2.ZERO)
+
+
+## The tiles on each side of the player that the ground reaches. A turned
+## window shows its corners past the map square. Thus, the drawn ground must
+## reach the corners of the turned square: the radius times the square root
+## of two. The chunks of the block reach at least 64 tiles past the player,
+## and the widest zoom turned needs 57.
+func _drawn_radius() -> int:
+	if is_zero_approx(heading_angle()):
+		return _radius
+
+	return ceili(float(_radius) * sqrt(2.0))
+
+
+# ─── Drawing ─────────────────────────────────────────────────────────────────
+
+## Draw the map on the window. The origin of the window is the top-left of
+## the map square, so each draw gets a zero origin. The ground, the path,
+## the hover outline, and the player square turn with the tiles. The icons,
+## the dots, the flag, and the readout stand upright at their turned points.
+func _draw_window() -> void:
+	var cell_px := _cell_pixels()
+	var origin := Vector2.ZERO
+	var turn := _window_transform(cell_px)
+
+	_window.draw_rect(Rect2(Vector2.ZERO, _window.size), COLOR_BACKGROUND)
 
 	if _state == null or not _state.has_ground():
 		return
 
+	_window.draw_set_transform_matrix(turn)
 	_draw_ground(cell_px, origin)
-	_draw_icons(cell_px, origin)
+	_window.draw_set_transform_matrix(Transform2D.IDENTITY)
+	_draw_icons(cell_px, origin, turn)
 
 	if _show_path:
+		_window.draw_set_transform_matrix(turn)
 		_draw_walk_path(cell_px, origin)
+		_window.draw_set_transform_matrix(Transform2D.IDENTITY)
 
-	_draw_dots(cell_px, origin)
+	_draw_dots(cell_px, origin, turn)
+	_window.draw_set_transform_matrix(turn)
 
 	if _hovering:
 		_draw_cell_outline(_hover_cell, cell_px, origin, COLOR_HOVER)
 
 	_draw_self(cell_px, origin)
-	_draw_flag(cell_px, origin)
-	_draw_coordinates(cell_px, origin)
+	_window.draw_set_transform_matrix(Transform2D.IDENTITY)
+	_draw_flag(cell_px, origin, turn)
+	_draw_coordinates()
+	_draw_compass()
 
 
-## Draw the part of each chunk image that the window covers.
+## Draw the part of each chunk image that the window covers. A turned window
+## covers more than the square: see [method _drawn_radius].
 func _draw_ground(cell_px: float, origin: Vector2) -> void:
 	var chunk_size: int = _Const.CHUNK_SIZE
-	var low := _window_low()
-	var high := low + Vector2i.ONE * (window_side() - 1)
+	var drawn := _drawn_radius()
+	var low := _state.current_cell - Vector2i.ONE * drawn
+	var high := _state.current_cell + Vector2i.ONE * drawn
 	var first := ChunkSet.chunk_of_tile(low)
 	var last := ChunkSet.chunk_of_tile(high)
 
@@ -463,7 +620,7 @@ func _draw_ground(cell_px: float, origin: Vector2) -> void:
 			var target := Rect2(_to_pixels(Vector2i(from.x, to.y), cell_px, origin),
 				Vector2(tiles) * cell_px)
 
-			draw_texture_rect_region(_texture_of(chunk), target, source)
+			_window.draw_texture_rect_region(_texture_of(chunk), target, source)
 
 
 ## The ground texture of one chunk, built on the first use.
@@ -483,7 +640,8 @@ func _on_chunks_changed() -> void:
 			_chunk_textures.erase(chunk)
 
 
-func _draw_icons(cell_px: float, origin: Vector2) -> void:
+## Each icon stands upright at the turned centre of its tile.
+func _draw_icons(cell_px: float, origin: Vector2, turn: Transform2D) -> void:
 	var chunk_size: int = _Const.CHUNK_SIZE
 	var icon_px := clampf(cell_px * ICON_SHARE, ICON_MIN_PX, ICON_MAX_PX)
 
@@ -498,10 +656,11 @@ func _draw_icons(cell_px: float, origin: Vector2) -> void:
 
 			var category := MapIcons.category_of(str(placed["kind"]))
 
-			MapIcons.draw(self, category, _centre_of(tile, cell_px, origin), icon_px)
+			MapIcons.draw(_window, category, turn * _centre_of(tile, cell_px, origin),
+				icon_px)
 
 
-func _draw_dots(cell_px: float, origin: Vector2) -> void:
+func _draw_dots(cell_px: float, origin: Vector2, turn: Transform2D) -> void:
 	if _roster == null:
 		return
 
@@ -509,10 +668,10 @@ func _draw_dots(cell_px: float, origin: Vector2) -> void:
 
 	for kind: String in DOT_ORDER:
 		for tile: Vector2i in dot_tiles(kind):
-			var centre := _centre_of(tile, cell_px, origin)
+			var centre := turn * _centre_of(tile, cell_px, origin)
 
-			draw_circle(centre, dot_px + 1.0, COLOR_DOT_OUTLINE)
-			draw_circle(centre, dot_px, DOT_COLOURS[kind])
+			_window.draw_circle(centre, dot_px + 1.0, COLOR_DOT_OUTLINE)
+			_window.draw_circle(centre, dot_px, DOT_COLOURS[kind])
 
 
 ## The tiles of every entity of one kind that the window shows, on the plane
@@ -542,24 +701,25 @@ func _draw_self(cell_px: float, origin: Vector2) -> void:
 	var at := _to_pixels(_state.current_cell, cell_px, origin)
 	var inset := cell_px * 0.2
 
-	draw_rect(Rect2(at + Vector2.ONE * inset, Vector2.ONE * (cell_px - inset * 2.0)),
-		COLOR_SELF)
+	_window.draw_rect(Rect2(at + Vector2.ONE * inset,
+		Vector2.ONE * (cell_px - inset * 2.0)), COLOR_SELF)
 	_draw_cell_outline(_state.current_cell, cell_px, origin, COLOR_MARKER)
 
 
-## The destination marker: a flag on a pole, standing on the goal tile.
-func _draw_flag(cell_px: float, origin: Vector2) -> void:
+## The destination marker: a flag on a pole, standing upright on the turned
+## centre of the goal tile.
+func _draw_flag(cell_px: float, origin: Vector2, turn: Transform2D) -> void:
 	if not _state.walk_on_current_plane() or not _in_window(_state.walk_goal):
 		return
 
-	var foot := _centre_of(_state.walk_goal, cell_px, origin)
+	var foot := turn * _centre_of(_state.walk_goal, cell_px, origin)
 	var height := clampf(cell_px * 2.0, 8.0, 14.0)
 	var top := foot - Vector2(0, height)
 	var cloth := PackedVector2Array([top, top + Vector2(height * 0.7, height * 0.2),
 		top + Vector2(0, height * 0.45)])
 
-	draw_line(foot, top, COLOR_FLAG_POLE, 1.5)
-	draw_colored_polygon(cloth, COLOR_FLAG)
+	_window.draw_line(foot, top, COLOR_FLAG_POLE, 1.5)
+	_window.draw_colored_polygon(cloth, COLOR_FLAG)
 
 
 ## The walk path: a line from the player through each tile still to walk.
@@ -572,7 +732,7 @@ func _draw_walk_path(cell_px: float, origin: Vector2) -> void:
 
 	for tile: Vector2i in _state.walk_path:
 		if _in_window(previous) and _in_window(tile):
-			draw_line(_centre_of(previous, cell_px, origin),
+			_window.draw_line(_centre_of(previous, cell_px, origin),
 				_centre_of(tile, cell_px, origin), COLOR_PATH, PATH_WIDTH)
 
 		previous = tile
@@ -580,8 +740,9 @@ func _draw_walk_path(cell_px: float, origin: Vector2) -> void:
 
 ## The position readout, centred at the bottom of the window, over the
 ## ground. A large font makes the strip grow up over the map. Then the words
-## stand on the top of the strip, not under its buttons.
-func _draw_coordinates(cell_px: float, origin: Vector2) -> void:
+## stand on the top of the strip, not under its buttons. The strip sits in
+## the space of the pane, so its top moves by the origin of the window.
+func _draw_coordinates() -> void:
 	var text := coordinates_text()
 
 	if text.is_empty():
@@ -590,22 +751,75 @@ func _draw_coordinates(cell_px: float, origin: Vector2) -> void:
 	var font := get_theme_default_font()
 	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		COORDINATES_FONT_SIZE).x
-	var window_bottom := origin.y + float(window_side()) * cell_px
-	var bottom := minf(window_bottom, _strip.position.y)
-	var at := Vector2((size.x - width) * 0.5,
+	var bottom := minf(_window.size.y, _strip.position.y - _window.position.y)
+	var at := Vector2((size.x - width) * 0.5 - _window.position.x,
 		bottom - COORDINATES_INSET - font.get_descent(COORDINATES_FONT_SIZE))
 
-	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+	_window.draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		COORDINATES_FONT_SIZE, COORDINATES_OUTLINE, COLOR_COORDINATES_OUTLINE)
-	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+	_window.draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 		COORDINATES_FONT_SIZE, COLOR_COORDINATES)
+
+
+## Where north is on the drawn map, as a unit vector in screen space: up
+## with north up, and turned with the ground when the map turns. Public, so
+## a test can check the needle with no canvas.
+func compass_needle() -> Vector2:
+	return Vector2.UP.rotated(heading_angle())
+
+
+## The centre of the compass, in the space of the pane. It is the top
+## centre of the map square, with room above it for the letter at the
+## north tip.
+func compass_centre() -> Vector2:
+	var cell_px := _cell_pixels()
+	var side := float(window_side()) * cell_px
+
+	return _origin(cell_px) + Vector2(side * 0.5,
+		COMPASS_INSET + COMPASS_REACH + COMPASS_RADIUS)
+
+
+## The compass: a ring, a red needle to north, a grey needle to south, and
+## the letter past the north tip. Upright on the window, whatever the turn.
+func _draw_compass() -> void:
+	var centre := compass_centre() - _window.position
+	var needle := compass_needle()
+	var across := needle.orthogonal() * COMPASS_NEEDLE_HALF_WIDTH
+	var tip := centre + needle * COMPASS_RADIUS
+	var tail := centre - needle * COMPASS_RADIUS
+
+	_window.draw_circle(centre, COMPASS_RADIUS, COLOR_COMPASS_FACE)
+	_window.draw_arc(centre, COMPASS_RADIUS, 0.0, TAU, COMPASS_RING_POINTS,
+		COLOR_COMPASS_RING, COMPASS_RING_WIDTH)
+	_window.draw_colored_polygon(
+		PackedVector2Array([tip, centre + across, centre - across]), COLOR_COMPASS_NORTH)
+	_window.draw_colored_polygon(
+		PackedVector2Array([tail, centre - across, centre + across]), COLOR_COMPASS_SOUTH)
+	_draw_compass_letter(centre + needle * (COMPASS_RADIUS + COMPASS_REACH))
+
+
+## The letter N, centred on a point. The font gives the width and the
+## height, so the letter sits on the point at every UI scale.
+func _draw_compass_letter(at: Vector2) -> void:
+	var font := get_theme_default_font()
+	var box := font.get_string_size(COMPASS_LETTER, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		COORDINATES_FONT_SIZE)
+	var ascent := font.get_ascent(COORDINATES_FONT_SIZE)
+	var descent := font.get_descent(COORDINATES_FONT_SIZE)
+	var baseline := at + Vector2(-box.x * 0.5, (ascent - descent) * 0.5)
+
+	_window.draw_string_outline(font, baseline, COMPASS_LETTER,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, COORDINATES_FONT_SIZE, COORDINATES_OUTLINE,
+		COLOR_COORDINATES_OUTLINE)
+	_window.draw_string(font, baseline, COMPASS_LETTER, HORIZONTAL_ALIGNMENT_LEFT,
+		-1, COORDINATES_FONT_SIZE, COLOR_COORDINATES)
 
 
 func _draw_cell_outline(cell: Vector2i, cell_px: float, origin: Vector2,
 		colour: Color) -> void:
 	var at := _to_pixels(cell, cell_px, origin)
 
-	draw_rect(Rect2(at, Vector2.ONE * cell_px), colour, false, MARKER_WIDTH)
+	_window.draw_rect(Rect2(at, Vector2.ONE * cell_px), colour, false, MARKER_WIDTH)
 
 
 # ─── Geometry ────────────────────────────────────────────────────────────────
@@ -640,10 +854,13 @@ func _window_low() -> Vector2i:
 	return _state.current_cell - Vector2i.ONE * _radius
 
 
+## True for a tile that the ground reaches. A turned window reaches past the
+## square: see [method _drawn_radius].
 func _in_window(tile: Vector2i) -> bool:
 	var offset := tile - _state.current_cell
+	var drawn := _drawn_radius()
 
-	return absi(offset.x) <= _radius and absi(offset.y) <= _radius
+	return absi(offset.x) <= drawn and absi(offset.y) <= drawn
 
 
 ## Cell -> the top-left pixel of its square.
@@ -666,12 +883,15 @@ func _centre_of(cell: Vector2i, cell_px: float, origin: Vector2) -> Vector2:
 ##
 ## Returns a cell whether or not a chunk holds it. [method WorldState.tile_action]
 ## decides what a cell affords, and it answers "nothing" for one with no chunk.
+## A turned map turns the point back first, so a click lands on the tile
+## that the player sees under the cursor.
 func _to_cell(point: Vector2) -> Vector2i:
 	if _state == null:
 		return Vector2i.ZERO
 
 	var cell_px := _cell_pixels()
-	var local := (point - _origin(cell_px)) / cell_px
+	var unturned := _window_transform(cell_px).affine_inverse() * (point - _origin(cell_px))
+	var local := unturned / cell_px
 	var low_x := _state.current_cell.x - _radius
 	var high_y := _state.current_cell.y + _radius
 
@@ -721,16 +941,19 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _notification(what: int) -> void:
+	if what == NOTIFICATION_RESIZED and _window != null:
+		_redraw()
+
 	if what == NOTIFICATION_MOUSE_EXIT and _hovering:
 		_hovering = false
-		queue_redraw()
+		_redraw()
 
 
 func _hover_at(point: Vector2) -> void:
 	if not _on_window(point):
 		if _hovering:
 			_hovering = false
-			queue_redraw()
+			_redraw()
 
 		return
 
@@ -741,7 +964,7 @@ func _hover_at(point: Vector2) -> void:
 
 	_hover_cell = cell
 	_hovering = true
-	queue_redraw()
+	_redraw()
 
 
 ## Send whatever a click on this cell does. This pane composes nothing and

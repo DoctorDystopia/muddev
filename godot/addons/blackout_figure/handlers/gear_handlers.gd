@@ -65,6 +65,7 @@ func connect_look_panel(panel: GearLookPanel) -> void:
 	panel.import_requested.connect(_on_import_requested)
 	panel.model_parts_requested.connect(_on_model_parts_requested)
 	panel.served_fit_requested.connect(_on_served_fit_requested)
+	panel.served_scale_changed.connect(_on_served_scale_changed)
 
 
 func connect_outfit_bar(bar: FigureOutfitBar) -> void:
@@ -331,6 +332,18 @@ func _on_served_fit_requested(key: String) -> void:
 
 	_context.history().commit(FigureStore.KIND_LOOK, key, before, after,
 		"fit the served model of %s to its look" % key)
+
+
+## "Scale in the hand": the served model of the row gets a new scale. It
+## keeps its proportions, its bone, and its place. One drag of the field is
+## one undo entry. An item with no look gets a look with the `served` row
+## only, as a move with the Godot tools gives it.
+func _on_served_scale_changed(key: String, drawn: Dictionary, size: float) -> void:
+	var start := {"format": FigureLook.FORMAT, "key": key}
+
+	_context.history().change_or_new(FigureStore.KIND_LOOK, key, start,
+		"scale the served model of %s" % key, func(content: Dictionary) -> String:
+			return FigureLookEdits.set_served_scale(content, drawn, size), true)
 
 
 ## Make the parts of one worn look from the nodes of one served model, as

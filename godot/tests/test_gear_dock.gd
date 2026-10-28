@@ -32,6 +32,10 @@ extends Node
 ## 9. A row whose served model wins says so, in the list and in the note
 ##    (10/17/2026). Its import is off until the model field names another
 ##    key. "Fit served model to look" is on for a moved model only.
+## 10. "Scale in the hand" is off for a row with no served model (10/27/2026).
+##     It shows the largest axis of the scale that the stand draws, from
+##     the box of the stand-in or from the `served` row. A change sends the
+##     row, the drawn part, and the new scale.
 
 ## The items of the test catalog.
 const SWORD := "iron_sword"
@@ -52,6 +56,7 @@ func _ready() -> void:
 	_the_look_panel_shows_and_sends_a_presentation()
 	_the_session_has_its_own_file()
 	_a_served_model_row_says_so()
+	_the_scale_in_the_hand_sends_the_drawn_part()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -519,6 +524,45 @@ func _a_served_model_row_says_so() -> void:
 		and panel._served_fit.tooltip_text == GearLookPanel.NOT_SERVED,
 		"a row with no served model has no fit button")
 	items.queue_free()
+	panel.queue_free()
+
+
+func _the_scale_in_the_hand_sends_the_drawn_part() -> void:
+	var panel := GearLookPanel.new()
+	var rig := _rig()
+	var looks := _gear_looks(rig)
+	var models := FigureModels.new()
+	var data := {"format": FigureLook.FORMAT, "key": STICK}
+
+	models.put_buffer(STICK, FigureReference.buffer_of(rig, [looks[SWORD]]))
+	add_child(panel)
+	_sent.clear()
+	_record(panel.served_scale_changed, "scale")
+	panel.set_content(_catalog(), rig, looks, SWORD, models)
+	_expect(not panel._served_scale.editable and panel.served_place().is_empty()
+		and panel._served_scale.tooltip_text == GearLookPanel.NOT_SERVED,
+		"a row with no served model has the scale field off, with the reason")
+
+	panel.set_content(_catalog(), rig, looks, STICK, models)
+	_expect(panel._served_scale.editable and not looks.has(STICK)
+		and is_equal_approx(panel._served_scale.value,
+			snappedf(FigureLookEdits.largest_scale(panel.served_place()), FigureFields.LENGTH_STEP)),
+		"a served model with its first place shows the scale of the box of the stand-in")
+
+	FigureLookEdits.set_served_place(data, rig.slots()["main_hand"],
+		Transform3D(Basis.from_scale(Vector3(0.3, 0.6, 0.3)), Vector3.ZERO))
+	looks[STICK] = FigureLook.from_data(data)
+	panel.set_content(_catalog(), rig, looks, STICK, models)
+	_expect(is_equal_approx(panel._served_scale.value, 0.6),
+		"a served row gives the field the largest axis of its scale")
+	_expect(_sent.is_empty(), "a shown scale sends nothing: %s" % [_sent])
+
+	var drawn := panel.served_place()
+
+	panel._served_scale.value = 1.2
+	_expect(_sent.size() == 1 and _sent[0][1] == STICK and _sent[0][2] == drawn
+		and is_equal_approx(_sent[0][3], 1.2),
+		"a changed scale sends the row, the drawn part, and the new scale: %s" % [_sent])
 	panel.queue_free()
 
 

@@ -34,6 +34,7 @@ func _ready() -> void:
 	_the_performance_view_persists_and_resets()
 	_shift_click_drop_persists_and_resets()
 	_ctrl_click_swaps_run_persists_and_resets()
+	_the_minimap_turn_persists_and_resets()
 	_the_map_settings_persist_clamp_and_reset()
 	_a_box_the_player_sized_is_remembered()
 	_a_box_size_from_a_bad_file_falls_back()
@@ -456,6 +457,26 @@ func _ctrl_click_swaps_run_persists_and_resets() -> void:
 
 	reloaded.set_ctrl_click_swaps_run(false)
 	_expect(not reloaded.swaps_pace(ctrl), "and a Ctrl click does not with the option off")
+
+	_clean()
+
+
+## Off by default: north stays up on the minimap.
+func _the_minimap_turn_persists_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+
+	_expect(not s.minimap_rotates, "the minimap keeps north up by default")
+
+	s.set_minimap_rotates(true)
+
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.minimap_rotates, "turning it on persists")
+
+	reloaded.reset()
+	_expect(reloaded.minimap_rotates == ClientSettings.DEFAULT_MINIMAP_ROTATES,
+		"and reset restores it")
 
 	_clean()
 

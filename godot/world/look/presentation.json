@@ -14,6 +14,19 @@
 				0.0
 			]
 		},
+		"blood_sword": {
+			"offset": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scale": 1.0,
+			"turn": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
 		"copper_pole": {
 			"offset": [
 				0.0,

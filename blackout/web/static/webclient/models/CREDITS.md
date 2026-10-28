@@ -21,6 +21,13 @@ Options pane.
 - License: Made for Blackout
 - Models: `bank_terminal`
 
+## Bloody sword2
+
+- Author: Harsh Patel
+- Source: https://playblackout.io
+- License: Made for Blackout
+- Models: `blood_sword`
+
 ## Copper pole
 
 - Author: Harsh Patel

@@ -24,6 +24,14 @@ extends Node3D
 ## **The arrow keys orbit too** (10/26/2026), for a trackpad with no middle
 ## button. The console holds the keys in [CameraKeys] and calls
 ## [method turn] on each frame.
+##
+## **The minimap can follow the yaw** (10/27/2026). [signal turned] fires on
+## each change of the rig. The world view relays it. The minimap then reads
+## the flat view direction from [method WorldView.camera_forward]. Thus,
+## this rig names no map.
+
+## Emitted after each change of the yaw, the pitch, or the distance.
+signal turned
 
 const ORBIT_SPEED := 0.006      # radians per pixel MIDDLE-dragged
 
@@ -133,3 +141,4 @@ func _apply() -> void:
 	rotation.y = _yaw
 	_arm.rotation.x = -_pitch
 	_arm.spring_length = _distance
+	turned.emit()

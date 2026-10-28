@@ -17,6 +17,9 @@ const Const := preload("res://autoload/blackout_constants.gd")
 const HOME := Vector2i(20, 30)
 const BLOCKED := Vector2i(22, 31)
 
+## The settings file of the turn cases, removed after each.
+const TURN_SETTINGS_PATH := "user://test_minimap_turn.cfg"
+
 var _failures := 0
 var _state: WorldState
 var _roster: EntityRoster
@@ -44,6 +47,10 @@ func _ready() -> void:
 	_the_xy_button_shows_the_position_readout()
 	_the_position_readout_follows_the_player()
 	_the_xy_choice_lives_in_the_settings()
+	_the_map_keeps_north_up_until_the_player_asks()
+	_the_map_turns_with_the_camera_when_the_player_asks()
+	_a_click_on_a_turned_map_lands_on_the_tile_under_the_cursor()
+	_the_compass_points_to_north_on_the_drawn_map()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -181,17 +188,20 @@ func _a_blocked_tile_is_drawn_darker() -> void:
 
 
 func _the_pane_redraws_when_the_world_changes() -> void:
-	# The pane holds no copy of the ground, so it has to be TOLD.
+	# The pane holds no copy of the ground, so it has to be TOLD. The child
+	# window draws the map, so the pane routes each change through _redraw.
 	_fresh()
 
-	_expect(_state.chunks_changed.is_connected(_map.queue_redraw),
+	_expect(_state.chunks_changed.is_connected(_map._redraw),
 		"a chunk arriving redraws the pane")
-	_expect(_state.room_changed.is_connected(_map.queue_redraw),
+	_expect(_state.room_changed.is_connected(_map._redraw),
 		"and so does a step to another tile")
-	_expect(_state.walk_changed.is_connected(_map.queue_redraw),
+	_expect(_state.walk_changed.is_connected(_map._redraw),
 		"and so does a change of the walk")
-	_expect(_roster.changed.is_connected(_map.queue_redraw),
+	_expect(_roster.changed.is_connected(_map._redraw),
 		"and so does an entity message")
+	_expect(_map._window.draw.is_connected(_map._draw_window),
+		"and the window draws the map")
 
 
 func _the_zoom_steps_in_and_out_and_stops_at_the_ends() -> void:
@@ -435,6 +445,146 @@ func _the_xy_choice_lives_in_the_settings() -> void:
 
 
 ## The words that the readout must show for a tile on a plane.
+## Off by default: a heading changes nothing until the option is on.
+func _the_map_keeps_north_up_until_the_player_asks() -> void:
+	_fresh()
+
+	var settings := _bound_settings()
+	var east := HOME + Vector2i(3, 0)
+
+	_expect(not _map.rotates() and not settings.minimap_rotates,
+		"the minimap keeps north up by default")
+
+	_map.set_heading(Vector2(1.0, 0.0))
+
+	var player := _map.drawn_point_of(HOME)
+	var drawn := _map.drawn_point_of(east)
+
+	_expect(is_zero_approx(_map.heading_angle()),
+		"a camera to the east turns nothing while the option is off")
+	_expect(drawn.x > player.x and is_equal_approx(drawn.y, player.y),
+		"and the east tile stays to the right of the player")
+
+	_drop_settings(settings)
+
+
+## With the option on, the way the camera looks is at the top. The player
+## stays at the centre, and the drawn points come back when the option goes
+## off again.
+func _the_map_turns_with_the_camera_when_the_player_asks() -> void:
+	_fresh()
+
+	var settings := _bound_settings()
+	var east := HOME + Vector2i(3, 0)
+	var north := HOME + Vector2i(0, 3)
+	var player := _map.drawn_point_of(HOME)
+
+	settings.set_minimap_rotates(true)
+	_map.set_heading(Vector2(1.0, 0.0))
+
+	var drawn_east := _map.drawn_point_of(east)
+	var drawn_north := _map.drawn_point_of(north)
+
+	_expect(_map.rotates(), "the option from Options reaches the pane")
+	_expect(_map.drawn_point_of(HOME).is_equal_approx(player),
+		"the player stays at the centre of a turned map")
+	_expect(drawn_east.y < player.y and is_equal_approx(drawn_east.x, player.x),
+		"the east tile stands above the player with the camera to the east")
+	_expect(drawn_north.x < player.x and is_equal_approx(drawn_north.y, player.y),
+		"and the north tile stands to the left")
+	_expect(_map._drawn_radius() > _map.radius(),
+		"the ground reaches past the square, to fill the turned corners")
+
+	_map.set_heading(Vector2(0.0, 1.0))
+	_expect(is_zero_approx(_map.heading_angle()),
+		"a camera to the north turns nothing")
+
+	_map.set_heading(Vector2(1.0, 0.0))
+	settings.set_minimap_rotates(false)
+	_expect(_map.drawn_point_of(east).x > player.x,
+		"the option off puts north up again, with the heading kept")
+
+	_drop_settings(settings)
+
+
+## A click on a turned map walks to the tile the player sees under the
+## cursor, at each zoom.
+func _a_click_on_a_turned_map_lands_on_the_tile_under_the_cursor() -> void:
+	_fresh()
+
+	var settings := _bound_settings()
+
+	settings.set_minimap_rotates(true)
+	_map.set_heading(Vector2(0.6, -0.8))
+
+	for step: int in MinimapView.ZOOM_RADII:
+		_set_radius(step)
+
+		for offset: Vector2i in [Vector2i.ZERO, Vector2i(step, 0),
+				Vector2i(0, -step), Vector2i(3, -7)]:
+			var cell := HOME + offset
+
+			if _map._to_cell(_map.drawn_point_of(cell)) != cell:
+				_fail("%s round-trips on a turned map at radius %d" % [cell, step])
+				_drop_settings(settings)
+				return
+
+	_pass("each cell round-trips through its drawn centre on a turned map")
+
+	var sent: Array[String] = []
+	_map.command_requested.connect(func(line): sent.append(line))
+	_set_radius(MinimapView.ZOOM_RADII[0])
+
+	var goal := HOME + Vector2i(2, 3)
+	_map._gui_input(_left_click(_map.drawn_point_of(goal), false))
+
+	_expect(sent == [_state.click_command(goal)],
+		"a click on a turned map walks to the tile under the cursor")
+
+	_drop_settings(settings)
+
+
+## The needle points up with north up, and turns with the ground. The
+## compass sits on the map square, between the Run and XY buttons.
+func _the_compass_points_to_north_on_the_drawn_map() -> void:
+	_fresh()
+
+	var settings := _bound_settings()
+	var centre := _map.compass_centre()
+	var letter_top := centre.y - MinimapView.COMPASS_RADIUS - MinimapView.COMPASS_REACH
+
+	_expect(_map.compass_needle().is_equal_approx(Vector2.UP),
+		"with north up, the needle points up")
+	_expect(_map.map_rect().has_point(centre) and letter_top >= 0.0,
+		"the compass and its letter sit on the map square")
+	_expect(centre.x > _map._run_button.get_rect().end.x
+		and centre.x < _map._coordinates_button.get_rect().position.x,
+		"between the Run and XY buttons")
+
+	settings.set_minimap_rotates(true)
+	_map.set_heading(Vector2(1.0, 0.0))
+
+	_expect(_map.compass_needle().is_equal_approx(Vector2.LEFT),
+		"with the camera to the east, the needle points left, where north is drawn")
+	_expect(_map.compass_centre().is_equal_approx(centre),
+		"and the compass itself stays put")
+
+	_drop_settings(settings)
+
+
+## A settings file of this test, bound to the pane.
+func _bound_settings() -> ClientSettings:
+	var settings := ClientSettings.new(TURN_SETTINGS_PATH)
+
+	_map.bind_settings(settings)
+
+	return settings
+
+
+func _drop_settings(_settings: ClientSettings) -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(TURN_SETTINGS_PATH))
+
+
 func _words(tile: Vector2i, plane: int) -> String:
 	return MinimapView.COORDINATES_TEMPLATE % [tile.x, tile.y, plane]
 

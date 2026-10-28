@@ -44,6 +44,10 @@ extends RefCounted
 ## `served` row of the look of its item. [method clear_served_place] takes
 ## the row away, and the model then takes the box of the stand-in again
 ## ([FigureOutfit]).
+##
+## [method set_served_scale] gives the whole served model a new scale
+## (10/27/2026). The Godot tools scale one axis at a time, and an author
+## who wants a smaller sword wants all three.
 
 ## The color role of the skin of a body. [constant FigureShapes.BODY_COLORS]
 ## gives each role of a new body its color.
@@ -61,6 +65,10 @@ const ITEM_PART := "item"
 
 ## The keys of a look that [method copy_look] takes from another look.
 const COPIED_KEYS := ["parts", "colors", "hides", "fit"]
+
+## The smallest scale of a served model. A smaller one draws nothing that
+## an author can see or click.
+const SERVED_SCALE_LOW := 0.01
 
 
 # ─── A new body ─────────────────────────────────────────────────────────────
@@ -173,6 +181,29 @@ static func set_served_place(look: Dictionary, bone: String, xform: Transform3D)
 	look["served"] = row
 
 	return ""
+
+
+## Give the served model of a look a new scale, and keep its proportions.
+## `drawn` is the row of the served part that the figure draws: its bone
+## and its place ([method FigureOutfit.served_look]). The largest axis of
+## its scale becomes `size`. The bone, the position, and the turn stay.
+static func set_served_scale(look: Dictionary, drawn: Dictionary, size: float) -> String:
+	if size < SERVED_SCALE_LOW:
+		return "The scale must be at least %s." % SERVED_SCALE_LOW
+
+	var place := FigureLook.part_transform(drawn)
+	var factor := size / maxf(largest_scale(drawn), SERVED_SCALE_LOW)
+	var scaled := Transform3D(place.basis.scaled_local(Vector3.ONE * factor), place.origin)
+
+	return set_served_place(look, drawn.get("bone", ""), scaled)
+
+
+## The largest axis of the scale of a part row or of a served row. A row
+## with no scale has the scale 1.
+static func largest_scale(row: Dictionary) -> float:
+	var scale := FigureJson.vector3(row.get("scale"), Vector3.ONE).abs()
+
+	return maxf(scale.x, maxf(scale.y, scale.z))
 
 
 ## Take the place of the served model out of a look. The model then takes

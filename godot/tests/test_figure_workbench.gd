@@ -50,7 +50,8 @@ extends Node
 ## 20. A served model of an item wins over its worn look on each stand
 ##     (10/17/2026). A ray picks it. A move of its node goes into the
 ##     `served` row of the look, and the node on the other stand follows.
-##     An item with no look gets a look with the row only.
+##     A new scale of the row draws on each stand (10/27/2026). An item
+##     with no look gets a look with the row only.
 
 const WORKBENCH_SCENE := "res://addons/blackout_figure/figure_workbench.tscn"
 
@@ -718,6 +719,17 @@ func _a_served_model_moves_on_the_stands() -> void:
 	await _frames(SETTLE_FRAMES)
 	_expect(_near(bench.part_node("body_2", STICK, FigureLook.SERVED_PART).transform, moved),
 		"the served model on the other stand follows")
+
+	var scaled := bench.store.data_of(LOOK, STICK)
+	var bigger := Transform3D(moved.basis.scaled_local(Vector3.ONE * 2.0), moved.origin)
+
+	FigureLookEdits.set_served_scale(scaled, bench.store.looks[STICK].served(), 0.8)
+	bench.put(LOOK, STICK, scaled)
+	await _frames(SETTLE_FRAMES)
+	_expect(_near(bench.part_node("body_1", STICK, FigureLook.SERVED_PART).transform, bigger)
+		and _near(bench.part_node("body_2", STICK, FigureLook.SERVED_PART).transform, bigger)
+		and not bench.sync_from_nodes(),
+		"a new scale of the served model draws on each stand, and nothing moved")
 
 	bench.put(LOOK, STICK, {})
 	await _frames(SETTLE_FRAMES)

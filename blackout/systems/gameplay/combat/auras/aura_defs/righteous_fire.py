@@ -38,7 +38,7 @@ RIGHTEOUS_FIRE_UNLOCK_LEVEL = 25
 # (Nick, 10/20/2026). The share is the same at every level. Thus, 0.02
 # burns a caster at full HP to 0 in 50 pulses, about two minutes. HP regen
 # gives back 1 HP each minute, so it changes that time very little.
-RIGHTEOUS_FIRE_SELF_BURN_PCT = 0.02
+RIGHTEOUS_FIRE_SELF_BURN_PCT = 0.05
 
 
 

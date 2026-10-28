@@ -23,6 +23,14 @@
 		},
 		{
 			"family": "weapon",
+			"key": "blood_sword",
+			"name": "blood sword",
+			"slot": "main_hand",
+			"tier": 3,
+			"tool_type": "gadget"
+		},
+		{
+			"family": "weapon",
 			"key": "broken_bit_blade",
 			"name": "broken bit-blade",
 			"slot": "main_hand",

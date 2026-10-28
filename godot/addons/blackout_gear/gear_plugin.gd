@@ -27,8 +27,9 @@ const BODY_PART_STATUS := "The part %s belongs to %s, a body or a kit part. Open
 	+ "workbench to change it."
 
 ## What the status box says for a selected served model.
-const SERVED_STATUS := "The served model of %s. W moves it, E turns it, and R scales it. " \
-	+ "The look file of the item keeps its place."
+const SERVED_STATUS := "The served model of %s. W moves it, E turns it, and R scales one " \
+	+ "axis. Scale in the hand, in the Model fold, scales the whole model. The look file of " \
+	+ "the item keeps its place."
 
 ## The handlers of the dock.
 var _gear: FigureGearHandlers

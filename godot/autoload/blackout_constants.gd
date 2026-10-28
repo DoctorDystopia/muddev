@@ -83,6 +83,8 @@ const MOMENT_FOUNDRY_CRAFT := "foundry_craft"
 const MOMENT_TRANSITION := "transition"
 const MOMENT_GUNS_SHOT := "guns_shot"
 const MOMENT_MELEE_SWING := "melee_swing"
+const MOMENT_SHOP_BUY := "shop_buy"
+const MOMENT_SHOP_SELL := "shop_sell"
 
 # Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
 const MESSAGE_TYPE_KEY := "type"
@@ -236,6 +238,8 @@ const OBJECT_KINDS := {
 	"copper_pole": "gathering",
 	"lone_android": "npc",
 	"shopkeeper_oasis": "npc",
+	"shopkeeper_al_wasta": "npc",
+	"shopkeeper_ephiri": "npc",
 	"atticus_quin": "npc",
 	"atum_musa": "npc",
 	"mutant_raider": "npc",
@@ -324,6 +328,8 @@ const OBJECT_KIND_PREVIEW := {
 	"copper_pole": ["copper_pole", "gatherable"],
 	"lone_android": ["lone_android", "npc"],
 	"shopkeeper_oasis": ["shopkeeper", "npc"],
+	"shopkeeper_al_wasta": ["shopkeeper_al_wasta", "npc"],
+	"shopkeeper_ephiri": ["shopkeeper_ephiri", "npc"],
 	"atticus_quin": ["talkative_npc", "npc"],
 	"atum_musa": ["atum_musa", "npc"],
 	"mutant_raider": ["mutant_raider", "npc"],

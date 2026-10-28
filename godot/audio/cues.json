@@ -36,6 +36,11 @@
       "clip": "sfx/metalsmith_craft.wav",
       "note": "One finished craft under Metalsmith. The cue repeats until the batch stops."
     },
+    "shop_trade": {
+      "kind": "sfx",
+      "clip": "sfx/shop_trade.wav",
+      "note": "One buy or one sell at a shop that moved one item or more. The trader hears it."
+    },
     "task_complete": {
       "kind": "sfx",
       "clip": "sfx/task_complete.wav",
@@ -54,6 +59,8 @@
     "guns_shot": "guns_shot",
     "melee_swing": "melee_swing",
     "metalsmith_craft": "metalsmith_craft",
+    "shop_buy": "shop_trade",
+    "shop_sell": "shop_trade",
     "task_complete": "task_complete",
     "transition": "transition"
   }

@@ -422,6 +422,13 @@ func _ready() -> void:
 	_minimap.command_requested.connect(Evennia.command)
 	_minimap.world_map_requested.connect(_open_world_map)
 
+	# The minimap can turn with the camera. It reads the flat view direction
+	# on each turn of the rig, and one time now. The rig turned to its start
+	# yaw before this ran. The pane decides whether it turns: the setting is
+	# its own.
+	_world.camera_turned.connect(_sync_minimap_heading)
+	_sync_minimap_heading()
+
 	# The right-click menu. The 3D pane raises the question and the menu is a
 	# sibling Control over the pane rather than a child of the Node3D, so the
 	# 3D scene stays 3D and the box can be tested with no camera.
@@ -1008,6 +1015,11 @@ func _process(delta: float) -> void:
 
 	if _camera_keys.is_holding():
 		_world.turn_camera(_camera_keys.turn(), delta)
+
+
+## Give the minimap the way the camera looks. See [method MinimapView.set_heading].
+func _sync_minimap_heading() -> void:
+	_minimap.set_heading(_world.camera_forward())
 
 
 ## Turn a key direction to follow the camera, when the player chose that in

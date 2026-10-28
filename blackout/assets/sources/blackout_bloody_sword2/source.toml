@@ -1,0 +1,9 @@
+title     = "Bloody sword2"
+author    = "Harsh Patel"
+url       = "https://playblackout.io"
+site      = "blackout"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-10-27
+
+[files]
+"bloody_sword2.glb" = "sha256:ad1c29d48f24ac3b51b0304b70a5e587ea384a1c106b65ab72e4780196b8e59f"

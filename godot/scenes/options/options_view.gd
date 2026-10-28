@@ -106,6 +106,7 @@ var _camera_keys_check: CheckBox
 var _ctrl_run_check: CheckBox
 var _hide_roofs_check: CheckBox
 var _walk_path_check: CheckBox
+var _minimap_rotates_check: CheckBox
 var _performance_check: CheckBox
 var _shift_drop_check: CheckBox
 
@@ -247,6 +248,12 @@ func _add_movement_section(column: VBoxContainer) -> void:
 	_walk_path_check = _check("Show the walk path on the maps")
 	column.add_child(_walk_path_check)
 
+	# Off by default: north stays up. The world map never turns. See
+	# ClientSettings.DEFAULT_MINIMAP_ROTATES.
+	_minimap_rotates_check = _check("Minimap turns with the camera")
+	_minimap_rotates_check.tooltip_text = "Off: north is at the top of the minimap. On: the way the camera looks is at the top."
+	column.add_child(_minimap_rotates_check)
+
 
 ## What a click in the bag does.
 func _add_inventory_section(column: VBoxContainer) -> void:
@@ -359,6 +366,7 @@ func _connect_controls() -> void:
 	_ctrl_run_check.toggled.connect(_on_ctrl_run_toggled)
 	_hide_roofs_check.toggled.connect(_on_hide_roofs_toggled)
 	_walk_path_check.toggled.connect(_on_walk_path_toggled)
+	_minimap_rotates_check.toggled.connect(_on_minimap_rotates_toggled)
 	_performance_check.toggled.connect(_on_performance_toggled)
 	_shift_drop_check.toggled.connect(_on_shift_drop_toggled)
 
@@ -386,6 +394,7 @@ func _sync() -> void:
 	_ctrl_run_check.button_pressed = _settings.ctrl_click_swaps_run
 	_hide_roofs_check.button_pressed = _settings.hide_roofs
 	_walk_path_check.button_pressed = _settings.show_walk_path
+	_minimap_rotates_check.button_pressed = _settings.minimap_rotates
 	_performance_check.button_pressed = _settings.show_performance
 	_shift_drop_check.button_pressed = _settings.shift_click_drop
 	_syncing = false
@@ -480,6 +489,13 @@ func _on_walk_path_toggled(pressed: bool) -> void:
 		return
 
 	_settings.set_show_walk_path(pressed)
+
+
+func _on_minimap_rotates_toggled(pressed: bool) -> void:
+	if _syncing:
+		return
+
+	_settings.set_minimap_rotates(pressed)
 
 
 func _on_shift_drop_toggled(pressed: bool) -> void:

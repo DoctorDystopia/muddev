@@ -65,6 +65,7 @@ where there is art, and the silhouette of the family where there is not.
 | **`Run` on the minimap**, or **R** in move mode | Turns run on or off. The button shows what the server says. Run moves two tiles each tick |
 | **Ctrl + left-click a tile, a minimap cell, or a thing** | Walks there with run on, and runs there with run off, when **Ctrl + left click swaps walk and run** is on in Options. On by default, as in OSRS. The click sends the paced walk that the server spells (`TILE_PACED_WALK_TEMPLATE`, `ENTITY_PACED_APPROACH_TEMPLATE`), as `goto/walk` or `goto/run`. A use of the run toggle during that walk ends its pace. Remembered |
 | **"Show the walk path on the maps" in Options** | Shows or hides the walk path on both maps. Remembered |
+| **"Minimap turns with the camera" in Options** | Off: north is at the top of the minimap. On: the way the camera looks is at the top, and the ground turns under you as the camera orbits. The world map never turns. Off by default. Remembered |
 | **`Map` on the minimap** | Opens the world map. Drag to pan, wheel to zoom, `Up` and `Down` for the plane, `Close` or Esc to close |
 | **Drag the world map title bar or a grip** | Moves or resizes the world map, as for the pop-up. Remembered |
 | **`Legend` on the world map** | Shows or hides the legend. A click on an icon row hides that category of map icon on the world map. Remembered |
@@ -2649,9 +2650,10 @@ To change the place of a served model:
    the Look fold says that the figure draws it.
 2. Click the model on a stand. The status box names the served model of
    the item.
-3. Move it with W, turn it with E, and scale it with R. The other stand
-   follows.
-4. Press Ctrl+S. The look file of the item keeps the place in its
+3. Move it with W, and turn it with E. The other stand follows.
+4. To scale the whole model, type a number in **Scale in the hand** in
+   the Model fold. R scales one axis only.
+5. Press Ctrl+S. The look file of the item keeps the place in its
    `served` row.
 
 **Fit served model to look** in the Model fold takes the `served` row
@@ -2673,6 +2675,12 @@ away. The rules:
   look is a figure model from **Import model**, in figure space.
 - **The `served` row has no fit row.** One place serves each body type.
   A row on a bone that the rig does not have gives the first place.
+- **Scale in the hand keeps the proportions** (10/27/2026). The field
+  shows the largest axis of the scale that the stand draws. A change
+  scales all three axes by the same factor
+  (`FigureLookEdits.set_served_scale`), as one undo entry for each drag.
+  The presentation fields do not touch the hand. `ModelLoader` reads
+  them for the model on the ground and on the family stand.
 - **A move of the served model of an item with no look makes a look** with
   the `served` row only. Such a look gives no stand-in: the slot shape
   stands in.
@@ -3363,6 +3371,23 @@ Since 09/28/2026, the minimap follows the OSRS minimap:
 | World map | The `Map` button opens the world map | `WorldMapView` |
 | Run | A toggle in the top-left corner of the map square, as the OSRS run orb | `blackout_walk` `running` |
 | Position readout | Your tile and your plane, at the bottom of the map square (10/21/2026). The `XY` toggle in the top-right corner shows it. The world map has the same toggle, and the two share one setting | `WorldState.current_cell`, `ClientSettings.show_coordinates` |
+| The turn (10/27/2026) | North up, or the way the camera looks up. "Minimap turns with the camera" in Options, off by default. The world map never turns | `WorldView.camera_turned`, `ClientSettings.minimap_rotates` |
+| Compass (10/27/2026) | A small compass at the top centre of the map square, between Run and XY. Its needle points to north on the drawn map, so it turns with the ground when the map turns. A mark, not a button | `MinimapView.compass_needle` |
+
+**The minimap can turn with the camera (10/27/2026).** `OrbitCamera` emits
+`turned` on each change of the rig, `WorldView` relays it as `camera_turned`,
+and the console gives the minimap `WorldView.camera_forward` on each one.
+The pane keeps that heading whether or not it turns, and
+`ClientSettings.minimap_rotates` says whether it uses it. The turn is one
+`Transform2D` about the tile of the player. The tile maths stays north up:
+`_to_pixels` never turns, and `_to_cell` turns a click back before it reads
+the cell, so a click lands on the tile under the cursor. A map icon, a map
+dot, the flag, and the readout stand upright at their turned points. The
+ground, the walk path, the hover outline, and the player square turn with
+the tiles. A turned square shows its corners past the map square. Thus, the
+map is drawn on a child `Window` that clips, and the ground reaches the
+radius times the square root of two. The widest zoom turned needs 57 tiles,
+and the block holds at least 64.
 
 Four rules hold it together:
 
@@ -3884,6 +3909,15 @@ Each melee style reads Strike, a fist included, and Strike names
 `melee_swing`. The client plays `melee_swing.wav`. The moment goes to the
 attacker only. A target and the onlookers hear nothing.
 
+**A shop trade has one sound for each buy and each sell.**
+`shop_service.execute_buy` sends `shop_buy`, and `execute_sell` sends
+`shop_sell`. The menu, the pop-up and the typed command all trade through
+those two. Both moments name the `shop_trade` cue, and the client plays
+`shop_trade.wav`. One trade is one sound, for one item or for fifty. A trade
+that moved no item sends nothing. The moment goes to the trader only. To
+give the sell its own sound, change the `shop_sell` row of `cues.json`. The
+server needs no edit.
+
 **Every clip plays on the bus of its sound kind.** A sound effect plays on
 the `SFX` bus declared in `default_bus_layout.tres`. `_KIND_BUSES` in
 `sound_cues.gd` maps each kind to its bus, and a kind with no row plays on
@@ -3995,7 +4029,7 @@ there, one bus row in `_KIND_BUSES`, and one bus in
 | `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/stable_hash.gd` | A string hash that gives the same number on every client. `EntityPool` turns the ring of figures on a tile by it. |
-| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button, the XY button and the position readout. |
+| `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button, the XY button, the position readout, and the turn with the camera. |
 | `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane, in a floating box. Pans, zooms, and changes the plane. Walks nowhere. |
 | `scenes/worldmap/world_map_legend.gd` | The legend of the world map: a row for each map icon and each marker. A click on an icon row hides that category of map icon. |
 | `world/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |

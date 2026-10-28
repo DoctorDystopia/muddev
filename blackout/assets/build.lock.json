@@ -11,6 +11,10 @@
     "inputs": "sha256:c9dee17f2d7aa43074df0d64493c1462a844ef414cdf329961568fd2a43fcd2d",
     "output": "sha256:cc8c3e55dec8e1196af1623550823f695ebad88b1f35d6c57d74a015d0daa52c"
   },
+  "blood_sword": {
+    "inputs": "sha256:719db74624f6c1262d4084eb6452dc309ad8d97e7da2598093fa17728b5f2177",
+    "output": "sha256:290ed8c93de35e229ed878f648d43264ae4c09ce9e7b3e3621fe955568d8bbb5"
+  },
   "copper_pole": {
     "inputs": "sha256:8e4a552f3db0ac0fe73df595828d078fdbcca99029f33f8f362225e0863259e5",
     "output": "sha256:e0c1f61dd4105d3bbb23882576e8ed1712ba71afcba8cae3bd4b11df96b6d093"

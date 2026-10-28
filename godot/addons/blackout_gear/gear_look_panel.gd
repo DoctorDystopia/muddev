@@ -42,6 +42,12 @@ extends VBoxContainer
 ## over art that it did not bring, and the served model draws as it is.
 ## "Fit served model to look" takes the moved place of the model away.
 ##
+## "Scale in the hand" scales the whole served model on each stand
+## (10/27/2026). The field shows the largest axis of the scale that the
+## stand draws. A change keeps the proportions, the bone, and the place.
+## The presentation fields do not change the model in the hand: the game
+## uses them on the ground and on the family stand.
+##
 ## This panel changes no worn look itself. Each control sends a signal, and
 ## the plugin makes the change through [FigureLookEdits] and the undo
 ## history.
@@ -66,6 +72,10 @@ signal model_parts_requested(key: String, model_key: String)
 ## "Fit served model to look".
 signal served_fit_requested(key: String)
 
+## "Scale in the hand". `drawn` is the row of the served part that the
+## stand draws before the change ([method served_place]).
+signal served_scale_changed(key: String, drawn: Dictionary, size: float)
+
 ## The served model of the row has a new offset, turn, or scale. The turn
 ## is in degrees. `field` names the changed field. The label of a merged
 ## undo entry carries it.
@@ -87,6 +97,10 @@ const SERVED_WINS := "The figure draws the served model of the row as it is. Typ
 ## The tooltip of "Fit served model to look" when it cannot apply.
 const NOT_SERVED := "The figure does not draw a served model for the row."
 const NOT_MOVED := "The served model of the row has its first place already."
+
+## The tooltip of "Scale in the hand" for a row whose served model draws.
+const SERVED_SCALE_TIP := "The largest axis of the scale of the served model in the hand. " \
+	+ "A change scales the whole model, on each stand."
 
 ## The first choice of the color list of a color role: the look gives the
 ## role no color, and the palette gives it one.
@@ -151,6 +165,7 @@ var _author := LineEdit.new()
 var _import: Button
 var _model_parts: Button
 var _served_fit: Button
+var _served_scale: SpinBox
 var _open_dialog := FileDialog.new()
 var _present_line := Label.new()
 var _present_offset: HBoxContainer
@@ -228,6 +243,7 @@ func set_content(catalog: FigureCatalog, rig: FigureRig, looks: Dictionary, key:
 	_show_colors(look)
 	_show_hides(look)
 	_show_model(look)
+	_show_served_scale()
 	_show_presentation()
 	_enable_look_buttons(look)
 
@@ -254,6 +270,19 @@ func serves_model() -> bool:
 	var source := FigureOutfit.source_of(_rig, _slot_of(_key), _key, _looks, _models)
 
 	return source == FigureOutfit.SOURCE_MODEL
+
+
+## The served part that the stand draws for the row, as a part row
+## ([method FigureOutfit.served_look]). It holds the bone and the place.
+## An empty dictionary for a row with no served model.
+func served_place() -> Dictionary:
+	if not serves_model():
+		return {}
+
+	var drawn := FigureOutfit.served_look(_rig, _slot_of(_key), _key, _looks,
+		_catalog.families(), _models)
+
+	return drawn.part(FigureLook.SERVED_PART)
 
 
 ## The key of the look in the copy list, or "".
@@ -349,6 +378,9 @@ func _model_rows() -> Array:
 		model_parts_requested.emit(_key, model_key()))
 	_served_fit = _look_button("Fit served model to look", func() -> void:
 		served_fit_requested.emit(_key))
+	_served_scale = FigureFields.spin(FigureLookEdits.SERVED_SCALE_LOW, PartEditor.SCALE_HIGH,
+		FigureFields.LENGTH_STEP, 1.0)
+	_served_scale.value_changed.connect(_send_served_scale)
 	_model_key.placeholder_text = "The asset key of the model. Empty for the key of the row"
 	_model_key.text_changed.connect(func(_text: String) -> void:
 		_enable_model_buttons(_looks.get(_key)))
@@ -374,7 +406,10 @@ func _model_rows() -> Array:
 
 	return [FigureFields.label("Model of the look (a file in figure space)"), _model_key,
 		_author, _import, _model_parts, _served_fit,
-		FigureFields.label("Presentation of the served model in the game"), _present_line,
+		FigureFields.label("Scale in the hand (the whole served model, on each stand)"),
+		_served_scale,
+		FigureFields.label("Presentation of the served model on the ground, not in the hand"),
+		_present_line,
 		FigureFields.label("Offset, in units of the unit box"), _present_offset,
 		FigureFields.label("Turn (degrees)"), _present_turn,
 		FigureFields.label("Scale, a multiplier on the unit box"), _present_scale]
@@ -395,6 +430,27 @@ func _send_presentation(field: String) -> void:
 	if not _presented.is_empty():
 		presentation_changed.emit(_presented, FigureFields.vector_of(_present_offset),
 			FigureFields.vector_of(_present_turn), _present_scale.value, field)
+
+
+## "Scale in the hand" changed: send the row, the served part that the
+## stand draws now, and the new scale.
+func _send_served_scale(size: float) -> void:
+	var drawn := served_place()
+
+	if not drawn.is_empty():
+		served_scale_changed.emit(_key, drawn, size)
+
+
+## Show the largest axis of the scale of the served model in the hand. A
+## row with no served model has the field off.
+func _show_served_scale() -> void:
+	var drawn := served_place()
+	var known := not drawn.is_empty()
+	var size := FigureLookEdits.largest_scale(drawn) if known else 1.0
+
+	_served_scale.set_value_no_signal(size)
+	_served_scale.editable = known
+	_served_scale.tooltip_text = SERVED_SCALE_TIP if known else NOT_SERVED
 
 
 ## Show the offset, the turn, and the scale of the served model of the row.
@@ -552,7 +608,8 @@ func _note_text(look: FigureLook) -> String:
 	if serves_model():
 		return "The figure draws the served model of %s, in place of the worn look. " % _key \
 			+ "The worn look, or the slot shape, stands in while the model is not in hand. " \
-			+ "It also gives the model its first place. Click the model on a stand to move it."
+			+ "It also gives the model its first place. Click the model on a stand to move it. " \
+			+ "Scale in the hand, in the Model fold, scales the whole model."
 
 	if look != null and not look.base().is_empty():
 		var problem := look.base_problem(_looks)

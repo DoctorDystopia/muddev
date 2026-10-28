@@ -37,6 +37,10 @@ signal options_requested(options: Array, at: Vector2)
 ## [signal options_requested] gives for the menu: this Node3D draws no Controls.
 signal hover_text_changed(text: String)
 
+## Emitted after each turn of the camera rig. The console gives the minimap
+## [method camera_forward] on it, so the minimap can turn with the camera.
+signal camera_turned
+
 ## Added to the hover text when the right-click menu has more than the default.
 ## OSRS prints the same count, so a player knows a right click has more.
 const MORE_OPTIONS_TEXT := " / %d more options"
@@ -233,6 +237,7 @@ var _hitsplats: HitsplatLayer
 func _ready() -> void:
 	_build_true_tile_marks()
 	_build_hover_mark()
+	_rig.turned.connect(camera_turned.emit)
 
 	_hitsplats = HitsplatLayer.new()
 	_hitsplats.name = "Hitsplats"

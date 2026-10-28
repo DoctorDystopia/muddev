@@ -247,6 +247,14 @@ _KIND_ROWS: tuple = (
     _npc("shopkeeper_oasis", "Shopkeeper",
          "A makeshift market stall shaded by a tattered awning.",
          "shopkeeper"),
+    # The two shops of Al Wasta (Nick, 10/27/2026). No model yet: the
+    # client draws the NPC family model.
+    _npc("shopkeeper_al_wasta", "Shopkeeper",
+         "A building full of salvaged goods.",
+         "shopkeeper_al_wasta"),
+    _npc("shopkeeper_ephiri", "Ephiri's Equipment Emporium",
+         "A shop with a lot of sharp things on the wall.",
+         "shopkeeper_ephiri"),
     # The first Preceptor (DESIGN-0012). No model yet: the fallback NPC.
     _npc("atticus_quin", "Atticus Quin",
          "A preceptor in a long red coat stands here, watching.",

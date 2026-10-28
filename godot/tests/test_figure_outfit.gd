@@ -27,6 +27,9 @@ extends Node
 ##    hide list and the colors of the look. A look that names the model
 ##    draws as it is. A look with only a `served` row gives the slot shape
 ##    as the stand-in. A model with no bone to hold it draws nothing.
+## 10. A new scale of a served model keeps its proportions, its bone, its
+##     position, and its turn (10/27/2026). A scale below the low limit
+##     gives a reason, and the row stays.
 
 const SWORD := "iron_sword"
 const STICK := "wood_sword"
@@ -55,6 +58,7 @@ func _ready() -> void:
 	_each_item_of_the_repository_draws()
 	_a_served_model_wins()
 	_a_served_model_takes_its_place()
+	_a_served_scale_keeps_the_proportions()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -471,6 +475,32 @@ func _a_served_model_takes_its_place() -> void:
 	_expect(FigureLookEdits.clear_served_place(data).is_empty() and not data.has("served")
 		and not FigureLookEdits.clear_served_place(data).is_empty(),
 		"the served row goes, and a second clear gives a reason")
+
+
+func _a_served_scale_keeps_the_proportions() -> void:
+	var hand: String = _rig().slots()["main_hand"]
+	var turn := Basis.from_euler(Vector3(0.0, 0.0, 1.5))
+	var origin := Vector3(0.0, 0.2, 0.0)
+	var drawn := {"name": FigureLook.SERVED_PART, "bone": hand}
+	var data := {"format": FigureLook.FORMAT, "key": STICK}
+
+	FigureLook.set_part_transform(drawn, Transform3D(turn.scaled_local(Vector3(0.5, 0.25, 0.5)),
+		origin))
+	_expect(is_equal_approx(FigureLookEdits.largest_scale(drawn), 0.5)
+		and is_equal_approx(FigureLookEdits.largest_scale({}), 1.0),
+		"the largest axis of the scale is the size of the served model")
+	_expect(FigureLookEdits.set_served_scale(data, drawn, 1.0).is_empty()
+		and data["served"]["bone"] == hand
+		and _near(FigureLook.part_transform(data["served"]),
+			Transform3D(turn.scaled_local(Vector3(1.0, 0.5, 1.0)), origin)),
+		"a new scale keeps the proportions, the bone, the position, and the turn: %s"
+			% [data.get("served")])
+
+	var kept: Dictionary = data["served"].duplicate(true)
+
+	_expect(not FigureLookEdits.set_served_scale(data, drawn,
+			FigureLookEdits.SERVED_SCALE_LOW * 0.5).is_empty() and data["served"] == kept,
+		"a scale below the low limit gives a reason, and the row stays")
 
 
 ## The count of the part nodes of a figure that are not of its body.

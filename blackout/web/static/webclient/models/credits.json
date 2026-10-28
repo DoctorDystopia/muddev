@@ -24,6 +24,17 @@
     ]
   },
   {
+    "title": "Bloody sword2",
+    "author": "Harsh Patel",
+    "url": "https://playblackout.io",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "blood_sword"
+    ]
+  },
+  {
     "title": "Copper pole",
     "author": "Harsh Patel",
     "url": "TODO",

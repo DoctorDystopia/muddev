@@ -32,6 +32,7 @@ func _ready() -> void:
 	_the_performance_check_writes_the_setting_and_sends_no_command()
 	_the_shift_drop_check_writes_the_setting_and_sends_no_command()
 	_the_ctrl_run_check_writes_the_setting_and_sends_no_command()
+	_the_minimap_turn_check_writes_the_setting_and_sends_no_command()
 	_the_credits_button_asks_for_the_box_and_sends_no_command()
 
 	_clean()
@@ -284,6 +285,29 @@ func _the_performance_check_writes_the_setting_and_sends_no_command() -> void:
 
 	_expect(not _view._performance_check.button_pressed,
 		"and a reset elsewhere unticks it again")
+
+
+## The turn of the minimap is a look of this client. The server never hears
+## about it, and the check shows the setting, whichever way the default points.
+func _the_minimap_turn_check_writes_the_setting_and_sends_no_command() -> void:
+	_fresh()
+
+	var sent: Array[String] = []
+	_view.command_requested.connect(func(line): sent.append(line))
+	var flipped := not ClientSettings.DEFAULT_MINIMAP_ROTATES
+
+	_expect(_view._minimap_rotates_check.button_pressed == ClientSettings.DEFAULT_MINIMAP_ROTATES,
+		"the minimap turn check starts at the default")
+
+	_view._minimap_rotates_check.toggled.emit(flipped)
+
+	_expect(_settings.minimap_rotates == flipped, "a toggle writes the setting")
+	_expect(sent.is_empty(), "and sends the server nothing")
+
+	_settings.reset()
+
+	_expect(_view._minimap_rotates_check.button_pressed == ClientSettings.DEFAULT_MINIMAP_ROTATES,
+		"and a reset elsewhere puts the check back")
 
 
 ## The option is a gesture of this client. The server never hears about it,

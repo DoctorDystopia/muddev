@@ -34,6 +34,7 @@ Royalty-free licence: https://ovanisound.com/policies/terms-of-service
 | `sfx/foundry_craft.wav` | `Steampunk/Steampunk Gas Ignite.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/transition.wav` | `Motions and Impacts/Whoosh Cyberwave.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/guns_shot.wav` | `Hollywood/Titan Handgun.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/shop_trade.wav` | `Medieval/Loot Gold.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 
 ## Enzo — Flesh and Fracture - Lite
 

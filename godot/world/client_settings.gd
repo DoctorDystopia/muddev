@@ -53,6 +53,7 @@ const KEY_POPUP_RECT := "popup_rect"
 const KEY_MINIMAP_RADIUS := "minimap_radius"
 const KEY_SHOW_WALK_PATH := "show_walk_path"
 const KEY_SHOW_COORDINATES := "show_coordinates"
+const KEY_MINIMAP_ROTATES := "minimap_rotates"
 const KEY_SHOW_PERFORMANCE := "show_performance"
 const KEY_SHIFT_CLICK_DROP := "shift_click_drop"
 
@@ -283,6 +284,15 @@ const DEFAULT_SHOW_WALK_PATH := false
 ## text and changes no fact.
 const DEFAULT_SHOW_COORDINATES := false
 
+## Whether the minimap turns with the camera (10/27/2026). With it off, the
+## minimap keeps north at the top. With it on, the way the camera looks is at
+## the top. The ground turns under the player as the camera orbits.
+##
+## Off by default, so a player who learned the map with north up sees no
+## change. The world map never turns. The server sends the same chunks either
+## way, so the toggle changes a look and no fact.
+const DEFAULT_MINIMAP_ROTATES := false
+
 ## Whether Shift + left click on a carried item drops it (10/20/2026). The
 ## OSRS setting "Shift click to drop items" does the same.
 ##
@@ -400,6 +410,7 @@ var hide_roofs := DEFAULT_HIDE_ROOFS
 var minimap_radius := DEFAULT_MINIMAP_RADIUS
 var show_walk_path := DEFAULT_SHOW_WALK_PATH
 var show_coordinates := DEFAULT_SHOW_COORDINATES
+var minimap_rotates := DEFAULT_MINIMAP_ROTATES
 var show_performance := DEFAULT_SHOW_PERFORMANCE
 var shift_click_drop := DEFAULT_SHIFT_CLICK_DROP
 var amount_size := DEFAULT_AMOUNT_SIZE
@@ -471,6 +482,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_SHOW_WALK_PATH, DEFAULT_SHOW_WALK_PATH))
 	show_coordinates = bool(config.get_value(
 		SECTION, KEY_SHOW_COORDINATES, DEFAULT_SHOW_COORDINATES))
+	minimap_rotates = bool(config.get_value(
+		SECTION, KEY_MINIMAP_ROTATES, DEFAULT_MINIMAP_ROTATES))
 	show_performance = bool(config.get_value(
 		SECTION, KEY_SHOW_PERFORMANCE, DEFAULT_SHOW_PERFORMANCE))
 	shift_click_drop = bool(config.get_value(
@@ -521,6 +534,7 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_MINIMAP_RADIUS, minimap_radius)
 	config.set_value(SECTION, KEY_SHOW_WALK_PATH, show_walk_path)
 	config.set_value(SECTION, KEY_SHOW_COORDINATES, show_coordinates)
+	config.set_value(SECTION, KEY_MINIMAP_ROTATES, minimap_rotates)
 	config.set_value(SECTION, KEY_SHOW_PERFORMANCE, show_performance)
 	config.set_value(SECTION, KEY_SHIFT_CLICK_DROP, shift_click_drop)
 	config.set_value(SECTION, KEY_AMOUNT_SIZE, amount_size)
@@ -828,6 +842,16 @@ func set_show_coordinates(value: bool) -> void:
 	changed.emit()
 
 
+## Turn the minimap with the camera, or keep north up, and persist it.
+func set_minimap_rotates(value: bool) -> void:
+	if value == minimap_rotates:
+		return
+
+	minimap_rotates = value
+	save_to_disk()
+	changed.emit()
+
+
 ## Remember how big the player made the amount box, and persist it.
 ##
 ## Called when the box closes, so a resize drag writes the file one time. A
@@ -953,6 +977,7 @@ func reset() -> void:
 	minimap_radius = DEFAULT_MINIMAP_RADIUS
 	show_walk_path = DEFAULT_SHOW_WALK_PATH
 	show_coordinates = DEFAULT_SHOW_COORDINATES
+	minimap_rotates = DEFAULT_MINIMAP_ROTATES
 	show_performance = DEFAULT_SHOW_PERFORMANCE
 	shift_click_drop = DEFAULT_SHIFT_CLICK_DROP
 	amount_size = DEFAULT_AMOUNT_SIZE
