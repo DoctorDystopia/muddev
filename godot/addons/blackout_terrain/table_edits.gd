@@ -75,6 +75,13 @@ const TEMPLATE_FIXTURES := "world/tests/fixtures/structures"
 ## The directories whose chunk files a rename and a removal read.
 var chunk_directories := PackedStringArray()
 
+## The shelves whose versions a rename and a removal read (10/28/2026).
+## Each directory of a shelf holds the chunk files of one version. A
+## version names the rows of today, so a rename reaches it, and a removal
+## refuses a row that it names. Thus, a switch to it never brings a stale
+## name back.
+var version_shelves := PackedStringArray()
+
 ## The directories whose templates a rename and a removal read.
 var template_directories := PackedStringArray()
 
@@ -90,6 +97,7 @@ func _init() -> void:
 		ProjectSettings.globalize_path(TerrainWorld.WORKBENCH_DIRECTORY)])
 	template_directories = PackedStringArray([StructureTemplate.world_directory(),
 		_game_directory().path_join(TEMPLATE_FIXTURES)])
+	version_shelves = PackedStringArray([WorldVersions.world_shelf()])
 	look_files = {
 		TileTables.AREAS: [[AreaLook.PATH, AreaLook.KEY_AREAS]],
 		TileTables.FLOOR_TYPES: [[TerrainPalette.PATH, TerrainPalette.KEY_FLOORS]],
@@ -309,11 +317,18 @@ static func names_key(holder: Object, table: String, key: String) -> bool:
 	return false
 
 
-## Each chunk file of [member chunk_directories].
+## Each chunk file of [member chunk_directories], and of each version of
+## [member version_shelves].
 func _all_chunk_paths() -> PackedStringArray:
 	var paths := PackedStringArray()
+	var directories := Array(chunk_directories)
 
-	for directory: String in chunk_directories:
+	for shelf: String in version_shelves:
+		if DirAccess.dir_exists_absolute(shelf):
+			for key: String in DirAccess.get_directories_at(shelf):
+				directories.append(shelf.path_join(key))
+
+	for directory: String in directories:
 		if not DirAccess.dir_exists_absolute(directory):
 			continue
 
@@ -342,14 +357,16 @@ static func _game_directory() -> String:
 	return project.path_join(ChunkFile.GAME_DIRECTORY_FROM_PROJECT).simplify_path()
 
 
-## `path` from the game directory, or its file name outside it.
+## `path` from the game directory, or its directory and file name outside
+## it. The directory keeps two files of one name apart: a chunk of the
+## workbench and a chunk of a version.
 static func _label(path: String) -> String:
 	var game := _game_directory() + "/"
 
 	if path.begins_with(game):
 		return path.trim_prefix(game)
 
-	return path.get_file()
+	return path.get_base_dir().get_file().path_join(path.get_file())
 
 
 # ─── Rename ─────────────────────────────────────────────────────────────────

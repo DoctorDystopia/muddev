@@ -64,6 +64,9 @@ Every name in a chunk file is a row of a table under `world/`:
 - **After an edit:** stop the server, run `scripts/sync_tile_objects.py
   --apply`, and start the server. The server loads these files one time, at
   start.
+- **A saved version of this directory** is a directory of `world/versions/`
+  (10/28/2026). The Versions tab of the terrain editor saves one and
+  switches this directory to one. `world/versions/README.md` has the rules.
 - **No hand edits of a big grid.** Use the editor, or a script that writes
   through `chunkfile.write_file`. A hand edit that breaks the layout still
   reads, but the next editor save rewrites every line of it.

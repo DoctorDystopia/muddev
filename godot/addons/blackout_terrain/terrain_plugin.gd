@@ -72,6 +72,21 @@ extends EditorPlugin
 ## files that name the key, and reads the block again. After each change,
 ## every list reads [TileTables] again, the block draws again, and
 ## [ClientExport] runs on a thread. The status box gives the result.
+##
+## ## The Versions tab
+##
+## [WorldVersions] owns the shelf of saved worlds (Nick, 10/28/2026). A
+## save of a version first saves the unsaved chunks of the block. Thus,
+## the version is what the author sees.
+##
+## A switch replaces the chunk files of the world and reads the block
+## again. It asks first, because undo cannot reach a file. When no version
+## holds the world of now, the question says so and counts the files that
+## go. A removal asks too.
+##
+## The list refreshes after a save of the block, after a load, and after
+## each change here. It never refreshes on a stroke, because the mark of
+## the current version digests every file of every version.
 
 ## Seconds between two dabs while a sculpt button is held still.
 const DAB_INTERVAL := 0.12
@@ -122,6 +137,9 @@ var _mouse := Vector2.ZERO
 ## The rules of the Tables tab.
 var _edits := TableEdits.new()
 
+## The shelf of the Versions tab.
+var _shelf := WorldVersions.new()
+
 ## The client export after a change on the Tables tab, on a thread. A
 ## change while it runs asks for one more run after it.
 var _export := FigureJob.new()
@@ -152,6 +170,7 @@ func _enter_tree() -> void:
 	_dock.switch_scene_requested.connect(_on_switch_scene)
 	_connect_look_panel()
 	_connect_tables_panel()
+	_connect_versions_panel()
 	_build = BuildInput.new()
 	_build.panel = _dock.build_panel()
 	_build.commit = _commit
@@ -195,6 +214,7 @@ func _edit(object: Object) -> void:
 	_dock.set_workbench(not _world.writes_world())
 	_on_overlays_changed()
 	_refresh_dock()
+	_refresh_versions()
 	_report_block()
 
 
@@ -252,6 +272,9 @@ func _save(world: TerrainWorld) -> String:
 
 	if world == _world:
 		_refresh_dock()
+
+	if world.writes_world():
+		_refresh_versions()
 
 	return "\n".join(lines)
 
@@ -360,6 +383,7 @@ func _on_block_loaded() -> void:
 	history.clear_history(history.get_object_history_id(_world))
 	_ramp_start = null
 	_refresh_dock()
+	_refresh_versions()
 	_report_block()
 
 
@@ -1455,6 +1479,169 @@ func _after_table_change(text: String, rename: Dictionary, select: String) -> vo
 	_table_report = text
 	_start_export()
 	update_overlays()
+
+
+# ─── The Versions tab ───────────────────────────────────────────────────────
+
+func _connect_versions_panel() -> void:
+	var panel := _dock.versions_panel()
+
+	panel.save_requested.connect(_on_version_save)
+	panel.switch_requested.connect(_on_version_switch)
+	panel.rename_requested.connect(_on_version_rename)
+	panel.remove_requested.connect(_on_version_remove)
+	panel.reload_requested.connect(func() -> void:
+		_refresh_versions()
+		_dock.set_status("Read the shelf again."))
+
+
+## Fill the list of the Versions tab again, with the current version
+## marked. The selection follows `select`.
+func _refresh_versions(select := "") -> void:
+	_dock.refresh_versions(_shelf.list(), _shelf.current_key(), select)
+
+
+func _version_problem(problem: String) -> void:
+	_dock.versions_panel().set_hint(problem)
+	_dock.set_status(problem)
+
+
+## "Save version". A key that exists asks before the version is replaced.
+func _on_version_save(key: String, note: String) -> void:
+	var problem := WorldVersions.key_problem(key)
+
+	if problem.is_empty():
+		problem = WorldVersions.note_problem(note)
+
+	if not problem.is_empty():
+		_version_problem(problem)
+		return
+
+	if not _shelf.has(key):
+		_save_version(key, note)
+		return
+
+	_dock.confirm("Replace the version %s with the world of now? Undo cannot bring the "
+		% key + "old files back.", _save_version.bind(key, note))
+
+
+## Save the unsaved chunks of the block first, then the version.
+func _save_version(key: String, note: String) -> void:
+	var lines := PackedStringArray()
+
+	if is_instance_valid(_last_world) and _last_world.writes_world() \
+			and _last_world.has_unsaved_changes():
+		lines.append(_save(_last_world))
+
+	var result := _shelf.save(key, note, true)
+
+	if not result["problem"].is_empty():
+		_version_problem(result["problem"])
+		return
+
+	lines.append("Saved %d chunk file(s) as the version %s." % [result["count"], key])
+	_dock.versions_panel().set_key_text(key)
+	_after_version_change("\n".join(lines), key)
+
+
+## "Switch to version". It rewrites files that undo cannot reach, so it
+## asks first, and it counts them. Unsaved chunks of the block go, as on
+## Revert. When no version holds the world of now, the question says so.
+func _on_version_switch(key: String) -> void:
+	if key.is_empty():
+		_version_problem("Select a version first.")
+		return
+
+	if not _shelf.has(key):
+		_version_problem("The shelf has no version %s." % key)
+		return
+
+	var changed := _shelf.differences(key)
+
+	if changed.is_empty():
+		_version_problem("The world is the version %s already." % key)
+		return
+
+	var text := "Switch the world to %s? It changes %d chunk file(s)." % [key, changed.size()]
+	var unsaved := _last_world.unsaved_count() if is_instance_valid(_last_world) \
+		and _last_world.writes_world() else 0
+
+	if unsaved > 0:
+		text += " It drops %d unsaved chunk file(s) of the block." % unsaved
+
+	if _shelf.current_key().is_empty():
+		text += " NO VERSION HOLDS THE WORLD OF NOW. Save it first to keep it, or " \
+			+ "switch and lose it."
+
+	_dock.confirm(text, _switch_version.bind(key))
+
+
+func _switch_version(key: String) -> void:
+	var result := _shelf.switch_to(key, true)
+
+	if not result["problem"].is_empty():
+		_version_problem(result["problem"])
+		return
+
+	var names := PackedStringArray()
+
+	for row: Array in result["changed"]:
+		names.append("%s (%s)" % [row[0], row[1]])
+
+	if is_instance_valid(_last_world) and _last_world.writes_world():
+		_last_world.load_block()
+
+	_after_version_change("Switched the world to %s: %s. The server shows it after a stop, "
+		% [key, ", ".join(names)] + "scripts/sync_tile_objects.py --apply, and a start.", key)
+
+
+## "Rename version". The files stay, so no question.
+func _on_version_rename(old: String, new: String) -> void:
+	if old.is_empty():
+		_version_problem("Select a version first.")
+		return
+
+	var problem := _shelf.rename(old, new)
+
+	if not problem.is_empty():
+		_version_problem(problem)
+		return
+
+	_after_version_change("Renamed the version %s to %s." % [old, new], new)
+
+
+## "Remove version". It asks first and counts the chunk files.
+func _on_version_remove(key: String) -> void:
+	if key.is_empty():
+		_version_problem("Select a version first.")
+		return
+
+	if not _shelf.has(key):
+		_version_problem("The shelf has no version %s." % key)
+		return
+
+	var count := WorldVersions.chunk_names(_shelf.path_of(key)).size()
+
+	_dock.confirm("Remove the version %s (%d chunk files)? Undo cannot bring it back."
+		% [key, count], _remove_version.bind(key))
+
+
+func _remove_version(key: String) -> void:
+	var problem := _shelf.remove(key)
+
+	if not problem.is_empty():
+		_version_problem(problem)
+		return
+
+	_after_version_change("Removed the version %s." % key, "")
+
+
+## After each change of the shelf: the list reads again, and the status
+## box gets the report.
+func _after_version_change(text: String, select: String) -> void:
+	_refresh_versions(select)
+	_dock.versions_panel().set_hint(text.get_slice("\n", 0))
+	_dock.set_status(text)
 
 
 func _start_export() -> void:

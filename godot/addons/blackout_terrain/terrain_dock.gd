@@ -26,6 +26,9 @@ extends VBoxContainer
 ## - **Tables**: the rows of the areas, the floor types, the wall styles,
 ##   and the decor kinds (`tables_panel.gd`, 10/14/2026). New, save, rename,
 ##   and remove a row. "New" beside a list of the paint values opens it.
+## - **Versions**: the shelf of saved worlds (`versions_panel.gd`,
+##   10/28/2026). Save the world as a version, switch the world to one,
+##   rename one, and remove one.
 ##
 ## The plugin reads the choices from here. This panel changes no terrain
 ## itself: each control sends a signal, and the plugin acts.
@@ -67,6 +70,7 @@ const _Session := preload("res://addons/blackout_terrain/terrain_session.gd")
 const _ToolRow := preload("res://addons/blackout_terrain/tool_row.gd")
 const _LookPanel := preload("res://addons/blackout_terrain/look_panel.gd")
 const _TablesPanel := preload("res://addons/blackout_terrain/tables_panel.gd")
+const _VersionsPanel := preload("res://addons/blackout_terrain/versions_panel.gd")
 
 const CONFIG_PATH := "res://addons/blackout_terrain/terrain_editor.cfg"
 const _CONFIG_SECTION := "noise"
@@ -261,6 +265,7 @@ var _build_page: Control
 var _look := _LookPanel.new()
 var _tables := _TablesPanel.new()
 var _tables_page: Control
+var _versions := _VersionsPanel.new()
 var _confirm := ConfirmationDialog.new()
 var _confirm_action := Callable()
 var _confirm_cancel := Callable()
@@ -289,6 +294,8 @@ func _init() -> void:
 	_page = _new_page("Tables")
 	_tables_page = _page.get_parent()
 	_page.add_child(_tables)
+	_page = _new_page("Versions")
+	_page.add_child(_versions)
 	_build.values.new_row_requested.connect(show_new_row)
 	_build_status_box()
 	_confirm.confirmed.connect(func() -> void:
@@ -465,6 +472,17 @@ func look_panel() -> Control:
 ## The Tables tab: the rows of the four server tables.
 func tables_panel() -> Control:
 	return _tables
+
+
+func versions_panel() -> Control:
+	return _versions
+
+
+## Fill the list of the Versions tab from `versions`, the rows of
+## [method WorldVersions.list], with `current` marked. The selection
+## follows `select`, when it is not empty.
+func refresh_versions(versions: Array[Dictionary], current: String, select := "") -> void:
+	_versions.refresh(versions, current, select)
 
 
 ## Show the Tables tab on `table` with an empty form: a "New" button of the

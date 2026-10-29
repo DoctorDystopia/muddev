@@ -1397,6 +1397,29 @@ A demolition spares player characters. A transition and a landmark stand
 nothing up, so the sync ignores them. An item spawn stands its item up. A
 new item on an item spawn is a refresh, not a change (see "Item spawns").
 
+### Keep a version of the world (10/28/2026)
+
+`world/versions/` is a shelf of saved worlds. The **Versions** tab of the
+terrain editor saves the world as a version, switches the world to one,
+and comes back. `world/versions/README.md` gives the rules. From a
+terminal, from `blackout/`:
+
+```bash
+../evenv/Scripts/python.exe scripts/world_versions.py list
+```
+
+```bash
+../evenv/Scripts/python.exe scripts/world_versions.py save market_v2 --note "two gates"
+```
+
+```bash
+../evenv/Scripts/python.exe scripts/world_versions.py switch market_v2
+```
+
+A switch changes the chunk files only. Then stop the server, run the tile
+sync with `--apply`, and start the server. A switch refuses to drop a
+world that no version holds. Save it first, or add `--drop`.
+
 ### Move as staff
 
 ```bash
@@ -1465,6 +1488,7 @@ Example: `\|300P\|n` renders **P** in dark red (R=3,G=0,B=0) then resets.
 | `scripts/reload_characters.py` | Re-runs `at_object_creation()` on all Character objects | `py -3 scripts/reload_characters.py` (from `blackout/`) |
 | `scripts/sync_tile_objects.py` | Makes the objects on the tile world match the chunk files. Reports by default | `../evenv/Scripts/python.exe scripts/sync_tile_objects.py [--apply]` (from `blackout/`, server stopped) |
 | `scripts/move_to_tile_world.py` | The cutover: moves each character off the xyzgrid maps, then deletes the map rooms. Reports by default | `../evenv/Scripts/python.exe scripts/move_to_tile_world.py [--apply]` (from `blackout/`, server stopped) |
+| `scripts/world_versions.py` | The shelf of saved worlds: list, save, switch, rename, remove. Touches no database | `../evenv/Scripts/python.exe scripts/world_versions.py list` (from `blackout/`; a switch needs the tile sync after it) |
 | `scripts/backup_db.py` | Snapshots the live sqlite3 database into `server/backups/` (gzip, timestamped), pruning old backups beyond `--keep` | `../evenv/Scripts/python.exe scripts/backup_db.py [--keep N] [--dest DIR]` (from `blackout/`) |
 | `scripts/backup_db.ps1` / `.sh` | Argument-light wrappers around `backup_db.py`, meant for Task Scheduler / cron | `.\scripts\backup_db.ps1 [-Keep N] [-Dest DIR]` |
 

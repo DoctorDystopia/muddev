@@ -119,6 +119,10 @@ These act on the **live** development database, not a test DB.
   `systems/interface/statefeed/clientexport.py` instead. The staleness test
   cannot import this directory, so the output-path table lives in
   `clientexport.py`.
+- `world_versions.py` touches no database either. It copies, renames, and
+  deletes files under `world/chunks/` and `world/versions/` only. The rules
+  are in `world/world_versions.py`, and the Versions tab of the terrain
+  editor is the other caller.
 - The world is regenerable from the chunk files in `world/chunks/` through
   `sync_tile_objects.py`. Accounts and characters are not.
 
@@ -995,6 +999,7 @@ Read the handoff before you continue this work.
 | World chunk files | `blackout/world/chunks/` |
 | Floor types, areas, object kinds | `world/floor_types.py`, `world/areas.py`, `world/object_kinds.py` |
 | The table files (10/14/2026): the rows of the areas, floor types, wall styles, and decor kinds, their two readers, the Tables tab, and the export from the editor | `blackout/world/tables/` with its README, `world/table_file.py`, `world/decor_kinds.py`, `godot/world/terrain/tile_tables.gd`, and `tables_panel.gd`, `table_edits.gd`, `source_table.gd`, `client_export.gd` in `godot/addons/blackout_terrain/` |
+| The world versions (10/28/2026): the shelf of saved worlds, the switch, the current mark, the Versions tab, and the script | `blackout/world/versions/` with its README, `world/world_versions.py`, `scripts/world_versions.py`, the `VERSION_*` constants in `systems/core/tilegrid/constants.py`, `world_versions.gd` and `versions_panel.gd` in `godot/addons/blackout_terrain/`, `version_shelves` in `table_edits.gd` |
 | Chunk mesh, `surface_height`, the chunk set, picking | `godot/world/terrain/` |
 | The terrain editor | `godot/addons/blackout_terrain/` |
 | Spike measurements | `profiling/scenarios/tilegrid.py` |
@@ -1082,6 +1087,14 @@ Ten rules:
   constants, because it must read what its server reads. A test must not
   name a row by its literal key. Derive the key from the table, so that a
   rename on the tab breaks no test.
+- **A version of the world is a shelf item, not a git branch** (Nick,
+  10/28/2026). `world/versions/<key>/` holds a whole copy of the chunk
+  files. A switch replaces the files of `world/chunks/`, and nothing else
+  moves. Thus, every reader of the world keeps one directory, and the tile
+  sync follows as before. A switch never drops a world that no version
+  holds: the editor asks and counts, and the script needs `--drop`. The
+  tables are shared, so a rename of a row reaches each version, and a
+  removal refuses a row that a version names.
 
 ## The website
 

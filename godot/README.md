@@ -1594,6 +1594,7 @@ The panel has six tabs:
 | World | The **Block** report (the load errors and the seam faults, kept until the next load), the marks to show with a legend, how the planes above show, **Check world** and its findings, and the state of the tile sync |
 | Look | The colour of each floor type, the cliff, the water, and each prop, the colour and the height of each wall style, the **Shadow minimum** of every area, the fog and the light of each area with **Preview the area light**, and the colours of the editor marks. See "The Look tab" below |
 | Tables | The rows of the areas, the floor types, the wall styles, and the decor kinds: **New row**, **Save row**, **Rename row**, **Remove row**, and **Read files again**. See "The Tables tab" below |
+| Versions | The shelf of saved worlds: **Save version**, **Switch to version**, **Rename version**, **Remove version**, and **Read files again**. See "The Versions tab" below |
 
 The **Shape** of the Paint brush is a circle or a square. The side of a
 square is twice the radius, and its edges lie on the tile edges. An odd side
@@ -1967,6 +1968,39 @@ open.
 The brushes follow the workflow of Low Poly Terrain Builder (MIT). None of its
 code is here: its Delaunay mesh cannot give a floor colour to one tile or put a
 wall on a tile edge.
+
+### The Versions tab
+
+Since 10/28/2026 the world has a shelf of saved versions under
+`blackout/world/versions/`. That directory has a README with the rules and
+the steps. A map author saves the world as a version, tries another
+layout, and comes back, with no terminal and no git. Nick asked for a
+quick swap between versions of the map, so an author keeps full creative
+control and iterates fast.
+
+| Button | Does |
+|---|---|
+| **Save version** | Saves the world chunk files as the version of the Key field, with the Note field. The unsaved chunks of the block save first. A key that exists asks before it is replaced |
+| **Switch to version** | Makes the selected version the world. It asks first and counts the chunk files that change. The block reads again, and the undo history goes. The World tab then names each changed file, for the tile sync |
+| **Rename version** | Gives the selected version the key of the Key field |
+| **Remove version** | Deletes the selected version. It asks first |
+| **Read files again** | Reads the shelf again, after a change outside Godot |
+
+A star marks the version whose files equal the world of now. When no
+version does, the hint says so, and a switch asks whether to lose the
+world of now. The class `WorldVersions` owns the rules, as the twin of
+`blackout/world/world_versions.py`. A version is a whole copy, so each one
+stands alone.
+
+A version names the rows of the tables of today. Thus, `TableEdits` reads
+each version too: a rename of a row reaches it, and a removal refuses a
+row that a version names.
+
+The list refreshes after a save of the block, after a load, and after each
+change on the tab. It never refreshes on a stroke, because the mark of the
+current version digests every chunk file of every version. The test
+`test_world_versions.tscn` tests the rules and the form, in a scratch
+directory under `user://`.
 
 ## The figure workbench writes figure files, not scenes
 
@@ -2838,8 +2872,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All one hundred and three tests are headless and exit non-zero on failure.
-One hundred need nothing running (counted 10/26/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All one hundred and four tests are headless and exit non-zero on failure.
+One hundred and one need nothing running (counted 10/28/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -2964,7 +2998,9 @@ and drives one gesture of each through `BuildInput`. `test_roof_shapes.tscn`
 covers the corner heights of each roof shape. `test_structure_template.tscn`
 covers the templates, the tile selection, and the Place tool.
 `test_structure_workbench.tscn` covers the structure workbench in a scratch
-directory, and it never touches a world file:
+directory, and it never touches a world file. `test_world_versions.tscn`
+covers the shelf of saved worlds and the form of the Versions tab, in a
+scratch directory under `user://`:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_terrain_editing.tscn

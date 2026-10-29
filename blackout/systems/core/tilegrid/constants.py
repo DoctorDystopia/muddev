@@ -217,6 +217,18 @@ TABLE_FORMAT_VERSION: int = 1
 # reads it to name the chunk files that changed since.
 SYNC_STAMP_FILE: str = "server/tile_sync_state.json"
 
+# The world versions (10/28/2026): the shelf of saved worlds, from the game
+# directory. One directory of the shelf holds one version: a copy of every
+# chunk file, and a `version.json` with its note and its save time. The
+# Versions tab of the terrain editor and `scripts/world_versions.py` save,
+# switch, rename, and remove one. `world/world_versions.py` owns the rules. A
+# switch copies the version over CHUNK_DIRECTORY, so every reader of the
+# world keeps one directory, and the tile sync follows as it always does.
+VERSION_DIRECTORY: str = "world/versions"
+VERSION_META_FILE: str = "version.json"
+VERSION_FORMAT_VERSION: int = 1
+VERSION_NOTE_MAX_CHARS: int = 200
+
 # The chunks around the chunk of a player that the server sends and the client
 # keeps, on each side. 1 gives a 3 x 3 block, as DESIGN-0011 section 6.6 says.
 # The client frees a chunk outside the block.

@@ -7,7 +7,7 @@ extends Node
 ## Needs nothing running and no editor. The dock does not persist here, so
 ## the test writes no file. The cases:
 ##
-## 1. The dock has the six tabs, and the Paint hint names the tool, its
+## 1. The dock has the seven tabs, and the Paint hint names the tool, its
 ##    values, and the plane.
 ## 2. The paint values strip serves the Paint tab and the Build tab: one
 ##    pick lands in both, and "(keep)" gives the Floor brush its warning.
@@ -88,8 +88,9 @@ func _the_tabs_and_the_paint_hint(dock: TerrainDock) -> void:
 			if child is TabContainer:
 				tabs = child
 
-	_expect(tabs != null and tabs.get_tab_count() == 6, "six tabs")
-	_expect(tabs != null and tabs.get_tab_title(5) == "Tables", "the Tables tab comes last")
+	_expect(tabs != null and tabs.get_tab_count() == 7, "seven tabs")
+	_expect(tabs != null and tabs.get_tab_title(5) == "Tables", "the Tables tab comes sixth")
+	_expect(tabs != null and tabs.get_tab_title(6) == "Versions", "the Versions tab comes last")
 	_expect(tabs != null and tabs.get_tab_title(0) == "Paint" and tabs.get_tab_title(1) == "Build",
 		"Paint and Build come first")
 	_expect(hint.begins_with("Raise") and "Plane 2" in hint, "the hint names the tool and the plane: %s" % hint)

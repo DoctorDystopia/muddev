@@ -429,6 +429,12 @@ _TILE_GRID_EXPORTS: tuple = (
     ("TILE_TABLE_FILE_SUFFIX", tile_const.TABLE_FILE_SUFFIX),
     ("TILE_TABLE_FORMAT", tile_const.TABLE_FORMAT_VERSION),
     ("TILE_SYNC_STAMP_FILE", tile_const.SYNC_STAMP_FILE),
+    # The world versions (10/28/2026). The Versions tab of the terrain
+    # editor reads and writes the shelf.
+    ("TILE_VERSION_DIRECTORY", tile_const.VERSION_DIRECTORY),
+    ("TILE_VERSION_META_FILE", tile_const.VERSION_META_FILE),
+    ("TILE_VERSION_FORMAT", tile_const.VERSION_FORMAT_VERSION),
+    ("TILE_VERSION_NOTE_MAX_CHARS", tile_const.VERSION_NOTE_MAX_CHARS),
     ("CHUNK_STREAM_RADIUS", tile_const.STREAM_RADIUS_CHUNKS),
     ("TILE_WORLD_Z", tile_const.WORLD_Z),
     # The client draws a triangle steeper than this as a cliff face.

@@ -153,6 +153,7 @@ func _edits() -> TableEdits:
 	var edits := TableEdits.new()
 
 	edits.chunk_directories = PackedStringArray([_root.path_join("chunks")])
+	edits.version_shelves = PackedStringArray([_root.path_join("versions")])
 	edits.template_directories = PackedStringArray([_root.path_join("structures")])
 	edits.look_files = {
 		TileTables.AREAS: [[_scratch_of(AreaLook.PATH), AreaLook.KEY_AREAS]],
