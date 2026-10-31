@@ -201,6 +201,39 @@ NPCS = {
             creature_types=(creature_types.CREATURE_TYPE_MUTANT,),
         ),
     ),
+    "bong": NpcDef(
+        key="bong",
+        name="Bong",
+        desc="Mutant Bong just wants to care.",
+        combat=NpcCombat(
+            strike_level=90,
+            brawn_level=90,
+            defense_level=90,
+            max_hp=95,
+            attack_speed=6,
+            combat_stat_bonuses={
+                # stats based on OSRS Greater Demon
+                "melee_stab_attack_bonus": 0,
+                "melee_slash_attack_bonus": 0,
+                "melee_crush_attack_bonus": 10,
+                # Defense bonuses
+                "melee_stab_defense_bonus": -10,
+                "melee_slash_defense_bonus": 0,
+                "melee_crush_defense_bonus": 0,
+                # Other bonuses
+                "melee_strength_bonus": 0,
+            },
+            combat_styles=_headbutt_crush_aggressive_combat_style(),
+            default_combat_style="headbutt",
+            # 30s timed respawn on the big mutant's spawn tile, driven by
+            # BlackoutRespawnManager (systems/gameplay/spawning/respawn.py).
+            respawn_seconds=60,
+            # Two main-table rolls plus the 1/128 Glass Cannon amulet; see
+            # world/loot_defs/hostile.py.
+            loot_table="bong_drops",
+            creature_types=(creature_types.CREATURE_TYPE_MUTANT,),
+        ),
+    ),
     "floating_eye": NpcDef(
         key="floating_eye",
         name="Floating Eye",

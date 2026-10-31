@@ -98,6 +98,34 @@ TABLES = {
         ],
     ),
 
+    # ─── Bong ───────────────────────────────────────────────────────
+    # ~ boss tier right now (95 hp).
+    # two rolls on tertiary, and source of the Glass Cannon amulet at 1/128.
+    "bong_drops": LootTableDef(
+        key="bong_drops",
+        always=[
+            LootEntry(item_key="mutant_raider_cured_prime_meat", min_quantity=1,
+                      max_quantity=2),
+            LootEntry(item_key="credits", min_quantity=50,
+                      max_quantity=50)
+        ],
+        main=[
+            LootEntry(item_key="credits", min_quantity=150, max_quantity=500,
+                      weight=48),
+            LootEntry(item_key="glass_cannon_amulet", weight=32),
+            LootEntry(item_key="toy_sword", weight=32),
+        ],
+        nothing_weight=16,
+        rolls=2,
+        tertiary=[
+            TertiaryDrop(
+                entry=LootEntry(item_key="blood_sword"),
+                chance_denominator=32,
+            ),
+        ],
+    ),
+
+
     "mutant_crab_drops": LootTableDef(
         key="mutant_crab_drops",
         # always=[
