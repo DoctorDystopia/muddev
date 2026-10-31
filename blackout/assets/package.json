@@ -12,6 +12,6 @@
     "@gltf-transform/functions": "4.5.0",
     "gltf-validator": "2.0.0-dev.3.10",
     "meshoptimizer": "1.2.0",
-    "sharp": "0.35.4"
+    "sharp": "^0.35.5"
   }
 }

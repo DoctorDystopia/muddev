@@ -80,6 +80,17 @@
     ]
   },
   {
+    "title": "GoblinPack Free",
+    "author": "standout7",
+    "url": "https://standout7.itch.io/goblin-lowpoly-assets",
+    "license": "CC0 1.0",
+    "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "confirmed": true,
+    "models": [
+      "bong"
+    ]
+  },
+  {
     "title": "gunsmith_bench",
     "author": "vaelsty",
     "url": "https://vaelsty.itch.io/blacksmith-workbench",

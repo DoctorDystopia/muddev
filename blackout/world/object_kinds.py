@@ -267,6 +267,8 @@ _KIND_ROWS: tuple = (
          "A mutant raider with a crude weapon.", "mutant_raider"),
     _npc("big_mutant", "Big Mutant Tile",
          "A large mutant with a crude weapon.", "big_mutant"),
+    _npc("bong", "Bong Tile",
+         "A strange large mutant looking curious.", "bong"),
     _npc("floating_eye", "Floating Eye Tile",
          "Terrified of needles.", "floating_eye"),
     _npc("mutant_crab", "Mutant Crab Tile",

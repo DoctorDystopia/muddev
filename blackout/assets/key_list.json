@@ -38,6 +38,12 @@
 			"owner": "blood_sword"
 		},
 		{
+			"key": "bong",
+			"kind": "npc",
+			"name": "Bong",
+			"owner": "bong"
+		},
+		{
 			"key": "broken_bit_blade",
 			"kind": "weapon",
 			"name": "broken bit-blade",

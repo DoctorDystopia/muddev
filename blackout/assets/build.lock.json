@@ -15,6 +15,10 @@
     "inputs": "sha256:719db74624f6c1262d4084eb6452dc309ad8d97e7da2598093fa17728b5f2177",
     "output": "sha256:290ed8c93de35e229ed878f648d43264ae4c09ce9e7b3e3621fe955568d8bbb5"
   },
+  "bong": {
+    "inputs": "sha256:e338f4bfafe3b729b269eb138535662a0515516468e3d95c63c4b09da37bac83",
+    "output": "sha256:b26aa059203904afe7d7fc9406838286b3b1b8d7a1de4bea2ff5db3fe42794fa"
+  },
   "copper_pole": {
     "inputs": "sha256:8e4a552f3db0ac0fe73df595828d078fdbcca99029f33f8f362225e0863259e5",
     "output": "sha256:e0c1f61dd4105d3bbb23882576e8ed1712ba71afcba8cae3bd4b11df96b6d093"

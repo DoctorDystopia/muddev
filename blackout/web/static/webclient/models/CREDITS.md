@@ -57,6 +57,13 @@ Options pane.
 - Models: `anvil`, `hammer`
 - **License not confirmed.** See the source record for the reason.
 
+## GoblinPack Free
+
+- Author: standout7
+- Source: https://standout7.itch.io/goblin-lowpoly-assets
+- License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- Models: `bong`
+
 ## gunsmith_bench
 
 - Author: vaelsty
