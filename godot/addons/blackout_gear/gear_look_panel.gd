@@ -30,7 +30,7 @@ extends VBoxContainer
 ## ## The Model fold (Phase W4, ENG-0011 step L6)
 ##
 ## "Import model" asks for a file, and the plugin runs the model pipeline
-## on it ([FigurePipeline]). The parts of the look then become the nodes of
+## on it ([ModelPipeline]). The parts of the look then become the nodes of
 ## the model. "Parts from model" does the second step only. Three fields
 ## give the presentation of the served model of the row: its offset, its
 ## turn in degrees, and its scale. The game draws the model with them

@@ -125,6 +125,21 @@ class ItemDef:
     eat_delay_ticks: int | None = None
     attack_delay_ticks: int | None = None
 
+    # ─── Sample fields (Augmentation samples only; None on everything else) ──
+    # sample_xp — the Augmentation XP that a graft of this item pays anywhere.
+    #     This is the field that makes an item a SAMPLE: None means not a
+    #     sample, and nothing else decides it, as heal_amount decides food.
+    #     The Locus multiplies it (AUG_LOCUS_XP_MULT), and the command reads
+    #     the attribute, never the def, so a tuned def reaches the items that
+    #     already exist.
+    # sample_kind — one of SAMPLE_KINDS in augmentation/constants.py: a
+    #     biological or a technological sample (Nick, 10/30/2026). Stamped as
+    #     an attribute beside sample_xp. The def also carries it as a tag of
+    #     the SAMPLE_TAG_CATEGORY, so a search by tag finds every sample of a
+    #     kind. world/tests/test_item_database.py holds the two equal.
+    sample_xp: int | None = None
+    sample_kind: str | None = None
+
     attack_speed: int | None = None
     max_range: int = 0
     accepted_ammo: str | None = None
@@ -209,6 +224,12 @@ class ItemDef:
             attrs["heal_amount"] = self.heal_amount
             attrs["eat_delay_ticks"] = self.eat_delay_ticks_or_default()
             attrs["attack_delay_ticks"] = self.attack_delay_ticks_or_default()
+
+        # Sample fields. Gated on sample_xp, as the food fields are gated on
+        # heal_amount: a kind on a thing that no graft takes is noise.
+        if self.sample_xp is not None:
+            attrs["sample_xp"] = self.sample_xp
+            attrs["sample_kind"] = self.sample_kind
 
         return attrs
 
@@ -329,6 +350,7 @@ class ItemDef:
 
 
 from .item_defs.materials import ITEMS as _MATERIALS
+from .item_defs.samples import ITEMS as _SAMPLES
 from .item_defs.tools import ITEMS as _TOOLS
 from .item_defs.currencies import ITEMS as _CURRENCIES
 from .item_defs.weapons import ITEMS as _WEAPONS
@@ -352,5 +374,5 @@ from .item_defs.exterminator import ITEMS as _EXTERMINATOR
 # out of the loop contributes nothing and raises nothing -- its items simply
 # do not exist as far as the rest of the game is concerned.
 ITEM_DB: dict[str, ItemDef] = {}
-for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _AMMUNITION, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BACK, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD, _EXTERMINATOR]:
+for _d in [_MATERIALS, _TOOLS, _CURRENCIES, _WEAPONS, _AMMUNITION, _GADGETS, _JEWELLERY, _ARMOR_HEAD, _ARMOR_BACK, _ARMOR_BODY, _ARMOR_LEGS, _ARMOR_OFFHAND, _ARMOR_FEET, _DEV_TOOLS, _CORPSES, _FOOD, _EXTERMINATOR, _SAMPLES]:
     ITEM_DB.update(_d)

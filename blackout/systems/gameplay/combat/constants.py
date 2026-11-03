@@ -11,6 +11,7 @@ from items.equipment.constants import WieldLocation
 from systems.core.tick.scheduler import seconds_to_ticks
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills.constants import (
+    SKILL_KEY_AUGMENTATION,
     SKILL_KEY_BALLISTICS,
     SKILL_KEY_BRAWN,
     SKILL_KEY_DEFENSE,
@@ -474,12 +475,10 @@ COMBAT_LEVEL_AUGMENTATION_DIVISOR: int = 2
 # it is halved before joining the sum and these two are not.
 COMBAT_LEVEL_BASE_SKILLS: tuple = (SKILL_KEY_FORTITUDE, SKILL_KEY_DEFENSE)
 
-# Augmentation does not exist as a built skill yet (03_Systems/Skills/Combat
-# Skills/Augmentation_Skill.md is still a stub) -- combat_level's skill-level
-# lookup treats any key absent from SKILL_REGISTRY as a 0 contribution rather
-# than raising, so this is safe to reference today and starts contributing
-# the moment the skill ships under this key.
-COMBAT_LEVEL_AUGMENTATION_SKILL: str = "augmentation"
+# The skill key has one owner, skills/constants.py (DESIGN-0015, 10/30/2026).
+# Before that date, this row held the literal "augmentation". The lookup of
+# combat_level still gives 0 for a key that SKILL_REGISTRY does not hold.
+COMBAT_LEVEL_AUGMENTATION_SKILL: str = SKILL_KEY_AUGMENTATION
 
 # ─── Damage types ────────────────────────────────────────────────────────────
 # What KIND of damage landed, threaded through CombatEntity.at_damage so death

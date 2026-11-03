@@ -42,8 +42,10 @@ signal changed
 ## answer.
 var has_data := false
 
-## [{key, name, kind, state, command, reason, tip}] in the order of the
-## server. `command` is empty on a locked row. `tip` is `{title, lines}`.
+## The rows, in the order of the server. Each one is `{key, name, kind,
+## state, command, reason, step, steps, step_command, tip}`. `command` is
+## empty on a locked row. `tip` is `{title, lines}`. A row with no step
+## dial has 0 in `step` and `steps`, and an empty `step_command`.
 var rows: Array = []
 
 
@@ -92,6 +94,23 @@ func active_row() -> Dictionary:
 	return {}
 
 
+## The set row, or `{}` when the server sent none (DESIGN-0015). The one
+## row of the kind `set`: the quick prayer orb. Its own key fires it, not
+## a slot of the number row.
+func set_row() -> Dictionary:
+	for row: Dictionary in rows:
+		if str(row["kind"]) == _Const.ABILITY_KIND_SET:
+			return row
+
+	return {}
+
+
+## Whether a row has a step dial: an augment row. A row that carries no
+## `steps` has none, and the rail draws it as before.
+static func has_steps(row: Dictionary) -> bool:
+	return int(row.get("steps", 0)) > 0
+
+
 func _rows(raw: Variant) -> Array:
 	var read: Array = []
 
@@ -111,6 +130,14 @@ func _rows(raw: Variant) -> Array:
 			# SERVER names it; this client sends it verbatim.
 			"command": str(entry.get("command", "")),
 			"reason": str(entry.get("reason", "")),
+			# The step dial of an augment row (DESIGN-0015). Zero on a row
+			# with none. The server names the line of the next step too.
+			"step": int(entry.get(_Const.ABILITY_STEP_KEY, 0)),
+			"steps": int(entry.get(_Const.ABILITY_STEPS_KEY, 0)),
+			"step_command": str(entry.get(_Const.ABILITY_STEP_COMMAND_KEY, "")),
+			# The note after the name: the roll of Overclock (Phase 5). The
+			# server says the text, and "" draws nothing.
+			"note": str(entry.get(_Const.ABILITY_NOTE_KEY, "")),
 			"tip": TipText.read(entry.get(_Const.TIP_KEY, {})),
 		})
 

@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from evennia.utils import logger
 
+from systems.gameplay.combat import constants as const
+
+from . import modifiers
 from .rule_defs.base_rules import (
     DEFAULT_ACTION_RULES,
     ACTION_SEAM_NAMES,
@@ -204,5 +207,48 @@ def resolve_action(context):
     _run_modifiers(context.defender_rules, context, context.defender_bag)
 
     context.rules = resolved
+    result = resolved.resolve(context)
 
-    return resolved.resolve(context)
+    _apply_defender_damage(context, result)
+
+    return result
+
+
+def _apply_defender_damage(context, result) -> None:
+    """
+    Purpose: Apply the damage channel of the DEFENDER bag to the landed
+             damage. The one defender-side pass of the pipeline.
+
+    Entry:
+        context - the ActionContext, after the modifiers ran.
+        result  - the ActionResult that the seams wrote.
+
+    Exit/Returns:
+        No conditions. `result.damage` is rewritten when the action landed
+        damage. A miss and a zero are left alone.
+
+    Module Globals:
+        const.CHANNEL_DAMAGE read.
+
+    Methodology:
+        roll_damage reads the damage channel of the attacker bag, and
+        three weapons replace that seam without a super() call. Thus, a
+        defender modifier (a guard augment, DESIGN-0015) runs AFTER the
+        resolve, on the number that landed. An override would skip it
+        otherwise. With an empty defender bag the appliers are the
+        identity, so the fifty-seed test against the reference still holds.
+
+    Notes/References:
+        The seam contest stays with the attacker. This pass adds no seam.
+        A defender cannot replace roll_damage. It can only scale the result.
+
+    Author: Nick Hobar
+    Creation date: 10/30/2026
+    """
+    if result.damage <= 0:
+        return
+
+    modified = modifiers.apply_to_int(context.defender_bag, const.CHANNEL_DAMAGE,
+                                      result.damage)
+
+    result.damage = modifiers.clamp_damage(modified)

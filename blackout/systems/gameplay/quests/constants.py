@@ -53,6 +53,7 @@ ACTION_CUT = "cut"
 ACTION_BUTCHER = "butcher"
 ACTION_MINE = "mine"
 ACTION_HARVEST_BRAIN = "harvest_brain"
+ACTION_GRAFT = "graft"
 
 
 QUEST_ACTIONS = frozenset({
@@ -69,6 +70,7 @@ QUEST_ACTIONS = frozenset({
     ACTION_BUTCHER,
     ACTION_MINE,
     ACTION_HARVEST_BRAIN,
+    ACTION_GRAFT,
 })
 
 

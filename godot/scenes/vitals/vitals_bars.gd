@@ -77,6 +77,15 @@ const BARS: Array = [
 		"maximum": "max_hp",
 		"graded": true,
 	},
+	# The Grit pool of the Augmentation skill (DESIGN-0015, 10/30/2026).
+	# Graded, not a plain budget. At 0, every lit augment goes out, so the
+	# colour is a warning here too. Nick chose this on 10/30/2026.
+	{
+		"label": "GRIT",
+		"current": "grit",
+		"maximum": "max_grit",
+		"graded": true,
+	},
 ]
 
 var _state: CharState

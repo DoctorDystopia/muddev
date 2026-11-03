@@ -12,7 +12,7 @@ Description: The command line of the model pipeline. Run it from blackout/:
 
 import sys
 
-from assets.pipeline import (budgets, build, check, fetch, figure, glb,
+from assets.pipeline import (budgets, build, check, fetch, figure, form, glb,
                              outputs, paths, picocad, records, sources,
                              wizard)
 
@@ -24,6 +24,12 @@ _USAGE: str = """python -m assets.pipeline <command>
   add                               answer questions to add one model: an
                                     upload, a Poly Haven model, or a source
                                     that is here already. Then build it
+  add-options <answer.json>         the model form of the Godot editor:
+  add-polyhaven <id> <answer.json>  the same steps as add, with no
+  add-check <plan.json> <answer.json>
+  add-write <plan.json> <answer.json>
+                                    questions. Each writes its answer as
+                                    JSON. See assets/pipeline/form.py
   build [asset_key ...] [--force]   build models (default: every record)
   check                             check records, sources and served tree
   seal <source_id ...> | --all      record the hash of every file in a source
@@ -48,6 +54,11 @@ _ALL_FLAG: str = "--all"
 _AUTHOR_FLAG: str = "--author"
 _FIGURE_MODEL_ARGUMENTS: int = 3
 _BYTES_PER_KIB: int = 1024
+
+# The arguments of the form commands: the answer file, after the plan file
+# or the Poly Haven id when the command takes one.
+_ONE_FILE: int = 1
+_TWO_ARGUMENTS: int = 2
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -403,8 +414,127 @@ def _command_add(_arguments: list) -> int:
     return status
 
 
+def _command_add_options(arguments: list) -> int:
+    """
+    Purpose: Write the lists of the model form to an answer file.
+
+    Entry:
+        arguments is [answer path].
+
+    Exit/Returns:
+        Returns the exit status.
+
+    Module Globals:
+        _ONE_FILE read.
+
+    Author: Nick Hobar
+    Creation date: 11/02/2026
+    """
+    if len(arguments) != _ONE_FILE:
+        print(_USAGE)
+        return _EXIT_USAGE
+
+    answer = form.options()
+    form.write_answer(arguments[0], answer)
+
+    return _EXIT_FAILED if answer["problem"] else _EXIT_OK
+
+
+def _command_add_polyhaven(arguments: list) -> int:
+    """
+    Purpose: Write what Poly Haven says about one model to an answer file.
+
+    Entry:
+        arguments is [Poly Haven id, answer path].
+
+    Exit/Returns:
+        Returns failed when the id is no model that the form can add.
+
+    Module Globals:
+        _TWO_ARGUMENTS read.
+
+    Author: Nick Hobar
+    Creation date: 11/02/2026
+    """
+    if len(arguments) != _TWO_ARGUMENTS:
+        print(_USAGE)
+        return _EXIT_USAGE
+
+    answer = form.polyhaven(arguments[0])
+    form.write_answer(arguments[1], answer)
+
+    return _EXIT_OK if answer["ok"] else _EXIT_FAILED
+
+
+def _command_add_check(arguments: list) -> int:
+    """
+    Purpose: Check one plan of the model form, and write the answer.
+
+    Entry:
+        arguments is [plan path, answer path].
+
+    Exit/Returns:
+        Returns ok when the check ran. The answer says whether the plan is
+        ready.
+
+    Module Globals:
+        _TWO_ARGUMENTS read.
+
+    Author: Nick Hobar
+    Creation date: 11/02/2026
+    """
+    if len(arguments) != _TWO_ARGUMENTS:
+        print(_USAGE)
+        return _EXIT_USAGE
+
+    content = form.read_plan(arguments[0])
+    form.write_answer(arguments[1], form.check(content))
+
+    return _EXIT_OK
+
+
+def _command_add_write(arguments: list) -> int:
+    """
+    Purpose: Write one plan of the model form, then build its model when
+    the plan asks and this machine can.
+
+    Entry:
+        arguments is [plan path, answer path].
+
+    Exit/Returns:
+        Returns ok when the write passed, and the build too when one ran.
+        The answer gets `built`.
+
+    Module Globals:
+        _TWO_ARGUMENTS read.
+
+    Author: Nick Hobar
+    Creation date: 11/02/2026
+    """
+    if len(arguments) != _TWO_ARGUMENTS:
+        print(_USAGE)
+        return _EXIT_USAGE
+
+    content = form.read_plan(arguments[0])
+    answer = form.write(content)
+    wanted = answer["ok"] and form.wants_build(content)
+    status = _EXIT_OK if answer["ok"] else _EXIT_FAILED
+
+    if wanted and not answer["build_problem"]:
+        status = _command_build([answer["asset_key"]])
+
+    answer["built"] = wanted and status == _EXIT_OK
+    form.write_answer(arguments[1], answer)
+
+    return status
+
+
 _COMMANDS: dict = {
     "add": _command_add,
+    "add-options": _command_add_options,
+    "add-polyhaven": _command_add_polyhaven,
+    "add-check": _command_add_check,
+    "add-write": _command_add_write,
     "build": _command_build,
     "check": _command_check,
     "seal": _command_seal,
@@ -446,7 +576,7 @@ def main(argv: list) -> int:
     try:
         status = command(arguments[1:])
     except (records.RecordError, sources.SourceError, fetch.FetchError,
-            figure.FigureError) as problem:
+            figure.FigureError, form.FormError) as problem:
         print("  %s" % problem)
         status = _EXIT_FAILED
 

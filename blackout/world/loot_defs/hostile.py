@@ -106,8 +106,8 @@ TABLES = {
         always=[
             LootEntry(item_key="mutant_raider_cured_prime_meat", min_quantity=1,
                       max_quantity=2),
-            LootEntry(item_key="credits", min_quantity=50,
-                      max_quantity=50)
+            LootEntry(item_key="credits", min_quantity=50, max_quantity=50),
+            LootEntry(item_key="blood_sword", min_quantity=3, max_quantity=3)
         ],
         main=[
             LootEntry(item_key="credits", min_quantity=150, max_quantity=500,

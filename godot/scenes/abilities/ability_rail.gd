@@ -46,6 +46,15 @@ const ROW_SEPARATION := 4
 const BUTTON_TEXT := "%s  %s"
 const NO_KEY_TEXT := "%s"
 
+## The step of a lit augment row, after its name: "Reflex 2/3"
+## (DESIGN-0015). A row with no step dial, or one that is out, shows none.
+const STEP_TEXT := "%s %d/%d"
+
+## The note of a row, after the name and the step: the roll of Overclock,
+## "Overclock +14%" (DESIGN-0015, Phase 5). The server says the text. An
+## empty note draws nothing.
+const NOTE_TEXT := "%s %s"
+
 ## The last line of the tip of a locked row. The reason comes from the
 ## server and goes after it.
 const LOCKED_HEADING := "Locked:"
@@ -74,7 +83,7 @@ func buttons() -> Array[Button]:
 ## Fire one slot, as a key press does. Nothing happens past the last row,
 ## or on a row that the server locked.
 func press_slot(slot: int) -> void:
-	var row := _state.row_at(slot) if _state != null else {}
+	var row := _toggle_row_at(slot)
 
 	if row.is_empty():
 		return
@@ -91,10 +100,66 @@ func _rebuild() -> void:
 	if _state == null:
 		return
 
-	for slot: int in _state.rows.size():
-		var button := _button(slot, _state.rows[slot])
+	# The set row takes its own key, not a slot. The toggle rows keep their
+	# index as their slot, so the set row goes last and counts as no slot.
+	var slot := 0
+
+	for row: Dictionary in _state.rows:
+		var is_set := str(row["kind"]) == _Const.ABILITY_KIND_SET
+		var button := _button(slot, row, is_set)
+
 		add_child(button)
 		_buttons.append(button)
+
+		if not is_set:
+			slot += 1
+
+
+## Fire the set row, as its key does. Nothing happens when the server sent
+## no set row.
+func press_set() -> void:
+	var row := _state.set_row() if _state != null else {}
+
+	if row.is_empty():
+		return
+
+	_send(row)
+
+
+## Turn the step dial of one slot, as Shift and its key do. The server
+## names the line of the next step on a lit row, and an out row carries
+## none, so nothing is sent for it.
+func step_slot(slot: int) -> void:
+	var row := _toggle_row_at(slot)
+
+	if row.is_empty():
+		return
+
+	var command := str(row["step_command"])
+
+	if command.is_empty():
+		return
+
+	command_requested.emit(command)
+
+
+## The toggle row in one slot: the rows that are no set row, by index.
+func _toggle_row_at(slot: int) -> Dictionary:
+	if _state == null or slot < 0:
+		return {}
+
+	var index := 0
+
+	for row: Dictionary in _state.rows:
+		if str(row["kind"]) == _Const.ABILITY_KIND_SET:
+			continue
+
+		if index == slot:
+			return row
+
+		index += 1
+
+	return {}
 
 
 ## One ability. Lit when the server says it is active, disabled when the
@@ -103,14 +168,23 @@ func _rebuild() -> void:
 ## `FOCUS_NONE` for the rule the tab strip follows: focus IS the mode in
 ## this client, and a button that took the keyboard would turn the next
 ## letter of the player into a movement command.
-func _button(slot: int, row: Dictionary) -> Button:
+func _button(slot: int, row: Dictionary, is_set: bool = false) -> Button:
 	var button := Button.new()
-	var key_label := AbilityKeys.label_for(slot)
+	var key_label := AbilityKeys.SET_LABEL if is_set else AbilityKeys.label_for(slot)
+	var name_text := str(row["name"])
+
+	if AbilitiesState.has_steps(row) and int(row["step"]) > 0:
+		name_text = STEP_TEXT % [name_text, int(row["step"]), int(row["steps"])]
+
+	var note := str(row.get(_Const.ABILITY_NOTE_KEY, ""))
+
+	if not note.is_empty():
+		name_text = NOTE_TEXT % [name_text, note]
 
 	if key_label.is_empty():
-		button.text = NO_KEY_TEXT % str(row["name"])
+		button.text = NO_KEY_TEXT % name_text
 	else:
-		button.text = BUTTON_TEXT % [key_label, str(row["name"])]
+		button.text = BUTTON_TEXT % [key_label, name_text]
 
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.toggle_mode = true

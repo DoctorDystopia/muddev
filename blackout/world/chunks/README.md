@@ -17,7 +17,7 @@ writes the shared corners into the neighbour chunk, so a save can add a
 neighbour file (`chunk_0_-1_p0.json` is an example).
 
 `godot/README.md`, "The terrain editor writes chunk files, not scenes", tells
-how to use the editor. `docs/2026-09-22-ENG-0010-godot-ui-authoring.md` is the
+how to use the editor. `docs/2026-11-02-ENG-0010-godot-ui-authoring.md` is the
 step-by-step guide.
 
 Every name in a chunk file is a row of a table under `world/`:

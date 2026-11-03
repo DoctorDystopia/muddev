@@ -170,6 +170,12 @@
 			"owner": "curing_chamber"
 		},
 		{
+			"key": "cyber_shard",
+			"kind": "generic",
+			"name": "cyber shard",
+			"owner": "cyber_shard"
+		},
+		{
 			"key": "floating_eye",
 			"kind": "npc",
 			"name": "Floating Eye",
@@ -402,6 +408,12 @@
 			"kind": "crafting_material",
 			"name": "mutant giant tallow",
 			"owner": "mutant_giant_tallow"
+		},
+		{
+			"key": "mutant_gland",
+			"kind": "generic",
+			"name": "mutant gland",
+			"owner": "mutant_gland"
 		},
 		{
 			"key": "mutant_raider",
@@ -786,6 +798,18 @@
 			"kind": "npc",
 			"name": "Atticus Quin",
 			"owner": "atticus_quin"
+		},
+		{
+			"key": "talkative_npc",
+			"kind": "npc",
+			"name": "NPC_AUG_CLINIC_1",
+			"owner": "npc_aug_clinic_1"
+		},
+		{
+			"key": "talkative_npc",
+			"kind": "npc",
+			"name": "NPC_AUG_HOSPITAL_1",
+			"owner": "npc_aug_hospital_1"
 		},
 		{
 			"key": "task_writ",

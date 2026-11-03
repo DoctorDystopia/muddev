@@ -273,6 +273,11 @@ _SCALAR_EXPORTS: tuple = (
     ("ABILITY_STATE_ACTIVE", const.ABILITY_STATE_ACTIVE),
     ("ABILITY_STATE_LOCKED", const.ABILITY_STATE_LOCKED),
     ("ABILITY_KIND_TOGGLE", const.ABILITY_KIND_TOGGLE),
+    ("ABILITY_KIND_SET", const.ABILITY_KIND_SET),
+    ("ABILITY_STEP_KEY", const.ABILITY_STEP_KEY),
+    ("ABILITY_STEPS_KEY", const.ABILITY_STEPS_KEY),
+    ("ABILITY_STEP_COMMAND_KEY", const.ABILITY_STEP_COMMAND_KEY),
+    ("ABILITY_NOTE_KEY", const.ABILITY_NOTE_KEY),
     ("TIP_KEY", const.TIP_KEY),
     ("TIP_TITLE_KEY", const.TIP_TITLE_KEY),
     ("TIP_LINES_KEY", const.TIP_LINES_KEY),
@@ -290,6 +295,7 @@ _SCALAR_EXPORTS: tuple = (
     ("ENTITY_BODY_TYPE_KEY", const.ENTITY_BODY_TYPE_KEY),
     ("ENTITY_FIGURE_COLORS_KEY", const.ENTITY_FIGURE_COLORS_KEY),
     ("ENTITY_WORN_KEY", const.ENTITY_WORN_KEY),
+    ("ENTITY_AUGMENTS_KEY", const.ENTITY_AUGMENTS_KEY),
     # The token a prompted action's `template` carries where the client's
     # answer goes, and the kind of box to open for it. These two are exported
     # and the templates are NOT: a template arrives per action, but the

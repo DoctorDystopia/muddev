@@ -108,11 +108,13 @@ class BlackoutAuraHandler(TickableHandler):
         # Force a radius rebuild on the first pulse.
         self.ndb.ring_rooms = None
         self.ndb.ring_origin_id = None
+        self.ndb.ring_radius = None
 
         # The ring is persistent state between activate and deactivate, so a
         # graphical client draws it from these two events rather than from the
         # pulses -- which would leave the ring flickering on the pulse cadence.
-        feed.emit_aura(self.obj, feed.AURA_EVENT_ACTIVATE, aura.key, aura.radius)
+        feed.emit_aura(self.obj, feed.AURA_EVENT_ACTIVATE, aura.key,
+                       self.radius_for(self.obj, aura))
 
     def get_aura(self):
         """Resolve this handler's active aura, or None if it has none."""
@@ -122,29 +124,98 @@ class BlackoutAuraHandler(TickableHandler):
 
     # ── radius cache ─────────────────────────────────────────────────────
 
+    def radius_for(self, caster, aura) -> int:
+        """
+        Purpose: The ring radius of one aura on one caster. The reach
+                 augments of the caster add to it (DESIGN-0015, Phase 5).
+
+        Entry:
+            caster is the holder. aura is an entry of AURA_REGISTRY.
+
+        Exit/Returns:
+            Returns aura.radius plus the tiles of the lit reach augments.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            One read of rules.reach_bonus. The routine imports the
+            augmentation rules inside, because that package reaches this one.
+
+        Notes/References:
+            The ring cache keys on this value, so a change rebuilds it.
+
+        Author: Nick Hobar
+        Creation date: 10/30/2026
+        """
+        from systems.gameplay.augmentation.rules import reach_bonus
+
+        return int(aura.radius) + reach_bonus(caster)
+
+    def refresh_ring(self) -> None:
+        """
+        Purpose: Rebuild the ring at the next pulse, and send it again now.
+
+        Entry:
+            No conditions. A handler with no aura does nothing.
+
+        Exit/Returns:
+            No conditions.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            Drop the cache, then send the activate event with the radius
+            of today. The augment handler calls this when the lit set
+            moves. Reach changes the radius without a move of the caster.
+
+        Notes/References:
+            None.
+
+        Author: Nick Hobar
+        Creation date: 10/30/2026
+        """
+        aura = self.get_aura()
+        caster = self.obj
+
+        if aura is None or caster is None:
+            return
+
+        self.ndb.ring_rooms = None
+        self.ndb.ring_radius = None
+
+        feed.emit_aura(caster, feed.AURA_EVENT_ACTIVATE, aura.key,
+                       self.radius_for(caster, aura))
+
     def _current_ring(self, caster, aura) -> list:
-        """Return the rooms in range, recomputing only when the caster moved.
+        """Return the rooms in range, recomputing only when the caster moved
+        or the radius changed.
 
         The radius query is one indexed database query, but the tick engine
         calls us every 0.6s and MUD movement is discrete -- a caster standing
-        still would pay for an identical result forever. Comparing the room id
-        we last built the ring for against the caster's current one turns that
-        into one query per room change.
+        still would pay for an identical result forever. The cache keys on
+        the room id and the radius of the last build. Thus, one query runs
+        for each change.
         """
         location = caster.location
 
         if location is None:
             return []
 
+        radius = self.radius_for(caster, aura)
         cached_rooms = self.ndb.ring_rooms
+        same_origin = self.ndb.ring_origin_id == location.id
+        same_radius = self.ndb.ring_radius == radius
 
-        if cached_rooms is not None and self.ndb.ring_origin_id == location.id:
+        if cached_rooms is not None and same_origin and same_radius:
             return cached_rooms
 
-        rooms = rooms_within_radius(location, aura.radius)
+        rooms = rooms_within_radius(location, radius)
 
         self.ndb.ring_rooms = rooms
         self.ndb.ring_origin_id = location.id
+        self.ndb.ring_radius = radius
 
         return rooms
 
@@ -236,7 +307,7 @@ class BlackoutAuraHandler(TickableHandler):
             caster,
             feed.AURA_EVENT_PULSE,
             aura.key,
-            aura.radius,
+            self.radius_for(caster, aura),
             tiles=tiles,
             damage=total_dealt,
         )
@@ -423,7 +494,8 @@ class BlackoutAuraHandler(TickableHandler):
                 return
 
             feed.emit_aura(
-                caster, feed.AURA_EVENT_DEACTIVATE, aura.key, aura.radius
+                caster, feed.AURA_EVENT_DEACTIVATE, aura.key,
+                self.radius_for(caster, aura)
             )
         except Exception:
             logger.log_trace()

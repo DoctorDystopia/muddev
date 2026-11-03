@@ -17,6 +17,7 @@ own cmdsets by inheriting from them or directly from `evennia.CmdSet`.
 # from blackout.commands.sittables import CmdSetSit2
 from evennia import default_cmds
 
+from commands.augment_cmds import AugmentCmdSet
 from commands.build_cmds import BuildCmdSet
 from commands.cleanup_cmds import CleanupCmdSet
 from commands.comms_cmds import CmdPage
@@ -82,6 +83,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         self.add(CraftingCmdSet())
 
         self.add(CombatCmdSet())
+        self.add(AugmentCmdSet())
 
         # self.add(CmdSetSit2())
 

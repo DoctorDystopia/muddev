@@ -4,12 +4,14 @@ extends RefCounted
 ## Runs the model pipeline of the game directory from the figure workbench
 ## (DESIGN-0014, requirement A10). The author then uses no terminal.
 ##
-## The workbench runs two commands of `python -m assets.pipeline`:
+## The workbench runs `figure-set` of `python -m assets.pipeline`. It
+## writes `figure.json` again. A save of a rig or of a worn look runs it,
+## so the served file does not go stale.
 ##
-## - `figure-model` brings one model file in as a source and a model record,
-##   and it builds the served model. The import button runs it.
-## - `figure-set` writes `figure.json` again. A save of a rig or of a worn
-##   look runs it, so the served file does not go stale.
+## [method run] is the one way that an editor starts the pipeline. The
+## import buttons of the gear editor and the Models dock run the commands
+## of the model form through it ([ModelPipeline], 11/02/2026). Before that
+## date, the import buttons ran `figure-model`.
 ##
 ## ## How the command starts
 ##
@@ -38,9 +40,7 @@ const RUN_PROGRAM := "import os, runpy, sys; game = sys.argv[1]; os.chdir(game);
 	+ "sys.path.insert(0, game); sys.argv = ['assets.pipeline'] + sys.argv[2:]; " \
 	+ "runpy.run_module('assets.pipeline', run_name='__main__')"
 
-const COMMAND_MODEL := "figure-model"
 const COMMAND_SET := "figure-set"
-const AUTHOR_FLAG := "--author"
 
 ## The family of a figure model that is no item: `FIGURE_FAMILY` of
 ## `assets/pipeline/figure.py`. The model of an item is in the `items`
@@ -92,18 +92,6 @@ static func run(arguments: PackedStringArray, game := "") -> Dictionary:
 	var code := OS.execute(python_of(directory), full, output, true)
 
 	return {"ok": code == 0, "output": "\n".join(output).strip_edges()}
-
-
-## Bring one model file in, and build it. `path` is an OS path. See
-## [method run] for the result.
-static func import_model(family: String, model_key: String, path: String,
-		author := "", game := "") -> Dictionary:
-	var arguments := PackedStringArray([COMMAND_MODEL, family, model_key, path])
-
-	if not author.is_empty():
-		arguments.append_array(PackedStringArray([AUTHOR_FLAG, author]))
-
-	return run(arguments, game)
 
 
 ## Write `figure.json` again. See [method run] for the result.

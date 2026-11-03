@@ -26,6 +26,7 @@ func _ready() -> void:
 	_every_command_button_sends_a_whole_line()
 	_the_skill_detail_choice_offers_every_mode_and_stores_the_value()
 	_the_sfx_slider_writes_the_volume_and_follows_it()
+	_the_brightness_slider_writes_the_setting_and_follows_it()
 	_the_xp_tracker_checks_write_settings_and_reset_only_asks()
 	_the_movement_check_writes_the_setting_and_follows_it()
 	_the_roofs_check_writes_the_setting_and_follows_it()
@@ -209,6 +210,38 @@ func _the_sfx_slider_writes_the_volume_and_follows_it() -> void:
 	_settings.reset()
 
 	_expect(is_equal_approx(slider.value, ClientSettings.DEFAULT_SFX_VOLUME),
+		"and Reset to defaults puts it back")
+
+
+func _the_brightness_slider_writes_the_setting_and_follows_it() -> void:
+	# The same contract as the volume slider. The value is on a step of the
+	# slider, so the slider stores it as it is.
+	_fresh()
+
+	var slider: HSlider = _view._brightness_slider
+	var readout: Label = _view._brightness_value
+	var picked := snappedf(lerpf(ClientSettings.MIN_BRIGHTNESS,
+		ClientSettings.MAX_BRIGHTNESS, 0.5), slider.step)
+
+	_expect(is_equal_approx(slider.min_value, ClientSettings.MIN_BRIGHTNESS)
+		and is_equal_approx(slider.max_value, ClientSettings.MAX_BRIGHTNESS),
+		"the brightness bounds come from ClientSettings")
+
+	slider.value = picked
+
+	_expect(is_equal_approx(_settings.brightness, picked),
+		"dragging the slider stores the brightness")
+	_expect(readout.text == "%d%%" % roundi(picked * 100.0),
+		"and reads it as a percentage")
+
+	_settings.set_brightness(ClientSettings.MAX_BRIGHTNESS)
+
+	_expect(is_equal_approx(slider.value, ClientSettings.MAX_BRIGHTNESS),
+		"a brightness set elsewhere moves the slider")
+
+	_settings.reset()
+
+	_expect(is_equal_approx(slider.value, ClientSettings.DEFAULT_BRIGHTNESS),
 		"and Reset to defaults puts it back")
 
 

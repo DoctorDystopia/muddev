@@ -424,6 +424,9 @@ func _redraw_avatar() -> void:
 	var look := _avatar_look_now()
 
 	if _avatar != null and look == _avatar_look:
+		# The same figure, with maybe another lit set (DESIGN-0015). The
+		# glow is a uniform write, so it needs no build.
+		_glow_avatar()
 		return
 
 	if _avatar != null:
@@ -431,6 +434,7 @@ func _redraw_avatar() -> void:
 
 	_avatar_look = look
 	_avatar = _build_avatar()
+	_glow_avatar()
 	_avatar.scale = Vector3.ONE * AVATAR_SCALE
 	# Rests on the tile by measurement, like everything standing beside it, and
 	# stands in the ring slot the pool reserved -- which is the middle of the
@@ -450,6 +454,16 @@ func _redraw_avatar() -> void:
 	# every figure of the pool (10/18/2026).
 	FigureLights.mark_entity(_avatar)
 	_avatar_root.add_child(_avatar)
+
+
+## Write the glow of the lit augments onto the avatar (DESIGN-0015).
+## `char_avatar` carries the lit set, as it carries the worn record. A
+## node from the mesh ladder has no part, and glows nowhere.
+func _glow_avatar() -> void:
+	if _avatar == null or _char == null:
+		return
+
+	FigureGlow.apply(_avatar, _char.augments)
 
 
 ## The node of the avatar. It is the figure of the observer when the server

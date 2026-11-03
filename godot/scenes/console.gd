@@ -981,6 +981,20 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
+	# Shift and the key of a slot turn its step dial (DESIGN-0015). The
+	# backtick fires the set row. Both send a line the server named.
+	var step_slot := AbilityKeys.step_slot_for(key)
+
+	if step_slot != AbilityKeys.NO_SLOT:
+		_ability_rail.step_slot(step_slot)
+		get_viewport().set_input_as_handled()
+		return
+
+	if AbilityKeys.is_set_key(key):
+		_ability_rail.press_set()
+		get_viewport().set_input_as_handled()
+		return
+
 	# An arrow key turns the camera. Nothing goes to the server: the camera is
 	# the client's own. [method _process] turns it while the key stays down.
 	if _camera_keys.press(key.keycode):
@@ -1117,6 +1131,10 @@ func _apply_settings() -> void:
 	_chat.apply_font_size(size_px)
 
 	get_window().content_scale_factor = _settings.ui_scale
+
+	# The world pane only. The HUD over it, the minimap, and the item icons
+	# keep their colours. See WorldBrightness.
+	WorldBrightness.apply(_world_view, _settings.brightness)
 
 	# The bus, not each player: every cue plays on SFX, so one write reaches a
 	# sound already playing as well as the next one.

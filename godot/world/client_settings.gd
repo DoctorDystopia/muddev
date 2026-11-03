@@ -9,9 +9,9 @@ extends RefCounted
 ##
 ## ## Only what is genuinely the player's
 ##
-## Font size, UI scale, which panes are shown, how big the player made a box
-## and where they put it, where a clicked skill's detail
-## is shown, and how loud sound effects play — and
+## Font size, UI scale, how bright the world draws, which panes are shown, how
+## big the player made a box and where they put it, where a clicked skill's
+## detail is shown, and how loud sound effects play — and
 ## deliberately nothing else. Everything the client draws from the feed belongs to the
 ## server, and a setting that duplicated one would be a second owner of it. The
 ## line is the same one the whole client is built on: the server says what is
@@ -56,6 +56,7 @@ const KEY_SHOW_COORDINATES := "show_coordinates"
 const KEY_MINIMAP_ROTATES := "minimap_rotates"
 const KEY_SHOW_PERFORMANCE := "show_performance"
 const KEY_SHIFT_CLICK_DROP := "shift_click_drop"
+const KEY_BRIGHTNESS := "brightness"
 
 ## The chat interface gets its own section: which mode a typed line goes to,
 ## and which tabs the player hid from All. See [ChatModes] and [ChatTabs].
@@ -105,6 +106,21 @@ const REFERENCE_DPI := 96.0
 
 ## The step of a scale from the screen, so a first run gives 125% and not 127%.
 const SCREEN_SCALE_STEP := 0.25
+
+## How bright the world pane draws (10/29/2026). 1.0 draws the world as the
+## area looks made it. A value above 1.0 lifts the dark tones the most, so a
+## player can see into a dark room. A value below 1.0 makes the world darker.
+##
+## A LOOK, and it stops at the world pane. The HUD, the minimap, and the item
+## icons keep their colours. The area looks and the Look tab of the terrain
+## editor do not see it, so an author tunes a look at 1.0 for every player.
+## [WorldBrightness] turns the value into pixels.
+##
+## The range is a pick (10/29/2026), not a rule from the vault. Past 1.75 the
+## darkest tones turn into visible steps.
+const DEFAULT_BRIGHTNESS := 1.0
+const MIN_BRIGHTNESS := 0.75
+const MAX_BRIGHTNESS := 1.75
 
 ## Whether the 3D world and inventory panes are drawn at all.
 ##
@@ -397,6 +413,7 @@ var ui_scale := DEFAULT_UI_SCALE
 ## The scale before the player picks one, and the scale that Reset gives. See
 ## [method set_shipped_ui_scale].
 var shipped_ui_scale := DEFAULT_UI_SCALE
+var brightness := DEFAULT_BRIGHTNESS
 var show_world := DEFAULT_SHOW_WORLD
 var show_inventory := DEFAULT_SHOW_INVENTORY
 var skill_detail := DEFAULT_SKILL_DETAIL
@@ -456,6 +473,8 @@ func load_from_disk() -> void:
 		SECTION, KEY_FONT_SIZE, DEFAULT_FONT_SIZE)))
 	ui_scale = _clamp_scale(float(config.get_value(
 		SECTION, KEY_UI_SCALE, shipped_ui_scale)))
+	brightness = _clamp_brightness(float(config.get_value(
+		SECTION, KEY_BRIGHTNESS, DEFAULT_BRIGHTNESS)))
 	show_world = bool(config.get_value(
 		SECTION, KEY_SHOW_WORLD, DEFAULT_SHOW_WORLD))
 	show_inventory = bool(config.get_value(
@@ -521,6 +540,7 @@ func save_to_disk() -> Error:
 	var config := ConfigFile.new()
 	config.set_value(SECTION, KEY_FONT_SIZE, font_size)
 	config.set_value(SECTION, KEY_UI_SCALE, ui_scale)
+	config.set_value(SECTION, KEY_BRIGHTNESS, brightness)
 	config.set_value(SECTION, KEY_SHOW_WORLD, show_world)
 	config.set_value(SECTION, KEY_SHOW_INVENTORY, show_inventory)
 	config.set_value(SECTION, KEY_SKILL_DETAIL, skill_detail)
@@ -592,6 +612,18 @@ func set_ui_scale(value: float) -> void:
 		return
 
 	ui_scale = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Set how bright the world pane draws, clamped, and persist it.
+func set_brightness(value: float) -> void:
+	var clamped := _clamp_brightness(value)
+
+	if is_equal_approx(clamped, brightness):
+		return
+
+	brightness = clamped
 	save_to_disk()
 	changed.emit()
 
@@ -964,6 +996,7 @@ func skill_detail_in_log() -> bool:
 func reset() -> void:
 	font_size = DEFAULT_FONT_SIZE
 	ui_scale = shipped_ui_scale
+	brightness = DEFAULT_BRIGHTNESS
 	show_world = DEFAULT_SHOW_WORLD
 	show_inventory = DEFAULT_SHOW_INVENTORY
 	skill_detail = DEFAULT_SKILL_DETAIL
@@ -1030,6 +1063,10 @@ func _clamp_skill_detail(value: String) -> String:
 
 func _clamp_scale(value: float) -> float:
 	return clampf(value, MIN_UI_SCALE, MAX_UI_SCALE)
+
+
+func _clamp_brightness(value: float) -> float:
+	return clampf(value, MIN_BRIGHTNESS, MAX_BRIGHTNESS)
 
 
 func _clamp_volume(value: float) -> float:

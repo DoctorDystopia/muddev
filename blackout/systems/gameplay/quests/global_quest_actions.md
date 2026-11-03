@@ -147,3 +147,12 @@ Tied to the core "Mining" skill. Fired when successfully extracting from ore/min
 Specific to the "Brain Farming" skill. Fired when successfully harvesting conscious energy from a living creature.
 
 * **Usage Examples:** `harvest_brain:mutant_rat`, `harvest_brain:raider`
+
+### `graft`
+
+Tied to the "Augmentation" skill (DESIGN-0015). Fired when a player grafts a
+sample for Augmentation XP, anywhere or at an Augmentation Locus. The hook
+fires two times for one graft: with the item key of the sample, and with its
+sample kind (`bio_sample` or `techno_sample`). An objective names either.
+
+* **Usage Examples:** `graft:mutant_gland`, `graft:bio_sample`, `graft:techno_sample`

@@ -324,6 +324,8 @@ class TestCharAvatarChannel(EvenniaTest):
         self.assertEqual(avatar.figure_colors,
                          seen_by_others.get(const.ENTITY_FIGURE_COLORS_KEY, {}))
         self.assertEqual(avatar.worn, seen_by_others.get(const.ENTITY_WORN_KEY, {}))
+        self.assertEqual(avatar.augments,
+                         seen_by_others.get(const.ENTITY_AUGMENTS_KEY, []))
 
     def test_a_player_row_names_a_body_type_and_an_npc_row_does_not(self):
         """The client builds a figure for a row with a body type, and only
@@ -347,11 +349,15 @@ class TestCharAvatarChannel(EvenniaTest):
         avatar = recorder.of_type(CharAvatarPayload)[-1]
 
         for key, value in avatar.to_dict().items():
-            # The figure colors are the one table: color role -> named color.
+            # The figure colors and the worn record are tables of text. The
+            # lit augments (DESIGN-0015) are a list of augment keys.
             if isinstance(value, dict):
                 for role, color in value.items():
                     self.assertIsInstance(role, str, msg=key)
                     self.assertIsInstance(color, str, msg=key)
+            elif isinstance(value, list):
+                for entry in value:
+                    self.assertIsInstance(entry, str, msg=key)
             else:
                 self.assertIsInstance(value, (int, str), msg=key)
 

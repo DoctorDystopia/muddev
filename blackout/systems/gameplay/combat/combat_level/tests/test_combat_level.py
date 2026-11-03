@@ -21,6 +21,7 @@ from systems.gameplay.combat.combat_level.branch_defs.melee import MeleeBranch
 from systems.gameplay.combat.combat_level.logic import get_combat_level
 from systems.gameplay.combat.combat_level.registry import COMBAT_BRANCH_REGISTRY
 from systems.gameplay.progression.skills.constants import (
+    SKILL_KEY_AUGMENTATION,
     SKILL_KEY_BRAWN,
     SKILL_KEY_DEFENSE,
     SKILL_KEY_FORTITUDE,
@@ -99,13 +100,27 @@ class TestGetCombatLevelForCharacter(EvenniaTest):
 
         self.assertEqual(get_combat_level(self.char1), expected)
 
-    def test_unbuilt_augmentation_skill_does_not_raise(self):
-        # 'augmentation' is not in SKILL_REGISTRY yet -- this must not raise
-        # ValueError the way a direct skills.get_level('augmentation') would.
+    def test_a_missing_augmentation_level_does_not_raise(self):
+        # The skill exists since 10/30/2026 (DESIGN-0015). A character with
+        # no slot for it must still get a combat level, with 0 for the term.
+        self.char1.db.skills.pop(SKILL_KEY_AUGMENTATION, None)
+
         try:
             get_combat_level(self.char1)
         except ValueError:
-            self.fail("get_combat_level raised on an unbuilt Combat Specialty skill")
+            self.fail("get_combat_level raised on a character with no Augmentation slot")
+
+    def test_augmentation_adds_half_its_level_to_the_base(self):
+        """The base term reads the skill through the one key of its owner."""
+        self._set_level(SKILL_KEY_FORTITUDE, 50)
+        self._set_level(SKILL_KEY_DEFENSE, 40)
+        self._set_level(SKILL_KEY_AUGMENTATION, 31)
+
+        contribution = math.floor(31 / const.COMBAT_LEVEL_AUGMENTATION_DIVISOR)
+        expected_base = const.COMBAT_LEVEL_BASE_WEIGHT * (50 + 40 + contribution)
+
+        self.assertEqual(get_combat_level(self.char1), math.floor(expected_base))
+        self.assertEqual(const.COMBAT_LEVEL_AUGMENTATION_SKILL, SKILL_KEY_AUGMENTATION)
 
     def test_combat_level_property_matches_the_function(self):
         self._set_level(SKILL_KEY_STRIKE, 25)

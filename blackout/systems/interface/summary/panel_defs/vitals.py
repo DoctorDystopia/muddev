@@ -8,6 +8,7 @@ Description: Summary panel: hitpoints, combat level, and whole-character
 
 from evennia.utils import logger
 
+from systems.gameplay.augmentation import pool as augmentation_pool
 from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.combat import pvp
 from systems.interface.ui.meters import build_hp_meter
@@ -22,6 +23,7 @@ from .base_panel import BasePanel
 PANEL_TITLE = "Vitals"
 
 LABEL_HITPOINTS = "Hitpoints"
+LABEL_GRIT = "Grit"
 LABEL_REGEN = "Regen"
 LABEL_COMBAT_LEVEL = "Combat Level"
 LABEL_TOTAL_LEVEL = "Total Level"
@@ -221,7 +223,10 @@ class VitalsPanel(BasePanel):
 
         Methodology:
             The HP meter is a wide row because it is METER_WIDTH columns on its
-            own; the three progression totals pair up beneath it.
+            own. The three progression totals pair up beneath it. The Grit
+            meter is a second wide row under it (DESIGN-0015, 10/30/2026).
+            Grit has the colour grades of HP, because at 0 every lit augment
+            goes out.
 
         Notes/References:
             None
@@ -230,6 +235,8 @@ class VitalsPanel(BasePanel):
         Creation date: 08/08/2026
         """
         meter = build_hp_meter(character.hp, character.max_hp)
+        grit_meter = build_hp_meter(augmentation_pool.current(character),
+                                    augmentation_pool.maximum(character))
         combat_level = character.combat_level
         total_level = character.skills.total_level()
         combined_xp = character.skills.combined_xp()
@@ -242,6 +249,7 @@ class VitalsPanel(BasePanel):
         ]
 
         lines = [layout.wide_field(LABEL_HITPOINTS, meter, color="")]
+        lines.append(layout.wide_field(LABEL_GRIT, grit_meter, color=""))
         lines.extend(layout.fields(pairs))
         lines.append(layout.wide_field(LABEL_STATUS, cls._status_text(character)))
 
@@ -276,6 +284,8 @@ class VitalsPanel(BasePanel):
         payload = {
             "hp": int(character.hp),
             "max_hp": int(character.max_hp),
+            "grit": int(augmentation_pool.current(character)),
+            "max_grit": int(augmentation_pool.maximum(character)),
             "combat_level": int(character.combat_level),
             "total_level": int(character.skills.total_level()),
             "total_xp": int(character.skills.combined_xp()),

@@ -63,7 +63,7 @@ func _on_part_model_import(part_name: String, model_key: String, path: String,
 	var author := _context.dock().saved_author()
 
 	_context.start_job(FigureGearHandlers.JOB_MODEL % model_key,
-		FigurePipeline.import_model.bind(FigureGearHandlers.model_family(bench, model_key),
+		ModelPipeline.import_export.bind(FigureGearHandlers.model_family(bench, model_key),
 			model_key, path, author),
 		func(result: Dictionary) -> void:
 			if not result["ok"]:

@@ -16,6 +16,7 @@ func _ready() -> void:
 	_no_data_is_not_the_same_as_dead()
 	_a_reading_arrives_and_the_bar_follows_it()
 	_the_colour_grades_with_the_fraction()
+	_the_grit_row_follows_the_same_payload()
 	_the_bars_never_swallow_a_click()
 
 	if _failures > 0:
@@ -114,6 +115,42 @@ func _the_colour_grades_with_the_fraction() -> void:
 
 	state.ingest(Const.CH_CHAR_VITALS, {"hp": 10.0, "max_hp": 100.0})
 	_expect(fill.modulate == VitalsBars.COLOR_CRITICAL, "a tenth is critical")
+
+
+## The second row is the Grit pool (DESIGN-0015). It rides the vitals
+## payload beside hp. A payload with no grit field draws the row as no data,
+## not as empty. A server from before the pool existed sends none.
+func _the_grit_row_follows_the_same_payload() -> void:
+	var built := _built()
+	var state: CharState = built[0]
+	var bars: VitalsBars = built[1]
+	var grit_index := -1
+
+	for index: int in VitalsBars.BARS.size():
+		if str(VitalsBars.BARS[index].get("current", "")) == "grit":
+			grit_index = index
+
+	_expect(grit_index >= 0, "a bar reads the grit pool")
+
+	if grit_index < 0:
+		return
+
+	state.ingest(Const.CH_CHAR_VITALS, {"hp": 30.0, "max_hp": 60.0})
+	_expect(_reading(bars, grit_index) == VitalsBars.NO_DATA_TEXT,
+		"a payload with no grit draws the row as no data")
+
+	state.ingest(Const.CH_CHAR_VITALS,
+		{"hp": 30.0, "max_hp": 60.0, "grit": 3.0, "max_grit": 12.0})
+	_expect(_reading(bars, grit_index) == "3/12",
+		"the reading is the server's grit numbers")
+	_expect(is_equal_approx(_fill(bars, grit_index).value, 0.25),
+		"and the bar is a quarter full")
+	_expect(_fill(bars, grit_index).modulate == VitalsBars.COLOR_CRITICAL,
+		"and a quarter is graded as critical, like HP")
+
+	state.ingest(Const.CH_CHAR_VITALS,
+		{"hp": 30.0, "max_hp": 60.0, "grit": 0.0, "max_grit": 12.0})
+	_expect(_reading(bars, grit_index) == "0/12", "an empty pool reads as zero")
 
 
 func _the_bars_never_swallow_a_click() -> void:

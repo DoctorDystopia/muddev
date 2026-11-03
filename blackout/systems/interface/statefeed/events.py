@@ -528,11 +528,21 @@ def emit_vitals(entity, force: bool = False) -> int:
     The dossier repeats both numbers, so it is marked stale here. Every HP
     change already passes through this routine on its way from the hp setter,
     which makes this the choke point rather than each thing that writes hp.
+
+    The Grit pool rides the same payload (DESIGN-0015, 10/30/2026). Each
+    write of the pool calls this routine, so the choke point holds for Grit
+    too. This routine imports the pool module inside itself, because the
+    pool imports this module for that call.
     """
+    from systems.gameplay.augmentation import pool as augmentation_pool
+
     refresh_summary(entity)
 
     max_hp = getattr(entity, "max_hp", 0)
-    payload = CharVitalsPayload(hp=getattr(entity, "hp", 0), max_hp=max_hp)
+    grit = augmentation_pool.current(entity)
+    max_grit = augmentation_pool.maximum(entity)
+    payload = CharVitalsPayload(hp=getattr(entity, "hp", 0), max_hp=max_hp,
+                                grit=grit, max_grit=max_grit)
 
     return emit(entity, payload, force=force)
 
@@ -652,6 +662,7 @@ def emit_avatar(observer, force: bool = False) -> int:
         body_type=body.get(const.ENTITY_BODY_TYPE_KEY, ""),
         figure_colors=body.get(const.ENTITY_FIGURE_COLORS_KEY, {}),
         worn=body.get(const.ENTITY_WORN_KEY, {}),
+        augments=body.get(const.ENTITY_AUGMENTS_KEY, []),
     )
 
     return emit(observer, payload, force=force)

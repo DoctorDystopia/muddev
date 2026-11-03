@@ -73,6 +73,10 @@ SKILL_KEY_GASTRONOMY = "gastronomy"
 
 # Utility
 SKILL_KEY_EXTERMINATOR = "exterminator"
+# The universal skill of DESIGN-0015, a Utility skill (Nick, 10/30/2026).
+# combat/constants.py reads it for the combat level, so this is the one
+# spelling.
+SKILL_KEY_AUGMENTATION = "augmentation"
 
 
 
@@ -117,4 +121,5 @@ SKILL_KEYS_CATEGORY_PRODUCTION = (
 
 SKILL_KEYS_CATEGORY_UTILITY = (
     SKILL_KEY_EXTERMINATOR,
+    SKILL_KEY_AUGMENTATION,
 )

@@ -40,6 +40,9 @@ func _ready() -> void:
 	_the_buttons_never_take_the_keyboard()
 	_the_tip_of_a_locked_row_says_why()
 	_the_rail_itself_ignores_the_mouse()
+	_the_set_row_takes_its_own_key_and_no_slot()
+	_a_lit_augment_row_shows_its_step_and_shift_turns_it()
+	_a_row_with_a_note_shows_it_after_the_name()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -152,3 +155,40 @@ func _the_tip_of_a_locked_row_says_why() -> void:
 func _the_rail_itself_ignores_the_mouse() -> void:
 	_expect(_rail.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 		"a click between the buttons reaches the world")
+
+
+func _the_set_row_takes_its_own_key_and_no_slot() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	_expect(_rail.buttons().size() == 5, "one button for each row, the set row too")
+	_expect(_rail.buttons()[4].text.begins_with(AbilityKeys.SET_LABEL),
+		"the set button starts with the set key")
+	_sent.clear()
+	_rail.press_set()
+	_expect(_sent == ["aug set"], "the set key sends the command of the set row")
+	_sent.clear()
+	_rail.press_slot(4)
+	_expect(_sent.is_empty(), "the set row answers no slot")
+
+
+func _a_row_with_a_note_shows_it_after_the_name() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	var overclock := _rail.buttons()[3]
+	_expect(overclock.text.ends_with("Overclock 3/3 +14%"), "the note of a row follows its name and step: " + overclock.text)
+	var reflex := _rail.buttons()[2]
+	_expect(reflex.text.ends_with("Reflex 2/3"), "a row with no note draws none: " + reflex.text)
+
+
+func _a_lit_augment_row_shows_its_step_and_shift_turns_it() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	var button := _rail.buttons()[2]
+	_expect(button.text.ends_with("Reflex 2/3"), "a lit augment row shows its step: " + button.text)
+	_expect(button.button_pressed, "and is lit")
+	_sent.clear()
+	_rail.step_slot(2)
+	_expect(_sent == ["aug Reflex 3"], "Shift and its key send the line of the next step")
+	_sent.clear()
+	_rail.step_slot(0)
+	_expect(_sent.is_empty(), "an aura row has no step to turn")
+	_sent.clear()
+	_rail.press_slot(2)
+	_expect(_sent == ["aug Reflex off"], "the key still sends the command of the row")

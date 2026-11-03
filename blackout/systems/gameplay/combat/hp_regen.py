@@ -159,7 +159,7 @@ class BlackoutRegenManager(DefaultScript):
                     # Healed by some other means since registering -- drop.
                     continue
 
-                entity.hp = entity.hp + const.HP_REGEN_AMOUNT
+                entity.hp = entity.hp + _heal_amount(entity)
                 healed += 1
 
                 if entity.hp < entity.max_hp:
@@ -174,6 +174,51 @@ class BlackoutRegenManager(DefaultScript):
 
 
 # ─── module helpers ────────────────────────────────────────────────────────
+
+def _heal_amount(entity) -> int:
+    """
+    Purpose: The HP of one entity at one sweep, with its regen modifiers.
+
+    Entry:
+        entity is a registered Combatant.
+
+    Exit/Returns:
+        Returns an int of at least 0. HP_REGEN_AMOUNT for an entity with
+        no regen modifier.
+
+    Module Globals:
+        const.HP_REGEN_AMOUNT read.
+
+    Methodology:
+        The sweep cadence is global, so a shorter interval for one entity
+        becomes a larger amount at each sweep: HP_REGEN_AMOUNT over the
+        share of the interval that the entity keeps. The whole points land
+        now, and the remainder carries in ndb to the next sweep. Thus, a
+        share of 0.4 heals 2.5 points for each sweep on average. That
+        equals a 24 second interval. The routine imports the augmentation
+        rules inside, because that package reaches the combat package.
+
+    Notes/References:
+        DESIGN-0015, Phase 5, Mend. rules.regen_interval_share owns the
+        share.
+
+    Author: Nick Hobar
+    Creation date: 10/30/2026
+    """
+    from systems.gameplay.augmentation.rules import regen_interval_share
+
+    share = regen_interval_share(entity)
+
+    if share >= 1.0:
+        return const.HP_REGEN_AMOUNT
+
+    carry = float(getattr(entity.ndb, "regen_carry", None) or 0.0)
+    total = carry + const.HP_REGEN_AMOUNT / share
+    whole = int(total)
+    entity.ndb.regen_carry = total - whole
+
+    return whole
+
 
 def get_regen_manager() -> BlackoutRegenManager:
     """Return the global regen manager, creating and arming it if absent.

@@ -934,6 +934,12 @@ _AREA_LOOKS_PATH = os.path.join(_LOOK_DIRECTORY, "area_looks.json")
 # The light of each scenery key (10/18/2026). The Look tab writes it, and the
 # client bakes it into the meshes of each chunk.
 _LIGHTS_PATH = os.path.join(_LOOK_DIRECTORY, "lights.json")
+
+# The glow of each lit augment on the figure (DESIGN-0015, 10/30/2026). The
+# parts it names are parts of the body looks of the served figure set.
+_AUGMENT_LOOKS_PATH = os.path.join(_LOOK_DIRECTORY, "augment_looks.json")
+_FIGURE_SET_PATH = os.path.join(
+    _GAME_DIR, "web", "static", "webclient", "models", "figure.json")
 _LIGHT_NUMBER_FIELDS = ("energy", "range", "height")
 _HEX_COLOR = re.compile(r"^[0-9a-fA-F]{6}$")
 
@@ -988,6 +994,39 @@ class LookFileTests(unittest.TestCase):
         for name in looks.get("areas", {}):
             with self.subTest(area=name):
                 self.assertIn(name, _area_table.AREAS)
+
+    def test_the_augment_looks_name_real_augments_and_real_parts(self):
+        """
+        A glow on an augment key that no augment has is a glow that nothing
+        draws (DESIGN-0015, 10/30/2026). The parts come from the body looks
+        of the served figure set, so a renamed part fails here too.
+        """
+        from systems.gameplay.augmentation.registry import AUGMENT_REGISTRY
+
+        looks = _read_look_file(_AUGMENT_LOOKS_PATH)
+
+        if looks is None:
+            self.skipTest("no augment looks file")
+
+        figure_set = _read_look_file(_FIGURE_SET_PATH)
+        body_parts = set()
+
+        if figure_set is not None:
+            for look in figure_set.get("looks", {}).values():
+                for part in look.get("parts", []):
+                    body_parts.add(part.get("name", ""))
+
+        for name, row in looks.get("augments", {}).items():
+            with self.subTest(augment=name):
+                self.assertIn(name, AUGMENT_REGISTRY)
+                self.assertRegex(row.get("color", ""), _HEX_COLOR)
+                self.assertTrue(row.get("parts"), "a glow names at least one part")
+
+                if figure_set is None:
+                    continue
+
+                for part in row.get("parts", []):
+                    self.assertIn(part, body_parts)
 
     def test_the_lights_name_real_scenery(self):
         """

@@ -6,8 +6,10 @@ Description: Turn the abilities of a character into the plain values that
              CharAbilitiesPayload carries.
 
              IT COMPOSES NOTHING. Every row comes from
-             systems/gameplay/combat/auras/detail.py, which the telnet
-             `aura` listing reads too. Thus, the rail that a graphical
+             systems/gameplay/abilities.py, the composer. That module puts
+             the rows of auras/detail.py and of augmentation/detail.py
+             after each other (10/30/2026), and each telnet listing reads
+             its own detail module. Thus, the rail that a graphical
              client draws and the listing that a telnet player reads
              describe the same abilities by construction. It is
              combat_options.py's arrangement with style_options, one
@@ -46,8 +48,8 @@ def build_payload(observer) -> CharAbilitiesPayload:
     Author: Nick Hobar
     Creation date: 10/20/2026
     """
-    from systems.gameplay.combat.auras import detail
+    from systems.gameplay import abilities as composer
 
-    payload = CharAbilitiesPayload(abilities=detail.ability_rows(observer))
+    payload = CharAbilitiesPayload(abilities=composer.ability_rows(observer))
 
     return payload

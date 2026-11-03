@@ -718,6 +718,39 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
 
 
 
+def sync_grit_from_augmentation(obj: object) -> None:
+    """
+    Purpose: Refresh the Grit pool from the Augmentation level. The
+             Augmentation twin of sync_max_hp_from_fortitude.
+
+    Entry:
+        obj is a valid Evennia Character (or other host with `db`).
+
+    Exit/Returns:
+        No conditions. The stored Grit is clamped to the new maximum, and
+        the new maximum reaches the client. A raised maximum does not fill
+        the pool.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        One call into the pool module, imported inside the routine. The
+        pool imports the statefeed, and the statefeed reads the skill
+        constants. An import at module scope would close that ring.
+
+    Notes/References:
+        DESIGN-0015 section 9, step 3.
+
+    Author: Nick Hobar
+    Creation date: 10/30/2026
+    """
+    from systems.gameplay.augmentation import pool as augmentation_pool
+
+    augmentation_pool.sync_from_level(obj)
+
+
+
 # ─── Level-up side effects ──────────────────────────────────────────────────
 # Some skills change derived state when they level. Registering them as data
 # keeps add_xp free of per-skill branches, and makes the coupling greppable:
@@ -726,8 +759,11 @@ def sync_max_hp_from_fortitude(obj: object) -> None:
 # Fortitude drives max_hp. Without this entry sync_max_hp_from_fortitude had
 # no callers at all, so every character's max HP stayed pinned at its creation
 # value forever no matter how much Fortitude XP they earned.
+#
+# Augmentation drives the maximum Grit the same way (DESIGN-0015, 10/30/2026).
 _LEVEL_UP_SIDE_EFFECTS = {
     SKILL_KEY_FORTITUDE: sync_max_hp_from_fortitude,
+    skill_constants.SKILL_KEY_AUGMENTATION: sync_grit_from_augmentation,
 }
 
 

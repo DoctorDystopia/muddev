@@ -52,6 +52,45 @@ const SLOTS: Array = [
 ]
 
 
+## The key that fires the set row (DESIGN-0015, 10/30/2026): the quick
+## prayer orb. The backtick, to the left of the number row. The set row is
+## no slot, because its place in the list moves with the count of the
+## abilities. [method is_set_key] answers it.
+const SET_KEYCODE := KEY_QUOTELEFT
+const SET_LABEL := "`"
+
+
+## True when the press fires the set row. Shift, Ctrl, Alt and Meta all
+## refuse it, as for a slot.
+static func is_set_key(event: InputEventKey) -> bool:
+	if event.ctrl_pressed or event.alt_pressed or event.meta_pressed or event.shift_pressed:
+		return false
+
+	return event.keycode == SET_KEYCODE
+
+
+## The slot whose step dial one press turns, or [constant NO_SLOT]: Shift
+## and the key of the slot (DESIGN-0015). A row of the table with `shift`
+## true is a slot of its own, so it never answers here.
+static func step_slot_for(event: InputEventKey) -> int:
+	if event.ctrl_pressed or event.alt_pressed or event.meta_pressed:
+		return NO_SLOT
+
+	if not event.shift_pressed:
+		return NO_SLOT
+
+	for slot: int in SLOTS.size():
+		var row: Dictionary = SLOTS[slot]
+
+		if bool(row[ROW_SHIFT]):
+			continue
+
+		if event.keycode == row[ROW_KEYCODE]:
+			return slot
+
+	return NO_SLOT
+
+
 ## The slot that one key press fires, or [constant NO_SLOT].
 ##
 ## A press with Ctrl, Alt or Meta held answers no slot. Those belong to

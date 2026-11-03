@@ -39,6 +39,8 @@ _SPAWNER_MODULES = [
     "typeclasses.gathering_nodes",
     "typeclasses.skill_facilities",
     "typeclasses.bank_nodes",
+    "typeclasses.augbots",
+    "typeclasses.loci",
     "typeclasses.npc_spawners",
     "typeclasses.signs",
 ]

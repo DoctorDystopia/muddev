@@ -266,6 +266,11 @@ var _links: Node3D
 ## The model source. Made on the first draw with [member show_models] on.
 var _models: TerrainModels
 
+## [member ModelPipeline.served_mark] when [member _models] read the
+## served tree. A build in this editor moves the mark, and the next draw
+## reads the tree again, so a new model shows with no reopen (11/02/2026).
+var _models_mark := 0
+
 ## Chunks to redraw on the next frame, as (cx, cy, plane). A brush dab queues
 ## its chunks here, so many dabs in one frame cost one redraw.
 var _pending := {}
@@ -1108,10 +1113,21 @@ func _model_for(thing: Dictionary) -> Node3D:
 	if not show_models:
 		return null
 
+	return _repo_models().stand(chunks, thing)
+
+
+## The models of the served tree of the repo. A build since the last read
+## ([member _models_mark]) reads the tree again.
+func _repo_models() -> TerrainModels:
+	if _models != null and _models_mark != ModelPipeline.served_mark:
+		_models.release()
+		_models = null
+
 	if _models == null:
 		_models = TerrainModels.for_repo()
+		_models_mark = ModelPipeline.served_mark
 
-	return _models.stand(chunks, thing)
+	return _models
 
 
 ## The view of one chunk of the edited plane, or an empty Dictionary.
@@ -1367,10 +1383,7 @@ func select_thing(tile: Vector2i, thing: Dictionary) -> void:
 ## the first ask, with "Show models" on or off: the list needs the variant
 ## map only.
 func variants_for(kind: String) -> PackedStringArray:
-	if _models == null:
-		_models = TerrainModels.for_repo()
-
-	return _models.variants_for(kind)
+	return _repo_models().variants_for(kind)
 
 
 func clear_selection() -> void:

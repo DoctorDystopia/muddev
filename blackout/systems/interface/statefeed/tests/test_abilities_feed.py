@@ -83,7 +83,12 @@ class _Fixture:
                 self.char1.db.skills[aura.scaling_skill] = {"level": level, "xp": 0}
 
     def _rows(self) -> list:
-        return abilities_feed.build_payload(self.char1).to_dict()["abilities"]
+        """The aura rows of the rail. The composer puts the augment rows
+        after them (DESIGN-0015, 10/30/2026), and those have their own
+        cases in systems/gameplay/augmentation/tests/test_rail.py."""
+        rows = abilities_feed.build_payload(self.char1).to_dict()["abilities"]
+
+        return [row for row in rows if row["key"] in AURA_REGISTRY]
 
     def _row(self, key: str) -> dict:
         for row in self._rows():

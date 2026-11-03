@@ -186,8 +186,8 @@ seconds):
 ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.banking.tests
 ```
 
-**Before a merge or a major change**, run the full suite (3765 tests, ~33 min,
-measured 10/21/2026):
+**Before a merge or a major change**, run the full suite (4123 tests, ~43 min,
+measured 11/02/2026):
 
 ```bash
 ../evenv/Scripts/evennia.exe test --settings test_settings.py items systems typeclasses commands world profiling analysis
@@ -955,8 +955,12 @@ Righteous Fire is the only aura with a burn today.
   `CREDITS.md` and `assets/build.lock.json`. Never edit those by hand.
 - **`python -m assets.pipeline check` runs in the test suite**, through
   `test_model_pipeline.py`. It needs no Node and no Blender.
-
-Five rules:
+- **Two askers fill one model plan** (11/02/2026). The model wizard (`add`)
+  asks in the terminal. The model form (the Models dock,
+  `godot/addons/blackout_models/`) sends a plan file to `add-check` and
+  `add-write`. `pipeline/plans.py` owns each check and each write, so the
+  two cannot refuse different answers. The gear editor imports through
+  the export origin of the same plan.
 
 1. **Never edit the art in a source.** Put a correction in the record's
    `[fix]`. The build bakes it into the served file.

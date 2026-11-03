@@ -102,8 +102,9 @@ The rules of the wizard:
 
 - **A question refuses what the build refuses:** a key that another record
   has, a base that is an alias or a variant, another license with no
-  exception. The wizard reads each rule from the module that owns it
-  (`pipeline/wizard.py`).
+  exception. The wizard reads each rule from the module that owns it.
+  Each check and each write is in `pipeline/plans.py`, which the model form
+  uses too.
 - **The asset key comes from the game.** Before the asset key question, the
   wizard shows each asset key that the server names and no model record
   draws yet. A number picks one. A key with a worn look comes after the
@@ -129,6 +130,40 @@ The rules of the wizard:
   first, as in step 5 of "Add a model".
 
 A figure model keeps its own command, `figure-model`. See "A figure model".
+
+## The model form (Godot)
+
+The Models dock of the Godot editor does the steps of the wizard with no
+terminal (11/02/2026). Nick chose a form and JSON commands over the wizard
+through a pipe. The plugin is `godot/addons/blackout_models/`, and
+`godot/README.md` tells how to use the dock.
+
+The dock runs four commands. Each command writes its answer to a JSON file:
+
+| Command | What it gives |
+|---|---|
+| `add-options <answer>` | The origins, the licenses, the families, and the sources |
+| `add-polyhaven <id> <answer>` | The title, the author, and the model file of a Poly Haven model |
+| `add-check <plan> <answer>` | The problem of each field, the warnings, the defaults, and the text of each file to write. It writes nothing |
+| `add-write <plan> <answer>` | The same check, then the write, then the build when the plan asks |
+
+The rules of the form:
+
+- **The form and the wizard use one set of checks.** `pipeline/plans.py`
+  holds each check and each write. The wizard asks one question at a time.
+  The form sends all the answers at one time (`pipeline/form.py`). A test
+  writes one model through each, and compares the files.
+- **A warning needs a yes, as in the wizard.** An asset key that the game
+  does not name needs the box "Keep the keys that the game does not name".
+  A source that the license gate refuses needs the box "Use it anyway".
+- **The form has a fourth origin: an export of art made here.** It does
+  what `figure-model` does. The gear editor imports through it. See "A
+  figure model".
+- **The answer goes to a file, not to the output.** The Godot bridge reads
+  stdout and stderr as one text, and a build prints lines.
+- **A plan key has one name in two languages.** `form.py` and
+  `godot/addons/blackout_models/model_pipeline.gd` name the same keys and
+  origins. `test_model_form.py` fails when they differ.
 
 ## A .vox file
 
@@ -245,7 +280,8 @@ chainbody, a head of hair. Nick makes it in a modeler, over the reference
 body that the figure workbench exports. `godot/README.md` gives those steps.
 
 One command does steps 1 to 4 of "Add a model" for such a file, with no
-`TODO` to replace. The import button of the figure workbench runs it, so the
+`TODO` to replace. The import buttons of the gear editor do the same through
+the `export` origin of the model form (`add-write`, 11/02/2026), so the
 author needs no terminal:
 
 ```bash
@@ -269,6 +305,10 @@ The rules of the command:
   `[fix]` stays.
 - **It refuses a key that another model record has**, as a file name or as
   an alias. Take the key out of that record first.
+- **It refuses a key whose source another record reads** (11/02/2026). An
+  import empties its source. `blood_sword.toml` reads
+  `blackout_bloody_sword2`. Without this rule, an import of `bloody_sword2`
+  deletes the file of the blood sword.
 - **It refuses a source that is not `LicenseRef-Blackout-Owned`.** It never
   writes over a download.
 - **The file must be in figure space:** the feet at the origin, +Y up, the
@@ -282,7 +322,7 @@ that.
 
 Since 10/16/2026 a model can also replace ONE part of any look, the body
 included (DESIGN-0014 section 20). The part editor of the figure workbench
-runs the same command for it: **Import model for part**. Its key is
+runs the same import for it: **Import model for part**. Its key is
 `<look>_<part>` by default, for example `body_1_head`, in the family
 `figure`. The part takes the node with its own name or with the name of
 its bone, and each other part of the look stays. A `.blend` file and a

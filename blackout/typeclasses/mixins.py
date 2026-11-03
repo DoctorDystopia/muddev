@@ -705,7 +705,55 @@ class CombatEntity:
         # self-burn of Righteous Fire would kill the player again.
         self._put_out_aura()
 
+        # Every augment goes out too (DESIGN-0015). The drain of a lit
+        # augment would go on at the respawn point.
+        self._put_out_augments()
+
         self.respawn()
+
+
+    def _put_out_augments(self) -> None:
+        """
+        Purpose: Put out every augment of this entity, if any burns.
+
+        Entry:
+            No conditions.
+
+        Exit/Returns:
+            No return value. After return, this entity has no augment
+            handler.
+
+        Module Globals:
+            _MSG_COMBAT read.
+
+        Methodology:
+            The same steps as `aug off`: put the set out, stop the handler,
+            then tell the player. The augmentation constants are imported
+            inside the routine. That package imports the statefeed, which
+            reads this module.
+
+        Notes/References:
+            at_death calls this, beside _put_out_aura.
+
+        Author: Nick Hobar
+        Creation date: 10/30/2026
+        """
+        from systems.gameplay.augmentation import constants as aug_const
+
+        handler = self.augments
+
+        if handler is None:
+            return
+
+        try:
+            was_lit = handler.put_out_all()
+            handler.stop_handler()
+        except Exception:
+            logger.log_trace()
+            return
+
+        if was_lit:
+            self.msg((aug_const.AUG_ALL_OUT_MESSAGE, _MSG_COMBAT))
 
 
     def _put_out_aura(self) -> None:
@@ -1110,4 +1158,43 @@ class CombatEntity:
             return get_aura_handler_for(self)
         except Exception:
             logger.log_trace("CombatEntity.aura accessor: no handler attached.")
+            return None
+
+    # ─── AugmentHandler lazy accessor ──────────────────────────────────────
+
+    @lazy_property
+    def augments(self):
+        """
+        Purpose: Cached property returning the BlackoutAugmentHandler attached
+        to this entity while any augment burns, or None (DESIGN-0015).
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            BlackoutAugmentHandler instance or None.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The `aura` accessor above, one handler over. The `aug` command
+            makes the handler, never a read of this property. The cache is
+            cleared with `obj.__dict__.pop("augments", None)`, for the
+            reason the `aura` accessor gives.
+
+        Notes/References:
+            systems/gameplay/augmentation/handler.py owns the handler.
+
+        Author: Nick Hobar
+        Creation date: 10/30/2026
+        """
+        from systems.gameplay.augmentation.handler import (  # local import to avoid circularity
+            get_augment_handler_for,
+        )
+
+        try:
+            return get_augment_handler_for(self)
+        except Exception:
+            logger.log_trace("CombatEntity.augments accessor: no handler attached.")
             return None

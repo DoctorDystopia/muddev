@@ -1523,7 +1523,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**3765 tests, ~33 minutes** (measured 10/21/2026). Run it before a merge, or
+**4123 tests, ~43 minutes** (measured 11/02/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

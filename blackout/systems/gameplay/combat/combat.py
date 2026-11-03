@@ -749,8 +749,15 @@ class ActionAttack(_Action):
         # Exterminator buffs join each side here, not the active_rules cache.
         # That cache follows the equipment. A buff follows the target. The
         # buffs of each side test the OTHER side (DESIGN-0012).
-        attacker_buffs = active_buffs(attacker, target)
-        defender_buffs = active_buffs(target, attacker)
+        #
+        # The lit augments join the same way (DESIGN-0015). An augment
+        # follows the tick. The collector reads the handler at the action,
+        # so the swing reads the lit set at its own tick. The import sits
+        # inside the routine, because that module reaches this one.
+        from systems.gameplay.augmentation.rules import active_rules as augment_rules
+
+        attacker_buffs = tuple(active_buffs(attacker, target)) + augment_rules(attacker)
+        defender_buffs = tuple(active_buffs(target, attacker)) + augment_rules(target)
         gear_rules = handler.active_rules()
         target_rules = collect_contributors(target)
 

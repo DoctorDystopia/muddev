@@ -77,6 +77,7 @@ SECTION_GATHERABLES = "Gathering Unlocks"
 SECTION_EQUIPMENT = "Equipment Unlocks"
 SECTION_ABILITIES = "Ability Unlocks"
 SECTION_CAPACITY = "Capacity Unlocks"
+SECTION_AUGMENTS = "Augment Unlocks"
 
 # Printed when a player names something that is not a skill.
 UNKNOWN_SKILL_TEXT = "There is no skill called '{name}'."
@@ -240,6 +241,42 @@ def _aura_rows(skill_key: str) -> list:
 
 
 
+def _augment_rows(skill_key: str) -> list:
+    """
+    Purpose: Build unlock rows for every augment this skill unlocks.
+
+    Entry:
+        skill_key is a valid skill key string.
+
+    Exit/Returns:
+        Returns a list of (name, required_level, note) tuples. The note is
+        the sockets that the augment fits. Empty for every skill but
+        Augmentation.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        One row for each entry from augmentation.registry
+        .get_augments_for_skill (DESIGN-0015, Phase 5).
+
+    Notes/References:
+        None
+
+    Author: Nick Hobar
+    Creation date: 10/30/2026
+    """
+    from systems.gameplay.augmentation.registry import get_augments_for_skill
+
+    rows = []
+
+    for augment in get_augments_for_skill(skill_key):
+        rows.append((augment.name, augment.unlock_level, augment.socket_labels()))
+
+    return rows
+
+
+
 def _capacity_rows(skill_key: str) -> list:
     """
     Purpose: Build unlock rows for every working slot this skill opens.
@@ -303,6 +340,7 @@ _UNLOCK_SECTIONS: tuple = (
     (SECTION_EQUIPMENT, _equippable_rows),
     (SECTION_ABILITIES, _aura_rows),
     (SECTION_CAPACITY, _capacity_rows),
+    (SECTION_AUGMENTS, _augment_rows),
 )
 
 # Every section title, as a flat view of the table above.

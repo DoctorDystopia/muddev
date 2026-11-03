@@ -40,7 +40,7 @@ from unittest import mock
 
 # assets/ is import-safe by design: it touches no database.
 from assets.pipeline import (blender, build, fetch, licenses, paths, picocad,
-                             questions, records, sources, wizard)
+                             plans, questions, records, sources, wizard)
 
 
 _YES = "y"
@@ -93,11 +93,11 @@ def _scripted(answers, picked=""):
     return console, said, queue, dialogs
 
 
-def _origin_row(writer):
-    """Give the number of the origin row whose source write is writer."""
-    writers = [row[wizard._ROW_WRITER] for row in wizard._ORIGINS]
+def _origin_row(origin):
+    """Give the number of the row of one origin in the origin list."""
+    origins = [row[wizard._ROW_ORIGIN] for row in wizard._ORIGINS]
 
-    return str(writers.index(writer) + 1)
+    return str(origins.index(origin) + 1)
 
 
 def _license_row(spdx):
@@ -114,7 +114,7 @@ def _another_license_row():
 
 def _family_row(family):
     """Give the number of one family in the family list."""
-    return str(wizard._families().index(family) + 1)
+    return str(plans.families().index(family) + 1)
 
 
 def _md5(body):
@@ -169,7 +169,7 @@ class _WizardTestCase(unittest.TestCase):
         if license_answers is None:
             license_answers = (_license_row("CC0-1.0"),)
 
-        answers = [_origin_row(wizard._write_upload), path]
+        answers = [_origin_row(plans.ORIGIN_FILE), path]
         answers += list(license_answers)
         answers += [title, _AUTHOR, _URL, _ENTER, _ENTER, _ENTER]
         answers += list(model_answers)
@@ -526,29 +526,29 @@ class KeyListTests(_WizardTestCase):
         self.assertEqual(result.asset_key, "gunsmith_bench")
 
     def test_the_reader_refuses_a_newer_format_and_a_short_row(self):
-        newer = wizard._KEY_LIST_FORMAT + 1
+        newer = plans.KEY_LIST_FORMAT + 1
         short = {"key": "crate", "owner": "crate"}
 
         for rows, version in (([], newer), ([short], 1)):
             with self.subTest(version=version, rows=rows):
                 self._write_key_list(rows, version)
 
-                with self.assertRaises(wizard.KeyListError):
-                    wizard.read_key_list(self.key_list_path)
+                with self.assertRaises(plans.KeyListError):
+                    plans.read_key_list(self.key_list_path)
 
     def test_the_reader_refuses_a_file_that_is_not_json(self):
         with open(self.key_list_path, "w", encoding="utf-8") as handle:
             handle.write("{not json")
 
-        with self.assertRaises(wizard.KeyListError):
-            wizard.read_key_list(self.key_list_path)
+        with self.assertRaises(plans.KeyListError):
+            plans.read_key_list(self.key_list_path)
 
 
 class ExistingSourceTests(_WizardTestCase):
     """A source that is in sources/ already feeds one more model."""
 
     def _source_answers(self, choose_answers, model_row):
-        return ([_origin_row(wizard._write_nothing)] + list(choose_answers)
+        return ([_origin_row(plans.ORIGIN_SOURCE)] + list(choose_answers)
                 + [model_row, _family_row(_FAMILY), _ENTER, _ENTER, _ENTER,
                    _YES, _NO])
 
@@ -605,7 +605,7 @@ class PolyHavenTests(_WizardTestCase):
         return matches[0]
 
     def _answers(self, confirm):
-        answers = [_origin_row(wizard._write_polyhaven), "wooden_crate_01",
+        answers = [_origin_row(plans.ORIGIN_POLYHAVEN), "wooden_crate_01",
                    _family_row(_FAMILY), _ENTER, _ENTER, _ENTER, confirm]
 
         return answers + [_NO] if confirm == _YES else answers

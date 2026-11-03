@@ -14,7 +14,7 @@ Description: Tests for the key list of the model wizard (`key_list.py`):
 import os
 import unittest
 
-from assets.pipeline import records, wizard
+from assets.pipeline import plans, records
 from systems.core.tilegrid import constants as tile_const
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
@@ -63,8 +63,8 @@ class KeyListTests(unittest.TestCase):
                          "%s is stale. %s" % (os.path.basename(path),
                                               _RUN_EXPORT))
 
-    def test_the_wizard_reads_the_file_back_as_the_rows(self):
-        self.assertEqual(wizard.read_key_list(key_list.output_path()),
+    def test_the_model_plan_reads_the_file_back_as_the_rows(self):
+        self.assertEqual(plans.read_key_list(key_list.output_path()),
                          self.rows)
 
     def test_the_list_has_rows(self):

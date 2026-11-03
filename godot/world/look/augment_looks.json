@@ -1,0 +1,8 @@
+{
+	"format": 1,
+	"augments": {
+		"reflex": {"parts": ["head"], "color": "ffb347"},
+		"surge": {"parts": ["upper_arm_l", "upper_arm_r", "lower_arm_l", "lower_arm_r"], "color": "ff4d4d"},
+		"plating": {"parts": ["chest", "upper_chest"], "color": "4da6ff"}
+	}
+}

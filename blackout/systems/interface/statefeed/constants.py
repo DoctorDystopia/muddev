@@ -179,6 +179,28 @@ ABILITY_STATE_LOCKED: str = "locked"
 # not carry that field.
 ABILITY_KIND_TOGGLE: str = "toggle"
 
+# The set row (DESIGN-0015, 10/30/2026): the quick prayer orb of OSRS. One
+# row, after the toggles. Ready, its command lights every augment that can
+# come online. Active, its command puts every augment out. The client
+# fires it from its own key, not from a slot of the number row.
+ABILITY_KIND_SET: str = "set"
+
+# The step dial of an augment row (DESIGN-0015). A toggle row with a step
+# carries the three keys below. ABILITY_STEP_KEY is the step it burns at,
+# 0 when it is out. ABILITY_STEPS_KEY is the top step. ABILITY_STEP_COMMAND_KEY
+# is the whole line that moves a lit row to its next step, and the client
+# sends it on Shift and the key of the slot. A row with no step dial
+# carries none of the three, and the rail draws it as before.
+ABILITY_STEP_KEY: str = "step"
+ABILITY_STEPS_KEY: str = "steps"
+ABILITY_STEP_COMMAND_KEY: str = "step_command"
+
+# A short mark after the name of a row: the roll of Overclock, "+14%"
+# (DESIGN-0015, Phase 5). The server says the text, and the client draws it
+# after the name. "" draws nothing. One field for every row kind, so a
+# later row with a count or a charge needs no second field.
+ABILITY_NOTE_KEY: str = "note"
+
 # The tip block: `{TIP_TITLE_KEY: str, TIP_LINES_KEY: [str, ...]}`, under
 # TIP_KEY on a row. The server says what a thing IS, as lines of text. The
 # client says how a tip looks. The ability row is the first row that
@@ -1138,6 +1160,15 @@ ENTITY_FIGURE_COLORS_KEY: str = "figure_colors"
 # when the character wears at least one item. ABSENT means that the figure
 # wears nothing. Not on the row of an NPC or an item.
 ENTITY_WORN_KEY: str = "worn"
+
+# The lit augments of a player character (DESIGN-0015, 10/30/2026): a list
+# of augment keys, in the order of the rail. Present only when one burns.
+# The client draws a glow on a figure part for each key. Its own look file,
+# augment_looks.json, names the part and the colour. The server names what
+# burns. The client says what that looks like. The row and char_avatar
+# both carry the list, as they carry the worn record. Thus, every observer
+# and the owner draw the same glow.
+ENTITY_AUGMENTS_KEY: str = "augments"
 
 
 

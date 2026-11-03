@@ -332,6 +332,8 @@ class CharAvatarPayload(_Payload):
     body_type: str = ""
     figure_colors: dict = field(default_factory=dict)
     worn: dict = field(default_factory=dict)
+    # The lit augments, for the glow on the own figure (DESIGN-0015).
+    augments: list = field(default_factory=list)
 
 
 @dataclass
@@ -342,6 +344,10 @@ class CharVitalsPayload(_Payload):
 
     hp: int = 0
     max_hp: int = 0
+    # The Grit pool of the Augmentation skill (DESIGN-0015, 10/30/2026).
+    # systems/gameplay/augmentation/pool.py owns both numbers.
+    grit: int = 0
+    max_grit: int = 0
 
 
 @dataclass
@@ -468,7 +474,10 @@ class CharAbilitiesPayload(_Payload):
 
     `abilities` is a LIST in the order of the registry. The slot of a
     hotkey is its index. Each row is `{key, name, kind, state, command,
-    reason, tip}`. systems/gameplay/combat/auras/detail.py builds the rows.
+    reason, tip}`. systems/gameplay/abilities.py composes the rows from
+    the detail module of each ability system (10/30/2026). An augment row
+    adds `{step, steps, step_command}`, and the set row has the kind
+    ABILITY_KIND_SET.
     `command` is the whole line that fires the row. The server names it,
     for the reason the rows of CharCombatPayload name theirs. It is EMPTY
     on a locked row.

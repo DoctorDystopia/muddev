@@ -750,6 +750,19 @@ func _light(entity_id: int, lit: bool) -> void:
 		else:
 			MeshGlow.rest(material)
 
+	# The rest erased the glow of the lit augments. Write it again
+	# (DESIGN-0015). The hover owns every material while it lasts.
+	if not lit:
+		FigureGlow.apply(node, _augments_of(entity(entity_id)))
+
+
+## The lit augments of a row, for the glow. An empty list for a row with
+## none, and for a row whose list is no list.
+static func _augments_of(entity_data: Dictionary) -> Array:
+	var value: Variant = entity_data.get(_Const.ENTITY_AUGMENTS_KEY, [])
+
+	return value if typeof(value) == TYPE_ARRAY else []
+
 
 ## Every writable material under one entity.
 ##
@@ -1033,6 +1046,12 @@ func _sync() -> void:
 			var first_sighting := (not _animators.has(entity_id)
 				and not _nodes.has(entity_id))
 			var node := _node_for_entity(entity_data)
+
+			# The lit augments of a character glow on its figure
+			# (DESIGN-0015). A row carries the list only while one burns,
+			# so a row with none puts every part to rest.
+			if entity_id != _hovered:
+				FigureGlow.apply(node, _augments_of(entity_data))
 
 			if first_sighting:
 				_fade_in(entity_id, node)

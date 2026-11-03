@@ -27,6 +27,7 @@ func _ready() -> void:
 	_an_old_dock_size_moves_into_the_layout()
 	_an_unknown_skill_detail_mode_falls_back_rather_than_breaking_the_grid()
 	_the_sfx_volume_persists_clamps_and_resets()
+	_the_brightness_persists_clamps_and_resets()
 	_the_xp_tracker_toggles_persist_and_reset()
 	_the_movement_animation_persists_and_resets()
 	_the_camera_keys_persist_and_reset()
@@ -336,6 +337,47 @@ func _the_sfx_volume_persists_clamps_and_resets() -> void:
 
 	repaired.reset()
 	_expect(is_equal_approx(repaired.sfx_volume, ClientSettings.DEFAULT_SFX_VOLUME),
+		"and reset restores the default")
+
+	_clean()
+
+
+## The brightness of the world pane (10/29/2026). The values come from the
+## bounds, so a new range breaks nothing here.
+func _the_brightness_persists_clamps_and_resets() -> void:
+	_clean()
+	var s := ClientSettings.new(TEST_PATH)
+	var picked := lerpf(ClientSettings.MIN_BRIGHTNESS, ClientSettings.MAX_BRIGHTNESS, 0.5)
+
+	_expect(is_equal_approx(s.brightness, ClientSettings.DEFAULT_BRIGHTNESS),
+		"the world starts at the default brightness")
+
+	s.set_brightness(picked)
+	var reloaded := ClientSettings.new(TEST_PATH)
+	reloaded.load_from_disk()
+	_expect(is_equal_approx(reloaded.brightness, picked), "the brightness persists")
+
+	s.set_brightness(ClientSettings.MAX_BRIGHTNESS * 10.0)
+	_expect(is_equal_approx(s.brightness, ClientSettings.MAX_BRIGHTNESS),
+		"a runaway brightness is clamped down")
+
+	s.set_brightness(0.0)
+	_expect(is_equal_approx(s.brightness, ClientSettings.MIN_BRIGHTNESS),
+		"a black world is clamped up")
+
+	# Clamped on READ, like every other value here. A brightness of 0 from a
+	# hand-edited file would be a black pane with the slider out of sight.
+	var handle := FileAccess.open(TEST_PATH, FileAccess.WRITE)
+	handle.store_string("[display]\nbrightness=0.0\n")
+	handle.close()
+
+	var repaired := ClientSettings.new(TEST_PATH)
+	repaired.load_from_disk()
+	_expect(is_equal_approx(repaired.brightness, ClientSettings.MIN_BRIGHTNESS),
+		"an out-of-range saved brightness is clamped on load")
+
+	repaired.reset()
+	_expect(is_equal_approx(repaired.brightness, ClientSettings.DEFAULT_BRIGHTNESS),
 		"and reset restores the default")
 
 	_clean()

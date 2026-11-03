@@ -6,7 +6,7 @@ extends RefCounted
 ## touch, because none of them is about the world:
 ##
 ##     char_avatar  -- your entity_id and which mesh is you
-##     char_vitals  -- hp / max_hp
+##     char_vitals  -- hp / max_hp, and grit / max_grit
 ##     char_status  -- in_combat, and a level per skill
 ##
 ## Exists for the same reason [WorldState] does: to keep the float boundary and
@@ -59,8 +59,18 @@ var figure_colors: Dictionary = {}
 ## wears nothing.
 var worn: Dictionary = {}
 
+## The lit augments of the observer, in the order of the rail
+## (DESIGN-0015). The figure of the avatar glows with them. Empty when
+## nothing burns.
+var augments: Array = []
+
 var hp := 0
 var max_hp := 0
+
+## The Grit pool of the Augmentation skill. Zero maximum means the server
+## has not said, as for hp.
+var grit := 0
+var max_grit := 0
 
 var in_combat := false
 
@@ -86,10 +96,13 @@ func ingest(channel: String, payload: Dictionary) -> bool:
 			body_type = str(payload.get("body_type", ""))
 			figure_colors = _text_table(payload.get("figure_colors", {}))
 			worn = _text_table(payload.get(_Const.ENTITY_WORN_KEY, {}))
+			augments = _text_list(payload.get(_Const.ENTITY_AUGMENTS_KEY, []))
 
 		_Const.CH_CHAR_VITALS:
 			hp = int(payload.get("hp", 0))
 			max_hp = int(payload.get("max_hp", 0))
+			grit = int(payload.get("grit", 0))
+			max_grit = int(payload.get("max_grit", 0))
 			has_vitals = true
 
 		_Const.CH_CHAR_STATUS:
@@ -126,8 +139,11 @@ func reset() -> void:
 	body_type = ""
 	figure_colors = {}
 	worn = {}
+	augments = []
 	hp = 0
 	max_hp = 0
+	grit = 0
+	max_grit = 0
 	in_combat = false
 	levels = {}
 	has_vitals = false
@@ -186,5 +202,19 @@ static func _text_table(raw: Variant) -> Dictionary:
 
 	for key: Variant in raw:
 		converted[str(key)] = str(raw[key])
+
+	return converted
+
+
+## A list of texts from a parsed payload. Anything that is not a list is
+## an empty list.
+static func _text_list(raw: Variant) -> Array:
+	var converted: Array = []
+
+	if typeof(raw) != TYPE_ARRAY:
+		return converted
+
+	for entry: Variant in raw:
+		converted.append(str(entry))
 
 	return converted

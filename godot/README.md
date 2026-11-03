@@ -575,6 +575,40 @@ Three rules:
 `test_tile_lights.tscn` covers the bake, the look file, and the real
 lights.
 
+### The brightness slider is a curve over the pane (10/29/2026)
+
+Options has a Brightness slider in the Display section, from 75% to 175%
+(`ClientSettings.brightness`). The range is a pick, not a rule from the
+vault. The slider changes the world pane, and nothing else. The HUD, the
+minimap, and the item icons keep their colours. The area looks and the
+Look tab do not see it. Thus, an author tunes a look at 100% for every
+player.
+
+`WorldBrightness.apply` puts `world/world_brightness.gdshader` on
+`%WorldView`, the `SubViewportContainer` of the world pane. The shader
+raises each colour of the finished picture to the power 1 / brightness.
+That curve lifts the dark tones the most, and white stays white. At 100%
+the pane has no material. Thus, the default picture does not change, and
+it costs nothing.
+
+A spike in the Compatibility renderer of 4.7.2 measured four ways. The
+scene had a dark quad, a light quad, and the background, lit by ambient
+light only. The values are 8-bit pixel values:
+
+| Way | Background | Dark | Light | Result |
+|---|---|---|---|---|
+| None | 25 | 17 | 118 | The reference |
+| `adjustment_enabled`, brightness 1.0 | 23 | 12 | 118 | The scene goes through an 8-bit linear buffer, so the dark tones lose most of their steps |
+| `adjustment_brightness` 1.5 | 40 | 25 | 181 | The same loss, and the light tones clip |
+| `tonemap_exposure` 1.5 | 25 | 22 | 142 | The background does not move. It is the fog colour, so the horizon shows a seam |
+| `ambient_light_energy` x1.5 | 25 | 22 | 142 | The same seam. It also goes through `AreaLook.apply_to`, which the Look tab shares |
+| The shader, 1.5 | 55 | 41 | 152 | The way that the client uses |
+
+The texture of the world viewport does not change. Only the draw of the
+container changes. `test_world_brightness.tscn` covers the material. A
+headless run draws nothing, so the test cannot check the pixels of the
+curve.
+
 ### Planes (DESIGN-0011 Phase 7b)
 
 The Z of the room of the player gives its plane: `tile_world` is plane 0, and
@@ -2085,6 +2119,9 @@ To give an item a model from a modeler (Phase W4):
    Type the author of the file, and click **Import model**. The model
    pipeline builds the model on a thread. The status box says "Building
    ..." until it ends, and the button is off. The editor stays usable.
+   Since 11/02/2026 the import runs `add-write` with an export plan, the
+   same command and checks as the Models dock. A problem, for example a
+   taken key, shows in the status box, and nothing is written.
 7. Look at the parts in the part editor. Each object is one part, on the
    bone with the name of the object, or on the nearest bone. Change a bone
    there if it is wrong. The part stays where it is.
@@ -2753,6 +2790,56 @@ of a shape, a moved shape node, and a moved served model.
 `test_figure_outfit.tscn` covers the four sources and the place of a
 served model.
 
+## The Models dock adds a model with no terminal
+
+Since 11/02/2026 the plugin `addons/blackout_models/` adds one 3D model to
+the model pipeline. It does the steps of `python -m assets.pipeline add`
+in one form, the Models dock. Nick chose a form and JSON commands over the
+terminal wizard through a pipe. `blackout/assets/README.md` ("The model
+form") owns the commands and the rules.
+
+To add a model:
+
+1. Open the **Models** dock. Choose where the model comes from: a file, a
+   Poly Haven model, a source in `sources/`, or a new export of art made
+   here.
+2. Fill the fields of that origin. For a file, click **Choose**, then pick
+   the license. For Poly Haven, type the id and click **Look up**.
+3. Pick the family. Type the asset key, or pick one in the list of keys
+   that the game names with no model yet.
+4. Read the note under each field. Red is a problem. Yellow is a warning,
+   and its box says yes to it. An empty field shows the default that it
+   takes.
+5. Open **Files to write**, and read each record.
+6. Click **Write**. The pipeline writes the source and the model record,
+   then builds the model when the box is ticked. The editor stays usable.
+
+Four rules:
+
+- **The form asks, and the pipeline decides.** Each change starts a short
+  timer, and then the dock runs `add-check` on a thread. The answer gives
+  each problem, each warning, each default, and each file. Write is on
+  only for a plan that is ready. The dock decides no rule.
+- **A section gives its fields only while it shows.** Each origin shows
+  its own sections (`ModelForm.ORIGIN_SECTIONS`). Thus, a field of another
+  origin never reaches the plan.
+- **A license, a family and a source start with no choice**, as in the
+  wizard. The form does not pick one for the author.
+- **A build tells the terrain editor to read the served tree again.**
+  `ModelPipeline.served_mark` moves after each build in this editor, and
+  `TerrainWorld` compares it before a draw. The figure workbench and the
+  gear editor read the tree again only after their own import.
+
+| File | What it holds |
+|---|---|
+| `addons/blackout_models/models_plugin.gd` | The plugin: the dock, and one job at a time on a thread |
+| `addons/blackout_models/model_form.gd` | `ModelForm`: the fields, the sections, the notes, and the plan |
+| `addons/blackout_models/model_pipeline.gd` | `ModelPipeline`: the four commands, the plan file and the answer file, the export plan of the gear editor, and `served_mark` |
+
+`test_model_form.tscn` covers the lists, the sections of each origin, the
+notes, the offer, the lookup, the end of a write, and one real run of the
+pipeline that writes nothing.
+
 ## The game draws each player as the figure
 
 Since 10/16/2026 the client draws each player character through
@@ -2768,6 +2855,7 @@ sees.
 | The body type, the figure colors, and the worn record of the observer | `world/char_state.gd` |
 | The worn looks of a worn record | `world/figure/figure_outfit.gd` (`FigureOutfit`) |
 | The item picture in a cell of the bag, the doll, and a pop-up | `FigureLibrary.build_item`, `FigureBuilder.build_item`, `scenes/inventory/item_stage.gd` |
+| The glow of the lit augments on the parts (DESIGN-0015, 10/30/2026) | `world/figure_glow.gd` (`FigureGlow`), `world/look/augment_look.gd` with `augment_looks.json` |
 
 The server names, the client draws. The row of a player character carries
 `body_type`, and `figure_colors` when the character has a color of its own.
@@ -2801,6 +2889,10 @@ The rules:
   tile.** The clips come from the default clip set of
   `world/figure/stances.json`. A figure of the pool turns to its step.
 - **Each figure has its own materials,** so a hit flash lights one figure.
+- **A lit augment glows on its parts, and the glow is no build.** The row
+  carries `augments`, and `FigureGlow` writes an emission on each named
+  part. A change of the lit set keeps the figure and its clip. See "The
+  ability rail lights what the server says".
 - **A figure knows its box** (`ModelLoader.BOUNDS_META`): the feet at the
   origin, the top of the head at `FigureLibrary.FIGURE_HEIGHT`.
 
@@ -2872,8 +2964,8 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All one hundred and four tests are headless and exit non-zero on failure.
-One hundred and one need nothing running (counted 10/28/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All one hundred and six tests are headless and exit non-zero on failure.
+One hundred and three need nothing running (counted 10/30/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
@@ -3138,10 +3230,13 @@ highlight:
 ```
 
 `test_abilities_state.tscn` and `test_ability_rail.tscn` need nothing running
-either. The state test covers the model, the key table and the tip text. The
-rail test asserts that every command that leaves the rail is the one that its
-row carried, that a key press fires the slot of its row, that a locked row
-fires nothing, and that a click alone never moves the light:
+either. The state test covers the model, the key table, the tip text, the
+step dial, and the set key. The rail test asserts that every command that
+leaves the rail is the one that its row carried, that a key press fires the
+slot of its row, that a locked row fires nothing, that a click alone never
+moves the light, that the set row takes its own key, and that Shift turns
+the step dial. `test_figure_glow.tscn` covers the glow of the lit augments
+on the parts of a mannequin, and the look file of the repository:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_ability_rail.tscn
@@ -3155,6 +3250,7 @@ either. Both write only to a scratch file under `user://`:
 ```
 
 `test_command_history.tscn`, `test_client_settings.tscn`,
+`test_world_brightness.tscn`,
 `test_scrollback_find.tscn`, `test_server_endpoint.tscn`,
 `test_movement_keys.tscn`, `test_held_movement.tscn`,
 `test_camera_keys.tscn` and `test_reconnect_policy.tscn` need nothing running
@@ -3368,6 +3464,45 @@ The channel republishes when an aura lights or goes out, on a level change
 (an unlock), and on resync. It is marked stale, not built at the change. On a
 put-out, the server deletes the aura handler after the mark, and the build at
 the drain reads the finished state.
+
+**The augment rows come after the aura rows (DESIGN-0015, 10/30/2026).**
+`systems/gameplay/abilities.py` composes the rail: the aura rows, then the
+augment rows, then the set row. Each augment row is a toggle with a step
+dial: `{step, steps, step_command}` beside the fields above. A ready row
+carries `aug <name>`. A lit row carries `aug <name> off`, shows its step as
+`Reflex 2/3`, and carries the line of its next step in `step_command`.
+Shift and the key of the slot send that line. The server names the step,
+and the top step wraps to the first.
+
+**The rail shows the socketed augments only (Phase 5, 10/30/2026).** The
+rig of a character has eight sockets, the parts of the body, and the level
+opens them one by one. The server sends a row for each augment that sits in
+an open socket, and no other. The `rig` command opens the rig pop-up, a
+plain pop-up of two grids: the sockets, and every known augment. Each cell
+carries `socket <augment> <socket>` or `unsocket <socket>`, so the pop-up
+needs no code of its own here. A row may carry a `note`, a short mark after
+the name and the step: the roll of Overclock, `Overclock 3/3 +14%`. The
+server says the text, and `AbilityRail` draws it. An empty note draws
+nothing.
+
+**The set row is the quick prayer orb.** One row of the kind `set`, last.
+It carries `aug set` when nothing burns and `aug off` when anything does.
+The backtick fires it (`AbilityKeys.SET_KEYCODE`), not a slot of the number
+row, because its place in the list moves with the count of the abilities.
+`AbilitiesState.set_row` finds it by its kind, and `AbilityRail.press_set`
+sends it. A row of the kind `set` counts as no slot, so the number keys keep
+their toggle rows.
+
+**A lit augment glows on the figure.** The row of a character and
+`char_avatar` carry `augments`, the keys of the lit augments, as they carry
+the worn record. `AugmentLook` in `world/look/augment_look.gd` reads
+`world/look/augment_looks.json`: augment key to `{parts, color}`. `FigureGlow`
+in `world/figure_glow.gd` writes an emission on each named part through
+`MeshGlow`, and puts each other part to rest. The pool applies it on each
+sync, and again after a hover ends, because the hover rests every material.
+The avatar applies it on each `char_avatar`. A key in the file must name an
+augment, and `test_client_constants.py` of the server checks it. A new
+augment with no row draws nothing, and that is fine.
 
 ## The quest log is numbers, not sentences
 
@@ -4026,6 +4161,7 @@ there, one bus row in `_KIND_BUSES`, and one bus in
 | `autoload/evennia.gd` | The socket. The only place that knows the `[name, args, kwargs]` wire format. |
 | `scenes/console.tscn` `.gd` | The shell: output, input, and the subscription handshake. |
 | `scenes/world.tscn` | The 3D scene: environment, light, terrain, marker, camera rig. |
+| `world/world_brightness.gd` `.gdshader` | The Brightness slider as a gamma curve over the world pane. The one place that turns `ClientSettings.brightness` into pixels. |
 | `world/world_state.gd` | The world model: the chunks of the block, the room, and the float boundary. |
 | `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds, with its water, walls, and scenery. |
 | `world/terrain/wall_mesh_builder.gd` | The wall slabs of one chunk. The editor uses it too. |
@@ -4090,7 +4226,7 @@ there, one bus row in `_KIND_BUSES`, and one bus in
 | `scenes/chat/chat_bar.gd` | The tab buttons under the input, and the right-click menu of each. |
 | `scenes/chat/chat_mode_button.gd` | The chat mode in front of the input, and its menu. |
 | `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, how big the player made a box, the HUD layout and its presets, via ConfigFile under `user://`. |
-| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Also the red accent: the text box red on the slider bars, check boxes (`ui/icons/check_*.svg`, `radio_*.svg`), the selected tab, scroll bars, pressed buttons, menu hover and `FormHeading` lines. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-09-22-ENG-0010-godot-ui-authoring.md`. |
+| `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Also the red accent: the text box red on the slider bars, check boxes (`ui/icons/check_*.svg`, `radio_*.svg`), the selected tab, scroll bars, pressed buttons, menu hover and `FormHeading` lines. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-11-02-ENG-0010-godot-ui-authoring.md`. |
 | `ui/theme_preview/` | Two scenes for the scene preview of the Theme editor: `blackout.tscn` shows each type that the theme sets, and `godot.tscn` shows each other type of the default theme. In the Theme editor, click Add Preview, then Add Scene Preview. The picker then selects the type of the clicked sample. A tool script builds the samples from the type lists, so a new variation needs no edit. |
 | `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
 | `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |

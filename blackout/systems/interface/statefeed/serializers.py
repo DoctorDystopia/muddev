@@ -822,6 +822,52 @@ def _add_figure_fields(body: dict, entity) -> None:
     if worn:
         body[const.ENTITY_WORN_KEY] = worn
 
+    augments = _lit_augment_keys(entity)
+
+    if augments:
+        body[const.ENTITY_AUGMENTS_KEY] = augments
+
+
+def _lit_augment_keys(entity) -> list:
+    """
+    Purpose: Give the keys of the augments lit on a character, for the glow
+             (DESIGN-0015, 10/30/2026).
+
+    Entry:
+        entity - a player character, or any object.
+
+    Exit/Returns:
+        Returns a list of augment keys in the order of the rail. Empty when
+        nothing burns or when the entity has no handler accessor.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Read through the `augments` accessor of CombatEntity, never through
+        a script query. The accessor caches, and the handler pops the
+        cache when it comes and goes. This routine runs for each character
+        row of each room list, so a query here would be a query for each
+        character on each step.
+
+    Notes/References:
+        The handler module owns `lit_augments`.
+
+    Author: Nick Hobar
+    Creation date: 10/30/2026
+    """
+    handler = getattr(entity, "augments", None)
+
+    if handler is None:
+        return []
+
+    keys = []
+
+    for augment, _step in handler.lit_augments():
+        keys.append(str(augment.key))
+
+    return keys
+
 
 def _worn_record(entity) -> dict:
     """

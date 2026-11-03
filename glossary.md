@@ -148,6 +148,39 @@ Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
 Guns and Ballistics are skill names, so they are identifiers. Guns decides
 whether a shot lands. Ballistics decides how hard it lands.
 
+## Augmentation
+
+DESIGN-0015 named these on 10/30/2026. The vault note
+`03_Systems/Skills/Combat Skills/Augmentation_Skill.md` owns the rules, and
+`docs/2026-10-27-DESIGN-0015-augmentation-skill.md` holds the plan. Every
+working name is open to Nick. These are the nouns for prose about the code.
+
+| Use | For | Not |
+|---|---|---|
+| Augmentation | the universal skill, in the Utility category: how much load a body carries, and for how long (`SKILL_KEY_AUGMENTATION`) | Aug, the buff skill, prayer, the combat specialty |
+| augment | one effect that a player lights and puts out, and that drains Grit while it burns. Each one is a row of the augment registry | buff, prayer, implant, mod |
+| Grit | the pool that each lit augment drains. Its maximum is the Augmentation level plus the pool floor (`systems/gameplay/augmentation/pool.py`) | prayer points, mana, energy, charge |
+| pool floor | the Grit that a level 0 character has (`AUG_POOL_FLOOR`) | base pool, starting pool |
+| drain | the Grit that a lit augment takes, as the OSRS drain counter: each tick adds the drain of each lit augment, and one point goes when the counter passes the resistance | upkeep, cost per tick, burn |
+| resistance | the counter value at which one Grit point goes: a base plus a gear bonus | prayer bonus, drain resistance |
+| sustain event | the one thing that a player does that gives an augment a free window | trigger, proc, refresh |
+| free window | the ticks after a sustain event in which an augment adds no drain | grace period, free ticks |
+| anneal | the discount on the drain of an augment that grows with its continuous activation, step by step, to a floor. A put-out resets it | ramp, commitment bonus |
+| step | the strength of one augment, from one to `AUG_STEPS`. Step 1 gives a part of the strength for the same part of the drain | tier, rank, level (of an augment) |
+| flick | a swing that resolves with an augment lit for one tick, and a put-out on the next | prayer flick, tick flick |
+| socket | one place in the rig that holds one augment. The sockets are the parts of the body | slot, mod slot |
+| rig | the sockets of a character, and the pop-up that shows them | loadout, build screen |
+| sample | an item that a graft consumes for Augmentation XP | bone, offering, specimen |
+| graft | the verb that consumes a sample for Augmentation XP, anywhere, and more at the Augmentation Locus | bury, offer, implant |
+| AugBot | the machine in the world that restores Grit in full with `amplify`. The object kind `restore_point` stands one up | altar, recharge station, restore point |
+| Augmentation Locus | the place in the world that pays more for a graft. The object kind `locus` stands one up | clinic, altar, training facility |
+| sample kind | the family of a sample: a biological sample (`bio_sample`) or a technological sample (`techno_sample`). The `sample_kind` field of the ItemDef, and a tag of the `sample` category | sample type, sample class |
+| conflict group | a set of augments of which one burns at a time. A light of one puts the other out. The guard augments share one | exclusion group, overhead |
+| guard augment | an augment that cuts a percentage of the incoming damage of one type, on the defender side | warden, protection prayer, block |
+| modifier | an augment that changes the other lit augments, or a fact outside the action, and boosts no channel of its own. Its `modifies` field names the fact: the strength (Overclock), the regen interval (Mend), or the aura radius (Reach) | meta augment, buff of buffs |
+| roll | the strength that Overclock draws at each light, in the range of its level. The row shows it as its note | proc, random bonus |
+| note | the short mark after the name of a rail row, for example the roll | badge, label |
+
 ## Exterminator
 
 DESIGN-0012 named these on 10/06/2026. The vault note
@@ -192,6 +225,9 @@ model file is never a recipe.
 | model record | the `.toml` in `assets/models/<family>/` that says how to build one served model | recipe, manifest row, model config |
 | alias | a second asset key that draws the same served model | duplicate, copy |
 | model wizard | the `add` command of the model pipeline: it asks the questions of "Add a model", then writes the source and the model record | import wizard, add script, asset wizard |
+| model form | the Models dock of the Godot editor (`addons/blackout_models/`) and its four JSON commands (`add-options`, `add-polyhaven`, `add-check`, `add-write`): the model wizard with no questions | model GUI, import dialog, upload window |
+| model plan | the answers of one new model, which the model wizard and the model form fill: `Plan` in `assets/pipeline/plans.py`, and the plan file of the model form | import job, add request |
+| export origin | the origin of the model plan for a new export of art made here. An import of the same key again replaces the file of its source. The gear editor imports through it | figure import, re-import mode |
 | key list | the generated file `assets/key_list.json`: each asset key that the server names, with its owner (an `ItemDef`, an NPC def or an object kind). `key_list.py` in the statefeed writes it, and the model wizard reads it | asset list, wanted keys, key catalog |
 | format script | a script that runs inside Blender for one format only, in `blender.FORMAT_SCRIPTS`: `blender_vox.py` for `.vox`. Only the digest of a model in that format reads it | importer plugin, converter script |
 | fix | a correction to a bad export, baked into the served file by the build | presentation, override |

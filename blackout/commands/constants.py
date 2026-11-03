@@ -15,6 +15,7 @@ Description: Help-category names for Blackout-authored commands.
 # One owner per fact: a command's category should come from here, never a
 # literal string, so a rename only ever touches this file.
 HELP_CATEGORY_ADMIN: str = "Blackout: Admin"
+HELP_CATEGORY_AUGMENTATION: str = "Blackout: Augmentation"
 HELP_CATEGORY_BANKING: str = "Blackout: Banking"
 HELP_CATEGORY_COMBAT: str = "Blackout: Combat"
 HELP_CATEGORY_CRAFTING: str = "Blackout: Crafting"

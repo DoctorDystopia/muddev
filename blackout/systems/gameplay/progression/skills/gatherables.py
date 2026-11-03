@@ -428,6 +428,16 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
                 secondary_xp={skill_constants.SKILL_KEY_CUTTING: 5},
                 menu_label="hide",
             ),
+            # The first Augmentation sample (DESIGN-0015, Phase 4). A
+            # graft consumes it. The level and the XP follow the chuck.
+            GatherableYield(
+                item_key="mutant_gland",
+                skill_key=skill_constants.SKILL_KEY_BUTCHERY,
+                required_level=0,
+                xp_reward=25,
+                secondary_xp={skill_constants.SKILL_KEY_CUTTING: 5},
+                menu_label="gland",
+            ),
             GatherableYield(
                 item_key="mutant_raider_raw_filet",
                 skill_key=skill_constants.SKILL_KEY_BUTCHERY,
@@ -499,6 +509,14 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
                 xp_reward=50,
                 secondary_xp={skill_constants.SKILL_KEY_CUTTING: 10},
                 menu_label="hide",
+            ),
+            GatherableYield(
+                item_key="mutant_gland",
+                skill_key=skill_constants.SKILL_KEY_BUTCHERY,
+                required_level=20,
+                xp_reward=50,
+                secondary_xp={skill_constants.SKILL_KEY_CUTTING: 10},
+                menu_label="gland",
             ),
             GatherableYield(
                 item_key="mutant_giant_raw_filet",

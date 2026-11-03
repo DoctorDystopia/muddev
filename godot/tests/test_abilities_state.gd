@@ -26,6 +26,10 @@ func _ready() -> void:
 	_a_key_outside_the_table_fires_nothing()
 	_a_slot_past_the_table_has_no_label()
 	_the_tip_text_puts_the_title_first_and_skips_empty_lines()
+	_a_step_row_keeps_its_dial_and_a_plain_row_has_none()
+	_the_set_row_is_found_by_its_kind()
+	_shift_and_a_key_turn_the_dial_of_its_slot()
+	_the_backtick_fires_the_set_row_alone()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -51,6 +55,31 @@ static func payload() -> Dictionary:
 			 "tip": {"title": "Toxic Cloud", "lines": ["A cloud."]}},
 		],
 	}
+
+
+## A snapshot with an augment row and the set row after the aura rows
+## (DESIGN-0015). The floats are what JSON.parse_string gives.
+static func payload_with_augments() -> Dictionary:
+	var snapshot := payload()
+
+	snapshot["abilities"].append(
+		{"key": "reflex", "name": "Reflex",
+		 "kind": "toggle", "state": "active", "command": "aug Reflex off",
+		 "reason": "", "step": 2.0, "steps": 3.0, "step_command": "aug Reflex 3",
+		 "tip": {"title": "Reflex", "lines": ["Sharpens your aim."]}})
+	snapshot["abilities"].append(
+		{"key": "overclock", "name": "Overclock",
+		 "kind": "toggle", "state": "active", "command": "aug Overclock off",
+		 "reason": "", "step": 3.0, "steps": 3.0, "step_command": "aug Overclock 1",
+		 "note": "+14%",
+		 "tip": {"title": "Overclock", "lines": ["Rolls its strength."]}})
+	snapshot["abilities"].append(
+		{"key": "augment_set", "name": "Set",
+		 "kind": "set", "state": "ready", "command": "aug set",
+		 "reason": "",
+		 "tip": {"title": "Set", "lines": ["Every augment at once."]}})
+
+	return snapshot
 
 
 func _press(keycode: Key, shift: bool = false, ctrl: bool = false) -> InputEventKey:
@@ -171,6 +200,50 @@ func _a_key_outside_the_table_fires_nothing() -> void:
 func _a_slot_past_the_table_has_no_label() -> void:
 	_expect(AbilityKeys.label_for(AbilityKeys.slot_count()).is_empty(),
 		"a slot past the table has no label")
+
+
+func _a_step_row_keeps_its_dial_and_a_plain_row_has_none() -> void:
+	var state := AbilitiesState.new()
+	state.ingest(_Const.CH_CHAR_ABILITIES, payload_with_augments())
+	var reflex := state.row_at(2)
+	var aura := state.row_at(0)
+
+	_expect(AbilitiesState.has_steps(reflex), "an augment row has a step dial")
+	_expect(reflex["step"] == 2 and reflex["steps"] == 3, "and keeps its step as ints")
+	_expect(reflex["step_command"] == "aug Reflex 3", "and the line of the next step")
+	_expect(reflex["note"].is_empty(), "a row with no note reads an empty one")
+	_expect(state.row_at(3)["note"] == "+14%", "the note of a row is kept")
+	_expect(not AbilitiesState.has_steps(aura), "an aura row has no dial")
+	_expect(aura["step_command"].is_empty(), "and no step line")
+
+
+func _the_set_row_is_found_by_its_kind() -> void:
+	var state := AbilitiesState.new()
+	state.ingest(_Const.CH_CHAR_ABILITIES, payload())
+	_expect(state.set_row().is_empty(), "no set row before the server sends one")
+	state.ingest(_Const.CH_CHAR_ABILITIES, payload_with_augments())
+	_expect(state.set_row()["command"] == "aug set", "the set row is found by its kind")
+
+
+func _shift_and_a_key_turn_the_dial_of_its_slot() -> void:
+	var row: Dictionary = AbilityKeys.SLOTS[0]
+	var shifted := _press(row[AbilityKeys.ROW_KEYCODE], true)
+	var plain := _press(row[AbilityKeys.ROW_KEYCODE], false)
+
+	_expect(AbilityKeys.step_slot_for(shifted) == 0, "Shift and the first key turn slot 0")
+	_expect(AbilityKeys.step_slot_for(plain) == AbilityKeys.NO_SLOT,
+		"the plain key turns no dial")
+	_expect(AbilityKeys.slot_for(shifted) == AbilityKeys.NO_SLOT,
+		"and the shifted key fires no slot")
+
+
+func _the_backtick_fires_the_set_row_alone() -> void:
+	_expect(AbilityKeys.is_set_key(_press(AbilityKeys.SET_KEYCODE)), "the backtick is the set key")
+	_expect(not AbilityKeys.is_set_key(_press(AbilityKeys.SET_KEYCODE, true)),
+		"Shift and the backtick is not")
+	_expect(not AbilityKeys.is_set_key(_press(KEY_1)), "and a number key is not")
+	_expect(AbilityKeys.slot_for(_press(AbilityKeys.SET_KEYCODE)) == AbilityKeys.NO_SLOT,
+		"the backtick fires no slot")
 
 
 func _the_tip_text_puts_the_title_first_and_skips_empty_lines() -> void:

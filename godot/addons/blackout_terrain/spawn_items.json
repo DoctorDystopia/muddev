@@ -128,6 +128,12 @@
 			"stackable": true
 		},
 		{
+			"family": "generic",
+			"key": "cyber_shard",
+			"name": "cyber shard",
+			"stackable": true
+		},
+		{
 			"family": "jewellery",
 			"key": "glass_cannon_amulet",
 			"name": "Glass Cannon amulet",
@@ -281,6 +287,12 @@
 			"family": "crafting_material",
 			"key": "mutant_giant_tallow",
 			"name": "mutant giant tallow",
+			"stackable": true
+		},
+		{
+			"family": "generic",
+			"key": "mutant_gland",
+			"name": "mutant gland",
 			"stackable": true
 		},
 		{

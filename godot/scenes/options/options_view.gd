@@ -1,7 +1,7 @@
 class_name OptionsView
 extends Control
-## Font size, interface scale, sound effects volume, which panes are drawn, and
-## where a clicked skill's detail is shown.
+## Font size, interface scale, brightness, sound effects volume, which panes
+## are drawn, and where a clicked skill's detail is shown.
 ##
 ## A body in [PanelView], and a Window before 08/28/2026. It is also the reason
 ## the panel column has no "hide me" setting: a control that can hide the screen
@@ -94,6 +94,8 @@ var _font_slider: HSlider
 var _font_value: Label
 var _scale_slider: HSlider
 var _scale_value: Label
+var _brightness_slider: HSlider
+var _brightness_value: Label
 var _sfx_slider: HSlider
 var _sfx_value: Label
 var _world_check: CheckBox
@@ -159,7 +161,8 @@ func bind(settings: ClientSettings) -> void:
 
 
 ## The text size and the interface scale set the size of everything the client
-## draws.
+## draws. The brightness sets how bright the world pane draws, and nothing
+## else.
 func _add_display_section(column: VBoxContainer) -> void:
 	column.add_child(_heading("Display"))
 
@@ -170,6 +173,12 @@ func _add_display_section(column: VBoxContainer) -> void:
 	_scale_slider = _slider(ClientSettings.MIN_UI_SCALE,
 		ClientSettings.MAX_UI_SCALE, 0.05)
 	_scale_value = _slider_row(column, "Interface scale", _scale_slider)
+
+	# Shown as a percent, so 100% is the world as the area looks made it.
+	_brightness_slider = _slider(ClientSettings.MIN_BRIGHTNESS,
+		ClientSettings.MAX_BRIGHTNESS, 0.05)
+	_brightness_slider.tooltip_text = "How bright the 3D world draws. The panels keep their colours."
+	_brightness_value = _slider_row(column, "Brightness", _brightness_slider)
 
 
 ## Linear, shown as a percentage. The console turns it into a bus level
@@ -355,6 +364,7 @@ func _add_credits_section(column: VBoxContainer) -> void:
 func _connect_controls() -> void:
 	_font_slider.value_changed.connect(_on_font_changed)
 	_scale_slider.value_changed.connect(_on_scale_changed)
+	_brightness_slider.value_changed.connect(_on_brightness_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_changed)
 	_world_check.toggled.connect(_on_world_toggled)
 	_inventory_check.toggled.connect(_on_inventory_toggled)
@@ -380,6 +390,8 @@ func _sync() -> void:
 	_font_value.text = "%dpx" % _settings.font_size
 	_scale_slider.value = _settings.ui_scale
 	_scale_value.text = "%d%%" % roundi(_settings.ui_scale * 100.0)
+	_brightness_slider.value = _settings.brightness
+	_brightness_value.text = "%d%%" % roundi(_settings.brightness * 100.0)
 	_sfx_slider.value = _settings.sfx_volume
 	_sfx_value.text = "%d%%" % roundi(_settings.sfx_volume * 100.0)
 	_world_check.button_pressed = _settings.show_world
@@ -412,6 +424,13 @@ func _on_scale_changed(value: float) -> void:
 		return
 
 	_settings.set_ui_scale(value)
+
+
+func _on_brightness_changed(value: float) -> void:
+	if _syncing:
+		return
+
+	_settings.set_brightness(value)
 
 
 func _on_sfx_changed(value: float) -> void:

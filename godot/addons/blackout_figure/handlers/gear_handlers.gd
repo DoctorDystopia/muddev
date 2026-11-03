@@ -12,9 +12,11 @@ extends RefCounted
 ##
 ## ## Models (Phase W4)
 ##
-## "Import a model file" runs the model pipeline through [FigurePipeline],
-## on a thread ([FigureJob]). The status box says "Building ..." until the
-## build ends, and the import button is off. The parts of the look then
+## "Import a model file" runs the model pipeline through [ModelPipeline],
+## on a thread ([FigureJob]): `add-write` with an export plan, the same
+## command and checks as the Models dock (11/02/2026). An import of the
+## same key again replaces the file of its source. The status box says
+## "Building ..." until the build ends, and the import button is off. The parts of the look then
 ## become the nodes of the model, as one undo entry. The model files stay
 ## after an undo, as a built clip stays.
 ##
@@ -234,7 +236,7 @@ func _on_import_requested(key: String, model_key: String, path: String,
 
 	_context.dock().save_author(author)
 	_context.start_job(JOB_MODEL % model_key,
-		FigurePipeline.import_model.bind(model_family(bench, model_key), model_key, path,
+		ModelPipeline.import_export.bind(model_family(bench, model_key), model_key, path,
 			author),
 		_on_import_done.bind(key, model_key, path))
 

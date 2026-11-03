@@ -20,6 +20,7 @@ from evennia.utils.utils import lazy_property
 from .mixins import CombatEntity
 from .objects import ObjectParent
 from systems.gameplay.progression.skills.handler import SkillHandler
+from systems.gameplay.augmentation import pool as augmentation_pool
 from systems.gameplay.banking.handler import BankHandler
 from systems.gameplay.curing.handler import CuringHandler
 from items.equipment.handler import EquipmentHandler
@@ -268,6 +269,10 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         # init_combat_attrs then sets max_hp=hp=10.
         self.skills.seed_fortitude_on_creation()
         self.init_combat_attrs(max_hp=self.db.max_hp or 10)
+
+        # A new character starts with full Grit (DESIGN-0015). The pool is
+        # the one writer of the Attribute, so the seed goes through it.
+        augmentation_pool.restore(self)
 
         # Touch each lazy handler once so its backing db attributes are
         # written at creation rather than on first in-game use. The return
