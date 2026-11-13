@@ -73,7 +73,9 @@ CHUNK_FORMAT_PLAIN_WALLS: int = 1
 DEFAULT_WALL_STYLE: str = "plain"
 
 # The highest plane. Plane 0 is the ground. OSRS has four planes, 0 to 3.
-PLANE_MAX: int = 3
+# Blackout has eight, 0 to 7 (Nick, 11/11/2026). The cost of a plane follows
+# the chunks that have a file, so a plane with no file costs almost nothing.
+PLANE_MAX: int = 7
 
 # The ground plane. Its rooms have the Z WORLD_Z, as before planes.
 GROUND_PLANE: int = 0

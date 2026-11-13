@@ -244,6 +244,62 @@ ITEMS = {
 
 
 
+    # -----------------------
+    # --- MANGANESE TOOLS ---
+    # -----------------------
+
+    # The OSRS Mithril axe, as the copper axe is the OSRS Steel axe. Tier 3
+    # has no row in any chance table yet. chance_for_tier gives it the best
+    # row below, so it cuts as a copper axe until a node names tier 3.
+    "manganese_axe": ItemDef(
+        key="manganese_axe",
+        name="manganese axe",
+        typeclass="typeclasses.items.ToolItem",
+        desc="An axe hammered out of scrap manganese.",
+        value=520,
+        weight=1.133,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="axe",
+        tier=3,
+        req_level=30,
+        tags=[
+            ("manganese_axe", TOOL_TAG_CATEGORY),
+            ("manganese_axe", ITEM_FAMILY_WEAPON),
+        ],
+        attack_speed=5,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": -2,
+            "melee_slash_attack_bonus": 12,
+            "melee_crush_attack_bonus": 10,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 13,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_AXE_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
+
+
     # -------------------
     # --- OTHER TOOLS ---
     # -------------------

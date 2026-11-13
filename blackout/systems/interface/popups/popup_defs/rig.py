@@ -14,6 +14,15 @@ Description: The rig pop-up (DESIGN-0015, section 6.6). The sockets of the
              NOT ROOM-BOUND. The anchor is the character. A socket swap
              happens anywhere, out of combat (Nick, 10/30/2026), so the
              pop-up stays open while the player walks.
+
+             THE DRAG (11/09/2026). An augment cell and a filled socket
+             carry a drag key. An open socket and an augment cell carry a
+             drop table: drag key -> whole command. A drop on a socket
+             sends `socket/swap <augment> <socket>` for each augment that
+             fits it. A filled socket that drops on any augment cell sends
+             `unsocket <socket>` (Nick, 11/09/2026). The table names no
+             augment that does not fit, so the client refuses that drop
+             with no rule of its own.
 """
 
 from systems.gameplay.augmentation import constants as aug_const
@@ -21,6 +30,7 @@ from systems.gameplay.augmentation import detail as augment_detail
 from systems.gameplay.augmentation import pool
 from systems.gameplay.augmentation import sockets
 from systems.gameplay.augmentation.registry import AUGMENT_REGISTRY, augments_in_order
+from systems.interface.popups import constants as popup_const
 from systems.interface.statefeed import constants as feed_const
 
 from .base_popup import BasePopup, grid
@@ -86,7 +96,69 @@ def _socket_action(augment, socket_key: str) -> dict:
     }
 
 
+def _socket_drag_key(socket_key: str) -> str:
+    """The drag key of a filled socket."""
+    return aug_const.RIG_DRAG_SOCKET_KEY.format(key=socket_key)
+
+
+def _augment_drag_key(augment_key: str) -> str:
+    """The drag key of an augment cell."""
+    return aug_const.RIG_DRAG_AUGMENT_KEY.format(key=augment_key)
+
+
+def _swap_command(augment, socket_key: str) -> str:
+    """The line that a drop of one augment on one socket sends."""
+    return aug_const.SOCKET_SWAP_TEMPLATE.format(name=augment.name, socket=socket_key)
+
+
+def _socket_drops(target: str, held: dict) -> dict:
+    """
+    The drop table of one open socket: drag key -> whole command.
+
+    Each augment cell that fits the socket, and each OTHER filled socket
+    whose augment fits it. The augment that already sits there gets no
+    entry, so a drop of a socket on itself sends nothing.
+    """
+    drops = {}
+
+    for augment in augments_in_order():
+        if target in augment.sockets and held.get(target) != augment.key:
+            drops[_augment_drag_key(augment.key)] = _swap_command(augment, target)
+
+    for source, augment_key in held.items():
+        augment = AUGMENT_REGISTRY[augment_key]
+
+        if source != target and target in augment.sockets:
+            drops[_socket_drag_key(source)] = _swap_command(augment, target)
+
+    return drops
+
+
+def _augment_drops(held: dict) -> dict:
+    """The drop table of an augment cell: a filled socket that drops here
+    leaves the rig."""
+    return {
+        _socket_drag_key(socket_key): aug_const.UNSOCKET_TEMPLATE.format(socket=socket_key)
+        for socket_key in held
+    }
+
+
 def _socket_row(slot: int, socket_key: str, held: dict, opened: list, level: int) -> dict:
+    """The cell of one socket, with the socket key as its place on the doll.
+    An open socket takes a drop. A filled socket drags."""
+    row = _socket_cell(slot, socket_key, held, opened, level)
+    row[popup_const.ROW_PLACE_FIELD] = socket_key
+
+    if socket_key in opened:
+        row[popup_const.ROW_DROPS_FIELD] = _socket_drops(socket_key, held)
+
+    if socket_key in held:
+        row[popup_const.ROW_DRAG_KEY_FIELD] = _socket_drag_key(socket_key)
+
+    return row
+
+
+def _socket_cell(slot: int, socket_key: str, held: dict, opened: list, level: int) -> dict:
     """The cell of one socket: the augment in it, empty, or locked."""
     label = aug_const.SOCKET_NAMES[socket_key]
 
@@ -110,9 +182,16 @@ def _socket_row(slot: int, socket_key: str, held: dict, opened: list, level: int
 
 
 def _augment_row(slot: int, augment, holder, held: dict, opened: list, level: int) -> dict:
-    """The cell of one augment: where it sits, or where it can go."""
+    """
+    The cell of one augment: where it sits, or where it can go.
+
+    A locked augment gives the short form of a locked socket, "Augmentation
+    20". The full sentence of `can_activate` names the augment again, and a
+    cell already shows the name. The client cuts a detail line at the width of
+    a slot (11/09/2026).
+    """
     in_socket = sockets.socket_of(holder, augment.key)
-    allowed, reason = augment.can_activate(holder)
+    allowed, _reason = augment.can_activate(holder)
     info = INFO_SEPARATOR.join(augment_detail.catalogue_tip(augment, level))
     actions = []
 
@@ -125,11 +204,15 @@ def _augment_row(slot: int, augment, holder, held: dict, opened: list, level: in
         detail = aug_const.RIG_IN_SOCKET_DETAIL.format(
             socket=aug_const.SOCKET_NAMES[in_socket])
     elif not allowed:
-        detail = reason
+        detail = aug_const.RIG_LOCKED_DETAIL.format(level=augment.unlock_level)
     else:
         detail = aug_const.RIG_FITS_DETAIL.format(fits=augment.socket_labels())
 
-    return _row(slot, augment.name, actions, detail, allowed or bool(in_socket), info)
+    row = _row(slot, augment.name, actions, detail, allowed or bool(in_socket), info)
+    row[popup_const.ROW_DRAG_KEY_FIELD] = _augment_drag_key(augment.key)
+    row[popup_const.ROW_DROPS_FIELD] = _augment_drops(held)
+
+    return row
 
 
 # ─── Public classes ──────────────────────────────────────────────────────────
@@ -198,7 +281,10 @@ class RigPopup(BasePopup):
             time. Each cell is built from them.
 
         Notes/References:
-            None.
+            The sockets grid names the rig layout, and each socket cell
+            names its socket as its place. The client draws the sockets
+            as a body doll, the shape of the paper doll (11/09/2026).
+            Where each socket sits is a client fact.
 
         Author: Nick Hobar
         Creation date: 10/30/2026
@@ -215,8 +301,8 @@ class RigPopup(BasePopup):
             _augment_row(slot, augment, caller, held, opened, level)
             for slot, augment in enumerate(augments_in_order())
         ]
+        socket_grid = grid(SOCKETS_GRID_KEY, SOCKETS_GRID_TITLE, len(socket_rows), socket_rows)
+        socket_grid[popup_const.GRID_LAYOUT_FIELD] = popup_const.POPUP_LAYOUT_RIG
+        augment_grid = grid(AUGMENTS_GRID_KEY, AUGMENTS_GRID_TITLE, len(augment_rows), augment_rows)
 
-        return [
-            grid(SOCKETS_GRID_KEY, SOCKETS_GRID_TITLE, len(socket_rows), socket_rows),
-            grid(AUGMENTS_GRID_KEY, AUGMENTS_GRID_TITLE, len(augment_rows), augment_rows),
-        ]
+        return [socket_grid, augment_grid]

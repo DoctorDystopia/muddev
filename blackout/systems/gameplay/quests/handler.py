@@ -935,6 +935,11 @@ class QuestHandler:
             player the completion record, which is what decides whether the
             quest can be replayed and what later quests gate on.
 
+            The music handler hears the completion between the record and
+            the reward (DESIGN-0016). It unlocks each track whose unlock
+            names this quest. A stub character with no music handler gets
+            no call.
+
         Notes/References:
             None
 
@@ -951,6 +956,11 @@ class QuestHandler:
 
         self.obj.msg(
             (constants.MSG_QUEST_COMPLETE.format(title=blueprint.title), _MSG_QUEST))
+
+        music = getattr(self.obj, "music", None)
+
+        if music is not None:
+            music.on_quest_complete(quest_key)
 
         if blueprint.rewards_callback is None:
             return

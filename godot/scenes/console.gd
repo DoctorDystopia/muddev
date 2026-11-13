@@ -156,6 +156,10 @@ var _abilities := AbilitiesState.new()
 ## What you have taken and how far through it you are. A model like the others.
 var _quest_log := QuestState.new()
 
+## The area you stand in and every track with its state. A model like the
+## others. [MusicPlayer] plays from it, and [MusicView] is the view of it.
+var _music := MusicState.new()
+
 ## The pop-up the server holds open over the world pane: the bank today. A
 ## model like the others; [PopupView] is the view of it.
 var _popup := PopupState.new()
@@ -286,7 +290,12 @@ var _skill_grid: SkillsView
 var _options: OptionsView
 var _help: HelpView
 var _quests: QuestsView
+var _music_view: MusicView
 var _find: FindBar
+
+## The music player: two players on the Music bus, and the pick by the mode.
+## Built in code, as the sound cues are. It plays from [member _music].
+var _music_player: MusicPlayer
 var _popup_view: PopupView
 
 ## The ability rail over the world pane. Built in code, as the hover bar
@@ -589,6 +598,17 @@ func _ready() -> void:
 	_quests.bind(_quest_log)
 	_panel.add_panel(PanelView.TAB_QUESTS, _quests)
 
+	# The music plays from the same origin as the models (DESIGN-0016). The
+	# player is a node of the console, not of the world pane. Thus, the
+	# music plays on with the 3D world turned off.
+	_music_player = MusicPlayer.new()
+	add_child(_music_player)
+	_music_player.bind(_music, _settings, asset_origin)
+
+	_music_view = MusicView.new()
+	_music_view.bind(_music, _settings, _music_player)
+	_panel.add_panel(PanelView.TAB_MUSIC, _music_view)
+
 	_options = OptionsView.new()
 	_options.bind(_settings)
 	_panel.add_panel(PanelView.TAB_OPTIONS, _options)
@@ -795,6 +815,7 @@ func _on_closed(code: int, reason: String, requested: bool) -> void:
 	_login.session_ended(code)
 	_char.reset()
 	_quest_log.reset()
+	_music.reset()
 	_skills.reset()
 	_combat_options.reset()
 	_abilities.reset()
@@ -981,12 +1002,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 
-	# Shift and the key of a slot turn its step dial (DESIGN-0015). The
-	# backtick fires the set row. Both send a line the server named.
-	var step_slot := AbilityKeys.step_slot_for(key)
+	# Shift and the key of a slot turn its power level dial (DESIGN-0015).
+	# The backtick fires the set row. Both send a line the server named.
+	var power_slot := AbilityKeys.power_level_slot_for(key)
 
-	if step_slot != AbilityKeys.NO_SLOT:
-		_ability_rail.step_slot(step_slot)
+	if power_slot != AbilityKeys.NO_SLOT:
+		_ability_rail.power_level_slot(power_slot)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -1139,6 +1160,7 @@ func _apply_settings() -> void:
 	# The bus, not each player: every cue plays on SFX, so one write reaches a
 	# sound already playing as well as the next one.
 	SoundCues.apply_volume(_settings.sfx_volume)
+	SoundCues.apply_volume(_settings.music_volume, SoundCues.MUSIC_BUS)
 
 	# A hidden Control is not drawn and its SubViewport stops rendering, which is
 	# the point of the world setting on a machine that is struggling.
@@ -1284,6 +1306,9 @@ func _on_channel(channel: String, _payload: Dictionary) -> void:
 			return
 
 		if _quest_log.ingest(channel, _payload):
+			return
+
+		if _music.ingest(channel, _payload):
 			return
 
 		if _popup.ingest(channel, _payload):

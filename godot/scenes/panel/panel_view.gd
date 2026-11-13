@@ -67,6 +67,7 @@ const TAB_CHARACTER := "Character"
 ## 08/28/2026 for a channel and a screen of its own; see [SkillsView].
 const TAB_SKILLS := "Skills"
 const TAB_QUESTS := "Quests"
+const TAB_MUSIC := "Music"
 const TAB_OPTIONS := "Options"
 const TAB_HELP := "Help"
 
@@ -97,6 +98,7 @@ const TAB_ICONS := {
 	TAB_CHARACTER: ["res://ui/icons/character.svg", "lorc", "cowled"],
 	TAB_SKILLS: ["res://ui/icons/skills.svg", "delapouite", "upgrade"],
 	TAB_QUESTS: ["res://ui/icons/quests.svg", "lorc", "scroll-unfurled"],
+	TAB_MUSIC: ["res://ui/icons/music.svg", "delapouite", "musical-notes"],
 	TAB_OPTIONS: ["res://ui/icons/options.svg", "lorc", "cog"],
 	TAB_HELP: ["res://ui/icons/help.svg", "lorc", "uncertainty"],
 }

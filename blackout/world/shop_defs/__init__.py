@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 # OSRS restocks one unit at a time, on a timer that differs for each item.
 DEFAULT_RESTOCK_SECONDS: float = 60.0
 
+# Seconds between two decay steps of the held units of one item, when the
+# ShopDef names none. Each step removes one unit. See
+# systems/gameplay/shop/held.py.
+DEFAULT_DECAY_SECONDS: float = 60.0
+
 
 @dataclass
 class WareStock:
@@ -29,7 +34,9 @@ class ShopDef:
     farewell: str = '"Farewell."'
     upsell_factor: float = 1.5
     miser_factor: float = 0.5
-    max_held_items: int = 20
+    # The held units of an item decay one unit at each step, down to the
+    # max_stock of the ware, or to nothing for an item with no WareStock.
+    decay_seconds: float = DEFAULT_DECAY_SECONDS
     buy_list: list[str] = field(default_factory=list)
     # Ware key -> WareStock. Every key must also be in buy_list. A buy_list
     # ware that is not here has endless stock, so a shop with an empty dict

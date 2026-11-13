@@ -63,6 +63,10 @@ const _HASH_PRIME_SALT := 83492791
 const _HASH_MIX := 0x45d9f3b
 const _HASH_SHIFT := 16
 
+## The lamp values of one triangle: three channels for each of its three
+## corners, as [method TileLights.append] writes them.
+const _LAMP_VALUES_PER_TRIANGLE := 9
+
 
 ## The three arrays that a mesh grows in. A class, not an Array of packed
 ## arrays: a packed array read out of an Array can be a copy, and then an
@@ -342,9 +346,23 @@ static func _add_triangle(a: Vector3, b: Vector3, c: Vector3, color: Color,
 		normal = -normal
 
 	normal = normal.normalized()
+	out.vertices.append(a)
+	out.vertices.append(b)
+	out.vertices.append(c)
+	out.normals.append(normal)
+	out.normals.append(normal)
+	out.normals.append(normal)
+	out.colors.append(color)
+	out.colors.append(color)
+	out.colors.append(color)
+
+	# Most tiles have no lamp in reach. Their three corners take no light,
+	# and a resize fills the new values with zero. This class has no static
+	# variable on purpose: it is no tool script, so the editor never runs the
+	# initializer of one, and the editor draws through this class (11/11/2026).
+	if lights.is_empty():
+		out.lamp.resize(out.lamp.size() + _LAMP_VALUES_PER_TRIANGLE)
+		return
 
 	for corner: Vector3 in [a, b, c]:
-		out.vertices.append(corner)
-		out.normals.append(normal)
-		out.colors.append(color)
 		TileLights.append(out.lamp, TileLights.lit(corner, normal, lights))

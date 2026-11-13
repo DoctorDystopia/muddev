@@ -28,6 +28,7 @@ no Evennia object. Thus, their tests use plain `unittest.TestCase` and cost
 nothing.
 
 Phase 2 added the chunk file. `godot/world/terrain/chunk_file.gd` is its
-GDScript twin. `tests/test_chunkfile.py` and `godot/tests/test_chunk_file.gd`
-are the two halves of the parity test, on the fixtures in `tests/fixtures/`.
+GDScript twin. `tests/test_chunkfile.py` and
+`godot/tests/world/terrain/test_chunk_file.gd` are the two halves of the
+parity test, on the fixtures in `tests/fixtures/`.
 """

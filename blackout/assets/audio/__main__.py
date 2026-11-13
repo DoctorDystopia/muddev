@@ -13,15 +13,21 @@ Description: The command line of the sound wizard. Run it from blackout/:
 import sys
 
 from assets.audio import check, credits, cue_table, wizard
+from assets.pipeline import sources
+from world import table_file
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
 
 _USAGE: str = """python -m assets.audio <command>
 
-  add      answer questions to add one sound clip: the copy, its .import
-           file, its cue, and its credits row. Then import it in Godot
-  check    check the cue table, the sound clips and the credits
+  add      answer questions to add one sound. A sound effect: the copy,
+           its .import file, its cue, and its credits row, then the import
+           in Godot. A music track: the source record of the master, the
+           encode into the served tree, its credits row, and its row of
+           the music track table
+  check    check the cue table, the sound clips, the credits, the music
+           track table and the served tracks
 
 godot/README.md, "Sound is the client's", is the procedure."""
 
@@ -126,6 +132,7 @@ def main(argv: list) -> int:
     try:
         status = command(arguments[1:])
     except (cue_table.CueTableError, credits.CreditsError,
+            table_file.TableFileError, sources.SourceError,
             OSError) as problem:
         print("  %s" % problem)
         status = _EXIT_FAILED

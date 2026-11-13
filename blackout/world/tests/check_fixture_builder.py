@@ -12,8 +12,9 @@ fixture fails at once.
 
 `EXPECTED` is the list of findings, written by hand here. It is the intent,
 not the output of `check_world`. `expected.json` holds the same list, and
-both `test_tile_checks.py` and `godot/tests/test_terrain_checks.gd` compare
-their findings with it.
+both `test_tile_checks.py` and
+`godot/tests/addons/blackout_terrain/test_terrain_checks.gd` compare their
+findings with it.
 
 To change the fixture, change this module, then run from `blackout/`:
 

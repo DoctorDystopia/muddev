@@ -433,7 +433,7 @@ class GatheringHandler(TickableHandler):
 
         self.ndb.ticks_until_swing = max(0, gather_constants.SWING_TICKS - 1)
 
-        self._face_node(gatherer, node)
+        self._face_node(gatherer, node, skill)
 
         try:
             stop_reason = skill.attempt_swing(gatherer, node, self.ndb.wanted)
@@ -452,13 +452,15 @@ class GatheringHandler(TickableHandler):
         self.dispatch(states.ActivityEvent.COOLDOWN_EXPIRED)
 
 
-    def _face_node(self, gatherer, node) -> None:
+    def _face_node(self, gatherer, node, skill) -> None:
         """
-        Purpose: Tell the feed that the gatherer turns to the node.
+        Purpose: Tell the feed that the gatherer turns to the node. The
+        event also names the action of the figure of the gatherer.
 
         Entry:
             gatherer is the owner of this handler, already checked.
             node is the live node, in the room of the gatherer.
+            skill is the skill of the channel.
 
         Exit/Returns:
             No conditions. Never raises.
@@ -488,6 +490,11 @@ class GatheringHandler(TickableHandler):
             The registry imports this module while it builds, and the feed
             reaches the registry.
 
+            The event carries the gathering action of the attempt
+            (11/10/2026), and the client plays its clip one time. The
+            event comes before each attempt, so each attempt plays the
+            clip one time. GatheringSkill.figure_action names the action.
+
         Notes/References:
             systems/interface/statefeed/events.py emit_face.
 
@@ -497,7 +504,8 @@ class GatheringHandler(TickableHandler):
         from systems.interface.statefeed import events as feed
 
         try:
-            feed.emit_face(gatherer, node)
+            action = skill.figure_action(gatherer)
+            feed.emit_face(gatherer, node, figure_action=action)
         except Exception as exc:
             logger.log_err(f"GatheringHandler._face_node failed: {exc!r}")
 

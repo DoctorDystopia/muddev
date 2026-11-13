@@ -155,4 +155,53 @@ ITEMS = {
             "projectile_strength_bonus": 0,
         },
     ),
+
+
+
+    # ----------------------------------
+    # --- MANGANESE MELEE ARMOR LEGS ---
+    # ----------------------------------
+
+    # The OSRS Mithril platelegs, as the copper platelegs are the OSRS
+    # Steel platelegs. Every tier of platelegs weighs 9.0.
+    "manganese_platelegs": ItemDef(
+        key="manganese_platelegs",
+        name="manganese platelegs",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Manganese platelegs.",
+        value=2600,
+        weight=9.0,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.LEGS,
+        tool_type="platelegs",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_platelegs", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 24,
+            "melee_slash_defense_bonus": 22,
+            "melee_crush_defense_bonus": 20,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 24,
+            "projectile_standard_defense_bonus": 22,
+            "projectile_heavy_defense_bonus": 20,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+    ),
 }

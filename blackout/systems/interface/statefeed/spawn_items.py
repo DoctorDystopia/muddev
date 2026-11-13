@@ -64,7 +64,8 @@ _REPO_ROOT: str = os.path.dirname(_GAME_DIR)
 
 # Where the list goes: beside the plugin that reads it.
 _OUTPUT_PATH: str = os.path.join(
-    _REPO_ROOT, "godot", "addons", "blackout_terrain", "spawn_items.json")
+    _REPO_ROOT, "godot", "addons", "blackout_terrain", "data",
+    "spawn_items.json")
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────

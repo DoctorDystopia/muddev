@@ -157,4 +157,52 @@ ITEMS = {
             "projectile_strength_bonus": 0,
         },
     ),
+
+
+
+    # ----------------------------------
+    # --- MANGANESE MELEE ARMOR FEET ---
+    # ----------------------------------
+
+    # The OSRS Mithril boots, as the copper boots are the OSRS Steel boots.
+    "manganese_boots": ItemDef(
+        key="manganese_boots",
+        name="manganese boots",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Manganese boots.",
+        value=780,
+        weight=1.36,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.FEET,
+        tool_type="boots",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_boots", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 8,
+            "melee_slash_defense_bonus": 9,
+            "melee_crush_defense_bonus": 10,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 8,
+            "projectile_standard_defense_bonus": 9,
+            "projectile_heavy_defense_bonus": 10,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+    ),
 }

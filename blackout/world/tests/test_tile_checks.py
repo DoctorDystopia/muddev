@@ -8,8 +8,9 @@ Description: Tests for `world/tile_checks.py`, the content rules of a tile
              Run from blackout/:
                  ../evenv/Scripts/evennia.exe test --settings test_settings.py world.tests.test_tile_checks
 
-             `godot/tests/test_terrain_checks.gd` is the GDScript half. It
-             reads the same fixtures and the same expected.json.
+             `godot/tests/addons/blackout_terrain/test_terrain_checks.gd` is
+             the GDScript half. It reads the same fixtures and the same
+             expected.json.
 """
 
 import json
@@ -67,7 +68,7 @@ class FixtureTests(unittest.TestCase):
         game_dir = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))
         twin = os.path.join(os.path.dirname(game_dir), "godot", "addons",
-                            "blackout_terrain", "terrain_checks.gd")
+                            "blackout_terrain", "checks", "terrain_checks.gd")
         relative = os.path.relpath(builder.FIXTURE_DIRECTORY, game_dir)
 
         self.assertIn('"%s"' % relative.replace(os.sep, "/"), _read_text(twin))

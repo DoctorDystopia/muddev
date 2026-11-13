@@ -18,11 +18,23 @@ from unittest import mock
 from evennia.utils.test_resources import EvenniaTest, EvenniaTestCase
 
 from systems.core.tilegrid.world import get_world
+from systems.gameplay.augmentation import constants as aug_const
+from systems.gameplay.augmentation import pool as augmentation_pool
+from systems.gameplay.augmentation.handler import (
+    ensure_augment_handler,
+    get_augment_handler_for,
+)
+from systems.gameplay.augmentation.registry import augments_in_order
 from systems.gameplay.combat.combat import ensure_combat_handler, get_handler_for
 from typeclasses.npc_spawners import spawn_npc
 from typeclasses.tests import respawn_fixture
 from typeclasses.tests.respawn_fixture import RESPAWN_TILE, make_respawn_room
 from world.respawn import get_respawn_room
+
+
+def _empty_the_grit_pool(character) -> None:
+    """Spend every point of Grit, so that a full pool after is a restore."""
+    augmentation_pool.spend(character, augmentation_pool.maximum(character))
 
 
 class _EmptyWorldMixin:
@@ -117,6 +129,39 @@ class TestCharacterRespawn(_EmptyWorldMixin, EvenniaTest):
         mocked_move.assert_not_called()
         self.assertEqual(self.char1.hp, self.char1.max_hp)
 
+    def test_respawn_fills_an_empty_grit_pool(self):
+        """A death resets every vital to full: HP and Grit (Nick, 11/09/2026)."""
+        make_respawn_room()
+        self.char1.db.hp = 0
+        _empty_the_grit_pool(self.char1)
+
+        self.char1.respawn()
+
+        self.assertEqual(augmentation_pool.current(self.char1),
+                         augmentation_pool.maximum(self.char1))
+
+    def test_respawn_without_a_room_still_fills_grit(self):
+        _empty_the_grit_pool(self.char1)
+
+        self.char1.respawn()
+
+        self.assertEqual(augmentation_pool.current(self.char1),
+                         augmentation_pool.maximum(self.char1))
+
+    def test_a_failed_grit_restore_still_leaves_a_live_character(self):
+        """The Grit restore is caught. A death must never stop half done."""
+        room = make_respawn_room()
+        self.char1.db.hp = 0
+
+        with mock.patch("typeclasses.characters.augmentation_pool.restore",
+                        side_effect=RuntimeError("boom")):
+            with mock.patch("typeclasses.characters.logger.log_trace") as mocked_log:
+                self.char1.respawn()
+
+        self.assertTrue(mocked_log.called, "a failed Grit restore must be logged")
+        self.assertEqual(self.char1.hp, self.char1.max_hp)
+        self.assertEqual(self.char1.location, room)
+
 
 class TestLoginWithNoRoom(_EmptyWorldMixin, EvenniaTest):
     """The cutover deletes the xyzgrid rooms. A character that logged out on
@@ -199,3 +244,17 @@ class TestPlayerKilledByAnNpc(_EmptyWorldMixin, EvenniaTest):
 
         self.assertEqual(self.char1.hp, self.char1.max_hp)
         self.assertIsNone(get_handler_for(self.char1))
+
+    def test_a_death_with_a_lit_augment_wakes_with_full_grit(self):
+        """The augment goes out before the restore, so no drain follows it."""
+        make_respawn_room()
+        handler = ensure_augment_handler(self.char1)
+        handler.light(augments_in_order()[0], aug_const.AUG_POWER_LEVEL_DEFAULT)
+        self.assertTrue(list(handler.lit_augments()), "precondition: an augment burns")
+        _empty_the_grit_pool(self.char1)
+
+        self._kill_char1_with_an_npc()
+
+        self.assertIsNone(get_augment_handler_for(self.char1))
+        self.assertEqual(augmentation_pool.current(self.char1),
+                         augmentation_pool.maximum(self.char1))

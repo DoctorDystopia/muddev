@@ -35,6 +35,7 @@ from .payloads import (
     CharChatPayload,
     CharCombatPayload,
     CharItemsPayload,
+    CharMusicPayload,
     CharPopupPayload,
     CharQuestsPayload,
     CharSkillsPayload,
@@ -451,15 +452,18 @@ def emit_miss(context) -> int:
 
 
 
-def emit_face(actor, target) -> int:
+def emit_face(actor, target, figure_action: str = "") -> int:
     """
     Purpose: Publish that one entity turns to another, and that one turns
              back. The start of a fight or a talk sends it. So does each
              use of a thing that the player clicks, and each harvest swing.
 
     Entry:
-        actor  - the entity that starts the exchange.
-        target - the entity it turns to.
+        actor         - the entity that starts the exchange.
+        target        - the entity it turns to.
+        figure_action - the action of the figure of the actor, or "" for a
+                        turn with no action. A gathering attempt gives its
+                        gathering action (11/10/2026).
 
     Exit/Returns:
         Returns the number of sends performed.
@@ -507,6 +511,7 @@ def emit_face(actor, target) -> int:
         actor_name=str(actor.key),
         target_id=target.id,
         target_name=str(target.key),
+        figure_action=figure_action,
     )
 
     return _broadcast(payload, actor, target, room)
@@ -877,7 +882,7 @@ def emit_moment(observer, moment: str) -> int:
 
     Notes/References:
         See CHANNEL_MOMENT. The client maps a moment to a sound in
-        godot/world/sound_cues.gd.
+        godot/world/sound/sound_cues.gd.
 
     Author: Nick Hobar
     Creation date: 10/08/2026
@@ -1000,6 +1005,58 @@ def emit_abilities(observer, force: bool = False) -> int:
         return 0
 
     return emit(observer, abilities_serializer.build_payload(observer),
+                force=force)
+
+
+def emit_music(observer, force: bool = False) -> int:
+    """
+    Purpose: Publish the music of the observer to the observer alone.
+
+    Entry:
+        observer - the puppeted Character.
+        force    - True to bypass rate caps. The channel is uncapped, so
+                   this keeps the resync call shape identical to every
+                   other send.
+
+    Exit/Returns:
+        Returns the number of sends. Zero when nobody subscribes, which is
+        the normal result on a telnet-only server.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The subscriber check happens FIRST, for the reason emit_summary
+        does it. The build reads the tile of the character and the
+        unlocks of the music handler.
+
+        Only resync and refresh_music call this. The state of a row moves
+        on an unlock, and the area moves on a step across a border. Both
+        reach MusicHandler, whose writers mark the snapshot stale. Thus,
+        the Music tab follows its facts through the one writer of those
+        facts, and no call sits beside a write.
+
+        The routine imports systems.interface.statefeed.music inside its
+        body. That module reaches the tile world through the detail
+        module, and typeclasses/mixins.py imports this module at startup.
+
+    Notes/References:
+        systems/interface/statefeed/music.py builds the payload from the
+        rows that the telnet `music` listing prints. DESIGN-0016.
+
+    Author: Nick Hobar
+    Creation date: 11/08/2026
+    """
+    from . import music as music_serializer
+
+    wants = subscriptions.has_channel_subscribers(
+        observer, CharMusicPayload.channel
+    )
+
+    if not wants:
+        return 0
+
+    return emit(observer, music_serializer.build_payload(observer),
                 force=force)
 
 
@@ -1908,6 +1965,21 @@ def refresh_abilities(observer) -> bool:
     """
     marked = _mark_stale_if_heard(
         observer, CharAbilitiesPayload.channel, emit_abilities, 0.0
+    )
+
+    return marked
+
+
+def refresh_music(observer) -> bool:
+    """Mark the music of the observer out of date. See refresh_summary.
+
+    MusicHandler._publishes calls this after each writer: an unlock, an
+    area entered, a quest completed. A mark, not a send, for the reason
+    refresh_status gives. An area with three tracks unlocks three rows in
+    one call. The drain builds one snapshot after the last of them.
+    """
+    marked = _mark_stale_if_heard(
+        observer, CharMusicPayload.channel, emit_music, 0.0
     )
 
     return marked

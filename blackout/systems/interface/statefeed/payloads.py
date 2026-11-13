@@ -476,7 +476,8 @@ class CharAbilitiesPayload(_Payload):
     hotkey is its index. Each row is `{key, name, kind, state, command,
     reason, tip}`. systems/gameplay/abilities.py composes the rows from
     the detail module of each ability system (10/30/2026). An augment row
-    adds `{step, steps, step_command}`, and the set row has the kind
+    adds `{power_level, power_levels, power_level_command}`, and the set
+    row has the kind
     ABILITY_KIND_SET.
     `command` is the whole line that fires the row. The server names it,
     for the reason the rows of CharCombatPayload name theirs. It is EMPTY
@@ -486,6 +487,29 @@ class CharAbilitiesPayload(_Payload):
     channel = const.CHANNEL_CHAR_ABILITIES
 
     abilities: list = field(default_factory=list)   # [{key, name, ...}, ...]
+
+
+@dataclass
+class CharMusicPayload(_Payload):
+    """The music of the observer: the area, and every track with its state.
+    Char.Music.
+
+    A SNAPSHOT, for the reason CharAbilitiesPayload gives. The state of a
+    row moves on an unlock, and the area moves on a step across a border.
+    It is also small: one short row for each track of the table.
+
+    `area` is the key of the area that the character stands in, or "" off
+    the tile world. `rows` is a LIST in the order of the track table. Each
+    row is `{key, name, area, state, hint}`. systems/gameplay/music/detail.py
+    builds the rows, and the telnet `music` listing reads the same rows.
+    The key names the served file. The server names no mode and no clip
+    (DESIGN-0016).
+    """
+
+    channel = const.CHANNEL_CHAR_MUSIC
+
+    area: str = ""
+    rows: list = field(default_factory=list)   # [{key, name, area, ...}, ...]
 
 
 @dataclass
@@ -708,6 +732,11 @@ class FacePayload(_Payload):
     ring of that tile.
 
     The names ride beside the ids, as on CombatPayload, for a log line.
+
+    `figure_action` is the action of the figure of the actor, or "" for a
+    turn with no action. Only a gathering attempt names one today
+    (const.FIGURE_GATHERING_ACTION_TEMPLATE, 11/10/2026). The client plays
+    its clip one time, as it plays the `figure_action` of a swing.
     """
 
     channel = const.CHANNEL_FACE
@@ -716,6 +745,7 @@ class FacePayload(_Payload):
     actor_name: str = ""
     target_id: int = 0
     target_name: str = ""
+    figure_action: str = ""
 
 
 @dataclass

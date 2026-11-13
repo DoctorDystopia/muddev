@@ -58,6 +58,7 @@ where there is art, and the silhouette of the family where there is not.
 | **Shift + left-click an inventory cell** | Drops the item, when **Shift + left click drops an item** is on in Options. Off by default, as in OSRS. The cell sends the Drop action of the row (`INVENTORY_DROP_KEY`), never a verb of its own. A worn item has no Drop, so the click does what a plain click does. While Shift is down, the hover bar names the Drop, because it reads the same action as the click. The delayed tooltip names the plain click. Remembered |
 | **Right-click an inventory cell** | The item's own actions, as the server listed them |
 | **Equipment tab** | The paper doll, in OSRS's Worn Equipment shape. A left click unequips, because that is the server's first action on a worn row |
+| **Augmentation Rig** under the paper doll | Opens the rig pop-up. The button sends `rig`, the command that a telnet player types |
 | **Edit layout** in Options | Opens the layout editor. Drag a frame to move a HUD element, and drag a grip to size it. Click a frame to hide, fade or scale the element. Save and load layouts by name. `Done` or Esc closes it. Remembered |
 | **Drag a pop-up grip** | Resizes the pop-up. It has a grip on each edge and each corner. Remembered |
 | **Click a minimap cell** | Walks there. The same `tile_action` lookup the 3D pane makes |
@@ -473,13 +474,13 @@ tile world. Since Phase 4b (09/25/2026), the tile world is the only world.
 | Part | Where | What it does |
 |---|---|---|
 | The chunk channel | server `events.emit_tile_chunks` | Sends each chunk of the 3 x 3 block around the player, on every plane, one time for each session. The plane of the player goes first. A resync sends the block again |
-| The model | `world/world_state.gd` | Keeps one `ChunkSet` for each plane, and frees a chunk outside the block. The server forgets the same chunks. `chunks` is the set of the plane of the player |
+| The model | `world/state/world_state.gd` | Keeps one `ChunkSet` for each plane, and frees a chunk outside the block. The server forgets the same chunks. `chunks` is the set of the plane of the player |
 | The ground | `world/terrain/terrain_view.gd` | One mesh for each chunk of each plane, from `ChunkMeshBuilder`, the class of the editor. It builds one chunk each frame, the chunk under the player first |
 | The water | `world/terrain/water_mesh_builder.gd` | A flat surface on each water tile, at the height of its highest corner. The editor draws it with the same class |
 | The walls | `world/terrain/wall_mesh_builder.gd`, `wall_palette.gd` | A thin slab on each tile edge with a wall flag, inside its own tile, on the ground of that edge. The wall style of the tile gives its colour and its height. A plain primitive until the walls get art. The editor draws it with the same class |
 | The scenery | `TerrainView._place_scenery` | The model that `OBJECT_KIND_SCENERY` names for a chunk object, on the centre of its tile. The server names the model in `world/object_kinds.py`. The transition pad is the first. No art, no model |
 | The primitives | `world/terrain/prop_mesh_builder.gd` | A ladder, a flight of stairs, a hatch, or the newel posts at the top of a flight, as plain boxes, for a scenery key in `SCENERY_PRIMITIVES`. The rotation of the object turns it. At rotation 0 the front faces north. A flight rises over the run of its kind, in front of its tile. The editor draws it with the same class |
-| The lamp light | `world/terrain/tile_lights.gd`, `terrain_material.gd`, `world/look/light_look.gd`, `world/figure_lights.gd` | The light of each lamp, baked into the ground, the walls, and the props around it, and a real light on the nearest few lamps for the figures. See "A lamp lights the ground" below |
+| The lamp light | `world/terrain/tile_lights.gd`, `terrain_material.gd`, `world/look/light_look.gd`, `world/pane/figure_lights.gd` | The light of each lamp, baked into the ground, the walls, and the props around it, and a real light on the nearest few lamps for the figures. See "A lamp lights the ground" below |
 | The height | `WorldState.ground_y` | The drawn ground at the centre of a tile. The avatar, each entity, the marks, and the aura stand on it |
 | The pick | `WorldView._cell_under` | `TerrainPicking.ray_hit` on the height grid. No collision shape |
 | The area look | `WorldView._place_marker` | The area of the tile under the player, from its chunk, goes to `AreaEnvironment` |
@@ -523,7 +524,7 @@ tiers, and the first tier that answers wins:
    until 10/20/2026. Near the camera, a figure is a hundred pixels tall,
    and the rule reached only its middle.
 
-`world/entity_picking.gd` holds the two ray tests. The boxes are the broad
+`world/pane/entity_picking.gd` holds the two ray tests. The boxes are the broad
 phase, nearest first. The pool tests the faces of a node only when the ray
 enters its box. It stops at the first box that starts past the nearest
 face. Thus, most picks test one mesh. The pool reads the faces of a node
@@ -557,7 +558,7 @@ So the light splits in two:
 | The bake | `world/terrain/tile_lights.gd` | Finds the lamps that reach a chunk, from the chunk and its eight neighbours on the same plane. Gives each vertex of the ground, the walls, and the props the colour that those lamps add: the glow of the lamp, times the square of the falloff, times how much the face turns toward it. A face away from a lamp stays dark |
 | The material | `world/terrain/terrain_material.gd`, `terrain.gdshader` | One shader for the client and the editor. The vertex colour is the albedo, as before. The CUSTOM0 array of a mesh is its baked light, and the shader sends it out as emission. Thus a lamp shows in a dark area, where the sun gives the albedo nothing |
 | The bulb | `PropMeshBuilder` | The lamp of a lamp post, the glass of an oil lamp, and the flame of a torch glow with the light of their rows |
-| The real lights | `world/figure_lights.gd` | One `OmniLight3D` on each of the `MAX_LIGHTS` lamps nearest the player. No shadow, a fade with the distance, and a cull mask of the entity layer only. `FigureLights.mark_entity` puts each figure, each item, and the avatar on that layer. The ground never counts them |
+| The real lights | `world/pane/figure_lights.gd` | One `OmniLight3D` on each of the `MAX_LIGHTS` lamps nearest the player. No shadow, a fade with the distance, and a cull mask of the entity layer only. `FigureLights.mark_entity` puts each figure, each item, and the avatar on that layer. The ground never counts them |
 
 Three rules:
 
@@ -584,7 +585,7 @@ minimap, and the item icons keep their colours. The area looks and the
 Look tab do not see it. Thus, an author tunes a look at 100% for every
 player.
 
-`WorldBrightness.apply` puts `world/world_brightness.gdshader` on
+`WorldBrightness.apply` puts `world/pane/world_brightness.gdshader` on
 `%WorldView`, the `SubViewportContainer` of the world pane. The shader
 raises each colour of the finished picture to the power 1 / brightness.
 That curve lifts the dark tones the most, and white stays white. At 100%
@@ -1068,7 +1069,7 @@ Five files share the work. Each one has one job:
 
 | File | Owns |
 |---|---|
-| `world/hud_layout.gd` | The rules: the anchor of a drop, the position from an anchor, the clamp, the snap, and the check of a saved entry. Static, and it knows no node |
+| `world/layout/hud_layout.gd` | The rules: the anchor of a drop, the position from an anchor, the clamp, the snap, and the check of a saved entry. Static, and it knows no node |
 | `scenes/layout/hud_elements.gd` | The table: the key of each element and where it ships |
 | `scenes/layout/hud_slot.gd` | One row of that table, with its control |
 | `scenes/layout/hud_arranger.gd` | The one owner of where each element sits. It places every element on each pane resize and each layout change |
@@ -1216,6 +1217,13 @@ dead square in the middle of a doll reads as a bug.
 > `inventory_view.gd` keeps only the swap. A branch put back in either file
 > would compose a verb for a gesture that no player can make, which is how a
 > verb table gets into a client.
+
+**The Augmentation Rig button sits under the doll** (11/09/2026), as the
+buttons under the OSRS Worn Equipment tab do. It sends `RIG_COMMAND`, which
+`clientexport.py` reads from `RIG_COMMAND_KEY` in the augmentation
+constants. The server opens the rig pop-up. A session with no pop-up gets
+the rig as text. Every character has the command, so the pane always shows
+the button.
 
 ## A pop-up is item grids, and every slot carries its commands
 
@@ -1625,7 +1633,7 @@ The panel has six tabs:
 | Paint | The tool row, and the options of the current tool only: the radius, the brush shape, the strength, the flags, the object kind, rotation, and variant, the sign text, the **Item spawn** fields for the kind `item_spawn`, the noise, and **Protect structures** |
 | Build | The structure tools (DESIGN-0013): Wall line, Room, Doorway, Level above, Ladder, Stairs, Roof, Wall style, Decor, Select tiles, and Place, with the options of the current tool only. See "The Build tab" below |
 | Objects | The selected object with its **Kind**, **Rotation**, **Sign text**, **Item spawn** (an item spawn only), **Variant**, **Scale**, **Tilt**, and **Nudge** fields (a change applies at once), **Turn**, **Turn back**, **Delete**, and **Follow link**. A filter, and a list of every object in the block. A click on a row selects it, and the Paint tool stays. **Show decor** off keeps the decor out of the list. See "A variant and a look" |
-| World | The **Block** report (the load errors and the seam faults, kept until the next load), the marks to show with a legend, how the planes above show, **Check world** and its findings, and the state of the tile sync |
+| World | The **Block** report (the load errors and the seam faults, kept until the next load), the marks to show with a legend, how the planes below and the planes above show, the **Ghost opacity**, **Check world** and its findings, and the state of the tile sync |
 | Look | The colour of each floor type, the cliff, the water, and each prop, the colour and the height of each wall style, the **Shadow minimum** of every area, the fog and the light of each area with **Preview the area light**, and the colours of the editor marks. See "The Look tab" below |
 | Tables | The rows of the areas, the floor types, the wall styles, and the decor kinds: **New row**, **Save row**, **Rename row**, **Remove row**, and **Read files again**. See "The Tables tab" below |
 | Versions | The shelf of saved worlds: **Save version**, **Switch to version**, **Rename version**, **Remove version**, and **Read files again**. See "The Versions tab" below |
@@ -1675,7 +1683,7 @@ The rules that the editor keeps:
 - **The block is N x N chunks, 4 x 4 unless the author says otherwise**
   (10/21/2026). The **Side** field of the block strip sets N, from 1 to
   `TerrainWorld.BLOCK_SIDE_MAX` (8). The cap bounds the cost of a load and
-  of a redraw: an 8 x 8 block holds 256 chunk views over the four planes.
+  of a redraw: an 8 x 8 block holds 512 chunk views over the eight planes.
   The session file keeps the choice, so the scene stores none of it. With an
   even side, the centre chunk is the south-west chunk of the middle four. A
   brush writes a shared corner to every chunk that stores it, so a seam
@@ -1707,8 +1715,15 @@ The rules that the editor keeps:
   are those below plus 32 height steps (two tiles). Every tile is `void` and
   Blocked, and the areas are those below. A floor paint on a void tile clears
   Blocked, and a `void` paint sets it. Until an edit, a new chunk follows the
-  ground under it. The planes below show dim. The planes above show hidden,
-  dim, or solid, as the World tab says.
+  ground under it.
+- **A ghost shows a structure on another plane** (11/09/2026). The World
+  tab gives the planes below and the planes above one choice each:
+  Hidden, Ghost, or Solid. A ghost is see-through, in the ghost colour of
+  the Look tab. The **Ghost opacity** of the World tab says how much shows:
+  10% to 90%, 40% at the start. Thus the author sees the floor and the roof over a room,
+  or the room under a floor. A ghost casts no shadow, so a ghost roof does
+  not darken the room under it. The planes below and the planes above
+  start as a ghost (11/11/2026). The session file keeps the three choices.
 - **A move of the block clears the undo history.** The move saves the old
   block first. Thus, an undo after the move would write into a chunk that is
   not loaded. `TerrainWorld.replay_edit` also refuses an edit of another
@@ -1897,7 +1912,7 @@ the client keeps its old values as the fallback, and a JSON file under
 | File | Holds | Fallback |
 |---|---|---|
 | `terrain_palette.json` | The colour of each floor type, the cliff, the water, and each prop. The colour and the height of each wall style, in height steps. The wall top lighten | `world/terrain/floor_palette.gd`, `wall_palette.gd` |
-| `area_looks.json` | The nine fields of the fog and the light of each area. The shadow minimum of every area (10/20/2026) | `world/area_look.gd` |
+| `area_looks.json` | The nine fields of the fog and the light of each area. The shadow minimum of every area (10/20/2026) | `world/look/area_look.gd` |
 | `lights.json` | The light of each scenery key: the colour, the energy, the range in tiles, and the height of the bulb (10/18/2026) | `world/look/light_look.gd` |
 
 `world/look/look_file.gd` reads and writes them, with a cache, so a mesh
@@ -1909,7 +1924,17 @@ no server fact.
 
 The Look tab edits the three files. Each picker and each field writes the
 file a short moment after the last change of a drag, and the block draws
-again, so the author sees the colour on the ground. The light section
+again, so the author sees the colour on the ground.
+
+The redraw takes some frames (11/11/2026). `TerrainWorld.redraw_soon`
+queues each chunk view, and each frame draws one view again, the edited
+plane first. A palette or a light change builds only the terrain meshes:
+the ground, the water, the walls, and the props. A mark colour builds only
+the flag marks and the border, and it paints each object marker. Each view
+keeps its nodes. Before, each change built every part of every chunk in
+one frame, and the editor stopped for 1.5 seconds on a 4 x 4 block.
+
+The light section
 lists every scenery key that an object kind names. An energy of zero
 gives no light, and "Reset light" takes the row out of the file. "Preview the area
 light" applies the fog and the light of the chosen area to the sun and the
@@ -1945,6 +1970,8 @@ Blocked and water tiles, the walls, the borders, the brush ring, the Build
 outlines, the beacon, the ghost planes, and the marker of each object
 category. A player never sees them, so they are no look file. They are the
 author's, in the session file, and "Reset marks" gives the defaults back.
+The ghost mark gives a colour only. The **Ghost opacity** of the World tab
+says how much of a ghost shows.
 
 ### The Tables tab
 
@@ -2287,6 +2314,30 @@ needs no client edit.
 A clip of an attack action must not loop, because a swing waits for the end
 of its clip. `test_figure_files.py` fails on a clip that loops.
 
+To give a gathering attempt its clip (11/10/2026):
+
+1. On the **Clips** tab, select the default clip set in the stance list.
+2. Find the row of the gathering action, for example
+   `gather_one_hand_cutting`. The table has one row for each gathering
+   action of the item catalog.
+3. Pick the clip, and click **Play** to see it.
+4. Press Ctrl+S.
+
+The server names the gathering action of each attempt:
+`gather_<hands>_<skill>`. The tool that the attempt uses gives the hands,
+also when the tool is in the bag. An attempt with no tool gives `unarmed`.
+`figure_action` of `blackout_face` carries the name. `WorldView._on_face`
+gives it to `FigureLibrary.strike`, which plays its clip one time on the
+gatherer.
+
+A gathering action with no clip plays nothing. No clip of a fight stands in
+for it. A clip of a gathering action must not loop, and a clip list must
+build it. `test_figure_files.py` fails on a clip that breaks either rule.
+
+Today, an axe gives `gather_one_hand_cutting`, which plays `cutting_chop`
+(`1H_Melee_Attack_Slice_Horizontal`). Bare hands at the rusty pole give
+`gather_unarmed_cutting`, which plays `punch`.
+
 A two-handed clip holds one item. Its row in the clip list file has
 `"held_in": ["two_hands"]`. The clearance check then holds a probe in the
 bone of the `two_hands` slot only. Without the field, the probe of the off
@@ -2391,7 +2442,7 @@ To add a clip from a source that has a clip list:
 | `blackout/assets/figure/clips/<source_id>.json` | One clip list: the clips that the workbench takes from one source of `blackout/assets/sources/` |
 | `blackout/assets/figure/palette.json` | The palette: each named color with its color and its finish, and the named color of each color role |
 | `world/figure/clips/<clip>.res` | One clip. The file name is the clip name. The game export holds these files |
-| `world/figure/stances.json` | The stance table: the default clip set with the clip of each attack action, and the clip set of each tool type |
+| `world/figure/stances.json` | The stance table: the default clip set with the clip of each attack action and each gathering action, and the clip set of each tool type |
 | `world/figure/figure_palette.gd` | `FigurePalette`: the reader and the writer of the palette, and the color of a color role on a figure |
 | `world/figure/figure_stances.gd` | `FigureStances`: the reader and the writer of the stance table, and the clip of one action |
 | `world/figure/figure_rig.gd`, `figure_look.gd`, `figure_json.gd` | The readers and the writers. The game and the workbench use the same classes |
@@ -2401,20 +2452,20 @@ To add a clip from a source that has a clip list:
 | `world/figure/figure_models.gd` | `FigureModels`: the mesh and the place of each node of each figure model. It does not put a model in the unit box |
 | `world/figure/figure_set.gd` | `FigureSet`: the reader of the served `figure.json` |
 | `blackout/web/static/webclient/models/figure.json` | The figure set: each rig, each worn look, and the palette in one served file. Generated, so never edit it by hand |
-| `addons/blackout_figure/figure_reference.gd` | `FigureReference`: the reference body file |
-| `addons/blackout_figure/figure_pipeline.gd` | `FigurePipeline`: starts `python -m assets.pipeline` of the game directory |
-| `addons/blackout_figure/figure_job.gd` | `FigureJob`: one pipeline run on a thread, polled from `_process` |
-| `addons/blackout_figure/play_bar.gd` | `FigurePlayBar`: Play, Pause, Rest pose, the time slider, and the speed, in the top bar of the dock |
+| `addons/blackout_figure/view/figure_reference.gd` | `FigureReference`: the reference body file |
+| `addons/blackout_figure/data/figure_pipeline.gd` | `FigurePipeline`: starts `python -m assets.pipeline` of the game directory |
+| `addons/blackout_figure/data/figure_job.gd` | `FigureJob`: one pipeline run on a thread, polled from `_process` |
+| `addons/blackout_figure/panels/play_bar.gd` | `FigurePlayBar`: Play, Pause, Rest pose, the time slider, and the speed, in the top bar of the dock |
 | `addons/blackout_figure/figure_editor.cfg` | The budgets: the one option that git tracks |
 | `user://blackout_figure_session.cfg` | The session of the dock: the body type, the outfit, the colors and the kit of the character, the author, and the folds. Git tracks none of it |
-| `addons/blackout_figure/item_catalog.json` | The item catalog: each item with a slot, each slot, each tool type of the server, and each NPC def with an outfit. Generated, so never edit it by hand |
-| `addons/blackout_figure/figure_checks.gd` | `FigureChecks`: the content rules of the figure files, and the budgets |
-| `addons/blackout_figure/check_panel.gd` | `FigureCheckPanel`: the Check tab |
-| `addons/blackout_figure/figure_shapes.gd` | `FigureShapes`: the part rows of a new body and of each new slot shape. A start for the author, not the design |
+| `addons/blackout_figure/data/item_catalog.json` | The item catalog: each item with a slot, each slot, each tool type of the server, and each NPC def with an outfit. Generated, so never edit it by hand |
+| `addons/blackout_figure/checks/figure_checks.gd` | `FigureChecks`: the content rules of the figure files, and the budgets |
+| `addons/blackout_figure/panels/check_panel.gd` | `FigureCheckPanel`: the Check tab |
+| `addons/blackout_figure/edits/figure_shapes.gd` | `FigureShapes`: the part rows of a new body and of each new slot shape. A start for the author, not the design |
 | `addons/blackout_figure/edits/` | The edit rules, one script for each file that a rule changes: `FigureRigEdits`, `FigurePartEdits`, `FigureShapeEdits`, `FigureLookEdits`, `FigurePaletteEdits`, and `FigureClipEdits`. Each rule changes a copy of the content and returns the reason for a refusal, or "". `figure_edits.gd` keeps `FigureEdits` as a forwarder, for the tests only |
 | `addons/blackout_figure/handlers/` | The handlers of each panel, one script for each, plus `FigureHistory` (the undo seam: one entry for one file, or for several files) and `FigureHandlerContext` (what a handler may reach of the plugin). The gear editor uses the same handlers |
 | `addons/blackout_figure/figure_plugin_base.gd` | `FigureEditorBase`: what the two plugins share of the editor contract. The dock, the workbench, the undo seam, the jobs, the save, the click in the 3D view, the hint, and the selection. `figure_plugin.gd` gives the dock, the handlers, and the refresh of each tab |
-| `addons/blackout_figure/figure_dock_base.gd` | `FigureDockBase`: what the two docks share. The top strip, the bar, the outfit bar, the status box, the folds, and the two option files |
+| `addons/blackout_figure/panels/figure_dock_base.gd` | `FigureDockBase`: what the two docks share. The top strip, the bar, the outfit bar, the status box, the folds, and the two option files |
 | `addons/blackout_figure/` | The plugin, the dock, the store, the edit rules, the catalog reader, the clip build, and the clearance check. The editor only |
 
 The rules that the workbench keeps:
@@ -2840,6 +2891,96 @@ Four rules:
 notes, the offer, the lookup, the end of a write, and one real run of the
 pipeline that writes nothing.
 
+## The Fly field sets the speed of the free-look camera
+
+Since 11/10/2026 the plugin `addons/blackout_camera/` puts a **Fly** field
+in the toolbar of the 3D editor. The field sets the fly speed. It works in
+every 3D scene: the terrain editor, the workbenches, and any other scene.
+
+To change the fly speed:
+
+1. Open a 3D scene. The **Fly** field is in the toolbar above the 3D view.
+2. Type a speed in metres per second, then press Enter. An arrow click
+   adds or removes 0.5.
+3. Hold the right mouse button, then press W, A, S, or D. The camera moves
+   at the new speed.
+
+Four rules:
+
+- **Godot owns the fly speed.** The field reads and writes the Editor
+  Setting `editors/3d/freelook/freelook_base_speed` (Editor Settings >
+  Editors > 3D > Freelook > Freelook Base Speed). The plugin keeps no copy.
+  A change in the Editor Settings dialog shows in the field. Godot keeps
+  the setting for each user, for all projects, and git does not see it.
+- **Shift is 3 times the fly speed, and no setting changes that.** Godot
+  fixes the factor in `View3DController::update_freelook`
+  (`scene/debugger/view_3d_controller.cpp`, Godot 4.7.2). The text beside
+  the field shows the Shift speed. Alt divides the speed by 3. Nick chose
+  a field for the fly speed only (11/10/2026).
+- **A new speed applies at the next frame.** A setting that a script
+  writes reaches the 3D view 1.5 s later, when the Editor Settings dialog
+  saves. Thus, the plugin also sends the change notification to each of
+  the four 3D views. The mouse wheel in free-look changes the
+  speed until the next change in the field.
+- **The field is as wide as its text in the font of the editor.** A width
+  in pixels clipped the first digit of 16 in an editor with a large font
+  (11/10/2026). A LineEdit scrolls to the end of a text that does not fit.
+  The bar measures the text of 888.88 and of the speed, and uses the wider.
+
+| File | What it holds |
+|---|---|
+| `addons/blackout_camera/camera_plugin.gd` | The plugin: the field in the toolbar, the write of the setting, and the notification to the 3D views |
+| `addons/blackout_camera/fly_speed_bar.gd` | `FlySpeedBar`: the field and the Shift text |
+
+The web export excludes the directory. `test_fly_speed_bar.tscn` covers the
+field, the signal, the Shift text, and the range. The plugin half needs a
+running editor, and no test covers it.
+
+## A dialogue script is written here, and the server runs it
+
+Since 11/11/2026 an NPC can speak from a dialogue script (DESIGN-0017): one
+`.dialogue` file in `dialogue/`, written in the **Dialogue** tab of the
+editor. The tab comes from the Dialogue Manager addon
+(`addons/dialogue_manager/`, Nathan Hoad, MIT).
+[dialogue/README.md](dialogue/README.md) is the procedure for an author.
+
+Four rules:
+
+- **The runtime of the addon never runs a dialogue of the game.** The server
+  runs each script and decides each condition. The client gets text and
+  responses through the pop-up, as for each other menu. Thus, the client has
+  no dialogue view, and no dialogue script goes into the client export.
+- **A save is the whole procedure.** The plugin `addons/blackout_dialogue/`
+  runs the script export after each save. It writes the compiled script to
+  `blackout/world/npc_dialogues/compiled/`. Then it runs the server check on
+  a thread, and the Output panel shows each fault.
+- **The server owns the dialogue vocabulary.** `dialogue_stub.gd` is a
+  generated copy of the names, for the test run. Never edit it. A Python
+  test fails if it is out of date.
+- **The Run button uses the test scene of this project,** not the one of the
+  addon. The scene shows one switch for each yes or no query of the script.
+  The project setting `dialogue_manager/editor/advanced/custom_test_scene_path`
+  names it.
+
+| File | What it holds |
+|---|---|
+| `dialogue/*.dialogue` | The dialogue scripts. The file name is the key that an `NpcDef` names |
+| `addons/blackout_dialogue/dialogue_plugin.gd` | The plugin: the export after each import of a script, and the server check |
+| `addons/blackout_dialogue/dialogue_script_export.gd` | `DialogueScriptExport`: compile, write, and remove a compiled script |
+| `addons/blackout_dialogue/export_cli.gd` | The export as a headless command. `-- --check` writes nothing |
+| `addons/blackout_dialogue/dialogue_server_check.gd` | `DialogueServerCheck`: runs `python -m systems.gameplay.dialogue --write-stub` |
+| `addons/blackout_dialogue/dialogue_stub.gd` | `DialogueStub`: the generated names |
+| `addons/blackout_dialogue/dialogue_stub_calls.gd` | `DialogueStubCalls`: the yes or no queries of one script |
+| `addons/blackout_dialogue/dialogue_test_scene.tscn` `.gd` | The test scene of the Run button |
+
+The web export excludes `addons/blackout_dialogue/` and `dialogue/`. It
+keeps `addons/dialogue_manager/`, because the project has the autoload of
+the addon and the test run uses it. `test_dialogue_script_export.tscn` covers
+the digest, the stamps, the write, the check, and the orphan.
+`test_dialogue_stub.tscn` covers the stub, the query list, the runtime of the
+addon on a real script, and the switches of the test scene. The plugin half
+needs a running editor, and no test covers it.
+
 ## The game draws each player as the figure
 
 Since 10/16/2026 the client draws each player character through
@@ -2850,12 +2991,12 @@ sees.
 | Part | Where |
 |---|---|
 | The figure set, the models of the parts, and the build of one figure | `world/figure/figure_library.gd` (`FigureLibrary`) |
-| The avatar | `world/world_view.gd`, `_build_avatar` |
-| Each other player | `world/entity_pool.gd`, `_figure_for` |
-| The body type, the figure colors, and the worn record of the observer | `world/char_state.gd` |
+| The avatar | `world/pane/world_view.gd`, `_build_avatar` |
+| Each other player | `world/pane/entity_pool.gd`, `_figure_for` |
+| The body type, the figure colors, and the worn record of the observer | `world/state/char_state.gd` |
 | The worn looks of a worn record | `world/figure/figure_outfit.gd` (`FigureOutfit`) |
 | The item picture in a cell of the bag, the doll, and a pop-up | `FigureLibrary.build_item`, `FigureBuilder.build_item`, `scenes/inventory/item_stage.gd` |
-| The glow of the lit augments on the parts (DESIGN-0015, 10/30/2026) | `world/figure_glow.gd` (`FigureGlow`), `world/look/augment_look.gd` with `augment_looks.json` |
+| The glow of the lit augments on the parts (DESIGN-0015, 10/30/2026) | `world/figure/figure_glow.gd` (`FigureGlow`), `world/look/augment_look.gd` with `augment_looks.json` |
 
 The server names, the client draws. The row of a player character carries
 `body_type`, and `figure_colors` when the character has a color of its own.
@@ -2907,7 +3048,7 @@ For the public game, run `deploy/webexport/publish.sh --changed-only`. A
 player sees the change at the next login, reconnect, or page load.
 
 The cost: one figure is about 195 draw calls. On ANGLE, 11 figures take
-3.8 ms of each frame, and 50 take 16.8 ms. `tests/figure_crowd_bench.tscn`
+3.8 ms of each frame, and 50 take 16.8 ms. `tests/bench/figure_crowd_bench.tscn`
 measures it. A crowd needs the shared version of DESIGN-0014 section 12.4.
 
 ## Running
@@ -2964,11 +3105,18 @@ subscribing`, and then a fresh `subscribed: ...`.
 
 ## Tests
 
-All one hundred and six tests are headless and exit non-zero on failure.
-One hundred and three need nothing running (counted 10/30/2026). Three of the four `smoke_*` scenes need an Evennia, and
+All one hundred and eleven tests are headless and exit non-zero on failure.
+One hundred and eight need nothing running (counted 11/10/2026). Three of the four `smoke_*` scenes need an Evennia, and
 none needs an account. `smoke_console` is the exception: it builds
 `console.tscn` for real and needs nothing, because the test expects its socket
 to fail.
+
+**The `tests/` tree mirrors the source tree** (11/11/2026). The test of
+`world/state/char_state.gd` is `tests/world/state/test_char_state.tscn`. The
+tests of the views are in `tests/scenes/`, and the tests of a plugin are in
+`tests/addons/<plugin>/`. `tests/smoke/` holds the four `smoke_*` scenes, and
+`tests/bench/` holds the benches and the spikes. Put a new test in the
+directory of its subject. No file goes into the root of `tests/`.
 
 Two of them guard the SCENE, not a model, and that is the gap that every other
 test leaves:
@@ -2990,7 +3138,7 @@ test leaves:
 in the shape that Godot's JSON parser produces:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_world_state.tscn
 ```
 
 `test_choose_option.tscn` needs nothing running. The payloads are hand-built in
@@ -2998,7 +3146,7 @@ the shape that `serialize_entity` produces, floats included. The menu is a
 plain `Control`, driven with no camera and no pool:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_choose_option.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_choose_option.tscn
 ```
 
 It covers the two things that go silently wrong:
@@ -3013,7 +3161,7 @@ It covers the two things that go silently wrong:
 and every case is a pair of grid cells:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/pane/test_world_view.tscn
 ```
 
 The HUD layout has three scenes, and each needs nothing running.
@@ -3023,9 +3171,9 @@ drags, the settings bar, the presets, and that no key reaches the console
 while the editor is open:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hud_layout.tscn
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hud_arranger.tscn
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_layout_editor.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/layout/test_hud_layout.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_hud_arranger.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_layout_editor.tscn
 ```
 
 The Help pane has one scene, and it needs nothing running. `test_help_view`
@@ -3034,7 +3182,7 @@ no label passes the right edge, that the rows ask for no width, and that the
 rows stack when the pane is narrow:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_help_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_help_view.tscn
 ```
 
 The two maps have four scenes, and each needs nothing running.
@@ -3044,17 +3192,17 @@ decodes hand-built summaries. `test_world_map_view` checks the pan, the zoom,
 the planes, the floating box, and the legend:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_minimap_view.tscn
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_entity_roster.tscn
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_state.tscn
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_world_map_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_minimap_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_entity_roster.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_world_map_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_world_map_view.tscn
 ```
 
 `test_step_animator.tscn` needs nothing running either, and no scene and no
 clock. Each case gives `advance` the frame time it wants to measure:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_step_animator.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/pane/test_step_animator.tscn
 ```
 
 Every bug it catches is SILENT. A figure that drifts a tile behind the server,
@@ -3067,7 +3215,7 @@ table of each area (`AreaLook.LOOKS`), the blend between two areas, and the fog
 that moves with the camera arm:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_area_look.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/look/test_area_look.tscn
 ```
 
 `test_chunk_file.tscn` needs nothing running either. It is the GDScript half of
@@ -3077,7 +3225,7 @@ byte, matches the committed digests, and refuses the same bad files as
 `test_chunkfile.py`:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_chunk_file.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/terrain/test_chunk_file.tscn
 ```
 
 Four tests cover the terrain editor, and none needs anything running.
@@ -3095,7 +3243,7 @@ covers the shelf of saved worlds and the form of the Versions tab, in a
 scratch directory under `user://`:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_terrain_editing.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/addons/blackout_terrain/test_terrain_editing.tscn
 ```
 
 Eight tests cover the figure workbench, and none needs anything running.
@@ -3110,7 +3258,7 @@ part that a gizmo moved. It writes only into a scratch directory under
 `test_figure_dock.tscn` covers the signals of the dock:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_workbench.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/addons/blackout_figure/test_figure_workbench.tscn
 ```
 
 `test_figure_clips.tscn` covers the clips: the player, the pose of one
@@ -3123,7 +3271,7 @@ source must give the rest pose of a figure, and each clip file of the
 repository must have the bytes of a new build:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_clip_import.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/addons/blackout_figure/test_figure_clip_import.tscn
 ```
 
 `test_figure_models.tscn` covers Phase W4: the reference body, the parts of
@@ -3135,7 +3283,7 @@ repository. It also reads the served `figure.json`, which must hold each
 rig and each worn look of the repository:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_models.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/figure/test_figure_models.tscn
 ```
 
 `test_figure_palette.tscn` covers Phase W5: the palette, the colors of a
@@ -3146,7 +3294,7 @@ the stance table. Each clip that the stance table of the repository names
 must be a clip file:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_figure_palette.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/figure/test_figure_palette.tscn
 ```
 
 `test_terrain_view.tscn` covers the ground of the client: one mesh for each
@@ -3160,13 +3308,13 @@ figures.
 `test_char_state.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_char_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_char_state.tscn
 ```
 
 `test_model_registry.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_model_registry.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/meshes/test_model_registry.tscn
 ```
 
 `test_model_loader.tscn` needs nothing running. It checks that one read
@@ -3174,32 +3322,32 @@ holds the largest served model, and it checks which failed fetches get a
 retry:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_model_loader.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/meshes/test_model_loader.tscn
 ```
 
 `test_inventory_state.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_inventory_state.tscn
 ```
 
 `test_inventory_view.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_inventory_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_inventory_view.tscn
 ```
 
 `test_item_look.tscn` needs nothing running either. It reads the served
 `figure.json` and checks the item picture of each item look:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_item_look.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/figure/test_item_look.tscn
 ```
 
 `test_summary_state.tscn` needs nothing running either:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_summary_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_summary_state.tscn
 ```
 
 `test_skills_state.tscn` and `test_skills_view.tscn` need nothing running
@@ -3208,7 +3356,7 @@ Every command that leaves the pane is one that the server named. Each of the
 three detail modes asks for exactly what it shows.
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_skills_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_skills_view.tscn
 ```
 
 `test_xp_tracker_state.tscn` and `test_xp_hud_view.tscn` need nothing running
@@ -3217,7 +3365,7 @@ test measures an hour of XP per hour in milliseconds. The view test proves that
 the HUD is hidden before an award, and that no control in it takes the mouse.
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_xp_hud_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_xp_hud_view.tscn
 ```
 
 `test_combat_options_state.tscn` and `test_combat_options_view.tscn` need
@@ -3226,27 +3374,27 @@ the tab is the one that its row carried, and that a click alone never moves the
 highlight:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_combat_options_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_combat_options_view.tscn
 ```
 
 `test_abilities_state.tscn` and `test_ability_rail.tscn` need nothing running
 either. The state test covers the model, the key table, the tip text, the
-step dial, and the set key. The rail test asserts that every command that
+power level dial, and the set key. The rail test asserts that every command that
 leaves the rail is the one that its row carried, that a key press fires the
 slot of its row, that a locked row fires nothing, that a click alone never
 moves the light, that the set row takes its own key, and that Shift turns
-the step dial. `test_figure_glow.tscn` covers the glow of the lit augments
+the power level dial. `test_figure_glow.tscn` covers the glow of the lit augments
 on the parts of a mannequin, and the look file of the repository:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_ability_rail.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_ability_rail.tscn
 ```
 
 `test_login_view.tscn` and `test_saved_login.tscn` need nothing running
 either. Both write only to a scratch file under `user://`:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_login_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_login_view.tscn
 ```
 
 `test_command_history.tscn`, `test_client_settings.tscn`,
@@ -3257,7 +3405,7 @@ either. Both write only to a scratch file under `user://`:
 either:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_command_history.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/input/test_command_history.tscn
 ```
 
 `test_sound_cues.tscn` needs nothing running either. A headless run uses the
@@ -3265,7 +3413,7 @@ dummy audio driver, so the test plays every cue for real with no speaker
 attached:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_sound_cues.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/sound/test_sound_cues.tscn
 ```
 
 `smoke_reconnect.tscn` needs a running Evennia but no account. It proves the
@@ -3275,14 +3423,14 @@ builds a fresh peer for each open. That change looks obviously correct, but
 only a real server can confirm it.
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/smoke_reconnect.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/smoke/smoke_reconnect.tscn
 ```
 
 `smoke_handshake.tscn` needs a running Evennia but no account. The server
 answers `blackout_subscribe` on an unauthenticated session:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/smoke_handshake.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/smoke/smoke_handshake.tscn
 ```
 
 ## Skills left the character sheet
@@ -3325,7 +3473,7 @@ the mistake that once rendered a `1154 / 152` bar on the server's own screen.
 Rows arrive sorted by `(category, name)`, and `categories` arrives beside them.
 Thus, the bands and their contents need no ordering table here, and the text
 screens and this grid agree with no statement from either. The client owns
-three columns, a bar for each cell, and `world/skill_palette.gd`.
+three columns, a bar for each cell, and `world/look/skill_palette.gd`.
 
 That palette is **guarded, not generated**, on the same asymmetry as
 `AreaLook.LOOKS`. A category named there that no skill declares is a bug, and
@@ -3437,11 +3585,11 @@ cannot describe an aura differently. The arrangement of the Combat tab.
 **A click sends, and changes nothing else.** The button goes straight back to
 what the last snapshot said. The light moves only when the server republishes
 `char_abilities`. A click on the lit row DOES send, because its command puts
-the aura out. The rule of `AbilitiesState` in `world/abilities_state.gd`.
+the aura out. The rule of `AbilitiesState` in `world/state/abilities_state.gd`.
 
 **The client owns the keys.** The server sends the rows in the order of its
 registry and names no key. The slot of a row is its index. `AbilityKeys` in
-`world/ability_keys.gd` says which key fires which slot: the number row, `1`
+`world/input/ability_keys.gd` says which key fires which slot: the number row, `1`
 to `0`, then `-` and `=`, twelve slots. A combination such as `Shift+1` is
 one more row of that table, with `shift` true. A press with Ctrl, Alt or Meta
 fires no slot. The console asks the table only when the player is not typing,
@@ -3452,7 +3600,7 @@ prints the key on each button.
 mouse, so a click between two buttons reaches the tile under it.
 
 **The tip is one shape for every row.** The `tip` block, `{title, lines}`, is
-the first of its kind (10/20/2026). `TipText` in `world/tip_text.gd` reads it
+the first of its kind (10/20/2026). `TipText` in `world/state/tip_text.gd` reads it
 and joins it into the tooltip of the button. A locked row adds the reason of
 the lock after the block. Nick expects a generic tip over most of the game
 later: an item, an entity, a skill. That tip reads this one shape from every
@@ -3467,12 +3615,14 @@ the drain reads the finished state.
 
 **The augment rows come after the aura rows (DESIGN-0015, 10/30/2026).**
 `systems/gameplay/abilities.py` composes the rail: the aura rows, then the
-augment rows, then the set row. Each augment row is a toggle with a step
-dial: `{step, steps, step_command}` beside the fields above. A ready row
-carries `aug <name>`. A lit row carries `aug <name> off`, shows its step as
-`Reflex 2/3`, and carries the line of its next step in `step_command`.
-Shift and the key of the slot send that line. The server names the step,
-and the top step wraps to the first.
+augment rows, then the set row. Each augment row is a toggle with a power
+level dial: `{power_level, power_levels, power_level_command}` beside the
+fields above. A ready row carries `aug <name>`. A lit row carries
+`aug <name> off` and shows its power level as `Reflex 2/3`. It carries the
+line of its next power level in `power_level_command`. Shift and the key of
+the slot send that line. The server names the power level, and the top
+power level wraps to the first. The power level was the "step" until
+11/09/2026.
 
 **The rail shows the socketed augments only (Phase 5, 10/30/2026).** The
 rig of a character has eight sockets, the parts of the body, and the level
@@ -3481,7 +3631,7 @@ an open socket, and no other. The `rig` command opens the rig pop-up, a
 plain pop-up of two grids: the sockets, and every known augment. Each cell
 carries `socket <augment> <socket>` or `unsocket <socket>`, so the pop-up
 needs no code of its own here. A row may carry a `note`, a short mark after
-the name and the step: the roll of Overclock, `Overclock 3/3 +14%`. The
+the name and the power level: the roll of Overclock, `Overclock 3/3 +14%`. The
 server says the text, and `AbilityRail` draws it. An empty note draws
 nothing.
 
@@ -3497,7 +3647,7 @@ their toggle rows.
 `char_avatar` carry `augments`, the keys of the lit augments, as they carry
 the worn record. `AugmentLook` in `world/look/augment_look.gd` reads
 `world/look/augment_looks.json`: augment key to `{parts, color}`. `FigureGlow`
-in `world/figure_glow.gd` writes an emission on each named part through
+in `world/figure/figure_glow.gd` writes an emission on each named part through
 `MeshGlow`, and puts each other part to rest. The pool applies it on each
 sync, and again after a hover ends, because the hover rests every material.
 The avatar applies it on each `char_avatar`. A key in the file must name an
@@ -3891,7 +4041,7 @@ Three files share the work:
 
 | File | Owns |
 |---|---|
-| `world/performance_state.gd` | The rings: the frame times, the tick gaps, the tick work, and the late flags. The clock is injected |
+| `world/state/performance_state.gd` | The rings: the frame times, the tick gaps, the tick work, and the late flags. The clock is injected |
 | `scenes/performance/performance_view.gd` | The card. Every colour, size and unit. The text lines and the graph geometry are static, for the tests |
 | `scenes/console.gd` | The gate from the setting, and the subscription that follows it |
 
@@ -3900,8 +4050,8 @@ The view test checks the text lines and the geometry, and that no part of
 the card takes a click:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_performance_state.tscn
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_performance_view.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/state/test_performance_state.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/scenes/test_performance_view.tscn
 ```
 
 ## Hitsplats: the server names the max hit
@@ -3946,7 +4096,7 @@ the killing blow is the hitsplat that a player most wants to see.
 from a style file, because those are look decisions:
 
 ```bash
-"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/test_hitsplat_layer.tscn
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/hitsplats/test_hitsplat_layer.tscn
 ```
 
 ## A fight turns the two to face each other
@@ -4000,7 +4150,7 @@ the fight comes back when it stands.
 
 `audio/cues.json` is the whole table: each cue NAME mapped to its sound kind
 and its sound clip under `audio/`, and each moment mapped to its cue.
-`world/sound_cues.gd` reads it. Callers ask for the cue, never the file, so
+`world/sound/sound_cues.gd` reads it. Callers ask for the cue, never the file, so
 a clip swap is one line, and no caller moves. The server names no sound and
 must not start. Which clip a level-up plays is a look, on the same side of
 the line as a mesh or a color.
@@ -4089,6 +4239,18 @@ that moved no item sends nothing. The moment goes to the trader only. To
 give the sell its own sound, change the `shop_sell` row of `cues.json`. The
 server needs no edit.
 
+**An AugBot has one sound for each restore.** `CmdAmplify` sends `amplify`
+after it restores the Grit of the player. The client plays `amplify.wav`.
+A full pool restores nothing, and it sends nothing. The moment goes to the
+player who typed `amplify` only.
+
+**A graft has one sound for each sample.** `graft.graft` sends `graft`
+after it consumes one unit of a sample. The client plays `graft.wav`. The
+Locus channel grafts one unit every few ticks. Thus, the sound repeats
+until the channel stops. A graft away from a Locus sends the same moment,
+because it is the same act. A thing that is no sample grafts nothing, and
+it sends nothing. The moment goes to the grafter only.
+
 **Every clip plays on the bus of its sound kind.** A sound effect plays on
 the `SFX` bus declared in `default_bus_layout.tres`. `_KIND_BUSES` in
 `sound_cues.gd` maps each kind to its bus, and a kind with no row plays on
@@ -4156,60 +4318,88 @@ there, one bus row in `_KIND_BUSES`, and one bus in
 
 ## Layout
 
+Each directory holds one kind of file (11/11/2026). Put a new file in the
+directory of its kind. The root of `world/` holds only the two files that no
+one directory owns.
+
+| Directory | Holds |
+|---|---|
+| `autoload/` | The socket and the generated constants. |
+| `scenes/` | The views: one directory for each pane. `console.tscn`, `world.tscn`, and the three shared controls are at the root. |
+| `world/state/` | The models of the statefeed, one for each channel. Also the readers of a row shape that several panes share: `ServerAction` and `TipText`. |
+| `world/session/` | The connection: the server endpoint, the reconnect schedule, the saved login, and the session readiness. |
+| `world/input/` | The keys and the typed line: movement, camera, ability keys, and the command history. |
+| `world/chat/` | The chat tabs, the chat modes, and the find in the log. |
+| `world/layout/` | Where a thing sits: the HUD layout rules, the paper doll, and the pop-up layouts. |
+| `world/map/` | What the two maps share: the map icons and the map raster. |
+| `world/sound/` | The reader of the cue table, and the music player. |
+| `world/pane/` | The world pane: the 3D view, the entity pool, the pick, the camera rig, the environment, the real lights, and the brightness. |
+| `world/figure/` | The figure: the rig, the worn look, the builder, the library, the clips, and the glow. |
+| `world/look/` | The look files, and the palettes of the client. |
+| `world/meshes/` | The mesh ladder, the model registry, and the look of a chunk object. |
+| `world/terrain/` | The ground: the chunk file, the chunk meshes, the walls, the props, and the tile lights. |
+| `world/hitsplats/` | The hitsplats. |
+| `world/` root | `client_settings.gd` and `stable_hash.gd`. |
+| `addons/blackout_terrain/` | The terrain editor. `panels/` holds the dock and its tabs. `tools/` holds the brushes, the Build tools, and their input. `view/` holds what the editor draws. `checks/` holds the content rules. `data/` holds the tables, the versions, the session file, and the item list. The plugin script, the config, and the two scenes are at the root. |
+| `addons/blackout_figure/` | The figure workbench. `panels/` holds the dock and its tabs. `edits/` holds the rules, and `handlers/` holds the handlers of each tab. `clips/` holds the clip import. `checks/` holds the content rules. `data/` holds the figure store and the item catalog. `view/` holds what the workbench draws. The plugin scripts, the config, and the scene are at the root. |
+| `addons/blackout_dialogue/` | The script export of the dialogue scripts, the generated stub of the dialogue vocabulary, and the test scene of the Dialogue tab. See "A dialogue script is written here, and the server runs it". |
+| `dialogue/` | The dialogue scripts, one `.dialogue` file for each NPC that speaks from one, and the procedure for an author. |
+| `tests/` | The tests, in the shape of the source tree. See "Tests". |
+
 | File | Owns |
 |---|---|
 | `autoload/evennia.gd` | The socket. The only place that knows the `[name, args, kwargs]` wire format. |
 | `scenes/console.tscn` `.gd` | The shell: output, input, and the subscription handshake. |
 | `scenes/world.tscn` | The 3D scene: environment, light, terrain, marker, camera rig. |
-| `world/world_brightness.gd` `.gdshader` | The Brightness slider as a gamma curve over the world pane. The one place that turns `ClientSettings.brightness` into pixels. |
-| `world/world_state.gd` | The world model: the chunks of the block, the room, and the float boundary. |
+| `world/pane/world_brightness.gd` `.gdshader` | The Brightness slider as a gamma curve over the world pane. The one place that turns `ClientSettings.brightness` into pixels. |
+| `world/state/world_state.gd` | The world model: the chunks of the block, the room, and the float boundary. |
 | `world/terrain/terrain_view.gd` | The ground of the tile world: one mesh for each chunk that the model holds, with its water, walls, and scenery. |
 | `world/terrain/wall_mesh_builder.gd` | The wall slabs of one chunk. The editor uses it too. |
 | `world/terrain/wall_palette.gd` | The colour of each wall style. A style with no row draws in the colour of `plain`. |
 | `world/terrain/prop_mesh_builder.gd` | The primitive scenery of one chunk: ladders, stairs, hatches, the tops of flights, and the decor shapes. The editor uses it too. |
-| `world/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
-| `world/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
+| `world/state/char_state.gd` | YOUR model: entity id, hp, in_combat, skill levels. |
+| `world/meshes/model_registry.gd` | Which assets have art (fetched) and how each is oriented (not). |
 | `world/meshes/mesh_palette.gd` | Colors and finishes. One owner for both. |
 | `world/meshes/family_shapes.gd` | What each family looks like, as data. One entry per family. |
 | `world/meshes/mesh_builder.gd` | Part data to a Node3D. Knows no family names. |
 | `world/meshes/model_loader.gd` | The only file that knows HTTP and glTF exist. |
 | `world/meshes/mesh_resolver.gd` | The mesh ladder. The only thing panes call. |
 | `world/figure/` | The rig reader, the worn look reader, `FigureBuilder`, and `FigureLibrary`. The figure workbench and the game use them. |
-| `world/inventory_state.gd` | Carried grid and worn slots. |
+| `world/state/inventory_state.gd` | Carried grid and worn slots. |
 | `scenes/inventory/inventory_view.gd` | Draws the grid and the paper doll; turns a gesture into a command. |
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |
 | `scenes/inventory/stack_count_label.gd` | The stack count in the top-right corner of a slot. Shared by the bag and the pop-up. |
 | `scenes/inventory/item_stage.gd` | Every item in 3D, into ONE render target. Cells read sub-rects of it. |
 | `scenes/inventory/amount_prompt.gd` | The box that asks for the amount of a prompted action. Shared by the inventory and the pop-up. |
-| `world/server_action.gd` | How to read one action the server named: send it whole, or fill in the amount. |
-| `world/popup_state.gd` | The pop-up the server holds open. Knows no pop-up, grid or verb. |
+| `world/state/server_action.gd` | How to read one action the server named: send it whole, or fill in the amount. |
+| `world/state/popup_state.gd` | The pop-up the server holds open. Knows no pop-up, grid or verb. |
 | `scenes/popup/popup_view.gd` | The pop-up over the world pane: grids or a menu, the side panel, the quantity row. The player moves and sizes it. |
 | `scenes/popup/popup_slot.gd` | One slot. Left click sends the first action, right click lists them all. |
 | `scenes/popup/timer_panel.gd` | The side panel of a timed station: one bar for each slot, counted down between snapshots. |
-| `world/summary_state.gd` | The dossier. Knows no panel names and must not learn any. |
+| `world/state/summary_state.gd` | The dossier. Knows no panel names and must not learn any. |
 | `scenes/summary/summary_view.gd` | The sheet, a native `Window`. Iterates panels, never enumerates them. |
 | `scenes/login/login_view.gd` | Name, password, connect/create. Hides itself when vitals arrive. |
-| `world/command_history.gd` | The up-arrow. Pure rules, no widget. |
-| `world/movement_keys.gd` | Which key means which direction. Knows nothing about focus. |
-| `world/held_movement.gd` | The movement keys held now, and when to send their direction again. Pure state, no clock. |
-| `world/camera_keys.gd` | The arrow keys held now, and which way they turn the camera. Pure state, no clock. |
-| `world/reconnect_policy.gd` | How long to wait before redialing. Pure schedule, no clock. |
-| `world/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
+| `world/input/command_history.gd` | The up-arrow. Pure rules, no widget. |
+| `world/input/movement_keys.gd` | Which key means which direction. Knows nothing about focus. |
+| `world/input/held_movement.gd` | The movement keys held now, and when to send their direction again. Pure state, no clock. |
+| `world/input/camera_keys.gd` | The arrow keys held now, and which way they turn the camera. Pure state, no clock. |
+| `world/session/reconnect_policy.gd` | How long to wait before redialing. Pure schedule, no clock. |
+| `world/state/quest_state.gd` | Your quest log. Knows no quest key and must not learn any. |
 | `scenes/quests/quests_view.gd` | The quest tab: a bar per objective, drawn from numbers rather than prose. |
-| `world/xp_tracker_state.gd` | This session's XP awards, totals and rates. The clock is injectable; the session is the client's own. |
+| `world/state/xp_tracker_state.gd` | This session's XP awards, totals and rates. The clock is injectable; the session is the client's own. |
 | `scenes/xp/xp_hud_view.gd` | XP drops, the session strip and the progress bar over the world. Takes no click. |
-| `world/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
+| `world/state/combat_options_state.gd` | Your weapon and its styles. Names no style, and nothing in it is set by a click. |
 | `scenes/combat/combat_options_view.gd` | The Combat tab: a button per style, lit by the snapshot rather than the click. |
 | `world/stable_hash.gd` | A string hash that gives the same number on every client. `EntityPool` turns the ring of figures on a tile by it. |
 | `scenes/minimap/minimap_view.gd` | The tiles around the player, drawn small over the world pane from the chunks. Clickable. Zoom, map dots, map icons, the destination marker, the walk path, the Run button, the XY button, the position readout, and the turn with the camera. |
 | `scenes/worldmap/world_map_view.gd` | The world map: every chunk of one plane, in a floating box. Pans, zooms, and changes the plane. Walks nowhere. |
 | `scenes/worldmap/world_map_legend.gd` | The legend of the world map: a row for each map icon and each marker. A click on an icon row hides that category of map icon. |
-| `world/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |
-| `world/world_map_state.gd` | The world map summaries, as one image and one icon list for each plane. |
-| `world/map_raster.gd` | The colour of a tile on both maps, and the images the maps draw the ground from. |
-| `world/map_icons.gd` | The symbol of each object category on both maps. |
+| `world/state/entity_roster.gd` | The entities near the observer, one row per id. The 3D pane and the minimap draw it. |
+| `world/state/world_map_state.gd` | The world map summaries, as one image and one icon list for each plane. |
+| `world/map/map_raster.gd` | The colour of a tile on both maps, and the images the maps draw the ground from. |
+| `world/map/map_icons.gd` | The symbol of each object category on both maps. |
 | `scenes/panel/panel_view.gd` | The control-panel tab strip. Tabs are addressed by title, never by index. Each tab has an icon, and the labels show when they fit. |
-| `world/hud_layout.gd` | The rules of the HUD layout: anchors, the clamp, the snap, and the check of a saved entry. Static, and it knows no node. |
+| `world/layout/hud_layout.gd` | The rules of the HUD layout: anchors, the clamp, the snap, and the check of a saved entry. Static, and it knows no node. |
 | `scenes/layout/hud_elements.gd` | The HUD elements that the player can place, and where each one ships. One row for each. |
 | `scenes/layout/hud_slot.gd` | One HUD element: its control and its shipped place. |
 | `scenes/layout/hud_arranger.gd` | Places every HUD element from the layout of the player. The one owner of where an element sits. |
@@ -4217,29 +4407,29 @@ there, one bus row in `_KIND_BUSES`, and one bus in
 | `scenes/resize_grips.gd` | The grips on the free edges and corners of a box. Shared by the floating boxes and the layout editor. A floating box raises its grips over every other box. |
 | `scenes/floating_box.gd` | The box that the player moves and sizes over the world pane: the dim, the title bar, the grips, the first rect, and the saved rect. The pop-up and the world map extend it. |
 | `ui/icons/` | The tab icons, from game-icons.net (CC BY 3.0). `PanelView.TAB_ICONS` names the author of each, and the Credits box shows them. |
-| `world/doll_layout.gd` | Where each equipment frame sits on the paper doll. A picture, not a rule; guarded from Python by path. |
+| `world/layout/doll_layout.gd` | Where each equipment frame sits on the paper doll. A picture, not a rule; guarded from Python by path. |
 | `scenes/equipment/equipment_view.gd` | The paper doll. Draws the frames the server sent, in the shape the table says. |
 | `scenes/vitals/vitals_bars.gd` | Your resources as bars. One control, two homes. |
-| `world/chat_tabs.gd` | Which tab a line belongs in, which tab is open, which tabs have unread lines, and which tabs are hidden from All. Holds no text. |
-| `world/chat_modes.gd` | The chat modes from `char_chat`, the chosen mode, and the line to send for a typed line. |
+| `world/chat/chat_tabs.gd` | Which tab a line belongs in, which tab is open, which tabs have unread lines, and which tabs are hidden from All. Holds no text. |
+| `world/chat/chat_modes.gd` | The chat modes from `char_chat`, the chosen mode, and the line to send for a typed line. |
 | `scenes/chat/chat_view.gd` | One RichTextLabel per tab. Appends. Draws All again only when the filter changes. |
 | `scenes/chat/chat_bar.gd` | The tab buttons under the input, and the right-click menu of each. |
 | `scenes/chat/chat_mode_button.gd` | The chat mode in front of the input, and its menu. |
 | `world/client_settings.gd` | Font size, UI scale, sound effects volume, which panes are shown, how big the player made a box, the HUD layout and its presets, via ConfigFile under `user://`. |
 | `ui/blackout_theme.tres` | Every margin, separation, font size and label color. Also the red accent: the text box red on the slider bars, check boxes (`ui/icons/check_*.svg`, `radio_*.svg`), the selected tab, scroll bars, pressed buttons, menu hover and `FormHeading` lines. The console root and `gui/theme/custom` both name it: the root reaches the tree, the project setting reaches each Window. See `docs/2026-11-02-ENG-0010-godot-ui-authoring.md`. |
 | `ui/theme_preview/` | Two scenes for the scene preview of the Theme editor: `blackout.tscn` shows each type that the theme sets, and `godot.tscn` shows each other type of the default theme. In the Theme editor, click Add Preview, then Add Scene Preview. The picker then selects the type of the clicked sample. A tool script builds the samples from the type lists, so a new variation needs no edit. |
-| `world/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
-| `world/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
+| `world/session/server_endpoint.gd` | Which server this build talks to. Debug reaches localhost, release reaches production. |
+| `world/chat/scrollback_find.gd` | Which matches exist and which one you are on. Pure. |
 | `scenes/find/find_bar.gd` | Ctrl+F over the log. Scrolls via `get_character_line`. |
 | `scenes/help/help_view.gd` | What the CLIENT does. The game's own `help` covers the rest. Every row wraps at any pane width, and a narrow pane stacks each name over its text. No entry has a line break in a sentence. |
 | `scenes/options/options_view.gd` | The sliders and the pane toggles. Writes through the settings object, applies nothing. |
 | `scenes/hud.tscn` `.gd` | Draws char_state above the text pane. Presentation only. |
-| `world/world_view.gd` | The 3D pane: the terrain node, the marker, the hover mark, the pick, and the avatar on the drawn ground. |
-| `world/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash, hover, and the pick. |
-| `world/entity_picking.gd` | The ray against the faces and the box of one node. See "The pick of an entity" |
+| `world/pane/world_view.gd` | The 3D pane: the terrain node, the marker, the hover mark, the pick, and the avatar on the drawn ground. |
+| `world/pane/entity_pool.gd` | Everything the statefeed can see, each on its own tile. Hit flash, hover, and the pick. |
+| `world/pane/entity_picking.gd` | The ray against the faces and the box of one node. See "The pick of an entity" |
 | `world/hitsplats/` | The hitsplats. `hitsplat_layer.gd` picks a style and draws. `hitsplat_style.gd` and `styles/*.tres` hold the look. |
-| `world/orbit_camera.gd` | The `SpringArm3D` follow rig. A middle drag and the arrow keys turn it. |
-| `world/sound_cues.gd` | The reader of the cue table: which clip each cue plays, on the bus of its kind. The server names no sound. |
+| `world/pane/orbit_camera.gd` | The `SpringArm3D` follow rig. A middle drag and the arrow keys turn it. |
+| `world/sound/sound_cues.gd` | The reader of the cue table: which clip each cue plays, on the bus of its kind. The server names no sound. |
 | `audio/cues.json` | The cue table: each cue with its kind and clip, and the cue of each moment. The sound wizard writes it. |
 | `audio/sfx/`, `audio/CREDITS.md` | The clips in use, and where each came from. Source packs live outside the repo. |
 | `default_bus_layout.tres` | The audio buses. Every cue plays on `SFX`. |
@@ -4271,12 +4461,12 @@ Rules that nobody needs to find again:
    09/13/2026, a `SystemFont` that listed Consolas resolved on desktop but fell
    back to the proportional default in the browser. The result was ragged
    EvMenu tables, and `→` drawn as a missing-glyph box. One face on every
-   platform also keeps the two clients identical. `tests/test_theme.gd` fails
+   platform also keeps the two clients identical. `tests/ui/test_theme.gd` fails
    on a `SystemFont` in the theme.
 5. **`StableHash.of` still matches the retired browser pane.** The two panes
    once ran side by side on the same character, so a difference meant a bug.
    For that reason, it reimplements the JS string hash of `blackout3d.js` and
-   does not call Godot's. `tests/test_world_state.gd` still checks it against
+   does not call Godot's. `tests/world/state/test_world_state.gd` still checks it against
    test vectors computed directly from the JS. The room-kind palette that it
    coloured went with the xyzgrid maps in DESIGN-0011 Phase 4b.
 6. **On the web, Ctrl+V into a LineEdit can fail to paste, and the failure is

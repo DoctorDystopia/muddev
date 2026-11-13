@@ -191,4 +191,58 @@ ITEMS = {
             "projectile_strength_bonus": 16,
         },
     ),
+
+
+
+    # ----------------------
+    # --- MANGANESE AMMO ---
+    # ----------------------
+
+    # The OSRS Mithril arrow (+22), as the copper arrow is the OSRS Steel
+    # arrow (+16). OSRS asks Ranged 10 for Mithril and 5 for Steel. Thus,
+    # the gate doubles from the copper arrow, the same step as OSRS.
+    "manganese_arrow": ItemDef(
+        key="manganese_arrow",
+        name="manganese arrow",
+        typeclass="typeclasses.items.AmmunitionItem",
+        desc="A short shaft with a manganese head.",
+        value=10,
+        weight=0.02,
+        tradeable=True,
+        stackable=True,
+        use_slot=WieldLocation.AMMO,
+        tool_type="ammo",
+        tier=2,
+        req_level=20,
+        tags=[
+            (combat_constants.AMMO_FAMILY_ARROW,
+             combat_constants.AMMO_FAMILY_TAG_CATEGORY),
+            ("manganese_arrow", "crafting_material"),
+        ],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 22,
+        },
+    ),
 }

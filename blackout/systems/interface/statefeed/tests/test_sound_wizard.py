@@ -22,8 +22,18 @@ Description: Guard the sound wizard, `python -m assets.audio add`.
                  it.
 
              Each test points the paths of assets/audio at a temporary
-             folder. Thus, no test touches godot/audio/. No test needs Godot:
-             find_godot and run_import are patched.
+             folder. Thus, no test touches godot/audio/. No test needs Godot
+             or ffmpeg: find_godot, run_import, find_ffmpeg and run_encode
+             are patched.
+
+             THE TRACK FLOW (DESIGN-0016) has its own class. Its promises:
+               - A track writes the source record of its master, the served
+                 file, the credits row and the table row, and the check
+                 passes on them.
+               - The master never enters git: the source is local.
+               - A machine with no ffmpeg gets no question and no write.
+               - The title and the area come from the folder and the file
+                 name of the master, and a yes takes each guess.
 """
 
 import os
@@ -32,14 +42,21 @@ import unittest
 from unittest import mock
 
 # assets/ is import-safe by design: it touches no database.
-from assets.audio import (check, credits, cue_table, godot_import, kinds,
-                          paths, wizard)
-from assets.pipeline import licenses, questions
+from assets.audio import (check, credits, cue_table, encode, godot_import,
+                          kinds, packs, paths, tracks, wizard)
+from assets.pipeline import figure, licenses, questions, sources
+from assets.pipeline import paths as pipeline_paths
+from world import areas, music_tracks
 
 
 _YES = "y"
 _NO = "n"
 _ENTER = ""
+
+# The rows of the kind question, in the order of kinds.KINDS.
+_SFX_ROW = str(list(kinds.KINDS).index(kinds.SFX_KIND) + 1)
+_MUSIC_ROW = str(list(kinds.KINDS).index(kinds.MUSIC_KIND) + 1)
+_FLAC_BODY = b"fLaC...."
 _PACK_FOLDER = "Sound FX Starter Pack Vol. 1"
 _PACK_HEADING = "Ovani Sound — " + _PACK_FOLDER
 _OTHER_HEADING = "Enzo — Flesh and Fracture - Lite"
@@ -151,6 +168,10 @@ class _SoundWizardTestCase(unittest.TestCase):
         self.constants_path = os.path.join(project, "blackout_constants.gd")
         self.packs_dir = os.path.join(self.root, "packs")
         self.downloads = os.path.join(self.root, "downloads")
+        self.served_dir = os.path.join(self.root, "served", "music")
+        self.tracks_path = os.path.join(self.root, "tables",
+                                        "music_tracks.json")
+        self.sources_dir = os.path.join(self.root, "sources")
 
         for name, value in (("REPO_DIR", self.root),
                             ("GODOT_PROJECT_DIR", project),
@@ -158,15 +179,24 @@ class _SoundWizardTestCase(unittest.TestCase):
                             ("CUE_TABLE_PATH", self.table_path),
                             ("CREDITS_PATH", self.credits_path),
                             ("CLIENT_CONSTANTS_PATH", self.constants_path),
-                            ("PACKS_DIR", self.packs_dir)):
+                            ("PACKS_DIR", self.packs_dir),
+                            ("SERVED_MUSIC_DIR", self.served_dir),
+                            ("TRACK_TABLE_PATH", self.tracks_path)):
             patch = mock.patch.object(paths, name, value)
             patch.start()
             self.addCleanup(patch.stop)
 
-        no_godot = mock.patch.object(godot_import, "find_godot",
-                                     return_value="")
-        no_godot.start()
-        self.addCleanup(no_godot.stop)
+        sources_patch = mock.patch.object(pipeline_paths, "SOURCES_DIR",
+                                          self.sources_dir)
+        sources_patch.start()
+        self.addCleanup(sources_patch.stop)
+
+        for target, name in ((godot_import, "find_godot"),
+                             (encode, "find_ffmpeg")):
+            patch = mock.patch.object(target, name, return_value="")
+            patch.start()
+            self.addCleanup(patch.stop)
+
         self._write_world()
 
     def _file(self, path, body):
@@ -197,6 +227,9 @@ class _SoundWizardTestCase(unittest.TestCase):
         cue_table.write_table(table, self.table_path)
         self._file(self.credits_path, _CREDITS_TEXT)
         self._file(self.constants_path, _CONSTANTS_TEXT)
+        os.makedirs(os.path.dirname(self.tracks_path))
+        os.makedirs(self.sources_dir)
+        tracks.write_table((), self.tracks_path)
 
     def _pack_clip(self, name="Titan Handgun.wav"):
         """Write one sound clip into the sound pack folder."""
@@ -209,15 +242,17 @@ class _SoundWizardTestCase(unittest.TestCase):
         return self._file(os.path.join(self.downloads, name), _CLIP_BODY)
 
     def _snapshot(self):
-        """Give each file under the temporary godot/ with its bytes."""
+        """Give each file that the wizard can write, with its bytes."""
         found = {}
 
-        for parent, _folders, names in os.walk(self.audio_dir):
-            for name in names:
-                path = os.path.join(parent, name)
+        for root in (self.audio_dir, self.served_dir, self.sources_dir,
+                     os.path.dirname(self.tracks_path)):
+            for parent, _folders, names in os.walk(root):
+                for name in names:
+                    path = os.path.join(parent, name)
 
-                with open(path, "rb") as handle:
-                    found[path] = handle.read()
+                    with open(path, "rb") as handle:
+                        found[path] = handle.read()
 
         return found
 
@@ -231,7 +266,7 @@ class _SoundWizardTestCase(unittest.TestCase):
 
     def _free_moment_answers(self, path, confirm=_YES):
         """Pick the first free moment for a sound clip from the known pack."""
-        return [path, _YES, _ENTER, "1", _ENTER, confirm]
+        return [_SFX_ROW, path, _YES, _ENTER, "1", _ENTER, confirm]
 
 
 class FreeMomentTests(_SoundWizardTestCase):
@@ -302,8 +337,8 @@ class NothingWrittenTests(_SoundWizardTestCase):
     def test_ctrl_c_at_a_question_writes_nothing(self):
         upload = self._pack_clip()
         before = self._snapshot()
-        result, _said, _dialogs = self._run([upload, _YES, _ENTER, "1",
-                                             KeyboardInterrupt])
+        result, _said, _dialogs = self._run([_SFX_ROW, upload, _YES, _ENTER,
+                                             "1", KeyboardInterrupt])
 
         self.assertIsNone(result)
         self.assertEqual(self._snapshot(), before)
@@ -314,9 +349,10 @@ class NewPackTests(_SoundWizardTestCase):
 
     def _new_pack_answers(self, path):
         """Answer the questions of a new CC BY pack with no moment."""
-        return [path, _new_pack_row(_CREDITS_TEXT), "Weather Kit", "Sonniss",
-                _license_row("CC-BY-4.0"), "https://sonniss.com/weather",
-                _ENTER, _ENTER, _no_moment_row(), "Rain on a tin roof.", _YES]
+        return [_SFX_ROW, path, _new_pack_row(_CREDITS_TEXT), "Weather Kit",
+                "Sonniss", _license_row("CC-BY-4.0"),
+                "https://sonniss.com/weather", _ENTER, _ENTER,
+                _no_moment_row(), "Rain on a tin roof.", _YES]
 
     def test_a_new_pack_is_a_section_at_the_end(self):
         upload = self._download("Rain Loop.wav")
@@ -357,7 +393,7 @@ class RefusalTests(_SoundWizardTestCase):
     def test_a_taken_cue_and_a_clip_that_is_there_are_refused(self):
         upload = self._pack_clip()
         self._file(paths.clip_path("sfx/orphan.wav"), _CLIP_BODY)
-        answers = [upload, _YES, _ENTER, "level_up", _MAPPED_MOMENT,
+        answers = [_SFX_ROW, upload, _YES, _ENTER, "level_up", _MAPPED_MOMENT,
                    "orphan", "thunder", _no_moment_row(), "Thunder.", _NO]
         _result, said, _dialogs = self._run(answers)
         text = "\n".join(said)
@@ -369,8 +405,8 @@ class RefusalTests(_SoundWizardTestCase):
         upload = self._pack_clip()
         other = self._download("theme.mp3")
         missing = os.path.join(self.downloads, "missing.wav")
-        answers = [missing, other, _ENTER, upload, _YES, _ENTER, "1",
-                   _ENTER, _NO]
+        answers = [_SFX_ROW, missing, other, _ENTER, upload, _YES, _ENTER,
+                   "1", _ENTER, _NO]
         _result, said, _dialogs = self._run(answers)
         text = "\n".join(said)
 
@@ -380,15 +416,15 @@ class RefusalTests(_SoundWizardTestCase):
 
     def test_a_credits_cell_that_breaks_the_table_is_refused(self):
         upload = self._pack_clip()
-        answers = [upload, _YES, "Hollywood/a|b.wav", _ENTER, "1", _ENTER,
-                   _NO]
+        answers = [_SFX_ROW, upload, _YES, "Hollywood/a|b.wav", _ENTER, "1",
+                   _ENTER, _NO]
         _result, said, _dialogs = self._run(answers)
 
         self.assertIn("cannot hold", "\n".join(said))
 
     def test_enter_at_the_path_opens_the_file_dialog(self):
         upload = self._pack_clip()
-        answers = [_ENTER, _YES, _ENTER, "1", _ENTER, _NO]
+        answers = [_SFX_ROW, _ENTER, _YES, _ENTER, "1", _ENTER, _NO]
         _result, _said, dialogs = self._run(answers, picked=upload)
 
         self.assertEqual(dialogs, [upload])
@@ -443,6 +479,239 @@ class ImportTests(_SoundWizardTestCase):
 
         self.assertFalse(result.imported)
         self.assertIn("GODOT_BIN", "\n".join(said))
+
+
+class _TrackTestCase(_SoundWizardTestCase):
+    """The track flow, with a master in a folder that names an area, and
+    an ffmpeg that writes bytes."""
+
+    def setUp(self):
+        super().setUp()
+        self.area = list(areas.AREAS)[-1]
+        self.area_name = areas.AREAS[self.area].name
+        self.title = "Frigid Memory"
+        self.key = questions.as_key(self.title)
+        encodes = mock.patch.object(encode, "run_encode",
+                                    side_effect=self._fake_encode)
+        encodes.start()
+        self.addCleanup(encodes.stop)
+        self.encoded = []
+
+    def _fake_encode(self, _executable, master, output):
+        """Act as ffmpeg does: write the output file."""
+        self.encoded.append((master, output))
+
+        with open(output, "wb") as handle:
+            handle.write(b"OggS")
+
+        return ""
+
+    def _with_ffmpeg(self):
+        """Give the wizard an ffmpeg."""
+        patch = mock.patch.object(encode, "find_ffmpeg",
+                                  return_value="ffmpeg.exe")
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def _master(self, name=None):
+        """Write one master under Areas/<Area name>/."""
+        name = name or "%s %s.flac" % (self.area_name, self.title)
+        path = os.path.join(self.downloads, "Areas", self.area_name, name)
+
+        return self._file(path, _FLAC_BODY)
+
+    def _own_track_answers(self, path, confirm=_YES):
+        """Take each guess of a track that Nick wrote, with an area unlock."""
+        return [_MUSIC_ROW, path, _YES, _ENTER, _ENTER, _YES, "1", _ENTER,
+                _ENTER, confirm]
+
+
+class TrackTests(_TrackTestCase):
+    """A track that Nick wrote lands in each of its four places."""
+
+    def test_the_wizard_writes_the_source_the_file_the_row_and_the_track(self):
+        self._with_ffmpeg()
+        master = self._master()
+        result, _said, _dialogs = self._run(self._own_track_answers(master))
+        rows = tracks.read_table(self.tracks_path)
+        source = sources.load_source(music_tracks.source_id_for(self.key))
+
+        self.assertEqual(result.track, self.key)
+        self.assertEqual([row.key for row in rows], [self.key])
+        self.assertEqual(rows[0].name, self.title)
+        self.assertEqual(rows[0].area, self.area)
+        self.assertEqual(rows[0].unlock, music_tracks.UNLOCK_AREA)
+        self.assertTrue(os.path.isfile(paths.track_path(self.key)))
+        self.assertTrue(source.local)
+        self.assertEqual(source.license, licenses.OWNED_LICENSE)
+        self.assertEqual(source.author, figure.DEFAULT_AUTHOR)
+        self.assertEqual(list(source.files), [os.path.basename(master)])
+        self.assertEqual(sources.gitignore_problem(source), "")
+
+    def test_the_encode_reads_the_copy_and_writes_the_served_file(self):
+        self._with_ffmpeg()
+        master = self._master()
+        self._run(self._own_track_answers(master))
+        copy = os.path.join(paths.source_dir(self.key),
+                            os.path.basename(master))
+
+        self.assertEqual(self.encoded, [(copy, paths.track_path(self.key))])
+
+    def test_the_row_goes_under_the_own_section(self):
+        self._with_ffmpeg()
+        master = self._master()
+        self._run(self._own_track_answers(master))
+        text = credits.read_credits(self.credits_path)
+        last = credits.packs_of(text)[-1]
+
+        self.assertEqual(last.heading, "%s — %s" % (figure.DEFAULT_AUTHOR,
+                                                   packs.OWN_PACK_TITLE))
+        self.assertEqual(last.clips, (tracks.served_relative(self.key),))
+        self.assertIn(licenses.ALLOWED_LICENSES[licenses.OWNED_LICENSE].name,
+                      text)
+
+    def test_what_the_wizard_writes_passes_the_check(self):
+        self._with_ffmpeg()
+        master = self._master()
+        self._run(self._own_track_answers(master))
+        report = check.run_check()
+
+        self.assertEqual(report.problems, [])
+
+    def test_a_second_track_goes_under_the_same_section(self):
+        self._with_ffmpeg()
+        self._run(self._own_track_answers(self._master()))
+        second = self._master("%s Second.flac" % self.area_name)
+        self._run(self._own_track_answers(second))
+        text = credits.read_credits(self.credits_path)
+        own = [pack for pack in credits.packs_of(text)
+               if packs.OWN_PACK_TITLE in pack.heading]
+        rows = tracks.read_table(self.tracks_path)
+
+        self.assertEqual(len(own), 1)
+        self.assertEqual(len(own[0].clips), 2)
+        self.assertEqual([row.key for row in rows], [self.key, "second"])
+
+    def test_the_next_steps_name_the_restart_and_the_check(self):
+        self._with_ffmpeg()
+        result, _said, _dialogs = self._run(
+            self._own_track_answers(self._master()))
+        steps = "\n".join(wizard.next_steps(result))
+
+        self.assertIn("Restart the server", steps)
+        self.assertIn("check", steps)
+
+
+class TrackQuestionTests(_TrackTestCase):
+    """The guesses, the refusals, and the pack of a track that is not
+    Nick's."""
+
+    def test_the_area_list_comes_when_the_guess_is_refused(self):
+        self._with_ffmpeg()
+        master = self._master()
+        row = str(list(areas.AREAS).index(areas.DEFAULT_AREA) + 1)
+        answers = [_MUSIC_ROW, master, _YES, _ENTER, _ENTER, _NO, row, "1",
+                   _ENTER, _ENTER, _YES]
+        self._run(answers)
+        rows = tracks.read_table(self.tracks_path)
+
+        self.assertEqual(rows[0].area, areas.DEFAULT_AREA)
+
+    def test_a_folder_that_names_no_area_asks_the_list(self):
+        self._with_ffmpeg()
+        master = self._file(os.path.join(self.downloads, "Loose.flac"),
+                            _FLAC_BODY)
+        row = str(list(areas.AREAS).index(self.area) + 1)
+        answers = [_MUSIC_ROW, master, _YES, _ENTER, _ENTER, row, "1",
+                   _ENTER, _ENTER, _YES]
+        self._run(answers)
+        rows = tracks.read_table(self.tracks_path)
+
+        self.assertEqual(rows[0].key, "loose")
+        self.assertEqual(rows[0].area, self.area)
+
+    def test_a_quest_unlock_asks_the_quest_key(self):
+        self._with_ffmpeg()
+        quest_row = str(music_tracks.UNLOCKS.index(music_tracks.UNLOCK_QUEST)
+                        + 1)
+        answers = [_MUSIC_ROW, self._master(), _YES, _ENTER, _ENTER, _YES,
+                   quest_row, "a_quest", "Finish the quest.", _ENTER, _YES]
+        self._run(answers)
+        rows = tracks.read_table(self.tracks_path)
+
+        self.assertEqual(rows[0].unlock, music_tracks.UNLOCK_QUEST)
+        self.assertEqual(rows[0].unlock_key, "a_quest")
+        self.assertEqual(rows[0].hint, "Finish the quest.")
+
+    def test_a_taken_key_and_a_bad_key_are_refused(self):
+        self._with_ffmpeg()
+        self._run(self._own_track_answers(self._master()))
+        second = self._master("%s Second.flac" % self.area_name)
+        answers = [_MUSIC_ROW, second, _YES, _ENTER, self.key, "Bad Key",
+                   "other", _YES, "1", _ENTER, _ENTER, _NO]
+        _result, said, _dialogs = self._run(answers)
+        text = "\n".join(said)
+
+        self.assertIn("already", text)
+        self.assertIn("a-z", text)
+
+    def test_a_master_that_is_no_flac_is_refused(self):
+        self._with_ffmpeg()
+        wav = self._pack_clip()
+        answers = [_MUSIC_ROW, wav, self._master(), _YES, _ENTER, _ENTER,
+                   _YES, "1", _ENTER, _ENTER, _NO]
+        _result, said, _dialogs = self._run(answers)
+
+        self.assertIn("not a sound clip of this kind", "\n".join(said))
+
+    def test_a_track_of_a_pack_records_its_license(self):
+        self._with_ffmpeg()
+        master = self._master()
+        answers = [_MUSIC_ROW, master, _NO, "Ambient Kit", "Sonniss",
+                   _license_row("CC0-1.0"), "https://sonniss.com/ambient",
+                   _ENTER, _ENTER, _YES, "1", _ENTER, _ENTER, _YES]
+        self._run(answers)
+        source = sources.load_source(music_tracks.source_id_for(self.key))
+        text = credits.read_credits(self.credits_path)
+
+        self.assertEqual(source.license, "CC0-1.0")
+        self.assertEqual(source.site, "sonniss.com")
+        self.assertTrue(source.local)
+        self.assertEqual(credits.packs_of(text)[-1].heading,
+                         "Sonniss — Ambient Kit")
+
+
+class TrackNothingWrittenTests(_TrackTestCase):
+    """No ffmpeg, a no, or a Ctrl+C leaves each file as it was."""
+
+    def test_no_ffmpeg_asks_no_question(self):
+        before = self._snapshot()
+        result, said, _dialogs = self._run([_MUSIC_ROW])
+
+        self.assertIsNone(result)
+        self.assertIn("FFMPEG_BIN", "\n".join(said))
+        self.assertEqual(self._snapshot(), before)
+
+    def test_a_no_at_the_confirm_writes_nothing(self):
+        self._with_ffmpeg()
+        master = self._master()
+        before = self._snapshot()
+        result, _said, _dialogs = self._run(
+            self._own_track_answers(master, confirm=_NO))
+
+        self.assertIsNone(result)
+        self.assertEqual(self._snapshot(), before)
+        self.assertEqual(self.encoded, [])
+
+    def test_ctrl_c_at_a_question_writes_nothing(self):
+        self._with_ffmpeg()
+        master = self._master()
+        before = self._snapshot()
+        result, _said, _dialogs = self._run([_MUSIC_ROW, master, _YES,
+                                             KeyboardInterrupt])
+
+        self.assertIsNone(result)
+        self.assertEqual(self._snapshot(), before)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cqi3frobamrqe"]
 
-[ext_resource type="Script" uid="uid://qq4jieq3xiy7" path="res://addons/blackout_figure/figure_workbench.gd" id="1_bench"]
+[ext_resource type="Script" uid="uid://qq4jieq3xiy7" path="res://addons/blackout_figure/view/figure_workbench.gd" id="1_bench"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_figure"]
 sky_top_color = Color(0.72, 0.62, 0.5, 1)

@@ -54,6 +54,7 @@ from systems.interface.popups.popup_defs.exterminator import (
 )
 from typeclasses.channels import Channel
 from typeclasses.characters import Character as BlackoutCharacter
+from world import areas, music_tracks
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 
@@ -215,6 +216,45 @@ class TestDossierFollowsItsFacts(_FreshnessTest):
         self.assertTrue(bodies)
         records = bodies[-1]["panels"][_RECORDS_PANEL]
         self.assertEqual(records[stat_constants.KILLS_PER_HOSTILE_STAT_KEY], {_HOSTILE: 1})
+
+
+class TestMusicFollowsAnUnlock(_FreshnessTest):
+    """An unlock marks the music stale, and the drain builds it one time.
+
+    The walk across a border is in test_music_feed.py, because it needs a
+    tile world. This is the proof that the writer marks and never sends.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.char1.msg = mock.Mock()
+
+        patcher = mock.patch.dict(music_tracks.TRACKS, {
+            "fresh_track": music_tracks.Track(
+                key="fresh_track", name="Fresh Track", area=next(iter(areas.AREAS)),
+                unlock=music_tracks.UNLOCK_AREA, unlock_key="", hint="", note=""),
+        }, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_an_unlock_reaches_the_music(self):
+        self.char1.music.unlock("fresh_track")
+
+        self.assertEqual(buffer.stale_count(), 1)
+        self.assertEqual(len(self._bodies(const.CHANNEL_CHAR_MUSIC)), 0)
+
+        bodies = self._drain(const.CHANNEL_CHAR_MUSIC)
+
+        self.assertEqual(len(bodies), 1)
+        self.assertEqual(
+            const.MUSIC_STATE_UNLOCKED,
+            bodies[0][const.MUSIC_ROWS_KEY][0][const.MUSIC_ROW_STATE])
+
+    def test_an_unlock_of_a_held_track_still_marks_once(self):
+        self.char1.music.unlock("fresh_track")
+        self.char1.music.unlock("fresh_track")
+
+        self.assertEqual(buffer.stale_count(), 1)
 
 
 class TestRosterFollowsXp(_FreshnessTest):

@@ -12,6 +12,9 @@
 # ============
 *.png    binary
 *.glb    binary
+*.ogg    binary
+*.flac   binary
+*.wav    binary
 *.bin    binary
 *.res    binary
 *.db     binary

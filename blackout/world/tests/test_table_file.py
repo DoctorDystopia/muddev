@@ -123,6 +123,12 @@ class RefusalTests(unittest.TestCase):
         data = _with(lambda d: d.update({table_file.ROWS_KEY: []}))
         self._assert_refused(data, "a row")
 
+    def test_no_rows_passes_for_a_table_that_allows_it(self):
+        data = _with(lambda d: d.update({table_file.ROWS_KEY: []}))
+        rows = table_file.rows_from_data(data, _Row, _SOURCE, allow_empty=True)
+
+        self.assertEqual(rows, ())
+
     def test_a_missing_field_with_no_default(self):
         data = _with(lambda d: _rows_of(d)[1].pop("note"))
         self._assert_refused(data, "'note'")

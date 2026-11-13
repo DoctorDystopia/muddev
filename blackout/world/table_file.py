@@ -86,15 +86,17 @@ def field_names(row_class) -> tuple:
     return tuple(field.name for field in dataclasses.fields(row_class))
 
 
-def read_rows(table: str, row_class,
-              directory: str = TABLE_DIRECTORY_PATH) -> tuple:
+def read_rows(table: str, row_class, directory: str = TABLE_DIRECTORY_PATH,
+              allow_empty: bool = False) -> tuple:
     """
     Purpose: Read the rows of one table file.
 
     Entry:
-        table     - the name of the table, the file name with no suffix.
-        row_class - a frozen dataclass whose fields the rows hold.
-        directory - the table directory. A test gives its own.
+        table       - the name of the table, the file name with no suffix.
+        row_class   - a frozen dataclass whose fields the rows hold.
+        directory   - the table directory. A test gives its own.
+        allow_empty - True for a table that may hold no row. Such a table
+                      has no default row. The music tracks are one.
 
     Exit/Returns:
         A tuple of row_class, in the order of the file.
@@ -122,17 +124,19 @@ def read_rows(table: str, row_class,
     except (OSError, ValueError) as error:
         raise TableFileError(f"{path}: {error}") from error
 
-    return rows_from_data(data, row_class, path)
+    return rows_from_data(data, row_class, path, allow_empty)
 
 
-def rows_from_data(data, row_class, source: str) -> tuple:
+def rows_from_data(data, row_class, source: str,
+                   allow_empty: bool = False) -> tuple:
     """
     Purpose: Check the content of a table file, and make its rows.
 
     Entry:
-        data      - the parsed JSON of the file.
-        row_class - a frozen dataclass whose fields the rows hold.
-        source    - the name of the file, for the error text.
+        data        - the parsed JSON of the file.
+        row_class   - a frozen dataclass whose fields the rows hold.
+        source      - the name of the file, for the error text.
+        allow_empty - True for a table that may hold no row.
 
     Exit/Returns:
         A tuple of row_class, in the order of the rows.
@@ -159,8 +163,9 @@ def rows_from_data(data, row_class, source: str) -> tuple:
                              f"{tile_const.TABLE_FORMAT_VERSION}")
 
     rows = data[ROWS_KEY]
+    shaped = isinstance(rows, list) and (rows or allow_empty)
 
-    if not isinstance(rows, list) or not rows:
+    if not shaped:
         raise TableFileError(f"{source}: {ROWS_KEY!r} must be a list with a row")
 
     made = tuple(_row(item, row_class, f"{source}, row {index}")

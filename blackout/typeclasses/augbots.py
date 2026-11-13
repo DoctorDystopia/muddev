@@ -18,6 +18,8 @@ from commands.command import FacingCommand
 from commands.constants import HELP_CATEGORY_AUGMENTATION
 from systems.gameplay.augmentation import constants as aug_const
 from systems.gameplay.augmentation import pool as augmentation_pool
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed
 from systems.interface.statefeed.constants import ASSET_KIND_STATION
 from typeclasses.objects import ObjectParent, DefaultObject
 from .spawners import register_spawner, spawn_once
@@ -56,14 +58,17 @@ class CmdAmplify(FacingCommand):
         Module Globals:
             aug_const.AMPLIFY_MESSAGE read.
             aug_const.AMPLIFY_FULL_MESSAGE read.
+            feed_const.MOMENT_AMPLIFY read.
 
         Methodology:
             1. If the pool is full, say so and stop.
             2. Else, restore the pool in full and say the amplified line.
+            3. Send the amplify moment, so that the client plays its sound.
 
         Notes/References:
             The restore reaches the vitals bar through the pool module.
-            Nothing here sends a snapshot.
+            Nothing here sends a snapshot. The moment goes to the caller
+            only. emit_moment never raises.
 
         Author: Nick Hobar
         Creation date: 10/30/2026
@@ -78,6 +83,7 @@ class CmdAmplify(FacingCommand):
 
         augmentation_pool.restore(caller)
         caller.msg(aug_const.AMPLIFY_MESSAGE)
+        feed.emit_moment(caller, feed_const.MOMENT_AMPLIFY)
 
 
 class AugBotCmdSet(CmdSet):

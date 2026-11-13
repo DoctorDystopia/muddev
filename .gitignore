@@ -13,6 +13,10 @@ __pycache__/
 # the live database, never a deliverable.
 blackout/server/backups/
 
+# The showroom world. scripts/showroom.py writes it again at each run, from
+# ITEM_DB and the object kinds.
+blackout/world/showroom/
+
 # Logs
 **/logs/*
 !**/logs/README.md

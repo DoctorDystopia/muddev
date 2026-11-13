@@ -13,16 +13,24 @@ Description: The graft (DESIGN-0015, Phase 4): the one way to train
              pays, and what the quest system hears. The award goes through
              xp_awards: announced on the graft line, then granted, as every
              award is.
+
+             THE NAME GROUPS A SAMPLE (11/09/2026). The graft channel and
+             the Locus pop-up find the units of one sample by the lowercased
+             object key. That is the rule of carried_group in
+             commands/inventory_cmds.py. Two objects with one name are one
+             sample to every reader.
 """
 
 from evennia.prototypes.prototypes import PROTOTYPE_TAG_CATEGORY
 from evennia.utils import logger
 
+from items import stacking
 from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.progression.skills.constants import SKILL_KEY_AUGMENTATION
 from systems.gameplay.quests import constants as quest_constants
 from systems.gameplay.quests.hooks import notify_quests
 from systems.interface.statefeed import constants as feed_const
+from world.item_database import ITEM_DB
 
 from . import constants as aug_const
 
@@ -61,6 +69,14 @@ def _publish_inventory(character) -> None:
         logger.log_trace()
 
 
+def _send_graft_moment(character) -> None:
+    """Tell the client of the grafter that a graft happened, so that it
+    plays the sound of the moment. emit_moment never raises."""
+    from systems.interface.statefeed import events as feed
+
+    feed.emit_moment(character, feed_const.MOMENT_GRAFT)
+
+
 def _prototype_key(item) -> str:
     """The ItemDef key of an item, from the tag that spawn stamps. Empty
     for an object that no ItemDef made."""
@@ -72,7 +88,121 @@ def _prototype_key(item) -> str:
     return str(keys[0])
 
 
+def _scaled(base: int, at_locus: bool) -> int:
+    """The XP of one graft from the base XP of its sample: the base, or the
+    base times AUG_LOCUS_XP_MULT on a Locus tile, rounded. Never below 0."""
+    if not at_locus:
+        return max(0, int(base))
+
+    boosted = round(int(base) * aug_const.AUG_LOCUS_XP_MULT)
+
+    return max(0, int(boosted))
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
+
+def sample_defs() -> list:
+    """Every ItemDef that is a sample, in ITEM_DB order. An ItemDef with
+    `sample_xp` is a sample, and nothing else decides it."""
+    return [item_def for item_def in ITEM_DB.values() if item_def.sample_xp is not None]
+
+
+def sample_def_for(text: str):
+    """
+    Purpose: Find the sample ItemDef that a typed word names.
+
+    Entry:
+        text is the name part of a `graft` argument. May be empty.
+
+    Exit/Returns:
+        Returns the ItemDef whose key or name equals the text, case
+        ignored, or None.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The key comes first, because the Locus pop-up sends the key: a key
+        holds no space and never collides. A name then serves a telnet
+        player who types "mutant gland 5".
+
+    Notes/References:
+        A slot number or a part of a name is not matched here. The command
+        hands those to resolve_carried_item.
+
+    Author: Nick Hobar
+    Creation date: 11/09/2026
+    """
+    wanted = text.strip().lower()
+
+    if not wanted:
+        return None
+
+    for item_def in sample_defs():
+        if item_def.key.lower() == wanted or item_def.name.lower() == wanted:
+            return item_def
+
+    return None
+
+
+def group_name(item) -> str:
+    """The name that groups the units of one sample: the lowercased object
+    key, the rule of commands/inventory_cmds.carried_group."""
+    return str(item.key).lower()
+
+
+def units_carried(character, name: str) -> int:
+    """
+    Purpose: Count the units of one sample that a character carries.
+
+    Entry:
+        character has `contents`.
+        name is a group name (group_name), lowercased.
+
+    Exit/Returns:
+        Returns the units: the size of a stack, one for each object that
+        does not stack, summed over every sample of that name.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        One walk of the contents. items/stacking.available_units sums the
+        units, so a stack and loose objects count the same way that every
+        group verb counts them.
+
+    Notes/References:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 11/09/2026
+    """
+    wanted = name.lower()
+    group = [item for item in samples_carried(character) if group_name(item) == wanted]
+    units = stacking.available_units(group)
+
+    return units
+
+
+def next_unit(character, name: str):
+    """The first carried sample of one group name, or None. The graft
+    channel takes its next unit here."""
+    wanted = name.lower()
+
+    for item in samples_carried(character):
+        if group_name(item) == wanted:
+            return item
+
+    return None
+
+
+def def_xp(item_def, at_locus: bool) -> int:
+    """The XP that a graft of one unit of a sample ItemDef pays. The Locus
+    pop-up reads it for a sample that the player does not carry."""
+    base = item_def.sample_xp or 0
+    xp = _scaled(base, at_locus)
+
+    return xp
 
 def is_sample(item) -> bool:
     """Whether an object is a sample: it carries SAMPLE_XP_ATTR."""
@@ -122,13 +252,9 @@ def xp_for(item, at_locus: bool) -> int:
     Creation date: 10/30/2026
     """
     base = int(item.attributes.get(aug_const.SAMPLE_XP_ATTR, default=0))
+    xp = _scaled(base, at_locus)
 
-    if not at_locus:
-        return max(0, base)
-
-    boosted = round(base * aug_const.AUG_LOCUS_XP_MULT)
-
-    return max(0, int(boosted))
+    return xp
 
 
 def graft(character, item) -> bool:
@@ -153,12 +279,14 @@ def graft(character, item) -> bool:
         3. Read the name, the key, and the kind BEFORE the consume, because
            the consume can delete the row.
         4. Send the graft line with the XP suffix, then grant the XP.
-        5. Consume one unit and send the inventory.
+        5. Consume one unit, send the inventory, and send the graft moment.
         6. Notify the quests two times: with the item key, and with the
            sample kind. A quest names either.
 
     Notes/References:
-        The order "announce, then grant" is the rule of xp_awards.
+        The order "announce, then grant" is the rule of xp_awards. The
+        graft moment goes out at a Locus and away from one, because the
+        graft is the same act in both places.
 
     Author: Nick Hobar
     Creation date: 10/30/2026
@@ -186,6 +314,7 @@ def graft(character, item) -> bool:
 
     _consume_one(item)
     _publish_inventory(character)
+    _send_graft_moment(character)
 
     if item_key:
         notify_quests(character, quest_constants.ACTION_GRAFT, item_key)

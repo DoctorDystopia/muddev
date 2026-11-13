@@ -365,7 +365,7 @@ class TestTheQuiverReachesTheClient(_ProjectileFixture):
 class TestAnAttackSendsTheMomentOfItsSkill(_ProjectileFixture):
     """Each shot of a gun sends the moment of Guns, one time. Each melee
     swing sends the moment of Strike, one time. The client plays the sound
-    of that moment (godot/world/sound_cues.gd)."""
+    of that moment (godot/world/sound/sound_cues.gd)."""
 
     def _attack(self, result):
         """Resolve one attack with a scripted result. Give the mock of

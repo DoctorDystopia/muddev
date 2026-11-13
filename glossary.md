@@ -29,7 +29,16 @@ the name.
 | NPC def | the `NpcDef` of one NPC, one entry in a module under `world/npc_defs/` | NPC template, NPC prototype, NPC data |
 | combat block | the `NpcCombat` of an NPC def. Only an NPC that can fight has one | stat block, combat profile |
 | role | the typeclass of an NPC: hostile, talkative, shopkeep or Preceptor | NPC type, NPC class |
-| dialogue | the EvMenu node tree that an NPC speaks from, one module in `world/npc_dialogues/` | conversation tree, dialogue menu |
+| dialogue | what an NPC speaks from: a dialogue script or a dialogue module. The `NpcDef` names it | conversation tree, dialogue menu |
+| dialogue module | a dialogue as an EvMenu node tree in Python, one module in `world/npc_dialogues/` | menu module, dialogue tree |
+| dialogue script | a dialogue as a `.dialogue` file that an author writes in the Dialogue tab of the Godot editor (`godot/dialogue/`) | dialogue file, dialogue resource, conversation script |
+| compiled script | the JSON file that the script export makes from a dialogue script. The server reads it (`world/npc_dialogues/compiled/`) | dialogue JSON, compiled dialogue |
+| script export | the step of the Godot editor that compiles each dialogue script into a compiled script (`addons/blackout_dialogue/`) | dialogue export, dialogue build |
+| cue | one named start point in a dialogue script, for example `~ start` | title, label, dialogue node |
+| response | one answer that a dialogue script offers the player. It is one option of the EvMenu node | choice, reply, option |
+| beat | the text and the responses that the dialogue runner shows at one time. It is one EvMenu node | page, screen, dialogue node |
+| dialogue runner | the code that reads a compiled script and makes each beat (`systems/gameplay/dialogue/runner.py`) | dialogue engine, interpreter |
+| dialogue vocabulary | the names that a dialogue script can call, for example `quest.accept`. One name is a vocabulary entry | dialogue API, script functions |
 | ware | one item kind that a shop sells, one row of `get_buy_items` | good, product |
 | stock level | how many units of a ware a shop has now (`stock.level`) | inventory, supply |
 | restock | the return of one unit to a ware below its `max_stock` | refill, replenish |
@@ -63,6 +72,7 @@ the name.
 | bank tab | one numbered group of vault slots. A tab that becomes empty disappears (`bank move`, `bank view`) | bank folder, category, page |
 | main tab | tab 0 of the vault. It holds each slot that is in no other tab, and it shows every slot, grouped by tab | All tab, default tab, tab zero |
 | placeholder | a vault slot that keeps its place and its tab after the last unit leaves. It uses one slot until the player releases it (`bank release`) | ghost slot, empty slot, reserved slot |
+| drag mode | what a drop of one vault slot on another does: swap the two, or insert the dragged slot at the place of the other (`bank drag`, `bank swap`, `bank insert`) | rearrange mode, sort mode, move mode |
 | dock | the box of the game log or of the control panel. Both are HUD elements (`%ConsoleDock`, `%PanelDock`) | window, sidebar, drawer |
 | grip | the strip on an edge or a corner of a box that a drag resizes (`ResizeGrips`) | handle, resizer, border |
 | HUD element | a box over the world pane that the player places in the layout editor: a dock, the minimap, the vitals, the XP drops, the hover text, the performance view, or the ability rail (`HudElements`) | widget, frame, panel, component |
@@ -84,8 +94,20 @@ the name.
 | cue table | the file `godot/audio/cues.json`: each cue with its sound kind, sound clip and note, and the cue of each moment. `SoundCues` reads it, and the sound wizard writes it | sound table, SFX list, cue map |
 | sound kind | what a cue is: a sound effect (`sfx`) today, and music later. It sets the folder, the import settings and the bus (`assets/audio/kinds.py`) | sound type, audio category |
 | sound pack | one download of sound clips. It stays outside the repo, and `godot/audio/CREDITS.md` has one section for each | source, audio pack, SFX library |
-| sound wizard | the `add` command of `assets.audio`: it asks the questions of "To add a sound", then copies the sound clip and writes its `.import` file, its cue and its credits row | audio wizard, sound import script |
+| sound wizard | the `add` command of `assets.audio`: it asks the questions of "To add a sound", then copies the sound clip and writes its `.import` file, its cue and its credits row. For a track, it writes the source record, the served file, the credits row and the table row | audio wizard, sound import script |
+| track | one piece of music that the client plays: one row of the track table, with its area and its unlock rule (`world/music_tracks.py`) | song, music track, tune, theme |
+| track table | the file `world/tables/music_tracks.json`. The server reads it at start, and the sound wizard writes it | music table, track list, playlist |
+| master | the FLAC that Nick exports for a track. Its source record is `assets/sources/music_<key>/`, and git ignores the file | original, FLAC source, stem |
+| served track | the OGG of a track under `web/static/webclient/music/`. The client fetches it, as it fetches a model | music file, OGG, stream |
+| music handler | the `MusicHandler` of a character, the one writer of its unlocked tracks (`systems/gameplay/music/handler.py`) | track handler, unlock handler, music manager |
+| area hook | `Character._follow_area`: the compare of the area of the tile against the area that the session last saw, after each move and at login | area trigger, area watcher, border check |
+| unlock line | the chat line that a new track sends: `MSG_TRACK_UNLOCKED` | unlock message, unlock notice, track toast |
+| music player | the node of the Godot client that picks and plays a track (`MusicPlayer`, `godot/world/sound/music_player.gd`) | jukebox, audio player, music system |
+| music mode | one of Area, Shuffle, and Single, a setting of the device (`ClientSettings.music_mode`) | play mode, playlist mode, playback mode |
+| Music tab | the tab of the control panel that shows the mode, the track that plays, and the list (`MusicView`) | music pane, music panel, track list pane |
 | saved login | the login token and the account name that the Godot client keeps on one device (`SavedLogin`, `user://login.cfg`) | stored credentials, remembered login, auto-login |
+| free-look camera | the camera of a 3D view of the Godot editor while the right mouse button is held. W, A, S, D, Q, and E move it. Godot owns it | fly cam, freecam, fly mode |
+| fly speed | the speed of the free-look camera, in metres per second: the Editor Setting `editors/3d/freelook/freelook_base_speed`. The Fly field in the toolbar of the 3D editor sets it (`FlySpeedBar`) | camera speed, freelook speed, base speed, move speed |
 
 "Panel" and "pane" are two items. A panel is a band of the dossier on the
 server. A pane is a region of the client screen. A Godot node class such as
@@ -142,7 +164,7 @@ Blackout item: `PROJECTILE_COMBAT_AXES`, `projectile_strength_bonus`,
 | hitsplat | the damage number that the Godot client draws over a figure for one swing (`HitsplatLayer`) | damage number, damage popup, floating text, splat |
 | hitsplat style | the look of one kind of hitsplat: one `.tres` file in `godot/world/hitsplats/styles/` (`HitsplatStyle`) | hitsplat theme, hitsplat skin |
 | detail line | the small line under a max hit hitsplat that names the roll and a bonus or a penalty | subtitle, caption, breakdown |
-| face event | the event that says two entities turn to face each other, at the start of a fight, a talk, or a trade, and at each swing of a harvest (`blackout_face`, `FacePayload`) | engage, aggro, target lock, look-at |
+| face event | the event that says two entities turn to face each other, at the start of a fight, a talk, or a trade, and at each swing of a harvest (`blackout_face`, `FacePayload`). At a gathering attempt, it also carries the gathering action | engage, aggro, target lock, look-at |
 | mobile | an entity row that turns, to its step and to its fight: a character or an NPC (`EntityPool._mobile`) | mover, actor, creature |
 
 Guns and Ballistics are skill names, so they are identifiers. Guns decides
@@ -166,7 +188,8 @@ working name is open to Nick. These are the nouns for prose about the code.
 | sustain event | the one thing that a player does that gives an augment a free window | trigger, proc, refresh |
 | free window | the ticks after a sustain event in which an augment adds no drain | grace period, free ticks |
 | anneal | the discount on the drain of an augment that grows with its continuous activation, step by step, to a floor. A put-out resets it | ramp, commitment bonus |
-| step | the strength of one augment, from one to `AUG_STEPS`. Step 1 gives a part of the strength for the same part of the drain | tier, rank, level (of an augment) |
+| power level | the strength of one augment, from one to `AUG_POWER_LEVELS`. Power level 1 gives a part of the strength for the same part of the drain | step, tier, rank, level alone (of an augment) |
+| power shift | a light of an augment that burns already, at a new power level. It rerolls a roll augment | re-step, relevel |
 | flick | a swing that resolves with an augment lit for one tick, and a put-out on the next | prayer flick, tick flick |
 | socket | one place in the rig that holds one augment. The sockets are the parts of the body | slot, mod slot |
 | rig | the sockets of a character, and the pop-up that shows them | loadout, build screen |
@@ -281,7 +304,7 @@ served place, and stand-in.
 | clip list | the file that names the clips that the figure workbench takes from one source (`blackout/assets/figure/clips/<source_id>.json`) | animation import config, retarget recipe |
 | grip | the rest rotation of a hand socket: a held item has its length along +Y of the socket | hand offset, weapon rotation |
 | probe | the test item that the clearance check of the figure workbench holds in each hand | test sword, dummy weapon |
-| item catalog | the generated file that gives the figure workbench each item with a slot, and each slot (`godot/addons/blackout_figure/item_catalog.json`) | item table, gear list, item export |
+| item catalog | the generated file that gives the figure workbench each item with a slot, and each slot (`godot/addons/blackout_figure/data/item_catalog.json`) | item table, gear list, item export |
 | outfit | the worn record of the figure workbench: the item that each stand wears in each slot | loadout, preview gear, test outfit |
 | outfit bar | the part of the Figure dock with one cell for each slot of the outfit | slot bar, gear bar, paper doll |
 | prism | the shape of a shape list that is a tapered block with flat faces (`SHAPE_PRISM`). The bodies and the slot shapes use it | block, frustum, low-poly mesh |
@@ -297,7 +320,8 @@ served place, and stand-in.
 | base | the worn look whose parts a tier draws (`base`) | parent look, template look |
 | stance table | the file that gives each tool type its clip set (`godot/world/figure/stances.json`) | animation table, stance config |
 | clip set | the clip of each action, for one stance or for a figure with no stance | animation set, clip group |
-| action | what a figure does, as the key of one clip in a clip set: `idle`, `walk`, `run`, `attack`, or an attack action | animation state, move, pose name |
+| action | what a figure does, as the key of one clip in a clip set: `idle`, `walk`, `run`, `attack`, an attack action, or a gathering action | animation state, move, pose name |
+| gathering action | the action that the server names for one gathering attempt: `gather_<hands>_<skill>`, for example `gather_one_hand_cutting` (`figure_action` of `blackout_face`). A gathering action with no clip plays nothing | gather animation, chop clip, harvest motion |
 | attack action | the action that the server names for one swing: `attack_<hands>_<attack type>`, for example `attack_one_hand_slash` (`figure_action` of `blackout_combat`). An attack action with no clip plays the clip of `attack` | swing animation, attack clip, motion |
 | hands | how an attacker holds what it swings: `unarmed`, `one_hand`, or `two_hands`. The slot of the held weapon gives it (`attack_hands`) | grip, handedness, wield type |
 | kit part | a worn look that is one choice of a character and no item: a hair shape, a head, a beard. Its file has a `kit` key | cosmetic, style, hair model |
@@ -382,7 +406,7 @@ a room.
 | preview | the asset key and the family of the entity that an object kind stands up. Only the terrain editor reads it, to draw the model on the tile | editor model, thumbnail |
 | tile sync stamp | the digest of each chunk file at the last tile sync, in `blackout/server/tile_sync_state.json` | sync marker, sync log |
 | link | where a transition or a climb leads. The terrain editor draws it | connection, portal line |
-| ghost | the dim copy of a plane other than the edited plane, in the terrain editor. The planes below show as a ghost, and the planes above can | shadow, underlay, onion skin |
+| ghost | the see-through copy of a plane other than the edited plane, in the terrain editor, at the ghost opacity of the World tab. The planes below and the planes above can each show as a ghost | shadow, underlay, onion skin |
 | beacon | the tall mark in the terrain editor over the selected object or the tile of a finding | marker, highlight |
 | structure | a building or a wall that the Build tools make from walls, floor types, planes, climbs, and roofs (DESIGN-0013) | building object, WMO, prefab |
 | structure editor | the Build tab of the terrain editor | building editor, construction mode |

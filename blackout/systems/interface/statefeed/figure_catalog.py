@@ -32,6 +32,9 @@ Description: Render the item catalog of the figure workbench.
                  npcs            [{key, name, outfit}, ...], sorted by key
                  attack_actions  each action that a swing can name,
                                  sorted
+                 gathering_actions
+                                 each action that a gathering attempt
+                                 can name, sorted
 
              `clears` names each other slot that an item in this slot
              empties (SLOT_CONFLICTS). The outfit bar of the workbench
@@ -53,6 +56,12 @@ Description: Render the item catalog of the figure workbench.
              shows one row for each, so the author gives each one a clip.
              The same two reads name the action of a live swing
              (events._figure_action).
+
+             `gathering_actions` is each action that a gathering attempt can
+             name (11/10/2026): the hands of the tool, or `unarmed` at a node
+             that allows bare hands, with the skill key. The Clips tab shows
+             one row for each. GatheringSkill.figure_action names the action
+             of a live attempt with the same reads.
 
              THE STANCE TABLE (Phase W5) is a file of the Godot project that
              names a server fact: each stance has a tool_type as its key.
@@ -100,7 +109,8 @@ _REPO_ROOT: str = os.path.dirname(_GAME_DIR)
 
 # Where the catalog goes: beside the plugin that reads it.
 _OUTPUT_PATH: str = os.path.join(
-    _REPO_ROOT, "godot", "addons", "blackout_figure", "item_catalog.json")
+    _REPO_ROOT, "godot", "addons", "blackout_figure", "data",
+    "item_catalog.json")
 
 # The figure directory of the Godot project: the stance table, and one clip
 # file for each clip. The figure workbench writes the two.
@@ -250,6 +260,61 @@ def _swing_kinds() -> set:
     return kinds
 
 
+def _gathering_kinds() -> set:
+    """
+    Purpose: Give each pair of hands and gathering skill that a gathering
+    attempt can have.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a set of (hands, skill key) tuples.
+
+    Module Globals:
+        ITEM_DB, combat_const.ATTACK_HANDS_UNARMED read.
+
+    Methodology:
+        GatheringSkill.find_tool gives the tool of an attempt. Thus, each
+        item with a tool type of the skill gives the hands of its slot. An
+        attempt with no tool is possible only at a node that allows bare
+        hands, so each such node gives the unarmed pair of each skill that
+        it yields to.
+
+        The imports are local. The skill registry imports each skill module
+        while it builds, and two modules of the feed import this module.
+
+    Author: Nick Hobar
+    Creation date: 11/10/2026
+    """
+    from systems.gameplay.progression.skills.gatherables import (
+        GATHERABLE_REGISTRY,
+    )
+    from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+    from systems.gameplay.progression.skills.skill_defs.gathering.gathering_skill import (
+        GatheringSkill,
+    )
+
+    unarmed = combat_const.ATTACK_HANDS_UNARMED
+    kinds = set()
+
+    for skill_class in SKILL_REGISTRY.values():
+        if not issubclass(skill_class, GatheringSkill):
+            continue
+
+        kinds.update((combat_const.attack_hands(item_def.use_slot), skill_class.key)
+                     for item_def in ITEM_DB.values()
+                     if item_def.tool_type in skill_class.tool_types)
+
+    for gatherable_def in GATHERABLE_REGISTRY.values():
+        if not gatherable_def.bare_hands:
+            continue
+
+        kinds.update((unarmed, skill_key) for skill_key in gatherable_def.skill_keys())
+
+    return kinds
+
+
 # ─── Public interface ────────────────────────────────────────────────────────
 
 def tool_types() -> list:
@@ -306,6 +371,37 @@ def attack_actions() -> list:
     template = const.FIGURE_ATTACK_ACTION_TEMPLATE
     found = {template.format(hands=hands, attack_type=attack_type)
              for hands, attack_type in _swing_kinds()}
+
+    return sorted(found)
+
+
+def gathering_actions() -> list:
+    """
+    Purpose: Give each action that a gathering attempt can name for a
+    figure.
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns a sorted list of names, for example gather_one_hand_cutting.
+
+    Module Globals:
+        const.FIGURE_GATHERING_ACTION_TEMPLATE read.
+
+    Methodology:
+        The template and combat_const.attack_hands give the spelling, as
+        they do for a live attempt (GatheringSkill.figure_action). The Clips
+        tab of the workbench shows one row for each name. The stance check
+        refuses a gathering action of the stance table that no attempt
+        names.
+
+    Author: Nick Hobar
+    Creation date: 11/10/2026
+    """
+    template = const.FIGURE_GATHERING_ACTION_TEMPLATE
+    found = {template.format(hands=hands, skill=skill_key)
+             for hands, skill_key in _gathering_kinds()}
 
     return sorted(found)
 
@@ -402,8 +498,8 @@ def build() -> dict:
         No conditions.
 
     Exit/Returns:
-        Returns {format, slots, items, tool_types, npcs, attack_actions}.
-        The module docstring gives each key.
+        Returns {format, slots, items, tool_types, npcs, attack_actions,
+        gathering_actions}. The module docstring gives each key.
 
     Module Globals:
         _FORMAT read.
@@ -418,6 +514,7 @@ def build() -> dict:
         "tool_types": tool_types(),
         "npcs": _npc_rows(),
         "attack_actions": attack_actions(),
+        "gathering_actions": gathering_actions(),
     }
 
     return catalog

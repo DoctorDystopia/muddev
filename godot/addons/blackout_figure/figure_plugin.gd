@@ -7,7 +7,7 @@ extends FigureEditorBase
 ## `res://addons/blackout_figure/figure_workbench.tscn` and select the
 ## [FigureWorkbench] node to start. The panel is [FigureDock]. The rules
 ## live in the scripts under `edits/` and in the other `Figure*` classes,
-## and the `tests/test_figure_*.tscn` scenes test them with no editor.
+## and the `test_figure_*.tscn` scenes under `tests/` test them with no editor.
 ##
 ## [FigureEditorBase] keeps the editor contract: the dock, the selection,
 ## the hint, the save, and the jobs. This script gives the dock, the
@@ -198,7 +198,7 @@ func _refresh_clips() -> void:
 	clips_panel.set_clips(_bench.clips)
 	clips_panel.set_clip_lists(_bench.store.clip_lists, source_clips)
 	clips_panel.set_stances(_bench.store.stances(), _bench.catalog.tool_types(),
-		_bench.stance_of_outfit(), _bench.catalog.attack_actions())
+		_bench.stance_of_outfit(), _bench.catalog.server_actions())
 
 
 # ─── The selection ──────────────────────────────────────────────────────────

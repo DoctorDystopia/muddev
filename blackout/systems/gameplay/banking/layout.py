@@ -26,6 +26,11 @@ Description: The vault layout: the tabs, the order of the slots in each tab,
              left becomes a placeholder or loses its slot. So an item that
              reaches the vault by any route gets a slot, and the layout can
              never show an item that is not there.
+
+             THE DRAG MODE (11/09/2026). The layout also keeps what a drop of
+             one slot on another does: swap() or insert(). The pop-up reads
+             it to pick the command that a drop sends. A typed `bank swap`
+             or `bank insert` does not read it.
 """
 
 from dataclasses import dataclass, field
@@ -50,6 +55,8 @@ class VaultLayout:
     viewed            - the tab the player looks at. A new item name goes into
                         this tab.
     keep_placeholders - True when the last unit to leave leaves a placeholder.
+    drag_mode         - one of bank_const.DRAG_MODES: what a drop of one slot
+                        on another does.
     """
 
     tabs: list = field(default_factory=lambda: [[]])
@@ -57,6 +64,7 @@ class VaultLayout:
     meta: dict = field(default_factory=dict)
     viewed: int = bank_const.MAIN_TAB
     keep_placeholders: bool = bank_const.PLACEHOLDERS_DEFAULT
+    drag_mode: str = bank_const.DRAG_MODE_DEFAULT
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -261,8 +269,14 @@ def from_record(record) -> VaultLayout:
         viewed = bank_const.MAIN_TAB
 
     keep = record.get(bank_const.RECORD_KEEP, bank_const.PLACEHOLDERS_DEFAULT)
+    drag_mode = record.get(bank_const.RECORD_DRAG, bank_const.DRAG_MODE_DEFAULT)
 
-    return VaultLayout(tabs, names, meta, viewed, bool(keep))
+    # A record from before the drag modes has no field. A mode that a later
+    # build removed is not a mode. Both swap.
+    if drag_mode not in bank_const.DRAG_MODES:
+        drag_mode = bank_const.DRAG_MODE_DEFAULT
+
+    return VaultLayout(tabs, names, meta, viewed, bool(keep), drag_mode)
 
 
 def to_record(layout: VaultLayout) -> dict:
@@ -274,6 +288,7 @@ def to_record(layout: VaultLayout) -> dict:
                                  for name, entry in layout.meta.items()},
         bank_const.RECORD_VIEWED: int(layout.viewed),
         bank_const.RECORD_KEEP: bool(layout.keep_placeholders),
+        bank_const.RECORD_DRAG: str(layout.drag_mode),
     }
 
 
@@ -448,6 +463,75 @@ def swap(layout: VaultLayout, first: str, second: str) -> bool:
     layout.tabs[second_tab][second_index] = first
 
     return True
+
+
+def insert(layout: VaultLayout, source: str, target: str) -> bool:
+    """
+    Purpose: Put one slot at the place of another, as the OSRS "Insert"
+             rearrange mode does.
+
+    Entry:
+        layout - the layout to change.
+        source - the slot name that moves.
+        target - the slot name whose place it takes.
+
+    Exit/Returns:
+        Returns True when the slot moved.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Refuse a name with no slot, and a slot on itself.
+        2. Take the source out of its tab.
+        3. Put it in the tab of the target, at the index that the target had
+           before step 2. In one tab, the slots between the two move one
+           place toward the gap. Across two tabs, the target and the slots
+           after it move one place to the right.
+        4. Remove a tab that the move made empty.
+
+    Notes/References:
+        Step 3 uses the index from before the removal on purpose. A forward
+        move in one tab then puts the source at the place of the target, and
+        the target moves one place back. Thus, a drop always lands where the
+        player let go.
+
+    Author: Nick Hobar
+    Creation date: 11/09/2026
+    """
+    source_tab, source_index = _position_of(layout, source)
+    target_tab, target_index = _position_of(layout, target)
+
+    if source_tab < 0 or target_tab < 0 or source == target:
+        return False
+
+    del layout.tabs[source_tab][source_index]
+    layout.tabs[target_tab].insert(target_index, source)
+    _drop_empty_tabs(layout)
+
+    return True
+
+
+def set_drag_mode(layout: VaultLayout, mode: str) -> bool:
+    """Pick what a drop of one slot on another does. Returns False for a
+    word that is not in bank_const.DRAG_MODES."""
+    if mode not in bank_const.DRAG_MODES:
+        return False
+
+    layout.drag_mode = mode
+
+    return True
+
+
+def next_drag_mode(mode: str) -> str:
+    """Return the drag mode after `mode` in bank_const.DRAG_MODES, the last
+    back to the first. A word that is not a mode gives the default."""
+    modes = bank_const.DRAG_MODES
+
+    if mode not in modes:
+        return bank_const.DRAG_MODE_DEFAULT
+
+    return modes[(modes.index(mode) + 1) % len(modes)]
 
 
 def clean_tab_name(text: str) -> str:

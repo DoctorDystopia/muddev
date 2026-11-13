@@ -1,0 +1,48 @@
+{
+	"compiler_version": 18,
+	"cues": {
+		"begin": "3"
+	},
+	"format": 1,
+	"lines": {
+		"1": {
+			"id": "1",
+			"next_id": "2",
+			"type": ""
+		},
+		"2": {
+			"id": "2",
+			"next_id": "3",
+			"type": "cue"
+		},
+		"3": {
+			"character": "Guard",
+			"id": "3",
+			"next_id": "4",
+			"static_id": "",
+			"text": "Hello.",
+			"type": "dialogue"
+		},
+		"4": {
+			"id": "4",
+			"is_snippet": false,
+			"next_id": "end",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"5": {
+			"id": "5",
+			"next_id": "6",
+			"type": ""
+		},
+		"6": {
+			"id": "6",
+			"is_snippet": false,
+			"next_id": "end",
+			"next_id_after": "",
+			"type": "goto"
+		}
+	},
+	"source": "no_start.dialogue",
+	"source_sha256": "2e00d6be5c75811a691a4d2ca1fe8f78412eaf9e2b29e3940021e97d19aa4f3f"
+}

@@ -34,6 +34,7 @@ from commands.consumable_cmds import ConsumableCmdSet
 from commands.inventory_cmds import InventoryCmdSet
 from commands.login_cmds import CmdForget, CmdRemember, CmdUnconnectedResume
 from commands.movement_cmds import MovementCmdSet
+from commands.music_cmds import MusicCmdSet
 from commands.progression_cmds import ProgressionCmdSet
 from commands.quest_cmds import QuestCmdSet
 from commands.read_cmds import ReadCmdSet
@@ -59,6 +60,7 @@ class CharacterCmdSet(default_cmds.CharacterCmdSet):
         #
         self.add(ProgressionCmdSet())
         self.add(QuestCmdSet())
+        self.add(MusicCmdSet())
         self.add(ExterminatorCmdSet())
         self.add(EquipmentCmdSet())
         self.add(InventoryCmdSet())

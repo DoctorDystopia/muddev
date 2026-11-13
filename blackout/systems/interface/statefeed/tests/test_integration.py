@@ -503,6 +503,33 @@ class TestFaceFeed(EvenniaTest):
 
         self.assertEqual(self._pairs(events), {(self.char1.id, target.id)})
 
+    def test_the_face_event_of_a_fight_names_no_action(self):
+        # The swing names its own action on CHANNEL_COMBAT. A second one on
+        # the face event would play the clip of the swing two times.
+        target = spawn_npc("mutant_raider", self.room1)
+
+        recorder = self._attack(self.char1, target)
+        events = recorder.of_type(FacePayload)
+
+        self.assertTrue(events)
+        self.assertEqual({event.figure_action for event in events}, {""})
+
+    def test_a_face_event_carries_the_action_it_is_given(self):
+        # A gathering attempt gives its action. The client plays its clip.
+        pole = create_object(RustyPole, key="rusty pole", location=self.room1)
+        action = figure_catalog.gathering_actions()[0]
+        recorder = _FeedRecorder()
+
+        with mock.patch("systems.interface.statefeed.events.emit", recorder):
+            with mock.patch("systems.interface.statefeed.events.emit_to_room",
+                            return_value=0):
+                events.emit_face(self.char1, pole, figure_action=action)
+
+        sent = recorder.of_type(FacePayload)
+
+        self.assertTrue(sent)
+        self.assertEqual({payload.figure_action for payload in sent}, {action})
+
     def test_the_face_event_comes_before_any_swing(self):
         # The client turns the two on the face event, a tick before the
         # first swing. An event that waited for the tick would turn them

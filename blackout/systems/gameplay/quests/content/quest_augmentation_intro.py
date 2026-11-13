@@ -18,9 +18,10 @@ need and is sympathetic.
 Design lives in the Obsidian vault, not here:
     03_Systems/Skills/Combat Skills/Augmentation_Skill.md
 
-The two dialogues are world/npc_dialogues/aug_clinic_1.py and
-aug_hospital_1.py. This module owns only what is TRUE about the quest: its
-steps, what satisfies them, and what it pays.
+The two dialogues are dialogue scripts (DESIGN-0017):
+godot/dialogue/aug_clinic_1.dialogue and aug_hospital_1.dialogue. This
+module owns only what is TRUE about the quest: its steps, what satisfies
+them, and what it pays.
 """
 
 from world.item_database import ITEM_DB

@@ -29,6 +29,7 @@ const CH_CHAR_COMBAT := "char_combat"
 const CH_CHAR_POPUP := "char_popup"
 const CH_CHAR_CHAT := "char_chat"
 const CH_CHAR_ABILITIES := "char_abilities"
+const CH_CHAR_MUSIC := "char_music"
 const CH_COMBAT := "blackout_combat"
 const CH_FACE := "blackout_face"
 const CH_AURA := "blackout_aura"
@@ -85,6 +86,8 @@ const MOMENT_GUNS_SHOT := "guns_shot"
 const MOMENT_MELEE_SWING := "melee_swing"
 const MOMENT_SHOP_BUY := "shop_buy"
 const MOMENT_SHOP_SELL := "shop_sell"
+const MOMENT_AMPLIFY := "amplify"
+const MOMENT_GRAFT := "graft"
 
 # Text routing -- what a line of game text is ABOUT. Which tab shows it is the client's own.
 const MESSAGE_TYPE_KEY := "type"
@@ -121,7 +124,7 @@ const CHUNK_FORMAT_VERSION := 2
 const CHUNK_FORMAT_PLAIN_WALLS := 1
 const CHUNK_SIZE := 64
 const CHUNK_CORNERS_PER_SIDE := 65
-const CHUNK_PLANE_MAX := 3
+const CHUNK_PLANE_MAX := 7
 const CHUNK_HEIGHT_MIN := -32768
 const CHUNK_HEIGHT_MAX := 32767
 const CHUNK_ROTATION_COUNT := 4
@@ -221,9 +224,9 @@ const TILE_CHECK_SPAWN_ITEM := "spawn_item"
 
 # What the terrain editor paints and places. The order is
 # the order of each table under world/.
-const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void"]
+const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void", "tile", "rusty_sand"]
 const TILE_ROOF_FLOOR_TYPES := ["roof_sheet_metal", "roof_tile", "roof_concrete"]
-const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta"]
+const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta", "rusty_shore", "wastes_desert"]
 const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_link", "rubble"]
 const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "item_spawn", "landmark", "npc", "sign", "transition"]
 const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable", "spawn_table", "spawn_item"]
@@ -237,15 +240,20 @@ const OBJECT_KINDS := {
 	"curing_chamber": "facility",
 	"gunsmith_bench": "facility",
 	"gastronomy_worktable": "facility",
+	"restore_point": "facility",
+	"locus": "facility",
 	"rusty_pole": "gathering",
 	"metal_pole": "gathering",
 	"copper_pole": "gathering",
+	"manganese_pole": "gathering",
 	"lone_android": "npc",
 	"shopkeeper_oasis": "npc",
 	"shopkeeper_al_wasta": "npc",
 	"shopkeeper_ephiri": "npc",
 	"atticus_quin": "npc",
 	"atum_musa": "npc",
+	"npc_aug_clinic_1": "npc",
+	"npc_aug_hospital_1": "npc",
 	"mutant_raider": "npc",
 	"big_mutant": "npc",
 	"bong": "npc",
@@ -328,15 +336,20 @@ const OBJECT_KIND_PREVIEW := {
 	"curing_chamber": ["curing_chamber", "station"],
 	"gunsmith_bench": ["gunbench", "station"],
 	"gastronomy_worktable": ["gastro_worktable", "station"],
+	"restore_point": ["augbot", "station"],
+	"locus": ["augmentation_locus", "station"],
 	"rusty_pole": ["rusty_pole", "gatherable"],
 	"metal_pole": ["metal_pole", "gatherable"],
 	"copper_pole": ["copper_pole", "gatherable"],
+	"manganese_pole": ["manganese_pole", "gatherable"],
 	"lone_android": ["lone_android", "npc"],
 	"shopkeeper_oasis": ["shopkeeper", "npc"],
 	"shopkeeper_al_wasta": ["shopkeeper_al_wasta", "npc"],
 	"shopkeeper_ephiri": ["shopkeeper_ephiri", "npc"],
 	"atticus_quin": ["talkative_npc", "npc"],
 	"atum_musa": ["atum_musa", "npc"],
+	"npc_aug_clinic_1": ["talkative_npc", "npc"],
+	"npc_aug_hospital_1": ["talkative_npc", "npc"],
 	"mutant_raider": ["mutant_raider", "npc"],
 	"big_mutant": ["big_mutant", "npc"],
 	"bong": ["bong", "npc"],
@@ -376,13 +389,22 @@ const ABILITY_STATE_ACTIVE := "active"
 const ABILITY_STATE_LOCKED := "locked"
 const ABILITY_KIND_TOGGLE := "toggle"
 const ABILITY_KIND_SET := "set"
-const ABILITY_STEP_KEY := "step"
-const ABILITY_STEPS_KEY := "steps"
-const ABILITY_STEP_COMMAND_KEY := "step_command"
+const ABILITY_POWER_LEVEL_KEY := "power_level"
+const ABILITY_POWER_LEVELS_KEY := "power_levels"
+const ABILITY_POWER_LEVEL_COMMAND_KEY := "power_level_command"
 const ABILITY_NOTE_KEY := "note"
 const TIP_KEY := "tip"
 const TIP_TITLE_KEY := "title"
 const TIP_LINES_KEY := "lines"
+const MUSIC_AREA_KEY := "area"
+const MUSIC_ROWS_KEY := "rows"
+const MUSIC_ROW_KEY := "key"
+const MUSIC_ROW_NAME := "name"
+const MUSIC_ROW_AREA := "area"
+const MUSIC_ROW_STATE := "state"
+const MUSIC_ROW_HINT := "hint"
+const MUSIC_STATE_LOCKED := "locked"
+const MUSIC_STATE_UNLOCKED := "unlocked"
 const ENTITY_SPENT_KEY := "spent"
 const ENTITY_FACING_KEY := "facing"
 const ENTITY_LOOK_KEY := "look"
@@ -403,6 +425,8 @@ const DRAG_TARGET_TOKEN := "{target}"
 const CLIENT_INBOUND_BUFFER_BYTES := 4194304
 const WORLD_MAP_ALPHABET := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 const WORLD_MAP_COMMAND := "worldmap"
+const RIG_COMMAND := "rig"
+const POPUP_LAYOUT_RIG := "rig"
 const LOGIN_ACCOUNT_KEY := "account"
 const LOGIN_TOKEN_KEY := "token"
 const LOGIN_RESUME_TEMPLATE := "resume {account} {token}"
@@ -411,6 +435,6 @@ const FORGET_COMMAND := "forget"
 
 # Derived sets, so a client can iterate rather than
 # rebuild these from the names above.
-const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_face", "blackout_moment", "blackout_tick_perf", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_abilities", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
+const SUBSCRIBABLE_CHANNELS := ["blackout_aura", "blackout_chunk", "blackout_combat", "blackout_face", "blackout_moment", "blackout_tick_perf", "blackout_walk", "blackout_world_map", "blackout_world_map_chunk", "blackout_xp", "char_abilities", "char_avatar", "char_chat", "char_combat", "char_items_list", "char_music", "char_popup", "char_quests", "char_skills", "char_status", "char_summary", "char_vitals", "room_add_player", "room_info", "room_players", "room_players_delta", "room_remove_player"]
 const ITEM_FAMILIES := ["armor", "corpse", "crafting_material", "crafting_tool", "currency", "food", "jewellery", "weapon"]
 const MESSAGE_TYPES := ["channel", "combat", "commerce", "crafting", "dialogue", "examine", "gathering", "general", "help", "inventory", "look", "menu", "move", "page", "pose", "progression", "quest", "room", "say", "system", "teleport", "vitals", "whisper", "xymap"]

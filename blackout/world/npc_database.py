@@ -255,8 +255,11 @@ class NpcDef:
         "hostile if it has a combat block, else talkative".
         desc is what `look` shows. The NPC reads it live through its def.
         asset_key names the model record. None means the key itself.
-        dialogue names a module in DIALOGUE_PACKAGE. None means that the NPC
-        has nothing to say.
+        dialogue names a dialogue module in DIALOGUE_PACKAGE.
+        dialogue_script names a dialogue script by the key of its compiled
+        script. See systems/gameplay/dialogue/loader.py.
+        A def names one of the two at most.
+        With neither, the NPC has nothing to say.
         shop_key names a ShopDef in world/shop_defs. A shopkeep needs one.
         preceptor_key names a PreceptorDef. A Preceptor needs one.
         combat is the combat block. None means that the NPC cannot fight.
@@ -287,7 +290,7 @@ class NpcDef:
 
     Author: Nick Hobar
     Creation date: 07/30/2026. One def for every NPC: 10/09/2026.
-    The outfit: 10/13/2026.
+    The outfit: 10/13/2026. The dialogue script: 11/11/2026.
     """
 
     key: str
@@ -296,6 +299,7 @@ class NpcDef:
     desc: str = ""
     asset_key: str | None = None
     dialogue: str | None = None
+    dialogue_script: str | None = None
     shop_key: str | None = None
     preceptor_key: str | None = None
     combat: NpcCombat | None = None

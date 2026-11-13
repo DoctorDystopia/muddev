@@ -25,12 +25,14 @@ VERB_TABS: str = "tabs"
 VERB_VIEW: str = "view"
 VERB_MOVE: str = "move"
 VERB_SWAP: str = "swap"
+VERB_INSERT: str = "insert"
 VERB_NAME: str = "name"
 VERB_PLACEHOLDERS: str = "placeholders"
 VERB_RELEASE: str = "release"
+VERB_DRAG: str = "drag"
 
-# The separator between the two sides of `move`, `swap` and `name`. An `=`,
-# the Evennia habit, because an item name can hold spaces.
+# The separator between the two sides of `move`, `swap`, `insert` and `name`.
+# An `=`, the Evennia habit, because an item name can hold spaces.
 ARG_SEPARATOR: str = "="
 
 # The target of `move` that makes a tab. A number names a tab that exists.
@@ -63,6 +65,14 @@ TAB_NAME_EXTRA_CHARACTERS: str = " '-_.&!?#+()"
 # `bank placeholders off`.
 PLACEHOLDERS_DEFAULT: bool = True
 
+# The drag modes: what a drop of one vault slot on another does. Each mode is
+# the verb that the drop sends, so `bank drag insert` makes a drop send
+# `bank insert`. The OSRS bank calls this "Rearrange mode". The order is the
+# order of the footer button: a click picks the next mode. A new vault swaps,
+# as in OSRS and as the vault did before the modes.
+DRAG_MODES: tuple = (VERB_SWAP, VERB_INSERT)
+DRAG_MODE_DEFAULT: str = VERB_SWAP
+
 # The fields of the stored layout record. The record is a plain dict in one
 # Attribute, so its keys are named once.
 RECORD_TABS: str = "tabs"
@@ -70,6 +80,7 @@ RECORD_NAMES: str = "names"
 RECORD_META: str = "meta"
 RECORD_VIEWED: str = "viewed"
 RECORD_KEEP: str = "keep_placeholders"
+RECORD_DRAG: str = "drag_mode"
 
 # The fields of one meta entry: the display key, the prototype key the
 # placeholder draws its mesh from, and whether the slot is a placeholder now.
@@ -85,6 +96,17 @@ MOVE_TEMPLATE: str = (
     f"{BANK_COMMAND_KEY} {VERB_MOVE} {{source}} {ARG_SEPARATOR} {{target}}")
 SWAP_TEMPLATE: str = (
     f"{BANK_COMMAND_KEY} {VERB_SWAP} {{source}} {ARG_SEPARATOR} {{target}}")
+INSERT_TEMPLATE: str = (
+    f"{BANK_COMMAND_KEY} {VERB_INSERT} {{source}} {ARG_SEPARATOR} {{target}}")
+DRAG_TEMPLATE: str = f"{BANK_COMMAND_KEY} {VERB_DRAG} {{mode}}"
+
+# The template of a drop on a slot, for each drag mode. Every mode in
+# DRAG_MODES has a row.
+DROP_ON_SLOT_TEMPLATES: dict = {
+    VERB_SWAP: SWAP_TEMPLATE,
+    VERB_INSERT: INSERT_TEMPLATE,
+}
+
 NAME_TEMPLATE: str = (
     f"{BANK_COMMAND_KEY} {VERB_NAME} {{index}} {ARG_SEPARATOR} {{text}}")
 CLEAR_NAME_TEMPLATE: str = f"{BANK_COMMAND_KEY} {VERB_NAME} {{index}}"

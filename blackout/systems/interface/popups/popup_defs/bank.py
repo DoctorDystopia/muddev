@@ -29,6 +29,11 @@ Description: The bank pop-up: the vault in one grid, its tabs above it, and
              THE SECTION NAMES (10/19/2026). Each tab button also sends a
              heading: the name of the tab, or "Tab 2" when it has no name.
              The client draws it over the slots of that tab in the main view.
+
+             THE DRAG MODE (11/09/2026). The drop-on-a-slot template is the
+             swap or the insert line, as the layout's drag mode says. A
+             footer button sends `bank drag <next mode>`. Thus, the client
+             fills one template as before and knows no mode.
 """
 
 from items.inventory.handler import SLOTS_TOTAL
@@ -38,6 +43,7 @@ from systems.gameplay.banking.handler import BANK_MAX_UNIQUE_KEYS
 from typeclasses.bank_nodes import DEPOSIT_COMMAND_KEY, WITHDRAW_COMMAND_KEY
 from world.item_database import ITEM_DB
 
+from systems.interface.popups import constants as popup_const
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed.serializers import _classify, _item_family
 
@@ -83,7 +89,7 @@ GRID_DRAG_FIELD: str = "drag"
 DRAG_ONTO_SLOT: str = "onto_slot"
 DRAG_ONTO_TAB: str = "onto_tab"
 ROW_TAB_FIELD: str = "tab"
-ROW_DRAG_KEY_FIELD: str = "drag_key"
+ROW_DRAG_KEY_FIELD: str = popup_const.ROW_DRAG_KEY_FIELD
 ROW_PLACEHOLDER_FIELD: str = "placeholder"
 TAB_HEADING_FIELD: str = "heading"
 
@@ -117,6 +123,14 @@ PLACEHOLDER_QUANTITY: int = 0
 LABEL_PLACEHOLDERS_ON: str = "Placeholders: On"
 LABEL_PLACEHOLDERS_OFF: str = "Placeholders: Off"
 LABEL_RELEASE_ALL: str = "Release all placeholders"
+
+# The label of the drag mode button, for each drag mode. The label names the
+# ACTIVE mode, as the placeholder button does. Every mode in
+# bank_const.DRAG_MODES has a row.
+LABEL_DRAG_MODE: dict = {
+    bank_const.VERB_SWAP: "Drag: Swap",
+    bank_const.VERB_INSERT: "Drag: Insert",
+}
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -513,22 +527,28 @@ class BankPopup(BasePopup):
         vault[GRID_TABS_FIELD] = _tab_buttons(current, groups)
         vault[GRID_VIEW_FIELD] = current.viewed
         vault[GRID_SEARCH_FIELD] = True
+        onto_slot = bank_const.DROP_ON_SLOT_TEMPLATES[current.drag_mode]
         vault[GRID_DRAG_FIELD] = {
-            DRAG_ONTO_SLOT: bank_const.SWAP_TEMPLATE,
+            DRAG_ONTO_SLOT: onto_slot,
             DRAG_ONTO_TAB: bank_const.MOVE_TEMPLATE,
         }
 
         return [vault]
 
     def actions(self, caller, anchor) -> list:
-        """The footer: the placeholder switch, and Release all when any
-        placeholder exists."""
+        """The footer: the placeholder switch, the drag mode, and Release all
+        when any placeholder exists."""
         current = caller.bank.layout()
         keep = current.keep_placeholders
         switch = bank_const.SWITCH_OFF_WORD if keep else bank_const.SWITCH_ON_WORD
         label = LABEL_PLACEHOLDERS_ON if keep else LABEL_PLACEHOLDERS_OFF
         command = _fill(bank_const.PLACEHOLDERS_TEMPLATE, switch=switch)
-        buttons = [{"label": label, "command": command}]
+        next_mode = vault_layout.next_drag_mode(current.drag_mode)
+        drag_command = _fill(bank_const.DRAG_TEMPLATE, mode=next_mode)
+        buttons = [
+            {"label": label, "command": command},
+            {"label": LABEL_DRAG_MODE[current.drag_mode], "command": drag_command},
+        ]
 
         if vault_layout.placeholder_names(current):
             release_all = _fill(bank_const.RELEASE_TEMPLATE,

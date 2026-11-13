@@ -401,6 +401,87 @@ class CopperShortbowRecipe(BlackoutRecipe):
 
 
 
+class CopperArrowRecipe(BlackoutRecipe):
+    """Cut and head ten arrows from one piece of scrap copper.
+
+    The copper_arrow ItemDef had no recipe, no shop, and no drop. The
+    arrow ladder follows the bow ladder: the level is the level of the
+    copper shortbow, and the XP is the XP of every arrow recipe.
+    """
+
+    name = "copper arrow"
+    category = CRAFT_CATEGORY_GUNSMITH
+    required_skill = skill_constants.SKILL_KEY_GUNSMITH
+    required_level = 20
+    xp_reward = 15
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper"]
+    consumable_names = ["scrap copper"]
+
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
+
+    output_item_keys = ["copper_arrow"] * 10
+
+    success_message = "You cut and head a bundle of ten copper arrows."
+
+
+
+# -------------------------------
+# --- MANGANESE METAL RECIPES ---
+# -------------------------------
+
+class ManganeseShortbowRecipe(BlackoutRecipe):
+    """Build the tier 4 bow at a Gunsmith Bench.
+
+    The string tier follows the metal tier one for one. Manganese takes the
+    giant prime sinew, which cures from the giant prime raw hide at Curing
+    30. That hide comes off the giant at Butchery 30, the level of the
+    manganese pole.
+    """
+
+    name = "manganese shortbow"
+    category = CRAFT_CATEGORY_GUNSMITH
+    required_skill = skill_constants.SKILL_KEY_GUNSMITH
+    required_level = 30
+    xp_reward = 70
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "mutant_giant_prime_sinew"]
+    consumable_names = ["scrap manganese", "mutant giant prime sinew"]
+
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
+
+    output_item_keys = ["manganese_shortbow"]
+
+    success_message = "You bend the manganese to a curve and string it with giant prime sinew."
+
+
+
+class ManganeseArrowRecipe(BlackoutRecipe):
+    "Cut and head ten arrows from one piece of scrap manganese."
+
+    name = "manganese arrow"
+    category = CRAFT_CATEGORY_GUNSMITH
+    required_skill = skill_constants.SKILL_KEY_GUNSMITH
+    required_level = 30
+    xp_reward = 15
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese"]
+    consumable_names = ["scrap manganese"]
+
+    tool_tags = ["gunbench"]
+    tool_names = ["gunsmith bench"]
+
+    output_item_keys = ["manganese_arrow"] * 10
+
+    success_message = "You cut and head a bundle of ten manganese arrows."
+
+
+
 # class ScrapAxeRecipe(BlackoutRecipe):
 #     "Hammer scrap metal into a crude axe at an anvil."
 

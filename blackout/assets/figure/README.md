@@ -121,6 +121,21 @@ An attack action with no clip plays the clip of `attack`. A clip of an
 attack action plays one time, so its loop box stays off. A clip that holds
 one item in two hands has `"held_in": ["two_hands"]` in `clips/`.
 
+## Give a gathering attempt its clip
+
+Each gathering attempt plays the clip of its gathering action, for example
+`gather_one_hand_cutting` with an axe or `gather_unarmed_cutting` with bare
+hands. The hands of the tool and the skill key give the name.
+
+1. On the **Clips** tab, select the default clip set in the stance list.
+2. Pick a clip in the row of each gathering action.
+3. Press Ctrl+S.
+
+A gathering action with no clip plays nothing. Its clip plays one time, so
+its loop box stays off. A clip list in `clips/` must build the clip. A clip
+file that you make in the Godot animation editor has no row, and the test
+refuses it.
+
 ## Check, save, and see it in the game
 
 1. On the **Check** tab, click **Check the figure files**. A finding is a

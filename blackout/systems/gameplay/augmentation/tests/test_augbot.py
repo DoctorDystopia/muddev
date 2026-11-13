@@ -4,12 +4,14 @@ Author: Nick Hobar
 Creation date: 10/30/2026
 Description: The AugBot and `amplify` (DESIGN-0015, Phase 1). The spawner
              stands one up under the room name of the `restore_point` kind,
-             and `amplify` restores Grit in full.
+             and `amplify` restores Grit in full. A restore sends the
+             `amplify` moment, so the client plays the sound of the AugBot.
 Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.augmentation
 """
 
 import unittest
+from unittest import mock
 
 from evennia import create_object
 from evennia.utils.test_resources import EvenniaCommandTest
@@ -17,6 +19,8 @@ from evennia.utils.test_resources import EvenniaCommandTest
 from systems.gameplay.augmentation import constants as aug_const
 from systems.gameplay.augmentation import pool
 from systems.gameplay.progression.skills.constants import SKILL_KEY_AUGMENTATION
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed_events
 from typeclasses import spawners
 from typeclasses.augbots import AugBot, CmdAmplify
 from typeclasses.characters import Character as BlackoutCharacter
@@ -56,6 +60,23 @@ class TestAmplify(EvenniaCommandTest):
 
         self.assertIn("full", response.lower())
         self.assertEqual(pool.current(self.char1), pool.maximum(self.char1))
+
+    def test_a_restore_sends_the_amplify_moment_to_the_caller(self):
+        pool.spend(self.char1, _A_SPEND)
+
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            self.call(CmdAmplify(), "", caller=self.char1, obj=self.augbot)
+
+        emitted.assert_called_once_with(self.char1, feed_const.MOMENT_AMPLIFY)
+
+    def test_a_full_pool_sends_no_moment(self):
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            self.call(CmdAmplify(), "", caller=self.char1, obj=self.augbot)
+
+        emitted.assert_not_called()
+
+    def test_the_amplify_moment_is_a_moment_the_feed_sends(self):
+        self.assertIn(feed_const.MOMENT_AMPLIFY, feed_const.MOMENTS)
 
     def test_the_augbot_names_its_verb_for_the_client(self):
         self.assertEqual(self.augbot.interact_verb, aug_const.AMPLIFY_COMMAND_KEY)

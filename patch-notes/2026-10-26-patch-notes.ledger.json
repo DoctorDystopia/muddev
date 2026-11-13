@@ -893,7 +893,7 @@
       "mark": "skipped",
       "note": "context: the feature list comes from these docs"
     },
-    "godot/addons/blackout_figure/clips_panel.gd": {
+    "godot/addons/blackout_figure/panels/clips_panel.gd": {
       "digest": "27ab9af0fc6d533f",
       "mark": "covered",
       "note": "A clip for each swing"
@@ -903,22 +903,22 @@
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/figure_catalog.gd": {
+    "godot/addons/blackout_figure/data/figure_catalog.gd": {
       "digest": "59405f5589936cff",
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/figure_checks.gd": {
+    "godot/addons/blackout_figure/checks/figure_checks.gd": {
       "digest": "d501f56e909c8f4f",
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/figure_clearance.gd": {
+    "godot/addons/blackout_figure/checks/figure_clearance.gd": {
       "digest": "fc170f826e31399c",
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/figure_clip_list.gd": {
+    "godot/addons/blackout_figure/clips/figure_clip_list.gd": {
       "digest": "4bb5cba726b6adfc",
       "mark": "covered",
       "note": "A clip for each swing"
@@ -928,72 +928,72 @@
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/figure_store.gd": {
+    "godot/addons/blackout_figure/data/figure_store.gd": {
       "digest": "8ebb77e6abca6a23",
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/figure_workbench.gd": {
+    "godot/addons/blackout_figure/view/figure_workbench.gd": {
       "digest": "0dd711525cf7b2fb",
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_figure/item_catalog.json": {
+    "godot/addons/blackout_figure/data/item_catalog.json": {
       "digest": "b6846fd0606619ca",
       "mark": "covered",
       "note": "A clip for each swing"
     },
-    "godot/addons/blackout_terrain/spawn_fields.gd": {
+    "godot/addons/blackout_terrain/panels/spawn_fields.gd": {
       "digest": "290c0d2e2c93b461",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/spawn_items.gd": {
+    "godot/addons/blackout_terrain/data/spawn_items.gd": {
       "digest": "a8772d33f2c0face",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/spawn_items.json": {
+    "godot/addons/blackout_terrain/data/spawn_items.json": {
       "digest": "7ee2f9b48d5586a6",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/structure_place.gd": {
+    "godot/addons/blackout_terrain/tools/structure_place.gd": {
       "digest": "26ec66b51540b2ee",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/structure_template.gd": {
+    "godot/addons/blackout_terrain/tools/structure_template.gd": {
       "digest": "f44ae7aa101060be",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/structure_tools.gd": {
+    "godot/addons/blackout_terrain/tools/structure_tools.gd": {
       "digest": "aa0cc430c0b883f4",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/terrain_checks.gd": {
+    "godot/addons/blackout_terrain/checks/terrain_checks.gd": {
       "digest": "418a4c115477c246",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/terrain_dock.gd": {
+    "godot/addons/blackout_terrain/panels/terrain_dock.gd": {
       "digest": "fd15d52ee5f404f5",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/terrain_edit.gd": {
+    "godot/addons/blackout_terrain/tools/terrain_edit.gd": {
       "digest": "f97d4f6fc456cf2f",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/terrain_models.gd": {
+    "godot/addons/blackout_terrain/view/terrain_models.gd": {
       "digest": "3769771a5536775a",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/terrain_overlay.gd": {
+    "godot/addons/blackout_terrain/view/terrain_overlay.gd": {
       "digest": "93bfc629ce116526",
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
@@ -1003,12 +1003,12 @@
       "mark": "covered",
       "note": "Item spawns in the terrain editor"
     },
-    "godot/addons/blackout_terrain/terrain_session.gd": {
+    "godot/addons/blackout_terrain/data/terrain_session.gd": {
       "digest": "a3233a31dcfba6fa",
       "mark": "skipped",
       "note": "refactor: no player effect"
     },
-    "godot/addons/blackout_terrain/terrain_world.gd": {
+    "godot/addons/blackout_terrain/view/terrain_world.gd": {
       "digest": "485a9f0f7310656c",
       "mark": "covered",
       "note": "Editor block side"
@@ -1068,142 +1068,142 @@
       "mark": "covered",
       "note": "Position readout on the maps"
     },
-    "godot/tests/test_area_look.gd": {
+    "godot/tests/world/look/test_area_look.gd": {
       "digest": "1281ef55af15dc08",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_avatar_facing.gd": {
+    "godot/tests/world/pane/test_avatar_facing.gd": {
       "digest": "6c64682840fc8682",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_avatar_facing.gd.uid": {
+    "godot/tests/world/pane/test_avatar_facing.gd.uid": {
       "digest": "c503953497b7a1fe",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_avatar_facing.tscn": {
+    "godot/tests/world/pane/test_avatar_facing.tscn": {
       "digest": "e005cfea02ba07db",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_chunk_file.gd": {
+    "godot/tests/world/terrain/test_chunk_file.gd": {
       "digest": "ddd97d3163da4f7d",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_client_settings.gd": {
+    "godot/tests/world/test_client_settings.gd": {
       "digest": "bf28821a2bdfec72",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_entity_pool.gd": {
+    "godot/tests/world/pane/test_entity_pool.gd": {
       "digest": "0614081c072a4562",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_figure_checks.gd": {
+    "godot/tests/addons/blackout_figure/test_figure_checks.gd": {
       "digest": "57339e5d158078f1",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_figure_clips.gd": {
+    "godot/tests/world/figure/test_figure_clips.gd": {
       "digest": "87d5df7320db97f7",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_figure_dock.gd": {
+    "godot/tests/addons/blackout_figure/test_figure_dock.gd": {
       "digest": "6adeca225a6537a9",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_figure_library.gd": {
+    "godot/tests/world/figure/test_figure_library.gd": {
       "digest": "10627ca555cf3641",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_figure_stances.gd": {
+    "godot/tests/world/figure/test_figure_stances.gd": {
       "digest": "c8ed43b9351d4d06",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_inventory_view.gd": {
+    "godot/tests/scenes/test_inventory_view.gd": {
       "digest": "eb529f52909607d0",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_item_look.gd": {
+    "godot/tests/world/figure/test_item_look.gd": {
       "digest": "0bebae1e3ee11643",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_look_files.gd": {
+    "godot/tests/world/look/test_look_files.gd": {
       "digest": "aee84cdc4ee5850e",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_minimap_view.gd": {
+    "godot/tests/scenes/test_minimap_view.gd": {
       "digest": "65fbb8e2f804527b",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_slot_cell.gd": {
+    "godot/tests/scenes/test_slot_cell.gd": {
       "digest": "f080cd92909fbaba",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_sound_cues.gd": {
+    "godot/tests/world/sound/test_sound_cues.gd": {
       "digest": "659feb6d630e31cc",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_structure_template.gd": {
+    "godot/tests/addons/blackout_terrain/test_structure_template.gd": {
       "digest": "7b31bbd95919bbdf",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_structure_tools.gd": {
+    "godot/tests/addons/blackout_terrain/test_structure_tools.gd": {
       "digest": "ae2d70bec015c7c5",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_structure_workbench.gd": {
+    "godot/tests/addons/blackout_terrain/test_structure_workbench.gd": {
       "digest": "1d241bcb423e2553",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_summary_state.gd": {
+    "godot/tests/world/state/test_summary_state.gd": {
       "digest": "9f97db42c959583a",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_terrain_checks.gd": {
+    "godot/tests/addons/blackout_terrain/test_terrain_checks.gd": {
       "digest": "86fa040a528fed1d",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_terrain_dock.gd": {
+    "godot/tests/addons/blackout_terrain/test_terrain_dock.gd": {
       "digest": "0e8f64468fe027ad",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_terrain_editing.gd": {
+    "godot/tests/addons/blackout_terrain/test_terrain_editing.gd": {
       "digest": "a7541c7e9b7b6b7f",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_terrain_view.gd": {
+    "godot/tests/world/terrain/test_terrain_view.gd": {
       "digest": "535f5e8c908b6e8b",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_terrain_world.gd": {
+    "godot/tests/addons/blackout_terrain/test_terrain_world.gd": {
       "digest": "0a2aeca64871b2ec",
       "mark": "skipped",
       "note": "test"
     },
-    "godot/tests/test_world_map_view.gd": {
+    "godot/tests/scenes/test_world_map_view.gd": {
       "digest": "9c458e2270509d12",
       "mark": "skipped",
       "note": "test"
@@ -1213,7 +1213,7 @@
       "mark": "covered",
       "note": "Position readout on the maps"
     },
-    "godot/world/entity_pool.gd": {
+    "godot/world/pane/entity_pool.gd": {
       "digest": "6e8fe4371a5c38a7",
       "mark": "covered",
       "note": "Facing after a walk"
@@ -1298,7 +1298,7 @@
       "mark": "covered",
       "note": "Attack animations"
     },
-    "godot/world/figure_lights.gd": {
+    "godot/world/pane/figure_lights.gd": {
       "digest": "427587140c93cde1",
       "mark": "skipped",
       "note": "refactor: no player effect"
@@ -1323,17 +1323,17 @@
       "mark": "skipped",
       "note": "refactor: no player effect"
     },
-    "godot/world/model_registry.gd": {
+    "godot/world/meshes/model_registry.gd": {
       "digest": "3877f1444cb1673a",
       "mark": "skipped",
       "note": "refactor: no player effect"
     },
-    "godot/world/sound_cues.gd": {
+    "godot/world/sound/sound_cues.gd": {
       "digest": "4d08debe61a8d4de",
       "mark": "covered",
       "note": "Sound wizard"
     },
-    "godot/world/summary_state.gd": {
+    "godot/world/state/summary_state.gd": {
       "digest": "0bdc8da722339b77",
       "mark": "skipped",
       "note": "refactor: no player effect"
@@ -1353,7 +1353,7 @@
       "mark": "skipped",
       "note": "refactor: no player effect"
     },
-    "godot/world/world_view.gd": {
+    "godot/world/pane/world_view.gd": {
       "digest": "0195964e7f42cc5f",
       "mark": "covered",
       "note": "Facing after a walk"

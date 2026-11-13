@@ -1,0 +1,5 @@
+# A test fixture: a script with no start cue. The content check refuses it.
+
+~ begin
+Guard: Hello.
+=> END

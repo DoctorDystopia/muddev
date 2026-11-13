@@ -90,8 +90,8 @@ class _Fixture:
     def _set_row(self) -> dict:
         return self._row(aug_const.AUG_SET_ROW_KEY)
 
-    def _light(self, augment, step: int = aug_const.AUG_STEP_DEFAULT) -> None:
-        ensure_augment_handler(self.char1).light(augment, step)
+    def _light(self, augment, power_level: int = aug_const.AUG_POWER_LEVEL_DEFAULT) -> None:
+        ensure_augment_handler(self.char1).light(augment, power_level)
 
 
 class TestRows(_Fixture, EvenniaTest):
@@ -125,7 +125,8 @@ class TestRows(_Fixture, EvenniaTest):
                 augment = AUGMENT_REGISTRY[row["key"]]
                 self.assertEqual(augment.name, row["name"])
                 self.assertIn(row["state"], _STATES)
-                self.assertEqual(aug_const.AUG_STEPS, row[feed_const.ABILITY_STEPS_KEY])
+                self.assertEqual(aug_const.AUG_POWER_LEVELS,
+                                 row[feed_const.ABILITY_POWER_LEVELS_KEY])
                 tip = row[feed_const.TIP_KEY]
                 self.assertEqual(augment.name, tip[feed_const.TIP_TITLE_KEY])
                 self.assertIn(augment.description, tip[feed_const.TIP_LINES_KEY])
@@ -133,7 +134,7 @@ class TestRows(_Fixture, EvenniaTest):
     def test_the_rows_survive_json(self):
         json.dumps(self._rows())
 
-    def test_a_ready_row_names_the_light_and_no_step(self):
+    def test_a_ready_row_names_the_light_and_no_power_level(self):
         for row in self._rows():
             if row["kind"] != feed_const.ABILITY_KIND_TOGGLE:
                 continue
@@ -143,34 +144,34 @@ class TestRows(_Fixture, EvenniaTest):
                 self.assertEqual(feed_const.ABILITY_STATE_READY, row["state"])
                 self.assertEqual(
                     aug_const.AUG_IGNITE_TEMPLATE.format(name=augment.name), row["command"])
-                self.assertEqual(0, row[feed_const.ABILITY_STEP_KEY])
-                self.assertEqual("", row[feed_const.ABILITY_STEP_COMMAND_KEY])
+                self.assertEqual(0, row[feed_const.ABILITY_POWER_LEVEL_KEY])
+                self.assertEqual("", row[feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY])
 
-    def test_a_lit_row_carries_its_step_and_the_next_step(self):
+    def test_a_lit_row_carries_its_power_level_and_the_next_power_level(self):
         augment = _first_augment()
-        self._light(augment, aug_const.AUG_STEP_MIN)
+        self._light(augment, aug_const.AUG_POWER_LEVEL_MIN)
 
         row = self._row(augment.key)
 
         self.assertEqual(feed_const.ABILITY_STATE_ACTIVE, row["state"])
         self.assertEqual(
             aug_const.AUG_EXTINGUISH_TEMPLATE.format(name=augment.name), row["command"])
-        self.assertEqual(aug_const.AUG_STEP_MIN, row[feed_const.ABILITY_STEP_KEY])
+        self.assertEqual(aug_const.AUG_POWER_LEVEL_MIN, row[feed_const.ABILITY_POWER_LEVEL_KEY])
         self.assertEqual(
-            aug_const.AUG_IGNITE_STEP_TEMPLATE.format(
-                name=augment.name, step=aug_const.AUG_STEP_MIN + 1),
-            row[feed_const.ABILITY_STEP_COMMAND_KEY])
+            aug_const.AUG_IGNITE_POWER_LEVEL_TEMPLATE.format(
+                name=augment.name, power_level=aug_const.AUG_POWER_LEVEL_MIN + 1),
+            row[feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY])
 
-    def test_the_top_step_wraps_to_the_first(self):
+    def test_the_top_power_level_wraps_to_the_first(self):
         augment = _first_augment()
-        self._light(augment, aug_const.AUG_STEPS)
+        self._light(augment, aug_const.AUG_POWER_LEVELS)
 
         row = self._row(augment.key)
 
         self.assertEqual(
-            aug_const.AUG_IGNITE_STEP_TEMPLATE.format(
-                name=augment.name, step=aug_const.AUG_STEP_MIN),
-            row[feed_const.ABILITY_STEP_COMMAND_KEY])
+            aug_const.AUG_IGNITE_POWER_LEVEL_TEMPLATE.format(
+                name=augment.name, power_level=aug_const.AUG_POWER_LEVEL_MIN),
+            row[feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY])
 
     def test_a_level_under_the_unlock_locks_the_row(self):
         # The row needs a socket that stays open under the unlock level, or
@@ -204,7 +205,7 @@ class TestRows(_Fixture, EvenniaTest):
         self.assertEqual(feed_const.ABILITY_KIND_SET, row["kind"])
         self.assertEqual(feed_const.ABILITY_STATE_READY, row["state"])
         self.assertEqual(aug_const.AUG_SET_COMMAND, row["command"])
-        self.assertNotIn(feed_const.ABILITY_STEP_KEY, row)
+        self.assertNotIn(feed_const.ABILITY_POWER_LEVEL_KEY, row)
 
     def test_the_set_row_puts_all_out_when_anything_burns(self):
         self._light(_first_augment())
@@ -260,15 +261,15 @@ class TestCommand(_Fixture, EvenniaCommandTest):
         handler = get_augment_handler_for(self.char1)
         self.assertTrue(handler is None or not handler.is_lit(augment.key))
 
-    def test_the_step_command_moves_the_step(self):
+    def test_the_power_level_command_moves_the_power_level(self):
         augment = _first_augment()
-        self._light(augment, aug_const.AUG_STEP_MIN)
+        self._light(augment, aug_const.AUG_POWER_LEVEL_MIN)
 
-        self._send(self._row(augment.key)[feed_const.ABILITY_STEP_COMMAND_KEY])
+        self._send(self._row(augment.key)[feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY])
 
         self.assertEqual(
-            aug_const.AUG_STEP_MIN + 1,
-            get_augment_handler_for(self.char1).step_of(augment.key))
+            aug_const.AUG_POWER_LEVEL_MIN + 1,
+            get_augment_handler_for(self.char1).power_level_of(augment.key))
 
     def test_the_set_command_lights_the_rig_and_then_puts_all_out(self):
         self._send(self._set_row()["command"])
@@ -295,8 +296,8 @@ class TestCommand(_Fixture, EvenniaCommandTest):
 
 
 class TestTheRailFollowsItsFacts(_Fixture, EvenniaTest):
-    """A light, a put-out, a re-step, and a level reach the rail with no
-    call beside the write."""
+    """A light, a put-out, a power shift, and a level reach the rail with
+    no call beside the write."""
 
     def setUp(self):
         super().setUp()
@@ -342,16 +343,17 @@ class TestTheRailFollowsItsFacts(_Fixture, EvenniaTest):
         self.assertEqual(feed_const.ABILITY_STATE_ACTIVE,
                          rows[aug_const.AUG_SET_ROW_KEY]["state"])
 
-    def test_a_restep_reaches_the_rail(self):
+    def test_a_power_shift_reaches_the_rail(self):
         augment = _first_augment()
-        self._light(augment, aug_const.AUG_STEP_MIN)
+        self._light(augment, aug_const.AUG_POWER_LEVEL_MIN)
         buffer.drain_stale()
         self.published.clear()
 
-        self._light(augment, aug_const.AUG_STEPS)
+        self._light(augment, aug_const.AUG_POWER_LEVELS)
 
         rows = self._drained_rows()
-        self.assertEqual(aug_const.AUG_STEPS, rows[augment.key][feed_const.ABILITY_STEP_KEY])
+        self.assertEqual(aug_const.AUG_POWER_LEVELS,
+                         rows[augment.key][feed_const.ABILITY_POWER_LEVEL_KEY])
 
     def test_a_put_out_reaches_the_rail_after_the_handler_is_gone(self):
         augment = _first_augment()

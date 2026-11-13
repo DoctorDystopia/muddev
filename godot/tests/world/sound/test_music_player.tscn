@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://tests/world/sound/test_music_player.gd" id="1_music"]
+
+[node name="TestMusicPlayer" type="Node"]
+script = ExtResource("1_music")

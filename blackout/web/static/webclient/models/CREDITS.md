@@ -93,6 +93,13 @@ Options pane.
 - License: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - Models: `big_mutant`, `mutant_giant`, `mutant_raider`
 
+## manganese_pole_temp
+
+- Author: Harsh Patel
+- Source: https://playblackout.io
+- License: Made for Blackout
+- Models: `manganese_pole`
+
 ## Meat on the bone
 
 - Author: Nick Hobar
@@ -155,7 +162,7 @@ Options pane.
 - Author: LAZY SPAR7AN GAMES (LazySpar7an / MikeE.Games / MedwardsArts)
 - Source: https://lazyspar7an.itch.io/sci-fi-low-poly-v1
 - License: License not confirmed
-- Models: `heavy_machine_gun`, `heavy_machine_gun_clip`, `rusty_scrap_arrow`, `rusty_scrap_shortbow`, `scrap_arrow`, `scrap_shortbow`
+- Models: `copper_arrow`, `heavy_machine_gun`, `heavy_machine_gun_clip`, `manganese_arrow`, `manganese_shortbow`, `rusty_scrap_arrow`, `rusty_scrap_shortbow`, `scrap_arrow`, `scrap_shortbow`
 - **License not confirmed.** See the source record for the reason.
 
 ## SM_Teleporter

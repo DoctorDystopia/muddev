@@ -86,6 +86,7 @@ _TICKABLE_MODULES = (
     "systems.gameplay.combat.combat",
     "systems.gameplay.combat.auras.aura_handler",
     "systems.gameplay.augmentation.handler",
+    "systems.gameplay.augmentation.graft_channel",
     "systems.gameplay.progression.skills.skill_defs.gathering.gather_handler",
 )
 

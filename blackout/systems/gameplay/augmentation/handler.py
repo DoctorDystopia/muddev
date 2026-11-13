@@ -138,24 +138,25 @@ class BlackoutAugmentHandler(TickableHandler):
 
     # ── the lit set ──────────────────────────────────────────────────────
 
-    def light(self, augment, step: int) -> bool:
+    def light(self, augment, power_level: int) -> bool:
         """
-        Purpose: Light an augment at a step, or move a lit one to the step.
+        Purpose: Light an augment at a power level, or move a lit one to
+                 that power level.
 
         Entry:
             augment is an instance of AUGMENT_REGISTRY.
-            step is an int in [AUG_STEP_MIN, AUG_STEPS].
+            power_level is an int in [AUG_POWER_LEVEL_MIN, AUG_POWER_LEVELS].
 
         Exit/Returns:
             Returns True when the augment was lit before this call (a
-            re-step). False for a new light.
+            power shift). False for a new light.
 
         Module Globals:
             None.
 
         Methodology:
             1. Put out every lit augment of the same conflict group.
-            2. Roll, when the augment rolls. A re-step rerolls too: a
+            2. Roll, when the augment rolls. A power shift rerolls too: a
                relight is the reroll, and it costs the Grit it costs.
             3. One dict write. The drain counter keeps its value: a light
                mid-run owes what the run already built up.
@@ -175,7 +176,7 @@ class BlackoutAugmentHandler(TickableHandler):
             self.ndb.rolls[augment.key] = float(augment.roll_for(level, self.roll_rng))
 
         was_lit = augment.key in self.ndb.lit
-        self.ndb.lit[augment.key] = int(step)
+        self.ndb.lit[augment.key] = int(power_level)
         self._publish()
 
         return was_lit
@@ -187,7 +188,7 @@ class BlackoutAugmentHandler(TickableHandler):
         if not group:
             return
 
-        for other, _step in self.lit_augments():
+        for other, _power_level in self.lit_augments():
             if other.key != augment.key and other.conflict_group == group:
                 self.ndb.lit.pop(other.key, None)
                 self.ndb.rolls.pop(other.key, None)
@@ -221,7 +222,7 @@ class BlackoutAugmentHandler(TickableHandler):
         if lit:
             self._publish()
 
-        return [augment for augment, _step in lit]
+        return [augment for augment, _power_level in lit]
 
     def _publish(self) -> None:
         """
@@ -291,22 +292,23 @@ class BlackoutAugmentHandler(TickableHandler):
 
         return augment_key in self.ndb.lit
 
-    def step_of(self, augment_key: str) -> int:
-        """The step of one lit augment, or 0 when it is out."""
+    def power_level_of(self, augment_key: str) -> int:
+        """The power level of one lit augment, or 0 when it is out."""
         self.init_runtime_state()
 
         return int(self.ndb.lit.get(augment_key, 0))
 
     def lit_augments(self) -> list:
         """
-        Purpose: Every lit augment with its step, in the order of the rail.
+        Purpose: Every lit augment with its power level, in the order of
+                 the rail.
 
         Entry:
             No conditions.
 
         Exit/Returns:
-            Returns a list of (augment, step) pairs. A key with no registry
-            entry (a renamed file after a light) is left out.
+            Returns a list of (augment, power_level) pairs. A key with no
+            registry entry (a renamed file after a light) is left out.
 
         Module Globals:
             None.
@@ -356,7 +358,8 @@ class BlackoutAugmentHandler(TickableHandler):
             5. At 0 Grit, put everything out, say so, and stop.
 
         Notes/References:
-            The counter is a float, because a step share of a drain is one.
+            The counter is a float, because the share of a drain at a power
+            level is one.
 
         Author: Nick Hobar
         Creation date: 10/30/2026
@@ -389,7 +392,8 @@ class BlackoutAugmentHandler(TickableHandler):
 
     def _drain(self, holder, lit: list) -> None:
         """Run the counter for one tick, and spend what passes the resistance."""
-        total = sum(augment.drain_for(step) for augment, step in lit)
+        total = sum(augment.drain_for(power_level)
+                    for augment, power_level in lit)
         self.ndb.drain_counter += total
         resistance = resistance_for(holder)
 
@@ -472,7 +476,8 @@ def ensure_augment_handler(holder) -> BlackoutAugmentHandler:
 
 
 def lit_augments_of(entity) -> list:
-    """The (augment, step) pairs lit on an entity. Empty with no handler."""
+    """The (augment, power_level) pairs lit on an entity. Empty with no
+    handler."""
     handler = get_augment_handler_for(entity)
 
     if handler is None:

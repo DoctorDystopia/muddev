@@ -98,6 +98,8 @@ var _brightness_slider: HSlider
 var _brightness_value: Label
 var _sfx_slider: HSlider
 var _sfx_value: Label
+var _music_slider: HSlider
+var _music_value: Label
 var _world_check: CheckBox
 var _inventory_check: CheckBox
 var _skill_detail: OptionButton
@@ -189,6 +191,11 @@ func _add_sound_section(column: VBoxContainer) -> void:
 	_sfx_slider = _slider(ClientSettings.MIN_SFX_VOLUME,
 		ClientSettings.MAX_SFX_VOLUME, 0.05)
 	_sfx_value = _slider_row(column, "Sound effects", _sfx_slider)
+
+	_music_slider = _slider(ClientSettings.MIN_SFX_VOLUME,
+		ClientSettings.MAX_SFX_VOLUME, 0.05)
+	_music_slider.tooltip_text = "How loud the music plays. The Music tab picks the track."
+	_music_value = _slider_row(column, "Music", _music_slider)
 
 
 ## The two panes toggle separately, because they cost different things: the
@@ -366,6 +373,7 @@ func _connect_controls() -> void:
 	_scale_slider.value_changed.connect(_on_scale_changed)
 	_brightness_slider.value_changed.connect(_on_brightness_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_changed)
+	_music_slider.value_changed.connect(_on_music_changed)
 	_world_check.toggled.connect(_on_world_toggled)
 	_inventory_check.toggled.connect(_on_inventory_toggled)
 	_skill_detail.item_selected.connect(_on_skill_detail_selected)
@@ -394,6 +402,8 @@ func _sync() -> void:
 	_brightness_value.text = "%d%%" % roundi(_settings.brightness * 100.0)
 	_sfx_slider.value = _settings.sfx_volume
 	_sfx_value.text = "%d%%" % roundi(_settings.sfx_volume * 100.0)
+	_music_slider.value = _settings.music_volume
+	_music_value.text = "%d%%" % roundi(_settings.music_volume * 100.0)
 	_world_check.button_pressed = _settings.show_world
 	_inventory_check.button_pressed = _settings.show_inventory
 	_skill_detail.selected = ClientSettings.SKILL_DETAIL_MODES.find(
@@ -438,6 +448,13 @@ func _on_sfx_changed(value: float) -> void:
 		return
 
 	_settings.set_sfx_volume(value)
+
+
+func _on_music_changed(value: float) -> void:
+	if _syncing:
+		return
+
+	_settings.set_music_volume(value)
 
 
 func _on_world_toggled(pressed: bool) -> void:

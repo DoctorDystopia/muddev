@@ -1,18 +1,18 @@
 {
   "anvil": {
-    "inputs": "sha256:76e3ed4baab8b6943dca472754256bd6a089ca4fb3a24edc119cbe4041dd840f",
+    "inputs": "sha256:710e3fd59432513b8872e9b68fdc1be1f714767a57d8e7c2f45f5d342e696143",
     "output": "sha256:0dcdb4265cb9300478d9a7ac53370de0b38568532125df159577f22fba31c0d9"
   },
   "atum_musa": {
-    "inputs": "sha256:b0f592f562db66e3ee8836bed2b84f3f54c9a611a58e1fd6bc9bd60ca009479a",
+    "inputs": "sha256:8c38eaf22c3499bdbcfca21e70250e529ed2bdb0a214ed590becd004a99d62c2",
     "output": "sha256:79fa31699df66283d3e877fd0335a3c3f4bd6606eef1ba33661ff38fa91024fb"
   },
   "bank_terminal": {
-    "inputs": "sha256:c9dee17f2d7aa43074df0d64493c1462a844ef414cdf329961568fd2a43fcd2d",
+    "inputs": "sha256:99d09997e1c5ea4f9d74de54ef3418bec45cd1d09cf51ad2ce81715b2edfda1e",
     "output": "sha256:cc8c3e55dec8e1196af1623550823f695ebad88b1f35d6c57d74a015d0daa52c"
   },
   "blood_sword": {
-    "inputs": "sha256:719db74624f6c1262d4084eb6452dc309ad8d97e7da2598093fa17728b5f2177",
+    "inputs": "sha256:61d24e5b82b27c92a85bcf5c2e2f97eef64b8a7f7e3d239165c69173177f4954",
     "output": "sha256:290ed8c93de35e229ed878f648d43264ae4c09ce9e7b3e3621fe955568d8bbb5"
   },
   "bong": {
@@ -20,103 +20,107 @@
     "output": "sha256:b26aa059203904afe7d7fc9406838286b3b1b8d7a1de4bea2ff5db3fe42794fa"
   },
   "copper_pole": {
-    "inputs": "sha256:8e4a552f3db0ac0fe73df595828d078fdbcca99029f33f8f362225e0863259e5",
+    "inputs": "sha256:77a26d8e1b342c10ba3bec067d3bdc67033d2f3af98bf3d5feda8ca82ffa2575",
     "output": "sha256:e0c1f61dd4105d3bbb23882576e8ed1712ba71afcba8cae3bd4b11df96b6d093"
   },
   "copper_shortbow": {
-    "inputs": "sha256:70e01a4af17b7857ff634bcf35502ad93f552447102c004b474514d92b86f269",
+    "inputs": "sha256:6950182149ec4fe95b5c337f1743aee010cc3d77d366e7063a2f705038f842b6",
     "output": "sha256:5b3cacb637cba9968d32bb2e55d9562d05e46d75d8c2c8e8b126e0bc8915182f"
   },
   "corpse_skeleton": {
-    "inputs": "sha256:5a9154925b5fe3c680feb0b793893ca3800124e08429e8eea109ccfd01e6643f",
+    "inputs": "sha256:bc14a4fb75dcb7f9ecf8b5d9c6d420fd381e3ed1c28c8a05dd4db4fc320e7f3e",
     "output": "sha256:86214cd7050cc841d1f2aaca7b49c11622158afd39490435553ea62f0e0c40cd"
   },
   "curing_chamber": {
-    "inputs": "sha256:da7ed9e5db7db3b8ef725104995139d6ce04fa55aa1ad01cf46c2b3d86261bb9",
+    "inputs": "sha256:604558eead4913f9f06c14b13ec4318a4bf5c2564e86d7cd9e53cc4fd417e310",
     "output": "sha256:771cab479debc30864a5d7d13b4b4c520b749297735eda356194e7b64552d1e0"
   },
   "floating_eye": {
-    "inputs": "sha256:61acfc75f6d875bf3618fa25bd3673cdb0d40c45f79845c5b36183f56df5cd15",
+    "inputs": "sha256:766709ef26f0d12d83ae204761c8b8947f6a2cdb8d9b878ab51f7920e69df1da",
     "output": "sha256:2f2ecfb05343596863e221de094d95d12a7defd72d50f16f0eb8bcf1a2eee1b9"
   },
   "food_meat": {
-    "inputs": "sha256:335a2940530af28e39e9b6d2174ba0f54daaaf8aa09cf3553e9fb857f2ac8e62",
+    "inputs": "sha256:061234661f3c4fb6e0633f9af97d5a0c32ee61231674b4b70f281d96a95e55f6",
     "output": "sha256:3592f8124407270d237f142df16356f77a4624f1f649cbbe8b5cb2bf14060939"
   },
   "furnace": {
-    "inputs": "sha256:df2e4680748679590e3d3bc6868d32eabd249addba048bd495a220c66eafe792",
+    "inputs": "sha256:216a8c79574f5eaa8768134950ecd979b3ea38694f5f64ba6c2f4a54adad2f50",
     "output": "sha256:2dfbe4937db1cb4b46725f99eff5c75ab398d0ada221cc8d7b0f3e86834b0649"
   },
   "gunbench": {
-    "inputs": "sha256:2fadf3d3f6d60fba1801090927032d9841753a540272d4b985555190c4d21371",
+    "inputs": "sha256:47f7e4ff23a589a2fe0d5c15ecfd63521ba347f33b3cc32b0584922f6d97b7db",
     "output": "sha256:520fe887a135b4caceded7f5c8cd43410b07a887b22d74dd81681f55e9730716"
   },
   "hammer": {
-    "inputs": "sha256:6518d00d40a46e53902bb50c59aebd2e971594764ec6e7e34e756d703c31cbdf",
+    "inputs": "sha256:d2e115ffd7da4285b855e276775804ed5b8434d11c42673e2aa27c59c39e6ddc",
     "output": "sha256:711a38ee3b30629b186b17be0d8dae2fc9f8986ad33622b1b46daaf3ecc30b3c"
   },
   "heavy_machine_gun": {
-    "inputs": "sha256:b8064e34e37a935d3a7899e9d35f11cb307cddd9350659ca4e30d455b8fd7797",
+    "inputs": "sha256:d47f1a18c9a0e01d91792b9e4ae6193351d5961a1faaf6199d9d6bc6abbb9d6d",
     "output": "sha256:5b3cacb637cba9968d32bb2e55d9562d05e46d75d8c2c8e8b126e0bc8915182f"
   },
   "heavy_machine_gun_clip": {
-    "inputs": "sha256:eda62615846009aa3d4ae29fbc424587a296c71cbd88be0666d0287be7c67255",
+    "inputs": "sha256:837a2acfe4ae63d765578a4dff9a0df5d703b3c48448b5cf6e4db3ed3b68fc35",
     "output": "sha256:2d38301c4ce6298749bcdd8cd8086f2ea14615b1a2661491784b9340e73f2d36"
   },
   "lone_android": {
-    "inputs": "sha256:2d09242a93505b5f6a2e43fff484d51e2f95a27145475cc9c03f0c4cfd485275",
+    "inputs": "sha256:bf77a91be0dba03dee22532d8eccaf567cfb4242ca3ad28e69e9e29b2b1ed0bf",
     "output": "sha256:49d9c9bf0dd238523af5e6a294efd86f331da702bb56ecc0433db733149ad381"
   },
+  "manganese_pole": {
+    "inputs": "sha256:7a5431e2a0f5a6979e94a23de4b3f1263c6a6d9536788ce8dc2c8a1c1b93d390",
+    "output": "sha256:7d54e73c17d8851352040a97b5f6c20c3c8b558a0de0f8373b26de51f089c23f"
+  },
   "map_transition": {
-    "inputs": "sha256:97dda455aea16e68787a52f8474e3b0922f32d7a5390616896462e214d6e59ec",
+    "inputs": "sha256:3c346cb35348e2a76c217a44c30011a0ee30de4b8a270e36fc6557e4981c3d86",
     "output": "sha256:a0cd165e91fa09e6d19078d377dfa5993bb8622c0b59508fdb47f811d296ceb4"
   },
   "metal_pole": {
-    "inputs": "sha256:841eccbf79752af42f4782d9ffc23dead3c39af8b7883885b00b51b366d01556",
+    "inputs": "sha256:42d4ad6614daf570ee543b26f45a9e5da97f8aa65d451cd924cbb0be5d038b97",
     "output": "sha256:83953507db2e946cc8a09efdcfe9e9696f54925d86df34e162d838bf21d6955d"
   },
   "moderator_egg": {
-    "inputs": "sha256:da8250cf4d6ec3650b705518a728981e38b8407bd6a426474f4803fa6a3e1894",
+    "inputs": "sha256:fce5f0e631ee1ffff4a04227b04cff0f5c3291e0634de51add2f958cad51346b",
     "output": "sha256:396f290b5504b7d907956a697e82d8791e483b6cb9636ccb520414d83e0e8afe"
   },
   "mutant_raider": {
-    "inputs": "sha256:6cae451b96d0099dc4ed7b6195baa557487b09a613d44a8a5c1b99f5f18935ed",
+    "inputs": "sha256:3be87dba10f38dc6f87c9f4f87d6ebad87d7f2bc3bef59ed329b70ec1354e5ec",
     "output": "sha256:ad628f3f0dbc8b1703b01a9fbe27bd2bb00161f4440ce61a209071123de0de16"
   },
   "mutant_raider_cured_chuck": {
-    "inputs": "sha256:5eccec359d7c017ffdef66dfe113af6df378c57e9fe8655c12c38a4495b352af",
+    "inputs": "sha256:9215de99b00e1c6c264e597dc984484cf6e5f504ccb36ff24f3bbacd9267b8d0",
     "output": "sha256:59e6039e86c62b8e97f839526188da16587b7a48cd043983fc63d5def44e31d6"
   },
   "mutant_raider_cured_meat_sandwich": {
-    "inputs": "sha256:d8ddf455e77b8d98e6f9af9c71a0f62374fc231b5a444e916fe682644cf52d53",
+    "inputs": "sha256:ba37c0c1e83276e9c8bc52d6d41e4d726faba2cf455135d07ef96cafcde06d4b",
     "output": "sha256:2ee6e914eaf03ac4868dc41d145e9d7a78c8952eb599c9a0ed1eb4b7fd3f53a5"
   },
   "mutant_raider_steak": {
-    "inputs": "sha256:2761df198f5700f5cb15226e6da6d48113bb0d08c255137b539d3f8514ac4124",
+    "inputs": "sha256:14afa7b312d072551f90b0c1e4663bb673f125f1871855acefadbda3ee16e44b",
     "output": "sha256:81edf2911627edaec006fa94b2ed5d271e70199e681fdc00e5618cdf7532c95c"
   },
   "rendering_cooker": {
-    "inputs": "sha256:89fa88dae22ad9fadebb3b05ea116cf9302da5c66c7c1711682481ef081c45f1",
+    "inputs": "sha256:823c51005d249d1e271cbdfd58a6ad7f28417eadd5fdcc5b2b13e5204816087f",
     "output": "sha256:3aca6a05b52fbb4e80d329997f68f3f5f7eff213c94e5be416f433b264d4207c"
   },
   "rusty_pole": {
-    "inputs": "sha256:f4005bb99514b1e081e4395c887e8d1812d668d537f73769ba2bd05f80404cf2",
+    "inputs": "sha256:f3ad932fac62976622bed04109cda0aef2cf8928866eda81d75639084d3eca9a",
     "output": "sha256:7d54e73c17d8851352040a97b5f6c20c3c8b558a0de0f8373b26de51f089c23f"
   },
   "rusty_scrap_shortsword": {
-    "inputs": "sha256:d17803612b3cbbcae8d181e88e80a79fb5e2fc01ce0a259468368f51ff2dcc6e",
+    "inputs": "sha256:fa445d78a353c01fce2acef42511efc1b54d63560bd7ffcd3ed2a26c1e6c4177",
     "output": "sha256:3c122580c0b3d6646e56c68ea47f10ed87677abc0634e13cd0ad7a99aa16ec72"
   },
   "shopkeeper": {
-    "inputs": "sha256:635aa1208a96bb14f63454e9d24354095c2b8425dd2979b10d4711917349d6e5",
+    "inputs": "sha256:5c5cc19b4d960f65634fc7d998160dde5d128e60187ad49d49c5613132f7e749",
     "output": "sha256:dec62850c432e35f68384a296b365700e0298df9aebab2aef42586f2768ade89"
   },
   "tile_oasis": {
-    "inputs": "sha256:65db5a91d4562bdf1def17a8c1b1cedc4c603d76b0d3be7e4ea362034c7a3f1c",
+    "inputs": "sha256:30af08600a0bdfc92e4657f59c4eb5418b72e99df01b5b70ac480f07cb3996c3",
     "output": "sha256:c6c11b097a832f979b17351dd3e1560b2b6797b9392eb65fc329199f37f33470"
   },
   "tile_oasis_outskirts": {
-    "inputs": "sha256:a29c178c21feaa19504cc4b056ded32cb5e76da0423da8c8bdf1abd2dfb88a46",
+    "inputs": "sha256:47a5bae172001645c5e6a14804664ea8983dd617a3a7814e84b16b297308a9d9",
     "output": "sha256:44f0601b34c0b5e330145fbf02dfa7b498ddd8fa68c62949584896f2a247eef5"
   }
 }

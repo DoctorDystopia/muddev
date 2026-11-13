@@ -13,8 +13,9 @@ Description: The content rules of a tile world, checked over its chunk files.
              runs this over `world/chunks/`, so a bad world fails the suite.
              The Godot terrain editor runs the same rules over the block that
              the author edits, before a save ("Check world" in the dock).
-             `godot/addons/blackout_terrain/terrain_checks.gd` is the GDScript
-             twin. Both check the fixtures in `world/tests/fixtures/checks/`
+             `godot/addons/blackout_terrain/checks/terrain_checks.gd` is the
+             GDScript twin. Both check the fixtures in
+             `world/tests/fixtures/checks/`
              and compare with one `expected.json`, so the two cannot drift.
              The rule names are generated into `blackout_constants.gd`.
 

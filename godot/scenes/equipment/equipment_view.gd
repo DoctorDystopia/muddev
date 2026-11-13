@@ -25,13 +25,26 @@ extends VBoxContainer
 ## first on a worn one, so one click does what the drag did. This pane
 ## therefore never connects `dropped`, because nothing can emit it.
 ##
+## ## The rig button
+##
+## A button under the doll opens the Augmentation Rig (11/09/2026). The
+## buttons under the OSRS Worn Equipment tab work the same way. It sends
+## [code]RIG_COMMAND[/code], the `rig` that a telnet player types. The server
+## spells it, and the server opens the pop-up. Every character has the
+## command, so the button is always there.
+##
 ## Author: Nick Hobar
 ## Creation date: 09/21/2026
 
 ## Emitted with a whole command a telnet player could have typed.
 signal command_requested(command: String)
 
+const _Const := preload("res://autoload/blackout_constants.gd")
 const SlotCell := preload("res://scenes/inventory/slot_cell.gd")
+
+## The text and the tip of the rig button.
+const RIG_BUTTON_TEXT := "Augmentation Rig"
+const RIG_BUTTON_TIP := "Open your Augmentation Rig"
 
 ## Floor on the doll, in pixels. The same rule as the carried grid's floor: in
 ## a pane the player can drag down to nothing, an EXPAND_FILL scroller resolves
@@ -47,6 +60,7 @@ var _heading: Label
 var _doll: VBoxContainer
 var _overflow_heading: Label
 var _overflow: GridContainer
+var _rig_button: Button
 
 ## The full text of the cell under the mouse. See [HoverBar].
 var _bar: HoverBar
@@ -107,6 +121,10 @@ func _init() -> void:
 	_overflow.columns = DollLayout.OVERFLOW_COLUMNS
 	_overflow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_child(_overflow)
+
+	# Under the scroller. The scroller holds the doll, so the button stays
+	# in view.
+	_build_rig_button()
 
 	_bar = HoverBar.new()
 	add_child(_bar)
@@ -368,6 +386,26 @@ func _clear(container: Node) -> void:
 
 func _on_action_chosen(command: String) -> void:
 	command_requested.emit(command)
+
+
+# ─── The rig button ──────────────────────────────────────────────────────────
+
+## No focus, as for the buttons of the minimap. A focused button would take
+## the keys that move the player.
+func _build_rig_button() -> void:
+	_rig_button = Button.new()
+	_rig_button.name = "Rig"
+	_rig_button.text = RIG_BUTTON_TEXT
+	_rig_button.tooltip_text = RIG_BUTTON_TIP
+	_rig_button.focus_mode = Control.FOCUS_NONE
+	_rig_button.pressed.connect(_on_rig_pressed)
+	add_child(_rig_button)
+
+
+## Ask the server for the rig. The server opens the pop-up, or sends the
+## rig as text to a session with no pop-up.
+func _on_rig_pressed() -> void:
+	command_requested.emit(_Const.RIG_COMMAND)
 
 
 # ─── The hover bar ───────────────────────────────────────────────────────────

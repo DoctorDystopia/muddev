@@ -27,6 +27,9 @@ from items.equipment.handler import EquipmentHandler
 from items.inventory.handler import InventoryHandler
 from systems.gameplay.quests.handler import QuestHandler
 from systems.gameplay.exterminator.handler import ExterminatorHandler
+from systems.gameplay.music import constants as music_const
+from systems.gameplay.music import detail as music_detail
+from systems.gameplay.music.handler import MusicHandler
 from systems.gameplay.speech import constants as speech_const
 from systems.core.stat_tracker.handler import StatHandler
 from systems.interface.statefeed import events as feed
@@ -141,6 +144,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
     quests = _handler_property(QuestHandler, "quests")
     stats = _handler_property(StatHandler, "stats")
     exterminator = _handler_property(ExterminatorHandler, "exterminator")
+    music = _handler_property(MusicHandler, "music")
 
     # Evennia's contrib cooldown handler. Stores absolute expiry timestamps in
     # a persistent Attribute, so unlike the ndb timestamp it replaces, a
@@ -381,6 +385,12 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
         resync.send_full_state(self)
 
+        # The area that this session last saw starts empty. Thus, a login
+        # inside an area counts as an entry. The tracks of that area unlock
+        # here, not on the first step.
+        self.nattributes.add(music_const.MUSIC_AREA_ATTR, "")
+        self._follow_area()
+
         parent_class = super()
         parent_class.at_post_puppet(**kwargs)
 
@@ -542,9 +552,47 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
     # ─── Death ──────────────────────────────────────────────────────────────
 
+    def _restore_vitals(self) -> None:
+        """
+        Purpose: Fill every vital of this character: HP and Grit. A death
+                 resets both to full (Nick, 11/09/2026).
+
+        Entry:
+            None.
+
+        Exit/Returns:
+            No return value. Raises nothing. After return, the HP and the
+            Grit are full.
+
+        Module Globals:
+            augmentation_pool read.
+
+        Methodology:
+            1. Set HP through the property, not db.hp. The hp setter clamps
+               to max_hp and publishes the vitals event of the client.
+            2. Restore the Grit pool in full. The pool module is the one
+               writer of Grit, and its write publishes the same channel.
+
+        Notes/References:
+            respawn calls this. To reset one more vital on a death, add one
+            step here. The Grit restore is caught: the pool reads the skills
+            handler, and an exception would stop the death half done.
+
+        Author: Nick Hobar
+        Creation date: 11/09/2026
+        """
+        self.hp = self.max_hp
+
+        try:
+            augmentation_pool.restore(self)
+        except Exception:
+            logger.log_trace()
+
+
     def respawn(self) -> None:
         """
-        Purpose: Return a dead player to the respawn room at full HP.
+        Purpose: Return a dead player to the respawn room with full vitals:
+        HP and Grit.
 
         Entry:
             None. Called by CombatEntity.at_death, which has already
@@ -560,10 +608,11 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Methodology:
             1. Resolve the respawn room. None means "unresolvable" -- already
                logged by get_respawn_room.
-            2. Restore HP first, THEN move. A move fires at_object_receive on
-               the destination and is the step that can fail; doing it second
-               means a failed move still leaves a live player rather than a
-               0 HP one standing where they died.
+            2. Restore the vitals first, THEN move. A move fires
+               at_object_receive on the destination, and it can fail. Thus,
+               a failed move leaves a live player, not a player at 0 HP on
+               the tile of the death. The list of vitals is in
+               _restore_vitals.
             3. Move quietly and message explicitly. The default move messaging
                would announce a routine arrival ("X arrives from the north"),
                which is wrong for a respawn -- there is no direction they came
@@ -588,11 +637,7 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
         Author: Nick Hobar
         Creation date: 08/23/2026
         """
-        # Through the property, not db.hp: the hp setter is what clamps to
-        # max_hp AND publishes the state-feed HP event the 3D client's bar
-        # reads. Writing db.hp directly refills the number but leaves every
-        # connected client still showing the corpse's zero.
-        self.hp = self.max_hp
+        self._restore_vitals()
 
         room = get_respawn_room()
 
@@ -764,6 +809,8 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
         popup_service.close_if_left(self)
 
+        self._follow_area()
+
         menu = self.ndb._evmenu
 
         if menu is None or not getattr(menu, "room_bound", False):
@@ -771,6 +818,54 @@ class Character(CombatEntity, ObjectParent, DefaultCharacter):
 
         try:
             menu.close_menu()
+        except Exception:
+            logger.log_trace()
+
+
+    def _follow_area(self) -> None:
+        """
+        Purpose: Tell the music handler when this character enters an area.
+
+        Entry:
+            Called from at_post_move after each move, and from
+            at_post_puppet after the resync.
+
+        Exit/Returns:
+            Returns nothing. Never raises. A music fault must not stop a
+            move.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The area of the tile comes from music_detail.area_of, the same
+            read that the char_music snapshot makes. It goes against
+            ndb.music_area, the area that this session last saw. Only a
+            change does work: the new key goes into the ndb, and the
+            handler gets enter_area. A step inside one area costs one grid
+            read and one compare.
+
+            The handler gets the call with or without a track to unlock,
+            because the area of the snapshot moved too. Off the tile world
+            the area is "", and the handler unlocks nothing.
+
+        Notes/References:
+            DESIGN-0016, section 5.4. `visit` of the quest system never
+            fires on the tile world, so this is the first "you are here"
+            fact on the server.
+
+        Author: Nick Hobar
+        Creation date: 11/08/2026
+        """
+        try:
+            area = music_detail.area_of(self)
+            last_seen = self.nattributes.get(music_const.MUSIC_AREA_ATTR)
+
+            if area == last_seen:
+                return
+
+            self.nattributes.add(music_const.MUSIC_AREA_ATTR, area)
+            self.music.enter_area(area)
         except Exception:
             logger.log_trace()
 

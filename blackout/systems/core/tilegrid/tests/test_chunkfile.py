@@ -15,8 +15,9 @@ things against the same committed files:
    `fixtures/digests.json`.
 3. It refuses every case in INVALID_CASES.
 
-`godot/tests/test_chunk_file.gd` is the other half. The guard at the end of
-this module reads that file as text and fails if its case names differ from
+`godot/tests/world/terrain/test_chunk_file.gd` is the other half. The guard
+at the end of this module reads that file as text and fails if its case
+names differ from
 INVALID_CASES, so one side cannot gain a rule that the other lacks.
 """
 
@@ -42,7 +43,8 @@ _REPO_ROOT = os.path.dirname(_GAME_DIR)
 
 _WORLD_CHUNK_DIRECTORY = os.path.join(_GAME_DIR, const.CHUNK_DIRECTORY)
 
-_GODOT_TEST = os.path.join(_REPO_ROOT, "godot", "tests", "test_chunk_file.gd")
+_GODOT_TEST = os.path.join(
+    _REPO_ROOT, "godot", "tests", "world", "terrain", "test_chunk_file.gd")
 
 # The fixture that the invalid cases mutate.
 _BASE_FIXTURE = "chunk_-1_2_p0.json"

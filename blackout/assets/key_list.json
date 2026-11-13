@@ -14,6 +14,18 @@
 			"owner": "atum_musa"
 		},
 		{
+			"key": "augbot",
+			"kind": "station",
+			"name": "AugBot",
+			"owner": "restore_point"
+		},
+		{
+			"key": "augmentation_locus",
+			"kind": "station",
+			"name": "Augmentation Locus",
+			"owner": "locus"
+		},
+		{
 			"key": "bank_terminal",
 			"kind": "station",
 			"name": "Bank",
@@ -230,6 +242,114 @@
 			"owner": "malfunctioning_gizmo"
 		},
 		{
+			"key": "manganese_arrow",
+			"kind": "crafting_material",
+			"name": "manganese arrow",
+			"owner": "manganese_arrow"
+		},
+		{
+			"key": "manganese_axe",
+			"kind": "crafting_tool",
+			"name": "manganese axe",
+			"owner": "manganese_axe"
+		},
+		{
+			"key": "manganese_battleaxe",
+			"kind": "weapon",
+			"name": "manganese battleaxe",
+			"owner": "manganese_battleaxe"
+		},
+		{
+			"key": "manganese_boots",
+			"kind": "armor",
+			"name": "manganese boots",
+			"owner": "manganese_boots"
+		},
+		{
+			"key": "manganese_chainbody",
+			"kind": "armor",
+			"name": "manganese chainbody",
+			"owner": "manganese_chainbody"
+		},
+		{
+			"key": "manganese_chunk",
+			"kind": "crafting_material",
+			"name": "manganese chunk",
+			"owner": "manganese_chunk"
+		},
+		{
+			"key": "manganese_dagger",
+			"kind": "weapon",
+			"name": "manganese dagger",
+			"owner": "manganese_dagger"
+		},
+		{
+			"key": "manganese_dust",
+			"kind": "crafting_material",
+			"name": "manganese dust",
+			"owner": "manganese_dust"
+		},
+		{
+			"key": "manganese_great_helm",
+			"kind": "armor",
+			"name": "manganese great helm",
+			"owner": "manganese_great_helm"
+		},
+		{
+			"key": "manganese_greatsword",
+			"kind": "weapon",
+			"name": "manganese greatsword",
+			"owner": "manganese_greatsword"
+		},
+		{
+			"key": "manganese_hide_cape",
+			"kind": "armor",
+			"name": "manganese hide cape",
+			"owner": "manganese_hide_cape"
+		},
+		{
+			"key": "manganese_platelegs",
+			"kind": "armor",
+			"name": "manganese platelegs",
+			"owner": "manganese_platelegs"
+		},
+		{
+			"key": "manganese_pole",
+			"kind": "gatherable",
+			"name": "Manganese pole clearing",
+			"owner": "manganese_pole"
+		},
+		{
+			"key": "manganese_scimitar",
+			"kind": "weapon",
+			"name": "manganese scimitar",
+			"owner": "manganese_scimitar"
+		},
+		{
+			"key": "manganese_shortbow",
+			"kind": "weapon",
+			"name": "manganese shortbow",
+			"owner": "manganese_shortbow"
+		},
+		{
+			"key": "manganese_shortsword",
+			"kind": "weapon",
+			"name": "manganese shortsword",
+			"owner": "manganese_shortsword"
+		},
+		{
+			"key": "manganese_spear",
+			"kind": "weapon",
+			"name": "manganese spear",
+			"owner": "manganese_spear"
+		},
+		{
+			"key": "manganese_square_shield",
+			"kind": "armor",
+			"name": "manganese square shield",
+			"owner": "manganese_square_shield"
+		},
+		{
 			"key": "map_transition",
 			"kind": "transition",
 			"name": "transition_azm_plains_to_outskirts",
@@ -344,6 +464,12 @@
 			"owner": "mutant_giant_fatless_meat"
 		},
 		{
+			"key": "mutant_giant_prime_cured_hide",
+			"kind": "crafting_material",
+			"name": "mutant giant prime cured hide",
+			"owner": "mutant_giant_prime_cured_hide"
+		},
+		{
 			"key": "mutant_giant_prime_cured_meat_sandwich",
 			"kind": "food",
 			"name": "mutant giant prime cured meat sandwich",
@@ -360,6 +486,12 @@
 			"kind": "crafting_material",
 			"name": "mutant giant prime raw hide",
 			"owner": "mutant_giant_prime_raw_hide"
+		},
+		{
+			"key": "mutant_giant_prime_sinew",
+			"kind": "crafting_material",
+			"name": "mutant giant prime sinew",
+			"owner": "mutant_giant_prime_sinew"
 		},
 		{
 			"key": "mutant_giant_prime_steak",
@@ -548,6 +680,12 @@
 			"owner": "mutant_raider_tallow"
 		},
 		{
+			"key": "necklace_of_brawn",
+			"kind": "jewellery",
+			"name": "Necklace of Brawn",
+			"owner": "necklace_of_brawn"
+		},
+		{
 			"key": "rendering_cooker",
 			"kind": "station",
 			"name": "Rendering Cooker Facility",
@@ -726,6 +864,12 @@
 			"kind": "armor",
 			"name": "scrap hide cape",
 			"owner": "scrap_hide_cape"
+		},
+		{
+			"key": "scrap_manganese",
+			"kind": "crafting_material",
+			"name": "scrap manganese",
+			"owner": "scrap_manganese"
 		},
 		{
 			"key": "scrap_metal",

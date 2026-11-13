@@ -176,6 +176,17 @@ class CopperPole(GatheringNode):
 
 
 
+class ManganesePole(GatheringNode):
+    """
+    Purpose: The level 30 gathering node for the Cutting skill.
+
+    Author: Nick Hobar
+    Creation date: 11/09/2026
+    """
+    gatherable_key = "manganese_pole"
+
+
+
 @register_spawner("Rusty pole clearing")
 def spawn_rusty_pole(room):
     return spawn_once(
@@ -202,4 +213,14 @@ def spawn_copper_pole(room):
         room,
         "typeclasses.gathering_nodes.CopperPole",
         key="copper pole",
+    )
+
+
+
+@register_spawner("Manganese pole clearing")
+def spawn_manganese_pole(room):
+    return spawn_once(
+        room,
+        "typeclasses.gathering_nodes.ManganesePole",
+        key="manganese pole",
     )

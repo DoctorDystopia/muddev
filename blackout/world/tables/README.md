@@ -1,7 +1,7 @@
 # Table files
 
-This directory holds the rows of four tables of the tile grid. One JSON
-file holds one table:
+This directory holds the rows of four tables of the tile grid, and the
+track table of the music. One JSON file holds one table:
 
 | File | Table | Python module |
 |---|---|---|
@@ -9,6 +9,12 @@ file holds one table:
 | `floor_types.json` | The floor types: a key, a note, and the roof flag | `world/floor_types.py` |
 | `wall_styles.json` | The wall styles: a key and a note | `world/wall_styles.py` |
 | `decor_kinds.json` | The decor kinds: a key, a note, and the scenery | `world/decor_kinds.py`, then `world/object_kinds.py` |
+| `music_tracks.json` | The tracks: a key, a name, an area, an unlock rule, a hint, and a note (DESIGN-0016) | `world/music_tracks.py` |
+
+The track table is not a table of the Tables tab. The sound wizard
+(`python -m assets.audio add`) writes a row, and the tab does not edit it.
+It may hold no row. A rename of an area on the tab reaches the `area` of
+each track, and a removal refuses an area that a track names.
 
 `world/table_file.py` reads each file at import, and its docstring gives
 the format and the rules. A bad row stops the server at start. Each module

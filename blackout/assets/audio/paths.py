@@ -13,6 +13,9 @@ Description: Where every part of the sound wizard lives on disk. The one
 
 import os
 
+from assets.pipeline import paths as pipeline_paths
+from world import music_tracks, table_file
+
 
 # ─── Public constant definitions ─────────────────────────────────────────────
 
@@ -52,6 +55,18 @@ PACKS_DIR: str = (os.environ.get(PACKS_ENV_VAR)
 # The file beside each sound clip that tells Godot how to import it.
 IMPORT_SUFFIX: str = ".import"
 
+# The served tree of the tracks (DESIGN-0016). Evennia serves it in
+# development, and publish.sh copies it to R2, as it does the models. The
+# client fetches each track from it. world/music_tracks.py owns the
+# relative path, so the server and the wizard name one directory.
+SERVED_MUSIC_DIR: str = os.path.join(GAME_DIR,
+                                     *music_tracks.SERVED_DIRECTORY.split("/"))
+
+# The music track table: one row for each track. The server reads it at
+# start, and the sound wizard writes it.
+TRACK_TABLE_PATH: str = table_file.table_path(music_tracks.TABLE_NAME)
+
+
 
 # ─── Public routines ─────────────────────────────────────────────────────────
 
@@ -75,3 +90,31 @@ def clip_path(clip: str) -> str:
     parts = clip.split("/")
 
     return os.path.join(AUDIO_DIR, *parts)
+
+
+def track_path(key: str) -> str:
+    """Give the absolute path of the served file of one track."""
+    return os.path.join(SERVED_MUSIC_DIR, key + music_tracks.SERVED_SUFFIX)
+
+
+def source_dir(key: str) -> str:
+    """
+    Purpose: Give the absolute path of the source directory of one track.
+
+    Entry:
+        key is a track key.
+
+    Exit/Returns:
+        Returns the directory under the sources of the model pipeline:
+        the master of a track is a source record, as a download is. A
+        test that patches pipeline paths.SOURCES_DIR moves it too, because
+        the read happens at the call.
+
+    Module Globals:
+        pipeline_paths.SOURCES_DIR read.
+
+    Author: Nick Hobar
+    Creation date: 11/08/2026
+    """
+    return os.path.join(pipeline_paths.SOURCES_DIR,
+                        music_tracks.source_id_for(key))

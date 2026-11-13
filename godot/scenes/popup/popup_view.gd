@@ -50,6 +50,23 @@ extends FloatingBox
 ##
 ## A drop sends the template of the server, filled by [PopupState]. A drop on
 ## a slot swaps the two. A drop on a tab moves the slot into that tab.
+##
+## ## A drag from one grid to another (11/09/2026)
+##
+## A row that names a drop table takes a drag from any grid of the box. The
+## slot sends the command of the table, with no fill. The rig works this way:
+## drag an augment onto a socket, or a filled socket back onto the augments.
+## See [PopupSlot].
+##
+## ## A doll (11/09/2026)
+##
+## A grid that names a layout draws as a doll, the shape of the paper doll in
+## the Equipment tab. The rig sockets are the one case. [PopupLayout] says where
+## each place sits. A place that the server did not send is a gap. A row whose
+## place the doll does not hold goes in a plain block under the doll.
+##
+## The doll keeps its columns at every width, so [method _reflow] skips it. It
+## sits in the middle of its column.
 
 ## Emitted with a whole command a telnet player could have typed.
 signal command_requested(command: String)
@@ -86,6 +103,9 @@ const SECTION_LABEL_STYLE := &"RowKey"
 ## in `popup_defs/bank.py`.
 const DROP_ONTO_SLOT := "onto_slot"
 const DROP_ONTO_TAB := "onto_tab"
+
+## The meta flag on a block whose columns stay fixed: the doll.
+const FIXED_COLUMNS_META := &"fixed_columns"
 
 var _state: PopupState
 var _meshes: MeshResolver
@@ -542,8 +562,13 @@ func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary,
 	scroller.add_child(content)
 	scroller.resized.connect(_reflow.bind(scroller))
 
-	_fill_blocks(content, grid_index, plan["groups"], first_index + tabs.size(),
-		scroller.size.x)
+	var doll := PopupLayout.rows_for(str(entry["layout"]))
+	var first_slot := first_index + tabs.size()
+
+	if doll.is_empty():
+		_fill_blocks(content, grid_index, plan["groups"], first_slot, scroller.size.x)
+	else:
+		_fill_doll(content, grid_index, doll, plan["groups"], first_slot, scroller.size.x)
 
 	return column
 
@@ -583,6 +608,113 @@ func _fill_blocks(content: VBoxContainer, grid_index: int, groups: Array,
 		for row: Dictionary in group:
 			block.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
 			slot_position += 1
+
+
+## The doll of a grid that names a layout, then a plain block of the rows that
+## the doll does not place. The slot positions run through the doll in reading
+## order and then through the block, the order of [method slots_in].
+func _fill_doll(content: VBoxContainer, grid_index: int, doll: Array,
+		groups: Array, first_index: int, width: float) -> void:
+	var rows: Array = []
+
+	for group: Array in groups:
+		rows.append_array(group)
+
+	var split := _split_by_place(doll, rows)
+	var by_place: Dictionary = split[0]
+	var spare: Array = split[1]
+	content.add_theme_constant_override("separation", SECTION_GAP)
+
+	var block := _doll_block()
+	content.add_child(_section_of(block))
+	var slot_position := 0
+
+	for line: Array in doll:
+		slot_position = _doll_line(block, grid_index, line, by_place,
+			first_index, slot_position)
+
+	if spare.is_empty():
+		return
+
+	content.add_child(HSeparator.new())
+	var rest := GridContainer.new()
+	rest.columns = _columns_for(width)
+	content.add_child(_section_of(rest))
+
+	for row: Dictionary in spare:
+		rest.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
+		slot_position += 1
+
+
+## `[place -> row, spare rows]`. A row goes in the doll when the doll has a
+## square for its place and no earlier row took it. An empty slot goes in
+## neither, because a doll draws a gap where the server sent nothing.
+static func _split_by_place(doll: Array, rows: Array) -> Array:
+	var by_place: Dictionary = {}
+	var spare: Array = []
+
+	for row: Dictionary in rows:
+		if row.is_empty():
+			continue
+
+		var place := str(row.get("place", ""))
+
+		if PopupLayout.places(doll, place) and not by_place.has(place):
+			by_place[place] = row
+		else:
+			spare.append(row)
+
+	return [by_place, spare]
+
+
+## One line of the doll: a slot for each place the server sent, and a gap
+## for the rest. A line with none of its places sent is left out, as the
+## paper doll leaves out an empty row. Returns the next slot position.
+func _doll_line(block: GridContainer, grid_index: int, line: Array,
+		by_place: Dictionary, first_index: int, slot_position: int) -> int:
+	if not line.any(func(place: String) -> bool: return by_place.has(place)):
+		return slot_position
+
+	for column: int in range(PopupLayout.COLUMNS):
+		var place: String = line[column] if column < line.size() else PopupLayout.GAP
+
+		if not by_place.has(place):
+			block.add_child(_gap())
+			continue
+
+		var row: Dictionary = by_place[place]
+		block.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
+		slot_position += 1
+
+	return slot_position
+
+
+## The grid of the doll: fixed columns, in the middle of its column.
+static func _doll_block() -> GridContainer:
+	var block := GridContainer.new()
+	block.columns = PopupLayout.COLUMNS
+	block.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	block.set_meta(FIXED_COLUMNS_META, true)
+
+	return block
+
+
+## A section box around one block, so [method _blocks_of] finds it.
+static func _section_of(block: GridContainer) -> VBoxContainer:
+	var section := VBoxContainer.new()
+	section.add_theme_constant_override("separation", LABEL_GAP)
+	section.add_child(block)
+
+	return section
+
+
+## An empty square of the doll, the size of a slot. The mouse goes through.
+static func _gap() -> Control:
+	var gap := Control.new()
+	gap.custom_minimum_size = PopupSlot.SLOT_SIZE
+	gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	return gap
 
 
 ## The small label over one section. A long tab name ends in an ellipsis, so
@@ -650,11 +782,14 @@ static func _columns_for(width: float) -> int:
 
 
 ## Fit the columns of every block to the scroller after a resize: of the box,
-## or of the pane.
+## or of the pane. A doll keeps its columns.
 func _reflow(scroller: ScrollContainer) -> void:
 	var wanted := _columns_for(scroller.size.x)
 
 	for block: GridContainer in _blocks_of(scroller.get_child(0)):
+		if block.has_meta(FIXED_COLUMNS_META):
+			continue
+
 		if block.columns != wanted:
 			block.columns = wanted
 
@@ -669,8 +804,12 @@ func _slot(grid_index: int, slot_position: int, row: Dictionary, stage_index: in
 	cell.hovered.connect(_on_slot_hovered.bind(cell, grid_index, slot_position))
 	cell.unhovered.connect(_on_slot_unhovered.bind(grid_index, slot_position))
 
-	if _takes_drag(grid_index):
-		cell.bind_drag(str(row.get("drag_key", "")))
+	# Every row with a drag key drags. A drop that the row table names goes
+	# out through command_requested. Only a template grid fills a template.
+	var takes_template := _takes_drag(grid_index)
+	cell.bind_drag(str(row.get("drag_key", "")), takes_template)
+
+	if takes_template:
 		cell.dropped_on.connect(_on_dropped.bind(grid_index, DROP_ONTO_SLOT))
 
 	if not row.is_empty():
@@ -681,7 +820,8 @@ func _slot(grid_index: int, slot_position: int, row: Dictionary, stage_index: in
 	return cell
 
 
-## True when the server sent a drag template for this grid.
+## True when the server sent a drag template for this grid. A drop table on
+## a row needs no template.
 func _takes_drag(grid_index: int) -> bool:
 	var entry: Dictionary = _state.grids[grid_index]
 

@@ -1,0 +1,11 @@
+title     = "Frigid Memory"
+author    = "Nick Hobar"
+url       = "https://playblackout.io"
+site      = "playblackout.io"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-11-08
+notes     = "The master of the track frigid_memory, as it was exported."
+local     = true
+
+[files]
+"Azm Plains Frigid Memory.flac" = "sha256:932e661aecda0ef7f15f9ef03afc57932c2ff28636577b2dd6dd81c153765a91"

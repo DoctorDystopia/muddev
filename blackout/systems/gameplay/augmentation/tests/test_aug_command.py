@@ -66,31 +66,36 @@ class TestAugCommand(EvenniaCommandTest):
         self.assertIn("rig", response.lower())
         self.assertIsNone(self._handler())
 
-    def test_a_name_lights_the_augment_at_the_top_step(self):
+    def test_a_name_lights_the_augment_at_the_top_power_level(self):
         response = self.call(CmdAug(), f" {self.augment.name}", caller=self.char1)
 
         self.assertIn("online", response.lower())
-        self.assertEqual(self._handler().step_of(self.augment.key), aug_const.AUG_STEP_DEFAULT)
+        self.assertEqual(self._handler().power_level_of(self.augment.key),
+                         aug_const.AUG_POWER_LEVEL_DEFAULT)
 
-    def test_a_name_and_a_step_light_at_that_step(self):
-        self.call(CmdAug(), f" {self.augment.name} {aug_const.AUG_STEP_MIN}", caller=self.char1)
+    def test_a_name_and_a_power_level_light_at_that_power_level(self):
+        low = aug_const.AUG_POWER_LEVEL_MIN
 
-        self.assertEqual(self._handler().step_of(self.augment.key), aug_const.AUG_STEP_MIN)
+        self.call(CmdAug(), f" {self.augment.name} {low}", caller=self.char1)
 
-    def test_a_second_light_resteps(self):
-        self.call(CmdAug(), f" {self.augment.name} {aug_const.AUG_STEP_MIN}", caller=self.char1)
+        self.assertEqual(self._handler().power_level_of(self.augment.key), low)
+
+    def test_a_second_light_shifts_the_power_level(self):
+        low = aug_const.AUG_POWER_LEVEL_MIN
+        self.call(CmdAug(), f" {self.augment.name} {low}", caller=self.char1)
 
         response = self.call(CmdAug(), f" {self.augment.name}", caller=self.char1)
 
         self.assertIn("shifts", response.lower())
-        self.assertEqual(self._handler().step_of(self.augment.key), aug_const.AUG_STEP_DEFAULT)
+        self.assertEqual(self._handler().power_level_of(self.augment.key),
+                         aug_const.AUG_POWER_LEVEL_DEFAULT)
 
-    def test_a_bad_step_is_refused(self):
-        bad = aug_const.AUG_STEPS + 1
+    def test_a_bad_power_level_is_refused(self):
+        bad = aug_const.AUG_POWER_LEVELS + 1
 
         response = self.call(CmdAug(), f" {self.augment.name} {bad}", caller=self.char1)
 
-        self.assertIn("step", response.lower())
+        self.assertIn("power level", response.lower())
         self.assertIsNone(self._handler())
 
     def test_an_unknown_name_is_refused(self):
@@ -104,7 +109,7 @@ class TestAugCommand(EvenniaCommandTest):
         response = self.call(CmdAug(), f" {self.augment.name} {aug_const.AUG_OFF_ARG}",
                              caller=self.char1)
 
-        self.assertIn("dark", response.lower())
+        self.assertIn("offline", response.lower())
         self.assertIsNone(self._handler())
 
     def test_off_puts_every_augment_out(self):

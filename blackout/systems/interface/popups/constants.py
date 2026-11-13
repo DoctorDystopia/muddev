@@ -71,6 +71,31 @@ QUANTITY_LABEL_ALL: str = "All"
 # What the X button's box asks.
 QUANTITY_PROMPT: str = "Set the quantity to how many?"
 
+# A grid can name a layout: a doll shape that the client knows by its key.
+# Each row of that grid names its place in the shape. The server names the
+# shape and the places. The client owns where each place sits, as the paper
+# doll owns where each wield location sits. A client with no table for the
+# key draws the plain grid.
+GRID_LAYOUT_FIELD: str = "layout"
+ROW_PLACE_FIELD: str = "place"
+
+# The body doll of the rig sockets (11/09/2026). Its places are the socket
+# keys of systems/gameplay/augmentation/constants.py. The client export
+# sends this key, so the client table names it with no typed copy.
+POPUP_LAYOUT_RIG: str = "rig"
+
+# A drag and its drop. `drag_key` is the name that a drag of a row carries.
+# The bank vault fills its grid templates with it (10/08/2026).
+#
+# `drops` is the drop table of a target row (11/09/2026): drag key -> the
+# whole command that a drop of that drag on this row sends. The client
+# fills in nothing. A drag key with no entry is no drop, and the client
+# shows the "no" cursor. The table may name a drag from any grid of the
+# pop-up. The rig puts an augment into a socket this way. The server
+# names every pair, so the rig fit rule stays on the server.
+ROW_DRAG_KEY_FIELD: str = "drag_key"
+ROW_DROPS_FIELD: str = "drops"
+
 
 # Messages. Plain text: a colour code would reach a graphical client as a
 # literal `|r`, the reason banking/messages.py gives.

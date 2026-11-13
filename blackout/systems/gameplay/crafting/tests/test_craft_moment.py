@@ -5,7 +5,7 @@ Creation date: 10/20/2026
 Description: Tests for the moment that a finished craft sends. The skill of
              the recipe names the moment in `craft_moment`, and
              crafting_service.perform_craft sends it. The client plays the
-             sound of the moment (godot/world/sound_cues.gd).
+             sound of the moment (godot/world/sound/sound_cues.gd).
 
 Run with:
     evennia test --settings test_settings.py systems.gameplay.crafting

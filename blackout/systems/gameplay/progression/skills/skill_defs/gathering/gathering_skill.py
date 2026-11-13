@@ -33,6 +33,7 @@ import random
 
 from evennia.utils import logger
 
+from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.progression.skills.gatherables import (
     get_gatherable_for_node,
     get_yield_item_name,
@@ -148,7 +149,7 @@ class GatheringSkill(BaseSkill):
     # The MOMENT_* name that each gathering attempt sends to the client of
     # the gatherer, a hit or a miss, or None for no moment. The server names
     # the moment, and the client decides what it sounds like
-    # (godot/world/sound_cues.gd). The channel makes an attempt every
+    # (godot/world/sound/sound_cues.gd). The channel makes an attempt every
     # SWING_TICKS until it stops. Thus, the client hears the work for as long
     # as it lasts.
     attempt_moment = None
@@ -225,6 +226,43 @@ class GatheringSkill(BaseSkill):
                 return item
 
         return None
+
+
+    def figure_action(self, character: object) -> str:
+        """
+        Purpose: Name the action of the figure of the gatherer for one
+        gathering attempt.
+
+        Entry:
+            character is the gatherer.
+
+        Exit/Returns:
+            Returns const.FIGURE_GATHERING_ACTION_TEMPLATE, filled with the
+            hands of the tool and the key of this skill. For example, an axe
+            gives gather_one_hand_cutting, and bare hands give
+            gather_unarmed_cutting.
+
+        Module Globals:
+            feed_const.FIGURE_GATHERING_ACTION_TEMPLATE read.
+
+        Methodology:
+            find_tool decides the tool, as it does for the roll. Thus, the
+            clip shows the tool that the attempt uses, also when the tool is
+            in the bag. The slot of the tool gives the hands, through
+            combat_const.attack_hands, as for a swing. No tool gives
+            ATTACK_HANDS_UNARMED. figure_catalog.gathering_actions lists each
+            action with the same reads.
+
+        Author: Nick Hobar
+        Creation date: 11/10/2026
+        """
+        tool = self.find_tool(character)
+        use_slot = getattr(tool, "inventory_use_slot", None)
+        hands = combat_const.attack_hands(use_slot)
+        action = feed_const.FIGURE_GATHERING_ACTION_TEMPLATE.format(
+            hands=hands, skill=self.key)
+
+        return action
 
 
 

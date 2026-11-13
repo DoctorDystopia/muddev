@@ -9,11 +9,12 @@ Description: Shop service layer: pricing, stock lookup, and the buy/sell
 from dataclasses import dataclass, field
 from evennia.utils import logger
 
+from items import stacking
 from typeclasses.items import CurrencyItem
 from world.item_database import ITEM_DB
 from world.shop_defs import ShopDef, shop_def_for
 from systems.core.stat_tracker import constants as stat_constants
-from systems.gameplay.shop import stock
+from systems.gameplay.shop import held, stock
 from systems.interface.statefeed import constants as feed_const
 
 # Every line perform_sell sends a player is a completed or refused trade, so
@@ -24,8 +25,6 @@ from systems.interface.statefeed import constants as feed_const
 # own voice is what carries MESSAGE_TYPE_DIALOGUE. See MESSAGE_TYPES in
 # systems/interface/statefeed/constants.py.
 _MSG_COMMERCE = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_COMMERCE}
-
-_ITEM_NAME_TO_KEY = {defn.name.lower(): key for key, defn in ITEM_DB.items()}
 
 # ITEM_DB key -- and matching currency tag key -- for the shop's currency.
 # The display name lives on the ItemDef.
@@ -169,6 +168,36 @@ def credits_add(caller, amount: int) -> None:
 
 
 def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
+    """
+    Purpose: List what the shop sells: each ware of its buy_list, then each
+             item it holds.
+
+    Entry:
+        shopkeep - the shopkeep.
+        caller   - the buyer, or None. It caps the count of an endless ware.
+
+    Exit/Returns:
+        Returns one BuyEntry for each item key, in buy_list order first.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Settle the decay of the held units, so that no reader sees a unit
+           that is already gone.
+        2. Add one entry for each ware of the buy_list.
+        3. Add each held object to the entry of its key. A held stack adds
+           its quantity, not 1.
+
+    Notes/References:
+        Every reader of the shop stock comes through here: the pop-up, the
+        dialogue menu, `buy`, and `value`. systems/gameplay/shop/held.py owns
+        the decay.
+
+    Author: Nick Hobar
+    Creation date: 07/13/2026
+    """
+    held.settle(shopkeep)
     upsell = get_upsell_factor(shopkeep)
     credits = credits_count(caller) if caller else 0
     groups = {}
@@ -196,12 +225,10 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
             group_order.append(key)
         groups[key].count += count
 
-    for obj in list(shopkeep.contents):
-        if obj.is_typeclass(CurrencyItem, exact=False):
-            continue
+    for obj in held.held_objects(shopkeep):
         value = obj.attributes.get("value", default=0)
         buy_price = max(1, int(value * upsell))
-        key = _ITEM_NAME_TO_KEY.get(obj.key.lower(), obj.key.lower())
+        key = held.held_key(obj)
         if key not in groups:
             item_def = ITEM_DB.get(key)
             groups[key] = BuyEntry(
@@ -215,7 +242,7 @@ def get_buy_items(shopkeep, caller=None) -> list[BuyEntry]:
                 endless=False,
             )
             group_order.append(key)
-        groups[key].count += 1
+        groups[key].count += stacking.quantity_of(obj)
         groups[key].content_items.append(obj)
 
     return [groups[k] for k in group_order]
@@ -648,6 +675,9 @@ def _buy_stock(caller, npc, entry: BuyEntry, buy_count: int) -> tuple[int, bool]
         proof the shopkeeper still holds it. A missing object is skipped; a
         refusal ends the run, because the next copy would not fit either.
 
+        A held stack counts its units. If the whole stack fits in the
+        request, the buyer gets the stack. Else the buyer gets a part.
+
     Notes/References: None.
 
     Author: Nick Hobar
@@ -662,15 +692,66 @@ def _buy_stock(caller, npc, entry: BuyEntry, buy_count: int) -> tuple[int, bool]
         if obj is None or obj.location != npc:
             continue
 
-        carried = _deliver_purchase(caller, obj)
+        wanted = buy_count - delivered
+        units = stacking.quantity_of(obj)
+
+        if units > wanted:
+            carried = _deliver_part(caller, obj, wanted)
+            units = wanted
+        else:
+            carried = _deliver_purchase(caller, obj)
 
         if not carried:
             return delivered, True
 
-        entry.content_items.remove(obj)
-        delivered += 1
+        if obj.pk is None or obj.location != npc:
+            entry.content_items.remove(obj)
+
+        delivered += units
 
     return delivered, False
+
+
+def _deliver_part(caller, stack, units: int) -> bool:
+    """
+    Purpose: Hand the buyer part of a stack that the shopkeep holds.
+
+    Entry:
+        caller - the buying Character.
+        stack  - a held stack with more than `units` units.
+        units  - how many units the buyer gets.
+
+    Exit/Returns:
+        True once the buyer carries the units. False when the bag refuses
+        the move. The held stack then keeps every unit.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Build a detached copy with the units.
+        2. Move the copy to the buyer.
+        3. Only after the move, take the units off the held stack.
+        stacking.split reduces the source after a refused move too. A full
+        bag would then lose the units.
+
+    Notes/References:
+        CLAUDE.md gotcha 4 is the reason for the detached copy.
+
+    Author: Nick Hobar
+    Creation date: 11/03/2026
+    """
+    copy = stacking.detached_copy(stack, units)
+    copy.home = caller
+    carried = _deliver_purchase(caller, copy)
+
+    if not carried:
+        copy.delete()
+        return False
+
+    stacking.reduce_units(stack, units)
+
+    return True
 
 
 def _deliver_ware(caller, npc, entry: BuyEntry, buy_count: int) -> tuple[int, bool]:
@@ -864,6 +945,11 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
         invisible to the hooks, which is why the closing snapshot is
         published from here rather than left to them.
 
+        The shopkeep holds the sold units of a stack too. held.hold_units
+        moves them before the stack of the seller shrinks. The decay
+        settles before the sale and after it. Thus an old stamp removes only
+        the old surplus. The clock of a new surplus starts at the sale.
+
     Notes/References:
         typeclasses/characters.py at_object_leave documents why the leave
         hook has to name the departing object when it publishes.
@@ -874,6 +960,7 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
     if not entry or not entry.items:
         return SellResult(success=False, error="Items no longer available.")
 
+    held.settle(npc)
     total_price = 0
     sold_count = 0
     remaining_items = []
@@ -892,6 +979,7 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
             if qty <= 0:
                 continue
             to_sell = min(qty, sell_count - sold_count)
+            held.hold_units(npc, obj, to_sell)
             new_qty = qty - to_sell
             if new_qty <= 0:
                 obj.delete()
@@ -918,6 +1006,7 @@ def execute_sell(caller, npc, entry: SellEntry, sell_count: int = 1) -> SellResu
     # A sold object joins the keeper's held units, which every open shop
     # pop-up on this keeper counts.
     if sold_count > 0:
+        held.settle(npc)
         _publish_stock(npc)
 
     _publish_inventory(caller)

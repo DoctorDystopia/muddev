@@ -157,6 +157,22 @@ _NPC_FAMILY = feed_const.ASSET_KIND_NPC
 # respawn.py imports Evennia.
 RESPAWN_KIND: str = "respawn_point"
 
+# The object kind of an AugBot, the machine that restores Grit (DESIGN-0015,
+# 10/30/2026). typeclasses/augbots.py spawns the AugBot under this room
+# name. The name has a twin, AUGBOT_SPAWNER_KEY in
+# systems/gameplay/augmentation/constants.py, and test_tile_content.py holds
+# the two equal. The twin exists because the client export reads this
+# module, and that package imports the statefeed.
+RESTORE_KIND: str = "restore_point"
+_AUGBOT_SPAWNER: str = "AugBot"
+
+# The object kind of an Augmentation Locus, the place where a graft pays
+# more (DESIGN-0015, Phase 4). typeclasses/loci.py spawns the Locus under
+# this room name. The twin is AUG_LOCUS_SPAWNER_KEY in the augmentation
+# constants, held equal by the same test.
+LOCUS_KIND: str = "locus"
+_LOCUS_SPAWNER: str = "Augmentation Locus"
+
 # The one signpost kind. Each placement holds its own words in its chunk
 # object text.
 SIGNPOST_KIND: str = "signpost"
@@ -230,6 +246,17 @@ _KIND_ROWS: tuple = (
            "A scrubbed steel worktable, a pan already warming over a low "
            "flame.",
            ("gastro_worktable", _STATION)),
+    # The AugBot (DESIGN-0015). No model yet: the client draws the station
+    # family model. Nick places the first one in the terrain editor.
+    _named(RESTORE_KIND, _FACILITY, _AUGBOT_SPAWNER,
+           "An Augmentation Bot hums here, its needle arms folded.",
+           ("augbot", _STATION)),
+    # The Augmentation Locus (DESIGN-0015). No model yet: the client draws
+    # the station family model. Nick places the first one in the terrain
+    # editor.
+    _named(LOCUS_KIND, _FACILITY, _LOCUS_SPAWNER,
+           "An Augmentation Locus waits here, its ring of arms at rest.",
+           ("augmentation_locus", _STATION)),
 
     _named("rusty_pole", _GATHERING, "Rusty pole clearing",
            "A rusted pole. Maybe I can cut it down?",
@@ -240,6 +267,10 @@ _KIND_ROWS: tuple = (
     _named("copper_pole", _GATHERING, "Copper pole clearing",
            "A copper pole. Maybe I can cut it down?",
            ("copper_pole", _GATHERABLE)),
+    # No model yet: the client draws the gathering family model.
+    _named("manganese_pole", _GATHERING, "Manganese pole clearing",
+           "A manganese pole. Maybe I can cut it down?",
+           ("manganese_pole", _GATHERABLE)),
 
     _npc("lone_android", "Lone Android",
          "An lonely looking android who lives in the wastes of the Sahara.",
@@ -263,6 +294,14 @@ _KIND_ROWS: tuple = (
     _npc("atum_musa", "Atum Musa",
          "A preceptor in white linen and a collar of gold stands here.",
          "atum_musa"),
+    # The two NPCs of the Augmentation intro quest (DESIGN-0015). Every
+    # name is a placeholder until Nick writes the lore. No model yet.
+    _npc("npc_aug_clinic_1", "Augmentation Clinic",
+         "Placeholder. The front room of the Augmentation Clinic.",
+         "talkative_npc"),
+    _npc("npc_aug_hospital_1", "Public Hospital",
+         "Placeholder. A ward of the Al Wasta Regional Public Hospital.",
+         "talkative_npc"),
     _npc("mutant_raider", "Mutant Raider Tile",
          "A mutant raider with a crude weapon.", "mutant_raider"),
     _npc("big_mutant", "Big Mutant Tile",

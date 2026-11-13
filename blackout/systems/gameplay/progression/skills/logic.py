@@ -16,6 +16,7 @@ from .constants import SKILL_KEY_FORTITUDE
 from systems.gameplay.combat import constants as combat_constants
 from .registry import SKILL_REGISTRY
 from systems.interface.statefeed import constants as feed_const
+from systems.interface.ui import colors
 
 
 
@@ -230,6 +231,81 @@ def _publish_level_change(obj: object) -> None:
     feed.refresh_skills(obj)
     feed.emit_combat_options(obj)
     feed.refresh_abilities(obj)
+
+
+
+def _combat_level_of(obj: object) -> int:
+    """
+    Purpose: Read the combat level of a character for the level-up line.
+
+    Entry:
+        obj is a character with a `skills` handler.
+
+    Exit/Returns:
+        Returns the integer combat level.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The combat_level package owns the formula. This module only asks it.
+        The import waits until the call, for the reason in
+        _publish_level_change. The skills package loads at startup through
+        typeclasses/characters.py. The combat_level package reads the skill
+        registry back.
+
+    Notes/References:
+        systems/gameplay/combat/combat_level/logic.py.
+
+    Author: Nick Hobar
+    Creation date: 11/09/2026
+    """
+    from systems.gameplay.combat.combat_level.logic import get_combat_level
+
+    combat_level = get_combat_level(obj)
+
+    return combat_level
+
+
+
+def _announce_combat_level(obj: object, previous: int) -> None:
+    """
+    Purpose: Tell the player that an earned level raised the combat level.
+
+    Entry:
+        obj is the character that just gained a skill level.
+        previous is the combat level before add_xp stored that skill level.
+
+    Exit/Returns:
+        No conditions. Sends nothing when the combat level did not rise.
+
+    Module Globals:
+        combat_constants.COMBAT_LEVEL_UP_TEMPLATE read.
+        _MSG_PROGRESSION read.
+
+    Methodology:
+        Most skills do not feed the combat level, and a combat skill moves
+        it by a fraction for each level. Thus, this function sends the line
+        only when the whole number increases. The line names the new combat level, not
+        the size of the step, the same as the skill line.
+
+        Only add_xp calls this. A set_level is a drain, a staff tool, or a
+        test fixture, and it announces no skill level either.
+
+    Notes/References:
+        None.
+
+    Author: Nick Hobar
+    Creation date: 11/09/2026
+    """
+    current = _combat_level_of(obj)
+
+    if current <= previous:
+        return
+
+    line = combat_constants.COMBAT_LEVEL_UP_TEMPLATE.format(level=current)
+    msg_string = f"{colors.SUCCESS_COLOR}{line}{colors.RESET_COLOR}"
+    obj.msg((msg_string, _MSG_PROGRESSION))
 
 
 
@@ -478,7 +554,11 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         in a loop until remaining XP is lower than the threshold. Re-saves
         data explicitly to ensure database serialization, sending a message
         if a level increased.
-        
+
+        If the combat level increases, a level-up sends the combat level
+        line too. This function reads the old combat level before it writes
+        the new skill level.
+
     Notes/References:
         None
         
@@ -509,7 +589,16 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         new_lvl = skill_data["level"]
         xp_needed = calculate_xp_needed(new_lvl)
         leveled_up = True
-        
+
+    # The database still holds the old level here. Thus, this read gives
+    # the combat level before the award. Combat pays XP on every hit, and
+    # an award with no level-up cannot move the combat level. Thus, only a
+    # level-up reads it.
+    combat_level_before = None
+
+    if leveled_up:
+        combat_level_before = _combat_level_of(obj)
+
     obj.db.skills[skill_key] = skill_data
 
     if amount_to_add > 0:
@@ -520,6 +609,7 @@ def add_xp(obj: object, skill_key: str, amount: int) -> None:
         skill_name = skill_class.name
         msg_string = f"|g[LEVEL_UP] Your {skill_name} skill increased to level {skill_data['level']}!|n"
         obj.msg((msg_string, _MSG_PROGRESSION))
+        _announce_combat_level(obj, combat_level_before)
 
         # Refresh any state derived from this skill (Fortitude -> max_hp).
         apply_level_up_side_effects(obj, skill_key)

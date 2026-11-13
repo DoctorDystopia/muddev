@@ -153,4 +153,54 @@ ITEMS = {
             "projectile_strength_bonus": 3,
         },
     ),
+
+
+
+    # ----------------------------------
+    # --- MANGANESE MELEE ARMOR BACK ---
+    # ----------------------------------
+
+    # OSRS has no Mithril cape. The hide cape gains one point on each bonus
+    # for each tier (1, 2, 3), so this tier gives 4. The value is the copper
+    # value times 2.6, the OSRS ratio of a Mithril item to its Steel item.
+    "manganese_hide_cape": ItemDef(
+        key="manganese_hide_cape",
+        name="manganese hide cape",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Manganese hide cape.",
+        value=231,
+        weight=0.453,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.BACK,
+        tool_type="cape",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_hide_cape", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 4,
+            "melee_slash_defense_bonus": 4,
+            "melee_crush_defense_bonus": 4,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 4,
+            "projectile_standard_defense_bonus": 4,
+            "projectile_heavy_defense_bonus": 4,
+
+            # Other bonuses
+            "melee_strength_bonus": 4,
+            "projectile_strength_bonus": 4,
+        },
+    ),
 }

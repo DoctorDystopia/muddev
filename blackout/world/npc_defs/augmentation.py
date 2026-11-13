@@ -8,8 +8,14 @@ Description: The NpcDef entries of the two NPCs of the Augmentation intro
 
              EVERY NAME AND EVERY TEXT HERE IS A PLACEHOLDER. Nick owns the
              lore and the names (10/30/2026). The keys and the names come
-             from the quest module, so the quest, the defs, and the
-             dialogues cannot spell them differently.
+             from the quest module, so the quest and the defs cannot spell
+             them differently.
+
+             Each of the two speaks from a dialogue script (DESIGN-0017,
+             11/11/2026): `godot/dialogue/aug_clinic_1.dialogue` and
+             `aug_hospital_1.dialogue`. A script types each key as a
+             literal, and the content check refuses a key that names
+             nothing.
 """
 
 from systems.gameplay.quests.content import quest_augmentation_intro as quest
@@ -30,7 +36,7 @@ NPCS = {
             "Placeholder. The recruiter of the Augmentation Clinic, the one "
             "who gives the Augmentation intro quest."
         ),
-        dialogue="aug_clinic_1",
+        dialogue_script="aug_clinic_1",
     ),
     quest.NPC_HOSPITAL_KEY: NpcDef(
         key=quest.NPC_HOSPITAL_KEY,
@@ -41,6 +47,6 @@ NPCS = {
             "Placeholder. The contact at the Al Wasta Regional Public "
             "Hospital, where the trail of the missing augments ends."
         ),
-        dialogue="aug_hospital_1",
+        dialogue_script="aug_hospital_1",
     ),
 }

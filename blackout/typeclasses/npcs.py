@@ -17,7 +17,6 @@ Description: The typeclasses of the NPCs that do not fight, one for each
 
 from evennia import Command, CmdSet
 from evennia import DefaultObject
-from evennia.utils import logger
 
 from commands.command import FacingCommand
 from commands.constants import HELP_CATEGORY_GENERAL
@@ -26,6 +25,7 @@ from typeclasses.npc_defined import NpcDefined
 from typeclasses.objects import ObjectParent, Unpocketable
 from .scripts import Script
 from systems.interface.menus.base_menu import start_blackout_menu
+from systems.interface.menus.dialogue_script import open_script
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed
 from systems.gameplay.exterminator import constants as ext_const
@@ -65,25 +65,23 @@ SHOPKEEP_FALLBACK_ASSET_KEY = "shopkeeper"
 
 # The label of the `task new` action on a Preceptor. TBD.
 PRECEPTOR_TASK_LABEL = "Get task"
-# The periodic trim that keeps player sales from filling a shopkeep's pockets
-# forever, and how much it leaves behind.
+# The daily trim that cut a shopkeep's holdings to 20 objects. Retired on
+# 11/03/2026: the held units now decay, see systems/gameplay/shop/held.py.
 #
-# The class lives in THIS module rather than in blackout/scripts/, where it sat
-# until 08/28/2026. That directory acts on the live database and CLAUDE.md
-# calls it import-unsafe -- yet this path was persisted in 34 ScriptDB rows, so
-# every server start imported out of it. It has one user, twenty lines below
-# it, and belongs beside that user.
+# ScriptDB rows still carry these two paths. The first path still imports.
+# ShopkeepCleanup below deletes its own row at the next server start. The
+# second path is the old blackout/scripts/ home of the class. Evennia loads
+# its rows as a DefaultScript. `retire_cleanup_script` deletes a row of
+# either path at each tile sync.
 SHOPKEEP_CLEANUP_SCRIPT = "typeclasses.npcs.ShopkeepCleanup"
-SHOPKEEP_CLEANUP_KEY = "shopkeep_cleanup"
-SHOPKEEP_CLEANUP_DESC = "Periodically removes excess items from this shopkeep"
-SHOPKEEP_CLEANUP_INTERVAL = 86400
-SHOPKEEP_MAX_HELD_ITEMS = 20
-
-# Paths this script has been persisted under before. A shopkeep carrying one is
-# re-pointed the next time its tile is spawned; see ensure_cleanup_script.
-LEGACY_SHOPKEEP_CLEANUP_SCRIPTS = (
+RETIRED_SHOPKEEP_CLEANUP_SCRIPTS = (
+    SHOPKEEP_CLEANUP_SCRIPT,
     "scripts.shopkeep_inventory_cleanup.ShopkeepCleanup",
 )
+
+# The db attribute that held the cap of the trim. Nothing reads it.
+# retire_cleanup_script removes it.
+RETIRED_MAX_HELD_ATTR = "max_held_items"
 
 
 
@@ -135,6 +133,39 @@ def _dialogue_module_for(npc: object) -> object:
     persisted = npc.attributes.get("menu_module", default=None)
 
     return persisted
+
+
+def _dialogue_script_for(npc: object) -> str | None:
+    """
+    Purpose: Report which dialogue script an NPC speaks from.
+
+    Entry:
+        npc is the object that CmdTalk is attached to.
+
+    Exit/Returns:
+        Returns the key of a compiled script, or None for an NPC that
+        speaks from a dialogue module or has nothing to say.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        Only the NpcDef names a dialogue script. No class attribute and no
+        database row holds one, so a stale row cannot hide the def.
+
+    Notes/References:
+        DESIGN-0017. _dialogue_module_for is the reader for a dialogue
+        module.
+
+    Author: Nick Hobar
+    Creation date: 11/11/2026
+    """
+    npc_def = getattr(npc, "npc_def", None)
+
+    if npc_def is None:
+        return None
+
+    return npc_def.dialogue_script or None
 
 
 
@@ -202,11 +233,12 @@ class CmdTalk(Command):
         """
         caller = self.caller
         npc = self.obj
+        script_key = _dialogue_script_for(npc)
         menu_module_path = _dialogue_module_for(npc)
 
-        menu_module_is_valid = bool(menu_module_path)
+        has_dialogue = bool(script_key) or bool(menu_module_path)
 
-        if not menu_module_is_valid:
+        if not has_dialogue:
             caller.msg((f"{npc.key} has nothing to say right now.", _MSG_ROOM))
             return
 
@@ -214,6 +246,12 @@ class CmdTalk(Command):
         # The two turn to face each other (10/18/2026). After the check
         # above, so an NPC with nothing to say turns nobody.
         feed.emit_face(caller, npc)
+
+        # A dialogue script wins over a dialogue module (DESIGN-0017). A def
+        # names one of the two, and a test refuses a def that names both.
+        if script_key:
+            open_script(caller, npc, script_key)
+            return
 
         start_blackout_menu(
             caller,
@@ -371,59 +409,40 @@ class TalkativeNPC(NpcDefined, Unpocketable, ObjectParent, DefaultObject):
 
 class ShopkeepCleanup(Script):
     """
-    Purpose: Trim a shopkeep's holdings back to its cap, so that items sold to
-             it by players do not accumulate without bound.
+    Purpose: Delete the row of the retired daily trim. Nothing creates this
+             script any more.
 
     Entry:
-        Attached to a ShopkeepNPC. `self.obj` is that NPC.
+        A ScriptDB row whose typeclass path is SHOPKEEP_CLEANUP_SCRIPT.
 
     Exit/Returns:
         No conditions.
 
     Module Globals:
-        SHOPKEEP_CLEANUP_KEY, SHOPKEEP_CLEANUP_DESC read.
-        SHOPKEEP_CLEANUP_INTERVAL, SHOPKEEP_MAX_HELD_ITEMS read.
+        None.
 
     Methodology:
-        Once a day, drop the oldest holdings until the cap is met.
+        Evennia calls at_server_start on each script after each server start
+        and each reload. The row deletes itself there. at_repeat does the
+        same, if a row runs before a restart.
 
     Notes/References:
-        The cap falls back to SHOPKEEP_MAX_HELD_ITEMS, the same constant
-        at_object_creation stamps on the NPC -- previously both this fallback
-        and that stamp were a literal 20 in two files, which is the
-        "Metalsmith vs Metalsmithing" shape CLAUDE.md warns about.
+        From 07/13/2026 to 11/03/2026, this script cut the holdings of a
+        shopkeep to 20 objects once a day. Now each held unit decays, through
+        systems/gameplay/shop/held.py. Remove this class when no live
+        database holds a row of it.
 
     Author: Nick Hobar
     Creation date: 07/13/2026
     """
 
-    def at_script_creation(self) -> None:
-        """Name the script and set it repeating once a day, persistently."""
-        self.key = SHOPKEEP_CLEANUP_KEY
-        self.desc = SHOPKEEP_CLEANUP_DESC
-        self.interval = SHOPKEEP_CLEANUP_INTERVAL
-        self.persistent = True
+    def at_server_start(self) -> None:
+        """Delete this retired row."""
+        self.delete()
 
-    def at_repeat(self) -> None:
-        """Delete the oldest holdings above the cap, or stop if orphaned."""
-        shopkeep = self.obj
-
-        if not shopkeep:
-            self.stop()
-            return
-
-        max_items = shopkeep.db.max_held_items or SHOPKEEP_MAX_HELD_ITEMS
-        contents = list(shopkeep.contents)
-        excess = len(contents) - max_items
-
-        if excess <= 0:
-            return
-
-        for item in contents[:excess]:
-            try:
-                item.delete()
-            except Exception:
-                logger.log_trace()
+    def at_repeat(self, **kwargs) -> None:
+        """Delete this retired row."""
+        self.delete()
 
 
 class CmdSell(FacingCommand):
@@ -638,8 +657,9 @@ class ShopkeepCmdSet(CmdSet):
 
 class ShopkeepNPC(TalkativeNPC):
     """
-    An NPC that buys and sells items. Extends TalkativeNPC with
-    shop-specific attributes and auto-attaches the cleanup script.
+    An NPC that buys and sells items. Extends TalkativeNPC with the shop
+    cmdset. The held units decay through systems/gameplay/shop/held.py, with
+    no script.
 
     The NpcDef names the shop (`shop_key`). world/shop_defs.shop_def_for
     reads it there, and falls back to db.shopdef_key only for a shopkeep
@@ -659,8 +679,6 @@ class ShopkeepNPC(TalkativeNPC):
     def at_object_creation(self) -> None:
         super().at_object_creation()
         self.ensure_shop_cmdset()
-        self.db.max_held_items = SHOPKEEP_MAX_HELD_ITEMS
-        self.ensure_cleanup_script()
 
     def refresh_from_def(self) -> None:
         """
@@ -677,13 +695,12 @@ class ShopkeepNPC(TalkativeNPC):
             None.
 
         Methodology:
-            The name comes from NpcDefined. Then the two ensure methods
-            run. at_object_creation runs one time, so a shopkeep placed
-            before ShopkeepCmdSet existed carries `talk` and no `sell`.
-            Neither cmdset.add nor scripts.add is idempotent, so each ensure
-            method also removes the extra copies of old rebuilds. The
-            cleanup ensure also moves a script persisted under the old
-            blackout/scripts/ typeclass path.
+            The name comes from NpcDefined. Then `ensure_shop_cmdset` runs.
+            `at_object_creation` runs one time. Thus a shopkeep placed before
+            ShopkeepCmdSet existed carries `talk` and no `sell`.
+            `cmdset.add` is not idempotent, so `ensure_shop_cmdset` also
+            removes the extra copies of old rebuilds. Last,
+            `retire_cleanup_script` deletes the rows of the retired trim.
 
         Notes/References:
             spawn_shopkeep did this until 10/09/2026.
@@ -694,7 +711,7 @@ class ShopkeepNPC(TalkativeNPC):
         """
         super().refresh_from_def()
         self.ensure_shop_cmdset()
-        self.ensure_cleanup_script()
+        self.retire_cleanup_script()
 
     def extra_actions(self, observer=None) -> list:
         """
@@ -768,68 +785,53 @@ class ShopkeepNPC(TalkativeNPC):
 
         self.cmdset.add(ShopkeepCmdSet, persistent=True)
 
-    def ensure_cleanup_script(self) -> None:
+    def retire_cleanup_script(self) -> None:
         """
-        Purpose: Guarantee this shopkeep carries exactly one cleanup script,
-                 under the current typeclass path.
+        Purpose: Delete every row of the retired daily trim on this shopkeep,
+                 and the attribute of its cap.
 
         Entry:
             No conditions.
 
         Exit/Returns:
-            Returns nothing. Stops any script found under a legacy path and
-            adds the current one if it is missing.
+            Returns nothing. A shopkeep with no such row and no such
+            attribute is not changed.
 
         Module Globals:
-            SHOPKEEP_CLEANUP_SCRIPT, LEGACY_SHOPKEEP_CLEANUP_SCRIPTS read.
+            RETIRED_SHOPKEEP_CLEANUP_SCRIPTS, RETIRED_MAX_HELD_ATTR read.
 
         Methodology:
-            Walk the attached scripts once, classifying each as legacy,
-            current, or neither; delete the legacy ones and add the current
-            one only if the walk did not find it.
+            Walk the attached scripts one time, and delete each one whose
+            typeclass path is a retired path. Then remove the cap attribute.
 
         Notes/References:
-            This is the migration for the 34 rows persisted under the old
-            blackout/scripts/ path. Doing it here rather than in a one-shot
-            operator script means it rides the tile sync the operator is
-            already running, through refresh_from_def.
-
-            It is also a dedupe. ScriptHandler.add creates unconditionally --
-            it has no presence check -- so anything that called it twice on
-            one NPC would leave two daily timers trimming the same pockets.
+            It rides the tile sync that the operator already runs, through
+            `refresh_from_def`. From 08/28/2026 to 11/03/2026,
+            `ensure_cleanup_script` did the same for the move out of
+            blackout/scripts/.
 
             `delete()`, not `stop()`. In Evennia 6 `stop()` only halts the
             timer component and leaves the row standing
-            (evennia/scripts/scripts.py:582), so a migration written with it
-            would faithfully re-point every shopkeep and leave the stale row
-            behind for the boot log to complain about anyway.
+            (evennia/scripts/scripts.py:582).
 
-            A legacy row's typeclass no longer imports, so Evennia has already
-            fallen the instance back to DefaultScript by the time this reads
-            it. `typeclass_path` is a plain database field and still reports
-            the stale path, which is exactly what makes it matchable.
+            A row of the old blackout/scripts/ path does not import. Evennia
+            thus loads it as a DefaultScript, which cannot delete itself.
+            `typeclass_path` is a plain database field and still reports the
+            stale path, so this walk finds it.
 
         Author: Nick Hobar
         Creation date: 08/28/2026
         """
-        found_current = False
         attached = list(self.scripts.all())
 
         for script in attached:
             path = script.typeclass_path
 
-            if path in LEGACY_SHOPKEEP_CLEANUP_SCRIPTS:
+            if path in RETIRED_SHOPKEEP_CLEANUP_SCRIPTS:
                 script.delete()
-                continue
 
-            if path == SHOPKEEP_CLEANUP_SCRIPT:
-                if found_current:
-                    script.delete()
-                    continue
-                found_current = True
-
-        if not found_current:
-            self.scripts.add(SHOPKEEP_CLEANUP_SCRIPT)
+        if self.attributes.has(RETIRED_MAX_HELD_ATTR):
+            self.attributes.remove(RETIRED_MAX_HELD_ATTR)
 
 
 class PreceptorNPC(TalkativeNPC):

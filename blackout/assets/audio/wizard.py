@@ -8,6 +8,12 @@ Description: The sound wizard. `python -m assets.audio add` asks one
              godot/README.md. It asks as the model wizard does, through
              assets/pipeline/questions.py.
 
+             TWO FLOWS (DESIGN-0016, 11/08/2026). The kind question comes
+             first. The music kind hands over to track_wizard.py, which
+             asks the questions of a track. This module asks the questions
+             of a sound effect, below. packs.py holds the questions that
+             both flows share: the file, and the sound pack.
+
              THE QUESTIONS, in this order:
                1. The sound kind. Only a table of two kinds or more asks it.
                2. The sound clip: a path, a drag, or Enter for a file dialog
@@ -44,8 +50,9 @@ import os
 import shutil
 from dataclasses import dataclass
 
-from assets.audio import credits, cue_table, godot_import, kinds, paths
-from assets.pipeline import licenses, questions, records
+from assets.audio import (credits, cue_table, godot_import, kinds, packs,
+                          paths, track_wizard)
+from assets.pipeline import questions, records
 from assets.pipeline.questions import INDENT, Console
 
 
@@ -55,13 +62,15 @@ from assets.pipeline.questions import INDENT, Console
 class WizardResult:
     """
     What the wizard wrote. moment is "" for a cue that no moment plays.
-    imported is True when Godot imported the sound clip.
+    imported is True when Godot imported the sound clip. track is the key
+    of a new track, and the other fields are "" then.
     """
 
     cue: str
     clip: str
     moment: str
     imported: bool
+    track: str = ""
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -74,8 +83,7 @@ class _Plan:
     kind: the row of kinds.KINDS.
     upload: the path of the sound clip on this machine.
     clip: the new sound clip, relative to godot/audio/.
-    pack: the heading of the sound pack in the credits.
-    new_pack: the prose lines of a new sound pack, or ().
+    pack: the sound pack of the credits, from packs.
     credits_added: the new row, or the section of a new sound pack.
     credits_text: the credits after the write.
     table: the cue table after the write.
@@ -84,8 +92,7 @@ class _Plan:
     kind: str = ""
     upload: str = ""
     clip: str = ""
-    pack: str = ""
-    new_pack: tuple = ()
+    pack: packs.PackAnswer = None
     source_file: str = ""
     cue: str = ""
     moment: str = ""
@@ -100,17 +107,8 @@ _ALL_SUFFIXES: tuple = tuple(suffix for kind in kinds.KINDS.values()
 _DIALOG_TITLE: str = "Choose a sound clip"
 _DIALOG_SOUNDS: str = "Sound clips"
 
-_NEW_PACK: str = "A new sound pack. The wizard adds its section at the end"
 _NO_MOMENT: str = ("No moment. A client caller plays the cue, or a moment "
                    "comes later")
-
-# The heading and the prose of a new sound pack, as the sections in git
-# write them.
-_PACK_HEADING: str = "%s — %s"
-_LICENSE_LINE: str = "License: %s."
-_LICENSE_URL: str = " %s"
-_EXCEPTION_LINE: str = "Exception to the license gate: %s"
-_PAGE_LINE: str = "Store page: %s"
 
 _OFFER_HINT: str = "Type the name of one of them."
 _MOMENT_NOTE: str = "The server sends the moment %s."
@@ -120,17 +118,7 @@ _IMPORT_COMMAND: str = "godot --headless --path godot --import"
 _STOPPED: str = "  Stopped. Nothing was written."
 
 
-# ─── Private helper routines: the sound clip and the sound pack ─────────────
-
-def _shown(path: str) -> str:
-    """Give a path relative to the repo, with forward slashes, if it can."""
-    try:
-        relative = os.path.relpath(path, paths.REPO_DIR)
-    except ValueError:
-        return path
-
-    return relative.replace(os.sep, "/")
-
+# ─── Private helper routines: the sound clip ─────────────────────────────────
 
 def _pick_sound_file() -> str:
     """Open the file dialog on the sound clips, in the sound pack folder."""
@@ -168,218 +156,6 @@ def _ask_kind(console: Console) -> str:
     chosen = questions.ask_choice(console, "Which sound kind is it?", labels)
 
     return keys[chosen]
-
-
-def _upload_problem(path: str, kind: kinds.SoundKind) -> str:
-    """Refuse a path that is no file, or no sound clip of the kind."""
-    suffix = os.path.splitext(path)[1].lower()
-    present = os.path.isfile(path)
-
-    if not present:
-        return "%s is not a file." % path
-
-    if suffix not in kind.suffixes:
-        return "%s is not a sound clip of this kind: %s." % (
-            path, " ".join(kind.suffixes))
-
-    return ""
-
-
-def _ask_upload(console: Console, kind: kinds.SoundKind) -> str:
-    """
-    Purpose: Ask for the path of the sound clip until it is one.
-
-    Entry:
-        kind is the sound kind of the new cue.
-
-    Exit/Returns:
-        Returns the path. Enter at the question opens the file dialog.
-
-    Module Globals:
-        questions.PROMPT, INDENT read.
-
-    Author: Nick Hobar
-    Creation date: 10/26/2026
-    """
-    console.say("")
-    console.say("Type the path of the sound clip. You can drag it here. "
-                "Press Enter to open a file dialog.")
-
-    while True:
-        typed = console.ask(questions.PROMPT)
-        path = questions.clean_path(typed)
-
-        if not path:
-            path = console.pick_file()
-
-        if not path:
-            console.say(INDENT + "No file was chosen. Type a path.")
-            continue
-
-        problem = _upload_problem(path, kind)
-
-        if not problem:
-            return path
-
-        console.say(INDENT + problem)
-
-
-def _in_pack_folder(path: str) -> tuple:
-    """
-    Purpose: Split a path in the folder of the sound packs.
-
-    Entry:
-        path names a file.
-
-    Exit/Returns:
-        Returns (the folder of its sound pack, its path in the pack). For
-        a path outside paths.PACKS_DIR, returns ("", its file name).
-
-    Module Globals:
-        paths.PACKS_DIR read.
-
-    Author: Nick Hobar
-    Creation date: 10/26/2026
-    """
-    name = os.path.basename(path)
-
-    try:
-        relative = os.path.relpath(path, paths.PACKS_DIR)
-    except ValueError:
-        return "", name
-
-    parts = relative.replace(os.sep, "/").split("/")
-    outside = parts[0] == os.pardir or len(parts) < 2
-
-    if outside:
-        return "", name
-
-    return parts[0], "/".join(parts[1:])
-
-
-def _guess_pack(packs: list, folder: str) -> str:
-    """Give the one heading that names the pack folder, or ""."""
-    lowered = folder.lower()
-    matches = [pack.heading for pack in packs
-               if folder and lowered in pack.heading.lower()]
-
-    return matches[0] if len(matches) == 1 else ""
-
-
-def _license_lines(spdx: str, exception: str) -> list:
-    """Give the license prose of a new sound pack section."""
-    terms = licenses.terms_for(spdx)
-    allowed = licenses.is_allowed(spdx)
-    name = terms.name if allowed else spdx
-    line = _LICENSE_LINE % name
-
-    if terms.url:
-        line += _LICENSE_URL % terms.url
-
-    lines = [line]
-
-    if exception:
-        lines.append(_EXCEPTION_LINE % exception)
-
-    return lines
-
-
-def _no_license_note(_terms: licenses.LicenseTerms) -> str:
-    """Add nothing after a license name: each heading names the author."""
-    return ""
-
-
-def _cell_text(value: str) -> str:
-    """Refuse an empty answer, or one that a credits cell cannot hold."""
-    problem = questions.required(value) or credits.cell_problem(value)
-
-    return problem
-
-
-def _ask_new_pack(console: Console, folder: str) -> tuple:
-    """
-    Purpose: Ask the questions of a new sound pack.
-
-    Entry:
-        folder is the pack folder of the sound clip, or "".
-
-    Exit/Returns:
-        Returns (heading, the prose lines under it).
-
-    Module Globals:
-        _PACK_HEADING, _PAGE_LINE read.
-
-    Author: Nick Hobar
-    Creation date: 10/26/2026
-    """
-    title = questions.ask_text(console, "The title of the sound pack, as "
-                               "its store page gives it.", folder,
-                               questions.required)
-    author = questions.ask_text(console, "Who made it?",
-                                check=questions.required)
-    spdx, exception = questions.ask_license(
-        console, "Which license does the store page give?", "Why can "
-        "Blackout ship it? CREDITS.md shows this reason.", _no_license_note)
-    url = questions.ask_text(console, "The URL of the store page.",
-                             check=questions.required)
-    lines = _license_lines(spdx, exception)
-    lines.append(_PAGE_LINE % url)
-
-    return _PACK_HEADING % (author, title), lines
-
-
-def _ask_pack(console: Console, plan: _Plan, text: str, folder: str) -> None:
-    """
-    Purpose: Ask which sound pack of the credits the sound clip came from.
-
-    Entry:
-        text is the credits. folder is the pack folder of the sound clip,
-        or "".
-
-    Exit/Returns:
-        Returns None. Sets plan.pack, and plan.new_pack for a new pack.
-
-    Module Globals:
-        _NEW_PACK read.
-
-    Methodology:
-        1. When one heading names the pack folder, ask for a yes.
-        2. Otherwise, show each sound pack and one row for a new one.
-        3. A new pack with the heading of a pack in the credits is that
-           pack.
-
-    Author: Nick Hobar
-    Creation date: 10/26/2026
-    """
-    packs = credits.packs_of(text)
-    headings = [pack.heading for pack in packs]
-    guess = _guess_pack(packs, folder)
-
-    if guess:
-        same = questions.ask_yes(console, "The sound pack is %s. Is that "
-                                 "right?" % guess, True)
-
-        if same:
-            plan.pack = guess
-            return
-
-    chosen = questions.ask_choice(console, "Which sound pack holds the sound "
-                                  "clip? CREDITS.md has one section for "
-                                  "each.", headings + [_NEW_PACK])
-
-    if chosen < len(packs):
-        plan.pack = headings[chosen]
-        return
-
-    heading, lines = _ask_new_pack(console, folder)
-    plan.pack = heading
-
-    if heading in headings:
-        console.say(INDENT + "CREDITS.md has %s already. The row goes in it."
-                    % heading)
-        return
-
-    plan.new_pack = tuple(lines)
 
 
 # ─── Private helper routines: the cue ────────────────────────────────────────
@@ -540,15 +316,8 @@ def _finish_plan(plan: _Plan, table: cue_table.CueTable, text: str) -> None:
     renamed = os.path.basename(plan.upload) != os.path.basename(plan.clip)
     changes = credits.changes_text(renamed, kind.import_note)
     row = credits.render_row(plan.clip, plan.source_file, changes)
-    plan.credits_added = row
-
-    if plan.new_pack:
-        section = credits.render_pack(plan.pack, list(plan.new_pack), row)
-        plan.credits_added = section
-        plan.credits_text = credits.with_pack(text, section)
-    else:
-        plan.credits_text = credits.with_row(text, plan.pack, row)
-
+    plan.credits_added, plan.credits_text = packs.credits_with_row(
+        text, plan.pack, row)
     cue = cue_table.Cue(key=plan.cue, kind=plan.kind, clip=plan.clip,
                         note=plan.note)
     plan.table = cue_table.with_cue(table, cue, plan.moment)
@@ -573,26 +342,27 @@ def _show_plan(console: Console, plan: _Plan) -> None:
     kind = kinds.KINDS[plan.kind]
     destination = paths.clip_path(plan.clip)
     cue = plan.table.cues[plan.cue]
-    where = "one more row under %s" % plan.pack
+    where = "one more row under %s" % plan.pack.pack
 
-    if plan.new_pack:
+    if plan.pack.new_pack:
         where = "a new section at the end"
 
     console.say("")
     console.say("The plan:")
-    console.say(INDENT + "%s  a copy of %s" % (_shown(destination),
+    console.say(INDENT + "%s  a copy of %s" % (packs.shown(destination),
                                               plan.upload))
     console.say(INDENT + "%s  the import settings of %s" % (
-        _shown(destination + paths.IMPORT_SUFFIX), plan.kind))
+        packs.shown(destination + paths.IMPORT_SUFFIX), plan.kind))
     questions.show_text(console, kind.import_note)
-    console.say(INDENT + "%s  one more cue" % _shown(paths.CUE_TABLE_PATH))
+    console.say(INDENT + "%s  one more cue" % packs.shown(
+        paths.CUE_TABLE_PATH))
     questions.show_text(console, "%s: %s, %s. %s" % (cue.key, cue.kind,
                                                      cue.clip, cue.note))
 
     if plan.moment:
         questions.show_text(console, "The moment %s plays it." % plan.moment)
 
-    console.say(INDENT + "%s  %s" % (_shown(paths.CREDITS_PATH), where))
+    console.say(INDENT + "%s  %s" % (packs.shown(paths.CREDITS_PATH), where))
     questions.show_text(console, plan.credits_added)
 
 
@@ -604,9 +374,11 @@ def _ask_plan(console: Console):
         No conditions.
 
     Exit/Returns:
-        Returns the plan, or None for a no at the confirm. Raises
-        cue_table.CueTableError or credits.CreditsError when a file that
-        the wizard reads does not read.
+        Returns the plan, or None for a no at the confirm. For the music
+        kind, returns the TrackPlan of track_wizard. Raises
+        cue_table.CueTableError, table_file.TableFileError or
+        credits.CreditsError when a file that the wizard reads does not
+        read.
 
     Module Globals:
         paths.CUE_TABLE_PATH, paths.CLIENT_CONSTANTS_PATH,
@@ -615,20 +387,25 @@ def _ask_plan(console: Console):
     Author: Nick Hobar
     Creation date: 10/26/2026
     """
+    console.say("Add a sound. Press Ctrl+C at a question to stop. The wizard "
+                "writes nothing before you confirm.")
+    kind = _ask_kind(console)
+
+    if kinds.KINDS[kind].served:
+        return track_wizard.ask_plan(console)
+
     table = cue_table.read_table(paths.CUE_TABLE_PATH)
     moments = cue_table.read_moments(paths.CLIENT_CONSTANTS_PATH)
     text = credits.read_credits(paths.CREDITS_PATH)
     free = [moment for moment in moments if moment not in table.moments]
-    console.say("Add a sound. Press Ctrl+C at a question to stop. The wizard "
-                "writes nothing before you confirm.")
-    kind = _ask_kind(console)
     plan = _Plan(kind=kind)
-    plan.upload = _ask_upload(console, kinds.KINDS[kind])
-    folder, in_pack = _in_pack_folder(plan.upload)
-    _ask_pack(console, plan, text, folder)
+    plan.upload = packs.ask_upload(console, kinds.KINDS[kind], "sound clip")
+    folder, in_pack = packs.in_pack_folder(plan.upload)
+    plan.pack = packs.ask_pack(console, text, folder)
     plan.source_file = questions.ask_text(console, "The path of the sound "
                                           "clip in the sound pack, for the "
-                                          "credits.", in_pack, _cell_text)
+                                          "credits.", in_pack,
+                                          packs.cell_text)
     plan.cue = _ask_cue(console, plan, table, free)
     plan.moment = _ask_moment(console, plan.cue, free)
     plan.note = _ask_note(console, plan.moment)
@@ -672,7 +449,7 @@ def _write(console: Console, plan: _Plan) -> None:
 
     for written in (destination, import_file, paths.CREDITS_PATH,
                     paths.CUE_TABLE_PATH):
-        console.say(INDENT + "wrote %s" % _shown(written))
+        console.say(INDENT + "wrote %s" % packs.shown(written))
 
 
 def _ask_import(console: Console, plan: _Plan) -> bool:
@@ -717,7 +494,7 @@ def _ask_import(console: Console, plan: _Plan) -> bool:
         console.say(INDENT + problem)
     elif not imported:
         console.say(INDENT + "Godot ended, but %s has no uid yet."
-                    % _shown(import_file))
+                    % packs.shown(import_file))
 
     return imported
 
@@ -735,7 +512,8 @@ def run(console: Console = None):
     Exit/Returns:
         Returns the WizardResult. Returns None when the person stops or
         says no at the confirm, and then nothing was written. Raises
-        cue_table.CueTableError, credits.CreditsError or OSError.
+        cue_table.CueTableError, credits.CreditsError,
+        table_file.TableFileError or OSError.
 
     Module Globals:
         _STOPPED read.
@@ -755,6 +533,11 @@ def run(console: Console = None):
         console.say("")
         console.say(_STOPPED)
         return None
+
+    if isinstance(plan, track_wizard.TrackPlan):
+        track_wizard.write(console, plan)
+        return WizardResult(cue="", clip="", moment="", imported=False,
+                            track=plan.key)
 
     _write(console, plan)
 
@@ -777,7 +560,7 @@ def next_steps(result: WizardResult) -> list:
     Exit/Returns:
         Returns the lines, numbered. A sound clip that Godot did not import
         gets the import first. A cue that no moment plays gets the way to
-        play it.
+        play it. A track gets the steps of track_wizard.
 
     Module Globals:
         _IMPORT_COMMAND, _CHECK_COMMAND, INDENT read.
@@ -786,6 +569,12 @@ def next_steps(result: WizardResult) -> list:
     Creation date: 10/26/2026
     """
     steps = []
+
+    if result.track:
+        steps.extend(track_wizard.next_steps(result.track))
+        steps.append("Check the sound clips and the tracks from blackout/: "
+                     + _CHECK_COMMAND)
+        return _numbered(steps)
 
     if not result.imported:
         steps.append("Import it: open the Godot editor, or run this from the "
@@ -805,6 +594,12 @@ def next_steps(result: WizardResult) -> list:
     steps.append("Check the sound clips from blackout/: " + _CHECK_COMMAND)
     steps.append("Commit the sound clip, its .import file, cues.json and "
                  "CREDITS.md in one commit.")
+
+    return _numbered(steps)
+
+
+def _numbered(steps: list) -> list:
+    """Give the steps as numbered lines under a "Next:" line."""
     lines = ["", "Next:"]
     lines.extend("%s%d. %s" % (INDENT, number, step)
                  for number, step in enumerate(steps, start=1))

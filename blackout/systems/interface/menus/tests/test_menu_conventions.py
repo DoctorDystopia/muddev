@@ -41,6 +41,7 @@ MENU_MODULE_PATHS = (
     "systems.interface.menus.crafting_menu",
     "systems.interface.menus.dev_egg_menu",
     "systems.interface.menus.dialogue",
+    "systems.interface.menus.dialogue_script",
     "systems.interface.menus.equipment_menu",
     "systems.interface.menus.profile_menu",
     "systems.interface.menus.skills_menu",

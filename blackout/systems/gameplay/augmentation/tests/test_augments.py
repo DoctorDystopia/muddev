@@ -127,25 +127,28 @@ class TestAugmentRegistry(unittest.TestCase):
         self.assertEqual(unlocks, sorted(unlocks))
 
 
-class TestStepDial(unittest.TestCase):
-    """Step 1 gives a share of the strength for the same share of the drain."""
+class TestPowerLevelDial(unittest.TestCase):
+    """Power level 1 gives a share of the strength for the same share of
+    the drain."""
 
-    def test_the_top_step_gives_the_whole_bonus(self):
+    def test_the_top_power_level_gives_the_whole_bonus(self):
+        top = aug_const.AUG_POWER_LEVELS
+
         for key, augment in AUGMENT_REGISTRY.items():
             with self.subTest(augment=key):
                 whole = augment.pct_per_level * _A_LEVEL
-                self.assertAlmostEqual(augment.bonus_for(_A_LEVEL, aug_const.AUG_STEPS), whole)
-                self.assertAlmostEqual(augment.drain_for(aug_const.AUG_STEPS), augment.drain)
+                self.assertAlmostEqual(augment.bonus_for(_A_LEVEL, top), whole)
+                self.assertAlmostEqual(augment.drain_for(top), augment.drain)
 
-    def test_a_lower_step_scales_the_bonus_and_the_drain_alike(self):
+    def test_a_lower_power_level_scales_the_bonus_and_the_drain_alike(self):
         augment = _first_augment()
-        step = aug_const.AUG_STEP_MIN
-        share = step / aug_const.AUG_STEPS
+        power_level = aug_const.AUG_POWER_LEVEL_MIN
+        share = power_level / aug_const.AUG_POWER_LEVELS
 
         self.assertAlmostEqual(
-            augment.bonus_for(_A_LEVEL, step),
-            augment.bonus_for(_A_LEVEL, aug_const.AUG_STEPS) * share)
-        self.assertAlmostEqual(augment.drain_for(step), augment.drain * share)
+            augment.bonus_for(_A_LEVEL, power_level),
+            augment.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVELS) * share)
+        self.assertAlmostEqual(augment.drain_for(power_level), augment.drain * share)
 
 
 class TestAugmentUnlock(EvenniaTest):
@@ -213,9 +216,9 @@ class _HandlerTest(EvenniaTest):
 
         super().tearDown()
 
-    def _ticks_for_one_point(self, step: int) -> int:
+    def _ticks_for_one_point(self, power_level: int) -> int:
         """The ticks until the counter first passes the resistance."""
-        drain = self.augment.drain_for(step)
+        drain = self.augment.drain_for(power_level)
         resistance = resistance_for(self.char1)
 
         return math.ceil(resistance / drain)
@@ -223,33 +226,35 @@ class _HandlerTest(EvenniaTest):
 
 class TestHandlerLitSet(_HandlerTest):
 
-    def test_a_light_adds_the_augment_at_its_step(self):
-        was_lit = self.handler.light(self.augment, aug_const.AUG_STEP_MIN)
+    def test_a_light_adds_the_augment_at_its_power_level(self):
+        was_lit = self.handler.light(self.augment, aug_const.AUG_POWER_LEVEL_MIN)
 
         self.assertFalse(was_lit)
         self.assertTrue(self.handler.is_lit(self.augment.key))
-        self.assertEqual(self.handler.step_of(self.augment.key), aug_const.AUG_STEP_MIN)
+        self.assertEqual(self.handler.power_level_of(self.augment.key),
+                         aug_const.AUG_POWER_LEVEL_MIN)
 
-    def test_a_second_light_is_a_restep(self):
-        self.handler.light(self.augment, aug_const.AUG_STEP_MIN)
+    def test_a_second_light_is_a_power_shift(self):
+        self.handler.light(self.augment, aug_const.AUG_POWER_LEVEL_MIN)
 
-        was_lit = self.handler.light(self.augment, aug_const.AUG_STEPS)
+        was_lit = self.handler.light(self.augment, aug_const.AUG_POWER_LEVELS)
 
         self.assertTrue(was_lit)
-        self.assertEqual(self.handler.step_of(self.augment.key), aug_const.AUG_STEPS)
+        self.assertEqual(self.handler.power_level_of(self.augment.key),
+                         aug_const.AUG_POWER_LEVELS)
 
     def test_the_lit_set_keeps_the_rail_order(self):
         wanted = support.one_of_each_group(augments_in_order())
 
         for augment in reversed(wanted):
-            self.handler.light(augment, aug_const.AUG_STEPS)
+            self.handler.light(augment, aug_const.AUG_POWER_LEVELS)
 
-        lit_keys = [augment.key for augment, _step in self.handler.lit_augments()]
+        lit_keys = [augment.key for augment, _power_level in self.handler.lit_augments()]
 
         self.assertEqual(lit_keys, [augment.key for augment in wanted])
 
     def test_a_put_out_removes_one(self):
-        self.handler.light(self.augment, aug_const.AUG_STEPS)
+        self.handler.light(self.augment, aug_const.AUG_POWER_LEVELS)
 
         was_lit = self.handler.put_out(self.augment.key)
 
@@ -265,10 +270,10 @@ class TestHandlerDrain(_HandlerTest):
     """The OSRS counter: one point goes when the counter passes the resistance."""
 
     def test_one_point_goes_when_the_counter_passes_the_resistance(self):
-        step = aug_const.AUG_STEPS
-        self.handler.light(self.augment, step)
+        power_level = aug_const.AUG_POWER_LEVELS
+        self.handler.light(self.augment, power_level)
         before = pool.current(self.char1)
-        ticks = self._ticks_for_one_point(step)
+        ticks = self._ticks_for_one_point(power_level)
 
         for _ in range(ticks - 1):
             self.handler.tick()
@@ -279,9 +284,9 @@ class TestHandlerDrain(_HandlerTest):
 
         self.assertEqual(pool.current(self.char1), before - aug_const.AUG_DRAIN_POINT)
 
-    def test_a_lower_step_drains_slower(self):
-        low = self._ticks_for_one_point(aug_const.AUG_STEP_MIN)
-        high = self._ticks_for_one_point(aug_const.AUG_STEPS)
+    def test_a_lower_power_level_drains_slower(self):
+        low = self._ticks_for_one_point(aug_const.AUG_POWER_LEVEL_MIN)
+        high = self._ticks_for_one_point(aug_const.AUG_POWER_LEVELS)
 
         self.assertGreater(low, high)
 
@@ -292,10 +297,11 @@ class TestHandlerDrain(_HandlerTest):
             self.skipTest("one augment only")
 
         first, second = ordered[0], ordered[1]
-        self.handler.light(first, aug_const.AUG_STEPS)
-        self.handler.light(second, aug_const.AUG_STEPS)
+        self.handler.light(first, aug_const.AUG_POWER_LEVELS)
+        self.handler.light(second, aug_const.AUG_POWER_LEVELS)
         before = pool.current(self.char1)
-        drain = first.drain_for(aug_const.AUG_STEPS) + second.drain_for(aug_const.AUG_STEPS)
+        top = aug_const.AUG_POWER_LEVELS
+        drain = first.drain_for(top) + second.drain_for(top)
         ticks = math.ceil(resistance_for(self.char1) / drain)
 
         for _ in range(ticks):
@@ -309,10 +315,10 @@ class TestHandlerDrain(_HandlerTest):
         self.assertIsNone(get_augment_handler_for(self.char1))
 
     def test_an_empty_pool_puts_every_augment_out(self):
-        step = aug_const.AUG_STEPS
-        self.handler.light(self.augment, step)
+        power_level = aug_const.AUG_POWER_LEVELS
+        self.handler.light(self.augment, power_level)
         pool.spend(self.char1, pool.maximum(self.char1) - aug_const.AUG_DRAIN_POINT)
-        ticks = self._ticks_for_one_point(step)
+        ticks = self._ticks_for_one_point(power_level)
 
         for _ in range(ticks):
             self.handler.tick()
@@ -321,7 +327,7 @@ class TestHandlerDrain(_HandlerTest):
         self.assertIsNone(get_augment_handler_for(self.char1))
 
     def test_a_dead_holder_puts_every_augment_out(self):
-        self.handler.light(self.augment, aug_const.AUG_STEPS)
+        self.handler.light(self.augment, aug_const.AUG_POWER_LEVELS)
         self.char1.hp = 0
 
         self.handler.tick()
@@ -344,7 +350,7 @@ class TestAugmentRules(_HandlerTest):
         wanted = support.one_of_each_group(augments_in_order())
 
         for augment in wanted:
-            self.handler.light(augment, aug_const.AUG_STEPS)
+            self.handler.light(augment, aug_const.AUG_POWER_LEVELS)
 
         rules = active_rules(self.char1)
         reaching = [augment for augment in wanted
@@ -357,19 +363,19 @@ class TestAugmentRules(_HandlerTest):
                 self.assertIsInstance(rule, AugmentModifierRules)
                 self.assertEqual(rule.priority, combat_const.RULES_PRIORITY_MODIFIER)
 
-    def test_the_bonus_is_the_level_times_the_rate_at_the_step(self):
-        step = aug_const.AUG_STEP_MIN
-        self.handler.light(self.augment, step)
+    def test_the_bonus_is_the_level_times_the_rate_at_the_power_level(self):
+        power_level = aug_const.AUG_POWER_LEVEL_MIN
+        self.handler.light(self.augment, power_level)
 
         rule = active_rules(self.char1)[0]
 
-        self.assertAlmostEqual(rule.bonus, self.augment.bonus_for(_A_LEVEL, step))
+        self.assertAlmostEqual(rule.bonus, self.augment.bonus_for(_A_LEVEL, power_level))
 
     def test_the_effective_level_matches_the_augmentation_multiplier(self):
         """The bonus lands on the accuracy channel through the OSRS formula."""
         accuracy = [augment for augment in augments_in_order()
                     if augment.family == aug_const.FAMILY_ACCURACY][0]
-        bonus = accuracy.bonus_for(_A_LEVEL, aug_const.AUG_STEPS)
+        bonus = accuracy.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVELS)
         rule = AugmentModifierRules(accuracy, bonus)
         context = _context(attacker_rules=(rule,))
 
@@ -400,7 +406,7 @@ class TestDeathPutsAugmentsOut(EvenniaTest):
         self.char1.skills.set_level(SKILL_KEY_AUGMENTATION, _A_LEVEL)
         pool.restore(self.char1)
         handler = ensure_augment_handler(self.char1)
-        handler.light(_first_augment(), aug_const.AUG_STEPS)
+        handler.light(_first_augment(), aug_const.AUG_POWER_LEVELS)
 
         self.char1._put_out_augments()
 

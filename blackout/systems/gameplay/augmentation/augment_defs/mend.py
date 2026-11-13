@@ -42,6 +42,6 @@ class Mend(BaseAugment):
 
     def effect_line(self, level: int) -> str:
         """The cut of the interval at this level, as the tip says it."""
-        percent = self.bonus_for(level, aug_const.AUG_STEPS) * _PERCENT
+        percent = self.bonus_for(level, aug_const.AUG_POWER_LEVELS) * _PERCENT
 
         return aug_const.AUG_TIP_REGEN.format(percent=percent)

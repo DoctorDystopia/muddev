@@ -157,4 +157,53 @@ ITEMS = {
             "projectile_strength_bonus": 0,
         },
     ),
+
+
+
+    # -------------------------------------
+    # --- MANGANESE MELEE ARMOR OFFHAND ---
+    # -------------------------------------
+
+    # The OSRS Mithril sq shield, as the copper square shield is the OSRS
+    # Steel sq shield. The projectile defense mirrors the melee defense.
+    "manganese_square_shield": ItemDef(
+        key="manganese_square_shield",
+        name="manganese square shield",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Manganese square shield.",
+        value=1560,
+        weight=3.175,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.OFF_HAND,
+        tool_type="square_shield",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_square_shield", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 17,
+            "melee_slash_defense_bonus": 19,
+            "melee_crush_defense_bonus": 15,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 17,
+            "projectile_standard_defense_bonus": 19,
+            "projectile_heavy_defense_bonus": 15,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+    ),
 }

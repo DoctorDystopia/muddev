@@ -907,7 +907,8 @@ class CombatEntity:
         Purpose: Subclass-overridable respawn hook. The base behaviour is a
         bare HP refill in place; both real combatant types override it.
         HostileNPC deletes its row and enqueues on the respawn manager, and
-        Character moves to the respawn room (world/respawn.py) at full HP.
+        Character moves to the respawn room (world/respawn.py) with full HP
+        and full Grit.
 
         This body is therefore the DEGRADED path, not a stub: it is what
         Character.respawn falls back to when the respawn room cannot be

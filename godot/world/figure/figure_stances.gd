@@ -37,6 +37,15 @@ extends RefCounted
 ## name. The Clips tab shows a row for each. [method attack_clip_for] gives
 ## its clip. An attack action with no clip of its own plays the clip of
 ## [constant ACTION_ATTACK]. Thus, a new weapon needs no edit here.
+##
+## ## A gathering action (11/10/2026)
+##
+## The server names the action of each gathering attempt: the hands of the
+## tool and the skill, for example `gather_one_hand_cutting` (`figure_action`
+## of `blackout_face`). The item catalog lists each one, and the Clips tab
+## shows a row for each. A gathering action with no clip plays nothing: no
+## clip of a fight stands in for it. [method strike_clip_for] gives the clip
+## of either kind.
 
 ## The newest format that this reader knows. It reads each older format.
 const FORMAT := 1
@@ -59,6 +68,9 @@ const ACTIONS := [ACTION_IDLE, ACTION_WALK, ACTION_RUN, ACTION_ATTACK]
 
 ## The start of the name of each attack action of the server.
 const ATTACK_PREFIX := ACTION_ATTACK + "_"
+
+## The start of the name of each gathering action of the server.
+const GATHERING_PREFIX := "gather_"
 
 ## A name of a tool type, of an action, or of a clip: a-z, 0-9, and _, with
 ## a letter first.
@@ -186,6 +198,24 @@ func attack_clip_for(tool_type: String, action: String) -> String:
 ## the table with the item catalog.
 static func is_attack_action(action: String) -> bool:
 	return action.begins_with(ATTACK_PREFIX)
+
+
+## True for the name of a gathering action of the server: it starts with
+## [constant GATHERING_PREFIX]. The stance check compares each such action
+## of the table with the item catalog.
+static func is_gathering_action(action: String) -> bool:
+	return action.begins_with(GATHERING_PREFIX)
+
+
+## The clip that one action of the server plays one time. A gathering
+## action gives its own clip or "" ([method clip_for]). Each other action
+## falls back as an attack action does ([method attack_clip_for]).
+func strike_clip_for(tool_type: String, action: String) -> String:
+	var gathering := is_gathering_action(action)
+	var clip := clip_for(tool_type, action) if gathering \
+		else attack_clip_for(tool_type, action)
+
+	return clip
 
 
 ## The clip set of one tool type: action -> clip name, for each action that

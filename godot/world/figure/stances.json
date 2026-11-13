@@ -11,6 +11,8 @@
 		"attack_two_hands_stab": "two_hands_stab",
 		"attack_two_hands_standard": "two_hands_shoot",
 		"attack_unarmed_crush": "punch",
+		"gather_one_hand_cutting": "cutting_chop",
+		"gather_unarmed_cutting": "punch",
 		"idle": "idle",
 		"walk": "walk"
 	},

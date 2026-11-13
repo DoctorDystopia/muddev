@@ -33,7 +33,7 @@ ingress:
       tcpKeepAlive: 90s
 
   # Godot client websocket. ServerEndpoint.PRODUCTION_URL in
-  # godot/world/server_endpoint.gd points here.
+  # godot/world/session/server_endpoint.gd points here.
   #
   # ABOVE THE CATCH-ALL, like the rule above it, or the client is handed HTML
   # instead of a socket upgrade.

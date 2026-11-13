@@ -158,4 +158,55 @@ ITEMS = {
             "projectile_strength_bonus": 0,
         },
     ),
+
+
+
+    # ----------------------------------
+    # --- MANGANESE MELEE ARMOR BODY ---
+    # ----------------------------------
+
+    # The OSRS Mithril chainbody, as the copper chainbody is the OSRS Steel
+    # chainbody. As on every chainbody, the light projectile defense is the
+    # stab defense, the heavy is the OSRS ranged defense (27), and the
+    # standard is between the two. Every tier of chainbody weighs 3.0.
+    "manganese_chainbody": ItemDef(
+        key="manganese_chainbody",
+        name="manganese chainbody",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Manganese chainbody.",
+        value=1950,
+        weight=3.0,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.BODY,
+        tool_type="chainbody",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_chainbody", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 25,
+            "melee_slash_defense_bonus": 35,
+            "melee_crush_defense_bonus": 42,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 25,
+            "projectile_standard_defense_bonus": 26,
+            "projectile_heavy_defense_bonus": 27,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+    ),
 }

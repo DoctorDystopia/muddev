@@ -17,16 +17,35 @@ extends PanelContainer
 ## [ServerAction]. There is no verb here, the contract [InventorySlotCell]
 ## states for the bag.
 ##
-## ## A drag inside one grid, from the server's template
+## ## A drag, and two kinds of drop
 ##
-## A slot drags only when the view gives it a key with [method bind_drag]. Only
-## the bank vault does this today. A drop goes on another slot of the grid, or
-## on a tab button. The view then fills the server's template with the two
-## keys. [PopupState] owns the fill, so this control holds no verb. No drag
-## goes from one grid to another.
+## A slot drags only when the view gives it a key with [method bind_drag]. A
+## drop then takes one of two paths:
+##
+## - **The drop table of the row** (11/09/2026). The row names the whole
+##   command for each drag key that it takes, from any grid. The rig sends
+##   one on each socket and each augment.
+##   [method PopupState.row_drop] reads it. A drag key with no entry is no
+##   drop, so a socket refuses an augment that does not fit it.
+## - **The template of the grid** (10/08/2026). The bank vault takes a drop
+##   from its own grid. The view fills the server's template with the two
+##   keys, and [PopupState] owns the fill.
+##
+## Neither path holds a verb. During a drag, a border marks each slot whose
+## drop table takes the drag.
 ##
 ## The left click fires on the RELEASE, as in [InventorySlotCell]. A click that
 ## fired on the press would withdraw the item that the player meant to drag.
+##
+## ## No line makes a slot wider than [constant SLOT_SIZE] (11/09/2026)
+##
+## [PopupView] counts its columns from [constant SLOT_SIZE]. A Label gives its
+## whole text as its minimum width, and a GridContainer makes each column as
+## wide as its widest cell. Thus, one long detail line made a whole column wide,
+## and the grid went past the right edge of the box. The rig showed this: a
+## locked augment said "Guard: Melee needs Augmentation level 20." under its
+## name. The detail line clips and ends in an ellipsis, as the name does. The
+## full line is in the tooltip and in [HoverBar].
 
 ## Emitted with a whole command a telnet player could have typed.
 signal command_requested(command: String)
@@ -62,6 +81,10 @@ const ART_HEIGHT := 34
 ## The border width of a buff card, in pixels. A card row has a `rarity` field.
 const RARITY_BORDER_WIDTH := 2
 
+## The border of a slot that takes the drag in progress. The accent of the XP
+## HUD: a "go" colour, not the red accent of an error.
+const DROP_HINT_COLOR := Color("5dcaa5")
+
 var _row: Dictionary = {}
 var _art: TextureRect
 var _title: ItemNameLabel
@@ -75,6 +98,13 @@ var _settings: ClientSettings
 
 ## The key a drag names this slot by, or "" for a slot that does not drag.
 var _drag_key := ""
+
+## True when the grid of this slot sends drag templates: the bank vault. Then
+## a drop of another slot of the grid fills a template.
+var _takes_template := false
+
+## True while the slot shows the border of a drop that it takes.
+var _hinted := false
 
 ## True after a drag starts, so the release that ends the gesture sends
 ## nothing.
@@ -106,6 +136,9 @@ func _init() -> void:
 	_detail = Label.new()
 	_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_detail.theme_type_variation = &"CellDetail"
+	# The clip drops the minimum width of the label to zero. See the class notes.
+	_detail.clip_text = true
+	_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	column.add_child(_detail)
 
 	# AFTER the column, so the count draws over the art. See [StackCountLabel].
@@ -160,13 +193,13 @@ func _show_rarity(rarity: String) -> void:
 		return
 
 	var colour := RarityPalette.color_for(rarity)
-	add_theme_stylebox_override("panel", _rarity_panel(colour))
+	add_theme_stylebox_override("panel", _bordered_panel(colour))
 	_detail.add_theme_color_override("font_color", colour)
 
 
 ## A copy of the theme panel with a border in `colour`. A theme panel that is
 ## not flat gives a clear box with the border only.
-func _rarity_panel(colour: Color) -> StyleBoxFlat:
+func _bordered_panel(colour: Color) -> StyleBoxFlat:
 	var base := get_theme_stylebox("panel", "PanelContainer")
 	var panel: StyleBoxFlat
 
@@ -243,9 +276,11 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()
 
 
-## Let this slot drag, under `key`. "" turns the drag off.
-func bind_drag(key: String) -> void:
+## Let this slot drag, under `key`. "" turns the drag off. `takes_template`
+## is true for a grid that sends drag templates, the bank vault.
+func bind_drag(key: String, takes_template: bool = false) -> void:
 	_drag_key = key
+	_takes_template = takes_template
 
 
 ## The key a drag names this slot by. For tests.
@@ -253,7 +288,59 @@ func drag_key() -> String:
 	return _drag_key
 
 
+## Show the border when this slot takes the drop of `data`, and hide it
+## otherwise. The notification calls it with the data of the drag in
+## progress. Public so that a test can start a drag with no mouse.
+func show_drop_hint_for(data: Variant) -> void:
+	var takes := not PopupState.row_drop(_row, _drag_source(data)).is_empty()
+
+	if takes == _hinted:
+		return
+
+	_hinted = takes
+
+	if takes:
+		add_theme_stylebox_override("panel", _bordered_panel(DROP_HINT_COLOR))
+	else:
+		_show_rarity(str(_row.get("rarity", "")))
+
+
+## True while the slot shows the drop border. For tests.
+func drop_hinted() -> bool:
+	return _hinted
+
+
 # ─── Drag and drop, all of it Godot's ────────────────────────────────────────
+
+## Every node in the viewport gets the start and the end of a drag. A slot
+## that a snapshot builds during a drag asks for the drag when it enters the
+## tree. A drop sends a command, and the next snapshot builds new slots.
+func _notification(what: int) -> void:
+	match what:
+		NOTIFICATION_DRAG_BEGIN, NOTIFICATION_ENTER_TREE:
+			show_drop_hint_for(_viewport_drag_data())
+		NOTIFICATION_DRAG_END:
+			show_drop_hint_for(null)
+
+
+## The data of the drag in progress, or null for no drag.
+func _viewport_drag_data() -> Variant:
+	var viewport := get_viewport()
+
+	if viewport == null:
+		return null
+
+	return viewport.gui_get_drag_data()
+
+
+## The drag key that a drag carries, or "" for a drag of something else: an
+## item of the bag, for example.
+static func _drag_source(data: Variant) -> String:
+	if typeof(data) != TYPE_DICTIONARY:
+		return ""
+
+	return str((data as Dictionary).get(DRAG_DATA_KEY, ""))
+
 
 func _get_drag_data(_at: Vector2) -> Variant:
 	if _drag_key.is_empty():
@@ -268,17 +355,29 @@ func _get_drag_data(_at: Vector2) -> Variant:
 	return {DRAG_DATA_KEY: _drag_key}
 
 
+## The drop table of the row first, then the template of the grid. A drop of
+## a slot on itself is never a template drop.
 func _can_drop_data(_at: Vector2, data: Variant) -> bool:
-	if _drag_key.is_empty() or typeof(data) != TYPE_DICTIONARY:
+	var source := _drag_source(data)
+
+	if source.is_empty():
 		return false
 
-	var source := str(data.get(DRAG_DATA_KEY, ""))
+	if not PopupState.row_drop(_row, source).is_empty():
+		return true
 
-	return not source.is_empty() and source != _drag_key
+	return _takes_template and not _drag_key.is_empty() and source != _drag_key
 
 
 func _drop_data(_at: Vector2, data: Variant) -> void:
-	dropped_on.emit(str(data.get(DRAG_DATA_KEY, "")), _drag_key)
+	var source := _drag_source(data)
+	var command := PopupState.row_drop(_row, source)
+
+	if not command.is_empty():
+		command_requested.emit(command)
+		return
+
+	dropped_on.emit(source, _drag_key)
 
 
 ## Offer exactly what the server offered, in the order it offered it. A slot

@@ -209,17 +209,15 @@ class MutantRaiderPrimeCuredHideRecipe(CuringRecipe):
 
 
 # ─── Mutant giant tier ──────────────────────────────────────────────────────
-# The same six shapes one tier up, at 20 to 32 against the raider's 0 to 12.
+# The same eight shapes one tier up, at 20 to 32 against the raider's 0 to 12.
 # Every XP value is twice the raider counterpart, which is the rule the giant
 # entries in world/item_defs/ follow for value, weight and heal.
 #
-# SIX RECIPES, NOT SEVEN. The giant has no prime sinew and no prime cured
-# hide, because nothing would consume either one -- the copper shortbow takes
-# giant sinew and the copper hide cape takes giant cured hide, and there is no
-# metal above copper to hang a fourth tier on. The corpse still yields a giant
-# prime raw hide, and the tier that needs it adds the two recipes then. See
-# gatherables.py for the line drawn between a gathered orphan and a crafted
-# one.
+# The prime sinew and the prime cured hide came with the manganese tier
+# (11/09/2026). Before it, nothing consumed them: the copper shortbow takes
+# giant sinew and the copper hide cape takes giant cured hide. The manganese
+# shortbow takes the prime sinew, and the manganese hide cape takes the prime
+# cured hide.
 
 
 class MutantGiantCuredChuckRecipe(CuringRecipe):
@@ -337,3 +335,47 @@ class MutantGiantCuredPrimeMeatRecipe(CuringRecipe):
     output_item_keys = ["mutant_giant_cured_prime_meat"]
 
     success_message = "You draw the cured giant prime meat out of the chamber."
+
+
+
+class MutantGiantPrimeSinewRecipe(CuringRecipe):
+    """Draw a whole giant prime hide down into one even cord.
+
+    The string of the manganese shortbow. Its level is the level of the
+    giant prime raw hide. The raider prime sinew follows the same rule.
+    The XP is twice the raider counterpart.
+    """
+
+    name = "mutant giant prime sinew"
+    required_level = 30
+    xp_reward = 100
+    cure_seconds = _GIANT_PRIME_TIER_SECONDS
+
+    consumable_tags = ["mutant_giant_prime_raw_hide"]
+    consumable_names = ["mutant giant prime raw hide"]
+
+    output_item_keys = ["mutant_giant_prime_sinew"]
+
+    success_message = "You draw the giant prime sinew out of the chamber."
+
+
+
+class MutantGiantPrimeCuredHideRecipe(CuringRecipe):
+    """Cure a whole giant prime hide flat instead of drawing it into a cord.
+
+    The manganese hide cape takes this. It takes the same hide as the giant
+    prime sinew, at the same level. Thus, one hide is a bowstring or a cape
+    panel, as at the raider prime tier.
+    """
+
+    name = "mutant giant prime cured hide"
+    required_level = 30
+    xp_reward = 100
+    cure_seconds = _GIANT_PRIME_TIER_SECONDS
+
+    consumable_tags = ["mutant_giant_prime_raw_hide"]
+    consumable_names = ["mutant giant prime raw hide"]
+
+    output_item_keys = ["mutant_giant_prime_cured_hide"]
+
+    success_message = "You draw the giant prime cured hide out of the chamber, flat and stiff."

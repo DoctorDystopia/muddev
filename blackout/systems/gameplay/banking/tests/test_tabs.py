@@ -23,6 +23,7 @@ from evennia.utils.test_resources import EvenniaCommandTest
 from systems.gameplay.banking import constants as bank_const
 from systems.gameplay.banking import handler as bank_handler
 from systems.gameplay.banking import layout as vault_layout
+from systems.gameplay.banking import verbs as bank_verbs
 from typeclasses.bank_nodes import BankNode, CmdBank
 from typeclasses.characters import Character as BlackoutCharacter
 from world.item_database import ITEM_DB
@@ -218,6 +219,42 @@ class TestBankVerbs(_TabFixture):
 
         self.assertEqual([chunks, dust],
                          self._layout().tabs[bank_const.MAIN_TAB])
+
+    def test_insert_puts_the_first_item_in_the_place_of_the_second(self):
+        dust = self._bank_dust()
+        chunks = self._bank_chunks()
+
+        response = self._bank_cmd(f"insert {dust} = {chunks}")
+
+        self.assertIn("place", response.lower())
+        self.assertEqual([chunks, dust],
+                         self._layout().tabs[bank_const.MAIN_TAB])
+
+    def test_insert_of_an_item_on_itself_is_refused(self):
+        dust = self._bank_dust()
+
+        response = self._bank_cmd(f"insert {dust} = {dust}")
+
+        self.assertIn("two different", response.lower())
+
+    def test_drag_sets_every_mode(self):
+        for mode in bank_const.DRAG_MODES:
+            with self.subTest(mode=mode):
+                response = self._bank_cmd(f"{bank_const.VERB_DRAG} {mode}")
+
+                self.assertEqual(mode, self.char1.bank.drag_mode())
+                self.assertIn("now", response.lower())
+
+    def test_drag_with_a_word_that_is_not_a_mode_prints_the_usage(self):
+        response = self._bank_cmd(f"{bank_const.VERB_DRAG} juggle")
+
+        self.assertIn("usage", response.lower())
+        self.assertEqual(bank_const.DRAG_MODE_DEFAULT, self.char1.bank.drag_mode())
+
+    def test_every_drag_mode_has_an_answer(self):
+        for mode in bank_const.DRAG_MODES:
+            with self.subTest(mode=mode):
+                self.assertIn(mode, bank_verbs.MSG_DRAG_MODE)
 
     def test_placeholders_off_turns_them_off(self):
         self._bank_cmd(f"placeholders {bank_const.SWITCH_OFF_WORD}")

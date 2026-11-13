@@ -1,0 +1,67 @@
+# The dialogue of NPC_AUG_CLINIC_1, the recruiter of the Augmentation Clinic
+# (DESIGN-0015, Phase 4). It gives the Augmentation intro quest and takes the
+# report at its end.
+#
+# EVERY LINE HERE IS A PLACEHOLDER. Nick owns the lore and the names. Each
+# line says what happens in the beat, as a stage direction, and nothing more.
+#
+# The start cue routes on the quest step. Each step has one cue.
+
+~ start
+if quest.is_complete("augmentation_intro")
+	=> post_quest
+elif quest.on_step("augmentation_intro", "recruit")
+	=> recruit
+elif quest.on_step("augmentation_intro", "report")
+	=> report
+elif quest.is_active("augmentation_intro")
+	=> waiting
+{{npc.header}}
+{{npc.name}}: [Placeholder: {{npc.name}} greets the candidate and hints at a job.]
+- Placeholder: ask about the job. => offer
+- Placeholder: leave. => END
+
+~ offer
+if not quest.is_available("augmentation_intro")
+	{{npc.name}}: [Placeholder: The job is already taken.]
+	- Right. => start
+{{npc.name}}: [Placeholder: {{npc.name}} explains that augments go missing from the Clinic, and asks the candidate to find out who takes them.]
+{{quest.accept_prompt("augmentation_intro")}}
+- Accept: {{quest.title("augmentation_intro")}}
+	do quest.accept("augmentation_intro")
+	do message.success("You take the job.")
+	=> recruit
+- Not yet. => END
+
+# The brief. The talk target fires here: the recruit step is done when the
+# player had this conversation.
+~ recruit
+do quest.talk("augmentation_intro", "npc_aug_clinic_1")
+{{npc.name}}: [Placeholder: {{npc.name}} gives the brief: the trail of the missing augments points at the Public Hospital.]
+{{quest.objectives("augmentation_intro")}}
+- Placeholder: agree and go. => END
+
+# The recruiter waits for the report. No target fires here.
+~ waiting
+{{npc.name}}: [Placeholder: {{npc.name}} asks whether the candidate found the trail yet.]
+{{quest.objectives("augmentation_intro")}}
+- Placeholder: not yet. => END
+
+# The report, with two closing responses: the truth and a cover story. Both
+# complete the quest. Nick decides whether they differ. The last target fires
+# under the response, so the reward comes after the player read the scene.
+~ report
+{{npc.name}}: [Placeholder: {{npc.name}} asks for the report.]
+- Placeholder: tell the truth about the Hospital.
+	do quest.talk("augmentation_intro", "npc_aug_clinic_1_end")
+	=> post_quest
+- Placeholder: give a cover story.
+	do quest.talk("augmentation_intro", "npc_aug_clinic_1_end")
+	=> post_quest
+
+~ post_quest
+{{npc.name}}: [Placeholder: {{npc.name}} thanks the candidate, and points at the Locus.]
+- Placeholder: leave. => END
+
+~ farewell
+{{npc.name}}: [Placeholder farewell of the Clinic recruiter.]

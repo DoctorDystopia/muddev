@@ -68,6 +68,13 @@ serve the model tree at the path the client asks for, which is
 `publish.sh` uploads both trees to the same bucket for exactly this reason, and
 `worker/index.ts` claims both prefixes on the site's own hostname.
 
+The music tree follows the same rule. `MusicPlayer` fetches each track from
+`/static/webclient/music/<key>.ogg` on the same origin. Thus, `publish.sh`
+uploads that tree too, and the worker claims that prefix. Until 11/10/2026,
+neither did. The site answered each track with its 404 page, the player
+marked the track as failed, and the web client played no music. The native
+client fetches from the game server, so it played the music.
+
 The alternative — adding CORS headers to Evennia's static serving — was rejected
 for the same two reasons §4.2 gives above: every byte would cross `cloudflared`,
 and an `evennia reload` could interrupt an art fetch.

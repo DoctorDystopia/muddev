@@ -18,13 +18,16 @@ Description: Guard the cue table (godot/audio/cues.json), the credits of the
              The other cases run the modules on temporary files.
 """
 
+import dataclasses
 import os
 import tempfile
 import unittest
 from unittest import mock
 
-from assets.audio import check, credits, cue_table, kinds, paths
+from assets.audio import check, credits, cue_table, kinds, paths, tracks
+from assets.pipeline import paths as pipeline_paths
 from systems.interface.statefeed import constants as const
+from world import areas, music_tracks
 
 
 _TWO_PACKS = """# Audio credits
@@ -181,10 +184,14 @@ class CreditsTests(unittest.TestCase):
 
 
 class KindTests(unittest.TestCase):
-    """Each sound kind writes an import file that Godot reads."""
+    """Each sound kind in the pck writes an import file that Godot reads.
+    A served kind writes none."""
 
     def test_each_import_text_holds_each_setting_of_its_kind(self):
         for key, kind in kinds.KINDS.items():
+            if kind.served:
+                continue
+
             with self.subTest(kind=key):
                 text = kinds.render_import(kind)
 
@@ -193,13 +200,31 @@ class KindTests(unittest.TestCase):
                 for name, value in kind.params:
                     self.assertIn("%s=%s" % (name, value), text)
 
+    def test_a_served_kind_has_no_import_file(self):
+        served = [kind for kind in kinds.KINDS.values() if kind.served]
+
+        self.assertTrue(served)
+
+        for kind in served:
+            with self.subTest(kind=kind.folder):
+                self.assertEqual(kinds.render_import(kind), "")
+                self.assertEqual(kind.importer, "")
+
     def test_each_kind_takes_suffixes_and_a_folder(self):
         for key, kind in kinds.KINDS.items():
             with self.subTest(kind=key):
                 self.assertTrue(kind.suffixes)
                 self.assertTrue(all(suffix.startswith(".")
                                     for suffix in kind.suffixes))
+                self.assertTrue(kind.output_suffix.startswith("."))
                 self.assertNotIn("/", kind.folder)
+
+    def test_the_music_kind_serves_the_suffix_that_the_server_names(self):
+        kind = kinds.KINDS[kinds.MUSIC_KIND]
+
+        self.assertTrue(kind.served)
+        self.assertEqual(kind.output_suffix, music_tracks.SERVED_SUFFIX)
+        self.assertTrue(music_tracks.SERVED_DIRECTORY.endswith(kind.folder))
 
 
 class CheckTests(unittest.TestCase):
@@ -210,10 +235,16 @@ class CheckTests(unittest.TestCase):
         self.addCleanup(self._folder.cleanup)
         root = self._folder.name
         self.audio_dir = os.path.join(root, "audio")
+        self.served_dir = os.path.join(root, "music")
+        self.sources_dir = os.path.join(root, "sources")
         os.makedirs(os.path.join(self.audio_dir, "sfx"))
+        os.makedirs(self.served_dir)
+        os.makedirs(self.sources_dir)
 
         for name, value in (
                 ("AUDIO_DIR", self.audio_dir),
+                ("SERVED_MUSIC_DIR", self.served_dir),
+                ("TRACK_TABLE_PATH", os.path.join(root, "music_tracks.json")),
                 ("CUE_TABLE_PATH", os.path.join(self.audio_dir, "cues.json")),
                 ("CREDITS_PATH", os.path.join(self.audio_dir, "CREDITS.md")),
                 ("CLIENT_CONSTANTS_PATH", os.path.join(root, "constants.gd"))):
@@ -221,8 +252,15 @@ class CheckTests(unittest.TestCase):
             patch.start()
             self.addCleanup(patch.stop)
 
+        sources = mock.patch.object(pipeline_paths, "SOURCES_DIR",
+                                    self.sources_dir)
+        sources.start()
+        self.addCleanup(sources.stop)
+
         with open(paths.CLIENT_CONSTANTS_PATH, "w", encoding="utf-8") as out:
             out.write('const MOMENT_A := "a"\n')
+
+        tracks.write_table((), paths.TRACK_TABLE_PATH)
 
     def _world(self, cues, moments, credited, files):
         """Write a cue table, the credits, and the named sound clips."""
@@ -239,6 +277,38 @@ class CheckTests(unittest.TestCase):
         for clip in files:
             with open(paths.clip_path(clip), "wb") as handle:
                 handle.write(b"RIFF")
+
+    def _track(self, key, served=True, credited=True, sourced=True,
+               **changes):
+        """Write one track row, with its served file, row and source."""
+        track = music_tracks.Track(key=key, name="A Track",
+                                   area=areas.DEFAULT_AREA,
+                                   unlock=music_tracks.UNLOCK_AREA,
+                                   unlock_key="", hint="", note="A note.")
+        track = dataclasses.replace(track, **changes)
+        rows = tracks.with_track(tracks.read_table(paths.TRACK_TABLE_PATH),
+                                 track)
+        tracks.write_table(rows, paths.TRACK_TABLE_PATH)
+
+        if served:
+            with open(paths.track_path(key), "wb") as handle:
+                handle.write(b"OggS")
+
+        if credited:
+            text = credits.read_credits(paths.CREDITS_PATH)
+            row = credits.render_row(tracks.served_relative(key), "X.flac", "")
+            credits.write_credits(credits.with_row(text, "A — Pack", row),
+                                  paths.CREDITS_PATH)
+
+        if sourced:
+            directory = paths.source_dir(key)
+            os.makedirs(directory)
+
+            with open(os.path.join(directory, "source.toml"), "w",
+                      encoding="utf-8") as handle:
+                handle.write('title = "A"\nauthor = "B"\nurl = "C"\n'
+                             'site = "D"\nlicense = "CC0-1.0"\n'
+                             'retrieved = 2026-11-08\n')
 
     def test_a_consistent_world_passes(self):
         self._world({"a": "sfx/a.wav"}, {"a": "a"}, ["sfx/a.wav"],
@@ -274,6 +344,91 @@ class CheckTests(unittest.TestCase):
 
         self.assertTrue(report.ok)
         self.assertIn("sfx/old.wav", "\n".join(report.warnings))
+
+    def test_a_whole_track_passes(self):
+        self._world({"a": "sfx/a.wav"}, {}, ["sfx/a.wav"], ["sfx/a.wav"])
+        self._track("whole")
+
+        self.assertEqual(check.run_check().problems, [])
+
+    def test_a_track_with_no_served_file_no_row_and_no_source_fails(self):
+        self._world({"a": "sfx/a.wav"}, {}, ["sfx/a.wav"], ["sfx/a.wav"])
+        self._track("bare", served=False, credited=False, sourced=False)
+        problems = "\n".join(check.run_check().problems)
+
+        self.assertIn("is not there", problems)
+        self.assertIn("no row in CREDITS.md", problems)
+        self.assertIn("no source record", problems)
+
+    def test_a_served_file_that_no_track_names_fails(self):
+        self._world({"a": "sfx/a.wav"}, {}, ["sfx/a.wav"], ["sfx/a.wav"])
+
+        with open(paths.track_path("stray"), "wb") as handle:
+            handle.write(b"OggS")
+
+        problems = "\n".join(check.run_check().problems)
+
+        self.assertIn("stray", problems)
+        self.assertIn("names no track", problems)
+
+    def test_a_track_of_an_unknown_area_fails(self):
+        self._world({"a": "sfx/a.wav"}, {}, ["sfx/a.wav"], ["sfx/a.wav"])
+        self._track("lost", area="no_such_area")
+        problems = "\n".join(check.run_check().problems)
+
+        self.assertIn("no_such_area", problems)
+
+    def test_a_track_table_that_does_not_read_fails(self):
+        self._world({"a": "sfx/a.wav"}, {}, ["sfx/a.wav"], ["sfx/a.wav"])
+
+        with open(paths.TRACK_TABLE_PATH, "w", encoding="utf-8") as handle:
+            handle.write("{not json")
+
+        self.assertFalse(check.run_check().ok)
+
+
+class TrackTableTests(unittest.TestCase):
+    """The track table writer gives the bytes of the Tables tab, and an
+    empty table reads."""
+
+    def setUp(self):
+        self._folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self._folder.cleanup)
+        self.path = os.path.join(self._folder.name, "music_tracks.json")
+
+    def test_an_empty_table_reads_back_empty(self):
+        tracks.write_table((), self.path)
+
+        self.assertEqual(tracks.read_table(self.path), ())
+
+    def test_a_table_reads_back_as_it_was_written(self):
+        track = music_tracks.Track(key="a", name="A", area=areas.DEFAULT_AREA,
+                                   unlock=music_tracks.UNLOCK_AREA,
+                                   unlock_key="", hint="", note="A note.")
+        rows = tracks.with_track((), track)
+        tracks.write_table(rows, self.path)
+
+        self.assertEqual(tracks.read_table(self.path), rows)
+
+    def test_the_text_has_a_tab_indent_and_sorted_keys(self):
+        track = music_tracks.Track(key="a", name="A", area=areas.DEFAULT_AREA,
+                                   unlock=music_tracks.UNLOCK_AREA,
+                                   unlock_key="", hint="", note="A note.")
+        text = tracks.render_table((track,))
+        lines = text.splitlines()
+
+        self.assertEqual(lines[0], "{")
+        self.assertTrue(lines[1].startswith('\t"format"'))
+        self.assertLess(text.index('"area"'), text.index('"key"'))
+        self.assertTrue(text.endswith("}\n"))
+
+    def test_the_served_name_and_the_source_id_come_from_the_key(self):
+        self.assertEqual(tracks.served_relative("a_track"),
+                         "music/a_track" + music_tracks.SERVED_SUFFIX)
+        self.assertEqual(tracks.source_ids((music_tracks.Track(
+            key="a_track", name="A", area=areas.DEFAULT_AREA,
+            unlock=music_tracks.UNLOCK_AREA, unlock_key="", hint="",
+            note="A note."),)), {music_tracks.source_id_for("a_track")})
 
 
 if __name__ == "__main__":

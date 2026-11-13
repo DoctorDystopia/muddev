@@ -47,9 +47,9 @@ class AugmentModifierRules(BaseActionRules):
 
     Methodology:
         Overrides contribute_modifiers only, so it composes with every
-        gear rule: a modifier never loses a priority contest. The bonus is
-        computed at the action, from the level and the step at that tick,
-        and stored on the instance. The channel comes from the augment at
+        gear rule: a modifier never loses a priority contest. The action
+        computes the bonus from the level and the power level at that tick.
+        The instance keeps the bonus. The channel comes from the augment at
         contribution time, because the accuracy and the damage channels
         follow the style of the action.
 
@@ -95,9 +95,9 @@ def active_rules(entity) -> tuple:
     Methodology:
         1. Read the lit set from the handler.
         2. Read the Augmentation level one time.
-        3. Sum the rolls of the lit strength modifiers, at their steps.
+        3. Sum the rolls of the lit strength modifiers, at their power levels.
         4. Build one instance for each pair that reaches an action, with
-           the bonus of its step plus the rolls. A modifier builds none.
+           the bonus of its power level plus the rolls. A modifier builds none.
 
     Notes/References:
         _build_context in combat.py merges these for both sides of an
@@ -115,11 +115,12 @@ def active_rules(entity) -> tuple:
     extra = strength_roll(entity)
     rules = []
 
-    for augment, step in lit:
+    for augment, power_level in lit:
         if augment.family == aug_const.FAMILY_MODIFIER:
             continue
 
-        bonus = augment.bonus_for(held_level, step) + extra * augment.step_share(step)
+        share = augment.power_level_share(power_level)
+        bonus = augment.bonus_for(held_level, power_level) + extra * share
         rules.append(AugmentModifierRules(augment, bonus))
 
     return tuple(rules)
@@ -135,7 +136,7 @@ def strength_roll(entity) -> float:
 
     Exit/Returns:
         Returns a float, 0.0 when no strength modifier burns. Each roll
-        is scaled by the step of its modifier.
+        is scaled by the power level of its modifier.
 
     Module Globals:
         aug_const.MODIFIES_STRENGTH read.
@@ -156,9 +157,9 @@ def strength_roll(entity) -> float:
 
     total = 0.0
 
-    for augment, step in handler.lit_augments():
+    for augment, power_level in handler.lit_augments():
         if augment.modifies == aug_const.MODIFIES_STRENGTH:
-            total += handler.roll_of(augment.key) * augment.step_share(step)
+            total += handler.roll_of(augment.key) * augment.power_level_share(power_level)
 
     return total
 
@@ -178,7 +179,8 @@ def reach_bonus(entity) -> int:
         aug_const.MODIFIES_REACH read.
 
     Methodology:
-        Sum `tiles_for(step)` over the lit augments that modify the reach.
+        Sum `tiles_for(power_level)` over the lit augments that modify the
+        reach.
 
     Notes/References:
         BlackoutAuraHandler.radius_for reads it at each pulse, and the
@@ -190,9 +192,9 @@ def reach_bonus(entity) -> int:
     """
     tiles = 0
 
-    for augment, step in lit_augments_of(entity):
+    for augment, power_level in lit_augments_of(entity):
         if augment.modifies == aug_const.MODIFIES_REACH:
-            tiles += augment.tiles_for(step)
+            tiles += augment.tiles_for(power_level)
 
     return tiles
 
@@ -214,7 +216,7 @@ def regen_interval_share(entity) -> float:
 
     Methodology:
         1 minus the sum of the bonuses of the lit regen modifiers, at the
-        level and the step of each, floored.
+        level and the power level of each, floored.
 
     Notes/References:
         combat/hp_regen.py reads it at each sweep.
@@ -230,9 +232,9 @@ def regen_interval_share(entity) -> float:
     held_level = pool.level(entity)
     cut = 0.0
 
-    for augment, step in lit:
+    for augment, power_level in lit:
         if augment.modifies == aug_const.MODIFIES_REGEN:
-            cut += augment.bonus_for(held_level, step)
+            cut += augment.bonus_for(held_level, power_level)
 
     share = 1.0 - cut
 

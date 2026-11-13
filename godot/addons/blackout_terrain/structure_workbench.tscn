@@ -1,6 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" uid="uid://ofhlufyuc7bb" path="res://addons/blackout_terrain/terrain_world.gd" id="1_world"]
+[ext_resource type="Script" uid="uid://ofhlufyuc7bb" path="res://addons/blackout_terrain/view/terrain_world.gd" id="1_world"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMaterial_workbench"]
 sky_top_color = Color(0.72, 0.62, 0.5, 1)

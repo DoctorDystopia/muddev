@@ -16,8 +16,8 @@
 #   reload        the other server code in blackout/     it changed
 #   Godot export  godot/, minus the exclude_filter of    it changed, or no build
 #                 the Web preset                          exists
-#   R2 publish    the export + the model tree            always, and publish.sh
-#                                                         uploads only changed files
+#   R2 publish    the export, the model tree, and the    always, and publish.sh
+#                 music tree                             uploads only changed files
 #   site deploy   the sources of playblackout-site,      they changed. The leg
 #                 minus docs/ and README.md               builds dist/ first
 #
@@ -55,6 +55,7 @@ SERVER_EXCLUDES=(
     ":(exclude)blackout/world/chunks"
     ":(exclude)blackout/assets"
     ":(exclude)blackout/web/static/webclient/models"
+    ":(exclude)blackout/web/static/webclient/music"
     ":(exclude)blackout/scripts"
     ":(exclude)blackout/analysis"
     ":(exclude)blackout/profiling"
@@ -301,7 +302,7 @@ else
         echo "export: godot/ unchanged, skipped"
     fi
 
-    # Always run: a model can change with no change under godot/. A dry run
+    # Always run: a model or a track can change with no change under godot/. A dry run
     # of publish.sh reads only, so it runs here and lists the changed keys.
     if [ "$DRY_RUN" -eq 1 ]; then
         bash "$SCRIPT_DIR/webexport/publish.sh" --changed-only --dry-run

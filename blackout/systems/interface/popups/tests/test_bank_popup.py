@@ -50,6 +50,9 @@ _DUST_UNITS = 40
 _CHUNK_KEY = "rusty_metal_chunk"
 _CHUNK_COUNT = 6
 
+# A third item, so an insert and a swap give two different orders.
+_SCRAP_KEY = "rusty_scrap_metal"
+
 # An amount the X button sets, that no fixed button shows.
 _CUSTOM_AMOUNT = 7
 
@@ -455,7 +458,9 @@ class TestTabs(_BankFixture):
         return self._vault()[bank_popup.GRID_TABS_FIELD][-1]["drop_key"]
 
     def test_the_templates_carry_the_client_tokens(self):
-        for template in (bank_const.MOVE_TEMPLATE, bank_const.SWAP_TEMPLATE):
+        drop_templates = list(bank_const.DROP_ON_SLOT_TEMPLATES.values())
+
+        for template in [bank_const.MOVE_TEMPLATE] + drop_templates:
             with self.subTest(template=template):
                 self.assertIn(feed_const.DRAG_SOURCE_TOKEN, template)
                 self.assertIn(feed_const.DRAG_TARGET_TOKEN, template)
@@ -560,6 +565,60 @@ class TestTabs(_BankFixture):
         self._send(switch["command"])
 
         self.assertFalse(self.char1.bank.keeps_placeholders())
+
+    def _drag_button(self) -> dict:
+        """The footer button of the drag mode."""
+        labels = set(bank_popup.LABEL_DRAG_MODE.values())
+        found = [button for button in self._snapshot()["actions"]
+                 if button["label"] in labels]
+
+        self.assertEqual(1, len(found))
+
+        return found[0]
+
+    def test_every_drag_mode_has_a_button_label(self):
+        for mode in bank_const.DRAG_MODES:
+            with self.subTest(mode=mode):
+                self.assertIn(mode, bank_popup.LABEL_DRAG_MODE)
+
+    def test_the_drag_button_names_the_mode_and_picks_the_next(self):
+        self._open()
+        start = self.char1.bank.drag_mode()
+        button = self._drag_button()
+
+        self._send(button["command"])
+
+        picked = self.char1.bank.drag_mode()
+        self.assertEqual(bank_popup.LABEL_DRAG_MODE[start], button["label"])
+        self.assertNotEqual(start, picked)
+        self.assertEqual(bank_const.DROP_ON_SLOT_TEMPLATES[picked],
+                         self._vault()[bank_popup.GRID_DRAG_FIELD][bank_popup.DRAG_ONTO_SLOT])
+
+    def test_every_drag_mode_sends_a_line_the_parser_takes(self):
+        self._bank_both()
+
+        for mode in bank_const.DRAG_MODES:
+            with self.subTest(mode=mode):
+                self.char1.bank.set_drag_mode(mode)
+                first, second = [row[bank_popup.ROW_DRAG_KEY_FIELD]
+                                 for row in self._vault()["items"]]
+
+                self._drop(bank_popup.DRAG_ONTO_SLOT, first, second)
+
+                keys = [row[bank_popup.ROW_DRAG_KEY_FIELD]
+                        for row in self._vault()["items"]]
+                self.assertEqual([second, first], keys)
+
+    def test_a_drop_in_insert_mode_shifts_the_slots_between(self):
+        dust, chunks = self._bank_both()
+        self._bank(self._carry(_SCRAP_KEY))
+        scrap = self._vault()["items"][-1][bank_popup.ROW_DRAG_KEY_FIELD]
+        self.char1.bank.set_drag_mode(bank_const.VERB_INSERT)
+
+        self._drop(bank_popup.DRAG_ONTO_SLOT, dust, scrap)
+
+        keys = [row[bank_popup.ROW_DRAG_KEY_FIELD] for row in self._vault()["items"]]
+        self.assertEqual([chunks, scrap, dust], keys)
 
 
 class TestSectionHeadings(TestCase):

@@ -5,7 +5,8 @@ Creation date: 10/28/2026
 Description: The world versions: a shelf of saved worlds that a developer
              switches between with one click. The Versions tab of the
              terrain editor and `scripts/world_versions.py` call here. The
-             GDScript twin is `godot/addons/blackout_terrain/world_versions.gd`.
+             GDScript twin is
+             `godot/addons/blackout_terrain/data/world_versions.gd`.
 
 Why a shelf, and not a git branch
 ---------------------------------

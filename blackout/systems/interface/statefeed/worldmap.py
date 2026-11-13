@@ -135,7 +135,7 @@ def encode_tiles(chunk_file) -> str:
         one character for each class.
 
     Notes/References:
-        godot/world/world_map_state.gd decodes it.
+        godot/world/state/world_map_state.gd decodes it.
 
     Author: Nick Hobar
     Creation date: 09/28/2026

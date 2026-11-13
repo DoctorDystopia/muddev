@@ -42,7 +42,7 @@ func _notification(what: int) -> void:
 ##
 ## Static and shared with [HoverBar], which has the same one-pixel floor.
 ##
-## Plain strings, not `&"..."`: `tests/test_theme.gd` reads every StringName
+## Plain strings, not `&"..."`: `tests/ui/test_theme.gd` reads every StringName
 ## literal in the client as a theme variation.
 static func height_of_lines(label: Label, lines: int) -> float:
 	var font := label.get_theme_font("font")

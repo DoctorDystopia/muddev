@@ -17,8 +17,9 @@ Description: The name check of the templates of the Build tab (DESIGN-0013
              format. This test reads each file with `json` and checks only
              what the server owns: the names, and that each grid index
              names a row of its list. `fixtures/structures/fixture_stall.json`
-             is also the fixture of `godot/tests/test_structure_template.gd`,
-             which writes it back byte for byte.
+             is also the fixture of `test_structure_template.gd` in
+             `godot/tests/addons/blackout_terrain/`, which writes it back
+             byte for byte.
 
              NO CENSUS HERE. The directory may hold any number of templates.
 """

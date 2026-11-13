@@ -120,6 +120,44 @@ ITEMS = {
         tags=[("scrap_copper", "crafting_material")],
     ),
 
+    # -----------------------
+    # --- MANGANESE ITEMS ---
+    # -----------------------
+    # Each value is the copper value times 2.6, the OSRS ratio of a Mithril
+    # item to its Steel item. The weights are the copper weights.
+    "manganese_chunk": ItemDef(
+        key="manganese_chunk",
+        name="manganese chunk",
+        desc="A chunk of manganese.",
+        value=65,
+        weight=2.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("manganese_chunk", "crafting_material")],
+    ),
+
+    "manganese_dust": ItemDef(
+        key="manganese_dust",
+        name="manganese dust",
+        desc="A fine dust ground from manganese.",
+        value=78,
+        weight=0.2,
+        tradeable=True,
+        stackable=True,
+        tags=[("manganese_dust", "crafting_material")],
+    ),
+
+    "scrap_manganese": ItemDef(
+        key="scrap_manganese",
+        name="scrap manganese",
+        desc="A rough piece of scrap manganese, smelted down from a manganese chunk.",
+        value=91,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("scrap_manganese", "crafting_material")],
+    ),
+
 
 
     # ─── Mutant raider cuts (Butchery) ────────────────────────────────────
@@ -343,12 +381,12 @@ ITEMS = {
         tags=[("mutant_giant_raw_hide", "crafting_material")],
     ),
 
-    # The level 30 hide. NOTHING CURES IT YET, and that is deliberate: the
-    # cut exists so the corpse reads the same as the raider's at every level,
-    # and the tier that needs a giant prime sinew or a giant prime cured hide
-    # adds the Curing recipe then. A gathered material with no recipe is a
-    # material a player can sell. A CRAFTED item with no recipe is the bug
-    # that left both hide capes uncraftable -- see curing_recipes.py.
+    # The level 30 hide. Curing makes it into a giant prime sinew or a giant
+    # prime cured hide, for the manganese shortbow and the manganese hide
+    # cape (11/09/2026). Until the manganese tier, nothing cured it. A
+    # gathered material with no recipe is a material a player can sell. A
+    # CRAFTED item with no recipe is the bug that left both hide capes
+    # uncraftable -- see curing_recipes.py.
     "mutant_giant_prime_raw_hide": ItemDef(
         key="mutant_giant_prime_raw_hide",
         name="mutant giant prime raw hide",
@@ -439,5 +477,32 @@ ITEMS = {
         tradeable=True,
         stackable=False,
         tags=[("mutant_giant_cured_hide", "crafting_material")],
+    ),
+
+    # The manganese tier strings its bow with the prime sinew and backs its
+    # cape with the prime cured hide. Both cure from the giant prime raw
+    # hide, as the raider prime pair cures from the raider prime raw hide.
+    # The value and the weight are twice the raider counterpart.
+
+    "mutant_giant_prime_sinew": ItemDef(
+        key="mutant_giant_prime_sinew",
+        name="mutant giant prime sinew",
+        desc="A cord drawn off a whole giant hide.",
+        value=90,
+        weight=0.4,
+        tradeable=True,
+        stackable=True,
+        tags=[("mutant_giant_prime_sinew", "crafting_material")],
+    ),
+
+    "mutant_giant_prime_cured_hide": ItemDef(
+        key="mutant_giant_prime_cured_hide",
+        name="mutant giant prime cured hide",
+        desc="A whole giant hide, cured flat.",
+        value=24,
+        weight=2.0,
+        tradeable=True,
+        stackable=False,
+        tags=[("mutant_giant_prime_cured_hide", "crafting_material")],
     ),
 }

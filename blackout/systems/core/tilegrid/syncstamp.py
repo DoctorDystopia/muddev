@@ -20,7 +20,7 @@ The digest
 ----------
 SHA-256 of the file text with each CRLF made LF. Git may check a file out
 with either line end, and the meaning does not change. The GDScript twin,
-`godot/addons/blackout_terrain/terrain_sync_state.gd`, uses the same rule.
+`godot/addons/blackout_terrain/data/terrain_sync_state.gd`, uses the same rule.
 
 This module imports no Evennia.
 """

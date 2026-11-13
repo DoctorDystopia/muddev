@@ -887,3 +887,302 @@ class CopperPlatelegsRecipe(BlackoutRecipe):
     output_item_keys = ["copper_platelegs"]
 
     success_message = "You hammer the scrap copper into a clean, bright pair of platelegs."
+
+
+
+# -------------------------------
+# --- MANGANESE METAL RECIPES ---
+# -------------------------------
+# Each level is the copper level plus TIER_LEVEL_STEP (10). Each recipe
+# takes as many sheets as its copper recipe. The XP for one sheet is 25,
+# 35, and 50 on the lower tiers, about 1.4 times for each step. Thus, a
+# manganese sheet pays 70.
+
+class ManganeseDaggerRecipe(BlackoutRecipe):
+    "Hammer scrap manganese into a dagger at an anvil."
+
+    name = "manganese dagger"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 30
+    xp_reward = 70
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese"]
+    consumable_names = ["scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_dagger"]
+
+    success_message = "You hammer the scrap manganese into a dagger."
+
+
+
+class ManganeseAxeRecipe(BlackoutRecipe):
+    "Hammer scrap manganese into an axe at an anvil."
+
+    name = "manganese axe"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 30
+    xp_reward = 70
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese"]
+    consumable_names = ["scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_axe"]
+
+    success_message = "You hammer the scrap manganese into an axe."
+
+
+
+class ManganeseHideCapeRecipe(BlackoutRecipe):
+    """Hammer scrap manganese and giant prime cured hide into a cape.
+
+    The cape ladder follows the corpse ladder. Each tier takes the next
+    hide: raider, raider prime, giant, and now giant prime. Each cape thus
+    asks for a hide that the cape below it does not.
+    """
+
+    name = "manganese hide cape"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 31
+    xp_reward = 140
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "mutant_giant_prime_cured_hide"]
+    consumable_names = ["scrap manganese", "mutant giant prime cured hide"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_hide_cape"]
+
+    success_message = "You hammer the scrap manganese and giant prime cured hide into a manganese hide cape."
+
+
+
+class ManganeseBootsRecipe(BlackoutRecipe):
+    "Hammer scrap manganese into boots at an anvil."
+
+    name = "manganese boots"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 33
+    xp_reward = 70
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese"]
+    consumable_names = ["scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_boots"]
+
+    success_message = "You hammer the scrap manganese into a pair of boots."
+
+
+
+class ManganeseShortswordRecipe(BlackoutRecipe):
+    "Hammer two scrap manganese sheets into a shortsword at an anvil."
+
+    name = "manganese shortsword"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 34
+    xp_reward = 140
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_shortsword"]
+
+    success_message = "You hammer the scrap manganese into a shortsword."
+
+
+
+class ManganeseScimitarRecipe(BlackoutRecipe):
+    "Hammer two scrap manganese sheets into a scimitar at an anvil."
+
+    name = "manganese scimitar"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 35
+    xp_reward = 140
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_scimitar"]
+
+    success_message = "You hammer the scrap manganese into a scimitar."
+
+
+
+class ManganeseSpearRecipe(BlackoutRecipe):
+    "Hammer two scrap manganese sheets into a spear at an anvil."
+
+    name = "manganese spear"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 35
+    xp_reward = 140
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_spear"]
+
+    success_message = "You hammer the scrap manganese into a spear."
+
+
+
+class ManganeseGreatHelmRecipe(BlackoutRecipe):
+    "Hammer two scrap manganese sheets into a great helm at an anvil."
+
+    name = "manganese great helm"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 37
+    xp_reward = 140
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_great_helm"]
+
+    success_message = "You hammer the scrap manganese into a great helm."
+
+
+
+class ManganeseSquareShieldRecipe(BlackoutRecipe):
+    "Hammer two scrap manganese sheets into a square shield at an anvil."
+
+    name = "manganese square shield"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 38
+    xp_reward = 140
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_square_shield"]
+
+    success_message = "You hammer the scrap manganese into a square shield."
+
+
+
+class ManganeseBattleaxeRecipe(BlackoutRecipe):
+    "Hammer three scrap manganese sheets into a battleaxe at an anvil."
+
+    name = "manganese battleaxe"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 40
+    xp_reward = 210
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_battleaxe"]
+
+    success_message = "You hammer the scrap manganese into a battleaxe."
+
+
+
+class ManganeseChainbodyRecipe(BlackoutRecipe):
+    "Hammer three scrap manganese sheets into a chainbody at an anvil."
+
+    name = "manganese chainbody"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 41
+    xp_reward = 210
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_chainbody"]
+
+    success_message = "You hammer the scrap manganese into a chainbody."
+
+
+
+class ManganeseGreatswordRecipe(BlackoutRecipe):
+    "Hammer three scrap manganese sheets into a greatsword at an anvil."
+
+    name = "manganese greatsword"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 42
+    xp_reward = 210
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_greatsword"]
+
+    success_message = "You hammer the scrap manganese into a greatsword."
+
+
+
+class ManganesePlatelegsRecipe(BlackoutRecipe):
+    "Hammer three scrap manganese sheets into platelegs at an anvil."
+
+    name = "manganese platelegs"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 43
+    xp_reward = 210
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese", "scrap_manganese", "scrap_manganese"]
+    consumable_names = ["scrap manganese", "scrap manganese", "scrap manganese"]
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_platelegs"]
+
+    success_message = "You hammer the scrap manganese into a pair of platelegs."

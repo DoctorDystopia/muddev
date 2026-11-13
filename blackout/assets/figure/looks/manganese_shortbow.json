@@ -1,0 +1,26 @@
+{
+	"base": "rusty_scrap_shortbow",
+	"colors": {
+		"metal": "manganese"
+	},
+	"format": 1,
+	"key": "manganese_shortbow",
+	"served": {
+		"bone": "hand_r",
+		"position": [
+			0.0,
+			0.33,
+			0.0
+		],
+		"rotation": [
+			-0.14754,
+			0.15212,
+			1.54008
+		],
+		"scale": [
+			1.14,
+			1.14,
+			1.14
+		]
+	}
+}

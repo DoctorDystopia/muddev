@@ -151,6 +151,40 @@ def _check_sources(report: CheckReport, used: set) -> dict:
     return loaded
 
 
+def _track_sources() -> set:
+    """
+    Purpose: Name each source that a music track uses (DESIGN-0016).
+
+    Entry:
+        No conditions.
+
+    Exit/Returns:
+        Returns the source ids of the masters of the track table. Returns
+        an empty set when the table does not read: the check of
+        assets.audio reports that.
+
+    Module Globals:
+        None.
+
+    Notes:
+        The imports are local, so that this module stays importable with
+        no track table, and because assets.audio imports this package.
+
+    Author: Nick Hobar
+    Creation date: 11/08/2026
+    """
+    from assets.audio import paths as audio_paths
+    from assets.audio import tracks
+    from world import table_file
+
+    try:
+        rows = tracks.read_table(audio_paths.TRACK_TABLE_PATH)
+    except table_file.TableFileError:
+        return set()
+
+    return tracks.source_ids(rows)
+
+
 def _clip_list_sources() -> set:
     """
     Purpose: Name each source that a clip list of the figure workbench uses.
@@ -376,6 +410,7 @@ def run_check() -> CheckReport:
 
     used = {record.source_id for record in all_records}
     used.update(_clip_list_sources())
+    used.update(_track_sources())
     loaded = _check_sources(report, used)
     lock = build.read_lock()
 

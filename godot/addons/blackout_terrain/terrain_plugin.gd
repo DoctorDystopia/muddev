@@ -7,7 +7,7 @@ extends EditorPlugin
 ## DESIGN-0011 section 6.3. Select a [TerrainWorld] node, for example in
 ## `res://addons/blackout_terrain/terrain_editor.tscn`, to start. The panel
 ## is [TerrainDock]. The rules live in [TerrainBrushes], [TerrainEdit],
-## [TerrainChecks], and [ChunkSet], and the `tests/test_terrain_*.tscn`
+## [TerrainChecks], and [ChunkSet], and the `test_terrain_*.tscn`
 ## scenes test them with no editor. This script only decides which rule a
 ## click calls.
 ##
@@ -401,8 +401,9 @@ func _on_overlays_changed() -> void:
 	_world.show_flags = _dock.show_flags()
 	_world.show_areas = _dock.show_areas()
 	_world.show_links = _dock.show_links()
-	_world.show_lower_planes = _dock.show_lower_planes()
-	_world.upper_planes = _dock.upper_planes() as TerrainWorld.UpperPlanes
+	_world.lower_planes = _dock.lower_planes() as TerrainWorld.OtherPlanes
+	_world.upper_planes = _dock.upper_planes() as TerrainWorld.OtherPlanes
+	_world.ghost_opacity = _dock.ghost_opacity()
 	_world.walls_down = _dock.build_panel().walls_down()
 
 
@@ -1270,22 +1271,23 @@ func _on_marks_changed() -> void:
 		update_overlays()
 
 
-## The terrain palette file changed. The block draws again with it.
+## The terrain palette file changed. The terrain of the block draws again
+## with it, one chunk for each frame, so a drag of a picker stays live.
 func _on_palette_changed() -> void:
 	if _world == null:
 		return
 
-	_world.rebuild_all()
+	_world.redraw_soon(TerrainWorld.REDRAW_TERRAIN)
 	_dock.set_status("The terrain palette changed: %s." % TerrainPalette.PATH)
 
 
-## The light of a scenery key changed in the file. The block draws again
-## with it, because each mesh carries the light.
+## The light of a scenery key changed in the file. The terrain of the block
+## draws again with it, because each terrain mesh carries the light.
 func _on_light_changed(scenery: String) -> void:
 	if _world == null:
 		return
 
-	_world.rebuild_all()
+	_world.redraw_soon(TerrainWorld.REDRAW_TERRAIN)
 	_dock.set_status("The light of %s changed: %s." % [scenery, LightLook.PATH])
 
 

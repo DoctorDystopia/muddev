@@ -373,6 +373,26 @@ GATHERABLE_REGISTRY: dict[str, GatherableDef] = {
         ),
     ),
 
+    "manganese_pole": GatherableDef(
+        key="manganese_pole",
+        node_name="Manganese Pole",
+        chances=(
+            GatherChance(tool_tier=0, low=80, high=140),
+            GatherChance(tool_tier=1, low=100, high=175),
+            GatherChance(tool_tier=2, low=120, high=210),
+        ),
+        deplete_chance=0.1,
+        respawn_seconds=14,
+        yields=(
+            GatherableYield(
+                item_key="manganese_chunk",
+                skill_key=skill_constants.SKILL_KEY_CUTTING,
+                required_level=30,
+                xp_reward=65,
+            ),
+        ),
+    ),
+
 
 
     # ─── Corpses ──────────────────────────────────────────────────────────

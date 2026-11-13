@@ -191,6 +191,49 @@ class TestTabs(unittest.TestCase):
         self.assertEqual(["gem", "bar", "ore"],
                          current.tabs[bank_const.MAIN_TAB])
 
+    def test_an_insert_forward_takes_the_place_of_the_target(self):
+        current = _fitted("ore", "bar", "gem", "coal")
+
+        inserted = vault_layout.insert(current, "ore", "gem")
+
+        self.assertTrue(inserted)
+        self.assertEqual(["bar", "gem", "ore", "coal"],
+                         current.tabs[bank_const.MAIN_TAB])
+
+    def test_an_insert_back_takes_the_place_of_the_target(self):
+        current = _fitted("ore", "bar", "gem", "coal")
+
+        vault_layout.insert(current, "coal", "bar")
+
+        self.assertEqual(["ore", "coal", "bar", "gem"],
+                         current.tabs[bank_const.MAIN_TAB])
+
+    def test_an_insert_across_tabs_joins_the_tab_of_the_target(self):
+        current = _fitted("ore", "bar", "gem")
+        vault_layout.move(current, "bar", len(current.tabs))
+        vault_layout.move(current, "gem", bank_const.FIRST_TAB)
+
+        vault_layout.insert(current, "ore", "gem")
+
+        self.assertEqual(["bar", "ore", "gem"], current.tabs[bank_const.FIRST_TAB])
+
+    def test_an_insert_that_empties_a_tab_removes_it(self):
+        current = _fitted("ore", "bar")
+        vault_layout.move(current, "ore", len(current.tabs))
+        tabs_before = len(current.tabs)
+
+        vault_layout.insert(current, "ore", "bar")
+
+        self.assertEqual(tabs_before - 1, len(current.tabs))
+        self.assertEqual(["ore", "bar"], current.tabs[bank_const.MAIN_TAB])
+
+    def test_an_insert_of_a_slot_on_itself_or_a_missing_slot_is_refused(self):
+        current = _fitted("ore", "bar")
+
+        self.assertFalse(vault_layout.insert(current, "ore", "ore"))
+        self.assertFalse(vault_layout.insert(current, "ore", "gem"))
+        self.assertEqual(["ore", "bar"], current.tabs[bank_const.MAIN_TAB])
+
     def test_resolve_prefers_an_exact_name_to_a_prefix(self):
         current = _fitted("rusty scrap metal", "rusty scrap")
 
@@ -286,3 +329,58 @@ class TestRecord(unittest.TestCase):
         self.assertEqual([["ore"], ["bar"]], current.tabs)
         self.assertEqual(len(current.tabs), len(current.names))
         self.assertEqual(bank_const.MAIN_TAB, current.viewed)
+
+    def test_every_drag_mode_survives_the_round_trip(self):
+        for mode in bank_const.DRAG_MODES:
+            with self.subTest(mode=mode):
+                current = _fitted("ore")
+                vault_layout.set_drag_mode(current, mode)
+
+                again = vault_layout.from_record(vault_layout.to_record(current))
+
+                self.assertEqual(mode, again.drag_mode)
+
+    def test_a_record_with_no_drag_mode_or_a_bad_one_gets_the_default(self):
+        old = vault_layout.to_record(_fitted("ore"))
+        del old[bank_const.RECORD_DRAG]
+        bad = dict(old, **{bank_const.RECORD_DRAG: "juggle"})
+
+        for record in (old, bad):
+            with self.subTest(record=record):
+                current = vault_layout.from_record(record)
+
+                self.assertEqual(bank_const.DRAG_MODE_DEFAULT, current.drag_mode)
+
+
+class TestDragMode(unittest.TestCase):
+
+    def test_a_new_vault_has_the_default_drag_mode(self):
+        self.assertEqual(bank_const.DRAG_MODE_DEFAULT,
+                         vault_layout.VaultLayout().drag_mode)
+
+    def test_the_default_is_a_drag_mode(self):
+        self.assertIn(bank_const.DRAG_MODE_DEFAULT, bank_const.DRAG_MODES)
+
+    def test_a_word_that_is_not_a_mode_is_refused(self):
+        current = _fitted("ore")
+
+        self.assertFalse(vault_layout.set_drag_mode(current, "juggle"))
+        self.assertEqual(bank_const.DRAG_MODE_DEFAULT, current.drag_mode)
+
+    def test_the_next_mode_visits_every_mode_and_comes_back(self):
+        start = bank_const.DRAG_MODE_DEFAULT
+        visited = [start]
+
+        for _step in range(len(bank_const.DRAG_MODES) - 1):
+            visited.append(vault_layout.next_drag_mode(visited[-1]))
+
+        self.assertEqual(set(bank_const.DRAG_MODES), set(visited))
+        self.assertEqual(start, vault_layout.next_drag_mode(visited[-1]))
+
+    def test_every_drag_mode_has_a_drop_template_that_sends_its_verb(self):
+        for mode in bank_const.DRAG_MODES:
+            with self.subTest(mode=mode):
+                template = bank_const.DROP_ON_SLOT_TEMPLATES[mode]
+
+                self.assertTrue(template.startswith(
+                    f"{bank_const.BANK_COMMAND_KEY} {mode} "))

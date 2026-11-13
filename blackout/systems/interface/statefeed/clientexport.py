@@ -52,6 +52,8 @@ import os as _os
 
 from systems.core.tick import constants as tick_const
 from systems.core.tilegrid import constants as tile_const
+from systems.gameplay.augmentation import constants as aug_const
+from systems.interface.popups import constants as popup_const
 from world import areas as area_table
 from world import decor_kinds as decor_table
 from world import floor_types as floor_table
@@ -128,6 +130,7 @@ _CHANNEL_EXPORTS: tuple = (
     ("CH_CHAR_POPUP", const.CHANNEL_CHAR_POPUP),
     ("CH_CHAR_CHAT", const.CHANNEL_CHAR_CHAT),
     ("CH_CHAR_ABILITIES", const.CHANNEL_CHAR_ABILITIES),
+    ("CH_CHAR_MUSIC", const.CHANNEL_CHAR_MUSIC),
     ("CH_COMBAT", const.CHANNEL_COMBAT),
     ("CH_FACE", const.CHANNEL_FACE),
     ("CH_AURA", const.CHANNEL_AURA),
@@ -235,6 +238,8 @@ _MOMENT_EXPORTS: tuple = (
     ("MOMENT_MELEE_SWING", const.MOMENT_MELEE_SWING),
     ("MOMENT_SHOP_BUY", const.MOMENT_SHOP_BUY),
     ("MOMENT_SHOP_SELL", const.MOMENT_SHOP_SELL),
+    ("MOMENT_AMPLIFY", const.MOMENT_AMPLIFY),
+    ("MOMENT_GRAFT", const.MOMENT_GRAFT),
 )
 
 # Single-value exports that are neither a channel nor a vocabulary.
@@ -274,13 +279,25 @@ _SCALAR_EXPORTS: tuple = (
     ("ABILITY_STATE_LOCKED", const.ABILITY_STATE_LOCKED),
     ("ABILITY_KIND_TOGGLE", const.ABILITY_KIND_TOGGLE),
     ("ABILITY_KIND_SET", const.ABILITY_KIND_SET),
-    ("ABILITY_STEP_KEY", const.ABILITY_STEP_KEY),
-    ("ABILITY_STEPS_KEY", const.ABILITY_STEPS_KEY),
-    ("ABILITY_STEP_COMMAND_KEY", const.ABILITY_STEP_COMMAND_KEY),
+    ("ABILITY_POWER_LEVEL_KEY", const.ABILITY_POWER_LEVEL_KEY),
+    ("ABILITY_POWER_LEVELS_KEY", const.ABILITY_POWER_LEVELS_KEY),
+    ("ABILITY_POWER_LEVEL_COMMAND_KEY", const.ABILITY_POWER_LEVEL_COMMAND_KEY),
     ("ABILITY_NOTE_KEY", const.ABILITY_NOTE_KEY),
     ("TIP_KEY", const.TIP_KEY),
     ("TIP_TITLE_KEY", const.TIP_TITLE_KEY),
     ("TIP_LINES_KEY", const.TIP_LINES_KEY),
+    # The music snapshot of char_music (DESIGN-0016). Its two keys, the
+    # keys of a track row, and the states of a row. No mode name is here.
+    # The modes belong to the client.
+    ("MUSIC_AREA_KEY", const.MUSIC_AREA_KEY),
+    ("MUSIC_ROWS_KEY", const.MUSIC_ROWS_KEY),
+    ("MUSIC_ROW_KEY", const.MUSIC_ROW_KEY),
+    ("MUSIC_ROW_NAME", const.MUSIC_ROW_NAME),
+    ("MUSIC_ROW_AREA", const.MUSIC_ROW_AREA),
+    ("MUSIC_ROW_STATE", const.MUSIC_ROW_STATE),
+    ("MUSIC_ROW_HINT", const.MUSIC_ROW_HINT),
+    ("MUSIC_STATE_LOCKED", const.MUSIC_STATE_LOCKED),
+    ("MUSIC_STATE_UNLOCKED", const.MUSIC_STATE_UNLOCKED),
     # The key a client reads to draw a node it has already stripped. Exported
     # for the same reason every other payload key is: a client that retyped
     # it would be free to disagree with the server about the spelling, and
@@ -321,6 +338,13 @@ _SCALAR_EXPORTS: tuple = (
     # with the same string, so the two cannot disagree about a floor.
     ("WORLD_MAP_ALPHABET", const.WORLD_MAP_ALPHABET),
     ("WORLD_MAP_COMMAND", const.WORLD_MAP_COMMAND),
+    # The rig of the player (DESIGN-0015). The Rig button under the paper
+    # doll sends it, and the server opens the rig pop-up. The augmentation
+    # constants own the key, so the export reads it there.
+    ("RIG_COMMAND", aug_const.RIG_COMMAND_KEY),
+    # The layout key of the rig sockets grid. The client keys its body doll
+    # table on it, so a rename on the server is a parse error in the client.
+    ("POPUP_LAYOUT_RIG", popup_const.POPUP_LAYOUT_RIG),
     # The saved login. The client keeps the token from the channel under
     # these keys, and it sends these commands. The server spells all five.
     ("LOGIN_ACCOUNT_KEY", const.LOGIN_ACCOUNT_KEY),

@@ -1,0 +1,65 @@
+# A test fixture: each feature that the dialogue runner reads. It uses the
+# test vocabulary of tests/helpers.py, not the vocabulary of the game.
+# test_runner.py reads the compiled script beside this file.
+
+~ start
+if state.flag("done")
+	=> finished
+elif state.flag("angry") and not state.flag("calm")
+	Guard: Go away, {{state.name}}.
+	=> END!
+{{state.name}} walks up.
+Guard: Halt.
+	Nobody passes.
+- Ask: who are you? => who
+- Bribe the guard [if state.count("gold") >= 5 /]
+	do state.raise("bribed")
+	Guard: Fine.
+	=> finished
+- Leave => END
+
+~ who
+=>< rank
+{{state.text("guard")}}: That is all.
+- Back => start
+
+~ rank
+match state.text("rank")
+	when "captain", "major"
+		Guard: An officer.
+	when "private"
+		Guard: A soldier.
+	else
+		Guard: Nobody.
+=> END
+
+~ wealth
+match state.count("gold")
+	when 0
+		No gold.
+	when >= 100
+		Rich.
+	else
+		Some gold.
+=> END
+
+~ logic
+if (state.flag("a") or state.flag("b")) and state.flag("c")
+	Group holds.
+if state.flag("a") or state.flag("b") and state.flag("c")
+	Flat holds.
+if state.text("rank") != "private"
+	Not a private.
+if state.text("rank") in state.text("ranks")
+	Rank is known.
+=> END
+
+~ circle
+=> circle
+
+~ finished
+Guard: You may pass.
+=> END
+
+~ farewell
+Guard: Move along.

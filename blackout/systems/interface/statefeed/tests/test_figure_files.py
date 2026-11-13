@@ -14,7 +14,7 @@ Description: Guard the server names in the figure files.
              DESIGN-0014 section 7.3 gives this half of the checks to Python:
              rules C10, C1, and C7.
              The workbench owns each other rule, and its own tests
-             (godot/tests/test_figure_*.gd) check the form of each file.
+             (test_figure_*.gd under godot/tests/) check the form of each file.
 
              NO CENSUS. Per CLAUDE.md, no case names a rig, a slot, or a
              bone. Each case is a relationship: between a slot table and the
@@ -25,8 +25,9 @@ Description: Guard the server names in the figure files.
              module makes sure that the source is there and that its license
              passes the gate.
 
-             The item catalog (godot/addons/blackout_figure/item_catalog.json,
-             Phase W3) is a generated file. This module compares the file in
+             The item catalog
+             (godot/addons/blackout_figure/data/item_catalog.json, Phase W3)
+             is a generated file. This module compares the file in
              git with a new render, and it compares the render with ITEM_DB.
 
              The figure set (web/static/webclient/models/figure.json, Phase
@@ -76,6 +77,11 @@ from items.equipment.constants import (SLOT_CONFLICTS, SLOT_DISPLAY_ORDER,
 from items.equipment.skill_requirements import (ARMOR_SKILL_MAP,
                                                 WEAPON_SKILL_MAP)
 from systems.gameplay.combat import constants as combat_const
+from systems.gameplay.progression.skills.gatherables import GATHERABLE_REGISTRY
+from systems.gameplay.progression.skills.registry import SKILL_REGISTRY
+from systems.gameplay.progression.skills.skill_defs.gathering.gathering_skill import (
+    GatheringSkill,
+)
 from world.item_database import ITEM_DB
 from world.npc_database import NPC_DB
 
@@ -360,6 +366,42 @@ class ItemCatalogTests(unittest.TestCase):
 
             with self.subTest(style=style_key):
                 self.assertIn(action, listed)
+
+    def test_each_tool_of_a_gathering_skill_has_its_gathering_action(self):
+        """
+        An attempt with each tool names an action of the list. Thus, the
+        Clips tab has a row for the attempt of each tool.
+        """
+        listed = set(self.catalog["gathering_actions"])
+        template = const.FIGURE_GATHERING_ACTION_TEMPLATE
+        skills = [skill_class for skill_class in SKILL_REGISTRY.values()
+                  if issubclass(skill_class, GatheringSkill)]
+
+        for skill_class in skills:
+            for key, item_def in ITEM_DB.items():
+                if item_def.tool_type not in skill_class.tool_types:
+                    continue
+
+                hands = combat_const.attack_hands(item_def.use_slot)
+                action = template.format(hands=hands, skill=skill_class.key)
+
+                with self.subTest(skill=skill_class.key, item=key):
+                    self.assertIn(action, listed)
+
+    def test_each_node_with_bare_hands_has_its_unarmed_action(self):
+        listed = set(self.catalog["gathering_actions"])
+        template = const.FIGURE_GATHERING_ACTION_TEMPLATE
+        unarmed = combat_const.ATTACK_HANDS_UNARMED
+
+        for node_key, gatherable_def in GATHERABLE_REGISTRY.items():
+            if not gatherable_def.bare_hands:
+                continue
+
+            for skill_key in gatherable_def.skill_keys():
+                action = template.format(hands=unarmed, skill=skill_key)
+
+                with self.subTest(node=node_key, skill=skill_key):
+                    self.assertIn(action, listed)
 
     def test_each_npc_def_with_an_outfit_has_a_row(self):
         rows = {row["key"]: row for row in self.catalog["npcs"]}
@@ -664,6 +706,9 @@ class StanceTableTests(unittest.TestCase):
     A typed attack action never plays. Each clip of an attack action plays
     one time: the client waits for the end of a swing, and a clip that loops
     has no end.
+
+    The same two rules apply to each gathering action (11/10/2026). The
+    client plays its clip one time for each gathering attempt.
     """
 
     _CLIP_SUFFIX = ".res"
@@ -674,12 +719,16 @@ class StanceTableTests(unittest.TestCase):
     _ATTACK_PREFIX = const.FIGURE_ATTACK_ACTION_TEMPLATE.split("{", 1)[0]
     _FALLBACK_ACTION = _ATTACK_PREFIX.rstrip("_")
 
+    # The start of the name of each gathering action, read the same way.
+    _GATHERING_PREFIX = const.FIGURE_GATHERING_ACTION_TEMPLATE.split("{", 1)[0]
+
     @classmethod
     def setUpClass(cls):
         cls.path = figure_catalog.stances_path()
         cls.table = _read_json(cls.path)
         cls.tool_types = set(figure_catalog.tool_types())
         cls.attack_actions = set(figure_catalog.attack_actions())
+        cls.gathering_actions = set(figure_catalog.gathering_actions())
         cls.clips = {name[:-len(cls._CLIP_SUFFIX)]
                      for name in os.listdir(figure_catalog.clips_directory())
                      if name.endswith(cls._CLIP_SUFFIX)}
@@ -730,6 +779,26 @@ class StanceTableTests(unittest.TestCase):
                     continue
 
                 with self.subTest(stance=name, action=action, clip=clip):
+                    self.assertFalse(self.loops[clip])
+
+    def test_each_gathering_action_is_one_that_an_attempt_names(self):
+        for name, clip_set in self._clip_sets():
+            for action in clip_set:
+                if not action.startswith(self._GATHERING_PREFIX):
+                    continue
+
+                with self.subTest(stance=name, action=action):
+                    self.assertIn(action, self.gathering_actions)
+
+    def test_no_clip_of_a_gathering_action_loops(self):
+        for name, clip_set in self._clip_sets():
+            for action, clip in clip_set.items():
+                if not action.startswith(self._GATHERING_PREFIX):
+                    continue
+
+                with self.subTest(stance=name, action=action, clip=clip):
+                    self.assertIn(clip, self.loops,
+                                  "no clip list builds %s" % clip)
                     self.assertFalse(self.loops[clip])
 
 

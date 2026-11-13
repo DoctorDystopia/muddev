@@ -1,0 +1,36 @@
+# A test fixture: each thing that the Dialogue Manager compiler accepts and
+# the server refuses. test_checks.py expects one problem for each block.
+# It uses the test vocabulary of tests/helpers.py.
+
+~ start
+Guard: This cue has no end.
+
+~ rest
+while state.flag("loop")
+	Looping.
+% Random one.
+% Random two.
+Guard: [[Hi|Hello]] there.
+Guard: Wait [wait=1] for it.
+Guard: Tagged. [#mood=angry]
+Guard: Together.
+| Other: Together too.
+if nobody.home("x")
+	Unknown name.
+if state.raise("x")
+	An action in a condition.
+if state.name()
+	A value with brackets.
+if state.flag
+	A query with no brackets.
+if state.flag("a", "b")
+	Too many arguments.
+if state.count("gold") + 1 > 2
+	Arithmetic.
+set state.name = "x"
+do state.flag("x")
+if state.checked("bad")
+	A refused argument.
+if gold > 1
+	A bare name.
+=> {{state.text("cue")}}

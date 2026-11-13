@@ -35,6 +35,7 @@ from evennia.utils.test_resources import (
 
 from commands.gathering_cmds import CmdCutGatheringNode
 from items.inventory.handler import SLOTS_TOTAL
+from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.progression.skills.constants import SKILL_KEY_CUTTING
 from systems.gameplay.progression.skills.gatherables import (
     GATHERABLE_REGISTRY,
@@ -57,6 +58,7 @@ from systems.gameplay.progression.skills.skill_defs.gathering import (
 from systems.gameplay.progression.tests import gathering_support
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed_events
+from systems.interface.statefeed import figure_catalog
 from typeclasses.gathering_nodes import MetalPole, RustyPole
 from typeclasses.objects import DefaultObject
 from world.item_database import ITEM_DB
@@ -394,10 +396,24 @@ class GatheringChannelTest(EvenniaCommandTest):
             skill = self._tick(self._stub_skill(), ticks)
 
         swings = skill.attempt_swing.call_count
+        action = skill.figure_action.return_value
 
         self.assertGreater(swings, 1)
-        self.assertEqual(faced.call_args_list,
-                         [mock.call(self.char1, self.pole)] * swings)
+        self.assertEqual(
+            faced.call_args_list,
+            [mock.call(self.char1, self.pole, figure_action=action)] * swings)
+
+
+    def test_each_face_event_names_the_action_the_skill_gives(self):
+        """The client plays the clip of that action one time per attempt."""
+        self._cut()
+
+        with mock.patch.object(feed_events, "emit_face") as faced:
+            skill = self._tick(self._stub_skill())
+
+        skill.figure_action.assert_called_once_with(self.char1)
+        self.assertEqual(faced.call_args.kwargs["figure_action"],
+                         skill.figure_action.return_value)
 
 
     def test_the_turn_comes_before_the_swing(self):
@@ -656,6 +672,70 @@ class BareHandedSwingTest(EvenniaTest):
         """The exemption is a property of the node, not of the character."""
         self.assertTrue(_pole_def().bare_hands)
         self.assertFalse(GATHERABLE_REGISTRY[_METAL_POLE].bare_hands)
+
+
+
+# ─── The action of the figure ───────────────────────────────────────────────
+
+class GatheringActionTest(EvenniaTest):
+    """
+    Each attempt names the action of the figure of the gatherer: the hands
+    of the tool that find_tool gives, and the skill. The client plays the
+    clip of that action.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+
+        self.skill = SKILL_REGISTRY[SKILL_KEY_CUTTING]()
+
+
+    def _expected(self, hands: str) -> str:
+        return feed_const.FIGURE_GATHERING_ACTION_TEMPLATE.format(
+            hands=hands, skill=SKILL_KEY_CUTTING)
+
+
+    def _tool_keys(self) -> list:
+        """Each ItemDef that the skill takes as its tool, read, not typed."""
+        return [key for key, item_def in ITEM_DB.items()
+                if item_def.tool_type in self.skill.tool_types]
+
+
+    def test_the_skill_has_tools(self):
+        """The vacuity guard of the loop below."""
+        self.assertTrue(self._tool_keys())
+
+
+    def test_an_attempt_with_a_tool_names_the_hands_of_its_slot(self):
+        for key in self._tool_keys():
+            hands = combat_const.attack_hands(ITEM_DB[key].use_slot)
+
+            with self.subTest(tool=key):
+                tool = ITEM_DB[key].create(location=self.char1, home=self.char1)
+
+                self.assertEqual(self.skill.figure_action(self.char1),
+                                 self._expected(hands))
+                tool.delete()
+
+
+    def test_an_attempt_with_bare_hands_names_unarmed(self):
+        self.assertIsNone(self.skill.find_tool(self.char1))
+        self.assertEqual(self.skill.figure_action(self.char1),
+                         self._expected(combat_const.ATTACK_HANDS_UNARMED))
+
+
+    def test_each_action_of_an_attempt_is_in_the_item_catalog(self):
+        """The Clips tab has a row for each action that an attempt names."""
+        listed = set(figure_catalog.gathering_actions())
+
+        self.assertIn(self.skill.figure_action(self.char1), listed)
+
+        for key in self._tool_keys():
+            with self.subTest(tool=key):
+                tool = ITEM_DB[key].create(location=self.char1, home=self.char1)
+
+                self.assertIn(self.skill.figure_action(self.char1), listed)
+                tool.delete()
 
 
 

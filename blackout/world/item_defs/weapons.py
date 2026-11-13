@@ -1079,6 +1079,282 @@ ITEMS = {
 
 
 
+    # -------------------------------
+    # --- MANGANESE MELEE WEAPONS ---
+    # -------------------------------
+
+    # The manganese tier copies the OSRS Mithril stats, as the copper tier
+    # copies OSRS Steel: the attack bonuses, the melee defense bonuses, the
+    # melee strength bonus, the value, and the weight. The projectile
+    # defense bonuses mirror the melee defense bonuses, as on every metal
+    # weapon above.
+
+    "manganese_dagger": ItemDef(
+        key="manganese_dagger",
+        name="manganese dagger",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Manganese dagger.",
+        value=325,
+        weight=0.396,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="dagger",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_dagger", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 11,
+            "melee_slash_attack_bonus": 5,
+            "melee_crush_attack_bonus": -4,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 10,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_DAGGER_COMBAT_STYLES,
+        default_combat_style="jab",
+    ),
+
+    "manganese_shortsword": ItemDef(
+        key="manganese_shortsword",
+        name="manganese shortsword",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Manganese shortsword.",
+        value=845,
+        weight=1.587,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="shortsword",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_shortsword", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 16,
+            "melee_slash_attack_bonus": 11,
+            "melee_crush_attack_bonus": -2,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 2,
+            "melee_crush_defense_bonus": 1,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 2,
+            "projectile_heavy_defense_bonus": 1,
+
+            # Other bonuses
+            "melee_strength_bonus": 17,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SHORTSWORD_COMBAT_STYLES,
+        default_combat_style="irimi",
+    ),
+
+    "manganese_scimitar": ItemDef(
+        key="manganese_scimitar",
+        name="manganese scimitar",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Manganese scimitar.",
+        value=1040,
+        weight=1.587,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="scimitar",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_scimitar", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 5,
+            "melee_slash_attack_bonus": 21,
+            "melee_crush_attack_bonus": -2,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 20,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SCIMITAR_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
+    "manganese_spear": ItemDef(
+        key="manganese_spear",
+        name="manganese spear",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Manganese spear.",
+        value=845,
+        weight=1.814,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="spear",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_spear", "weapon")],
+        attack_speed=4,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 17,
+            "melee_slash_attack_bonus": 17,
+            "melee_crush_attack_bonus": 17,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 1,
+            "melee_slash_defense_bonus": 1,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 1,
+            "projectile_standard_defense_bonus": 1,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 18,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SPEAR_COMBAT_STYLES,
+        default_combat_style="lunge",
+    ),
+
+    "manganese_battleaxe": ItemDef(
+        key="manganese_battleaxe",
+        name="manganese battleaxe",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Manganese battleaxe.",
+        value=1690,
+        weight=2.267,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.MAIN_HAND,
+        tool_type="battleaxe",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_battleaxe", "weapon")],
+        attack_speed=6,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": -2,
+            "melee_slash_attack_bonus": 22,
+            "melee_crush_attack_bonus": 17,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 29,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_BATTLEAXE_COMBAT_STYLES,
+        default_combat_style="chop",
+    ),
+
+    "manganese_greatsword": ItemDef(
+        key="manganese_greatsword",
+        name="manganese greatsword",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="Manganese greatsword.",
+        value=2600,
+        weight=3.175,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="greatsword",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_greatsword", "weapon")],
+        attack_speed=7,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": -4,
+            "melee_slash_attack_bonus": 30,
+            "melee_crush_attack_bonus": 24,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 31,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_GREATSWORD_COMBAT_STYLES,
+        default_combat_style="slash",
+    ),
+
+
+
     # --------------------------------------
     # --- RUSTY SCRAP PROJECTILE WEAPONS ---
     # --------------------------------------
@@ -1222,6 +1498,63 @@ ITEMS = {
             "projectile_light_attack_bonus": 20,
             "projectile_standard_attack_bonus": 19,
             "projectile_heavy_attack_bonus": 16,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 0,
+            "melee_slash_defense_bonus": 0,
+            "melee_crush_defense_bonus": 0,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 0,
+            "projectile_standard_defense_bonus": 0,
+            "projectile_heavy_defense_bonus": 0,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+        combat_styles=_SHORTBOW_COMBAT_STYLES,
+        default_combat_style="accurate",
+    ),
+
+
+
+    # ------------------------------------
+    # --- MANGANESE PROJECTILE WEAPONS ---
+    # ------------------------------------
+
+    # OSRS has no Mithril bow. The copper shortbow (+20) has the ranged
+    # attack of the OSRS willow shortbow. Thus, this bow takes the next
+    # bow, the maple shortbow (+29), with the same steps down to the
+    # standard and heavy bonuses as the copper shortbow.
+
+    "manganese_shortbow": ItemDef(
+        key="manganese_shortbow",
+        name="manganese shortbow",
+        typeclass="typeclasses.items.WeaponItem",
+        desc="A manganese shortbow.",
+        value=884,
+        weight=3.628,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.TWO_HANDS,
+        tool_type="bow",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_shortbow", "weapon")],
+        attack_speed=3,
+        max_range=7,
+        accepted_ammo=combat_constants.AMMO_FAMILY_ARROW,
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 29,
+            "projectile_standard_attack_bonus": 28,
+            "projectile_heavy_attack_bonus": 25,
 
             # Melee defense bonuses
             "melee_stab_defense_bonus": 0,

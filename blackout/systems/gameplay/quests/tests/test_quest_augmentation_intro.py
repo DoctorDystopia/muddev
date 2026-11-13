@@ -14,17 +14,21 @@ from evennia.utils.test_resources import EvenniaCommandTest, EvenniaTest
 
 from commands.augment_cmds import CmdGraft
 from systems.gameplay.augmentation import constants as aug_const
+from systems.gameplay.augmentation import graft_channel
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.quests.content import quest_augmentation_intro as quest
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
 from typeclasses.characters import Character as BlackoutCharacter
 from world.item_database import ITEM_DB
+from systems.gameplay.dialogue.tests import helpers as dialogue
 from world.npc_database import NPC_DB
-from world.npc_dialogues import aug_clinic_1 as clinic
-from world.npc_dialogues import aug_hospital_1 as hospital
 
 
 _QUEST_KEY = quest.QUEST_KEY
+
+# The dialogue script of each of the two NPCs, from its def (DESIGN-0017).
+_CLINIC_SCRIPT = NPC_DB[quest.NPC_CLINIC_KEY].dialogue_script
+_HOSPITAL_SCRIPT = NPC_DB[quest.NPC_HOSPITAL_KEY].dialogue_script
 
 
 class IntroBlueprintTests(EvenniaTest):
@@ -74,111 +78,136 @@ class IntroBlueprintTests(EvenniaTest):
 
 
 class IntroPlaythroughTests(EvenniaCommandTest):
-    """One run from the recruit to the reward, through the real nodes and
-    the real graft command."""
+    """One run from the recruit to the reward, through the two real
+    dialogue scripts and the real graft command.
+
+    Each step gives a response by a keyword of its label, as a player picks
+    it. The conversation has no menu here: the dialogue runner is the same
+    one that the menu uses."""
 
     character_typeclass = BlackoutCharacter
+
+    def tearDown(self):
+        graft_channel.end_grafting(self.char1)
+        super().tearDown()
 
     def _step(self):
         return self.char1.quests.current_step_key(_QUEST_KEY)
 
-    def _accept(self):
-        clinic._accept_quest(self.char1, "")
+    def _clinic(self):
+        return dialogue.talk(self.char1, _CLINIC_SCRIPT)
+
+    def _hospital(self):
+        return dialogue.talk(self.char1, _HOSPITAL_SCRIPT)
+
+    def _take_the_job(self):
+        """Ask about the job and accept it. The recruiter gives the brief
+        in the same beat, which closes the recruit step."""
+        conversation = self._clinic()
+        dialogue.give(conversation, "ask about the job")
+
+        return dialogue.give(conversation, "Accept")
+
+    def _take_the_sample(self):
+        return dialogue.give(self._hospital(), "take the sample")
+
+    def _graft_the_sample(self):
+        sample = self._samples()[0]
+        self.call(CmdGraft(), f" {sample.key}", caller=self.char1)
 
     def _samples(self):
         return [item for item in self.char1.contents
                 if item.attributes.get(aug_const.SAMPLE_KIND_ATTR, default=None)]
 
     def test_the_offer_names_the_quest(self):
-        text, _options = clinic.node_quest_offer(self.char1)
+        conversation = self._clinic()
 
-        self.assertIn(quest.QUEST_TITLE, text)
+        beat = dialogue.give(conversation, "ask about the job")
 
-    def test_accepting_starts_the_quest_on_the_recruit_step(self):
-        self._accept()
+        self.assertIn(quest.QUEST_TITLE, beat.text)
+
+    def test_accepting_starts_the_quest(self):
+        self._take_the_job()
 
         self.assertTrue(self.char1.quests.is_active(_QUEST_KEY))
-        self.assertEqual(self._step(), quest.STEP_RECRUIT)
 
     def test_the_brief_closes_the_recruit_step(self):
-        self._accept()
+        self.char1.quests.accept_quest(_QUEST_KEY)
+        self.assertEqual(self._step(), quest.STEP_RECRUIT)
 
-        clinic.node_step_recruit(self.char1)
+        self._clinic()
 
         self.assertEqual(self._step(), quest.STEP_TRAIL)
 
-    def test_the_hospital_gives_nothing_away_before_the_trail(self):
-        text, _options = hospital.start(self.char1)
+    def test_the_brief_follows_the_accept_in_one_beat(self):
+        beat = self._take_the_job()
 
-        self.assertIn("nothing away", text)
+        self.assertEqual(self._step(), quest.STEP_TRAIL)
+        self.assertIn("brief", beat.text)
+
+    def test_the_hospital_gives_nothing_away_before_the_trail(self):
+        beat = self._hospital().beat
+
+        self.assertIn("nothing away", beat.text)
 
     def test_taking_the_sample_opens_the_graft_step_with_a_sample_in_hand(self):
-        self._accept()
-        clinic.node_step_recruit(self.char1)
+        self._take_the_job()
         self.assertEqual(self._samples(), [])
 
-        hospital._take_sample(self.char1, "")
+        self._take_the_sample()
 
         self.assertEqual(self._step(), quest.STEP_GRAFT)
         self.assertEqual(len(self._samples()), 1)
 
     def test_the_sample_is_not_handed_over_twice(self):
-        self._accept()
-        clinic.node_step_recruit(self.char1)
-        hospital._take_sample(self.char1, "")
+        self._take_the_job()
+        self._take_the_sample()
 
         quest.grant_teaching_sample(self.char1, None)
 
         self.assertEqual(len(self._samples()), 1)
 
     def test_a_real_graft_closes_the_graft_step(self):
-        self._accept()
-        clinic.node_step_recruit(self.char1)
-        hospital._take_sample(self.char1, "")
-        sample = self._samples()[0]
+        self._take_the_job()
+        self._take_the_sample()
 
-        self.call(CmdGraft(), f" {sample.key}", caller=self.char1)
+        self._graft_the_sample()
 
         self.assertEqual(self._step(), quest.STEP_REPORT)
 
     def test_either_report_completes_the_quest_and_pays(self):
-        for story in ("truth", "cover"):
+        for story in ("truth", "cover story"):
             with self.subTest(story=story):
+                # A graft keeps a channel for GRAFT_TICKS ticks, and no tick
+                # runs here. End it, or the next graft joins its wait.
+                graft_channel.end_grafting(self.char1)
                 self.char1.db.active_quests = {}
                 self.char1.db.completed_quests = []
                 self.char1.__dict__.pop("quests", None)
-                self._accept()
-                clinic.node_step_recruit(self.char1)
-                hospital._take_sample(self.char1, "")
-                sample = self._samples()[0]
-                self.call(CmdGraft(), f" {sample.key}", caller=self.char1)
+                self._take_the_job()
+                self._take_the_sample()
+                self._graft_the_sample()
                 before = self.char1.skills.get_total_xp(
                     skill_constants.SKILL_KEY_AUGMENTATION)
 
-                clinic._finish_quest(self.char1, "", story=story)
+                dialogue.give(self._clinic(), story)
 
                 self.assertTrue(self.char1.quests.is_complete(_QUEST_KEY))
                 self.assertGreater(self.char1.skills.get_total_xp(
                     skill_constants.SKILL_KEY_AUGMENTATION), before)
 
     def test_the_conversations_resume_on_the_right_step(self):
-        self._accept()
-        clinic.node_step_recruit(self.char1)
+        self._take_the_job()
 
-        text, _options = clinic.start(self.char1)
-        self.assertIn("trail", text.lower())
-
-        text, _options = hospital.start(self.char1)
-        self.assertIn("admits", text)
+        self.assertIn("trail", self._clinic().beat.text.lower())
+        self.assertIn("admits", self._hospital().beat.text)
 
     def test_a_finished_player_gets_the_post_quest_scene(self):
-        self._accept()
-        clinic.node_step_recruit(self.char1)
-        hospital._take_sample(self.char1, "")
-        sample = self._samples()[0]
-        self.call(CmdGraft(), f" {sample.key}", caller=self.char1)
-        clinic._finish_quest(self.char1, "", story="truth")
+        self._take_the_job()
+        self._take_the_sample()
+        self._graft_the_sample()
+        dialogue.give(self._clinic(), "truth")
 
-        text, _options = clinic.start(self.char1)
+        beat = self._clinic().beat
 
-        self.assertIn("Locus", text)
+        self.assertIn("Locus", beat.text)

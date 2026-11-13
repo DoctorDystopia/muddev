@@ -16,8 +16,8 @@ Description: The areas of the tile grid, one row for each area.
 
              The client picks the fog and the light of a tile by its area:
              `godot/world/look/area_looks.json`, with `LOOKS` in
-             `godot/world/area_look.gd` as its fallback. An area with no row
-             there gets the fallback look, so a new area needs no client
+             `godot/world/look/area_look.gd` as its fallback. An area with
+             no row there gets the fallback look, so a new area needs no client
              edit. DESIGN-0011 sections 6.2 and 6.7.
 
              A tile room stores no name and no description. On a tile with no

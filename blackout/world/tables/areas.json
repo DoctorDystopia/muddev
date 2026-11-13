@@ -24,6 +24,18 @@
 			"key": "al_wasta",
 			"name": "Al Wasta",
 			"note": "the small settlement of Al Wasta"
+		},
+		{
+			"desc": "magnets, beware!",
+			"key": "rusty_shore",
+			"name": "Rusty Shore",
+			"note": "Shati Al-Sada"
+		},
+		{
+			"desc": "Wastes of the Sahara desert",
+			"key": "wastes_desert",
+			"name": "Wastes",
+			"note": "default for desert area"
 		}
 	]
 }

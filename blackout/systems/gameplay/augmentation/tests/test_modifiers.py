@@ -127,8 +127,8 @@ class _Lit:
 
         super().tearDown()
 
-    def _light(self, augment, step=aug_const.AUG_STEP_DEFAULT) -> None:
-        self.handler.light(augment, step)
+    def _light(self, augment, power_level=aug_const.AUG_POWER_LEVEL_DEFAULT) -> None:
+        self.handler.light(augment, power_level)
 
 
 class TestOverclock(_Lit, EvenniaTest):
@@ -165,7 +165,7 @@ class TestOverclock(_Lit, EvenniaTest):
         built = {rule.augment.key: rule for rule in rules.active_rules(self.char1)}
 
         self.assertNotIn(self.roller.key, built, "the roller contributes no channel of its own")
-        expected = self.stat.bonus_for(_A_LEVEL, aug_const.AUG_STEP_DEFAULT) + roll
+        expected = self.stat.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVEL_DEFAULT) + roll
         self.assertAlmostEqual(expected, built[self.stat.key].bonus)
 
     def test_a_relight_rerolls(self):
@@ -228,7 +228,7 @@ class TestGuards(_Lit, EvenniaTest):
 
     def test_a_guard_cuts_the_damage_of_its_type_on_the_defender_side(self):
         guard = self._guard_for(combat_const.DAMAGE_TYPE_MELEE)
-        bonus = guard.bonus_for(_A_LEVEL, aug_const.AUG_STEP_DEFAULT)
+        bonus = guard.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVEL_DEFAULT)
         rule = AugmentModifierRules(guard, bonus)
         cut_seen = False
 
@@ -249,7 +249,7 @@ class TestGuards(_Lit, EvenniaTest):
 
     def test_a_guard_on_the_attacker_side_changes_nothing(self):
         guard = self._guard_for(combat_const.DAMAGE_TYPE_MELEE)
-        rule = AugmentModifierRules(guard, guard.bonus_for(_A_LEVEL, aug_const.AUG_STEPS))
+        rule = AugmentModifierRules(guard, guard.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVELS))
 
         for seed in _SEEDS:
             plain = resolve_action(_context(seed))
@@ -260,7 +260,7 @@ class TestGuards(_Lit, EvenniaTest):
 
     def test_a_guard_of_another_type_changes_nothing(self):
         guard = self._guard_for(combat_const.DAMAGE_TYPE_PROJECTILE)
-        rule = AugmentModifierRules(guard, guard.bonus_for(_A_LEVEL, aug_const.AUG_STEPS))
+        rule = AugmentModifierRules(guard, guard.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVELS))
 
         for seed in _SEEDS:
             plain = resolve_action(_context(seed))
@@ -283,7 +283,7 @@ class TestMend(_Lit, EvenniaTest):
 
     def test_mend_cuts_the_share_by_its_bonus(self):
         self._light(self.mend)
-        expected = 1.0 - self.mend.bonus_for(_A_LEVEL, aug_const.AUG_STEP_DEFAULT)
+        expected = 1.0 - self.mend.bonus_for(_A_LEVEL, aug_const.AUG_POWER_LEVEL_DEFAULT)
 
         self.assertAlmostEqual(max(aug_const.AUG_REGEN_SHARE_FLOOR, expected),
                                rules.regen_interval_share(self.char1))
@@ -320,9 +320,10 @@ class TestReach(_Lit, EvenniaTest):
 
         super().tearDown()
 
-    def test_the_tiles_follow_the_step(self):
-        tiles = [self.reach.tiles_for(step)
-                 for step in range(aug_const.AUG_STEP_MIN, aug_const.AUG_STEPS + 1)]
+    def test_the_tiles_follow_the_power_level(self):
+        levels = range(aug_const.AUG_POWER_LEVEL_MIN,
+                       aug_const.AUG_POWER_LEVELS + 1)
+        tiles = [self.reach.tiles_for(power_level) for power_level in levels]
 
         self.assertEqual(sorted(tiles), tiles)
         self.assertEqual(aug_const.AUG_REACH_TILES, tiles[-1])
@@ -333,9 +334,9 @@ class TestReach(_Lit, EvenniaTest):
         self.assertEqual(self.aura.radius, self.aura_handler.radius_for(self.char1, self.aura))
 
     def test_reach_adds_its_tiles_to_the_radius(self):
-        self._light(self.reach, aug_const.AUG_STEP_MIN)
+        self._light(self.reach, aug_const.AUG_POWER_LEVEL_MIN)
 
-        expected = self.aura.radius + self.reach.tiles_for(aug_const.AUG_STEP_MIN)
+        expected = self.aura.radius + self.reach.tiles_for(aug_const.AUG_POWER_LEVEL_MIN)
         self.assertEqual(expected, self.aura_handler.radius_for(self.char1, self.aura))
 
     def test_the_ring_cache_rebuilds_when_the_radius_moves(self):

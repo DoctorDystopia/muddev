@@ -309,20 +309,20 @@ class TestTheRestockClock(_BuyFixture):
         self.addCleanup(patcher.stop)
 
     def test_a_full_shop_schedules_nothing(self):
-        shop_popup._watch_restock(self.keeper, now=_T0)
+        shop_popup._watch_stock(self.keeper, now=_T0)
 
         self.call_later.assert_not_called()
 
     def test_repeated_builds_schedule_one_wake(self):
         stock.take(self.keeper, self.key, 1, now=_T0)
 
-        shop_popup._watch_restock(self.keeper, now=_T0)
-        shop_popup._watch_restock(self.keeper, now=_T0 + 1)
+        shop_popup._watch_stock(self.keeper, now=_T0)
+        shop_popup._watch_stock(self.keeper, now=_T0 + 1)
 
         self.assertEqual(1, self.call_later.call_count)
 
     def test_the_wake_refreshes_the_viewers(self):
         with mock.patch.object(service, "refresh_anchor_viewers") as refresh:
-            shop_popup._restock_due(self.keeper)
+            shop_popup._stock_change_due(self.keeper)
 
         refresh.assert_called_once_with(self.keeper)

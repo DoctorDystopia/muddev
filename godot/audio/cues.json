@@ -1,6 +1,11 @@
 {
   "format": 1,
   "cues": {
+    "amplify": {
+      "kind": "sfx",
+      "clip": "sfx/amplify.wav",
+      "note": "One amplify at an AugBot that restored Grit. A full pool sends nothing. The player who amplified hears it."
+    },
     "butcher_attempt": {
       "kind": "sfx",
       "clip": "sfx/butcher_attempt.wav",
@@ -15,6 +20,11 @@
       "kind": "sfx",
       "clip": "sfx/foundry_craft.wav",
       "note": "One finished craft under Foundry. The cue repeats until the batch stops."
+    },
+    "graft": {
+      "kind": "sfx",
+      "clip": "sfx/graft.wav",
+      "note": "One graft of one sample, at a Locus or away from one. The cue repeats until the graft channel stops. The grafter hears it."
     },
     "guns_shot": {
       "kind": "sfx",
@@ -53,9 +63,11 @@
     }
   },
   "moments": {
+    "amplify": "amplify",
     "butcher_attempt": "butcher_attempt",
     "cut_attempt": "cut_attempt",
     "foundry_craft": "foundry_craft",
+    "graft": "graft",
     "guns_shot": "guns_shot",
     "melee_swing": "melee_swing",
     "metalsmith_craft": "metalsmith_craft",

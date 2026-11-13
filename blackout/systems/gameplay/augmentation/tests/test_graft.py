@@ -5,7 +5,8 @@ Creation date: 10/30/2026
 Description: The graft, the samples, and the Augmentation Locus
              (DESIGN-0015, Phase 4). A graft anywhere pays `sample_xp`. A
              graft on a Locus tile pays AUG_LOCUS_XP_MULT times that. The
-             quests hear the item key and the sample kind.
+             quests hear the item key and the sample kind. Each graft sends
+             the `graft` moment, so the client plays the sound of the graft.
 Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.augmentation
 """
@@ -20,8 +21,11 @@ from evennia.utils.test_resources import EvenniaCommandTest
 from commands.augment_cmds import CmdGraft
 from systems.gameplay.augmentation import constants as aug_const
 from systems.gameplay.augmentation import graft as graft_service
+from systems.gameplay.augmentation import graft_channel
 from systems.gameplay.progression.skills.constants import SKILL_KEY_AUGMENTATION
 from systems.gameplay.quests import constants as quest_constants
+from systems.interface.statefeed import constants as feed_const
+from systems.interface.statefeed import events as feed_events
 from typeclasses import spawners
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.loci import AugmentationLocus, locus_here
@@ -69,6 +73,7 @@ class TestGraft(EvenniaCommandTest):
         super().setUp()
         self.item_def = _first_sample()
         self.sample = self.item_def.create(location=self.char1, home=self.char1)
+        self.addCleanup(graft_channel.end_grafting, self.char1)
 
     def _xp(self) -> int:
         return self.char1.skills.get_total_xp(SKILL_KEY_AUGMENTATION)
@@ -121,6 +126,31 @@ class TestGraft(EvenniaCommandTest):
         for call in hook.call_args_list:
             self.assertEqual(call.args[1], quest_constants.ACTION_GRAFT)
 
+    def test_a_graft_sends_the_graft_moment_to_the_grafter(self):
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            graft_service.graft(self.char1, self.sample)
+
+        emitted.assert_called_once_with(self.char1, feed_const.MOMENT_GRAFT)
+
+    def test_a_graft_on_a_locus_tile_sends_the_graft_moment(self):
+        create_object(AugmentationLocus, key="locus", location=self.room1)
+
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            graft_service.graft(self.char1, self.sample)
+
+        emitted.assert_called_once_with(self.char1, feed_const.MOMENT_GRAFT)
+
+    def test_a_refused_graft_sends_no_moment(self):
+        other = ITEM_DB["rusty_metal_chunk"].create(location=self.char1, home=self.char1)
+
+        with mock.patch.object(feed_events, "emit_moment") as emitted:
+            graft_service.graft(self.char1, other)
+
+        emitted.assert_not_called()
+
+    def test_the_graft_moment_is_a_moment_the_feed_sends(self):
+        self.assertIn(feed_const.MOMENT_GRAFT, feed_const.MOMENTS)
+
     def test_a_thing_that_is_no_sample_is_refused(self):
         other = ITEM_DB["rusty_metal_chunk"].create(location=self.char1, home=self.char1)
         before = self._xp()
@@ -141,7 +171,7 @@ class TestGraft(EvenniaCommandTest):
 
         response = self.call(CmdGraft(), "", caller=self.char1)
 
-        self.assertIn("no sample", response.lower())
+        self.assertIn("any samples", response.lower())
 
 
 class TestLocus(EvenniaCommandTest):

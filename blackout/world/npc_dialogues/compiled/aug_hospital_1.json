@@ -1,0 +1,684 @@
+{
+	"compiler_version": 18,
+	"cues": {
+		"farewell": "43",
+		"graft": "34",
+		"report": "39",
+		"start": "11",
+		"trail": "24"
+	},
+	"format": 1,
+	"lines": {
+		"10": {
+			"id": "10",
+			"next_id": "11",
+			"type": "cue"
+		},
+		"11": {
+			"condition": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "on_step",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 17,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 39,
+									"type": "string",
+									"value": "trail"
+								},
+								{
+									"i": 46,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "11",
+			"next_id": "12",
+			"next_id_after": "17",
+			"next_sibling_id": "13",
+			"type": "condition"
+		},
+		"12": {
+			"id": "12",
+			"is_snippet": false,
+			"next_id": "24",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"13": {
+			"condition": {
+				"expression": [
+					{
+						"i": 5,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 10,
+						"type": "dot"
+					},
+					{
+						"function": "on_step",
+						"i": 11,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 41,
+									"type": "string",
+									"value": "graft"
+								},
+								{
+									"i": 48,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "13",
+			"next_id": "14",
+			"next_id_after": "17",
+			"next_sibling_id": "15",
+			"type": "condition"
+		},
+		"14": {
+			"id": "14",
+			"is_snippet": false,
+			"next_id": "34",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"15": {
+			"condition": {
+				"expression": [
+					{
+						"i": 5,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 10,
+						"type": "dot"
+					},
+					{
+						"function": "on_step",
+						"i": 11,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 41,
+									"type": "string",
+									"value": "report"
+								},
+								{
+									"i": 49,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "15",
+			"next_id": "16",
+			"next_id_after": "17",
+			"type": "condition"
+		},
+		"16": {
+			"id": "16",
+			"is_snippet": false,
+			"next_id": "39",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"17": {
+			"id": "17",
+			"next_id": "18",
+			"static_id": "",
+			"text": "{{npc.header}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 7,
+							"type": "dot"
+						},
+						{
+							"i": 8,
+							"type": "variable",
+							"value": "header"
+						}
+					],
+					"value_in_text": "{{npc.header}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"18": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "18",
+			"next_id": "19",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} is busy, and gives nothing away.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"19": {
+			"character": "Placeholder",
+			"id": "19",
+			"next_id": "end",
+			"responses": [
+				"19"
+			],
+			"static_id": "",
+			"text": "leave.",
+			"type": "response"
+		},
+		"22": {
+			"id": "22",
+			"next_id": "23",
+			"type": ""
+		},
+		"23": {
+			"id": "23",
+			"next_id": "24",
+			"type": "cue"
+		},
+		"24": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "24",
+			"next_id": "25",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} admits that the Hospital takes the augments, out of need, and asks the candidate to understand.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"25": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "25",
+			"next_id": "26",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} offers one sample, and tells the candidate how a body takes a graft.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"26": {
+			"character": "Placeholder",
+			"id": "26",
+			"next_id": "27",
+			"responses": [
+				"26",
+				"29"
+			],
+			"static_id": "",
+			"text": "take the sample.",
+			"type": "response"
+		},
+		"27": {
+			"id": "27",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "talk",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 14,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "string",
+									"value": "npc_aug_hospital_1"
+								},
+								{
+									"i": 56,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "28",
+			"type": "mutation"
+		},
+		"28": {
+			"id": "28",
+			"is_snippet": false,
+			"next_id": "34",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"29": {
+			"character": "Placeholder",
+			"id": "29",
+			"next_id": "end",
+			"static_id": "",
+			"text": "leave.",
+			"type": "response"
+		},
+		"32": {
+			"id": "32",
+			"next_id": "33",
+			"type": ""
+		},
+		"33": {
+			"id": "33",
+			"next_id": "34",
+			"type": "cue"
+		},
+		"34": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "34",
+			"next_id": "35",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} explains the graft, and that a Locus takes one deeper.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"35": {
+			"id": "35",
+			"next_id": "36",
+			"static_id": "",
+			"text": "{{quest.objectives(\"augmentation_intro\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 9,
+							"type": "dot"
+						},
+						{
+							"function": "objectives",
+							"i": 10,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 21,
+										"type": "string",
+										"value": "augmentation_intro"
+									},
+									{
+										"i": 41,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.objectives(\"augmentation_intro\")}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"36": {
+			"character": "Placeholder",
+			"id": "36",
+			"next_id": "end",
+			"responses": [
+				"36"
+			],
+			"static_id": "",
+			"text": "try it.",
+			"type": "response"
+		},
+		"37": {
+			"id": "37",
+			"next_id": "38",
+			"type": ""
+		},
+		"38": {
+			"id": "38",
+			"next_id": "39",
+			"type": "cue"
+		},
+		"39": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "39",
+			"next_id": "40",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} asks what the candidate will tell the Clinic.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"40": {
+			"character": "Placeholder",
+			"id": "40",
+			"next_id": "end",
+			"responses": [
+				"40"
+			],
+			"static_id": "",
+			"text": "leave.",
+			"type": "response"
+		},
+		"41": {
+			"id": "41",
+			"next_id": "42",
+			"type": ""
+		},
+		"42": {
+			"id": "42",
+			"next_id": "43",
+			"type": "cue"
+		},
+		"43": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "43",
+			"next_id": "45",
+			"static_id": "",
+			"text": "[Placeholder farewell of the Hospital contact.]",
+			"type": "dialogue"
+		},
+		"44": {
+			"id": "44",
+			"next_id": "45",
+			"type": ""
+		},
+		"45": {
+			"id": "45",
+			"is_snippet": false,
+			"next_id": "end",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"9": {
+			"id": "9",
+			"next_id": "10",
+			"type": ""
+		}
+	},
+	"source": "aug_hospital_1.dialogue",
+	"source_sha256": "1bf767c144d3165375d3b66f60bb51e66e38898dd310245f4b51154b1ad639e5"
+}

@@ -866,7 +866,7 @@ Read the handoff before you continue this work.
 
 | Part | Where |
 |---|---|
-| Fog and light for each area | `godot/world/area_look.gd`, `area_environment.gd` |
+| Fog and light for each area | `godot/world/look/area_look.gd`, `godot/world/pane/area_environment.gd` |
 | Grid arrays, step rule, A*, tile rooms and pool | `blackout/systems/core/tilegrid/` |
 | `TileRoom` | `typeclasses/rooms.py` |
 | Chunk file, Python | `systems/core/tilegrid/chunkfile.py` |
@@ -881,20 +881,20 @@ Read the handoff before you continue this work.
 | Direction commands, `goto`, `run`, and `tiletp` on the tile world | `commands/tile_movement.py` |
 | The walk on the tick, the run toggle, and the one writer of the walk, `set_walk` | `systems/gameplay/movement/walk.py` |
 | One move across several tiles (the run and its tile skip) | `stride` in `systems/core/tilegrid/movement.py` |
-| A held movement key in the client, and the Run button | `godot/world/held_movement.gd`, `godot/scenes/console.gd`, `godot/scenes/minimap/minimap_view.gd` |
+| A held movement key in the client, and the Run button | `godot/world/input/held_movement.gd`, `godot/scenes/console.gd`, `godot/scenes/minimap/minimap_view.gd` |
 | The tile sync of chunk objects | `systems/gameplay/spawning/tile_sync.py`, `scripts/sync_tile_objects.py` |
 | The respawn point (the `respawn_point` object kind) | `world/respawn.py` |
 | The cutover from the xyzgrid maps | `world/tile_cutover.py`, `scripts/move_to_tile_world.py` |
 | Line of sight, and reach with sight (`can_strike`) | `systems/core/tilegrid/sight.py`, `systems/gameplay/combat/reach.py` |
 | The sweep of empty tile rooms | `systems/core/tilegrid/sweep.py` |
 | The room Z of each plane, `TilePlane`, and `climb` | `systems/core/tilegrid/planes.py`, `world.py`, `world/tile_travel.py` |
-| Planes in the client, and "Hide roofs" | `godot/world/world_state.gd`, `godot/world/terrain/terrain_view.gd` |
+| Planes in the client, and "Hide roofs" | `godot/world/state/world_state.gd`, `godot/world/terrain/terrain_view.gd` |
 | The water surface | `godot/world/terrain/water_mesh_builder.gd` |
 | The walls, and the scenery of a chunk object | `godot/world/terrain/wall_mesh_builder.gd`, `terrain_view.gd`, `scenery` in `world/object_kinds.py` |
 | The primitives: ladder, stairs, hatch | `godot/world/terrain/prop_mesh_builder.gd`, `SCENERY_PRIMITIVES` in `systems/core/tilegrid/constants.py` |
 | The sign text of a chunk object | `text` in `systems/core/tilegrid/chunkfile.py` and `chunk_file.gd`, the `sign_text` rule in `world/tile_checks.py` |
-| The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/terrain_checks.gd` |
-| The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/terrain_sync_state.gd` |
+| The content rules of the world ("Check world" in the editor) | `world/tile_checks.py`, `godot/addons/blackout_terrain/checks/terrain_checks.gd` |
+| The tile sync stamp | `systems/core/tilegrid/syncstamp.py`, `godot/addons/blackout_terrain/data/terrain_sync_state.gd` |
 | The walk feed (`blackout_walk`), with the run toggle | `systems/interface/statefeed/events.py`, `systems/gameplay/movement/walk.py` |
 | The minimap, and the world map with its feed and `worldmap` | `godot/scenes/minimap/`, `godot/scenes/worldmap/`, `systems/interface/statefeed/worldmap.py`, `world/tile_world_map.py` |
 
@@ -909,7 +909,7 @@ Nine rules:
   `ChunkMeshBuilder` owns the diagonal of each tile and `surface_height`.
   `test_chunk_mesh.gd` fails if the drawn ground and the height read differ.
 - **Both chunk file readers change together.** The parity test is
-  `test_chunkfile.py` plus `godot/tests/test_chunk_file.gd`. A Python guard
+  `test_chunkfile.py` plus `godot/tests/world/terrain/test_chunk_file.gd`. A Python guard
   fails if their lists of refused files differ.
 - **Both content checks change together.** `world/tile_checks.py` and
   `terrain_checks.gd` check one fixture world against one `expected.json`.

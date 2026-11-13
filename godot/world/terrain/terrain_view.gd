@@ -68,8 +68,8 @@ extends Node3D
 ##
 ## ## One build for each frame
 ##
-## One chunk mesh costs about 18 ms. Nine chunks on each of four planes would
-## stop the client for more than half a second. Thus [method sync] only queues
+## One chunk mesh costs about 18 ms. Nine chunks on each of eight planes would
+## stop the client for more than one second. Thus [method sync] only queues
 ## the builds, and each frame builds [constant BUILDS_PER_FRAME] of them. The
 ## chunk under the player builds first: its own plane first, then the nearest
 ## chunk. [method flush] builds the whole queue at once, for a test.

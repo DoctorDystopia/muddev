@@ -25,6 +25,10 @@
 			"from": "1H_Melee_Attack_Slice_Diagonal",
 			"loop": false
 		},
+		"cutting_chop": {
+			"from": "1H_Melee_Attack_Slice_Horizontal",
+			"loop": false
+		},
 		"idle": {
 			"from": "Idle",
 			"loop": true

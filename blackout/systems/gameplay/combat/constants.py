@@ -480,6 +480,10 @@ COMBAT_LEVEL_BASE_SKILLS: tuple = (SKILL_KEY_FORTITUDE, SKILL_KEY_DEFENSE)
 # combat_level still gives 0 for a key that SKILL_REGISTRY does not hold.
 COMBAT_LEVEL_AUGMENTATION_SKILL: str = SKILL_KEY_AUGMENTATION
 
+# The line a player gets when an earned skill level raises the combat level.
+# skills/logic.add_xp sends it after the skill line, in the same colour.
+COMBAT_LEVEL_UP_TEMPLATE: str = "[LEVEL_UP] Your Combat level is now {level}!"
+
 # ─── Damage types ────────────────────────────────────────────────────────────
 # What KIND of damage landed, threaded through CombatEntity.at_damage so death
 # attribution and messaging can tell a sword from fire, etc.

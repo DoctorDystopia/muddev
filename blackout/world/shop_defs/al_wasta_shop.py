@@ -20,7 +20,6 @@ ITEMS = {
         farewell='"Stay safe out there."',
         upsell_factor=1.5,
         miser_factor=0.5,
-        max_held_items=20,
         buy_list=["rusty_scrap_axe", "hammer", "rusty_metal_chunk", "spray_can", "mutant_raider_cured_chuck"],
         stock={
             "rusty_scrap_axe": WareStock(max_stock=10, restock_seconds=60.0),

@@ -185,15 +185,16 @@ ABILITY_KIND_TOGGLE: str = "toggle"
 # fires it from its own key, not from a slot of the number row.
 ABILITY_KIND_SET: str = "set"
 
-# The step dial of an augment row (DESIGN-0015). A toggle row with a step
-# carries the three keys below. ABILITY_STEP_KEY is the step it burns at,
-# 0 when it is out. ABILITY_STEPS_KEY is the top step. ABILITY_STEP_COMMAND_KEY
-# is the whole line that moves a lit row to its next step, and the client
-# sends it on Shift and the key of the slot. A row with no step dial
-# carries none of the three, and the rail draws it as before.
-ABILITY_STEP_KEY: str = "step"
-ABILITY_STEPS_KEY: str = "steps"
-ABILITY_STEP_COMMAND_KEY: str = "step_command"
+# The power level dial of an augment row (DESIGN-0015). A toggle row with a
+# power level carries the three keys below. ABILITY_POWER_LEVEL_KEY is the
+# power level it burns at, 0 when it is out. ABILITY_POWER_LEVELS_KEY is the
+# top power level. ABILITY_POWER_LEVEL_COMMAND_KEY is the whole line that
+# moves a lit row to its next power level. The client sends that line on
+# Shift and the key of the slot. A row with no power level dial carries
+# none of the three, and the rail draws it as before.
+ABILITY_POWER_LEVEL_KEY: str = "power_level"
+ABILITY_POWER_LEVELS_KEY: str = "power_levels"
+ABILITY_POWER_LEVEL_COMMAND_KEY: str = "power_level_command"
 
 # A short mark after the name of a row: the roll of Overclock, "+14%"
 # (DESIGN-0015, Phase 5). The server says the text, and the client draws it
@@ -212,6 +213,46 @@ TIP_KEY: str = "tip"
 TIP_TITLE_KEY: str = "title"
 TIP_LINES_KEY: str = "lines"
 
+# The music of the observer (DESIGN-0016, 11/08/2026): the area that the
+# character stands in, and one row for each track of the track table with
+# its state. The Music tab of the Godot client draws it, and the player
+# picks a track from it.
+#
+# A Char.* channel for the reason the ones above give: it is about what
+# YOUR character has unlocked, and nobody else receives it.
+#
+# STRUCTURED, NOT RENDERED. Each row is `{key, name, area, state, hint}`.
+# The key names the served file: the client fetches
+# `<origin>/static/webclient/music/<key>.ogg`. The rows come from
+# systems/gameplay/music/detail.py. The telnet `music` listing reads the
+# same rows, so the tab and the listing cannot disagree.
+#
+# THE SERVER OWNS THE LIST, THE CLIENT OWNS THE PLAY. No mode name, no
+# volume and no playing track are here. The server never names a clip.
+#
+# `area` is the first time the server tells the client the area of the
+# character. The fog keeps its own chunk read, because the fog is a look.
+#
+# A SNAPSHOT, and coalescable. The state of a row moves on an unlock, and
+# the handler marks it. The area moves on a step across a border, and the
+# area hook marks it through the handler.
+CHANNEL_CHAR_MUSIC: str = "char_music"                # -> Char.Music
+
+# The states of a track row.
+MUSIC_STATE_LOCKED: str = "locked"
+MUSIC_STATE_UNLOCKED: str = "unlocked"
+
+# The keys of a track row, and of the snapshot. A locked row carries its
+# hint. An unlocked row carries "" there, because the hint is the clue to
+# the unlock.
+MUSIC_AREA_KEY: str = "area"
+MUSIC_ROWS_KEY: str = "rows"
+MUSIC_ROW_KEY: str = "key"
+MUSIC_ROW_NAME: str = "name"
+MUSIC_ROW_AREA: str = "area"
+MUSIC_ROW_STATE: str = "state"
+MUSIC_ROW_HINT: str = "hint"
+
 # Blackout-specific extensions.
 CHANNEL_COMBAT: str = "blackout_combat"    # -> Blackout.Combat
 CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
@@ -226,6 +267,17 @@ CHANNEL_AURA: str = "blackout_aura"        # -> Blackout.Aura
 # a new attack type needs no client edit. The item catalog of the figure
 # workbench lists each action that a swing can name (figure_catalog.py).
 FIGURE_ATTACK_ACTION_TEMPLATE: str = "attack_{hands}_{attack_type}"
+
+# The action of the figure of the gatherer for one gathering attempt
+# (11/10/2026): a key of the clip set, as an attack action is. The hands of
+# the tool and the skill key fill it, for example gather_one_hand_cutting
+# with an axe and gather_unarmed_cutting with bare hands. The face event of
+# each attempt carries it as `figure_action`.
+#
+# The hands come from combat_const.attack_hands, as for a swing. A gathering
+# action with no clip plays nothing: no clip of a fight stands in for it.
+# The item catalog lists each gathering action that an attempt can name.
+FIGURE_GATHERING_ACTION_TEMPLATE: str = "gather_{hands}_{skill}"
 
 # One entity turns to another, and that one turns back (10/18/2026): the
 # start of a fight, a talk, or a trade. The attack command and the AI of
@@ -355,6 +407,17 @@ MOMENT_MELEE_SWING: str = "melee_swing"
 MOMENT_SHOP_BUY: str = "shop_buy"
 MOMENT_SHOP_SELL: str = "shop_sell"
 
+# An AugBot restored the Grit of a player. CmdAmplify sends it after the
+# restore, to that player only. A full pool restores nothing, and it sends
+# nothing.
+MOMENT_AMPLIFY: str = "amplify"
+
+# One graft of one sample, at a Locus or away from one. graft.graft sends it
+# after the consume, to the grafter only. The Locus channel grafts one unit
+# every few ticks. Thus, the sound repeats until the channel stops. A thing
+# that is no sample grafts nothing, and it sends nothing.
+MOMENT_GRAFT: str = "graft"
+
 MOMENTS: frozenset = frozenset((
     MOMENT_TASK_COMPLETE,
     MOMENT_CUT_ATTEMPT,
@@ -366,6 +429,8 @@ MOMENTS: frozenset = frozenset((
     MOMENT_MELEE_SWING,
     MOMENT_SHOP_BUY,
     MOMENT_SHOP_SELL,
+    MOMENT_AMPLIFY,
+    MOMENT_GRAFT,
 ))
 
 # The command that asks for the world map. The key of CmdWorldMap, and the
@@ -393,6 +458,7 @@ SUBSCRIBABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_POPUP,
     CHANNEL_CHAR_CHAT,
     CHANNEL_CHAR_ABILITIES,
+    CHANNEL_CHAR_MUSIC,
     CHANNEL_COMBAT,
     CHANNEL_FACE,
     CHANNEL_AURA,
@@ -720,7 +786,7 @@ LOGIN_RESUME_TEMPLATE: str = "resume {account} {token}"
 # Zero is not a dead setting: rooms_within_radius short-circuits to [origin]
 # without a query, so setting it back costs nothing and restores exactly the
 # text channel's visibility.
-STATEFEED_ENTITY_RADIUS: int = 24
+STATEFEED_ENTITY_RADIUS: int = 32
 
 
 # ─── Rate limiting ───────────────────────────────────────────────────────────
@@ -828,6 +894,7 @@ COALESCABLE_CHANNELS: frozenset = frozenset((
     CHANNEL_CHAR_POPUP,
     CHANNEL_CHAR_CHAT,
     CHANNEL_CHAR_ABILITIES,
+    CHANNEL_CHAR_MUSIC,
     CHANNEL_CHAR_ITEMS,
     CHANNEL_ROOM_INFO,
     CHANNEL_ROOM_PLAYERS,

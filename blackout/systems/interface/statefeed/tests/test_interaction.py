@@ -62,7 +62,7 @@ _REPO_ROOT = os.path.dirname(_GAME_DIR)
 # does not exist is skipped, so a client can be removed without a test edit --
 # but the vacuity guard below refuses to let all of them disappear silently.
 _ENTITY_CLICK_SOURCES: tuple = (
-    os.path.join(_REPO_ROOT, "godot", "world", "world_view.gd"),
+    os.path.join(_REPO_ROOT, "godot", "world", "pane", "world_view.gd"),
 )
 
 # A comment in either language, stripped before any of these files is read.

@@ -29,6 +29,7 @@ from systems.gameplay.augmentation.handler import (
 from systems.gameplay.augmentation.registry import AUGMENT_REGISTRY, augments_in_order
 from systems.gameplay.augmentation.tests import support
 from systems.gameplay.progression.skills.constants import SKILL_KEY_AUGMENTATION
+from systems.interface.popups import constants as popup_const
 from systems.interface.popups.popup_defs.rig import (
     AUGMENTS_GRID_KEY,
     RIG_POPUP_KEY,
@@ -42,6 +43,34 @@ from typeclasses.mixins import CombatEntity
 
 def _first_augment():
     return augments_in_order()[0]
+
+
+def _swap_pair():
+    """(mover, held, origin, target): two augments that both fit two
+    sockets, and the two sockets. None when no two augments share two."""
+    for mover in augments_in_order():
+        for held in augments_in_order():
+            shared = [key for key in mover.sockets if key in held.sockets]
+
+            if held is not mover and len(shared) > 1:
+                return mover, held, shared[0], shared[1]
+
+    return None
+
+
+def _one_way_pair():
+    """(mover, held, origin, target): the mover fits the origin and the
+    target, and the held augment fits the target only. None for no pair."""
+    for mover in augments_in_order():
+        for held in augments_in_order():
+            for target in mover.sockets:
+                origins = [key for key in mover.sockets
+                           if key != target and key not in held.sockets]
+
+                if held is not mover and target in held.sockets and origins:
+                    return mover, held, origins[0], target
+
+    return None
 
 
 def _a_locked_socket_for(character) -> str:
@@ -179,6 +208,71 @@ class TestSockets(_Rig, EvenniaCommandTest):
         self.assertIn("holds", message.lower())
         self.assertEqual(self.augment.key, sockets.assignments(self.char1)[self.socket_key])
 
+    def test_swap_trades_two_augments_that_fit_both_sockets(self):
+        pair = _swap_pair()
+
+        if pair is None:
+            self.skipTest("no two augments share two sockets")
+
+        mover, held, origin, target = pair
+        sockets.place(self.char1, mover, origin)
+        sockets.place(self.char1, held, target)
+
+        done, message = sockets.place(self.char1, mover, target, swap=True)
+
+        self.assertTrue(done, message)
+        self.assertEqual({target: mover.key, origin: held.key}, sockets.assignments(self.char1))
+        self.assertIn("moves", message.lower())
+
+    def test_swap_puts_out_a_held_augment_that_cannot_move(self):
+        pair = _one_way_pair()
+
+        if pair is None:
+            self.skipTest("no held augment misses the socket of the mover")
+
+        mover, held, origin, target = pair
+        sockets.place(self.char1, mover, origin)
+        sockets.place(self.char1, held, target)
+        ensure_augment_handler(self.char1).light(held, aug_const.AUG_POWER_LEVEL_DEFAULT)
+
+        done, message = sockets.place(self.char1, mover, target, swap=True)
+
+        self.assertTrue(done, message)
+        self.assertEqual({target: mover.key}, sockets.assignments(self.char1))
+        self.assertIn("leaves", message.lower())
+        self.assertIsNone(get_augment_handler_for(self.char1))
+
+    def test_swap_from_the_catalogue_takes_the_held_augment_out(self):
+        pair = _swap_pair()
+
+        if pair is None:
+            self.skipTest("no two augments share a socket")
+
+        mover, held, _origin, target = pair
+        sockets.place(self.char1, held, target)
+
+        done, message = sockets.place(self.char1, mover, target, swap=True)
+
+        self.assertTrue(done, message)
+        self.assertEqual({target: mover.key}, sockets.assignments(self.char1))
+
+    def test_swap_into_an_empty_socket_is_a_plain_place(self):
+        done, message = sockets.place(self.char1, self.augment, self.socket_key, swap=True)
+
+        self.assertTrue(done, message)
+        self.assertEqual({self.socket_key: self.augment.key}, sockets.assignments(self.char1))
+
+    def test_swap_still_refuses_a_socket_the_augment_does_not_fit(self):
+        wrong = [key for key in aug_const.SOCKETS if key not in self.augment.sockets]
+
+        if not wrong:
+            self.skipTest("the augment fits every socket")
+
+        done, _message = sockets.place(self.char1, self.augment, wrong[0], swap=True)
+
+        self.assertFalse(done)
+        self.assertEqual({}, sockets.assignments(self.char1))
+
     def test_place_moves_an_augment_between_sockets(self):
         if len(self.augment.sockets) < 2:
             self.skipTest("the augment fits one socket")
@@ -226,7 +320,7 @@ class TestSockets(_Rig, EvenniaCommandTest):
 
     def test_remove_puts_a_lit_augment_out(self):
         sockets.place(self.char1, self.augment, self.socket_key)
-        ensure_augment_handler(self.char1).light(self.augment, aug_const.AUG_STEP_DEFAULT)
+        ensure_augment_handler(self.char1).light(self.augment, aug_const.AUG_POWER_LEVEL_DEFAULT)
 
         sockets.remove(self.char1, self.socket_key)
 
@@ -275,6 +369,27 @@ class TestSocketCommands(_Rig, EvenniaCommandTest):
         response = self.call(CmdSocket(), f" no such thing {label}", caller=self.char1)
 
         self.assertIn("know no augment", response.lower())
+
+    def test_the_swap_switch_reaches_the_command_through_the_parser(self):
+        pair = _swap_pair()
+
+        if pair is None:
+            self.skipTest("no two augments share a socket")
+
+        mover, held, _origin, target = pair
+        sockets.place(self.char1, held, target)
+
+        self.char1.execute_cmd(
+            aug_const.SOCKET_SWAP_TEMPLATE.format(name=mover.name, socket=target))
+
+        self.assertEqual(mover.key, sockets.assignments(self.char1)[target])
+
+    def test_an_unknown_switch_gives_the_usage_and_changes_nothing(self):
+        response = self.call(CmdSocket(), f"/moon {self.augment.name} {self.socket_key}",
+                             caller=self.char1)
+
+        self.assertIn("usage", response.lower())
+        self.assertEqual({}, sockets.assignments(self.char1))
 
     def test_unsocket_empties_the_socket(self):
         sockets.place(self.char1, self.augment, self.socket_key)
@@ -338,6 +453,21 @@ class TestRigPopup(_Rig, EvenniaCommandTest):
         self.assertEqual(len(augments_in_order()), len(grids[AUGMENTS_GRID_KEY]["items"]))
         json.dumps(grids)
 
+    def test_the_sockets_grid_names_the_rig_layout(self):
+        grids = self._grids()
+
+        self.assertEqual(
+            popup_const.POPUP_LAYOUT_RIG,
+            grids[SOCKETS_GRID_KEY].get(popup_const.GRID_LAYOUT_FIELD))
+        self.assertNotIn(popup_const.GRID_LAYOUT_FIELD, grids[AUGMENTS_GRID_KEY])
+
+    def test_each_socket_cell_names_its_socket_as_its_place(self):
+        cells = self._grids()[SOCKETS_GRID_KEY]["items"]
+
+        for slot, socket_key in enumerate(aug_const.SOCKETS):
+            with self.subTest(socket=socket_key):
+                self.assertEqual(socket_key, cells[slot][popup_const.ROW_PLACE_FIELD])
+
     def test_a_filled_socket_carries_the_unsocket_line(self):
         sockets.place(self.char1, self.augment, self.socket_key)
         slot = aug_const.SOCKETS.index(self.socket_key)
@@ -369,6 +499,20 @@ class TestRigPopup(_Rig, EvenniaCommandTest):
         self.assertFalse(cell["enabled"])
         self.assertEqual([], cell["actions"])
 
+    def test_a_locked_augment_names_its_level_in_the_short_form(self):
+        self.char1.skills.set_level(SKILL_KEY_AUGMENTATION, aug_const.NO_UNLOCK_LEVEL)
+        cells = {cell["name"]: cell for cell in self._grids()[AUGMENTS_GRID_KEY]["items"]}
+        locked = [augment for augment in augments_in_order()
+                  if augment.unlock_level > aug_const.NO_UNLOCK_LEVEL]
+
+        if not locked:
+            self.skipTest("every augment is open at level 0")
+
+        for augment in locked:
+            with self.subTest(augment=augment.key):
+                expected = aug_const.RIG_LOCKED_DETAIL.format(level=augment.unlock_level)
+                self.assertEqual(expected, cells[augment.name]["detail"])
+
     def test_the_status_counts_the_open_sockets(self):
         status = RigPopup().status(self.char1, self.char1)
 
@@ -381,3 +525,112 @@ class TestRigPopup(_Rig, EvenniaCommandTest):
                 if row["kind"] != aug_const.AUG_SET_ROW_KEY]
 
         self.assertEqual([self.augment.key, aug_const.AUG_SET_ROW_KEY], keys)
+
+
+class TestRigDrag(_Rig, EvenniaCommandTest):
+    """The drag of the rig pop-up (11/09/2026). Each drop runs through the
+    real parser, as the client sends it. A drop that the parser refuses is
+    a drag that does nothing."""
+
+    def _grids(self) -> dict:
+        grids = RigPopup().grids(self.char1, self.char1, None)
+
+        return {entry["key"]: entry for entry in grids}
+
+    def _socket_cell(self, socket_key: str) -> dict:
+        cells = self._grids()[SOCKETS_GRID_KEY]["items"]
+
+        return cells[aug_const.SOCKETS.index(socket_key)]
+
+    def _augment_cell(self, augment) -> dict:
+        cells = self._grids()[AUGMENTS_GRID_KEY]["items"]
+
+        return cells[augments_in_order().index(augment)]
+
+    def _drop(self, source: dict, target: dict) -> None:
+        """Drop one cell on another, as the client does: look up the drag
+        key of the source in the drop table of the target, and send."""
+        drag_key = source[popup_const.ROW_DRAG_KEY_FIELD]
+
+        self.char1.execute_cmd(target[popup_const.ROW_DROPS_FIELD][drag_key])
+
+    def test_a_socket_takes_the_drop_of_each_augment_that_fits_it(self):
+        for socket_key in aug_const.SOCKETS:
+            drops = self._socket_cell(socket_key)[popup_const.ROW_DROPS_FIELD]
+
+            for augment in augments_in_order():
+                with self.subTest(socket=socket_key, augment=augment.key):
+                    drag_key = self._augment_cell(augment)[popup_const.ROW_DRAG_KEY_FIELD]
+                    self.assertEqual(socket_key in augment.sockets, drag_key in drops)
+
+    def test_a_drop_of_an_augment_on_a_socket_puts_it_there(self):
+        self._drop(self._augment_cell(self.augment), self._socket_cell(self.socket_key))
+
+        self.assertEqual(self.socket_key, sockets.socket_of(self.char1, self.augment.key))
+
+    def test_a_drop_of_a_socket_on_a_full_socket_swaps_the_two(self):
+        pair = _swap_pair()
+
+        if pair is None:
+            self.skipTest("no two augments share two sockets")
+
+        mover, held, origin, target = pair
+        sockets.place(self.char1, mover, origin)
+        sockets.place(self.char1, held, target)
+
+        self._drop(self._socket_cell(origin), self._socket_cell(target))
+
+        self.assertEqual({target: mover.key, origin: held.key}, sockets.assignments(self.char1))
+
+    def test_a_filled_socket_drops_out_on_any_augment_cell(self):
+        sockets.place(self.char1, self.augment, self.socket_key)
+        source = self._socket_cell(self.socket_key)
+        drag_key = source[popup_const.ROW_DRAG_KEY_FIELD]
+
+        for augment in augments_in_order():
+            with self.subTest(augment=augment.key):
+                drops = self._augment_cell(augment)[popup_const.ROW_DROPS_FIELD]
+                self.assertIn(drag_key, drops)
+
+        self._drop(source, self._augment_cell(augments_in_order()[-1]))
+
+        self.assertEqual({}, sockets.assignments(self.char1))
+
+    def test_an_augment_cell_takes_no_drop_from_another_augment_cell(self):
+        cells = self._grids()[AUGMENTS_GRID_KEY]["items"]
+        drag_keys = {cell[popup_const.ROW_DRAG_KEY_FIELD] for cell in cells}
+
+        for cell in cells:
+            with self.subTest(augment=cell["name"]):
+                self.assertFalse(drag_keys & set(cell[popup_const.ROW_DROPS_FIELD]))
+
+    def test_a_socket_takes_no_drop_of_the_augment_it_holds(self):
+        sockets.place(self.char1, self.augment, self.socket_key)
+        target = self._socket_cell(self.socket_key)
+        drops = target[popup_const.ROW_DROPS_FIELD]
+
+        self.assertNotIn(target[popup_const.ROW_DRAG_KEY_FIELD], drops)
+        self.assertNotIn(self._augment_cell(self.augment)[popup_const.ROW_DRAG_KEY_FIELD], drops)
+
+    def test_a_closed_socket_takes_no_drop_and_an_empty_one_does_not_drag(self):
+        self.char1.skills.set_level(SKILL_KEY_AUGMENTATION, aug_const.NO_UNLOCK_LEVEL)
+        closed = _a_locked_socket_for(self.char1)
+
+        if not closed:
+            self.skipTest("every socket is open at level 0")
+
+        empty = sockets.open_sockets(self.char1)[0]
+
+        self.assertNotIn(popup_const.ROW_DROPS_FIELD, self._socket_cell(closed))
+        self.assertIn(popup_const.ROW_DROPS_FIELD, self._socket_cell(empty))
+        self.assertNotIn(popup_const.ROW_DRAG_KEY_FIELD, self._socket_cell(empty))
+
+    def test_every_drag_key_names_one_cell(self):
+        sockets.place(self.char1, self.augment, self.socket_key)
+        grids = self._grids()
+        cells = grids[SOCKETS_GRID_KEY]["items"] + grids[AUGMENTS_GRID_KEY]["items"]
+        drag_keys = [cell[popup_const.ROW_DRAG_KEY_FIELD] for cell in cells
+                     if popup_const.ROW_DRAG_KEY_FIELD in cell]
+
+        self.assertEqual(len(drag_keys), len(set(drag_keys)))
+        self.assertEqual(len(augments_in_order()) + 1, len(drag_keys))

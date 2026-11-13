@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Publish the Godot web client and its model tree to the R2 bucket the site
-# serves them from.
+# Publish the Godot web client, its model tree, and its music tree to the R2
+# bucket the site serves them from.
 #
 # The client does NOT ship with the marketing site. `index.wasm` is 37.7 MiB and
 # Cloudflare caps an individual static asset at 25 MiB on every plan it sells,
@@ -56,6 +56,7 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 EXPORT_DIR="$SCRIPT_DIR/build"
 MODEL_DIR="$REPO_ROOT/blackout/web/static/webclient/models"
+MUSIC_DIR="$REPO_ROOT/blackout/web/static/webclient/music"
 
 # Wrangler is a devDependency of the SITE repo, not this one, so it runs from
 # there. Nothing else in this script needs that directory.
@@ -68,6 +69,11 @@ fi
 
 if [ ! -d "$MODEL_DIR" ]; then
     echo "No model tree at $MODEL_DIR." >&2
+    exit 1
+fi
+
+if [ ! -d "$MUSIC_DIR" ]; then
+    echo "No music tree at $MUSIC_DIR." >&2
     exit 1
 fi
 
@@ -87,11 +93,14 @@ to_native_path() {
     fi
 }
 
-# Each pair is (local tree, R2 key prefix). The prefixes are the same two the
-# worker claims in R2_ROUTE_PREFIXES and wrangler.jsonc's run_worker_first.
+# Each pair is (local tree, R2 key prefix). The prefixes are the same ones
+# that the worker claims in R2_ROUTE_PREFIXES and wrangler.jsonc's
+# run_worker_first. A tree that is here and not there uploads, and the site
+# then answers each request for it with its 404 page.
 TREES=(
     "$EXPORT_DIR:client"
     "$MODEL_DIR:static/webclient/models"
+    "$MUSIC_DIR:static/webclient/music"
 )
 
 # The publish record: one "key<TAB>sha256" line for each object that this

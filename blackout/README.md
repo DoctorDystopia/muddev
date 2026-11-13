@@ -840,6 +840,8 @@ tab. The number of tabs has no limit, but an empty tab disappears, so the
 > bank move rusty metal chunk = new  # make a tab for it
 > bank move rusty metal chunk = 0    # put it back in the main tab
 > bank swap rusty metal chunk = hammer
+> bank insert rusty metal chunk = hammer  # take the place of the hammer
+> bank drag insert                   # a drop in the pop-up inserts
 > bank name 2 = Ores                 # show "Ores", not the first item
 > bank name 2                        # show the first item again
 > bank placeholders off
@@ -854,12 +856,19 @@ item, a placeholder keeps its place and its tab. The next deposit of that item
 fills the placeholder. A placeholder uses one of the 100 slots until you
 release it.
 
+A swap trades the places of two items. An insert puts the first item in the
+place of the second, and the items between them move one place. An insert
+into another tab moves the item into that tab.
+
 In the Godot client, the tabs are buttons above the vault. A left click on a
 tab views it. A right click renames it. Drag a vault item onto a tab to move
-it there, onto the "+" to make a new tab, or onto another item to swap the
-two. The search box filters the whole vault by name. The buttons under the
-vault switch placeholders and release them all. In the main tab, a small
-label names the items of each tab: the name you gave the tab, or "Tab 2".
+it there, onto the "+" to make a new tab, or onto another item to swap or
+insert it. The drag mode decides which one, as the OSRS "Rearrange mode"
+does. A new vault swaps. The search box filters the whole vault by name. The
+buttons under the vault switch placeholders, switch the drag mode ("Drag:
+Swap" or "Drag: Insert"), and release all placeholders. In the main tab, a
+small label names the items of each tab: the name you gave the tab, or
+"Tab 2".
 
 ### Python inspection
 
@@ -906,6 +915,68 @@ dim and has no actions. A right click on the shopkeeper in the world offers
 Talk and Trade.
 
 Every other client gets the shop menu from `trade`.
+
+---
+
+## Dialogue scripts
+
+An NPC speaks from a dialogue module (Python, in `world/npc_dialogues/`) or
+from a dialogue script (DESIGN-0017, 11/11/2026). A dialogue script is a
+`.dialogue` file that an author writes in the Godot editor. The procedure is
+in [godot/dialogue/README.md](../godot/dialogue/README.md).
+
+### Give an NPC a dialogue script
+
+1. Write `godot/dialogue/<key>.dialogue` in the Dialogue tab, and save.
+2. Name it in the `NpcDef`: `dialogue_script="<key>"`.
+3. Reload the server for the new def. A later save of the script needs no
+   reload.
+
+### Check the scripts
+
+```bash
+python -m systems.gameplay.dialogue
+```
+
+The command prints one line for each fault: a compiled script that is out of
+date, a name that is not in the dialogue vocabulary, a quest key that names
+no quest, or a feature that the server does not run. The Godot editor runs
+it after each save. The test suite runs the same check.
+
+### Add a name to the dialogue vocabulary
+
+Add one decorated function to a module under
+`systems/gameplay/dialogue/vocab_defs/`. The function gets the context
+first, and then the arguments of the script:
+
+```python
+@query("quest.is_active", "True while the player has the quest.",
+       argument_check=_check_quest_key)
+def _is_active(context, quest_key: str) -> bool:
+    ...
+```
+
+Then write the editor stub again, and add the row to the table in
+`godot/dialogue/README.md`:
+
+```bash
+python -m systems.gameplay.dialogue --write-stub
+```
+
+### Test a dialogue script
+
+```python
+from systems.gameplay.dialogue.tests import helpers as dialogue
+
+conversation = dialogue.talk(self.char1, "aug_clinic_1")
+beat = dialogue.give(conversation, "ask about the job")
+self.assertIn("Augmentation Intro", beat.text)
+```
+
+`talk` opens the script as `talk` does, with no menu. `give` gives the
+response whose label holds a keyword.
+`systems/gameplay/quests/tests/test_quest_augmentation_intro.py` is the
+model.
 
 ---
 
@@ -958,6 +1029,7 @@ lives in `world/item_database.py`. `tier_for_level` is its one owner, and
 | `rusty_scrap_axe`, `rusty_scrap_dagger` | 0 | 0 |
 | `scrap_axe`, `scrap_dagger` | 10 | 1 |
 | `copper_axe`, `copper_dagger` | 20 | 2 |
+| `manganese_axe`, `manganese_dagger` | 30 | 3 |
 
 The two fields are not one field. `req_level` is the gate, and it says who
 may wield the tool. `tier` is the ladder position, and it says what the swing
@@ -1420,6 +1492,92 @@ A switch changes the chunk files only. Then stop the server, run the tile
 sync with `--apply`, and start the server. A switch refuses to drop a
 world that no version holds. Save it first, or add `--drop`.
 
+### The showroom (11/03/2026)
+
+The showroom is a generated world. It holds one of each item and one of
+each object kind, side by side. It runs on a separate server, with
+`server/conf/showroom_settings.py`. The live world and the live database do
+not change.
+
+| Fact | Showroom | Live |
+|---|---|---|
+| Database | `server/showroom.db3` | `server/evennia.db3` |
+| Chunk files | `world/showroom/` (git ignores it) | `world/chunks/` |
+| Godot socket | `ws://127.0.0.1:4108` | `ws://127.0.0.1:4008` |
+| Log files | `server/logs/showroom_*.log` | `server/logs/*.log` |
+
+`scripts/showroom.py` writes the world again at each run, from `ITEM_DB` and
+`world/object_kinds.py`. A new item or kind needs no edit. Each item lies on
+an item spawn with a respawn of one tick. Thus, a taken item comes back in
+about 3 seconds. `world/showroom.py` gives the layout and what it leaves
+out.
+
+Only one server can run at a time. Both write their PID files into
+`server/`.
+
+**First run** (about 5 minutes). From `blackout/`:
+
+1. Stop the live server:
+
+```bash
+../evenv/Scripts/evennia.exe stop
+```
+
+2. Make the showroom database:
+
+```bash
+../evenv/Scripts/evennia.exe --settings showroom_settings.py migrate
+```
+
+3. Start the showroom server one time. It asks for the superuser:
+
+```bash
+../evenv/Scripts/evennia.exe --settings showroom_settings.py start
+```
+
+4. Stop it:
+
+```bash
+../evenv/Scripts/evennia.exe --settings showroom_settings.py stop
+```
+
+5. Write the world, and stand it up in the showroom database:
+
+```bash
+../evenv/Scripts/python.exe scripts/showroom.py --apply
+```
+
+6. Start the showroom server:
+
+```bash
+../evenv/Scripts/evennia.exe --settings showroom_settings.py start
+```
+
+7. Start the Godot client with the showroom socket:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --path ../godot --server=ws://127.0.0.1:4108
+```
+
+In the Godot editor, put `--server=ws://127.0.0.1:4108` in Project
+Settings > Editor > Run > Main Run Args. The superuser starts at the
+respawn point, at the south-west corner of the showroom.
+
+**Each later run:** stop the showroom server, run step 5, and start it.
+Without `--apply`, the script writes the files and prints a report. It
+touches no database.
+
+**Back to the live game:** stop the showroom server, and start the live
+server:
+
+```bash
+../evenv/Scripts/evennia.exe --settings showroom_settings.py stop
+```
+
+```bash
+../evenv/Scripts/evennia.exe start
+```
+
 ### Move as staff
 
 ```bash
@@ -1489,6 +1647,7 @@ Example: `\|300P\|n` renders **P** in dark red (R=3,G=0,B=0) then resets.
 | `scripts/sync_tile_objects.py` | Makes the objects on the tile world match the chunk files. Reports by default | `../evenv/Scripts/python.exe scripts/sync_tile_objects.py [--apply]` (from `blackout/`, server stopped) |
 | `scripts/move_to_tile_world.py` | The cutover: moves each character off the xyzgrid maps, then deletes the map rooms. Reports by default | `../evenv/Scripts/python.exe scripts/move_to_tile_world.py [--apply]` (from `blackout/`, server stopped) |
 | `scripts/world_versions.py` | The shelf of saved worlds: list, save, switch, rename, remove. Touches no database | `../evenv/Scripts/python.exe scripts/world_versions.py list` (from `blackout/`; a switch needs the tile sync after it) |
+| `scripts/showroom.py` | Writes the showroom world (one of each item and object kind) into `world/showroom/`. With `--apply`, runs the tile sync into `server/showroom.db3` only | `../evenv/Scripts/python.exe scripts/showroom.py [--apply]` (from `blackout/`; see "The showroom") |
 | `scripts/backup_db.py` | Snapshots the live sqlite3 database into `server/backups/` (gzip, timestamped), pruning old backups beyond `--keep` | `../evenv/Scripts/python.exe scripts/backup_db.py [--keep N] [--dest DIR]` (from `blackout/`) |
 | `scripts/backup_db.ps1` / `.sh` | Argument-light wrappers around `backup_db.py`, meant for Task Scheduler / cron | `.\scripts\backup_db.ps1 [-Keep N] [-Dest DIR]` |
 
@@ -1523,7 +1682,7 @@ finish in seconds:
 
 ### Full test suite (only when necessary)
 
-**4123 tests, ~43 minutes** (measured 11/02/2026). Run it before a merge, or
+**4409 tests, ~43 minutes** (measured 11/11/2026). Run it before a merge, or
 when a change affects more than one system:
 
 ```bash

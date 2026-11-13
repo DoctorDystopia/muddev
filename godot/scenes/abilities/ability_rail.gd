@@ -46,12 +46,13 @@ const ROW_SEPARATION := 4
 const BUTTON_TEXT := "%s  %s"
 const NO_KEY_TEXT := "%s"
 
-## The step of a lit augment row, after its name: "Reflex 2/3"
-## (DESIGN-0015). A row with no step dial, or one that is out, shows none.
-const STEP_TEXT := "%s %d/%d"
+## The power level of a lit augment row, after its name: "Reflex 2/3"
+## (DESIGN-0015). A row with no power level dial, or one that is out,
+## shows none.
+const POWER_LEVEL_TEXT := "%s %d/%d"
 
-## The note of a row, after the name and the step: the roll of Overclock,
-## "Overclock +14%" (DESIGN-0015, Phase 5). The server says the text. An
+## The note of a row, after the name and the power level: the roll of
+## Overclock, "Overclock +14%" (DESIGN-0015, Phase 5). The server says the text. An
 ## empty note draws nothing.
 const NOTE_TEXT := "%s %s"
 
@@ -126,16 +127,16 @@ func press_set() -> void:
 	_send(row)
 
 
-## Turn the step dial of one slot, as Shift and its key do. The server
-## names the line of the next step on a lit row, and an out row carries
-## none, so nothing is sent for it.
-func step_slot(slot: int) -> void:
+## Turn the power level dial of one slot, as Shift and its key do. The
+## server names the line of the next power level on a lit row. An out row
+## carries none, so the rail sends nothing for it.
+func power_level_slot(slot: int) -> void:
 	var row := _toggle_row_at(slot)
 
 	if row.is_empty():
 		return
 
-	var command := str(row["step_command"])
+	var command := str(row["power_level_command"])
 
 	if command.is_empty():
 		return
@@ -173,8 +174,9 @@ func _button(slot: int, row: Dictionary, is_set: bool = false) -> Button:
 	var key_label := AbilityKeys.SET_LABEL if is_set else AbilityKeys.label_for(slot)
 	var name_text := str(row["name"])
 
-	if AbilitiesState.has_steps(row) and int(row["step"]) > 0:
-		name_text = STEP_TEXT % [name_text, int(row["step"]), int(row["steps"])]
+	if AbilitiesState.has_power_levels(row) and int(row["power_level"]) > 0:
+		name_text = POWER_LEVEL_TEXT % [
+			name_text, int(row["power_level"]), int(row["power_levels"])]
 
 	var note := str(row.get(_Const.ABILITY_NOTE_KEY, ""))
 

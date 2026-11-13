@@ -22,7 +22,7 @@ model its first place. See "Place a served model" below.
 | `looks/<item key>.json` with a `base` key | A tier: the parts of another look with other colors |
 | `looks/<item key>.json` with a `served` key | The place of the served model of the item, after you moved it |
 | `godot/world/figure/stances.json` | The clip of each action, for one tool type |
-| `godot/addons/blackout_figure/item_catalog.json` | The rows of the gear editor. The export writes it |
+| `godot/addons/blackout_figure/data/item_catalog.json` | The rows of the gear editor. The export writes it |
 
 ## Open the gear editor
 

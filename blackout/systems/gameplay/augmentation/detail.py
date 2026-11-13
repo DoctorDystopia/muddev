@@ -10,9 +10,9 @@ Description: What an augment IS, for one holder, as ability rows
              puts them on the rail after the aura rows. Thus, the listing
              and the rail cannot describe an augment differently.
 
-             Each row is a toggle with a step dial. The last row is the set
-             row: one button that lights every socketed augment, or puts
-             every one out. Since Phase 5, the rows are the SOCKETED
+             Each row is a toggle with a power level dial. The last row is
+             the set row: one button that lights every socketed augment, or
+             puts every one out. Since Phase 5, the rows are the SOCKETED
              augments only (section 4.7): the rig decides what the rail
              shows, and the rig pop-up shows the whole catalogue.
 """
@@ -41,12 +41,13 @@ def _tip_lines(augment, level: int, roll: float) -> list:
     return lines
 
 
-def _next_step(step: int) -> int:
-    """The step after `step` on the dial. The top step wraps to the first."""
-    if step >= aug_const.AUG_STEPS:
-        return aug_const.AUG_STEP_MIN
+def _next_power_level(power_level: int) -> int:
+    """The power level after `power_level` on the dial. The top one wraps
+    to the first."""
+    if power_level >= aug_const.AUG_POWER_LEVELS:
+        return aug_const.AUG_POWER_LEVEL_MIN
 
-    return step + 1
+    return power_level + 1
 
 
 def _note(roll: float) -> str:
@@ -60,15 +61,15 @@ def _note(roll: float) -> str:
 def _row(augment, holder, lit: dict, rolls: dict, level: int) -> dict:
     """One ability row for one augment and one holder."""
     allowed, reason = augment.can_activate(holder)
-    step = int(lit.get(augment.key, 0))
+    power_level = int(lit.get(augment.key, 0))
     roll = float(rolls.get(augment.key, 0.0))
-    step_command = ""
+    power_level_command = ""
 
-    if step > 0:
+    if power_level > 0:
         state = feed_const.ABILITY_STATE_ACTIVE
         command = aug_const.AUG_EXTINGUISH_TEMPLATE.format(name=augment.name)
-        step_command = aug_const.AUG_IGNITE_STEP_TEMPLATE.format(
-            name=augment.name, step=_next_step(step))
+        power_level_command = aug_const.AUG_IGNITE_POWER_LEVEL_TEMPLATE.format(
+            name=augment.name, power_level=_next_power_level(power_level))
     elif allowed:
         state = feed_const.ABILITY_STATE_READY
         command = aug_const.AUG_IGNITE_TEMPLATE.format(name=augment.name)
@@ -83,9 +84,9 @@ def _row(augment, holder, lit: dict, rolls: dict, level: int) -> dict:
         "state": state,
         "command": command,
         "reason": str(reason),
-        feed_const.ABILITY_STEP_KEY: step,
-        feed_const.ABILITY_STEPS_KEY: aug_const.AUG_STEPS,
-        feed_const.ABILITY_STEP_COMMAND_KEY: step_command,
+        feed_const.ABILITY_POWER_LEVEL_KEY: power_level,
+        feed_const.ABILITY_POWER_LEVELS_KEY: aug_const.AUG_POWER_LEVELS,
+        feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY: power_level_command,
         feed_const.ABILITY_NOTE_KEY: _note(roll),
         feed_const.TIP_KEY: {
             feed_const.TIP_TITLE_KEY: str(augment.name),
@@ -123,13 +124,14 @@ def _set_row(any_lit: bool) -> dict:
 
 
 def _lit_and_rolls(holder) -> tuple:
-    """The lit steps and the rolls of a holder, in one handler lookup."""
+    """The lit power levels and the rolls of a holder, in one lookup."""
     handler = get_augment_handler_for(holder)
 
     if handler is None:
         return {}, {}
 
-    lit = {augment.key: step for augment, step in handler.lit_augments()}
+    lit = {augment.key: power_level
+           for augment, power_level in handler.lit_augments()}
     rolls = {key: handler.roll_of(key) for key in lit}
 
     return lit, rolls
@@ -149,9 +151,9 @@ def ability_rows(holder) -> list:
     Exit/Returns:
         Returns a list of rows, in the order of augments_in_order among the
         socketed augments, then the set row. Each augment row is `{key,
-        name, kind, state, command, reason, step, steps, step_command,
-        note, tip}`. The set row has no step keys. Every value survives
-        json.dumps.
+        name, kind, state, command, reason, power_level, power_levels,
+        power_level_command, note, tip}`. The set row has no power level
+        keys. Every value survives json.dumps.
 
     Module Globals:
         None.

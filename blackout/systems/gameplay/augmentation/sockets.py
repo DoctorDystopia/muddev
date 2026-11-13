@@ -89,6 +89,57 @@ def _put_out_if_lit(holder, augment_key: str) -> None:
         handler.stop_handler()
 
 
+def _place_refusal(holder, augment, socket_key: str) -> str:
+    """The reason that no augment change may happen, or "". A fight, a
+    closed socket, and a socket that the augment does not fit refuse."""
+    if _in_combat(holder):
+        return aug_const.SOCKET_IN_COMBAT_MESSAGE
+
+    label = _label(socket_key)
+    needed = unlock_level(socket_key)
+
+    if needed > pool.level(holder):
+        return aug_const.SOCKET_LOCKED_MESSAGE.format(socket=label, level=needed)
+
+    if socket_key not in augment.sockets:
+        return aug_const.SOCKET_NO_FIT_MESSAGE.format(
+            name=augment.name, socket=label, fits=augment.socket_labels())
+
+    return ""
+
+
+def _take_out(rig: dict, augment_key: str) -> str:
+    """Take an augment out of every socket of a rig dict. Returns the
+    socket that it left, or "" when it sat in none."""
+    left = ""
+
+    for socket_key, held in list(rig.items()):
+        if held == augment_key:
+            rig.pop(socket_key)
+            left = left or socket_key
+
+    return left
+
+
+def _rehome(holder, rig: dict, displaced, origin: str) -> str:
+    """
+    Find a new place for the augment that a swap pushed out of its socket.
+
+    It moves to the socket that the new augment left, when that socket is
+    open and it fits there. Else it leaves the rig and goes dark (Nick,
+    11/09/2026). Returns the line that tells the player which one.
+    """
+    if origin and origin in displaced.sockets and origin in open_sockets(holder):
+        rig[origin] = displaced.key
+
+        return aug_const.SOCKET_SWAP_MOVED_MESSAGE.format(
+            other=displaced.name, socket=_label(origin))
+
+    _put_out_if_lit(holder, displaced.key)
+
+    return aug_const.SOCKET_SWAP_OUT_MESSAGE.format(other=displaced.name)
+
+
 # ─── Public routines ─────────────────────────────────────────────────────────
 
 def socket_labels() -> str:
@@ -209,7 +260,7 @@ def socketed_augments(holder) -> list:
     return [augment for augment in augments_in_order() if augment.key in held]
 
 
-def place(holder, augment, socket_key: str) -> tuple:
+def place(holder, augment, socket_key: str, swap: bool = False) -> tuple:
     """
     Purpose: Put an augment into a socket.
 
@@ -217,6 +268,8 @@ def place(holder, augment, socket_key: str) -> tuple:
         holder is the character.
         augment is an instance of AUGMENT_REGISTRY.
         socket_key is a key of aug_const.SOCKETS.
+        swap is True for `socket/swap`: take a socket that another augment
+            holds.
 
     Exit/Returns:
         Returns (True, message) on a write. Returns (False, reason)
@@ -227,54 +280,52 @@ def place(holder, augment, socket_key: str) -> tuple:
         aug_const.SOCKET_* read.
 
     Methodology:
-        1. Refuse in a fight.
-        2. Refuse a closed socket, and a socket that the augment does not
-           fit.
-        3. Refuse a socket that another augment holds. The player unsockets
-           first, so a swap is two deliberate lines.
-        4. Say so when the augment already sits there.
-        5. Take the augment out of any other socket, then write.
+        1. Refuse in a fight, a closed socket, and a socket that the
+           augment does not fit.
+        2. Say so when the augment already sits there.
+        3. Without swap, refuse a socket that another augment holds. The
+           player unsockets first.
+        4. Take the augment out of any other socket, and put it in.
+        5. With swap, find a new place for the held augment: the socket
+           that the new augment left, or out of the rig.
+        6. Write one time.
 
     Notes/References:
         The level gate of the augment is not read here. A locked augment
         may sit in the rig, and the rail shows it locked until the level
-        comes. Thus, a build survives a level cut.
+        comes. Thus, a build survives a level cut. A drop on a socket in
+        the rig pop-up sends the swap form (11/09/2026).
 
     Author: Nick Hobar
     Creation date: 10/30/2026
     """
-    if _in_combat(holder):
-        return False, aug_const.SOCKET_IN_COMBAT_MESSAGE
+    refusal = _place_refusal(holder, augment, socket_key)
+
+    if refusal:
+        return False, refusal
 
     label = _label(socket_key)
-    needed = unlock_level(socket_key)
-
-    if needed > pool.level(holder):
-        return False, aug_const.SOCKET_LOCKED_MESSAGE.format(socket=label, level=needed)
-
-    if socket_key not in augment.sockets:
-        return False, aug_const.SOCKET_NO_FIT_MESSAGE.format(
-            name=augment.name, socket=label, fits=augment.socket_labels())
-
     rig = _stored(holder)
     held = rig.get(socket_key)
 
     if held == augment.key:
         return False, aug_const.SOCKET_SAME_MESSAGE.format(name=augment.name, socket=label)
 
-    if held in AUGMENT_REGISTRY:
-        other = AUGMENT_REGISTRY[held].name
+    displaced = AUGMENT_REGISTRY.get(held) if held is not None else None
 
-        return False, aug_const.SOCKET_TAKEN_MESSAGE.format(socket=label, other=other)
+    if displaced is not None and not swap:
+        return False, aug_const.SOCKET_TAKEN_MESSAGE.format(socket=label, other=displaced.name)
 
-    for other_socket, other_key in list(rig.items()):
-        if other_key == augment.key:
-            rig.pop(other_socket)
-
+    origin = _take_out(rig, augment.key)
     rig[socket_key] = augment.key
+    lines = [aug_const.SOCKET_DONE_MESSAGE.format(name=augment.name, socket=label)]
+
+    if displaced is not None:
+        lines.append(_rehome(holder, rig, displaced, origin))
+
     _write(holder, rig)
 
-    return True, aug_const.SOCKET_DONE_MESSAGE.format(name=augment.name, socket=label)
+    return True, aug_const.SOCKET_MESSAGE_JOIN.join(lines)
 
 
 def remove(holder, socket_key: str) -> tuple:

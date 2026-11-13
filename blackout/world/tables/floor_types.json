@@ -60,6 +60,16 @@
 			"key": "void",
 			"note": "No floor: a gap in plane 1 and up. Always Blocked.",
 			"roof": false
+		},
+		{
+			"key": "tile",
+			"note": "Desert clay basic tile",
+			"roof": false
+		},
+		{
+			"key": "rusty_sand",
+			"note": "Loose desert sand, imbued with rusty hue.",
+			"roof": false
 		}
 	]
 }

@@ -23,6 +23,13 @@ config/icon="res://ui/blackout_mark.png"
 [autoload]
 
 Evennia="*res://autoload/evennia.gd"
+DialogueManager="*uid://c3rodes2l3gxb"
+
+[dialogue_manager]
+
+editor/translations/UPDATE_TRANSLATION_TEMPLATES_AUTOMATICALLY=false
+editor/advanced/custom_test_scene_path="res://addons/blackout_dialogue/dialogue_test_scene.tscn"
+editor/advanced/extra_auto_complete_script_sources=PackedStringArray("res://addons/blackout_dialogue/dialogue_stub.gd")
 
 [display]
 
@@ -31,7 +38,7 @@ window/size/viewport_height=720
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/blackout_terrain/plugin.cfg", "res://addons/blackout_figure/plugin.cfg", "res://addons/blackout_gear/plugin.cfg", "res://addons/blackout_models/plugin.cfg")
+enabled=PackedStringArray("res://addons/blackout_camera/plugin.cfg", "res://addons/blackout_dialogue/plugin.cfg", "res://addons/blackout_figure/plugin.cfg", "res://addons/blackout_gear/plugin.cfg", "res://addons/blackout_models/plugin.cfg", "res://addons/blackout_terrain/plugin.cfg", "res://addons/dialogue_manager/plugin.cfg")
 
 [gui]
 

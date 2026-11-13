@@ -25,7 +25,7 @@ extends PanelContainer
 ## Emitted with a whole command a telnet player could have typed.
 signal chosen(command: String)
 
-const _Palette := preload("res://world/skill_palette.gd")
+const _Palette := preload("res://world/look/skill_palette.gd")
 
 ## The category swatch, in pixels. Square, small, and left of the name — enough
 ## to band the grid by category without becoming the thing you look at.

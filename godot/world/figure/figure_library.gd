@@ -319,10 +319,12 @@ static func play(holder: Node3D, action: String) -> void:
 		FigureClips.play(figure, clip)
 
 
-## Play the clip of one attack action on a figure, one time: one swing
-## (`figure_action` of `blackout_combat`, 10/25/2026). An action with no
-## clip of its own plays the clip of `attack`. A figure with neither clip
-## keeps what it plays.
+## Play the clip of one action of the server on a figure, one time. A swing
+## names one (`figure_action` of `blackout_combat`, 10/25/2026). So does a
+## gathering attempt (`figure_action` of `blackout_face`, 11/10/2026). An
+## attack action with no clip of its own plays the clip of `attack`. A
+## gathering action with no clip plays nothing. A figure with no clip keeps
+## what it plays. See [method FigureStances.strike_clip_for].
 ##
 ## A second swing starts again from the start of its clip. At the end of a
 ## swing, the player goes on with the clip of the action of the frame, from
@@ -333,7 +335,7 @@ static func strike(holder: Node3D, action: String) -> void:
 	if figure == null:
 		return
 
-	var clip := _stance_table().attack_clip_for("", action)
+	var clip := _stance_table().strike_clip_for("", action)
 
 	if clip.is_empty() or not FigureClips.play(figure, clip, 1.0, STRIKE_BLEND):
 		return

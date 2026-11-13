@@ -1,0 +1,14 @@
+{
+	"format": 1,
+	"rows": [
+		{
+			"area": "azm_plains",
+			"hint": "",
+			"key": "frigid_memory",
+			"name": "Frigid Memory",
+			"note": "The track of Azm Plains.",
+			"unlock": "area",
+			"unlock_key": ""
+		}
+	]
+}

@@ -153,6 +153,17 @@
     ]
   },
   {
+    "title": "manganese_pole_temp",
+    "author": "Harsh Patel",
+    "url": "https://playblackout.io",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "manganese_pole"
+    ]
+  },
+  {
     "title": "Meat on the bone",
     "author": "Nick Hobar",
     "url": "https://johanpeitz.itch.io/picocad",
@@ -248,8 +259,11 @@
     "license_url": "",
     "confirmed": false,
     "models": [
+      "copper_arrow",
       "heavy_machine_gun",
       "heavy_machine_gun_clip",
+      "manganese_arrow",
+      "manganese_shortbow",
       "rusty_scrap_arrow",
       "rusty_scrap_shortbow",
       "scrap_arrow",

@@ -35,6 +35,7 @@ Royalty-free licence: https://ovanisound.com/policies/terms-of-service
 | `sfx/transition.wav` | `Motions and Impacts/Whoosh Cyberwave.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/guns_shot.wav` | `Hollywood/Titan Handgun.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/shop_trade.wav` | `Medieval/Loot Gold.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/amplify.wav` | `Sci-Fi/Biobot Move.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 
 ## Enzo — Flesh and Fracture - Lite
 
@@ -46,6 +47,7 @@ the pack.
 |---|---|---|
 | `sfx/butcher_attempt.wav` | `Flesh Tearing/Flesh Tearing_T.Bone  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 | `sfx/cut_attempt.wav` | `Axe Chops/Axe Chop_MKE 600  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+| `sfx/graft.wav` | `Bone Twist_Snap Heavy/Bone Snap Heavy_MKE 600  (1).wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
 
 ## Hove Audio — Sword Combat Sound Effects Pack Free Version
 
@@ -58,3 +60,13 @@ Store page: https://hoveaudio.itch.io/sword-combat-sound-effects-pack-free-versi
 | Clip | Source file in the pack | Changes |
 |---|---|---|
 | `sfx/melee_swing.wav` | `Main Sounds/Sword Stabs/w_Whoosh/WEAPSwrd_SwordStabwWhoosh_HoveAud_SwordCombat_01.wav` | Renamed. Imported as mono (Force → Mono). The source file is unmodified. |
+
+## Nick Hobar — Blackout
+
+Original music, written for the game.
+
+License: Made for Blackout.
+
+| Clip | Source file in the pack | Changes |
+|---|---|---|
+| `music/frigid_memory.ogg` | `Azm Plains Frigid Memory.flac` | Renamed. Encoded to OGG Vorbis at quality 6. The source file is unmodified. |

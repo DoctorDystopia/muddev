@@ -3,7 +3,7 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 10/08/2026
 Description: The layout verbs of the `bank` command: tabs, view, move, swap,
-             name, placeholders and release.
+             insert, name, placeholders, release and drag.
 
              `bank` alone opens the vault. `bank <verb> ...` changes its
              layout. The Godot pop-up sends these same lines for a tab click,
@@ -23,12 +23,21 @@ from . import layout as vault_layout
 
 USAGE: str = (
     "Usage: bank | bank tabs | bank view <tab> | bank move <item> = <tab|new> | "
-    "bank swap <item> = <item> | bank name <tab> [= <name>] | "
-    "bank placeholders <on|off> | bank release <item|all>")
+    "bank swap <item> = <item> | bank insert <item> = <item> | "
+    "bank name <tab> [= <name>] | bank placeholders <on|off> | "
+    f"bank release <item|all> | bank drag <{'|'.join(bank_const.DRAG_MODES)}>")
 
 MSG_VIEW: str = "You look at {tab}."
 MSG_MOVE: str = "You move {item} to {tab}."
 MSG_SWAP: str = "You swap {first} and {second}."
+MSG_INSERT: str = "You put {first} in the place of {second}."
+
+# The answer to `bank drag <mode>`, for each drag mode. Every mode in
+# bank_const.DRAG_MODES has a row.
+MSG_DRAG_MODE: dict = {
+    bank_const.VERB_SWAP: "Dragging a vault item onto another now swaps the two.",
+    bank_const.VERB_INSERT: "Dragging a vault item onto another now puts it in that place.",
+}
 MSG_NAMED: str = "{tab} is now called '{name}'."
 MSG_UNNAMED: str = "{tab} shows the icon of its first item again."
 MSG_PLACEHOLDERS: str = "Placeholders are {state}."
@@ -157,14 +166,20 @@ def _verb_move(caller, rest: str) -> str:
                            tab=_tab_label(index, current.names))
 
 
-def _verb_swap(caller, rest: str) -> str:
-    """`bank swap <item> = <item>`: swap the places of two slots."""
+def _rearrange_line(caller, rest: str, change, message: str) -> str:
+    """
+    Read "<item> = <item>", give both names to `change` (the handler's
+    swap_slots or insert_slot), and word the result with `message`.
+
+    One routine for `swap` and `insert`, so the two read their arguments and
+    name their items the same way.
+    """
     first, second = _split_pair(rest)
 
     if not first or not second:
         return USAGE
 
-    refusal = caller.bank.swap_slots(first, second)
+    refusal = change(first, second)
 
     if refusal:
         return refusal
@@ -173,7 +188,34 @@ def _verb_swap(caller, rest: str) -> str:
     first_key = vault_layout.display_key(current, vault_layout.resolve(current, first))
     second_key = vault_layout.display_key(current, vault_layout.resolve(current, second))
 
-    return MSG_SWAP.format(first=first_key, second=second_key)
+    return message.format(first=first_key, second=second_key)
+
+
+def _verb_swap(caller, rest: str) -> str:
+    """`bank swap <item> = <item>`: swap the places of two slots."""
+    return _rearrange_line(caller, rest, caller.bank.swap_slots, MSG_SWAP)
+
+
+def _verb_insert(caller, rest: str) -> str:
+    """`bank insert <item> = <item>`: put the first slot at the place of the
+    second, and move the slots between them one place."""
+    return _rearrange_line(caller, rest, caller.bank.insert_slot, MSG_INSERT)
+
+
+def _verb_drag(caller, rest: str) -> str:
+    """`bank drag <swap|insert>`: pick what a drop of one vault slot on
+    another sends in the pop-up."""
+    mode = rest.strip().lower()
+
+    if mode not in bank_const.DRAG_MODES:
+        return USAGE
+
+    refusal = caller.bank.set_drag_mode(mode)
+
+    if refusal:
+        return refusal
+
+    return MSG_DRAG_MODE[mode]
 
 
 def _verb_name(caller, rest: str) -> str:
@@ -239,9 +281,11 @@ _VERBS: dict = {
     bank_const.VERB_VIEW: _verb_view,
     bank_const.VERB_MOVE: _verb_move,
     bank_const.VERB_SWAP: _verb_swap,
+    bank_const.VERB_INSERT: _verb_insert,
     bank_const.VERB_NAME: _verb_name,
     bank_const.VERB_PLACEHOLDERS: _verb_placeholders,
     bank_const.VERB_RELEASE: _verb_release,
+    bank_const.VERB_DRAG: _verb_drag,
 }
 
 

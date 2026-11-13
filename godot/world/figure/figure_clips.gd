@@ -31,7 +31,7 @@ extends RefCounted
 ## 2. [method pose] writes the pose of one moment into a skeleton, with no
 ##    player and no scene tree. A check and a test read a clip this way.
 ##
-## `tests/test_figure_clips.tscn` makes sure that the two give one pose.
+## `tests/world/figure/test_figure_clips.tscn` makes sure that the two give one pose.
 
 const CLIP_DIRECTORY := "res://world/figure/clips"
 const CLIP_SUFFIX := ".res"

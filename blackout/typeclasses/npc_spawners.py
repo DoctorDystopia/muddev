@@ -18,7 +18,7 @@ Description: The spawner of every NPC, one registry entry for each NpcDef.
              that no longer exists. `_adopt_legacy` finds such an NPC on its
              tile, swaps it to the typeclass of its role, and stamps its key.
              It rides the tile sync that the operator already runs, as
-             ShopkeepNPC.ensure_cleanup_script does. Remove it when no live
+             ShopkeepNPC.retire_cleanup_script does. Remove it when no live
              database holds an old row.
 """
 

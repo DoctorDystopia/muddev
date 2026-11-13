@@ -1,0 +1,834 @@
+extends Node
+## Tests for the pop-up's jobs that can be wrong: it shows only while the server
+## holds it open, every command leaving it was named by the server, a left
+## click sends the row's FIRST action, and the close button asks rather than
+## closes.
+##
+## The drawing is not tested beyond counts. Slots are cheap to look at and
+## expensive to assert.
+##
+##     godot --headless --path godot res://tests/scenes/test_popup_view.tscn
+
+const _Const := preload("res://autoload/blackout_constants.gd")
+const _StateTest := preload("res://tests/world/state/test_popup_state.gd")
+
+## Disposable, rather than the real profile: one case here writes a rect.
+const SETTINGS_PATH := "user://test_popup_view.cfg"
+
+var _failures := 0
+var _view: PopupView
+var _state: PopupState
+var _sent: Array[String] = []
+
+
+func _ready() -> void:
+	_state = PopupState.new()
+	_view = PopupView.new()
+	add_child(_view)
+	_view.command_requested.connect(func(command: String): _sent.append(command))
+	_view.bind(_state, null)
+
+	_nothing_shows_before_a_snapshot()
+
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+
+	_an_open_snapshot_shows_the_box()
+	_every_slot_the_server_counted_is_drawn()
+	_a_left_click_sends_the_first_action()
+	_a_right_click_lists_every_action_in_order()
+	_an_empty_slot_sends_nothing()
+	_the_active_quantity_button_is_lit()
+	_a_quantity_press_sends_and_does_not_relight()
+	_hovering_a_slot_names_it_and_its_click()
+	_the_bar_follows_a_rebuild_under_the_mouse()
+	_leaving_a_slot_clears_the_bar()
+	_close_asks_the_server_and_stays_open()
+	_a_closed_snapshot_clears_the_bar()
+	_a_closed_snapshot_hides_the_box()
+	_a_dim_slot_is_dim_and_still_sends()
+	_the_detail_line_and_the_footer_are_drawn()
+	_a_menu_node_draws_text_options_and_a_box()
+	_a_menu_option_sends_its_key()
+	_the_box_sends_what_was_typed()
+	_a_number_key_picks_the_option()
+	_many_choices_share_one_scroll_with_the_text()
+	_the_count_sits_in_the_corner_not_the_detail_line()
+	_a_card_takes_the_colour_of_its_rarity()
+	_a_timed_station_draws_its_slots()
+	_a_grid_pop_up_has_no_side_panel()
+	_the_box_stays_inside_the_pane()
+	_every_edge_and_corner_has_a_raised_grip()
+	_a_drag_on_one_edge_keeps_the_other_edges()
+	_the_first_box_opens_between_the_docks()
+	await _a_wide_box_can_be_made_narrow_again()
+	await _the_players_box_survives_the_client()
+	_the_grid_fits_its_columns_to_the_width()
+	_a_long_line_does_not_widen_a_slot()
+	_the_vault_draws_its_tabs_and_lights_the_viewed_one()
+	_the_main_view_draws_a_block_for_each_tab()
+	_only_the_main_view_labels_its_blocks()
+	_a_tab_click_sends_its_view_command()
+	_a_named_tab_shows_its_name_and_an_icon_tab_shows_none()
+	_a_drop_on_a_slot_sends_the_swap()
+	_a_drop_on_a_tab_sends_the_move()
+	_a_placeholder_click_sends_nothing()
+	_the_search_filters_and_survives_a_snapshot()
+	_another_pop_up_hides_and_clears_the_search()
+	_the_rig_sockets_draw_as_a_doll()
+	_the_doll_keeps_its_columns_on_a_reflow()
+	_a_line_with_nothing_sent_is_left_out()
+	_a_place_the_doll_lacks_goes_under_it()
+	_an_unknown_layout_draws_the_plain_grid()
+	_the_rig_cells_drag_under_their_keys()
+	_an_augment_drops_on_a_socket_it_fits()
+	_a_filled_socket_drops_out_on_an_augment()
+	_a_drag_marks_the_slots_that_take_it()
+
+	if _failures > 0:
+		printerr("FAIL: %d case(s)" % _failures)
+		get_tree().quit(1)
+		return
+
+	print("PASS: popup_view")
+	get_tree().quit(0)
+
+
+func _nothing_shows_before_a_snapshot() -> void:
+	_expect(not _view.visible, "the box is hidden until the server opens it")
+
+
+func _an_open_snapshot_shows_the_box() -> void:
+	_expect(_view.visible, "an open snapshot shows the box")
+	_expect(_view.title_text() == "Bank Vault", "the server's title is drawn")
+	_expect(_view.status_text().begins_with("Vault"), "the status line is drawn")
+
+
+func _every_slot_the_server_counted_is_drawn() -> void:
+	_expect(_view.slots_in(0).size() == 1, "the vault draws its one slot")
+	_expect(_view.slots_in(1).size() == 32, "the inventory draws all 32 frames")
+
+
+func _a_left_click_sends_the_first_action() -> void:
+	_sent.clear()
+	var slot: PopupSlot = _view.slots_in(0)[0]
+
+	slot.activate()
+
+	_expect(_sent_only("withdraw rusty metal dust 5"),
+		"a left click sends the first action, byte for byte")
+
+
+func _a_right_click_lists_every_action_in_order() -> void:
+	var slot: PopupSlot = _view.slots_in(0)[0]
+	var labels := slot.menu_labels()
+
+	_expect(labels.size() == 4, "every action is offered")
+	_expect(labels[0] == "Withdraw 5" and labels[3] == "Withdraw All",
+		"in the order the server listed them")
+
+
+func _an_empty_slot_sends_nothing() -> void:
+	_sent.clear()
+	var slot: PopupSlot = _view.slots_in(1)[0]
+
+	slot.activate()
+
+	_expect(_sent.is_empty(), "an empty frame affords nothing")
+
+
+func _the_active_quantity_button_is_lit() -> void:
+	var lit: Array = []
+
+	for button: Button in _view.quantity_buttons():
+		if button.button_pressed:
+			lit.append(button.text)
+
+	_expect(lit == ["5"], "only the mode the server named is lit")
+
+
+func _a_quantity_press_sends_and_does_not_relight() -> void:
+	_sent.clear()
+	var first: Button = _view.quantity_buttons()[0]
+
+	first.set_pressed_no_signal(true)
+	first.pressed.emit()
+
+	_expect(_sent_only("popup quantity 1"),
+		"a press sends the server's command")
+	_expect(not first.button_pressed,
+		"and the button goes back to what the snapshot said")
+
+
+## One line, with no tooltip delay: the name, the count, and the click action.
+func _hovering_a_slot_names_it_and_its_click() -> void:
+	var slot: PopupSlot = _view.slots_in(0)[0]
+
+	slot.hovered.emit()
+
+	var text := _view.hover_bar_text()
+	_expect(text.begins_with("rusty metal dust"), "the bar names the item")
+	_expect(text.contains("Click: Withdraw 5"), "and what a left click does")
+	_expect(not text.contains("\n"), "on one line")
+
+
+## A withdraw under the mouse rebuilds every slot. The bar must name the new
+## slot at the same place, not keep the text from before the click.
+func _the_bar_follows_a_rebuild_under_the_mouse() -> void:
+	_view.slots_in(0)[0].hovered.emit()
+
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+
+	_expect(_view.hover_bar_text().begins_with("rusty metal dust"),
+		"after a rebuild the bar still names the slot under the mouse")
+
+
+func _leaving_a_slot_clears_the_bar() -> void:
+	var slot: PopupSlot = _view.slots_in(0)[0]
+	slot.hovered.emit()
+	slot.unhovered.emit()
+
+	_expect(_view.hover_bar_text().is_empty(), "leaving the slot clears the bar")
+
+
+func _a_closed_snapshot_clears_the_bar() -> void:
+	_view.slots_in(0)[0].hovered.emit()
+	_expect(not _view.hover_bar_text().is_empty(), "the bar has text before the close")
+
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.closed_payload())
+
+	_expect(_view.hover_bar_text().is_empty(), "a closed box leaves no text")
+
+
+func _close_asks_the_server_and_stays_open() -> void:
+	_sent.clear()
+
+	_view.request_close()
+
+	_expect(_sent_only("popup close"),
+		"close sends the server's close command")
+	_expect(_view.visible, "and the box stays until the server closes it")
+
+
+func _a_closed_snapshot_hides_the_box() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.closed_payload())
+
+	_expect(not _view.visible, "the closed snapshot hides the box")
+	_expect(_view.slots_in(0).is_empty(), "and drops every slot")
+
+
+func _a_dim_slot_is_dim_and_still_sends() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.crafting_payload())
+	_sent.clear()
+	var dim: PopupSlot = _view.slots_in(0)[1]
+
+	_expect(dim.modulate == PopupSlot.COLOR_DISABLED, "a disabled slot is dim")
+
+	dim.activate()
+
+	_expect(_sent_only("craft rusty scrap shortsword 1"),
+		"and a click still sends, so the server can say what is missing")
+	_expect(dim.tooltip_text.contains("Missing"), "the tooltip shows the info")
+
+
+func _the_detail_line_and_the_footer_are_drawn() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.crafting_payload())
+	_sent.clear()
+	var buttons := _view.footer_buttons()
+
+	_expect(buttons.size() == 1, "one footer button for one action")
+	_expect(buttons[0].text == "Stop crafting", "with the server's label")
+
+	buttons[0].pressed.emit()
+
+	_expect(_sent_only("craft cancel"), "a footer press sends its command")
+
+
+func _a_menu_node_draws_text_options_and_a_box() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.menu_payload())
+
+	_expect(_view.visible, "a menu node shows the box")
+	_expect(_view.menu_text().contains("What do you need?"),
+		"the node text is drawn")
+	_expect(_view.menu_option_buttons().size() == 2, "one button for each option")
+	_expect(_view.menu_input_shown(), "and the text box, for a node that reads text")
+
+
+func _a_menu_option_sends_its_key() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.menu_payload())
+	_sent.clear()
+	var second: Button = _view.menu_option_buttons()[1]
+
+	second.pressed.emit()
+
+	_expect(_sent_only("2"), "an option button sends the option key")
+
+
+func _the_box_sends_what_was_typed() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.menu_payload())
+	_sent.clear()
+
+	_view.submit_menu_input("  17 ")
+	_view.submit_menu_input("   ")
+
+	_expect(_sent_only("17"), "the box sends the typed text, and blank sends nothing")
+
+
+func _a_number_key_picks_the_option() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.menu_payload())
+	_sent.clear()
+	var press := InputEventKey.new()
+	press.pressed = true
+	press.keycode = KEY_1
+	press.unicode = "1".unicode_at(0)
+
+	_view._unhandled_input(press)
+
+	_expect(_sent_only("1"), "pressing 1 sends the option keyed 1")
+
+
+## The egg's first screen had twelve choices. Before the one scroll, the text
+## and the choices split the height, and either one could lose all of it.
+func _many_choices_share_one_scroll_with_the_text() -> void:
+	var payload := _StateTest.menu_payload()
+	var choices: Array = []
+
+	for index: int in range(12):
+		var key := str(index + 1)
+		choices.append({"key": key, "label": "Choice %s" % key, "command": key})
+
+	payload["choices"] = choices
+	_state.ingest(_Const.CH_CHAR_POPUP, payload)
+
+	var buttons := _view.menu_option_buttons()
+	var content: Node = buttons[0].get_parent().get_parent()
+
+	_expect(buttons.size() == 12, "every choice is a button")
+	_expect(content.get_parent() is ScrollContainer, "the choices are inside the scroll")
+	_expect(content.get_child(0) is RichTextLabel,
+		"and the node text is above them in the same scroll")
+
+
+func _the_count_sits_in_the_corner_not_the_detail_line() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+	var slot: PopupSlot = _view.slots_in(0)[0]
+
+	_expect(slot.count_text() == "x40", "a stack shows its count in the corner")
+	_expect(not slot.detail_text().contains("x40"),
+		"and not on the line under the name")
+
+
+## A buff card row carries `rarity`. The slot draws the border and the detail
+## line in the palette colour. A row with no rarity, or an unknown key, draws
+## no border.
+func _a_card_takes_the_colour_of_its_rarity() -> void:
+	var slot := PopupSlot.new()
+	add_child(slot)
+
+	for rarity: String in RarityPalette.RARITY_COLORS:
+		slot.bind({"name": "card", "detail": rarity, "rarity": rarity})
+		_expect(slot.rarity_border_color() == RarityPalette.color_for(rarity),
+			"a %s card has the %s border" % [rarity, rarity])
+
+	slot.bind({"name": "card", "detail": "?", "rarity": "mythic"})
+	_expect(slot.rarity_border_color() == Color.TRANSPARENT,
+		"an unknown rarity draws no border")
+
+	slot.bind({"name": "bread", "detail": "5 cr"})
+	_expect(slot.rarity_border_color() == Color.TRANSPARENT,
+		"a row with no rarity draws no border")
+
+	slot.queue_free()
+
+
+func _a_timed_station_draws_its_slots() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.curing_payload())
+	var panel := _view.timer_panel()
+	var texts := panel.row_texts()
+	var bars := panel.bars()
+
+	_expect(panel.visible, "a station with timers shows the side panel")
+	_expect(texts.size() == 2, "one row for each occupied slot")
+	_expect(texts[0].contains("left"), "a running cure counts down")
+	_expect(texts[1] == TimerPanel.READY_TEXT, "a finished cure says to collect")
+	# Within a hundredth: the bar moves with the clock between two reads.
+	_expect(absf((bars[0] as ProgressBar).value - 0.5) < 0.01,
+		"half of the cure is done, so half of the bar is full")
+
+
+func _a_grid_pop_up_has_no_side_panel() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+
+	_expect(not _view.timer_panel().visible, "a bank has no side panel")
+
+
+func _the_box_stays_inside_the_pane() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+	_view.size = Vector2(1000, 600)
+	var pane := Rect2(Vector2.ZERO, _view.size).grow(-PopupView.EDGE_MARGIN)
+
+	_view.resize_box(Vector2(5000, 5000))
+	_expect(pane.encloses(_view.box_rect()), "a huge drag stops at the pane")
+
+	_view.resize_box(Vector2(10, 10))
+	var small := _view.box_rect().size
+	_expect(small.x >= PopupView.MIN_BOX_SIZE.x and small.y >= PopupView.MIN_BOX_SIZE.y,
+		"a tiny drag stops at the smallest box")
+
+	_view.move_box(Vector2(-400, 9000))
+	_expect(pane.encloses(_view.box_rect()), "a move cannot push it out of the pane")
+
+
+## The control panel draws over the pop-up. Until 09/22/2026 the pop-up had one
+## grip, in the corner that the panel covers. Now each edge and each corner has
+## a grip. Each grip is top-level, so no dock draws over it or takes its click.
+func _every_edge_and_corner_has_a_raised_grip() -> void:
+	var grips := _view.grips()
+	var expected := ResizeGrips.EDGES + ResizeGrips.CORNERS
+
+	_expect(grips.offered().size() == expected.size(),
+		"the box has a grip on every edge and every corner")
+
+	for edges: int in expected:
+		var grip := grips.grip(edges)
+		_expect(grip != null and grip.top_level
+			and grip.mouse_filter == Control.MOUSE_FILTER_STOP,
+			"the grip for edges %d is raised and takes the mouse" % edges)
+
+
+## A drag moves only the edges of its grip. The old grip sized the box from
+## its top-left corner. A left edge that moved thus took the right edge with
+## it.
+func _a_drag_on_one_edge_keeps_the_other_edges() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+	_view.size = Vector2(1000, 600)
+	_view.move_box(Vector2(200, 100))
+	_view.resize_box(Vector2(500, 400))
+	var before := _view.box_rect()
+
+	_view.grips().drag(ResizeGrips.LEFT, Vector2(-50, 0))
+	var after := _view.box_rect()
+	_expect(is_equal_approx(after.position.x, before.position.x - 50.0)
+		and is_equal_approx(after.end.x, before.end.x),
+		"a drag on the left edge moves it and keeps the right edge")
+
+	_view.grips().drag(ResizeGrips.TOP | ResizeGrips.LEFT, Vector2(-9000, -9000))
+	after = _view.box_rect()
+	_expect(is_equal_approx(after.position.x, PopupView.EDGE_MARGIN)
+		and is_equal_approx(after.position.y, PopupView.EDGE_MARGIN),
+		"a drag past the pane stops the corner at the pane")
+	_expect(is_equal_approx(after.end.x, before.end.x)
+		and is_equal_approx(after.end.y, before.end.y),
+		"and the opposite corner stays where it was")
+
+
+## When the gap between the docks is wide enough, the first box opens in it.
+## When the gap is too narrow, the box opens centred in the pane.
+func _the_first_box_opens_between_the_docks() -> void:
+	var pane := Vector2(1920, 1080)
+	var wide := PopupView._default_rect(pane, 528.0, 1452.0)
+	_expect(is_equal_approx(wide.get_center().x, (528.0 + 1452.0) / 2.0),
+		"a wide gap centres the box in the gap")
+	_expect(wide.position.x >= 528.0 + PopupView.EDGE_MARGIN - 0.01
+		and wide.end.x <= 1452.0 - PopupView.EDGE_MARGIN + 0.01,
+		"and the box stays in the gap")
+
+	var gap_right := 528.0 + PopupView.MIN_GAP_WIDTH
+	var narrow := PopupView._default_rect(pane, 528.0, gap_right)
+	_expect(is_equal_approx(narrow.get_center().x, pane.x / 2.0),
+		"a narrow gap centres the box in the pane")
+
+	var large := PopupView._default_rect(Vector2(3840, 2160), 0.0, 0.0)
+	_expect(large.size == PopupView.DEFAULT_MAX_SIZE,
+		"a large pane gives a box no larger than the largest first box")
+
+
+## A wider box gives the grid more columns. Until 09/22/2026 those columns
+## raised the minimum width of the box. The player could thus make a box wide
+## and never make it narrow again.
+##
+## Every kind of pop-up, because each one fills the box with different
+## content. The case waits for layout passes: a container sorts its children
+## and reports its new minimum on a later frame.
+func _a_wide_box_can_be_made_narrow_again() -> void:
+	var payloads := {
+		"bank": _StateTest.bank_payload(),
+		"crafting": _StateTest.crafting_payload(),
+		"menu": _StateTest.menu_payload(),
+		"curing": _StateTest.curing_payload(),
+	}
+
+	for kind: String in payloads:
+		_state.ingest(_Const.CH_CHAR_POPUP, payloads[kind])
+		_view.size = Vector2(1600, 900)
+		_view.move_box(Vector2(100, 100))
+		_view.resize_box(Vector2(400, 500))
+		await _layout_passes()
+		var narrow := _view.box_rect().size.x
+
+		_view.grips().drag(ResizeGrips.RIGHT, Vector2(1000, 0))
+		await _layout_passes()
+		_expect(_view.box_rect().size.x > narrow + 500.0,
+			"%s: a drag makes the box wide" % kind)
+
+		_view.grips().drag(ResizeGrips.RIGHT, Vector2(-1000, 0))
+		await _layout_passes()
+		_expect(is_equal_approx(_view.box_rect().size.x, narrow),
+			"%s: a drag back makes it narrow again (%s, then %s)"
+			% [kind, narrow, _view.box_rect().size.x])
+
+		var short := _view.box_rect().size.y
+		_view.grips().drag(ResizeGrips.BOTTOM, Vector2(0, 200))
+		await _layout_passes()
+		_view.grips().drag(ResizeGrips.BOTTOM, Vector2(0, -200))
+		await _layout_passes()
+		_expect(is_equal_approx(_view.box_rect().size.y, short),
+			"%s: and a tall box can be made short again" % kind)
+
+
+func _layout_passes() -> void:
+	for i: int in 4:
+		await get_tree().process_frame
+
+
+## A rect the player dragged lived in this node and died with the client, so a
+## player who moved the bank off their minimap moved it again on every run.
+##
+## Both halves are checked, because each fails on its own. The rect is read the
+## first time the box is PLACED, not at bind time -- the console binds every
+## pane before it loads the file. And a drag writes the rect the box ENDED at,
+## once, after the gesture.
+func _the_players_box_survives_the_client() -> void:
+	_clean_settings()
+	var settings := ClientSettings.new(SETTINGS_PATH)
+	settings.set_popup_rect(Rect2(30, 40, 820, 520))
+
+	var state := PopupState.new()
+	var view := PopupView.new()
+	add_child(view)
+	view.bind(state, null)
+	view.bind_settings(settings)
+	view.size = Vector2(1000, 600)
+	state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+
+	# The POSITION, because a content minimum can still widen the box. The
+	# default rect is centred, so a box at the player's corner cannot be it.
+	_expect(view.box_rect().position == Vector2(30, 40),
+		"the box opens where the player left it")
+
+	view.resize_box(Vector2(640, 480))
+	var ended := view.box_rect()
+	await get_tree().create_timer(PopupView.RECT_SAVE_DELAY + 0.2).timeout
+
+	var reloaded := ClientSettings.new(SETTINGS_PATH)
+	reloaded.load_from_disk()
+	_expect(reloaded.popup_rect == ended,
+		"and a drag writes the rect the box ended at")
+
+	view.queue_free()
+	_clean_settings()
+
+
+func _clean_settings() -> void:
+	if FileAccess.file_exists(SETTINGS_PATH):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SETTINGS_PATH))
+
+
+func _the_grid_fits_its_columns_to_the_width() -> void:
+	var pitch := PopupSlot.SLOT_SIZE.x + PopupView.SLOT_GAP
+
+	_expect(PopupView._columns_for(0.0) == 1, "no width still draws one column")
+	_expect(PopupView._columns_for(pitch * 6.0) == 6, "six slots fit six columns")
+	_expect(PopupView._columns_for(pitch * 6.0 - 20.0) == 5,
+		"and a little less fits five")
+
+
+## The column count reads [constant PopupSlot.SLOT_SIZE]. A slot that a long
+## line made wider pushed the rig's Augments grid past the edge of the box.
+func _a_long_line_does_not_widen_a_slot() -> void:
+	var slot := PopupSlot.new()
+	add_child(slot)
+	var long_line := "Guard: Projectile needs Augmentation level 20."
+	slot.bind({"name": long_line, "detail": long_line, "info": long_line})
+
+	_expect(slot.get_combined_minimum_size().x <= PopupSlot.SLOT_SIZE.x,
+		"a long name and detail keep the slot at its own width")
+	_expect(slot.detail_text() == long_line, "the label keeps the whole line")
+	_expect(slot.tooltip_text.contains(long_line), "and the tooltip shows it")
+
+	slot.queue_free()
+
+
+## True when exactly one command left the view, and it is `command`.
+func _show_vault(view: int) -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.vault_payload(view))
+
+
+func _the_vault_draws_its_tabs_and_lights_the_viewed_one() -> void:
+	_show_vault(1)
+	var buttons := _view.tab_buttons(0)
+
+	_expect(buttons.size() == 4, "every tab the server sent is drawn, the + too")
+	_expect((buttons[1] as PopupTabButton).button_pressed,
+		"the viewed tab is drawn pressed")
+	_expect(not (buttons[0] as PopupTabButton).button_pressed,
+		"the other tabs are not")
+	_expect(_view.slots_in(0).size() == 2, "a tab view draws only its tab")
+
+
+func _the_main_view_draws_a_block_for_each_tab() -> void:
+	_show_vault(0)
+
+	_expect(_view.slots_in(0).size() == 4, "the main view draws every slot")
+	_expect(_view.block_count(0) == 3, "one block for each tab, so a line between")
+	_expect(_view.section_headings(0) == ["Tab 1", "Bars", "Main tab"],
+		"a label names each block: the tab name, or its number")
+
+
+func _only_the_main_view_labels_its_blocks() -> void:
+	_show_vault(1)
+
+	_expect(_view.section_headings(0).is_empty(), "a tab view draws no label")
+
+	_show_vault(0)
+	_view.set_search("o")
+
+	_expect(_view.section_headings(0).is_empty(), "a search draws no label")
+
+	_view.set_search("")
+
+
+func _a_tab_click_sends_its_view_command() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var button: PopupTabButton = _view.tab_buttons(0)[2]
+
+	button.activate()
+
+	_expect(_sent_only("bank view 2"), "a left click on a tab views it")
+	_expect(not button.button_pressed, "and lights nothing before the snapshot")
+
+
+func _a_named_tab_shows_its_name_and_an_icon_tab_shows_none() -> void:
+	_show_vault(0)
+	var buttons := _view.tab_buttons(0)
+	var icon_tab: PopupTabButton = buttons[1]
+	var named_tab: PopupTabButton = buttons[2]
+
+	_expect(named_tab.text == "Bars" and named_tab.icon == null,
+		"a named tab shows its name")
+	_expect(icon_tab.text.is_empty() and icon_tab.icon != null,
+		"a tab with an asset shows the mesh")
+
+
+func _a_drop_on_a_slot_sends_the_swap() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var target: PopupSlot = _view.slots_in(0)[0]
+	var data := {PopupSlot.DRAG_DATA_KEY: "coal"}
+
+	_expect(target._can_drop_data(Vector2.ZERO, data), "a slot takes a vault drop")
+	target._drop_data(Vector2.ZERO, data)
+
+	_expect(_sent_only("bank swap coal = iron ore"), "a drop on a slot swaps the two")
+
+
+func _a_drop_on_a_tab_sends_the_move() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var plus: PopupTabButton = _view.tab_buttons(0)[3]
+	var data := {PopupSlot.DRAG_DATA_KEY: "coal"}
+
+	_expect(plus._can_drop_data(Vector2.ZERO, data), "the + takes a vault drop")
+	plus._drop_data(Vector2.ZERO, data)
+
+	_expect(_sent_only("bank move coal = new"), "a drop on the + makes a tab")
+
+
+func _a_placeholder_click_sends_nothing() -> void:
+	_show_vault(0)
+	_sent.clear()
+	var placeholder: PopupSlot = _view.slots_in(0)[2]
+
+	placeholder.activate()
+
+	_expect(_sent.is_empty(), "a left click on a placeholder sends nothing")
+
+
+func _the_search_filters_and_survives_a_snapshot() -> void:
+	_show_vault(0)
+	_view.set_search("ore")
+
+	_expect(_view.search_box().visible, "the vault shows a search box")
+	_expect(_view.slots_in(0).size() == 1, "the search keeps the matches only")
+
+	_show_vault(0)
+
+	_expect(_view.search_box().text == "ore", "a snapshot keeps the search text")
+	_expect(_view.slots_in(0).size() == 1, "and the filter")
+
+
+func _another_pop_up_hides_and_clears_the_search() -> void:
+	_show_vault(0)
+	_view.set_search("ore")
+
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.bank_payload())
+
+	_expect(not _view.search_box().visible, "a grid with no search hides the box")
+	_expect(_view.search_box().text.is_empty(), "and clears it")
+
+
+func _show_rig(places: Array = _StateTest.RIG_PLACES,
+		layout: String = _Const.POPUP_LAYOUT_RIG) -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.rig_payload(places, layout))
+
+
+## The place of each slot of one grid, in the order the view drew them.
+func _drawn_places(grid_index: int) -> Array:
+	return _view.slots_in(grid_index).map(
+		func(slot: PopupSlot) -> String: return str(slot.row()["place"]))
+
+
+## The places of the rig doll that `sent` holds, in reading order.
+static func _doll_order(sent: Array) -> Array:
+	var order: Array = []
+
+	for line: Array in PopupLayout.RIG_ROWS:
+		for place: String in line:
+			if sent.has(place):
+				order.append(place)
+
+	return order
+
+
+func _the_rig_sockets_draw_as_a_doll() -> void:
+	_show_rig()
+	var block: GridContainer = _view._blocks_in(0)[0]
+
+	_expect(_drawn_places(0) == _doll_order(_StateTest.RIG_PLACES),
+		"the sockets draw in the reading order of the doll, not the slot order")
+	_expect(_view.columns_in(0) == PopupLayout.COLUMNS, "the doll has the columns of its table")
+	_expect(block.get_child_count() == PopupLayout.RIG_ROWS.size() * PopupLayout.COLUMNS,
+		"each line of the doll has a square in each column, gaps included")
+	_expect(_view.block_count(0) == 1, "every socket has a square, so nothing goes under the doll")
+	_expect(_drawn_places(1) == [""], "the augments grid stays a plain grid")
+
+
+func _the_doll_keeps_its_columns_on_a_reflow() -> void:
+	_show_rig()
+	var scroller: ScrollContainer = _view._scrollers[0]
+	scroller.size = Vector2(2000, 400)
+	_view._reflow(scroller)
+
+	_expect(_view.columns_in(0) == PopupLayout.COLUMNS, "a wide box keeps the doll in its columns")
+
+
+func _a_line_with_nothing_sent_is_left_out() -> void:
+	var top: Array = PopupLayout.RIG_ROWS[0]
+	var places := _StateTest.RIG_PLACES.filter(
+		func(place: String) -> bool: return not top.has(place))
+	_show_rig(places)
+	var block: GridContainer = _view._blocks_in(0)[0]
+	var lines := PopupLayout.RIG_ROWS.size() - 1
+
+	_expect(block.get_child_count() == lines * PopupLayout.COLUMNS,
+		"a line of the doll with no place sent draws no squares")
+	_expect(_drawn_places(0) == _doll_order(places), "the other lines still draw")
+
+
+func _a_place_the_doll_lacks_goes_under_it() -> void:
+	var places: Array = _StateTest.RIG_PLACES + ["tail"]
+	_show_rig(places)
+	var drawn := _drawn_places(0)
+
+	_expect(_view.block_count(0) == 2, "a socket with no square goes in a block under the doll")
+	_expect(drawn.size() == places.size(), "every row still draws")
+	_expect(str(drawn[drawn.size() - 1]) == "tail", "the block comes after the doll")
+
+
+func _an_unknown_layout_draws_the_plain_grid() -> void:
+	_show_rig(_StateTest.RIG_PLACES, "no_such_layout")
+
+	_expect(_drawn_places(0) == _StateTest.RIG_PLACES,
+		"a layout with no table draws the rows in slot order")
+	_expect(not _view._blocks_in(0)[0].has_meta(PopupView.FIXED_COLUMNS_META),
+		"and its columns follow the width")
+
+
+## The slot of one grid whose row names `place`, or the first slot for "".
+func _slot_at(grid_index: int, place: String) -> PopupSlot:
+	for slot: PopupSlot in _view.slots_in(grid_index):
+		if str(slot.row()["place"]) == place:
+			return slot
+
+	return null
+
+
+func _the_rig_cells_drag_under_their_keys() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.rig_drag_payload())
+
+	_expect(_slot_at(0, "head").drag_key() == _StateTest.HEAD_DRAG, "a filled socket drags")
+	_expect(_slot_at(0, "body").drag_key().is_empty(), "an empty socket does not drag")
+	_expect(_slot_at(1, "").drag_key() == _StateTest.REFLEX_DRAG, "an augment drags")
+
+
+func _an_augment_drops_on_a_socket_it_fits() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.rig_drag_payload())
+	_sent.clear()
+	var data := {PopupSlot.DRAG_DATA_KEY: _StateTest.REFLEX_DRAG}
+	var head := _slot_at(0, "head")
+
+	_expect(head._can_drop_data(Vector2.ZERO, data), "the head takes Reflex")
+	_expect(not _slot_at(0, "body")._can_drop_data(Vector2.ZERO, data),
+		"the body refuses an augment that does not fit it")
+	_expect(not _slot_at(1, "")._can_drop_data(Vector2.ZERO, data),
+		"an augment takes no drop of an augment")
+
+	head._drop_data(Vector2.ZERO, data)
+
+	_expect(_sent_only(_StateTest.REFLEX_TO_HEAD), "a drop on a socket sends the swap line")
+
+
+func _a_filled_socket_drops_out_on_an_augment() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.rig_drag_payload())
+	_sent.clear()
+	var data := {PopupSlot.DRAG_DATA_KEY: _StateTest.HEAD_DRAG}
+	var reflex := _slot_at(1, "")
+
+	_expect(reflex._can_drop_data(Vector2.ZERO, data), "an augment takes a filled socket")
+	_expect(not _slot_at(0, "head")._can_drop_data(Vector2.ZERO, data),
+		"a socket takes no drop of itself")
+
+	reflex._drop_data(Vector2.ZERO, data)
+
+	_expect(_sent_only(_StateTest.HEAD_OUT), "a drop on an augment sends the unsocket line")
+
+
+func _a_drag_marks_the_slots_that_take_it() -> void:
+	_state.ingest(_Const.CH_CHAR_POPUP, _StateTest.rig_drag_payload())
+	var data := {PopupSlot.DRAG_DATA_KEY: _StateTest.REFLEX_DRAG}
+	var head := _slot_at(0, "head")
+	var body := _slot_at(0, "body")
+
+	head.show_drop_hint_for(data)
+	body.show_drop_hint_for(data)
+
+	_expect(head.drop_hinted() and head.has_theme_stylebox_override("panel"),
+		"a socket that takes the drag shows the border")
+	_expect(not body.drop_hinted(), "a socket that refuses the drag shows none")
+
+	head.show_drop_hint_for(null)
+
+	_expect(not head.drop_hinted() and not head.has_theme_stylebox_override("panel"),
+		"the end of the drag takes the border away")
+
+
+func _sent_only(command: String) -> bool:
+	return _sent.size() == 1 and _sent[0] == command
+
+
+func _expect(condition: bool, what: String) -> void:
+	if condition:
+		return
+
+	_failures += 1
+	printerr("  x %s" % what)

@@ -46,15 +46,16 @@ AUG_DRAIN_POINT: int = 1
 AUG_DRAIN_COUNTER_START: float = 0.0
 
 
-# ─── The step dial ───────────────────────────────────────────────────────────
-# An augment burns at a step from 1 to AUG_STEPS (Nick, 10/30/2026: 3).
-# Step 1 gives a third of the strength for a third of the drain. Step
-# AUG_STEPS gives the whole of both. The OSRS tiers, on one row.
-AUG_STEPS: int = 3
-AUG_STEP_MIN: int = 1
+# ─── The power level dial ────────────────────────────────────────────────────
+# An augment burns at a power level from 1 to AUG_POWER_LEVELS (Nick,
+# 10/30/2026: 3). Power level 1 gives a third of the strength for a third of
+# the drain. Power level AUG_POWER_LEVELS gives the whole of both. The OSRS
+# tiers, on one row. The power level was the "step" until 11/09/2026.
+AUG_POWER_LEVELS: int = 3
+AUG_POWER_LEVEL_MIN: int = 1
 
-# A light with no step named burns at the top step.
-AUG_STEP_DEFAULT: int = AUG_STEPS
+# A light with no power level named burns at the top power level.
+AUG_POWER_LEVEL_DEFAULT: int = AUG_POWER_LEVELS
 
 
 # ─── The families ────────────────────────────────────────────────────────────
@@ -70,20 +71,21 @@ NO_UNLOCK_LEVEL: int = 0
 
 
 # ─── The `aug` command ───────────────────────────────────────────────────────
-# `aug` lists. `aug <name> [<step>]` lights, or re-steps a lit augment.
+# `aug` lists. `aug <name> [<power level>]` lights an augment, or moves a lit
+# augment to the new power level.
 # `aug <name> off` puts one out. `aug off` puts every augment out. The
 # templates are what the ability rail sends (Phase 3), as the aura
 # templates in combat/constants.py are.
 AUG_COMMAND_KEY: str = "aug"
 AUG_OFF_ARG: str = "off"
 AUG_IGNITE_TEMPLATE: str = f"{AUG_COMMAND_KEY} {{name}}"
-AUG_IGNITE_STEP_TEMPLATE: str = f"{AUG_COMMAND_KEY} {{name}} {{step}}"
+AUG_IGNITE_POWER_LEVEL_TEMPLATE: str = f"{AUG_COMMAND_KEY} {{name}} {{power_level}}"
 AUG_EXTINGUISH_TEMPLATE: str = f"{AUG_COMMAND_KEY} {{name}} {AUG_OFF_ARG}"
 AUG_EXTINGUISH_ALL_COMMAND: str = f"{AUG_COMMAND_KEY} {AUG_OFF_ARG}"
 
 # The set (the quick prayer orb of OSRS). `aug set` lights every augment
-# that can come online, at the default step. Phase 5 narrows it to the
-# sockets. The set row of the rail carries it when nothing burns, and
+# that can come online, at the default power level. Phase 5 narrows it to
+# the sockets. The set row of the rail carries it when nothing burns, and
 # `aug off` when anything does.
 AUG_SET_ARG: str = "set"
 AUG_SET_COMMAND: str = f"{AUG_COMMAND_KEY} {AUG_SET_ARG}"
@@ -95,19 +97,19 @@ AUG_SET_TIP_LINES: tuple = (
 )
 
 # Player-facing text. The voice stays.
-AUG_LIGHT_MESSAGE: str = "{name} comes online at step {step}."
-AUG_RESTEP_MESSAGE: str = "{name} shifts to step {step}."
-AUG_OUT_MESSAGE: str = "{name} goes dark."
-AUG_ALL_OUT_MESSAGE: str = "Every augment goes dark."
+AUG_LIGHT_MESSAGE: str = "{name} comes online at power level {power_level}."
+AUG_POWER_SHIFT_MESSAGE: str = "{name} shifts to power level {power_level}."
+AUG_OUT_MESSAGE: str = "{name} goes offline."
+AUG_ALL_OUT_MESSAGE: str = "Every augment goes offline."
 AUG_NONE_LIT_MESSAGE: str = "You have no augment online."
 AUG_NOT_LIT_MESSAGE: str = "{name} is not online."
 AUG_UNKNOWN_MESSAGE: str = "You know no augment called '{name}'."
-AUG_BAD_STEP_MESSAGE: str = "The step is a number from {low} to {high}."
+AUG_BAD_POWER_LEVEL_MESSAGE: str = "The power level is a number from {low} to {high}."
 AUG_NO_GRIT_MESSAGE: str = "You have no Grit left. Find an AugBot."
-AUG_SPENT_MESSAGE: str = "Your Grit is spent. Every augment goes dark."
+AUG_SPENT_MESSAGE: str = "Your Grit is spent. Every augment goes offline."
 AUG_LOCKED_MESSAGE: str = "{name} needs Augmentation level {level}."
 AUG_LIST_TITLE: str = "|wAugments|n"
-AUG_LIST_LIT: str = "online, step {step}"
+AUG_LIST_LIT: str = "online, power level {power_level}"
 AUG_LIST_READY: str = "ready"
 AUG_LIST_EMPTY: str = "You know of no augments."
 AUG_LIST_NO_SOCKETS: str = "  Nothing sits in your rig. Try |yrig|n."
@@ -115,9 +117,9 @@ AUG_SET_NONE_MESSAGE: str = "No augment can come online."
 AUG_SET_MESSAGE: str = "{count} augment(s) come online."
 
 # The tip lines of an augment row. The server says what an augment IS.
-AUG_TIP_BOOST: str = "+{percent:.1f}% to {axis} at your level, at the top step."
-AUG_TIP_DRAIN: str = "Drains {drain:g} Grit units each tick at the top step."
-AUG_TIP_STEPS: str = "Step 1 to {steps}: a share of the boost for the same share of the drain."
+AUG_TIP_BOOST: str = "+{percent:.1f}% to {axis} at your level, at the top power level."
+AUG_TIP_DRAIN: str = "Drains {drain:g} Grit units each tick at the top power level."
+AUG_TIP_POWER_LEVELS: str = "Power level 1 to {power_levels}: higher power level means a faster drain rate."
 AUG_TIP_UNLOCK: str = "Needs Augmentation {level}."
 AUG_TIP_AXIS: dict = {
     FAMILY_ACCURACY: "accuracy",
@@ -139,7 +141,7 @@ AUGBOT_SPAWNER_KEY: str = "AugBot"
 AMPLIFY_MESSAGE: str = "You feel like you can take a lot more punishment now."
 AMPLIFY_FULL_MESSAGE: str = "Your Grit is already full."
 AUGBOT_DESC: str = (
-    "An Augmentation Bot. Its arms hold a bank of needles and a cuff. "
+    "An Augmentation Bot. Its articulating arms hold a concerning array of medical tools. "
     "Try |yamplify|n to restore your Grit."
 )
 
@@ -172,17 +174,55 @@ AUG_LOCUS_SPAWNER_KEY: str = "Augmentation Locus"
 
 # Player-facing text. The voice stays.
 GRAFT_NOTHING_NAMED_MESSAGE: str = "Graft what? You carry: {names}."
-GRAFT_NO_SAMPLES_MESSAGE: str = "You carry no sample to graft."
+GRAFT_NO_SAMPLES_MESSAGE: str = "You are not carrying any samples to graft."
 GRAFT_NOT_A_SAMPLE_MESSAGE: str = "You cannot graft {name}."
-GRAFT_MESSAGE: str = "You graft the {name} into yourself.{suffix}"
+GRAFT_MESSAGE: str = "You graft the {name} onto yourself.{suffix}"
 GRAFT_LOCUS_MESSAGE: str = (
-    "The Locus takes the {name} and works it into you, deeper than your own "
-    "hands could.{suffix}")
+    "The Locus takes the {name} and grafts it onto you, more skilled than you every could. {suffix}")
 AUG_LOCUS_DESC: str = (
     "An Augmentation Locus: a reclined chair under a ring of articulated "
-    "arms. A graft here takes better. Try |ygraft <sample>|n."
+    "arms. A graft here is always better than doing it yourself. Try |ygraft <sample>|n."
 )
 GRAFT_LIST_SEPARATOR: str = ", "
+
+
+# ─── The graft channel and the Locus pop-up (11/09/2026) ─────────────────────
+# A graft of several samples is a channel on the global tick: one graft each
+# GRAFT_TICKS ticks, the pace of the OSRS altar (Nick, 11/09/2026). A walk or
+# a fight ends it. The pace holds for EVERY graft, typed or clicked, so a
+# click on "Graft 1" again and again is not faster than "Graft All". A count
+# works anywhere. Only the XP rate changes at a Locus (Nick, 11/09/2026).
+GRAFT_TICKS: int = 3
+
+# `graft stop` ends the running channel. No sample is named "stop".
+GRAFT_STOP_ARG: str = "stop"
+GRAFT_STOP_COMMAND: str = f"{GRAFT_COMMAND_KEY} {GRAFT_STOP_ARG}"
+
+# The least count of one command. An omitted count is one graft.
+GRAFT_COUNT_MIN: int = 1
+
+# Player-facing text of the channel. The voice stays.
+GRAFT_BEGIN_MESSAGE: str = "You begin to graft {name} x{count}."
+GRAFT_DONE_MESSAGE: str = "Grafting complete: {grafted}/{total} {name}."
+GRAFT_HALT_MESSAGE: str = "Grafting halted: {grafted}/{total} {name}. You carry no more."
+GRAFT_FIGHT_MESSAGE: str = "The fight breaks off your grafting: {grafted}/{total} {name}."
+GRAFT_STOP_MESSAGE: str = "You stop grafting: {grafted}/{total} {name}."
+GRAFT_NOTHING_TO_STOP_MESSAGE: str = "You are not grafting anything."
+GRAFT_NONE_CARRIED_MESSAGE: str = "You are not carrying any {name}."
+
+# The Locus pop-up (popups/popup_defs/locus.py). Every sample in the game
+# shows, dim when the player carries none (Nick, 11/09/2026), as a recipe
+# that the player cannot make shows at the anvil.
+LOCUS_POPUP_TITLE: str = "Augmentation Locus"
+LOCUS_SAMPLES_TITLE: str = "Samples"
+LOCUS_IDLE_STATUS: str = "Choose a sample and a count."
+LOCUS_BUSY_STATUS: str = "Grafting {name} ({grafted}/{total})"
+LOCUS_XP_DETAIL: str = "{xp} XP each"
+LOCUS_CARRIED_INFO: str = "You carry {count}."
+LOCUS_RATE_INFO: str = "{xp} XP each here, {base} XP elsewhere."
+LOCUS_GRAFT_LABEL: str = "Graft"
+LOCUS_GRAFT_PROMPT: str = "Graft how many?"
+LOCUS_STOP_LABEL: str = "Stop grafting"
 
 
 # ─── The sockets and the rig (Phase 5) ───────────────────────────────────────
@@ -231,12 +271,12 @@ SOCKET_NAMES: dict = {
 SOCKET_UNLOCK_LEVELS: dict = {
     SOCKET_HEAD: 0,
     SOCKET_ARM_R: 0,
-    SOCKET_ARM_L: 20,
-    SOCKET_BODY: 40,
-    SOCKET_SKELETON: 60,
-    SOCKET_NEURAL: 80,
-    SOCKET_LEG_R: 100,
-    SOCKET_LEG_L: 120,
+    SOCKET_ARM_L: 30,
+    SOCKET_BODY: 10,
+    SOCKET_SKELETON: 20,
+    SOCKET_NEURAL: 40,
+    SOCKET_LEG_R: 50,
+    SOCKET_LEG_L: 60,
 }
 
 # The Attribute that holds the rig of a character: a dict of socket key to
@@ -251,8 +291,23 @@ RIG_COMMAND_KEY: str = "rig"
 SOCKET_TEMPLATE: str = f"{SOCKET_COMMAND_KEY} {{name}} {{socket}}"
 UNSOCKET_TEMPLATE: str = f"{UNSOCKET_COMMAND_KEY} {{socket}}"
 
+# The swap switch (11/09/2026). A plain `socket` refuses a socket that holds
+# a different augment. `socket/swap` takes that socket: the held augment
+# moves to the socket that the new augment left, if it fits there. Else it
+# leaves the rig and goes dark (Nick, 11/09/2026). A drop on a socket in the
+# rig pop-up sends this form. A telnet player can type it.
+SOCKET_SWAP_SWITCH: str = "swap"
+SOCKET_SWITCH_MARK: str = "/"
+SOCKET_SWAP_TEMPLATE: str = (
+    f"{SOCKET_COMMAND_KEY}{SOCKET_SWITCH_MARK}{SOCKET_SWAP_SWITCH} {{name}} {{socket}}")
+
 # Player-facing text. The voice stays.
-SOCKET_USAGE_MESSAGE: str = "Usage: socket <augment> <socket>. Sockets: {sockets}."
+SOCKET_USAGE_MESSAGE: str = (
+    "Usage: socket <augment> <socket>, or socket/swap <augment> <socket>. "
+    "Sockets: {sockets}.")
+SOCKET_SWAP_MOVED_MESSAGE: str = "{other} moves to your {socket}."
+SOCKET_SWAP_OUT_MESSAGE: str = "{other} leaves your rig."
+SOCKET_MESSAGE_JOIN: str = " "
 UNSOCKET_USAGE_MESSAGE: str = "Usage: unsocket <socket>. Sockets: {sockets}."
 SOCKET_UNKNOWN_MESSAGE: str = "You have no socket called '{socket}'. Sockets: {sockets}."
 SOCKET_IN_COMBAT_MESSAGE: str = "You cannot change your rig in a fight."
@@ -265,7 +320,7 @@ UNSOCKET_EMPTY_MESSAGE: str = "Your {socket} holds nothing."
 UNSOCKET_DONE_MESSAGE: str = "You take {name} out of your {socket}."
 AUG_NOT_SOCKETED_MESSAGE: str = "{name} is not in your rig. Socket it first."
 RIG_TITLE: str = "Rig"
-RIG_STATUS: str = "{open} of {total} sockets open. Augmentation {level}."
+RIG_STATUS: str = "{open} of {total} sockets open. Augmentation level is {level}."
 RIG_LIST_TITLE: str = "|wYour rig|n"
 RIG_SOCKET_LINE: str = "  |y{socket}|n: {holds}"
 RIG_SOCKET_EMPTY: str = "empty"
@@ -280,6 +335,13 @@ RIG_EMPTY_NAME: str = "{socket} (empty)"
 RIG_SOCKET_ACTION_LABEL: str = "Socket: {socket}"
 RIG_UNSOCKET_ACTION_LABEL: str = "Unsocket"
 SOCKET_LIST_SEPARATOR: str = ", "
+
+# The drag keys of the rig pop-up (11/09/2026). A key is the name that a drag
+# of one cell carries. The client never reads it. It only looks it up in the
+# drop table of the target cell. A prefix keeps a socket key and an augment
+# key apart, so an augment named like a socket cannot take the wrong drop.
+RIG_DRAG_SOCKET_KEY: str = "socket:{key}"
+RIG_DRAG_AUGMENT_KEY: str = "augment:{key}"
 
 
 # ─── The conflict groups and the modifiers (Phase 5) ─────────────────────────
@@ -323,8 +385,9 @@ AUG_ROLL_LOW: float = 0.02
 AUG_ROLL_HIGH: float = 0.15
 AUG_ROLL_LOW_PER_LEVEL: float = 0.0005
 
-# The tiles that Reach adds to the ring of the lit aura at the top step. A
-# step gives its share, rounded, so step k of 3 gives k tiles.
+# The tiles that Reach adds to the ring of the lit aura at the top power
+# level. A power level gives its share, rounded, so power level k of 3 gives
+# k tiles.
 AUG_REACH_TILES: int = 3
 
 # The least share of the regen interval that Mend can leave. A share of
@@ -334,9 +397,9 @@ AUG_REGEN_SHARE_FLOOR: float = 0.25
 # The tip lines of the Phase 5 rows.
 AUG_TIP_ROLL: str = "Rolls +{low:.0f}% to +{high:.0f}% when it comes online, and adds the roll to every lit augment."
 AUG_TIP_ROLL_NOW: str = "The roll now: +{percent:.0f}%."
-AUG_TIP_GUARD: str = "Cuts {percent:.1f}% from the {kind} damage you take at your level, at the top step."
-AUG_TIP_REGEN: str = "Shortens the wait between HP regen ticks by {percent:.1f}% at your level, at the top step."
-AUG_TIP_REACH: str = "Adds {tiles} tile(s) to the ring of your lit aura at the top step."
+AUG_TIP_GUARD: str = "Cuts {percent:.1f}% from the {kind} damage you take at your level, at the top power level."
+AUG_TIP_REGEN: str = "Shortens the wait between HP regen ticks by {percent:.1f}% at your level, at the top power level."
+AUG_TIP_REACH: str = "Adds {tiles} tile(s) to the ring of your lit aura at the top power level."
 AUG_TIP_SOCKETS: str = "Fits: {fits}."
 AUG_TIP_CONFLICT: str = "Only one {group} augment burns at a time."
 AUG_ROLL_NOTE: str = "+{percent:.0f}%"

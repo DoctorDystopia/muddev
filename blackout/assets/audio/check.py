@@ -21,13 +21,24 @@ Description: The check of the sound clips. It reads the cue table, the
                  no such moment.
                Warnings: Godot did not import a sound clip yet. A file in a
                  kind folder has no cue. The web export ships it anyway.
+
+             THE TRACKS (DESIGN-0016, 11/08/2026). The music track table
+             and the served music tree must agree in both directions,
+             because a track that a player unlocks must play:
+               Problems: the track table does not read, or a row breaks a
+                 rule of world/music_tracks.py. A track has no served file,
+                 no credits row, or no source record. A served file has no
+                 track row.
+             The model check (assets.pipeline check) checks the source
+             record itself: its license, its .gitignore, and its hashes.
 """
 
 import os
 from dataclasses import dataclass, field
 
-from assets.audio import credits, cue_table, godot_import, kinds, paths
-from assets.pipeline import records
+from assets.audio import credits, cue_table, godot_import, kinds, paths, tracks
+from assets.pipeline import records, sources
+from world import areas, music_tracks, table_file
 
 
 # ─── Public constant definitions ─────────────────────────────────────────────
@@ -144,6 +155,9 @@ def _file_warnings(table: cue_table.CueTable) -> list:
         folder = os.path.join(paths.AUDIO_DIR, kind.folder)
         names = os.listdir(folder) if os.path.isdir(folder) else []
 
+        if kind.served:
+            continue
+
         for name in sorted(names):
             clip = "%s/%s" % (kind.folder, name)
             extra = name.endswith(paths.IMPORT_SUFFIX) or clip in named
@@ -153,6 +167,87 @@ def _file_warnings(table: cue_table.CueTable) -> list:
                              % clip)
 
     return found
+
+
+def _track_problems(track: music_tracks.Track, credited: set) -> list:
+    """
+    Purpose: Give each problem of one track row.
+
+    Entry:
+        credited holds each file that a credits row names.
+
+    Exit/Returns:
+        Returns the problems, or an empty list.
+
+    Module Globals:
+        areas.AREAS read.
+
+    Author: Nick Hobar
+    Creation date: 11/08/2026
+    """
+    served = tracks.served_relative(track.key)
+    present = os.path.isfile(paths.track_path(track.key))
+    source_id = music_tracks.source_id_for(track.key)
+    found = []
+    row = music_tracks.row_problem(track, areas.AREAS)
+
+    if row:
+        found.append(row)
+
+    if not present:
+        found.append("the served file %s of the track %s is not there. Run "
+                     "the sound wizard again, or encode it" % (served,
+                                                               track.key))
+
+    if served not in credited:
+        found.append("the served file %s has no row in CREDITS.md" % served)
+
+    try:
+        sources.load_source(source_id)
+    except sources.SourceError as problem:
+        found.append("the track %s has no source record for its master: %s"
+                     % (track.key, problem))
+
+    return found
+
+
+def _served_problems(rows: tuple) -> list:
+    """Give a problem for each served file that no track row names."""
+    named = {os.path.basename(paths.track_path(row.key)) for row in rows}
+    folder = paths.SERVED_MUSIC_DIR
+    names = os.listdir(folder) if os.path.isdir(folder) else []
+
+    return ["the served file %s/%s names no track of the track table"
+            % (music_tracks.SERVED_DIRECTORY, name)
+            for name in sorted(names) if name not in named]
+
+
+def _check_tracks(report: "CheckReport", credited: set) -> None:
+    """
+    Purpose: Run every check of the tracks.
+
+    Entry:
+        credited holds each file that a credits row names.
+
+    Exit/Returns:
+        Returns None. Adds problems to report.
+
+    Module Globals:
+        paths.TRACK_TABLE_PATH read.
+
+    Author: Nick Hobar
+    Creation date: 11/08/2026
+    """
+    try:
+        rows = tracks.read_table(paths.TRACK_TABLE_PATH)
+    except table_file.TableFileError as problem:
+        report.problems.append(str(problem))
+        return
+
+    for track in rows:
+        report.problems.extend(_track_problems(track, credited))
+
+    report.problems.extend(_served_problems(rows))
 
 
 # ─── Public routines ─────────────────────────────────────────────────────────
@@ -178,6 +273,7 @@ def run_check() -> CheckReport:
         2. Check each cue, then each moment row.
         3. Warn about each sound clip that is not imported, and each file
            that no cue names.
+        4. Check each track row, and each served file.
 
     Author: Nick Hobar
     Creation date: 10/26/2026
@@ -199,5 +295,6 @@ def run_check() -> CheckReport:
 
     report.problems.extend(_moment_problems(table, moments))
     report.warnings.extend(_file_warnings(table))
+    _check_tracks(report, credited)
 
     return report

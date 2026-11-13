@@ -1,0 +1,1205 @@
+{
+	"compiler_version": 18,
+	"cues": {
+		"farewell": "66",
+		"offer": "24",
+		"post_quest": "62",
+		"recruit": "38",
+		"report": "53",
+		"start": "10",
+		"waiting": "45"
+	},
+	"format": 1,
+	"lines": {
+		"10": {
+			"condition": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "is_complete",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 21,
+									"type": "string",
+									"value": "augmentation_intro"
+								},
+								{
+									"i": 41,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "10",
+			"next_id": "11",
+			"next_id_after": "18",
+			"next_sibling_id": "12",
+			"type": "condition"
+		},
+		"11": {
+			"id": "11",
+			"is_snippet": false,
+			"next_id": "62",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"12": {
+			"condition": {
+				"expression": [
+					{
+						"i": 5,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 10,
+						"type": "dot"
+					},
+					{
+						"function": "on_step",
+						"i": 11,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 41,
+									"type": "string",
+									"value": "recruit"
+								},
+								{
+									"i": 50,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "12",
+			"next_id": "13",
+			"next_id_after": "18",
+			"next_sibling_id": "14",
+			"type": "condition"
+		},
+		"13": {
+			"id": "13",
+			"is_snippet": false,
+			"next_id": "38",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"14": {
+			"condition": {
+				"expression": [
+					{
+						"i": 5,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 10,
+						"type": "dot"
+					},
+					{
+						"function": "on_step",
+						"i": 11,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 41,
+									"type": "string",
+									"value": "report"
+								},
+								{
+									"i": 49,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "14",
+			"next_id": "15",
+			"next_id_after": "18",
+			"next_sibling_id": "16",
+			"type": "condition"
+		},
+		"15": {
+			"id": "15",
+			"is_snippet": false,
+			"next_id": "53",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"16": {
+			"condition": {
+				"expression": [
+					{
+						"i": 5,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 10,
+						"type": "dot"
+					},
+					{
+						"function": "is_active",
+						"i": 11,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 21,
+									"type": "string",
+									"value": "augmentation_intro"
+								},
+								{
+									"i": 41,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "16",
+			"next_id": "17",
+			"next_id_after": "18",
+			"type": "condition"
+		},
+		"17": {
+			"id": "17",
+			"is_snippet": false,
+			"next_id": "45",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"18": {
+			"id": "18",
+			"next_id": "19",
+			"static_id": "",
+			"text": "{{npc.header}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 7,
+							"type": "dot"
+						},
+						{
+							"i": 8,
+							"type": "variable",
+							"value": "header"
+						}
+					],
+					"value_in_text": "{{npc.header}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"19": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "19",
+			"next_id": "20",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} greets the candidate and hints at a job.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"20": {
+			"character": "Placeholder",
+			"id": "20",
+			"next_id": "24",
+			"responses": [
+				"20",
+				"21"
+			],
+			"static_id": "",
+			"text": "ask about the job.",
+			"type": "response"
+		},
+		"21": {
+			"character": "Placeholder",
+			"id": "21",
+			"next_id": "end",
+			"static_id": "",
+			"text": "leave.",
+			"type": "response"
+		},
+		"22": {
+			"id": "22",
+			"next_id": "23",
+			"type": ""
+		},
+		"23": {
+			"id": "23",
+			"next_id": "24",
+			"type": "cue"
+		},
+		"24": {
+			"condition": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "not"
+					},
+					{
+						"i": 7,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 12,
+						"type": "dot"
+					},
+					{
+						"function": "is_available",
+						"i": 13,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 26,
+									"type": "string",
+									"value": "augmentation_intro"
+								},
+								{
+									"i": 46,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
+			"id": "24",
+			"next_id": "25",
+			"next_id_after": "27",
+			"type": "condition"
+		},
+		"25": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 3,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 6,
+							"type": "dot"
+						},
+						{
+							"i": 7,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "25",
+			"next_id": "26",
+			"static_id": "",
+			"text": "[Placeholder: The job is already taken.]",
+			"type": "dialogue"
+		},
+		"26": {
+			"id": "26",
+			"next_id": "10",
+			"responses": [
+				"26"
+			],
+			"static_id": "",
+			"text": "Right.",
+			"type": "response"
+		},
+		"27": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "27",
+			"next_id": "28",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} explains that augments go missing from the Clinic, and asks the candidate to find out who takes them.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"28": {
+			"id": "28",
+			"next_id": "29",
+			"static_id": "",
+			"text": "{{quest.accept_prompt(\"augmentation_intro\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 9,
+							"type": "dot"
+						},
+						{
+							"function": "accept_prompt",
+							"i": 10,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 24,
+										"type": "string",
+										"value": "augmentation_intro"
+									},
+									{
+										"i": 44,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.accept_prompt(\"augmentation_intro\")}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"29": {
+			"character": "Accept",
+			"id": "29",
+			"next_id": "30",
+			"responses": [
+				"29",
+				"33"
+			],
+			"static_id": "",
+			"text": "{{quest.title(\"augmentation_intro\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 10,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 15,
+							"type": "dot"
+						},
+						{
+							"function": "title",
+							"i": 16,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 22,
+										"type": "string",
+										"value": "augmentation_intro"
+									},
+									{
+										"i": 42,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.title(\"augmentation_intro\")}}"
+				}
+			],
+			"type": "response"
+		},
+		"30": {
+			"id": "30",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "accept",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 16,
+									"type": "string",
+									"value": "augmentation_intro"
+								},
+								{
+									"i": 36,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "31",
+			"type": "mutation"
+		},
+		"31": {
+			"id": "31",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "message"
+					},
+					{
+						"i": 10,
+						"type": "dot"
+					},
+					{
+						"function": "success",
+						"i": 11,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "You take the job."
+								},
+								{
+									"i": 38,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "32",
+			"type": "mutation"
+		},
+		"32": {
+			"id": "32",
+			"is_snippet": false,
+			"next_id": "38",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"33": {
+			"id": "33",
+			"next_id": "end",
+			"static_id": "",
+			"text": "Not yet.",
+			"type": "response"
+		},
+		"36": {
+			"id": "36",
+			"next_id": "37",
+			"type": ""
+		},
+		"37": {
+			"id": "37",
+			"next_id": "38",
+			"type": "cue"
+		},
+		"38": {
+			"id": "38",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "talk",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 14,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "string",
+									"value": "npc_aug_clinic_1"
+								},
+								{
+									"i": 54,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "39",
+			"type": "mutation"
+		},
+		"39": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "39",
+			"next_id": "40",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} gives the brief: the trail of the missing augments points at the Public Hospital.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"40": {
+			"id": "40",
+			"next_id": "41",
+			"static_id": "",
+			"text": "{{quest.objectives(\"augmentation_intro\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 9,
+							"type": "dot"
+						},
+						{
+							"function": "objectives",
+							"i": 10,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 21,
+										"type": "string",
+										"value": "augmentation_intro"
+									},
+									{
+										"i": 41,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.objectives(\"augmentation_intro\")}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"41": {
+			"character": "Placeholder",
+			"id": "41",
+			"next_id": "end",
+			"responses": [
+				"41"
+			],
+			"static_id": "",
+			"text": "agree and go.",
+			"type": "response"
+		},
+		"43": {
+			"id": "43",
+			"next_id": "44",
+			"type": ""
+		},
+		"44": {
+			"id": "44",
+			"next_id": "45",
+			"type": "cue"
+		},
+		"45": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "45",
+			"next_id": "46",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} asks whether the candidate found the trail yet.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"46": {
+			"id": "46",
+			"next_id": "47",
+			"static_id": "",
+			"text": "{{quest.objectives(\"augmentation_intro\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 9,
+							"type": "dot"
+						},
+						{
+							"function": "objectives",
+							"i": 10,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 21,
+										"type": "string",
+										"value": "augmentation_intro"
+									},
+									{
+										"i": 41,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.objectives(\"augmentation_intro\")}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"47": {
+			"character": "Placeholder",
+			"id": "47",
+			"next_id": "end",
+			"responses": [
+				"47"
+			],
+			"static_id": "",
+			"text": "not yet.",
+			"type": "response"
+		},
+		"51": {
+			"id": "51",
+			"next_id": "52",
+			"type": ""
+		},
+		"52": {
+			"id": "52",
+			"next_id": "53",
+			"type": "cue"
+		},
+		"53": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "53",
+			"next_id": "54",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} asks for the report.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"54": {
+			"character": "Placeholder",
+			"id": "54",
+			"next_id": "55",
+			"responses": [
+				"54",
+				"57"
+			],
+			"static_id": "",
+			"text": "tell the truth about the Hospital.",
+			"type": "response"
+		},
+		"55": {
+			"id": "55",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "talk",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 14,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "string",
+									"value": "npc_aug_clinic_1_end"
+								},
+								{
+									"i": 58,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "56",
+			"type": "mutation"
+		},
+		"56": {
+			"id": "56",
+			"is_snippet": false,
+			"next_id": "62",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"57": {
+			"character": "Placeholder",
+			"id": "57",
+			"next_id": "58",
+			"static_id": "",
+			"text": "give a cover story.",
+			"type": "response"
+		},
+		"58": {
+			"id": "58",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "talk",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 14,
+									"type": "string",
+									"value": "augmentation_intro"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "string",
+									"value": "npc_aug_clinic_1_end"
+								},
+								{
+									"i": 58,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "59",
+			"type": "mutation"
+		},
+		"59": {
+			"id": "59",
+			"is_snippet": false,
+			"next_id": "62",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"60": {
+			"id": "60",
+			"next_id": "61",
+			"type": ""
+		},
+		"61": {
+			"id": "61",
+			"next_id": "62",
+			"type": "cue"
+		},
+		"62": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "62",
+			"next_id": "63",
+			"static_id": "",
+			"text": "[Placeholder: {{npc.name}} thanks the candidate, and points at the Locus.]",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 30,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 33,
+							"type": "dot"
+						},
+						{
+							"i": 34,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"63": {
+			"character": "Placeholder",
+			"id": "63",
+			"next_id": "end",
+			"responses": [
+				"63"
+			],
+			"static_id": "",
+			"text": "leave.",
+			"type": "response"
+		},
+		"64": {
+			"id": "64",
+			"next_id": "65",
+			"type": ""
+		},
+		"65": {
+			"id": "65",
+			"next_id": "66",
+			"type": "cue"
+		},
+		"66": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "66",
+			"next_id": "68",
+			"static_id": "",
+			"text": "[Placeholder farewell of the Clinic recruiter.]",
+			"type": "dialogue"
+		},
+		"67": {
+			"id": "67",
+			"next_id": "68",
+			"type": ""
+		},
+		"68": {
+			"id": "68",
+			"is_snippet": false,
+			"next_id": "end",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"8": {
+			"id": "8",
+			"next_id": "9",
+			"type": ""
+		},
+		"9": {
+			"id": "9",
+			"next_id": "10",
+			"type": "cue"
+		}
+	},
+	"source": "aug_clinic_1.dialogue",
+	"source_sha256": "2e02aade7fd73692b8ab16677d1d73550011c68fe17073287d0a7e6b5cbf248f"
+}

@@ -2,6 +2,11 @@
 The dialogue modules of the NPCs. Each module is the EvMenu node tree of one
 dialogue, and NpcDef.dialogue names it by its module name.
 
+`compiled/` holds the compiled scripts of the dialogue scripts (DESIGN-0017).
+NpcDef.dialogue_script names one by its file name. The script export of the
+Godot editor writes each file from `godot/dialogue/`. Never edit one by hand.
+systems/gameplay/dialogue/ reads and runs them.
+
 Nothing imports this package as a whole. CmdTalk gives the path of one
 module to EvMenu when a player talks, so a module here loads only when it is
 in use. world/tests/test_npc_database.py imports each module that a def

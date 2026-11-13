@@ -142,3 +142,50 @@ class CopperDustRecipe(BlackoutRecipe):
     output_item_keys = ["copper_dust"]
 
     success_message = "You grind the copper chunk into a fine dust."
+
+
+
+# The foundry XP doubles at each metal tier: 10, 20, 40 for a smelt and 15,
+# 30, 60 for a grind. The manganese pair takes the next step of each.
+
+class ScrapManganeseRecipe(BlackoutRecipe):
+    "Smelt a manganese chunk into usable scrap manganese in a foundry furnace."
+
+    name = "scrap manganese"
+    category = CRAFT_CATEGORY_FOUNDRY
+    required_skill = skill_constants.SKILL_KEY_FOUNDRY
+    required_level = 0
+    xp_reward = 80
+    skill_category = skill_constants.SKILL_CATEGORY_PROCESSING
+
+    consumable_tags = ["manganese_chunk"]
+    consumable_names = ["manganese chunk"]
+
+    tool_tags = ["furnace"]
+    tool_names = ["furnace"]
+
+    output_item_keys = ["scrap_manganese"]
+
+    success_message = "You smelt the manganese chunk into a piece of scrap manganese."
+
+
+
+class ManganeseDustRecipe(BlackoutRecipe):
+    "Grind a manganese chunk into fine dust using a hammer."
+
+    name = "manganese dust"
+    category = CRAFT_CATEGORY_FOUNDRY
+    required_skill = skill_constants.SKILL_KEY_FOUNDRY
+    required_level = 0
+    xp_reward = 120
+    skill_category = skill_constants.SKILL_CATEGORY_PROCESSING
+
+    consumable_tags = ["manganese_chunk"]
+    consumable_names = ["manganese chunk"]
+
+    tool_tags = ["hammer"]
+    tool_names = ["hammer"]
+
+    output_item_keys = ["manganese_dust"]
+
+    success_message = "You grind the manganese chunk into a fine dust."

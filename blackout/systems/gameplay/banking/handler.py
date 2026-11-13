@@ -54,8 +54,10 @@ NOT_STORED_ERROR = "You don't have that item stored in the bank."
 NOTHING_GIVEN_ERROR = "There is nothing to move."
 NO_SUCH_SLOT_ERROR = "Your vault has nothing by that name."
 NO_SUCH_TAB_ERROR = "Your vault has no tab with that number."
-SAME_SLOT_ERROR = "Name two different items to swap."
+SAME_SLOT_ERROR = "Name two different items."
 NOT_A_PLACEHOLDER_ERROR = "That slot holds an item, not a placeholder."
+NO_SUCH_DRAG_MODE_ERROR = (
+    f"A drag can only {' or '.join(bank_const.DRAG_MODES)}.")
 
 
 @dataclass
@@ -848,10 +850,16 @@ class BankHandler:
         return self._change_layout(_move)
 
 
-    def swap_slots(self, first: str, second: str) -> str:
-        """Swap the places of two slots. Each name may name a placeholder.
-        Returns "" on success, or the reason it failed."""
-        def _swap(current):
+    def _rearrange(self, first: str, second: str, rule) -> str:
+        """
+        Resolve two names to two different slots, and give both to `rule`:
+        vault_layout.swap or vault_layout.insert. Returns "" on success, or
+        the reason it failed. Each name may name a placeholder.
+
+        One routine for both rules. Thus, a swap and an insert refuse the
+        same names with the same reason.
+        """
+        def _apply(current):
             first_name = vault_layout.resolve(current, first)
             second_name = vault_layout.resolve(current, second)
 
@@ -861,11 +869,42 @@ class BankHandler:
             if first_name == second_name:
                 return SAME_SLOT_ERROR
 
-            vault_layout.swap(current, first_name, second_name)
+            rule(current, first_name, second_name)
 
             return ""
 
-        return self._change_layout(_swap)
+        return self._change_layout(_apply)
+
+
+    def swap_slots(self, first: str, second: str) -> str:
+        """Swap the places of two slots. Returns "" on success, or the
+        reason it failed."""
+        return self._rearrange(first, second, vault_layout.swap)
+
+
+    def insert_slot(self, source: str, target: str) -> str:
+        """Put the slot `source` at the place of the slot `target`, and move
+        the slots between them one place. Returns "" on success, or the
+        reason it failed."""
+        return self._rearrange(source, target, vault_layout.insert)
+
+
+    def set_drag_mode(self, mode: str) -> str:
+        """Pick what a drop of one slot on another does in the pop-up: one of
+        bank_const.DRAG_MODES. Returns "" on success, or the reason it
+        failed."""
+        def _set(current):
+            picked = vault_layout.set_drag_mode(current, mode)
+
+            return "" if picked else NO_SUCH_DRAG_MODE_ERROR
+
+        return self._change_layout(_set)
+
+
+    def drag_mode(self) -> str:
+        """Return what a drop of one slot on another does: a verb of
+        bank_const.DRAG_MODES."""
+        return self.layout().drag_mode
 
 
     def rename_tab(self, index: int, text: str) -> str:

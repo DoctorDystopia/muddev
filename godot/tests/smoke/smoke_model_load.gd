@@ -1,0 +1,533 @@
+extends Node
+## Live smoke test: the whole tier-1 pipeline, end to end.
+##
+## NEEDS A RUNNING EVENNIA (the webserver on 4001, not the Godot socket). No
+## account required — this fetches static files and never logs in.
+##
+##     godot --headless --path godot res://tests/smoke/smoke_model_load.tscn
+##
+## ## Why this cannot be a unit test
+##
+## Every interesting step here is I/O or engine internals: an HTTP fetch, a
+## glTF parse, and the normalise that depends on what the real file actually
+## contains. The measurement that motivated the whole normalise step —
+## the packed sword's bounds being 0.33 x 9.80 x 1.02 — is a fact about a file
+## on disk, and no amount of hand-built payload would have revealed it.
+##
+## What IS pure lives in test_family_shapes: the shape table, the builder, and
+## the unit-box invariant this test confirms tier 1 also obeys.
+
+const TIMEOUT_SECONDS := 25.0
+
+## Served by Evennia, and named in models/manifest.json.
+const KNOWN_ASSET := "rusty_scrap_shortsword"
+
+## The RIGGED one. Carries a skeleton, and is the model whose placement the
+## measurement ladder is most easily wrong about. The player character was
+## this model until 10/16/2026. A player is now a figure with no skin, and
+## the mutant raider is the one served model with a skin.
+const RIGGED_ASSET := "mutant_raider"
+
+## The family that the server sends with the rigged model.
+const RIGGED_FAMILY := "npc"
+
+## The one whose export declares itself transparent and is not.
+const TRANSPARENT_ASSET := "floating_eye"
+
+## An asset key nothing has art for, standing in for the creature a corpse came
+## from. Deliberately not a real NPC key: the point of the tier-2 fetch below is
+## that it happens for a body whose own asset is unmodelled, which is every body
+## in the game today and would stop being asserted the day one gains art.
+const UNMODELLED_CREATURE := "a_creature_with_no_art_of_its_own"
+
+## Server-owned names. The corpse FAMILY is the one whose art is looked up by
+## family rather than by asset key.
+const _Const := preload("res://autoload/blackout_constants.gd")
+
+## How far off a unit the longest axis may land. Generous: the normalise divides
+## by a measured extent, so this is float slop rather than a tolerance on the
+## intent.
+const UNIT_TOLERANCE := 0.02
+
+## How much taller than deep a standing figure must measure. The flat bind-pose
+## bug measured 0.17. A standing figure with an arm held forward measures 1.50.
+## See [method _a_rigged_model_stands_up].
+const UPRIGHT_RATIO := 1.25
+
+var _failures := 0
+var _resolver: MeshResolver
+
+## The two models fetched last, until each has reported. The test finishes when
+## this empties, NOT when the first of them lands.
+##
+## Every fetch gets its own HTTPRequest, so they race, and the eye is the
+## smaller file -- so calling _finish() from whichever arrived first quietly
+## SKIPPED the character's checks on every run. A skipped assertion looks
+## exactly like a passing one in the output, which is the whole reason this
+## exists rather than an ordering assumption.
+var _outstanding := {}
+
+
+func _ready() -> void:
+	get_tree().create_timer(TIMEOUT_SECONDS).timeout.connect(_give_up)
+
+	# The dev origin explicitly: this test is about the pipeline, not about
+	# which build we are. See ServerEndpoint.asset_origin for that decision.
+	_resolver = MeshResolver.new(ModelRegistry.new(),
+		ServerEndpoint.ASSET_DEV_ORIGIN)
+	add_child(_resolver)
+
+	_resolver.manifest_ready.connect(_on_manifest)
+	_resolver.start()
+
+
+func _on_manifest(count: int) -> void:
+	print("manifest named %d models" % count)
+
+	_expect(count > 0, "the served manifest names at least one model")
+	_expect(_resolver.may_have_art(KNOWN_ASSET),
+		"%s is one of them" % KNOWN_ASSET)
+	_expect(not _resolver.may_have_art("nothing_is_modelled_as_this"),
+		"an unknown key has no art")
+
+	# Before the fetch, art is not to hand -- so an entity still draws, from its
+	# family. This is the "renders generics and sharpens" state, asserted rather
+	# than assumed.
+	var early := _resolver.resolve_entity(KNOWN_ASSET, "weapon")
+
+	_expect(early != null, "an entity resolves even before its art arrives")
+	early.free()
+
+	# Scenery is the opposite policy and must stay empty-handed.
+	var scenery := _resolver.resolve_scenery("nothing_is_modelled_as_this")
+
+	_expect(scenery == null, "scenery with no art draws nothing at all")
+
+	_every_scenery_model_is_served()
+	_no_primitive_is_served()
+
+	_resolver.refreshed.connect(_on_refreshed)
+
+
+## The server must serve each model that it names for a chunk object, or its
+## tile stays bare. The transition pad is one.
+##
+## A primitive is not a model. [PropMeshBuilder] draws it, and [TerrainView]
+## asks the resolver for no art. Until 10/19/2026 this loop also asked for the
+## art of each primitive. It failed on every ladder, crate and lamp. The loop
+## reads each scenery key through [method TileTables.scenery_of], as the
+## client does. Thus, a decor row of the table files gets the same check.
+func _every_scenery_model_is_served() -> void:
+	var checked := 0
+
+	for kind: String in _Const.OBJECT_KIND_SCENERY:
+		var asset_key: String = TileTables.scenery_of(kind)
+
+		if asset_key.is_empty() or not PropMeshBuilder.primitive_of(kind).is_empty():
+			continue
+
+		checked += 1
+		_expect(_resolver.may_have_art(asset_key),
+			"the scenery of %s (%s) is served" % [kind, asset_key])
+
+	_expect(checked > 0, "at least one chunk object names a model")
+
+
+## A served model with the key of a primitive never draws. The client skips
+## each primitive before it asks for art. When the art arrives, the key must
+## move out of `SCENERY_PRIMITIVES` in the tilegrid constants. This case fails
+## until the key moves.
+func _no_primitive_is_served() -> void:
+	for primitive: String in _Const.SCENERY_PRIMITIVES:
+		_expect(not _resolver.may_have_art(primitive),
+			"the primitive %s has no served model" % primitive)
+
+
+func _on_refreshed(asset_key: String) -> void:
+	if asset_key == RIGGED_ASSET:
+		_a_rigged_model_stands_up()
+		_reported(asset_key)
+		return
+
+	if asset_key == TRANSPARENT_ASSET:
+		_an_export_lying_about_transparency_is_corrected()
+		_reported(asset_key)
+		return
+
+	if asset_key == FamilyShapes.model_for(_Const.FAMILY_CORPSE):
+		_a_body_is_lying_down()
+		_reported(asset_key)
+		return
+
+	if _outstanding.has(asset_key) and _scaled_keys().has(asset_key):
+		_a_presentation_scale_sizes_the_world_not_the_cell(asset_key)
+		_reported(asset_key)
+		return
+
+	if asset_key != KNOWN_ASSET:
+		return
+
+	var model := _resolver.resolve_entity(KNOWN_ASSET, "weapon")
+
+	_expect(model != null, "the model resolves once fetched")
+
+	if model == null:
+		_finish()
+		return
+
+	# The payoff. The file on disk is 9.8 units tall; if this is not ~1 the
+	# sword stands ten tiles high and the ladder's tiers are not interchangeable.
+	var bounds := _bounds_of(model)
+	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+	print("normalised bounds: %.3f x %.3f x %.3f"
+		% [bounds.size.x, bounds.size.y, bounds.size.z])
+
+	_expect(absf(longest - 1.0) < UNIT_TOLERANCE,
+		"the longest axis normalises to one unit (is %.3f)" % longest)
+	_expect(bounds.size.y > bounds.size.x,
+		"and the sword is still taller than it is wide")
+
+	# THE REGRESSION. Everything above measured the model as handed over, and it
+	# was correct -- but every caller then assigns `scale`, and the normalise
+	# used to live on that same property, so the assignment silently threw it
+	# away and the model drew at raw glTF size. A transition pad the size of the
+	# map is what that looks like.
+	#
+	# Scaling what you were handed must scale a UNIT box, whatever tier it came
+	# from. Checked here rather than in the callers so one test covers the seam
+	# for all of them.
+	var scaled := _resolver.resolve_entity(KNOWN_ASSET, "weapon")
+
+	scaled.scale = Vector3.ONE * 0.34
+
+	var scaled_bounds := _bounds_of(scaled)
+	var scaled_longest := maxf(scaled_bounds.size.x,
+		maxf(scaled_bounds.size.y, scaled_bounds.size.z))
+
+	print("scaled to 0.34 -> longest %.3f" % scaled_longest)
+
+	_expect(absf(scaled_longest - 0.34) < UNIT_TOLERANCE,
+		"a caller's scale multiplies the unit box rather than replacing the "
+		+ "normalise (longest is %.3f, wanted 0.34)" % scaled_longest)
+
+	scaled.free()
+	model.free()
+
+	# Cached now, so a second ask is synchronous and does not refetch.
+	var again := _resolver.resolve_entity(KNOWN_ASSET, "weapon")
+
+	_expect(again != null, "a second ask is served from cache")
+
+	if again != null:
+		again.free()
+
+	# Kicks off the character fetch. Finishing waits for it: measuring now
+	# would measure the FAMILY SHAPE, which is what the first version of this
+	# test did -- it passed while checking the procedural figure, because the
+	# tier-2 fallback is what a first ask returns.
+	_outstanding = {RIGGED_ASSET: true, TRANSPARENT_ASSET: true}
+
+	var pending := _resolver.resolve_entity(RIGGED_ASSET, RIGGED_FAMILY)
+	pending.free()
+
+	var eye := _resolver.resolve_entity(TRANSPARENT_ASSET, "npc")
+	eye.free()
+
+	# TIER 2, asked for the only way it is ever reached: an entity whose own
+	# asset key has no art, resolved by its FAMILY. Nothing here names the
+	# corpse model -- the table does, and the whole point of the tier is that
+	# adding a body to the game needs no client edit.
+	var corpse_model := FamilyShapes.model_for(_Const.FAMILY_CORPSE)
+
+	if corpse_model.is_empty():
+		_expect(false, "the corpse family names a model to stand in for it")
+	elif not _resolver.may_have_art(corpse_model):
+		# ASKED BEFORE IT IS WAITED ON. A key that the manifest does not name
+		# never fetches, so `refreshed` never fires for it. The test would sit
+		# out its timeout and then blame a server that is fine.
+		_expect(false, "%s is in the served manifest. Repack and run " % corpse_model
+			+ "collectstatic, or every corpse in the game is a grey box")
+	else:
+		_outstanding[corpse_model] = true
+
+		var body := _resolver.resolve_entity(UNMODELLED_CREATURE,
+			_Const.FAMILY_CORPSE)
+		body.free()
+
+	# Every model that PRESENTATION resizes, from the table and not by name.
+	for sized_key: String in _scaled_keys():
+		if not _resolver.may_have_art(sized_key):
+			_expect(false, "%s is in the served manifest. Build it and reload "
+				% sized_key + "Evennia so collectstatic picks it up")
+			continue
+
+		_outstanding[sized_key] = true
+
+		var pending_sized := _resolver.resolve_entity(sized_key, "item")
+
+		pending_sized.free()
+
+
+## Every key in PRESENTATION that sets a scale.
+func _scaled_keys() -> Array[String]:
+	var keys: Array[String] = []
+
+	for key: String in ModelRegistry.PRESENTATION:
+		var entry: Dictionary = ModelRegistry.PRESENTATION[key]
+
+		if entry.has("scale"):
+			keys.append(key)
+
+	return keys
+
+
+## A presentation scale shrinks the model in the world, and a grid cell undoes
+## it.
+##
+## Two facts about one number. The world draws the model at its scale of the
+## unit box, so a clip is smaller than its gun. A grid cell divides the same
+## number back out, so the clip fills its cell like every other item. The
+## second fact rides on metadata that `duplicate()` must copy. Only a copy from
+## the real cache proves that.
+func _a_presentation_scale_sizes_the_world_not_the_cell(asset_key: String) -> void:
+	var model := _resolver.resolve_entity(asset_key, "item")
+	var wanted: float = ModelRegistry.PRESENTATION[asset_key]["scale"]
+	var bounds := _bounds_of(model)
+	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+	print("%s: longest %.3f, presentation scale %.3f" % [asset_key, longest, wanted])
+
+	_expect(absf(longest - wanted) < UNIT_TOLERANCE,
+		"%s draws at its presentation scale (longest %.3f, wanted %.3f)"
+		% [asset_key, longest, wanted])
+	_expect(is_equal_approx(ModelLoader.presentation_scale(model), wanted),
+		"and a cached copy still carries that scale for a grid cell")
+
+	model.scale = Vector3.ONE / ModelLoader.presentation_scale(model)
+
+	var cell_bounds := _bounds_of(model)
+	var cell_longest := maxf(cell_bounds.size.x,
+		maxf(cell_bounds.size.y, cell_bounds.size.z))
+
+	_expect(absf(cell_longest - 1.0) < UNIT_TOLERANCE,
+		"and a cell that divides it out fills the unit box again (%.3f)"
+		% cell_longest)
+
+	model.free()
+
+
+## The character is measured standing up, whatever its bind pose claims.
+##
+## THE BUG THIS GUARDS. A rigged model's vertices are stored in bind space and
+## placed by bones at draw time, so `mesh.get_aabb()` describes a pose nobody
+## sees. The Spider-Man placeholder measured 0.74 x **0.17** x 1.00 that way --
+## flat, as if lying down -- against a skeleton spanning 1.04 tall, and
+## normalising by the mesh box made the character six times too big and left it
+## floating. `ModelLoader.bounds_of` merges the skeleton's box in for that
+## reason, and the placement uses it, so this assertion has to as well.
+##
+## THE CURRENT ASSET DOES NOT REPRODUCE THAT, and the check is written knowing
+## it. Quaternius' base character (08/27/2026) is a T-pose whose bind pose is
+## the pose -- 1.859 x 1.820 x 0.297 as it comes out of the file -- so its mesh
+## box and its merged box agree, and no ratio between them can prove the
+## skeleton was read. Asserting they DISAGREE, as this did while the flat model
+## was the one served, would now fail on a model measured perfectly correctly.
+## (What this function measures is the model AFTER the normalise, so the numbers
+## it prints are that box divided by its own longest axis.)
+##
+## So what is asserted is the property that outlives either asset: the merged
+## box is never smaller than the meshes alone -- a merge cannot shrink a box, so
+## a violation means bounds_of stopped merging -- and the figure measures
+## clearly taller than it is DEEP. Depth, not width: the T-pose's 1.859 of
+## outstretched arms is fractionally wider than it is tall, so "taller than
+## wide" is false here for a model that is standing up perfectly straight.
+##
+## "Clearly", not "far". The bar was 2.0 for the base character. The OSRS
+## placeholder that replaced it holds one arm forward at chest height, 0.89
+## units out, so it measures 1.0 tall and 0.667 deep: a ratio of 1.50 for a
+## figure that stands up straight (measured 09/18/2026). The bug reads 0.17.
+## [constant UPRIGHT_RATIO] sits between the two, and a pose does not move it.
+func _a_rigged_model_stands_up() -> void:
+	var rigged := _resolver.resolve_entity(RIGGED_ASSET, RIGGED_FAMILY)
+
+	if rigged == null:
+		_expect(false, "the character model resolves")
+		return
+
+	var bounds := ModelLoader.bounds_of(rigged)
+	var mesh_only := _bounds_of(rigged)
+	var uprightness := bounds.size.y / maxf(bounds.size.z, 0.0001)
+
+	print("%s: bounds_of=(%.3f, %.3f, %.3f)  mesh only=(%.3f, %.3f, %.3f)"
+		% [RIGGED_ASSET, bounds.size.x, bounds.size.y, bounds.size.z,
+			mesh_only.size.x, mesh_only.size.y, mesh_only.size.z])
+
+	_expect(uprightness > UPRIGHT_RATIO,
+		"a person measures clearly taller than they are deep (ratio %.2f)"
+		% uprightness)
+
+	# A merge cannot make a box smaller. If bounds_of ever reports LESS than the
+	# meshes alone it has stopped merging something, which is the failure the
+	# skeleton box exists to prevent -- and it is the same assertion whether or
+	# not this particular bind pose happens to be honest.
+	_expect(bounds.size.y >= mesh_only.size.y - 0.001,
+		"and never less than its meshes alone claim (%.3f vs %.3f)"
+		% [bounds.size.y, mesh_only.size.y])
+
+	rigged.free()
+
+
+## A body arrives lying down, and arrives at all without naming its own art.
+##
+## Two separate facts, and both are only checkable against the real file.
+##
+## THE LADDER. `UNMODELLED_CREATURE` has no art and never will, so a node that
+## carries real geometry can only have come from the family's model — tier 2.
+## Before that tier existed the same call returned the generic block, which is
+## also a node, which is why the check is on the SHAPE and not on null.
+##
+## THE ORIENTATION. The download is a skeleton STANDING UP, because that is what
+## a character model is, and `ModelRegistry.PRESENTATION` lays it on its back.
+## That correction is a quarter turn about one axis and there is nothing invalid
+## about the file if it is wrong — a body standing to attention on the tile
+## where something died reads as a live enemy, and only a person looking at it
+## would ever say so. Exactly the class of failure this whole file exists for.
+##
+## Measured as a RATIO rather than against the authored numbers: what matters is
+## that the longest axis stopped being the vertical one, which survives a
+## repack, a different skeleton and a different tolerance on the normalise.
+func _a_body_is_lying_down() -> void:
+	var body := _resolver.resolve_entity(UNMODELLED_CREATURE,
+		_Const.FAMILY_CORPSE)
+
+	if body == null:
+		_expect(false, "a corpse resolves")
+		return
+
+	var bounds := ModelLoader.bounds_of(body)
+	var longest := maxf(bounds.size.x, maxf(bounds.size.y, bounds.size.z))
+
+	print("corpse: bounds=(%.3f, %.3f, %.3f)"
+		% [bounds.size.x, bounds.size.y, bounds.size.z])
+
+	# The generic block is a cube, so a longest axis of one proves nothing on
+	# its own -- but a cube is as deep as it is long, and no figure is.
+	_expect(bounds.size.x < longest - UNIT_TOLERANCE
+			or bounds.size.z < longest - UNIT_TOLERANCE,
+		"a corpse draws real art rather than the generic block, fetched by "
+		+ "family for a creature with no asset of its own")
+
+	_expect(bounds.size.y < longest * 0.5,
+		"and it is lying down rather than standing up (%.3f tall against a "
+		% bounds.size.y + "longest axis of %.3f)" % longest)
+
+	body.free()
+
+
+## An export can be WRONG ABOUT ITSELF, and nothing downstream can tell.
+##
+## Sketchfab's converter wrote the authoring tool's base-colour alpha into this
+## glTF, so the eye's body arrives at alpha 0 against alphaMode BLEND: an
+## invisible shell around a floating eyeball. It loads cleanly and reports no
+## error, which is exactly why it needs a correction and a test -- the only
+## symptom is a person saying it looks wrong. The model record's `[fix]` bakes
+## `opaque` into the served file; this proves the file Godot fetches is solid.
+func _an_export_lying_about_transparency_is_corrected() -> void:
+	var eye := _resolver.resolve_entity(TRANSPARENT_ASSET, "npc")
+
+	if eye == null:
+		_expect(false, "the eye model resolves")
+		return
+
+	var checked := 0
+	var stack: Array[Node] = [eye]
+
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		var instance := node as MeshInstance3D
+
+		if instance != null and instance.mesh != null:
+			for surface: int in instance.mesh.get_surface_count():
+				var material := instance.get_surface_override_material(
+					surface) as StandardMaterial3D
+
+				if material == null:
+					continue
+
+				checked += 1
+				_expect(material.albedo_color.a > 0.99,
+					"%s surface %d is solid, not alpha %.2f"
+					% [instance.name, surface, material.albedo_color.a])
+
+		for child: Node in node.get_children():
+			stack.append(child)
+
+	# The vacuity guard. Finding no materials at all would pass every check
+	# above while proving nothing.
+	_expect(checked > 0, "the eye actually has materials to check")
+
+	eye.free()
+
+
+## Mark one of the last two fetches done, and finish once neither is left.
+func _reported(asset_key: String) -> void:
+	_outstanding.erase(asset_key)
+
+	if _outstanding.is_empty():
+		_finish()
+
+
+func _finish() -> void:
+	if _failures > 0:
+		printerr("FAIL: %d case(s)" % _failures)
+		get_tree().quit(1)
+		return
+
+	print("PASS: model_load")
+	get_tree().quit(0)
+
+
+func _give_up() -> void:
+	printerr("FAIL: timed out after %.0fs. Is Evennia's webserver on 4001?"
+		% TIMEOUT_SECONDS)
+	get_tree().quit(1)
+
+
+## Bounds in the node's own space, accumulating transforms by hand because
+## nothing here is in the scene tree. Same reasoning as ModelLoader._bounds_of.
+func _bounds_of(root: Node3D) -> AABB:
+	var bounds := AABB()
+	var found := false
+	var stack: Array = [[root, root.transform]]
+
+	while not stack.is_empty():
+		var entry: Array = stack.pop_back()
+		var node: Node = entry[0]
+		var to_root: Transform3D = entry[1]
+		var instance := node as MeshInstance3D
+
+		if instance != null and instance.mesh != null:
+			var box: AABB = to_root * instance.mesh.get_aabb()
+
+			bounds = box if not found else bounds.merge(box)
+			found = true
+
+		for child: Node in node.get_children():
+			var spatial := child as Node3D
+			var child_transform := to_root
+
+			if spatial != null:
+				child_transform = to_root * spatial.transform
+
+			stack.append([child, child_transform])
+
+	return bounds
+
+
+func _expect(condition: bool, what: String) -> void:
+	if condition:
+		return
+
+	_failures += 1
+	printerr("  not true: %s" % what)

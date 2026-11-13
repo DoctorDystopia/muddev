@@ -67,20 +67,20 @@ _REPO_ROOT = os.path.dirname(_GAME_DIR)
 # browser client has no skills screen, and a table one client does not have is
 # not drift.
 _SKILL_CATEGORY_SOURCES: tuple = (
-    os.path.join(_REPO_ROOT, "godot", "world", "skill_palette.gd"),
+    os.path.join(_REPO_ROOT, "godot", "world", "look", "skill_palette.gd"),
 )
 
 # The colour of each buff card rarity (DESIGN-0012). Each key names a rarity
 # of RARITIES in systems/gameplay/exterminator/constants.py.
 _RARITY_PALETTE_SOURCES: tuple = (
-    os.path.join(_REPO_ROOT, "godot", "world", "rarity_palette.gd"),
+    os.path.join(_REPO_ROOT, "godot", "world", "look", "rarity_palette.gd"),
 )
 
 # The fog and the light of each area (DESIGN-0011 section 6.7). Each key
 # names a row of world/areas.py, the table that the `areas` layer of a chunk
 # file names.
 _AREA_LOOK_SOURCES: tuple = (
-    os.path.join(_REPO_ROOT, "godot", "world", "area_look.gd"),
+    os.path.join(_REPO_ROOT, "godot", "world", "look", "area_look.gd"),
 )
 
 # The colour of each floor type (DESIGN-0011 section 6.8). Each key names a row
@@ -113,8 +113,18 @@ _FAMILY_MODEL_SOURCES: tuple = (
 # browser client had no equipment screen, and a table one client does not have
 # is not drift.
 _DOLL_LAYOUT_SOURCES: tuple = (
-    os.path.join(_REPO_ROOT, "godot", "world", "doll_layout.gd"),
+    os.path.join(_REPO_ROOT, "godot", "world", "layout", "doll_layout.gd"),
 )
+
+# Where each rig socket sits on the body doll of the rig pop-up (11/09/2026).
+# Each place names a socket of systems/gameplay/augmentation/constants.py.
+_POPUP_LAYOUT_SOURCES: tuple = (
+    os.path.join(_REPO_ROOT, "godot", "world", "layout", "popup_layout.gd"),
+)
+
+# The rows of the rig doll. Anchored on the closing bracket at the start of a
+# line, for the reason `_DOLL_ROWS_RE` gives.
+_RIG_ROWS_RE = re.compile(r"RIG_ROWS[^=]*=\s*\[(.*?)^\]", re.DOTALL | re.MULTILINE)
 
 # Anchored on `var MODELS` rather than on the bare name, and carrying an
 # optional `: Dictionary` annotation: this one is a `static var` because its
@@ -829,6 +839,52 @@ class ClientDollLayoutTests(unittest.TestCase):
                     % (path, wide))
 
 
+class ClientRigLayoutTests(unittest.TestCase):
+    """Every square on the rig doll names a socket, and only one time."""
+
+    def _rig_places(self):
+        """(file name, places) for each client that declares the rig doll."""
+        found = []
+
+        for path in _POPUP_LAYOUT_SOURCES:
+            source = _read_source(path)
+
+            if source is None:
+                continue
+
+            match = _RIG_ROWS_RE.search(source)
+            self.assertIsNotNone(
+                match,
+                "%s exists but declares no RIG_ROWS table. The drift check "
+                "on it is now inert." % path)
+            found.append((os.path.basename(path), _QUOTED_RE.findall(match.group(1))))
+
+        return found
+
+    def test_no_client_places_a_socket_that_does_not_exist(self):
+        """
+        A square named for no socket never fills. The rig sends no row for
+        it, so the doll draws a hole, and the socket that it was meant to be
+        goes in the block under the doll.
+
+        The reverse is not checked, on purpose. A socket that the doll does
+        not place goes in that block, so a new socket reaches the pop-up with
+        no client edit.
+        """
+        from systems.gameplay.augmentation import constants as aug_const
+
+        for client, places in self._rig_places():
+            for place in places:
+                with self.subTest(client=client, place=place):
+                    self.assertIn(place, aug_const.SOCKETS)
+
+    def test_no_client_places_one_socket_twice(self):
+        """One socket in two squares draws in one square, and leaves a gap."""
+        for client, places in self._rig_places():
+            with self.subTest(client=client):
+                self.assertEqual(len(places), len(set(places)), sorted(places))
+
+
 class ClientTableDiscoveryTests(unittest.TestCase):
     """The guard that stops every test above from passing vacuously."""
 
@@ -950,7 +1006,8 @@ _PRESENTATION_PATH = os.path.join(_LOOK_DIRECTORY, "presentation.json")
 
 # Each family that the server can send in the `family` field of an entity:
 # the item families, and the asset kinds that `_mesh_family` gives as they
-# are. The same list as `_sendable_families` in godot/tests/test_family_shapes.gd.
+# are. The same list as `_sendable_families` in
+# godot/tests/world/meshes/test_family_shapes.gd.
 _SENDABLE_FAMILIES: frozenset = frozenset(const.ITEM_FAMILIES) | frozenset((
     const.ASSET_KIND_ITEM, const.ASSET_KIND_NPC, const.ASSET_KIND_CHARACTER,
     const.ASSET_KIND_ROOM, const.ASSET_KIND_STATION, const.ASSET_KIND_GATHERABLE,

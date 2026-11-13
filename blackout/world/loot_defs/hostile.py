@@ -35,8 +35,12 @@ TABLES = {
             LootEntry(item_key="rusty_metal_chunk", weight=16),
             LootEntry(item_key="rusty_metal_dust", min_quantity=1,
                       max_quantity=3, weight=8),
+            # The first biological sample (DESIGN-0015). The share comes
+            # out of the no-drop tail, so the metal rates stay as the wiki
+            # gives them.
+            LootEntry(item_key="mutant_gland", weight=8),
         ],
-        nothing_weight=64,
+        nothing_weight=56,
     ),
 
     # ─── Floating Eye ─────────────────────────────────────────────────────
@@ -49,8 +53,11 @@ TABLES = {
             LootEntry(item_key="rusty_metal_dust", min_quantity=2,
                       max_quantity=5, weight=32),
             LootEntry(item_key="malfunctioning_gizmo", weight=8),
+            # The first technological sample (DESIGN-0015). No robot hostile
+            # exists, and the eye is the one machine-like hostile.
+            LootEntry(item_key="cyber_shard", weight=8),
         ],
-        nothing_weight=40,
+        nothing_weight=32,
     ),
 
     # ─── Mutant Giant ─────────────────────────────────────────────────────
@@ -60,6 +67,9 @@ TABLES = {
     #
     # A quarter of all kills give nothing, against the raider's half: the
     # giant is a longer fight and the table says so.
+    #
+    # The Necklace of Brawn is a tertiary roll at 1/32, so the main pool
+    # keeps its 128ths.
     "mutant_giant_drops": LootTableDef(
         key="mutant_giant_drops",
         main=[
@@ -68,8 +78,16 @@ TABLES = {
             LootEntry(item_key="metal_chunk", weight=32),
             LootEntry(item_key="metal_dust", min_quantity=1,
                       max_quantity=3, weight=16),
+            LootEntry(item_key="mutant_gland", min_quantity=1,
+                      max_quantity=2, weight=8),
         ],
-        nothing_weight=32,
+        nothing_weight=24,
+        tertiary=[
+            TertiaryDrop(
+                entry=LootEntry(item_key="necklace_of_brawn"),
+                chance_denominator=32,
+            ),
+        ],
     ),
 
     # ─── Big Mutant ───────────────────────────────────────────────────────
@@ -87,8 +105,10 @@ TABLES = {
             LootEntry(item_key="rusty_scrap_metal", weight=32),
             LootEntry(item_key="rusty_scrap_shortsword", weight=16),
             LootEntry(item_key="rusty_scrap_spear", weight=16),
+            LootEntry(item_key="mutant_gland", min_quantity=1,
+                      max_quantity=3, weight=8),
         ],
-        nothing_weight=16,
+        nothing_weight=8,
         rolls=2,
         tertiary=[
             TertiaryDrop(

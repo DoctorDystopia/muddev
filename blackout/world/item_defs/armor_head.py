@@ -153,4 +153,53 @@ ITEMS = {
             "projectile_strength_bonus": 0,
         },
     ),
+
+
+
+    # ----------------------------------
+    # --- MANGANESE MELEE ARMOR HEAD ---
+    # ----------------------------------
+
+    # The OSRS Mithril full helm, as the copper great helm is the OSRS
+    # Steel full helm. The projectile defense mirrors the melee defense.
+    "manganese_great_helm": ItemDef(
+        key="manganese_great_helm",
+        name="manganese great helm",
+        typeclass="typeclasses.items.ArmorItem",
+        desc="Manganese great helm.",
+        value=1430,
+        weight=2.267,
+        tradeable=True,
+        stackable=False,
+        use_slot=WieldLocation.HEAD,
+        tool_type="helmet",
+        tier=3,
+        req_level=30,
+        tags=[("manganese_great_helm", "armor")],
+        combat_stat_bonuses={
+            # Melee attack bonuses
+            "melee_stab_attack_bonus": 0,
+            "melee_slash_attack_bonus": 0,
+            "melee_crush_attack_bonus": 0,
+
+            # Projectile attack bonuses
+            "projectile_light_attack_bonus": 0,
+            "projectile_standard_attack_bonus": 0,
+            "projectile_heavy_attack_bonus": 0,
+
+            # Melee defense bonuses
+            "melee_stab_defense_bonus": 13,
+            "melee_slash_defense_bonus": 14,
+            "melee_crush_defense_bonus": 11,
+
+            # Projectile defense bonuses
+            "projectile_light_defense_bonus": 13,
+            "projectile_standard_defense_bonus": 14,
+            "projectile_heavy_defense_bonus": 11,
+
+            # Other bonuses
+            "melee_strength_bonus": 0,
+            "projectile_strength_bonus": 0,
+        },
+    ),
 }

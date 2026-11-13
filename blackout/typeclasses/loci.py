@@ -37,8 +37,9 @@ class AugmentationLocus(ObjectParent, DefaultObject):
 
     # How a graphical client draws this and what it may send to use it. Read
     # by systems/interface/statefeed/serializers.py through getattr. The
-    # verb is `graft` with no argument: the command then lists the samples
-    # that the player carries, so a click on the Locus is a prompt.
+    # verb is `graft` with no argument. At a Locus, that opens the Locus
+    # pop-up (popups/popup_defs/locus.py) for a client that draws pop-ups.
+    # A telnet client gets the list of the samples that the player carries.
     asset_kind = ASSET_KIND_STATION
     asset_key = LOCUS_ASSET_KEY
     interact_verb = aug_const.GRAFT_COMMAND_KEY

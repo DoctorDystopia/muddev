@@ -520,12 +520,18 @@ class CmdBank(FacingCommand):
         bank view <tab>
         bank move <item> = <tab|new>
         bank swap <item> = <item>
+        bank insert <item> = <item>
         bank name <tab> [= <name>]
         bank placeholders <on|off>
         bank release <item|all>
+        bank drag <swap|insert>
 
     A graphical client shows the vault as a pop-up beside your inventory.
     Every other client gets the banking menu.
+
+    Swap trades the places of two items. Insert puts the first item in the
+    place of the second and shifts the items between them. In the pop-up,
+    dragging one item onto another does whichever one `bank drag` picks.
 
     Tabs sort the vault. Tab 0 is the main tab: it shows everything, and it
     holds whatever is in no other tab. A new item goes into the tab you are

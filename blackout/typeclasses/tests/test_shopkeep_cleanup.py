@@ -2,132 +2,98 @@
 GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 08/28/2026
-Description: Tests for the shopkeep cleanup script and its typeclass-path
-             migration.
+Description: Tests that retire the shopkeep cleanup script.
 
-ShopkeepCleanup lived in blackout/scripts/ until 08/28/2026 -- the directory
-CLAUDE.md calls import-unsafe because everything in it acts on the live
-database. Its path was persisted in 34 ScriptDB rows, so every server start
-imported out of that directory to resolve them.
-
-Moving the class beside its only user leaves those rows pointing at a module
-that no longer exists. `ensure_cleanup_script` is the migration: it rides the
-map rebuild the operator is already running. Since 10/09/2026,
-ShopkeepNPC.refresh_from_def calls it on each tile sync.
+ShopkeepCleanup cut the holdings of a shopkeep to 20 objects once a day,
+from 07/13/2026 to 11/03/2026. The held units now decay, through
+systems/gameplay/shop/held.py. ScriptDB rows of the script stay in a live
+database until something deletes them. Two things delete them. The class
+deletes its own row at the next server start. `retire_cleanup_script`
+deletes a row of either retired path at each tile sync.
 """
 
-from evennia import create_object
-from evennia.utils.test_resources import EvenniaTest
+from evennia import create_object, create_script
+from evennia.utils.test_resources import EvenniaTestCase
+from evennia.utils.utils import class_from_module
 
 from typeclasses import npcs
-from typeclasses.items import BaseItem
 from typeclasses.npcs import ShopkeepNPC
 
 
-class TestShopkeepCleanupAttachment(EvenniaTest):
-    """Exactly one cleanup script, under the current path, always."""
+# A plain script, for a row that carries a retired path.
+_PLAIN_SCRIPT = "evennia.scripts.scripts.DefaultScript"
 
-    def _cleanup_scripts(self, shopkeep):
-        """The cleanup scripts attached to this NPC, by current path."""
+
+class TestTheCleanupIsRetired(EvenniaTestCase):
+    """No new row, and every old row goes."""
+
+    def _retired_rows(self, shopkeep) -> list:
+        """The scripts on this NPC under a retired path."""
         attached = list(shopkeep.scripts.all())
 
-        return [
-            script
-            for script in attached
-            if script.typeclass_path == npcs.SHOPKEEP_CLEANUP_SCRIPT
-        ]
+        return [script for script in attached
+                if script.typeclass_path in npcs.RETIRED_SHOPKEEP_CLEANUP_SCRIPTS]
 
-    def test_a_new_shopkeep_carries_the_current_path(self):
-        """The path the class actually lives at, not the one it used to."""
-        shopkeep = create_object(ShopkeepNPC, key="test keep", location=self.room1)
+    def _row_with_path(self, shopkeep, path: str):
+        """A script on the shopkeep whose row names `path`. The class of
+        the row stays a plain script, as Evennia loads a stale path."""
+        script = create_script(_PLAIN_SCRIPT, obj=shopkeep, key="old trim")
+        script.db_typeclass_path = path
+        script.save(update_fields=["db_typeclass_path"])
 
-        found = self._cleanup_scripts(shopkeep)
+        return script
 
-        self.assertEqual(len(found), 1)
+    def test_a_new_shopkeep_carries_no_cleanup_script(self):
+        shopkeep = create_object(ShopkeepNPC, key="test keep")
 
-    def test_the_legacy_path_is_no_longer_referenced(self):
-        """The move is only done when nothing points into scripts/ any more."""
-        self.assertNotIn(
-            npcs.SHOPKEEP_CLEANUP_SCRIPT,
-            npcs.LEGACY_SHOPKEEP_CLEANUP_SCRIPTS,
-        )
-        for path in npcs.LEGACY_SHOPKEEP_CLEANUP_SCRIPTS:
-            with self.subTest(path=path):
-                self.assertTrue(path.startswith("scripts."))
+        self.assertEqual([], self._retired_rows(shopkeep))
+        self.assertFalse(shopkeep.attributes.has(npcs.RETIRED_MAX_HELD_ATTR))
 
-    def test_ensure_is_idempotent(self):
-        """A rebuild runs this on every spawn; it must not stack timers.
+    def test_the_retire_deletes_a_row_of_each_retired_path(self):
+        shopkeep = create_object(ShopkeepNPC, key="test keep")
 
-        ScriptHandler.add has no presence check of its own -- it creates
-        unconditionally -- so without the guard a shopkeep would collect one
-        more daily timer per rebuild.
-        """
-        shopkeep = create_object(ShopkeepNPC, key="test keep", location=self.room1)
+        for path in npcs.RETIRED_SHOPKEEP_CLEANUP_SCRIPTS:
+            self._row_with_path(shopkeep, path)
 
-        shopkeep.ensure_cleanup_script()
-        shopkeep.ensure_cleanup_script()
+        shopkeep.retire_cleanup_script()
 
-        found = self._cleanup_scripts(shopkeep)
+        self.assertEqual([], self._retired_rows(shopkeep))
 
-        self.assertEqual(len(found), 1)
+    def test_the_retire_removes_the_cap_attribute(self):
+        shopkeep = create_object(ShopkeepNPC, key="test keep")
+        shopkeep.attributes.add(npcs.RETIRED_MAX_HELD_ATTR, 20)
 
-    def test_a_duplicate_is_pruned_back_to_one(self):
-        """Whatever stacked timers already exist are collapsed, not tolerated."""
-        shopkeep = create_object(ShopkeepNPC, key="test keep", location=self.room1)
-        shopkeep.scripts.add(npcs.SHOPKEEP_CLEANUP_SCRIPT)
-        stacked = self._cleanup_scripts(shopkeep)
-        self.assertEqual(len(stacked), 2, "fixture failed to stack a second script")
+        shopkeep.retire_cleanup_script()
 
-        shopkeep.ensure_cleanup_script()
+        self.assertFalse(shopkeep.attributes.has(npcs.RETIRED_MAX_HELD_ATTR))
 
-        found = self._cleanup_scripts(shopkeep)
+    def test_the_retire_rides_the_tile_sync(self):
+        shopkeep = create_object(ShopkeepNPC, key="test keep")
+        self._row_with_path(shopkeep, npcs.SHOPKEEP_CLEANUP_SCRIPT)
 
-        self.assertEqual(len(found), 1)
+        shopkeep.refresh_from_def()
 
+        self.assertEqual([], self._retired_rows(shopkeep))
 
-class TestShopkeepCleanupTrim(EvenniaTest):
-    """The trim itself, and the cap it reads."""
+    def test_the_current_path_still_imports_the_shell(self):
+        """A row of this path must load the class that deletes it. A stale
+        path loads a plain script, which cannot."""
+        loaded = class_from_module(npcs.SHOPKEEP_CLEANUP_SCRIPT)
 
-    def _stock(self, shopkeep, count):
-        """Put `count` throwaway items in the shopkeep's pockets."""
-        for i in range(count):
-            create_object(BaseItem, key=f"test junk {i}", location=shopkeep)
+        self.assertIs(npcs.ShopkeepCleanup, loaded)
 
-    def test_holdings_under_the_cap_are_left_alone(self):
-        shopkeep = create_object(ShopkeepNPC, key="test keep", location=self.room1)
-        self._stock(shopkeep, npcs.SHOPKEEP_MAX_HELD_ITEMS - 1)
+    def test_the_shell_deletes_its_row_at_server_start(self):
+        shopkeep = create_object(ShopkeepNPC, key="test keep")
+        script = create_script(npcs.SHOPKEEP_CLEANUP_SCRIPT, obj=shopkeep)
 
-        script = self._cleanup(shopkeep)
+        script.at_server_start()
+
+        self.assertIsNone(script.pk)
+
+    def test_the_shell_deletes_its_row_at_a_repeat(self):
+        shopkeep = create_object(ShopkeepNPC, key="test keep")
+        script = create_script(npcs.SHOPKEEP_CLEANUP_SCRIPT, obj=shopkeep)
+
         script.at_repeat()
 
-        self.assertEqual(len(shopkeep.contents), npcs.SHOPKEEP_MAX_HELD_ITEMS - 1)
-
-    def test_holdings_over_the_cap_are_trimmed_to_it(self):
-        shopkeep = create_object(ShopkeepNPC, key="test keep", location=self.room1)
-        self._stock(shopkeep, npcs.SHOPKEEP_MAX_HELD_ITEMS + 5)
-
-        script = self._cleanup(shopkeep)
-        script.at_repeat()
-
-        self.assertEqual(len(shopkeep.contents), npcs.SHOPKEEP_MAX_HELD_ITEMS)
-
-    def test_the_default_cap_matches_what_creation_stamps(self):
-        """One owner for the number, read the same way by both.
-
-        The stamp and the script's fallback were a literal 20 in two separate
-        files, which is the shape that hid every anvil recipe behind
-        "Metalsmith" vs "Metalsmithing".
-        """
-        shopkeep = create_object(ShopkeepNPC, key="test keep", location=self.room1)
-
-        self.assertEqual(shopkeep.db.max_held_items, npcs.SHOPKEEP_MAX_HELD_ITEMS)
-
-    def _cleanup(self, shopkeep):
-        """The one cleanup script on this NPC."""
-        attached = list(shopkeep.scripts.all())
-
-        for script in attached:
-            if script.typeclass_path == npcs.SHOPKEEP_CLEANUP_SCRIPT:
-                return script
-
-        self.fail("shopkeep carries no cleanup script")
+        self.assertIsNone(script.pk)

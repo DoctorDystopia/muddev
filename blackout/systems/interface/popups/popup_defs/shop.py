@@ -25,7 +25,7 @@ import time
 
 from evennia.utils import logger
 
-from systems.gameplay.shop import shop_service, stock
+from systems.gameplay.shop import held, shop_service, stock
 from systems.interface.statefeed import constants as feed_const
 from typeclasses.npcs import BUY_COMMAND_KEY, SELL_COMMAND_KEY, VALUE_COMMAND_KEY
 from world.item_database import ITEM_DB
@@ -70,9 +70,9 @@ PRICE_TEMPLATE: str = "{price} cr"
 STATUS_TEMPLATE: str = "Your credits: {credits}"
 OUT_OF_STOCK_DETAIL: str = "Out of stock"
 
-# ndb attribute on the shopkeep: the time of the one scheduled restock
-# refresh. See _watch_restock.
-RESTOCK_WAKE_ATTR: str = "shop_restock_wake_at"
+# ndb attribute on the shopkeep: the time of the one scheduled stock
+# refresh, for a restock or a decay step. See _watch_stock.
+STOCK_WAKE_ATTR: str = "shop_stock_wake_at"
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -154,9 +154,25 @@ def _stock_row(entry, index: int, credits: int, mode) -> dict:
                           detail=detail, enabled=enabled)
 
 
-def _watch_restock(npc, now=None) -> None:
+def _next_change_in(npc, now: float) -> float | None:
+    """The seconds until the next restock or decay step, whichever comes
+    first. None when every ware is full and no item has a surplus."""
+    delays = (stock.next_restock_in(npc, now=now),
+              held.next_decay_in(npc, now=now))
+    waiting = [delay for delay in delays if delay is not None]
+
+    if not waiting:
+        return None
+
+    soonest = min(waiting)
+
+    return soonest
+
+
+def _watch_stock(npc, now=None) -> None:
     """
-    Purpose: Make sure one refresh is scheduled for the next restock.
+    Purpose: Make sure one refresh is scheduled for the next stock change:
+             a restock or a decay step.
 
     Entry:
         npc - the shopkeep that an open pop-up shows.
@@ -166,50 +182,53 @@ def _watch_restock(npc, now=None) -> None:
         Returns nothing. Never raises.
 
     Module Globals:
-        RESTOCK_WAKE_ATTR read and written.
+        STOCK_WAKE_ATTR read and written.
 
     Methodology:
-        1. Ask stock.next_restock_in. None means every ware is full.
+        1. Ask _next_change_in. None means that nothing will change.
         2. If a wake is already due at or before that moment, stop.
-        3. Else schedule _restock_due, and record its time on the ndb.
+        3. Else schedule _stock_change_due, and record its time on the ndb.
 
     Notes/References:
         Each build calls this, and buffer.mark_stale does not merge delayed
         marks. The ndb record is what keeps it to one timer for each keeper.
-        The chain stops when nobody looks: _restock_due marks no pop-up, so
-        no build runs, and nothing schedules the next wake. The next open
-        starts it again. A reload drops the timer and the record together.
+        The chain stops when nobody looks: _stock_change_due marks no
+        pop-up, so no build runs, and nothing schedules the next wake. The
+        next open starts it again. A reload drops the timer and the record
+        together. The build settles the decay before this runs, so each
+        decay stamp names a real surplus.
 
     Author: Nick Hobar
     Creation date: 09/18/2026
     """
     try:
         now = time.time() if now is None else now
-        delay = stock.next_restock_in(npc, now=now)
+        delay = _next_change_in(npc, now)
 
         if delay is None:
             return
 
         due = now + delay
-        pending = getattr(npc.ndb, RESTOCK_WAKE_ATTR, None)
+        pending = getattr(npc.ndb, STOCK_WAKE_ATTR, None)
 
         if pending is not None and now < pending <= due:
             return
 
         from twisted.internet import reactor
 
-        setattr(npc.ndb, RESTOCK_WAKE_ATTR, due)
-        reactor.callLater(delay, _restock_due, npc)
+        setattr(npc.ndb, STOCK_WAKE_ATTR, due)
+        reactor.callLater(delay, _stock_change_due, npc)
     except Exception:
         logger.log_trace()
 
 
-def _restock_due(npc) -> None:
-    """A restock fell due. Refresh every pop-up that shows this keeper."""
+def _stock_change_due(npc) -> None:
+    """A restock or a decay step fell due. Refresh every pop-up that shows
+    this keeper. The rebuild settles the decay."""
     from systems.interface.popups import service
 
     try:
-        setattr(npc.ndb, RESTOCK_WAKE_ATTR, None)
+        setattr(npc.ndb, STOCK_WAKE_ATTR, None)
         service.refresh_anchor_viewers(npc)
     except Exception:
         logger.log_trace()
@@ -278,7 +297,7 @@ class ShopPopup(BasePopup):
         """
         stock_rows = _stock_rows(anchor, caller, mode)
         stock_grid = grid(STOCK_GRID_KEY, STOCK_GRID_TITLE, len(stock_rows), stock_rows)
-        _watch_restock(anchor)
+        _watch_stock(anchor)
 
         return [stock_grid]
 

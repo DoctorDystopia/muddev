@@ -1,0 +1,16 @@
+[remap]
+
+importer="dialogue_manager"
+importer_version=18
+type="Resource"
+uid="uid://gydtcwiel3y5"
+path="res://.godot/imported/aug_clinic_1.dialogue-f109b836cd88d67147592378638fa915.tres"
+
+[deps]
+
+source_file="res://dialogue/aug_clinic_1.dialogue"
+dest_files=["res://.godot/imported/aug_clinic_1.dialogue-f109b836cd88d67147592378638fa915.tres"]
+
+[params]
+
+defaults=true

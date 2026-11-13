@@ -10,7 +10,10 @@
 		"roof_sheet_metal": "7a6f66",
 		"roof_tile": "8e5a44",
 		"rubble": "6e6660",
+		"rusty_sand": "ffa06b",
 		"sand": "c2a06b",
+		"tile": "c7981e",
+		"void": "8c675b",
 		"water_bed": "4f6a6e"
 	},
 	"format": 1,

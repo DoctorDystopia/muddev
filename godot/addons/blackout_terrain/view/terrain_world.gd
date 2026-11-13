@@ -1,0 +1,1670 @@
+@tool
+class_name TerrainWorld
+extends Node3D
+## The terrain that the editor shows: a square block of chunks around
+## [member centre_chunk], on every plane. The world chunk files are its store.
+## [member block_side] gives the side of the block, 4 x 4 chunks unless the
+## author says otherwise (10/21/2026), up to [constant BLOCK_SIDE_MAX].
+##
+## A block with an even side has no middle chunk. Thus the centre chunk is
+## the south-west chunk of the middle four. The block reaches
+## [method block_below] chunks west and south of it, and the rest east and
+## north.
+##
+## The scene holds no terrain data (DESIGN-0011 section 6.3). Every mesh here
+## is made at load and has no owner, so a scene save stores none of it. The
+## chunk files are the only store. The plugin saves them on Ctrl+S.
+##
+## ## Why the neighbours load
+##
+## A brush at a chunk edge writes the shared corners to both chunks. Thus the
+## neighbours load with the centre, and the author edits across a seam
+## as if no seam were there. Only the outer edge of the block is locked: its
+## corners also belong to chunks that are not loaded. The border of the block
+## shows red. Move [member centre_chunk] to edit past it.
+##
+## ## A file that does not read
+##
+## A chunk file that exists but does not read stays out of the block, and
+## [member load_errors] names it. The editor never draws a blank chunk in its
+## place. A blank chunk there would overwrite the file on the next save.
+##
+## ## Planes (Phase 7c, DESIGN-0013 Phase S0)
+##
+## The block holds every plane at one time: one [ChunkSet] for each plane,
+## from [method chunks_on]. A room on plane 0 and its level on plane 1 are
+## one Build gesture, and one undo entry. [member plane] picks the plane to
+## edit, and [member chunks] is its set. A change of [member plane] reads no
+## file and saves nothing. It keeps every unsaved edit and the undo history.
+##
+## Two choices say how the other planes show. The planes below the edited
+## plane take [member lower_planes], and the planes above take
+## [member upper_planes]. Each choice is hidden, a ghost, or solid. A ghost
+## is see-through, in the ghost colour, at [member ghost_opacity]
+## (11/09/2026). Thus the author sees the structures of all planes at one
+## time, for example the floor above a room.
+##
+## A ghost casts no shadow, so a ghost roof does not darken the room under
+## it. The planes below and the planes above show as a ghost unless the
+## author says otherwise. A plane other than the edited one shows only its
+## chunks that exist: a file, or an edit.
+##
+## The dock keeps the three choices in the session file. Thus none of them
+## is an export, and a scene save stores none of them.
+##
+## A plane-1 chunk with no file starts from the chunk below: its heights plus
+## [constant NEW_PLANE_RISE], every tile void and Blocked, and the areas of
+## the chunk below (Nick, 09/26/2026). A floor paint on a void tile clears
+## Blocked ([method TerrainBrushes.flags_after_floor]). Like a blank chunk of
+## plane 0, a new chunk is saved only after an edit. Until then,
+## [method refresh_new_chunks] makes it again from the chunk below, so a
+## sculpt of the ground moves the new chunks above it.
+##
+## A new chunk on any plane then takes each corner that it shares with a
+## neighbour that exists. A file or an edit exists. Outside the block, only a
+## file counts. Thus the first edit of a new chunk saves no seam fault.
+##
+## ## Selection, links, and water
+##
+## [member selected] is the object that the Select tool picked. A tall beacon
+## marks it, or the tile of a finding of "Check world". The links show where
+## each transition and each climb leads. [WaterMeshBuilder] draws the water
+## surface, [WallMeshBuilder] draws the walls, and [PropMeshBuilder] draws
+## the ladders, the stairs, and the hatches, as in the client. A nose on the
+## front of each object marker shows its rotation.
+##
+## A wall meets the plane above when that tile of the plane above has a
+## floor (DESIGN-0013 section 6.3). Thus a redraw of a chunk also redraws the
+## chunk under it. [member walls_down] draws every wall low, so the author
+## sees into a room.
+##
+## ## The structure workbench (DESIGN-0013 Phase S6)
+##
+## `structure_workbench.tscn` holds this node with [member chunk_directory]
+## set to [constant WORKBENCH_DIRECTORY]. The author builds a template there,
+## on flat blank ground, away from the world. Every tool works as in the
+## world, and a save writes only the scratch files. [method writes_world]
+## tells the two apart. [method clear_workbench] deletes the scratch files,
+## and it refuses the world chunk directory.
+##
+## ## Models
+##
+## [TerrainModels] stands the real model of each object that has one: the
+## entity that the kind stands up, or its scenery. The model turns with the
+## object, as in the game. Its marker then draws no box, so the model shows.
+## The nose and the label stay. [member show_models] turns the models off.
+
+signal block_loaded
+signal plane_changed
+
+const _Const := preload("res://autoload/blackout_constants.gd")
+
+## How the planes on one side of the edited plane show: not at all, as a
+## see-through ghost, or as the game draws them.
+enum OtherPlanes { HIDDEN, GHOST, SOLID }
+
+## How each side shows at the start. The dock and its session read take
+## their defaults from here. The planes above start as a ghost (Nick,
+## 11/11/2026).
+const LOWER_PLANES_DEFAULT := OtherPlanes.GHOST
+const UPPER_PLANES_DEFAULT := OtherPlanes.GHOST
+
+## The opacity of a ghost plane: the default, and the range of the World
+## tab. The ghost writes no depth, so near full opacity the draw order of
+## two ghost surfaces would show. The cap stops short of it.
+const GHOST_OPACITY_DEFAULT := 0.4
+const GHOST_OPACITY_MIN := 0.1
+const GHOST_OPACITY_MAX := 0.9
+
+## How many chunks are on each side of the block when nothing says
+## otherwise: the side of the block since Phase 4a.
+const BLOCK_SIDE_DEFAULT := 4
+
+## The smallest block: one chunk, with every edge locked.
+const BLOCK_SIDE_MIN := 1
+
+## The largest block. The cap bounds the cost of a load and of a redraw. An
+## 8 x 8 block holds 64 chunks on each of the eight planes. That is 512
+## chunk views at one time. Nick allowed a cap (10/21/2026), and 8 is the
+## pick here.
+## [constant StructureTemplate.SIDE_MAX] reads it, so a template that fits
+## the largest block reads.
+const BLOCK_SIDE_MAX := 8
+
+## The height steps between a plane and a new chunk of the plane above: two
+## tiles (Nick, 09/26/2026). The Build tools use the same rise for a level.
+const NEW_PLANE_RISE := 32
+
+## The parts of a chunk view that [method redraw_soon] draws again. The
+## terrain is the ground, the water, the walls, and the props: the meshes
+## that carry the terrain palette and the lamp light. The marks are the flag
+## marks, the chunk border, and the object markers.
+const REDRAW_TERRAIN := 1
+const REDRAW_MARKS := 2
+
+## The names of the terrain meshes in a chunk view.
+const TERRAIN_PARTS := ["ground", "water", "walls", "props"]
+
+## The time that the queued redraws may take in one frame, in microseconds.
+## The terrain of one chunk takes more than this, so each frame draws one
+## chunk again, and the editor stays live between two chunks. A full redraw
+## of a 4 x 4 block stopped the editor for 1.5 seconds (measured 11/11/2026).
+const REDRAW_BUDGET_USEC := 8000
+
+## The meta of an object marker that holds the kind of its object, for the
+## colour of the marker.
+const MARKER_KIND_META := "kind"
+
+## The chunk directory of the structure workbench (DESIGN-0013 Phase S6). It
+## is outside the repo, so git never sees a scratch chunk.
+const WORKBENCH_DIRECTORY := "user://structure_workbench"
+
+## The file name pattern of a chunk file: the prefix and the suffix.
+
+## The beacon over a selected object or a finding.
+const BEACON_SIZE := Vector3(0.12, 4.0, 0.12)
+## The nose of an object marker shows its front. These give the side of the
+## nose over the side of the marker, the colour, and the node name.
+const MARKER_NOSE_SCALE := 0.4
+const MARKER_NOSE_COLOR := Color(1.0, 1.0, 1.0)
+const MARKER_NOSE_NODE := "Nose"
+
+## The chunk at the centre of the block. A move saves the changed chunks of
+## the old block first, so no edit is lost.
+@export var centre_chunk := Vector2i.ZERO:
+	get:
+		return _centre
+	set(value):
+		move_block(value, _plane)
+
+## The edited plane. A change reads and saves nothing. See the class comment.
+@export_range(0, 3) var plane := 0:
+	get:
+		return _plane
+	set(value):
+		move_block(_centre, value)
+
+## How many chunks are on each side of the block, from
+## [constant BLOCK_SIDE_MIN] to [constant BLOCK_SIDE_MAX]. A change saves
+## the changed chunks and loads the block again, as a move does. It is not
+## an export. The author makes the choice, and the dock keeps it in the
+## session file. Thus a scene save stores none of it.
+var block_side := BLOCK_SIDE_DEFAULT:
+	get:
+		return _side
+	set(value):
+		resize_block(value)
+
+## Where the chunk files are: an OS path, or a `user://` or `res://` path.
+## Empty means the world chunk directory, `blackout/world/chunks/`. A test
+## sets a scratch directory here. The structure workbench sets
+## [constant WORKBENCH_DIRECTORY].
+@export var chunk_directory := ""
+
+## Draw the walk flags and the walls.
+@export var show_flags := true:
+	set(value):
+		show_flags = value
+		_refresh_visibility()
+
+## Draw the area tint. It is built only while it shows: it costs one height
+## read for each tile corner.
+@export var show_areas := false:
+	set(value):
+		if value == show_areas:
+			return
+
+		show_areas = value
+		_redraw()
+
+## Draw where each transition and each climb leads.
+@export var show_links := true:
+	set(value):
+		show_links = value
+
+		if is_inside_tree():
+			_rebuild_links()
+
+## Draw the model of each object that has one. See the class comment.
+@export var show_models := true:
+	set(value):
+		if value == show_models:
+			return
+
+		show_models = value
+		_redraw()
+
+## How the planes below the edited plane show. See the class comment.
+var lower_planes := LOWER_PLANES_DEFAULT:
+	set(value):
+		if value == lower_planes:
+			return
+
+		lower_planes = value
+		_redraw()
+
+## How the planes above the edited plane show. See the class comment.
+var upper_planes := UPPER_PLANES_DEFAULT:
+	set(value):
+		if value == upper_planes:
+			return
+
+		upper_planes = value
+		_redraw()
+
+## The opacity of a ghost plane, from [constant GHOST_OPACITY_MIN] to
+## [constant GHOST_OPACITY_MAX]. A change sets the ghost material and builds
+## no mesh again.
+var ghost_opacity := GHOST_OPACITY_DEFAULT:
+	set(value):
+		ghost_opacity = clampf(value, GHOST_OPACITY_MIN, GHOST_OPACITY_MAX)
+
+		if _ghost_material != null:
+			TerrainOverlay.set_ghost(_ghost_material, ghost_opacity)
+
+## Draw every wall low, so the author sees into a room. The walls of the
+## game do not change.
+@export var walls_down := false:
+	set(value):
+		if value == walls_down:
+			return
+
+		walls_down = value
+		_redraw()
+
+## The set of the edited plane.
+var chunks: ChunkSet:
+	get:
+		return _planes[_plane]
+
+## Each chunk file of the block that exists but does not read, with the reason.
+var load_errors := PackedStringArray()
+
+## The fields of the environment and of the sun that a preview of an area
+## look writes, and that the end of the preview puts back.
+const _PREVIEW_ENVIRONMENT_FIELDS := ["background_mode", "background_color", "fog_enabled",
+	"fog_mode", "fog_density", "fog_light_color", "fog_depth_begin", "fog_depth_end",
+	"ambient_light_color", "ambient_light_energy"]
+const _PREVIEW_SUN_FIELDS := ["light_color", "light_energy", "shadow_opacity", "rotation"]
+
+## The look that the preview draws, or empty, and the fields of the scene
+## that it replaced.
+var _preview := {}
+var _preview_backup := {}
+
+## Each chunk file that the last [method save_block] could not write. The
+## chunk stays dirty, so the next save tries again. The plugin shows the
+## names in the status box: the Output panel alone is easy to miss.
+var save_errors := PackedStringArray()
+
+## The object that the Select tool picked: `{tile, kind, rotation, text}`, or
+## empty.
+var selected := {}
+
+var _centre := Vector2i.ZERO
+var _plane := 0
+var _side := BLOCK_SIDE_DEFAULT
+
+## One [ChunkSet] for each plane, indexed by plane.
+var _planes: Array[ChunkSet] = []
+
+## (cx, cy, plane) of each chunk of the block that came from a file, or that
+## a save wrote. A chunk with no key here is new.
+var _from_file := {}
+
+## (cx, cy, plane) of a chunk next to the block, to its file as read, or to
+## null for no file. [method _seal] reads each one time for each load.
+var _outside := {}
+
+## True after the first load. Before it, a move only records the block.
+var _block_ready := false
+
+## (cx, cy, plane) to `{ground, water, walls, props, ...}` nodes. A view of
+## the edited plane also has flags, areas, border, objects, and models.
+var _views := {}
+
+var _ground_material: ShaderMaterial
+var _ghost_material: ShaderMaterial
+var _overlay_material: StandardMaterial3D
+var _ring: MeshInstance3D
+var _marks: MeshInstance3D
+var _outline: MeshInstance3D
+var _beacon: MeshInstance3D
+var _block_outline: MeshInstance3D
+var _links: Node3D
+
+## The model source. Made on the first draw with [member show_models] on.
+var _models: TerrainModels
+
+## [member ModelPipeline.served_mark] when [member _models] read the
+## served tree. A build in this editor moves the mark, and the next draw
+## reads the tree again, so a new model shows with no reopen (11/02/2026).
+var _models_mark := 0
+
+## Chunks to redraw on the next frame, as (cx, cy, plane). A brush dab queues
+## its chunks here, so many dabs in one frame cost one redraw.
+var _pending := {}
+
+## (cx, cy, plane) of a chunk view to the parts that [method redraw_soon]
+## queued for it, as REDRAW_* bits. [method _redraw_queued] takes a few
+## views out for each frame.
+var _queued := {}
+
+
+func _init() -> void:
+	for each_plane: int in _plane_range():
+		_planes.append(_new_set(each_plane))
+
+
+func _ready() -> void:
+	_ground_material = TerrainMaterial.make()
+	_ghost_material = TerrainOverlay.ghost_material(ghost_opacity)
+	_overlay_material = TerrainOverlay.material()
+	_ring = MeshInstance3D.new()
+	_ring.material_override = _overlay_material
+	add_child(_ring)
+	_marks = MeshInstance3D.new()
+	_marks.material_override = _overlay_material
+	add_child(_marks)
+	_outline = MeshInstance3D.new()
+	_outline.material_override = _overlay_material
+	add_child(_outline)
+	_beacon = _make_beacon()
+	add_child(_beacon)
+	load_block()
+
+
+func _exit_tree() -> void:
+	if _models != null:
+		_models.release()
+		_models = null
+
+
+static func _plane_range() -> Array:
+	return range(_Const.TILE_GROUND_PLANE, _Const.CHUNK_PLANE_MAX + 1)
+
+
+static func _new_set(on_plane: int) -> ChunkSet:
+	var chunk_set := ChunkSet.new()
+
+	chunk_set.plane = on_plane
+
+	return chunk_set
+
+
+# ─── Planes ─────────────────────────────────────────────────────────────────
+
+## The set of `on_plane`, or null for a plane out of range.
+func chunks_on(on_plane: int) -> ChunkSet:
+	if on_plane < _Const.TILE_GROUND_PLANE or on_plane > _Const.CHUNK_PLANE_MAX:
+		return null
+
+	return _planes[on_plane]
+
+
+## Plane to [ChunkSet], for [method TerrainEdit.replay_planes].
+func plane_sets() -> Dictionary:
+	var sets := {}
+
+	for chunk_set: ChunkSet in _planes:
+		sets[chunk_set.plane] = chunk_set
+
+	return sets
+
+
+## True when the chunk at `chunk_coord` of `on_plane` is a file or an edit.
+func chunk_exists(chunk_coord: Vector2i, on_plane: int) -> bool:
+	var key := Vector3i(chunk_coord.x, chunk_coord.y, on_plane)
+
+	return _from_file.has(key) or _planes[on_plane].is_dirty(chunk_coord)
+
+
+## Make each new chunk above the ground again from the chunk below it, as it
+## is now. A chunk with a file or an edit keeps its data.
+func refresh_new_chunks() -> void:
+	for on_plane: int in range(_Const.TILE_GROUND_PLANE + 1, _Const.CHUNK_PLANE_MAX + 1):
+		var chunk_set := _planes[on_plane]
+
+		for coord: Vector2i in chunk_set.chunk_coords():
+			if not chunk_exists(coord, on_plane):
+				chunk_set.add(upper_chunk(_below(coord, on_plane), on_plane))
+
+		_seal_new_chunks(on_plane)
+
+
+func _set_plane(new_plane: int) -> void:
+	if new_plane == _plane:
+		return
+
+	_plane = new_plane
+	clear_selection()
+	refresh_new_chunks()
+	rebuild_all()
+	plane_changed.emit()
+
+
+# ─── Loading and saving ─────────────────────────────────────────────────────
+
+## Move the block to `centre`, and edit `new_plane`. A move to another centre
+## saves the changed chunks of the old block first, and loads the new one. A
+## change of the plane only loads nothing. See the class comment.
+func move_block(centre: Vector2i, new_plane: int) -> void:
+	var clamped := clampi(new_plane, _Const.TILE_GROUND_PLANE, _Const.CHUNK_PLANE_MAX)
+
+	if centre == _centre and _block_ready:
+		_set_plane(clamped)
+		return
+
+	if is_inside_tree() and has_unsaved_changes():
+		save_block()
+
+	_centre = centre
+	_plane = clamped
+	clear_selection()
+
+	if is_inside_tree():
+		load_block()
+
+
+## Give the block `side` chunks on each side, clamped to
+## [constant BLOCK_SIDE_MIN] and [constant BLOCK_SIDE_MAX]. The same rule as
+## a move: a change saves the changed chunks first, and loads the block
+## again around the same centre. The same side loads nothing.
+func resize_block(side: int) -> void:
+	var clamped := clampi(side, BLOCK_SIDE_MIN, BLOCK_SIDE_MAX)
+
+	if clamped == _side:
+		return
+
+	if is_inside_tree() and has_unsaved_changes():
+		save_block()
+
+	_side = clamped
+	clear_selection()
+
+	if is_inside_tree():
+		load_block()
+
+
+## Every chunk coordinate of the block.
+func block_coords() -> Array[Vector2i]:
+	var coords: Array[Vector2i] = []
+	var low := block_low()
+
+	for dy: int in _side:
+		for dx: int in _side:
+			coords.append(low + Vector2i(dx, dy))
+
+	return coords
+
+
+## How many chunks the block reaches west and south of the centre chunk.
+## A block with an even side has no middle chunk, so the centre chunk is
+## the south-west chunk of the middle four. The block reaches
+## `block_side - 1 - block_below()` chunks east and north.
+func block_below() -> int:
+	return (_side - 1) / 2
+
+
+## The south-west chunk of the block.
+func block_low() -> Vector2i:
+	return _centre - Vector2i.ONE * block_below()
+
+
+## True when `tile` is in the loaded block.
+func block_has_tile(tile: Vector2i) -> bool:
+	var offset := ChunkSet.chunk_of_tile(tile) - block_low()
+
+	return offset.x >= 0 and offset.x < _side \
+		and offset.y >= 0 and offset.y < _side
+
+
+## The path of a chunk file. `on_plane` -1 means the edited plane.
+func chunk_path(chunk_coord: Vector2i, on_plane: int = -1) -> String:
+	var file_plane := _plane if on_plane < 0 else on_plane
+	var file_name := _Const.CHUNK_FILE_TEMPLATE.format(
+		{"cx": chunk_coord.x, "cy": chunk_coord.y, "plane": file_plane})
+
+	return directory().path_join(file_name)
+
+
+## The chunk directory as an OS path. See [member chunk_directory].
+func directory() -> String:
+	if chunk_directory.is_empty():
+		return ChunkFile.world_directory()
+
+	return ProjectSettings.globalize_path(chunk_directory)
+
+
+## True when this node edits the world chunk files. False for the structure
+## workbench and for a test.
+func writes_world() -> bool:
+	return same_directory(directory(), ChunkFile.world_directory())
+
+
+## True when the OS paths `first` and `second` name one directory. Windows
+## does not read the case of a path, so the test does not either.
+static func same_directory(first: String, second: String) -> bool:
+	return _directory_key(first) == _directory_key(second)
+
+
+static func _directory_key(path: String) -> String:
+	var key := path.replace("\\", "/").simplify_path().trim_suffix("/")
+
+	if OS.get_name() == "Windows":
+		key = key.to_lower()
+
+	return key
+
+
+static func _is_chunk_file(file_name: String) -> bool:
+	return ChunkFile.is_chunk_file_name(file_name)
+
+
+# ─── The structure workbench ────────────────────────────────────────────────
+
+## Delete every chunk file of a scratch directory, and load the block again:
+## flat, blank ground. Unsaved edits go too. Returns the number of files
+## deleted, or -1 with no change when this node edits the world: the world
+## chunk files are never scratch.
+func clear_workbench() -> int:
+	if writes_world():
+		push_error("Terrain: the world chunk files are not a workbench. Nothing deleted.")
+		return -1
+
+	var deleted := 0
+
+	if DirAccess.dir_exists_absolute(directory()):
+		for file_name: String in DirAccess.get_files_at(directory()):
+			if _is_chunk_file(file_name) \
+					and DirAccess.remove_absolute(directory().path_join(file_name)) == OK:
+				deleted += 1
+
+	clear_selection()
+
+	if is_inside_tree():
+		load_block()
+
+	return deleted
+
+
+## Read the block from disk, every plane. Unsaved changes are lost.
+## [method move_block] saves them first.
+func load_block() -> void:
+	load_errors = PackedStringArray()
+	_from_file.clear()
+	_outside.clear()
+
+	# The ground first: a new chunk above starts from the chunk below.
+	for on_plane: int in _plane_range():
+		_planes[on_plane] = _new_set(on_plane)
+
+		for coord: Vector2i in block_coords():
+			var chunk := _read_or_new(coord, on_plane)
+
+			if chunk != null:
+				_planes[on_plane].add(chunk)
+
+		_seal_new_chunks(on_plane)
+
+	_block_ready = true
+	rebuild_all()
+	block_loaded.emit()
+
+
+func _read_or_new(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var path := chunk_path(coord, on_plane)
+
+	if not FileAccess.file_exists(path):
+		return new_chunk(coord, on_plane)
+
+	var chunk := ChunkFile.read_file(path)
+
+	if not chunk.error.is_empty():
+		load_errors.append("%s: %s" % [path.get_file(), chunk.error])
+		return null
+
+	_from_file[Vector3i(coord.x, coord.y, on_plane)] = true
+
+	return chunk
+
+
+## The chunk that the editor starts where no file exists. Plane 0 is flat and
+## blank. A plane above starts from the chunk below it, as it is in memory.
+func new_chunk(coord: Vector2i, on_plane: int) -> ChunkFile:
+	if on_plane <= _Const.TILE_GROUND_PLANE:
+		return ChunkFile.blank(coord.x, coord.y, on_plane)
+
+	return upper_chunk(_below(coord, on_plane), on_plane)
+
+
+## The chunk under `coord` of `on_plane`. A chunk below that does not read
+## counts as new.
+func _below(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var below := _planes[on_plane - 1].get_chunk(coord)
+
+	if below != null:
+		return below
+
+	return new_chunk(coord, on_plane - 1)
+
+
+## A new chunk over `below`, on `on_plane`: the heights of `below` plus
+## [constant NEW_PLANE_RISE], every tile void and Blocked, and the areas of
+## `below`, so the fog does not change on a climb.
+static func upper_chunk(below: ChunkFile, on_plane: int) -> ChunkFile:
+	var chunk := ChunkFile.blank(below.cx, below.cy, on_plane)
+
+	for index: int in chunk.heights.size():
+		chunk.heights[index] = clampi(below.heights[index] + NEW_PLANE_RISE,
+			_Const.CHUNK_HEIGHT_MIN, _Const.CHUNK_HEIGHT_MAX)
+
+	chunk.floor_names = PackedStringArray([_Const.TILE_VOID_FLOOR])
+	chunk.flags.fill(_Const.TILE_FLAG_BLOCKED)
+	chunk.area_names = below.area_names.duplicate()
+	chunk.areas = below.areas.duplicate()
+
+	return chunk
+
+
+# ─── Seams of a new chunk ───────────────────────────────────────────────────
+
+## Give each new chunk of `on_plane` the shared corners of each neighbour that
+## exists. A new chunk follows the chunk below it. A saved neighbour on the
+## same plane does not. Without this step, the first edit of the new chunk
+## saves a seam fault, and `test_chunkfile.py` fails (10/09/2026).
+func _seal_new_chunks(on_plane: int) -> void:
+	var chunk_set := _planes[on_plane]
+
+	for coord: Vector2i in chunk_set.chunk_coords():
+		if not chunk_exists(coord, on_plane):
+			_seal(chunk_set.get_chunk(coord), on_plane)
+
+
+## Copy into `chunk` each corner that it shares with a neighbour that exists.
+## The eight neighbours count, the corner ones too.
+func _seal(chunk: ChunkFile, on_plane: int) -> void:
+	var coord := Vector2i(chunk.cx, chunk.cy)
+
+	for dy: int in [-1, 0, 1]:
+		for dx: int in [-1, 0, 1]:
+			var step := Vector2i(dx, dy)
+
+			if step == Vector2i.ZERO:
+				continue
+
+			var neighbour := _existing_neighbour(coord + step, on_plane)
+
+			if neighbour != null:
+				copy_shared_corners(chunk, neighbour, step)
+
+
+## Copy the corners that `chunk` shares with `neighbour`, which is `step`
+## chunks away. A side neighbour shares one edge. A corner neighbour shares
+## one corner.
+static func copy_shared_corners(chunk: ChunkFile, neighbour: ChunkFile,
+		step: Vector2i) -> void:
+	var size: int = _Const.CHUNK_SIZE
+	var side: int = _Const.CHUNK_CORNERS_PER_SIDE
+	var low := (step * size).max(Vector2i.ZERO)
+	var high := (step * size + Vector2i(size, size)).min(Vector2i(size, size))
+
+	for y: int in range(low.y, high.y + 1):
+		for x: int in range(low.x, high.x + 1):
+			var there := Vector2i(x, y) - step * size
+
+			chunk.heights[y * side + x] = neighbour.heights[there.y * side + there.x]
+
+
+## The neighbour at `coord` of `on_plane` when it is a file or an edit, else
+## null. A chunk outside the block counts only as a file on disk.
+func _existing_neighbour(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var block := Rect2i(block_low(), Vector2i(_side, _side))
+
+	if block.has_point(coord):
+		if chunk_exists(coord, on_plane):
+			return _planes[on_plane].get_chunk(coord)
+
+		return null
+
+	var key := Vector3i(coord.x, coord.y, on_plane)
+
+	if not _outside.has(key):
+		_outside[key] = _read_outside(coord, on_plane)
+
+	return _outside[key]
+
+
+## The file at `coord` of `on_plane`, or null when none reads.
+func _read_outside(coord: Vector2i, on_plane: int) -> ChunkFile:
+	var path := chunk_path(coord, on_plane)
+
+	if not FileAccess.file_exists(path):
+		return null
+
+	var chunk := ChunkFile.read_file(path)
+
+	if not chunk.error.is_empty():
+		return null
+
+	return chunk
+
+
+func has_unsaved_changes() -> bool:
+	for chunk_set: ChunkSet in _planes:
+		if not chunk_set.dirty_coords().is_empty():
+			return true
+
+	return false
+
+
+## The number of changed chunks that a save writes, for the Save button.
+func unsaved_count() -> int:
+	var count := 0
+
+	for chunk_set: ChunkSet in _planes:
+		count += chunk_set.dirty_coords().size()
+
+	return count
+
+
+## The number of chunk files in the directory of this node, for the
+## confirmation of a clear.
+func chunk_file_count() -> int:
+	var count := 0
+
+	if DirAccess.dir_exists_absolute(directory()):
+		for file_name: String in DirAccess.get_files_at(directory()):
+			if _is_chunk_file(file_name):
+				count += 1
+
+	return count
+
+
+## Write every changed chunk of every plane to its file. Returns the names of
+## the files. A file that does not write goes into [member save_errors].
+func save_block() -> PackedStringArray:
+	var saved := PackedStringArray()
+
+	save_errors = PackedStringArray()
+	DirAccess.make_dir_recursive_absolute(directory())
+
+	for chunk_set: ChunkSet in _planes:
+		for coord: Vector2i in chunk_set.dirty_coords():
+			var chunk := chunk_set.get_chunk(coord)
+			var path := chunk_path(coord, chunk_set.plane)
+
+			chunk.compact_names()
+
+			if chunk.write_file(path) == OK:
+				chunk_set.mark_clean(coord)
+				_from_file[Vector3i(coord.x, coord.y, chunk_set.plane)] = true
+				saved.append(path.get_file())
+			else:
+				save_errors.append(path.get_file())
+				push_error("Terrain: cannot write %s" % path)
+
+	return saved
+
+
+## Every chunk of the world, of every plane, as the author has it now: the
+## files on disk, with each chunk of the block in place of its file. A new
+## chunk of the block counts only after an edit, as for a save. For "Check
+## world". Each file that does not read goes into `errors`.
+func world_chunk_files(errors: PackedStringArray) -> Array[ChunkFile]:
+	var found := {}
+	var names := PackedStringArray()
+
+	# A new structure workbench has no directory until its first save.
+	if DirAccess.dir_exists_absolute(directory()):
+		names = DirAccess.get_files_at(directory())
+
+	for file_name: String in names:
+		if not _is_chunk_file(file_name):
+			continue
+
+		var chunk := ChunkFile.read_file(directory().path_join(file_name))
+
+		if chunk.error.is_empty():
+			found[Vector3i(chunk.cx, chunk.cy, chunk.plane)] = chunk
+		else:
+			errors.append("%s: %s" % [file_name, chunk.error])
+
+	for chunk_set: ChunkSet in _planes:
+		for coord: Vector2i in chunk_set.chunk_coords():
+			var key := Vector3i(coord.x, coord.y, chunk_set.plane)
+
+			if found.has(key) or chunk_set.is_dirty(coord):
+				found[key] = chunk_set.get_chunk(coord)
+
+	var files: Array[ChunkFile] = []
+
+	files.assign(found.values())
+
+	return files
+
+
+# ─── Drawing ────────────────────────────────────────────────────────────────
+
+func _redraw() -> void:
+	if is_inside_tree() and _block_ready:
+		rebuild_all()
+
+
+func rebuild_all() -> void:
+	for key: Vector3i in _views.keys():
+		_free_view(key)
+
+	for chunk_set: ChunkSet in _planes:
+		for coord: Vector2i in chunk_set.chunk_coords():
+			_rebuild_key(Vector3i(coord.x, coord.y, chunk_set.plane))
+
+	_refresh_visibility()
+	_rebuild_block_outline()
+	_rebuild_links()
+
+
+## The outer edge of the block, in the colour of a locked border.
+func _rebuild_block_outline() -> void:
+	if _block_outline != null:
+		_block_outline.queue_free()
+
+	var size: int = _Const.CHUNK_SIZE
+	var low := block_low() * size
+	var tiles := _side * size
+
+	_block_outline = _mesh_node(TerrainOverlay.outline_mesh(chunks, low, tiles,
+		TerrainOverlay.mark("locked")), _overlay_material)
+
+
+## Rebuild the view of one chunk of one plane, as (cx, cy, plane).
+func _rebuild_key(key: Vector3i) -> void:
+	_free_view(key)
+
+	var coord := Vector2i(key.x, key.y)
+	var chunk := _planes[key.z].get_chunk(coord)
+
+	if chunk == null:
+		return
+
+	if key.z == _plane:
+		_views[key] = _edited_view(chunk, coord)
+		return
+
+	var material := _plane_material(key.z)
+
+	if material == null or not chunk_exists(coord, key.z):
+		return
+
+	_views[key] = _plain_view(chunk, key.z, material)
+
+
+## The terrain meshes of a chunk of `on_plane`, by the names of
+## [constant TERRAIN_PARTS]: the ground, the water, the walls, and the props.
+## A part with nothing to draw is null.
+func _terrain_meshes(chunk: ChunkFile, on_plane: int) -> Dictionary:
+	var coord := Vector2i(chunk.cx, chunk.cy)
+	var lights := TileLights.collect(chunks_on(on_plane), coord)
+
+	return {
+		"ground": ChunkMeshBuilder.build(chunk, lights),
+		"water": WaterMeshBuilder.build(chunk),
+		"walls": _walls_mesh(chunk, coord, on_plane, lights),
+		"props": PropMeshBuilder.build(chunk, lights),
+	}
+
+
+## The ground, the water, the walls, and the props of a chunk of another
+## plane, in `material`.
+func _plain_view(chunk: ChunkFile, on_plane: int, material: Material) -> Dictionary:
+	var meshes := _terrain_meshes(chunk, on_plane)
+	var view := {}
+
+	for part: String in TERRAIN_PARTS:
+		view[part] = _mesh_node(meshes[part], material)
+
+	return view
+
+
+## The full view of a chunk of the edited plane: the meshes, the marks, and
+## the objects.
+func _edited_view(chunk: ChunkFile, coord: Vector2i) -> Dictionary:
+	var view := _plain_view(chunk, _plane, _ground_material)
+	var nodes := _object_nodes(chunk)
+
+	view["flags"] = _mesh_node(TerrainOverlay.flag_mesh(chunks, coord), _overlay_material)
+	view["areas"] = _mesh_node(_area_mesh_if_shown(coord), _overlay_material)
+	view["border"] = _mesh_node(_border_mesh(coord), _overlay_material)
+	view["objects"] = nodes[0]
+	view["models"] = nodes[1]
+
+	return view
+
+
+## The outline of one chunk of the edited plane, in the colour of a border.
+func _border_mesh(coord: Vector2i) -> ArrayMesh:
+	return TerrainOverlay.outline_mesh(chunks, coord * _Const.CHUNK_SIZE,
+		_Const.CHUNK_SIZE, TerrainOverlay.mark("border"))
+
+
+## The walls of a chunk: low with [member walls_down], else each wall meets
+## the plane above where it has a floor. `lights` is the lamps that reach
+## the chunk.
+func _walls_mesh(chunk: ChunkFile, coord: Vector2i, on_plane: int,
+		lights: Array) -> ArrayMesh:
+	if walls_down:
+		return WallMeshBuilder.build(chunk, null, true, lights)
+
+	var above_set := chunks_on(on_plane + 1)
+	var above: ChunkFile = null if above_set == null else above_set.get_chunk(coord)
+
+	return WallMeshBuilder.build(chunk, above, false, lights)
+
+
+## The material of a plane other than the edited one, or null when it does
+## not show: the choice of [member lower_planes] or of [member upper_planes].
+func _plane_material(on_plane: int) -> Material:
+	var choice: OtherPlanes = lower_planes if on_plane < _plane else upper_planes
+	var by_choice := {
+		OtherPlanes.HIDDEN: null,
+		OtherPlanes.GHOST: _ghost_material,
+		OtherPlanes.SOLID: _ground_material,
+	}
+
+	return by_choice[choice]
+
+
+func _area_mesh_if_shown(chunk_coord: Vector2i) -> ArrayMesh:
+	if not show_areas:
+		return null
+
+	return TerrainOverlay.area_mesh(chunks, chunk_coord)
+
+
+## Redraw these chunks, as (cx, cy, plane), on the next frame.
+func queue_rebuild(keys: Array[Vector3i]) -> void:
+	for key: Vector3i in keys:
+		_pending[key] = true
+
+
+func _process(_delta: float) -> void:
+	_follow_editor_camera()
+	_rebuild_pending()
+	_redraw_queued()
+
+
+func _rebuild_pending() -> void:
+	if _pending.is_empty():
+		return
+
+	var keys: Array[Vector3i] = []
+
+	keys.assign(_pending.keys())
+	_pending.clear()
+	rebuild_many(keys)
+
+
+## Draw `parts` of every chunk view again, a few views for each frame, and
+## the edited plane first. `parts` is [constant REDRAW_TERRAIN],
+## [constant REDRAW_MARKS], or both.
+##
+## A colour of the Look tab moves no tile and no object. Thus the redraw
+## keeps each node and gives it a new mesh, and it builds only the parts that
+## carry the colour. [method rebuild_all] builds every part of every view in
+## one frame, and the editor stops for that time.
+func redraw_soon(parts: int) -> void:
+	for edited: bool in [true, false]:
+		for key: Vector3i in _views:
+			if (key.z == _plane) == edited:
+				_queued[key] = _queued.get(key, 0) | parts
+
+
+## How many chunk views wait for [method redraw_soon]. For a test.
+func queued_redraws() -> int:
+	return _queued.size()
+
+
+## Take views out of the queue of [method redraw_soon] until the budget of
+## the frame is gone. Each call draws one view at least.
+func _redraw_queued() -> void:
+	var deadline := Time.get_ticks_usec() + REDRAW_BUDGET_USEC
+
+	while not _queued.is_empty():
+		var key: Vector3i = _queued.keys()[0]
+		var parts: int = _queued[key]
+
+		_queued.erase(key)
+		_redraw_view(key, parts)
+
+		if Time.get_ticks_usec() >= deadline:
+			return
+
+
+## Draw `parts` of the view at `key` again, in the nodes that the view has.
+func _redraw_view(key: Vector3i, parts: int) -> void:
+	var view: Dictionary = _views.get(key, {})
+	var chunk := _planes[key.z].get_chunk(Vector2i(key.x, key.y))
+
+	if view.is_empty() or chunk == null:
+		return
+
+	if parts & REDRAW_TERRAIN:
+		var meshes := _terrain_meshes(chunk, key.z)
+
+		for part: String in TERRAIN_PARTS:
+			view[part].mesh = meshes[part]
+
+	# Only a view of the edited plane has marks.
+	if parts & REDRAW_MARKS and view.has("flags"):
+		_redraw_marks(view, Vector2i(key.x, key.y))
+
+
+## Give the flag marks, the border, and each object marker of `view` the
+## mark colours of the moment. The models stay as they are.
+func _redraw_marks(view: Dictionary, coord: Vector2i) -> void:
+	view["flags"].mesh = TerrainOverlay.flag_mesh(chunks, coord)
+	view["border"].mesh = _border_mesh(coord)
+
+	for marker: MeshInstance3D in view["objects"].get_children():
+		var kind: String = marker.get_meta(MARKER_KIND_META)
+		var paint: StandardMaterial3D = marker.material_override
+
+		paint.albedo_color = TerrainOverlay.kind_color(kind)
+
+
+# ─── The preview of an area look ────────────────────────────────────────────
+
+## Draw `look` with the sun and the environment of the editor scene, as
+## the game draws it: the Look tab, "Preview the area light". An empty
+## look ends the preview, and the scene gets its own sky and sun back.
+##
+## The preview writes into the environment resource and the sun of the
+## scene. Thus, a save with the preview on would store the look as the sky
+## of the scene (10/14/2026). The plugin ends the preview before each save,
+## and it starts the preview again after the save ([method previewed_look]).
+func preview_look(look: Dictionary) -> void:
+	var holder := _scene_environment()
+	var sun := _scene_sun()
+
+	if holder == null or holder.environment == null:
+		return
+
+	if look.is_empty():
+		_end_preview(holder, sun)
+		return
+
+	if _preview.is_empty():
+		_preview_backup = _environment_state(holder.environment, sun)
+
+	_preview = look
+	holder.environment.background_mode = Environment.BG_COLOR
+	holder.environment.fog_enabled = true
+	holder.environment.fog_mode = Environment.FOG_MODE_DEPTH
+	holder.environment.fog_density = AreaEnvironment.FOG_FULL_DENSITY
+	AreaLook.apply_to(holder.environment, sun, look)
+	_follow_editor_camera()
+
+
+## The mark colours changed on the Look tab: the ghost planes, the beacon,
+## the border, and each overlay take the new colours.
+func refresh_mark_colors() -> void:
+	TerrainOverlay.set_ghost(_ghost_material, ghost_opacity)
+
+	if _beacon != null and _beacon.material_override is StandardMaterial3D:
+		(_beacon.material_override as StandardMaterial3D).albedo_color = TerrainOverlay.mark("beacon")
+
+	_rebuild_block_outline()
+	_rebuild_links()
+	redraw_soon(REDRAW_MARKS)
+
+
+## True while a preview is on.
+func previewing() -> bool:
+	return not _preview.is_empty()
+
+
+## A copy of the look that the preview draws, or an empty Dictionary.
+func previewed_look() -> Dictionary:
+	return _preview.duplicate()
+
+
+func _end_preview(holder: WorldEnvironment, sun: DirectionalLight3D) -> void:
+	if _preview.is_empty():
+		return
+
+	_restore_environment(holder.environment, sun, _preview_backup)
+	_preview = {}
+	_preview_backup = {}
+
+
+## The fields of the environment and the sun that a preview writes.
+static func _environment_state(environment: Environment,
+		sun: DirectionalLight3D) -> Dictionary:
+	var state := {}
+
+	for field: String in _PREVIEW_ENVIRONMENT_FIELDS:
+		state[field] = environment.get(field)
+
+	if sun != null:
+		for field: String in _PREVIEW_SUN_FIELDS:
+			state["sun_" + field] = sun.get(field)
+
+	return state
+
+
+static func _restore_environment(environment: Environment, sun: DirectionalLight3D,
+		state: Dictionary) -> void:
+	for field: String in _PREVIEW_ENVIRONMENT_FIELDS:
+		environment.set(field, state[field])
+
+	if sun != null:
+		for field: String in _PREVIEW_SUN_FIELDS:
+			sun.set(field, state["sun_" + field])
+
+
+## Godot measures depth fog from the camera, and the look measures it from
+## the player. In the editor, the point under the middle of the view
+## stands for the player.
+func _follow_editor_camera() -> void:
+	if _preview.is_empty() or not Engine.is_editor_hint():
+		return
+
+	var holder := _scene_environment()
+	var camera := EditorInterface.get_editor_viewport_3d(0).get_camera_3d()
+
+	if holder == null or holder.environment == null or camera == null:
+		return
+
+	var origin := camera.global_position
+	var hit: Variant = TerrainPicking.ray_hit(chunks, origin, -camera.global_transform.basis.z)
+	var arm := 0.0 if hit == null else origin.distance_to(hit)
+	var depth := AreaLook.fog_depth(_preview, arm)
+
+	holder.environment.fog_depth_begin = depth.x
+	holder.environment.fog_depth_end = depth.y
+
+
+## The WorldEnvironment beside this node in the scene, or null.
+func _scene_environment() -> WorldEnvironment:
+	if get_parent() == null:
+		return null
+
+	for child: Node in get_parent().get_children():
+		if child is WorldEnvironment:
+			return child
+
+	return null
+
+
+## The sun beside this node in the scene, or null.
+func _scene_sun() -> DirectionalLight3D:
+	if get_parent() == null:
+		return null
+
+	for child: Node in get_parent().get_children():
+		if child is DirectionalLight3D:
+			return child
+
+	return null
+
+
+## Redraw these chunks, as (cx, cy, plane), and the chunk under each: its
+## walls meet the plane above.
+func rebuild_many(keys: Array[Vector3i], with_neighbours := false) -> void:
+	var all := {}
+
+	for key: Vector3i in keys:
+		all[key] = true
+
+		if key.z > _Const.TILE_GROUND_PLANE:
+			all[key - Vector3i(0, 0, 1)] = true
+
+		# A lamp lights the chunks around its own (TileLights), so an object
+		# change redraws them too.
+		if with_neighbours:
+			for offset: Vector2i in TileLights.AROUND:
+				all[key + Vector3i(offset.x, offset.y, 0)] = true
+
+	for key: Vector3i in all:
+		_rebuild_key(key)
+
+	_refresh_visibility()
+	_rebuild_block_outline()
+	_rebuild_links()
+	_check_selection()
+
+
+func _mesh_node(mesh: ArrayMesh, material: Material) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+
+	node.mesh = mesh
+	node.material_override = material
+
+	# A ghost casts no shadow. See the class comment.
+	if material == _ghost_material:
+		node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+	add_child(node)
+
+	return node
+
+
+## The marker holder and the model holder of one chunk. A marker of an
+## object with a model draws no box.
+func _object_nodes(chunk: ChunkFile) -> Array[Node3D]:
+	var markers := Node3D.new()
+	var models := Node3D.new()
+
+	add_child(markers)
+	add_child(models)
+
+	for thing: Dictionary in chunk.global_objects():
+		var model := _model_for(thing)
+		var marker := _marker(thing)
+
+		if model != null:
+			models.add_child(model)
+			marker.mesh = null
+
+		markers.add_child(marker)
+
+	return [markers, models]
+
+
+func _model_for(thing: Dictionary) -> Node3D:
+	if not show_models:
+		return null
+
+	return _repo_models().stand(chunks, thing)
+
+
+## The models of the served tree of the repo. A build since the last read
+## ([member _models_mark]) reads the tree again.
+func _repo_models() -> TerrainModels:
+	if _models != null and _models_mark != ModelPipeline.served_mark:
+		_models.release()
+		_models = null
+
+	if _models == null:
+		_models = TerrainModels.for_repo()
+		_models_mark = ModelPipeline.served_mark
+
+	return _models
+
+
+## The view of one chunk of the edited plane, or an empty Dictionary.
+func _edited_view_of(chunk_coord: Vector2i) -> Dictionary:
+	return view_on(chunk_coord, _plane)
+
+
+## The view of one chunk of `on_plane`, or an empty Dictionary: the nodes by
+## name, for example `ground` and `walls`. For a test.
+func view_on(chunk_coord: Vector2i, on_plane: int) -> Dictionary:
+	return _views.get(Vector3i(chunk_coord.x, chunk_coord.y, on_plane), {})
+
+
+## The models of one chunk of the block, or an empty list. For a test.
+func models_of(chunk_coord: Vector2i) -> Array[Node]:
+	var view := _edited_view_of(chunk_coord)
+
+	if view.is_empty():
+		return []
+
+	return view["models"].get_children()
+
+
+## The marker of one object: a box in the colour of its kind, a nose on the
+## front face, and a label. A box looks the same at every quarter turn, so
+## the nose shows the rotation. At rotation 0 it points north, as the front of
+## a scenery model and of a [PropMeshBuilder] shape.
+func _marker(thing: Dictionary) -> MeshInstance3D:
+	var point := Vector2(thing["x"], thing["y"])
+	var base := TerrainOverlay.ground_point(chunks, point, 0.0)
+	var box := BoxMesh.new()
+	var paint := StandardMaterial3D.new()
+	var node := MeshInstance3D.new()
+	var label := Label3D.new()
+
+	box.size = Vector3.ONE * TerrainOverlay.MARKER_SIZE
+	paint.albedo_color = TerrainOverlay.kind_color(thing["kind"])
+	node.mesh = box
+	node.material_override = paint
+	node.set_meta(MARKER_KIND_META, thing["kind"])
+	node.position = base + Vector3.UP * TerrainOverlay.MARKER_SIZE * 0.5
+	node.rotation.y = -thing["rotation"] * PI * 0.5
+	node.add_child(_marker_nose())
+	label.text = _marker_text(thing)
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.position = Vector3.UP * TerrainOverlay.MARKER_SIZE * 1.4
+	label.pixel_size = 0.004
+	node.add_child(label)
+
+	return node
+
+
+## The nose of a marker: a small box that sticks out of its front face.
+static func _marker_nose() -> MeshInstance3D:
+	var nose := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	var paint := StandardMaterial3D.new()
+	var size := TerrainOverlay.MARKER_SIZE * MARKER_NOSE_SCALE
+
+	box.size = Vector3.ONE * size
+	paint.albedo_color = MARKER_NOSE_COLOR
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	nose.name = MARKER_NOSE_NODE
+	nose.mesh = box
+	nose.material_override = paint
+	nose.position = Vector3.FORWARD * (TerrainOverlay.MARKER_SIZE + size) * 0.5
+
+	return nose
+
+
+## The label of a marker: the kind, and the words of a sign or the item of
+## an item spawn.
+static func _marker_text(thing: Dictionary) -> String:
+	var text: String = thing.get("text", "")
+	var spawn: Dictionary = thing.get("spawn", {})
+
+	if not spawn.is_empty():
+		return "%s\n%s" % [thing["kind"], spawn_label(spawn)]
+
+	if text.is_empty():
+		return thing["kind"]
+
+	return "%s\n\"%s\"" % [thing["kind"], text]
+
+
+## A spawn for a person: the item, its quantity, and its respawn, as
+## `scrap x2-7, 150 ticks`. The marker and the object list show it.
+static func spawn_label(spawn: Dictionary) -> String:
+	var bounds: Array = ChunkFile.spawn_quantity(spawn)
+	var amount := ""
+
+	if bounds[1] > _Const.SPAWN_QUANTITY_UNIT:
+		amount = " x%d" % bounds[0] if bounds[0] == bounds[1] \
+			else " x%d-%d" % [bounds[0], bounds[1]]
+
+	return "%s%s, %d ticks" % [spawn[_Const.SPAWN_ITEM_KEY], amount,
+		spawn[_Const.SPAWN_RESPAWN_KEY]]
+
+
+## The object markers of one chunk of the block, or an empty list. For a
+## test.
+func markers_of(chunk_coord: Vector2i) -> Array[Node]:
+	var view := _edited_view_of(chunk_coord)
+
+	if view.is_empty():
+		return []
+
+	return view["objects"].get_children()
+
+
+func _free_view(key: Vector3i) -> void:
+	var view: Dictionary = _views.get(key, {})
+
+	for node: Node in view.values():
+		node.queue_free()
+
+	_views.erase(key)
+
+	# A view that goes needs no redraw, and a new view is current.
+	_queued.erase(key)
+
+
+func _refresh_visibility() -> void:
+	for view: Dictionary in _views.values():
+		if view.has("flags"):
+			view["flags"].visible = show_flags
+
+
+## Show the brush ring at `centre`, a point in tile space, or hide it.
+## `shape` is a [enum TerrainBrushes.Shape].
+func show_ring(centre: Variant, radius: float,
+		shape := TerrainBrushes.Shape.CIRCLE) -> void:
+	if _ring == null:
+		return
+
+	if centre == null:
+		_ring.visible = false
+		return
+
+	_ring.mesh = TerrainOverlay.ring_mesh(chunks, centre, radius, shape)
+	_ring.visible = true
+
+
+## Show the marks of a Build tool: `paths` as [method TerrainOverlay.path_mesh]
+## takes them. An empty list hides them.
+func show_marks(paths: Array, color: Color) -> void:
+	if _marks == null:
+		return
+
+	_marks.visible = not paths.is_empty()
+
+	if _marks.visible:
+		_marks.mesh = TerrainOverlay.path_mesh(chunks, paths, color)
+
+
+## Show the outline of a Build plan: the lattice of
+## [method TerrainOverlay.lattice_layers_mesh]. An empty `heights` hides it.
+func show_outline(heights: Dictionary, color: Color) -> void:
+	if _outline == null:
+		return
+
+	show_outline_layers([heights], color)
+
+
+## Show the outline of several maps of [method show_outline] at one time:
+## one for each plane of a template copy. An empty list hides it.
+func show_outline_layers(layers: Array, color: Color) -> void:
+	if _outline == null:
+		return
+
+	var corners := 0
+
+	for heights: Dictionary in layers:
+		corners += heights.size()
+
+	_outline.visible = corners > 0
+
+	if _outline.visible:
+		_outline.mesh = TerrainOverlay.lattice_layers_mesh(layers, color)
+
+
+## How many chunks of the other planes show. For a test.
+func ghost_count() -> int:
+	var count := 0
+
+	for key: Vector3i in _views:
+		if key.z != _plane:
+			count += 1
+
+	return count
+
+
+# ─── Links ──────────────────────────────────────────────────────────────────
+
+func _rebuild_links() -> void:
+	if _links != null:
+		_links.queue_free()
+
+	_links = Node3D.new()
+	add_child(_links)
+
+	if not show_links:
+		return
+
+	var linked: Array[Dictionary] = []
+
+	for thing: Dictionary in objects_in_block():
+		if TerrainOverlay.has_link(thing["kind"]):
+			linked.append(thing)
+
+	if linked.is_empty():
+		return
+
+	var lines := MeshInstance3D.new()
+
+	lines.mesh = TerrainOverlay.link_mesh(chunks, linked, _plane)
+	lines.material_override = _overlay_material
+	_links.add_child(lines)
+
+	for thing: Dictionary in linked:
+		for label: Label3D in TerrainOverlay.link_labels(chunks, thing, _plane):
+			_links.add_child(label)
+
+
+# ─── Objects and the selection ──────────────────────────────────────────────
+
+## Every object of the edited plane of the block as
+## `{tile, kind, rotation, text, look, spawn}`, south row first.
+func objects_in_block() -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+
+	for coord: Vector2i in chunks.chunk_coords():
+		for thing: Dictionary in chunks.get_chunk(coord).global_objects():
+			found.append({"tile": Vector2i(thing["x"], thing["y"]),
+				"kind": thing["kind"], "rotation": thing["rotation"],
+				"text": thing["text"], "look": thing["look"], "spawn": thing["spawn"]})
+
+	found.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["tile"].y != b["tile"].y:
+			return a["tile"].y < b["tile"].y
+
+		return a["tile"].x < b["tile"].x)
+
+	return found
+
+
+## Select one object. The beacon marks its tile.
+func select(tile: Vector2i, kind: String, turn: int, text: String = "",
+		look: Dictionary = {}, spawn: Dictionary = {}) -> void:
+	selected = {"tile": tile, "kind": kind, "rotation": turn, "text": text,
+		"look": look.duplicate(true), "spawn": spawn.duplicate(true)}
+	show_beacon(tile)
+
+
+## Select one object of [method ChunkSet.objects_at] on `tile`.
+func select_thing(tile: Vector2i, thing: Dictionary) -> void:
+	select(tile, thing["kind"], thing["rotation"], thing["text"], thing["look"],
+		thing.get("spawn", {}))
+
+
+## The variant keys of the model of a kind, from the served tree of the
+## repo. For the Variant lists of the dock (10/16/2026). The models load on
+## the first ask, with "Show models" on or off: the list needs the variant
+## map only.
+func variants_for(kind: String) -> PackedStringArray:
+	return _repo_models().variants_for(kind)
+
+
+func clear_selection() -> void:
+	selected = {}
+	show_beacon(null)
+
+
+## Put the beacon on `tile` of the block, or hide it with null.
+func show_beacon(tile: Variant) -> void:
+	if _beacon == null:
+		return
+
+	if tile == null or not chunks.has_tile(tile):
+		_beacon.visible = false
+		return
+
+	var base := TerrainOverlay.ground_point(chunks, Vector2(tile), 0.0)
+
+	_beacon.position = base + Vector3.UP * BEACON_SIZE.y * 0.5
+	_beacon.visible = true
+
+
+## True while the beacon stands on a tile. A test reads it: the beacon must
+## go with the selection on a plane change and on a block move.
+func beacon_shown() -> bool:
+	return _beacon != null and _beacon.visible
+
+
+## Clear a selection that an undo or a redo took away.
+func _check_selection() -> void:
+	if selected.is_empty():
+		return
+
+	for thing: Dictionary in chunks.objects_at(selected["tile"]):
+		if ChunkSet.same_object(thing, selected):
+			return
+
+	clear_selection()
+
+
+## Show the block and the plane of `tile` of `on_plane`, and mark the tile.
+## A tile out of the block loads its block. Selects the first object there,
+## if any.
+func jump_to(tile: Vector2i, on_plane: int) -> void:
+	if not block_has_tile(tile):
+		move_block(ChunkSet.chunk_of_tile(tile), on_plane)
+	else:
+		move_block(_centre, on_plane)
+
+	var here := chunks.objects_at(tile)
+
+	if here.is_empty():
+		clear_selection()
+		show_beacon(tile)
+		return
+
+	select_thing(tile, here[0])
+
+
+## Where the selected object leads: `{tile, plane}`, or empty when it does
+## not lead anywhere. A climb leads by its first way.
+func selected_link_end() -> Dictionary:
+	if selected.is_empty():
+		return {}
+
+	var kind: String = selected["kind"]
+	var target: Array = _Const.OBJECT_KIND_TARGETS.get(kind, [])
+
+	if not target.is_empty():
+		return {"tile": Vector2i(target[0], target[1]), "plane": _plane}
+
+	var ways: Array = _Const.OBJECT_KIND_CLIMBS.get(kind, [])
+
+	if ways.is_empty():
+		return {}
+
+	return {"tile": ClimbRule.landing(selected["tile"], kind,
+			selected["rotation"], ways[0]),
+		"plane": _plane + _Const.CLIMB_PLANE_STEPS[ways[0]]}
+
+
+func _make_beacon() -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	var paint := StandardMaterial3D.new()
+
+	box.size = BEACON_SIZE
+	paint.albedo_color = TerrainOverlay.mark("beacon")
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	node.mesh = box
+	node.material_override = paint
+	node.visible = false
+
+	return node
+
+
+# ─── Undo and redo ──────────────────────────────────────────────────────────
+
+## Apply an edit forward (redo) or back (undo), and redraw what it touched.
+## The editor history calls this. Each change goes into the set of its own
+## plane, so the edited plane does not matter. Returns false, and changes
+## nothing, for an edit of another block: its tiles are not these chunks.
+func replay_edit(edit: TerrainEdit, forward: bool) -> bool:
+	if edit.centre != _centre:
+		push_warning("Terrain: the undo entry belongs to block %s. " % edit.centre
+			+ "Load that block to undo it.")
+		return false
+
+	edit.replay_planes(plane_sets(), forward)
+	rebuild_many(edit.chunk_keys(), edit.has_objects())
+
+	return true

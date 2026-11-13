@@ -164,6 +164,9 @@ class TestNonCoalescableChannelsPassThrough(_BufferTestCase):
             # out in one tick must arrive as the rail after it goes out,
             # which is the newest.
             const.CHANNEL_CHAR_ABILITIES,
+            # Every track row in one message. Two unlocks in one tick must
+            # arrive as the list after the second, which is the newest.
+            const.CHANNEL_CHAR_MUSIC,
             const.CHANNEL_CHAR_ITEMS,
             const.CHANNEL_ROOM_INFO,
             const.CHANNEL_ROOM_PLAYERS,

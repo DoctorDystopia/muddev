@@ -6,10 +6,10 @@ Description: The base class of every augment (DESIGN-0015, section 4.4).
 
              An augment is one effect that a player lights and puts out,
              and that drains Grit while it burns. The class is data plus a
-             few routines: the channel it boosts, the bonus at a level and
-             a step, the unlock check, the tip, and the contribution to an
-             action. The handler reads the drain, and the rules module
-             reads the bonus. The aura twin is auras/aura_defs/base_aura.py.
+             few routines. They give the channel it boosts, the bonus at a
+             level and a power level, and the unlock check. They also give
+             the tip and the contribution to an action. The handler reads
+             the drain, and the rules module reads the bonus. The aura twin is auras/aura_defs/base_aura.py.
 
              Phase 5 added the sockets that an augment fits, the conflict
              group, the `modifies` field of a modifier, and `contribute`,
@@ -44,8 +44,8 @@ class BaseAugment:
     Methodology:
         The level sets the strength: `pct_per_level x level` is the whole
         bonus, as `BaseAura.damage_for` reads the level for an aura. The
-        step dial scales the bonus and the drain by the same share, so step
-        1 of 3 gives a third of each. One augment for each axis, and no two
+        power level dial scales the bonus and the drain by the same share,
+        so power level 1 of 3 gives a third of each. One augment for each axis, and no two
         rows are one effect at two strengths.
 
     Notes/References:
@@ -69,12 +69,12 @@ class BaseAugment:
     # that the augment boosts, or what else it does.
     family = ""
 
-    # The drain of each tick at the top step, in counter units. The OSRS
+    # The drain of each tick at the top power level, in counter units. The OSRS
     # drain effects run from 1 to 24 at a resistance of 60.
     drain = 0.0
 
     # The share of the level that the augment adds to its channel at the
-    # top step. 0.002 x level 50 gives +10%.
+    # top power level. 0.002 x level 50 gives +10%.
     pct_per_level = 0.0
 
     # The Augmentation level that unlocks the augment. NO_UNLOCK_LEVEL
@@ -98,18 +98,18 @@ class BaseAugment:
     # The handler keeps the roll, and the row shows it.
     rolls = False
 
-    def step_share(self, step: int) -> float:
+    def power_level_share(self, power_level: int) -> float:
         """
-        Purpose: The share of the strength and of the drain at one step.
+        Purpose: The share of the strength and of the drain at one power level.
 
         Entry:
-            step is an int in [AUG_STEP_MIN, AUG_STEPS].
+            power_level is an int in [AUG_POWER_LEVEL_MIN, AUG_POWER_LEVELS].
 
         Exit/Returns:
-            Returns a float in (0, 1]. Step AUG_STEPS gives 1.0.
+            Returns a float in (0, 1]. Power level AUG_POWER_LEVELS gives 1.0.
 
         Module Globals:
-            aug_const.AUG_STEPS read.
+            aug_const.AUG_POWER_LEVELS read.
 
         Methodology:
             One division. The bonus and the drain both read it, so the two
@@ -121,15 +121,15 @@ class BaseAugment:
         Author: Nick Hobar
         Creation date: 10/30/2026
         """
-        return step / aug_const.AUG_STEPS
+        return power_level / aug_const.AUG_POWER_LEVELS
 
-    def bonus_for(self, level: int, step: int) -> float:
+    def bonus_for(self, level: int, power_level: int) -> float:
         """
         Purpose: The augment bonus that the augment adds to its channel.
 
         Entry:
             level is the Augmentation level of the holder.
-            step is an int in [AUG_STEP_MIN, AUG_STEPS].
+            power_level is an int in [AUG_POWER_LEVEL_MIN, AUG_POWER_LEVELS].
 
         Exit/Returns:
             Returns a float. +0.10 means +10% on the channel, the form that
@@ -139,7 +139,7 @@ class BaseAugment:
             None.
 
         Methodology:
-            pct_per_level x level x the step share.
+            pct_per_level x level x the power level share.
 
         Notes/References:
             None.
@@ -147,16 +147,16 @@ class BaseAugment:
         Author: Nick Hobar
         Creation date: 10/30/2026
         """
-        share = self.step_share(step)
+        share = self.power_level_share(power_level)
 
         return self.pct_per_level * level * share
 
-    def drain_for(self, step: int) -> float:
+    def drain_for(self, power_level: int) -> float:
         """
-        Purpose: The drain of one tick at one step.
+        Purpose: The drain of one tick at one power level.
 
         Entry:
-            step is an int in [AUG_STEP_MIN, AUG_STEPS].
+            power_level is an int in [AUG_POWER_LEVEL_MIN, AUG_POWER_LEVELS].
 
         Exit/Returns:
             Returns a float in counter units.
@@ -165,7 +165,7 @@ class BaseAugment:
             None.
 
         Methodology:
-            drain x the step share.
+            drain x the power level share.
 
         Notes/References:
             None.
@@ -173,7 +173,7 @@ class BaseAugment:
         Author: Nick Hobar
         Creation date: 10/30/2026
         """
-        share = self.step_share(step)
+        share = self.power_level_share(power_level)
 
         return self.drain * share
 
@@ -268,7 +268,7 @@ class BaseAugment:
             aug_const.AUG_TIP_* read.
 
         Methodology:
-            The description, the effect line, the drain, the steps, the
+            The description, the effect line, the drain, the power levels, the
             sockets, the conflict group, and the unlock. A subclass with a
             different effect overrides `effect_line` alone.
 
@@ -281,7 +281,8 @@ class BaseAugment:
         lines = [str(self.description), self.effect_line(level)]
 
         lines.append(aug_const.AUG_TIP_DRAIN.format(drain=self.drain))
-        lines.append(aug_const.AUG_TIP_STEPS.format(steps=aug_const.AUG_STEPS))
+        lines.append(aug_const.AUG_TIP_POWER_LEVELS.format(
+            power_levels=aug_const.AUG_POWER_LEVELS))
         lines.append(aug_const.AUG_TIP_SOCKETS.format(fits=self.socket_labels()))
 
         if self.conflict_group:
@@ -294,7 +295,7 @@ class BaseAugment:
 
     def effect_line(self, level: int) -> str:
         """The one line that says what the augment does at a level."""
-        percent = self.bonus_for(level, aug_const.AUG_STEPS) * 100
+        percent = self.bonus_for(level, aug_const.AUG_POWER_LEVELS) * 100
         axis = aug_const.AUG_TIP_AXIS.get(self.family, self.family)
 
         return aug_const.AUG_TIP_BOOST.format(percent=percent, axis=axis)

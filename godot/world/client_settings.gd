@@ -42,6 +42,9 @@ const KEY_SHOW_WORLD := "show_world"
 const KEY_SHOW_INVENTORY := "show_inventory"
 const KEY_SKILL_DETAIL := "skill_detail"
 const KEY_SFX_VOLUME := "sfx_volume"
+const KEY_MUSIC_VOLUME := "music_volume"
+const KEY_MUSIC_MODE := "music_mode"
+const KEY_MUSIC_TRACK := "music_track"
 const KEY_SHOW_XP_DROPS := "show_xp_drops"
 const KEY_SHOW_SKILL_RATES := "show_skill_rates"
 const KEY_SMOOTH_MOVEMENT := "smooth_movement"
@@ -198,6 +201,36 @@ const DEFAULT_SKILL_DETAIL := SKILL_DETAIL_BOTH
 const DEFAULT_SFX_VOLUME := 1.0
 const MIN_SFX_VOLUME := 0.0
 const MAX_SFX_VOLUME := 1.0
+
+## How loud the music plays, LINEAR, on the same scale as the sound effects
+## (DESIGN-0016). Under the effects by default, so a hit still reads over
+## the track. The bounds are the ones of the effects, and so is the clamp.
+const DEFAULT_MUSIC_VOLUME := 0.6
+
+## The modes of the music player, and the chosen track of Single mode. The
+## mode is the DEVICE's, as the volume is: a laptop with no speakers wants
+## silence, and the same account on a desktop wants the area. Thus, nothing
+## here reaches the server. The server owns the list of the tracks, and the
+## client owns the play. See [MusicPlayer].
+##
+## Area plays a track of the area that the character stands in. Shuffle
+## plays any unlocked track. Single loops one chosen track. The names are
+## this client's own, and no server constant spells them.
+const MUSIC_MODE_AREA := "area"
+const MUSIC_MODE_SHUFFLE := "shuffle"
+const MUSIC_MODE_SINGLE := "single"
+
+## Every legal mode, in the order the Music tab offers them. A value outside
+## this is clamped to the default on read.
+const MUSIC_MODES: Array[String] = [
+	MUSIC_MODE_AREA, MUSIC_MODE_SHUFFLE, MUSIC_MODE_SINGLE]
+
+const DEFAULT_MUSIC_MODE := MUSIC_MODE_AREA
+
+## The track key of Single mode. Empty in the two other modes, and empty
+## when the player never chose one. A key the server no longer sends is
+## not an error here: the player treats it as silence.
+const DEFAULT_MUSIC_TRACK := ""
 
 ## Whether XP drops, the session tracker and the progress bar are drawn over the
 ## world.
@@ -418,6 +451,9 @@ var show_world := DEFAULT_SHOW_WORLD
 var show_inventory := DEFAULT_SHOW_INVENTORY
 var skill_detail := DEFAULT_SKILL_DETAIL
 var sfx_volume := DEFAULT_SFX_VOLUME
+var music_volume := DEFAULT_MUSIC_VOLUME
+var music_mode := DEFAULT_MUSIC_MODE
+var music_track := DEFAULT_MUSIC_TRACK
 var show_xp_drops := DEFAULT_SHOW_XP_DROPS
 var show_skill_rates := DEFAULT_SHOW_SKILL_RATES
 var smooth_movement := DEFAULT_SMOOTH_MOVEMENT
@@ -483,6 +519,12 @@ func load_from_disk() -> void:
 		SECTION, KEY_SKILL_DETAIL, DEFAULT_SKILL_DETAIL)))
 	sfx_volume = _clamp_volume(float(config.get_value(
 		AUDIO_SECTION, KEY_SFX_VOLUME, DEFAULT_SFX_VOLUME)))
+	music_volume = _clamp_volume(float(config.get_value(
+		AUDIO_SECTION, KEY_MUSIC_VOLUME, DEFAULT_MUSIC_VOLUME)))
+	music_mode = _clamp_music_mode(str(config.get_value(
+		AUDIO_SECTION, KEY_MUSIC_MODE, DEFAULT_MUSIC_MODE)))
+	music_track = str(config.get_value(
+		AUDIO_SECTION, KEY_MUSIC_TRACK, DEFAULT_MUSIC_TRACK))
 	show_xp_drops = bool(config.get_value(
 		SECTION, KEY_SHOW_XP_DROPS, DEFAULT_SHOW_XP_DROPS))
 	show_skill_rates = bool(config.get_value(
@@ -545,6 +587,9 @@ func save_to_disk() -> Error:
 	config.set_value(SECTION, KEY_SHOW_INVENTORY, show_inventory)
 	config.set_value(SECTION, KEY_SKILL_DETAIL, skill_detail)
 	config.set_value(AUDIO_SECTION, KEY_SFX_VOLUME, sfx_volume)
+	config.set_value(AUDIO_SECTION, KEY_MUSIC_VOLUME, music_volume)
+	config.set_value(AUDIO_SECTION, KEY_MUSIC_MODE, music_mode)
+	config.set_value(AUDIO_SECTION, KEY_MUSIC_TRACK, music_track)
 	config.set_value(SECTION, KEY_SHOW_XP_DROPS, show_xp_drops)
 	config.set_value(SECTION, KEY_SHOW_SKILL_RATES, show_skill_rates)
 	config.set_value(SECTION, KEY_SMOOTH_MOVEMENT, smooth_movement)
@@ -751,6 +796,37 @@ func set_sfx_volume(value: float) -> void:
 		return
 
 	sfx_volume = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Set the music volume, clamped as the effects are, and persist it.
+func set_music_volume(value: float) -> void:
+	var clamped := _clamp_volume(value)
+
+	if is_equal_approx(clamped, music_volume):
+		return
+
+	music_volume = clamped
+	save_to_disk()
+	changed.emit()
+
+
+## Set the mode of the music player, with the track of Single mode, and
+## persist both.
+##
+## One setter for the two, because they move together: a click on a track
+## row sets Single AND that track. The track is kept in Area and Shuffle
+## mode too, so a return to Single plays the last choice. An unknown mode
+## falls back to the default, as a skill detail mode does.
+func set_music_mode(mode: String, track: String = music_track) -> void:
+	var clamped := _clamp_music_mode(mode)
+
+	if clamped == music_mode and track == music_track:
+		return
+
+	music_mode = clamped
+	music_track = track
 	save_to_disk()
 	changed.emit()
 
@@ -1001,6 +1077,9 @@ func reset() -> void:
 	show_inventory = DEFAULT_SHOW_INVENTORY
 	skill_detail = DEFAULT_SKILL_DETAIL
 	sfx_volume = DEFAULT_SFX_VOLUME
+	music_volume = DEFAULT_MUSIC_VOLUME
+	music_mode = DEFAULT_MUSIC_MODE
+	music_track = DEFAULT_MUSIC_TRACK
 	show_xp_drops = DEFAULT_SHOW_XP_DROPS
 	show_skill_rates = DEFAULT_SHOW_SKILL_RATES
 	smooth_movement = DEFAULT_SMOOTH_MOVEMENT
@@ -1059,6 +1138,13 @@ func _clamp_skill_detail(value: String) -> String:
 		return value
 
 	return DEFAULT_SKILL_DETAIL
+
+
+func _clamp_music_mode(value: String) -> String:
+	if MUSIC_MODES.has(value):
+		return value
+
+	return DEFAULT_MUSIC_MODE
 
 
 func _clamp_scale(value: float) -> float:
