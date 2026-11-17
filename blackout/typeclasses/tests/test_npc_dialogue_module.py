@@ -32,7 +32,10 @@ STALE_DIALOGUE_PATH = "systems.menus.npc_dialogues.npc_shopkeep"
 
 # The NpcDefs these tests stand up.
 _SHOPKEEP_KEY = "shopkeeper_oasis"
-_ANDROID_KEY = "lone_android"
+
+# A def with a dialogue module that is not the shopkeep's. The Lone Android
+# filled this role until it moved to a dialogue script (11/12/2026).
+_PRECEPTOR_KEY = "atticus_quin"
 
 
 class TestDialogueModuleResolution(EvenniaTest):
@@ -59,12 +62,12 @@ class TestDialogueModuleResolution(EvenniaTest):
         just no longer shadows a def that names one.
         """
         npc = create_object(TalkativeNPC, key="test talker", location=self.room1)
-        android_module = NPC_DB[_ANDROID_KEY].dialogue_module()
-        npc.db.menu_module = android_module
+        preceptor_module = NPC_DB[_PRECEPTOR_KEY].dialogue_module()
+        npc.db.menu_module = preceptor_module
 
         speaks_from = _dialogue_module_for(npc)
 
-        self.assertEqual(speaks_from, android_module)
+        self.assertEqual(speaks_from, preceptor_module)
 
     def test_an_npc_with_nothing_to_say_resolves_to_nothing(self):
         """CmdTalk's own guard reads this, so None has to survive the lookup."""

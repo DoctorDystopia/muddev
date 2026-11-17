@@ -19,6 +19,10 @@
     "inputs": "sha256:e338f4bfafe3b729b269eb138535662a0515516468e3d95c63c4b09da37bac83",
     "output": "sha256:b26aa059203904afe7d7fc9406838286b3b1b8d7a1de4bea2ff5db3fe42794fa"
   },
+  "canopic_jar": {
+    "inputs": "sha256:d3753b184fed2c530633d4497dd35a6d081c1fff3649cd6f1e1c2740da33cdca",
+    "output": "sha256:68d154061186d084019a6b58b3b388a2067d3902dbe44a7ea214998985669113"
+  },
   "copper_pole": {
     "inputs": "sha256:77a26d8e1b342c10ba3bec067d3bdc67033d2f3af98bf3d5feda8ca82ffa2575",
     "output": "sha256:e0c1f61dd4105d3bbb23882576e8ed1712ba71afcba8cae3bd4b11df96b6d093"

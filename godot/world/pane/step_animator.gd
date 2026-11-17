@@ -52,6 +52,13 @@ extends RefCounted
 ## Pure maths on a RefCounted, so `test_step_animator.tscn` drives it with no
 ## scene, no camera and no clock.
 
+const _Const := preload("res://autoload/blackout_constants.gd")
+
+## The longest move of one tick, as a multiple of the speed cap. The diagonal
+## of one tile is 1.41 tiles. The rest is the headroom for the height of the
+## ground between the two tiles.
+const DIAGONAL_ALLOWANCE := 1.5
+
 ## How far the SERVER may move a figure and still have that count as a walk,
 ## in steps.
 ##
@@ -65,12 +72,15 @@ extends RefCounted
 ## moves two tiles in each tick (`systems/gameplay/movement/walk.py`). One
 ## message thus names a tile two squares away on every tick of a run.
 ##
-## Three, so a move of two tiles — 2.83 across on the diagonal — is
-## walked, and a longer one is not. The honest cost is that a teleport of three
-## tiles or fewer is drawn as a slide of under a second, through whatever
-## stands between the two tiles. A map-crossing jump, which is what a teleport
-## usually is, still snaps.
-const SNAP_STEPS := 3.0
+## Since 11/14/2026 the limit comes from the speed cap of the server,
+## `MAX_TILES_PER_TICK`. A run with Nitro moves three tiles in one tick, and
+## three tiles on the diagonal measure 4.24. The limit is the cap times
+## [constant DIAGONAL_ALLOWANCE]: 4.5 for a cap of 3, and 3.0 for the old cap
+## of 2. The cost: the client draws a teleport of 4.5 tiles or less as a slide
+## of under a second. The slide goes through each thing between the two
+## tiles. A map-crossing
+## jump, which is what a teleport usually is, still snaps.
+const SNAP_STEPS: float = _Const.MAX_TILES_PER_TICK * DIAGONAL_ALLOWANCE
 
 ## How long one tile takes to cross, in server ticks.
 ##

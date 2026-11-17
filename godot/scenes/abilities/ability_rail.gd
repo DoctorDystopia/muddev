@@ -30,6 +30,17 @@ extends VBoxContainer
 ## empty rail lets a click through to the tile under it, as the XP HUD
 ## does.
 ##
+## ## An augment row has a button for each power level
+##
+## After the button of an augment row come small buttons, one for each
+## power level: `1`, `2`, `3` (11/12/2026). The button of the current power
+## level is lit. A click on another one sends the line that the server
+## named for it: it lights an out augment at that power level, or moves a
+## lit one there. Shift and the key of the slot still turn the dial, so the
+## keyboard and the mouse reach the same lines. The light of a power level
+## button moves only when the server republishes, as the light of a row
+## does.
+##
 ## Author: Nick Hobar
 ## Creation date: 10/20/2026
 
@@ -60,8 +71,24 @@ const NOTE_TEXT := "%s %s"
 ## server and goes after it.
 const LOCKED_HEADING := "Locked:"
 
+## The power level buttons of an augment row. Item 0 of the list that the
+## server sends is power level 1, so the text of a button is its index
+## plus one.
+const POWER_BUTTON_WIDTH := 26
+const POWER_BUTTON_TEXT := "%d"
+const POWER_BUTTON_TIP := "Power level %d"
+const POWER_BUTTON_SEPARATION := 2
+
 var _state: AbilitiesState
 var _buttons: Array[Button] = []
+
+## The power level buttons of each row, in the order of [member _buttons].
+## An empty list for a row with no power level dial.
+var _power_buttons: Array = []
+
+## The node of each row in the rail: its button, or the line that holds
+## its button and its power level buttons.
+var _drawn: Array[Control] = []
 
 
 func _init() -> void:
@@ -81,6 +108,23 @@ func buttons() -> Array[Button]:
 	return _buttons
 
 
+## The power level buttons of the row at an index of [method buttons], the
+## lowest power level first. Empty for a row with no dial. For the tests.
+func power_level_buttons(index: int) -> Array:
+	if index < 0 or index >= _power_buttons.size():
+		return []
+
+	return _power_buttons[index]
+
+
+## The node of the row at an index of [method buttons]. For the tests.
+func row_node(index: int) -> Control:
+	if index < 0 or index >= _drawn.size():
+		return null
+
+	return _drawn[index]
+
+
 ## Fire one slot, as a key press does. Nothing happens past the last row,
 ## or on a row that the server locked.
 func press_slot(slot: int) -> void:
@@ -93,10 +137,12 @@ func press_slot(slot: int) -> void:
 
 
 func _rebuild() -> void:
-	for button: Button in _buttons:
-		button.queue_free()
+	for node: Control in _drawn:
+		node.queue_free()
 
+	_drawn.clear()
 	_buttons.clear()
+	_power_buttons.clear()
 
 	if _state == null:
 		return
@@ -108,12 +154,83 @@ func _rebuild() -> void:
 	for row: Dictionary in _state.rows:
 		var is_set := str(row["kind"]) == _Const.ABILITY_KIND_SET
 		var button := _button(slot, row, is_set)
+		var power_buttons := _power_level_buttons(row)
+		var node: Control = button
 
-		add_child(button)
+		if not power_buttons.is_empty():
+			node = _line(button, power_buttons)
+
+		add_child(node)
+		_drawn.append(node)
 		_buttons.append(button)
+		_power_buttons.append(power_buttons)
 
 		if not is_set:
 			slot += 1
+
+
+## One row with a power level dial: its button, then its power level
+## buttons. The line ignores the mouse, as the rail does, so a click in a
+## gap reaches the world. The row button takes the width that is left, so
+## the right edges of all rows line up.
+func _line(button: Button, power_buttons: Array[Button]) -> HBoxContainer:
+	var line := HBoxContainer.new()
+
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_theme_constant_override("separation", POWER_BUTTON_SEPARATION)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(button)
+
+	for power_button: Button in power_buttons:
+		line.add_child(power_button)
+
+	return line
+
+
+## The power level buttons of one row, the lowest first. None for a row
+## with no dial, or for a server that sends no lines.
+##
+## The button of the current power level is lit and never disabled, so it
+## draws lit. Its line is empty, and a click on it sends nothing. Any other
+## button with an empty line is disabled: the row is locked.
+func _power_level_buttons(row: Dictionary) -> Array[Button]:
+	var made: Array[Button] = []
+
+	if not AbilitiesState.has_power_levels(row):
+		return made
+
+	var lines: Array = row.get("power_level_commands", [])
+	var current := int(row["power_level"])
+
+	for index: int in lines.size():
+		var power_level := index + 1
+		var command := str(lines[index])
+		var is_current := power_level == current
+		var power_button := Button.new()
+
+		power_button.text = POWER_BUTTON_TEXT % power_level
+		power_button.toggle_mode = true
+		power_button.button_pressed = is_current
+		power_button.disabled = command.is_empty() and not is_current
+		power_button.focus_mode = Control.FOCUS_NONE
+		power_button.custom_minimum_size = Vector2(POWER_BUTTON_WIDTH, BUTTON_HEIGHT)
+		power_button.tooltip_text = POWER_BUTTON_TIP % power_level
+		power_button.pressed.connect(
+			_on_power_level_pressed.bind(power_button, is_current, command))
+		made.append(power_button)
+
+	return made
+
+
+## A power level button was clicked. Put it back, then ask. The republish
+## of the server moves the light.
+func _on_power_level_pressed(power_button: Button, is_current: bool, command: String) -> void:
+	power_button.set_pressed_no_signal(is_current)
+
+	if command.is_empty():
+		return
+
+	command_requested.emit(command)
 
 
 ## Fire the set row, as its key does. Nothing happens when the server sent

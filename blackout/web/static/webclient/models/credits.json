@@ -35,6 +35,17 @@
     ]
   },
   {
+    "title": "canopic jar",
+    "author": "Harsh Patel",
+    "url": "https://playblackout.io",
+    "license": "Made for Blackout",
+    "license_url": "",
+    "confirmed": true,
+    "models": [
+      "canopic_jar"
+    ]
+  },
+  {
     "title": "Copper pole",
     "author": "Harsh Patel",
     "url": "TODO",

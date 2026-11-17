@@ -1,0 +1,199 @@
+# The dialogue of the Lone Android: every beat of "Oasis in the Wastes",
+# gated on which step of the quest the player is on. Moved from
+# world/npc_dialogues/oasis_lone_android.py on 11/12/2026. Each line is the
+# text of that module.
+#
+# The design is in the vault note:
+#     04_Content/Quests_and_Adventures/Full Quest List/
+#     Oasis in the Wastes (name TBD) [AI-EDITABLE].md
+#
+# The android's voice is the point of the opening conversation: it is a farm
+# hand, not a diplomat, and it addresses the player as a probability. It does
+# not notice them until they physically interrupt it (DCT.1), reports its
+# confidence that they are human (DCT.2), and never stops being cheerful about
+# any of it.
+#
+# The start cue routes on the quest step. Each step has one cue.
+
+# ─── Step 1: Awakening in the Wastes (DCT.1 - DCT.5) ─────────────────────────
+
+# DCT.1: the android does not notice the player.
+~ start
+if quest.is_complete("oasis_in_the_wastes")
+	=> post_quest
+elif quest.on_step("oasis_in_the_wastes", "intro")
+	=> step1_drainage_intro
+elif quest.on_step("oasis_in_the_wastes", "maintenance")
+	=> step2_chores
+elif quest.on_step("oasis_in_the_wastes", "apprenticeship")
+	=> step3_craft
+elif quest.on_step("oasis_in_the_wastes", "defense")
+	=> step4_defend
+elif quest.on_step("oasis_in_the_wastes", "resolution")
+	=> step5_resolution
+{{npc.heading}}
+	A farm-hand android, alone. Its chassis is sand-scoured down to the primer and one knee joint whines when it moves. It is bent over a datapad, writing.
+It is writing intently and does not look up.
+- "Hello?" => hello_once
+- *tap the android on the shoulder* => shoulder_tap
+
+# DCT.1.1: the android does not hear the player. The polite option is never
+# removed, so the player chooses to escalate.
+~ hello_once
+The android keeps writing. Nothing about it acknowledges you.
+- "Hello?!" => hello_twice
+- *tap the android on the shoulder* => shoulder_tap
+
+# DCT.1.2: shouting makes the note-taking worse. The tap is the only way on.
+~ hello_twice
+The stylus speeds up. Whatever it is recording must be urgent.
+- *tap the android on the shoulder* => shoulder_tap
+
+# DCT.1.3: the android finally looks up. The three openers give three
+# confidence readings, and every path reaches the same quest.
+~ shoulder_tap
+With a whine of servos, the android straightens and looks at you with a welcoming smile. Its weathered, chrome face stares at you, the two photoreceptors unblinking.
+- "Excuse me. Might I bother you for some help?" => analysis_polite
+- "Start explaining, or there is going to be violence." => analysis_raider
+- *stare blankly back at it* => analysis_damage
+
+# DCT.2.1: the polite opener.
+~ analysis_polite
+{{npc.name}}: "Analyzing detected [human] presence."
+	"Probability of [human] = [82%]. Probability of [other] = [17%]."
+{{npc.name}}: "Greetings, [82% human]!"
+	"This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:"
+- "Come to think of it... I am having trouble remembering." => customization
+- "What does [other] mean?" => what_is_other
+
+# DCT.2.2: a threat reads as slightly less human, because some of the
+# probability moves to [mutant raider].
+~ analysis_raider
+{{npc.name}}: "Analyzing detected [human] presence."
+	"Probability of [other] = [17%] and [mutant raider] = [10%]."
+{{npc.name}}: "Greetings, [72% human]!"
+	"This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:"
+- "Come to think of it... I am having trouble remembering." => customization
+- "What does [other] mean?" => what_is_other
+
+# DCT.2.3: a blank stare reads as fully human, with a caveat.
+~ analysis_damage
+{{npc.name}}: "Analyzing detected [human] presence."
+	"Probability of [human] = [82%], likely brain damage. Probability of [other] = [17%]."
+{{npc.name}}: "Greetings, [82% human] with likely and/or guaranteed brain damage!"
+	"This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:"
+- "Come to think of it... I am having trouble remembering." => customization
+- "What does [other] mean?" => what_is_other
+
+# DCT.3.5: the android explains the Wastes to a small child.
+~ what_is_other
+{{npc.name}}: "[human] appears to have suffered brain damage. Adjusting vocabulary."
+{{npc.name}}: "Hello, little human. Many entities exist in the Wastes. There are raiders. There are mutants. There are mutant raiders, and there are raider mutants. So: everything."
+- "That is not as helpful as you think it is." => customization
+
+# DCT.3: where the player states who they are. STUBBED: no customization
+# system exists yet, so the beat is written and the handoff is not.
+~ customization
+You tell it what little you are sure of.
+|xThe android waits, stylus poised. [Character customization goes here.]|n
+{{npc.name}}: "Recorded. Retention is poor in [82% human]."
+- "Where am I? What is this place?" => who_are_you
+
+# The android explains itself and the farm, then offers work.
+~ who_are_you
+{{npc.name}}: "Welcome to [redacted deceased owner's name] farm. I am C.L.A.R.K. unit."
+{{npc.name}}: "Yield is down. Yield has been down for some years. The current orange varietal is iteration seventy-three point two eight four. Status of seedling: dead. I will try seventy-three point two eight five."
+- "Can you tell me how to get out of the desert?" => quest_offer
+- "Doesn't that get to you?" => android_lore
+
+# Optional depth: the android on being the last one here.
+~ android_lore
+{{npc.name}}: "Clarify [get to]. If you mean degradation: yes. Chassis integrity is falling."
+{{npc.name}}: "If you mean the other thing, you are the first entity to speak to this unit in five hundred and eleven days. This unit logged it."
+- "...Can you tell me how to get out of the desert?" => quest_offer
+
+# The android names its price and the player accepts or declines.
+~ quest_offer
+if not quest.is_available("oasis_in_the_wastes")
+	{{npc.name}}: "That arrangement is already in progress."
+	- Right. => start
+{{npc.name}}: "Affirmative. Route data for Neo Cairo is held in this unit's navigation cache."
+{{npc.name}}: "This unit will transmit it in exchange for one day of labor. The drainage line is silted. The soil sample is unprepared. Many tasks to do."
+{{quest.accept_prompt("oasis_in_the_wastes")}}
+- Accept: {{quest.title("oasis_in_the_wastes")}}
+	do quest.accept("oasis_in_the_wastes")
+	do message.success("You agree to work the farm.")
+	=> step1_drainage_intro
+- Not yet. => END
+
+# DCT.4: the android briefs the first chore and step 1 closes. The talk
+# target fires here: the intro step is done when the player had this
+# conversation.
+~ step1_drainage_intro
+do quest.talk("oasis_in_the_wastes", "lone_android")
+{{npc.name}}: "Task one. The drainage line runs beneath the north row. Sand enters it. Sand always enters it. Remove the sand."
+{{npc.name}}: "Task two. The soil sample must be prepared and iteration seventy-three point two eight five planted in it."
+{{npc.name}}: "Report back. This unit will be here. This unit is always here."
+- "I'll get to it." => END
+
+# ─── Step 2: Crop Rotation & Maintenance (STUBBED) ───────────────────────────
+
+# The chores are done by reporting them here, not in the world. When the
+# drainage pipe and the soil bed are real objects, they fire the same two
+# targets, and these two responses come out.
+~ step2_chores
+{{npc.name}}: "Report status of assigned tasks."
+{{quest.objectives("oasis_in_the_wastes")}}
+- [stub] Clear the sand from the drainage line. [if not quest.reported("oasis_in_the_wastes", "interact", "pipe") /]
+	do quest.report("oasis_in_the_wastes", "interact", "pipe")
+	do message.success("You dig the silt out of the drainage line.")
+	=> start
+- [stub] Prepare the soil and plant the varietal. [if not quest.reported("oasis_in_the_wastes", "interact", "soil") /]
+	do quest.report("oasis_in_the_wastes", "interact", "soil")
+	do message.success("You work the sample bed and press the seedling in.")
+	=> start
+- "Later." => END
+
+# ─── Step 3: Make a crafting tool and weapon ─────────────────────────────────
+
+# The android teaches Cutting, Foundry and Metalsmith. No target fires here:
+# the crafts report the step. The hammer comes from the on_enter hook of the
+# quest step, not from this conversation.
+~ step3_craft
+{{npc.name}}: "Task three. This unit will teach you to make tools, because you have none and that is statistically fatal."
+{{npc.name}}: "There are rusty poles standing in the sand. Take metal from one. You do not have an axe, so it will take metal from you as well."
+{{npc.name}}: "Then: the furnace, to smelt the chunk into scrap. Then: the anvil, to beat the scrap into a {{recipe.name("rusty scrap axe")}} and a {{recipe.name("rusty scrap dagger")}}. Take this hammer. It was not doing anything."
+{{quest.objectives("oasis_in_the_wastes")}}
+- "Understood." => END
+
+# ─── Step 4: Defend the Green ────────────────────────────────────────────────
+
+# The android sends the player out to meet the raiders. The kill comes from
+# at_death, not from here.
+~ step4_defend
+{{npc.name}}: "Movement in the dunes. Meat signature, bipedal, approaching the farm. Probability of [mutant raider] = [96%]."
+{{npc.name}}: "This unit is a farm hand. This unit no longer has combat protocols. You have a blade now. This unit calculates that this is your task."
+{{quest.objectives("oasis_in_the_wastes")}}
+- "Then I will meet it." => END
+
+# ─── Step 5: Harvest & Departure ─────────────────────────────────────────────
+
+# The closing conversation. The last target fires under the response, not on
+# entry: it completes the quest and pays the reward, and the player reads the
+# scene first.
+~ step5_resolution
+{{npc.name}}: "Threat resolved. The farm is intact. This unit had assigned a low probability to that outcome."
+{{npc.name}}: "Transmitting navigation data. Follow the pylons east. They point at Neo Cairo."
+- "Thank you."
+	do quest.talk("oasis_in_the_wastes", "lone_android_end")
+	=> post_quest
+
+# What the android says to a player who already helped it.
+~ post_quest
+{{npc.name}}: "You are still here. This unit has logged the visit. Iteration seventy-three point two eight five is dead. Iteration seventy-three point two eight six is sure to live."
+{{npc.name}}: "East, [82% human]. Follow the pylons. Don't die!"
+- "I will. Look after yourself." => END
+
+# Spoken however the conversation ends.
+~ farewell
+{{npc.name}}: "Don't die!, [82% human]."

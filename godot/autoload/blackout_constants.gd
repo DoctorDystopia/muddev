@@ -116,8 +116,9 @@ const MSG_CHANNEL := "channel"
 const MSG_PAGE := "page"
 const MSG_SYSTEM := "system"
 
-# The server clock. One tile per tick is walking speed.
+# The server clock. One tile per tick is walking speed. MAX_TILES_PER_TICK is the speed cap.
 const TICK_SECONDS := 0.6
+const MAX_TILES_PER_TICK := 3
 
 # The tile grid and its chunk file. DESIGN-0011 section 6.2.
 const CHUNK_FORMAT_VERSION := 2
@@ -392,6 +393,7 @@ const ABILITY_KIND_SET := "set"
 const ABILITY_POWER_LEVEL_KEY := "power_level"
 const ABILITY_POWER_LEVELS_KEY := "power_levels"
 const ABILITY_POWER_LEVEL_COMMAND_KEY := "power_level_command"
+const ABILITY_POWER_LEVEL_COMMANDS_KEY := "power_level_commands"
 const ABILITY_NOTE_KEY := "note"
 const TIP_KEY := "tip"
 const TIP_TITLE_KEY := "title"

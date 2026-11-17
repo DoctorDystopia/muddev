@@ -43,6 +43,11 @@ func _ready() -> void:
 	_the_set_row_takes_its_own_key_and_no_slot()
 	_a_lit_augment_row_shows_its_power_level_and_shift_turns_it()
 	_a_row_with_a_note_shows_it_after_the_name()
+	_an_augment_row_has_a_button_for_each_power_level()
+	_a_power_level_button_sends_the_servers_line()
+	_the_current_power_level_button_sends_nothing_and_stays_lit()
+	_a_locked_augment_row_has_no_power_level_to_click()
+	_the_line_of_a_power_level_row_ignores_the_mouse()
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -195,3 +200,60 @@ func _a_lit_augment_row_shows_its_power_level_and_shift_turns_it() -> void:
 	_sent.clear()
 	_rail.press_slot(2)
 	_expect(_sent == ["aug Reflex off"], "the key still sends the command of the row")
+
+
+func _an_augment_row_has_a_button_for_each_power_level() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	var reflex := _rail.power_level_buttons(2)
+	_expect(reflex.size() == 3, "one power level button for each line sent")
+	_expect(reflex[0].text == "1" and reflex[2].text == "3",
+		"each button names its power level")
+	_expect(reflex[1].button_pressed, "the button of the current power level is lit")
+	_expect(not reflex[0].button_pressed and not reflex[2].button_pressed,
+		"and no other one is")
+	_expect(_rail.power_level_buttons(0).is_empty(), "an aura row has no such buttons")
+	_expect(_rail.power_level_buttons(4).is_empty(), "nor does the set row")
+
+	for power_button: Button in reflex:
+		_expect(power_button.focus_mode == Control.FOCUS_NONE,
+			"a power level button never takes focus")
+
+
+func _a_power_level_button_sends_the_servers_line() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	var reflex := _rail.power_level_buttons(2)
+	_sent.clear()
+	_click(reflex[0])
+	_expect(_sent == ["aug Reflex 1"], "a click sends the line of that power level")
+	_expect(not reflex[0].button_pressed, "and does not move the light by itself")
+
+
+func _the_current_power_level_button_sends_nothing_and_stays_lit() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	var reflex := _rail.power_level_buttons(2)
+	_expect(not reflex[1].disabled, "the current button draws lit, not disabled")
+	_sent.clear()
+	_click(reflex[1])
+	_expect(_sent.is_empty(), "a click on the current power level sends nothing")
+	_expect(reflex[1].button_pressed, "and it stays lit")
+
+
+func _a_locked_augment_row_has_no_power_level_to_click() -> void:
+	var payload := _StateTest.payload_with_augments()
+	payload["abilities"][2]["state"] = "locked"
+	payload["abilities"][2]["command"] = ""
+	payload["abilities"][2]["power_level"] = 0.0
+	payload["abilities"][2]["power_level_commands"] = ["", "", ""]
+	_state.ingest(_Const.CH_CHAR_ABILITIES, payload)
+
+	for power_button: Button in _rail.power_level_buttons(2):
+		_expect(power_button.disabled, "every power level button of a locked row is disabled")
+
+
+func _the_line_of_a_power_level_row_ignores_the_mouse() -> void:
+	_state.ingest(_Const.CH_CHAR_ABILITIES, _StateTest.payload_with_augments())
+	var line := _rail.row_node(2)
+	_expect(line is HBoxContainer, "a row with a dial is a line of buttons")
+	_expect(line.mouse_filter == Control.MOUSE_FILTER_IGNORE,
+		"a click in a gap of the line reaches the world")
+	_expect(_rail.row_node(0) == _rail.buttons()[0], "a row with no dial is its button")

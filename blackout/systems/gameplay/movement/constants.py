@@ -18,6 +18,13 @@ Description: The tunables, the attribute names, and the player text of
 WALK_TILES_PER_TICK: int = 1
 RUN_TILES_PER_TICK: int = 2
 
+# The speed cap: the most tiles that a walker moves in one tick (Nick,
+# 11/14/2026: 3). A lit augment adds its tile bonus to the walk or the run,
+# up to this cap. Nitro at the top power level takes a run to the cap. The
+# Godot client reads it too. Its step animation must slide a move of this
+# length, and not snap it.
+MAX_TILES_PER_TICK: int = 3
+
 # ─── Attribute names ─────────────────────────────────────────────────────────
 
 # The run toggle, on the character. Persistent, so run stays on through a
@@ -26,6 +33,12 @@ RUN_ATTR: str = "run_enabled"
 
 # The walk in progress, on `ndb`. `walk.set_walk` is its one writer.
 WALK_NDB_ATTR: str = "tile_walk"
+
+# The tile carry, on `ndb`, as a Fraction. A walker keeps this part of a tile
+# from one tick to the next. A whole tile of carry adds one tile to the
+# stride of that tick. The carry stays on the character, not on the walk. A
+# held key makes a new walk two times a tick.
+TILE_CARRY_NDB_ATTR: str = "tile_carry"
 
 # The last refused step, on `ndb`, as (tile, direction). A held key sends its
 # direction two times a tick. The player reads the refusal one time, not

@@ -446,6 +446,80 @@ class GatheringChannelTest(EvenniaCommandTest):
         self.assertTrue(gathering_support.channel_is_open(self.char1))
 
 
+    def test_each_swing_holds_the_tool_of_the_swing(self):
+        """The figure shows the tool that find_tool gives, also from the bag."""
+        self._cut()
+        ticks = 1 + gather_constants.SWING_TICKS
+
+        with mock.patch.object(gather_handler.character_figure,
+                               "hold_tool") as held:
+            skill = self._tick(self._stub_skill(), ticks)
+
+        tool = skill.find_tool.return_value
+        swings = skill.attempt_swing.call_count
+
+        self.assertGreater(swings, 1)
+        self.assertEqual(held.call_args_list,
+                         [mock.call(self.char1, tool)] * swings)
+
+
+    def test_the_hold_comes_before_the_face_event(self):
+        # The client must build the figure with the tool before the clip.
+        self._cut()
+        calls = mock.Mock()
+
+        with mock.patch.object(gather_handler.character_figure,
+                               "hold_tool") as held, \
+                mock.patch.object(feed_events, "emit_face") as faced:
+            calls.attach_mock(held, "hold")
+            calls.attach_mock(faced, "face")
+            self._tick(self._stub_skill())
+
+        names = [entry[0] for entry in calls.mock_calls]
+
+        self.assertEqual(names, ["hold", "face"])
+
+
+    def test_a_stop_that_a_swing_gives_keeps_the_tool_one_cadence(self):
+        """The clip of the last swing ends with the tool in the hand."""
+        self._cut()
+        skill = self._stub_skill()
+        skill.attempt_swing.return_value = gather_constants.STOP_REASON_DEPLETED
+
+        with mock.patch.object(gather_handler.character_figure,
+                               "release_tool") as released:
+            self._tick(skill)
+
+        released.assert_called_once_with(
+            self.char1,
+            delay=gather_constants.TOOL_HOLD_AFTER_STOP_SECONDS)
+        self.assertFalse(gathering_support.channel_is_open(self.char1))
+
+
+    def test_walking_away_takes_the_tool_away_at_once(self):
+        self._cut()
+
+        with mock.patch.object(gather_handler.character_figure,
+                               "release_tool") as released:
+            self.char1.move_to(self.room2, quiet=True)
+
+        released.assert_called_once_with(self.char1, delay=0.0)
+
+
+    def test_a_hold_that_fails_does_not_end_the_channel(self):
+        # The figure is a bystander to the harvest.
+        self._cut()
+
+        with mock.patch.object(gather_handler.character_figure, "hold_tool",
+                               side_effect=RuntimeError("figure down")):
+            with mock.patch.object(gather_handler.logger, "log_err") as logged:
+                skill = self._tick(self._stub_skill())
+
+        self.assertTrue(skill.attempt_swing.called)
+        self.assertTrue(logged.called)
+        self.assertTrue(gathering_support.channel_is_open(self.char1))
+
+
 
 # ─── One swing ──────────────────────────────────────────────────────────────
 

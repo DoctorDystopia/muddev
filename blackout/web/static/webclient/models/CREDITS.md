@@ -28,6 +28,13 @@ Options pane.
 - License: Made for Blackout
 - Models: `blood_sword`
 
+## canopic jar
+
+- Author: Harsh Patel
+- Source: https://playblackout.io
+- License: Made for Blackout
+- Models: `canopic_jar`
+
 ## Copper pole
 
 - Author: Harsh Patel

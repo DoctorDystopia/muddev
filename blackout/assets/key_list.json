@@ -62,6 +62,12 @@
 			"owner": "broken_bit_blade"
 		},
 		{
+			"key": "canopic_jar",
+			"kind": "food",
+			"name": "canopic jar",
+			"owner": "canopic_jar"
+		},
+		{
 			"key": "copper_arrow",
 			"kind": "crafting_material",
 			"name": "copper arrow",

@@ -522,7 +522,8 @@ its pace, and the walk follows the toggle again.
 
 1. A direction command and `goto` only start a walk. Neither moves you.
 2. At the start of each tick, the tick engine moves every walker.
-3. A walker moves one tile, or two tiles with run on.
+3. A walker moves one tile, or two tiles with run on. A lit Nitro adds
+   tiles, up to the speed cap (see below).
 4. A new direction command or `goto` replaces the walk in progress.
 
 A direction command is one tick of movement. The client sends a held key two
@@ -538,11 +539,29 @@ so a click on the next tile never goes past it.
 
 Run stays on after a logout (`db.run_enabled`). No resource drains yet.
 
+### Nitro and the speed cap
+
+Nitro is an augment (11/14/2026). At the top power level, it adds one tile
+to each tick of a walk or a run. A lower power level adds a part of a tile.
+The walker keeps that part as its tile carry, and each whole tile of carry
+adds one tile to that tick. No walker moves more than `MAX_TILES_PER_TICK`
+(3) tiles in one tick.
+
+| Power level | Walk, tiles each tick | Run, tiles each tick |
+|---|---|---|
+| Nitro off | 1 | 2 |
+| 1 | 1, 1, 2 (average 1.33) | 2, 2, 3 (average 2.33) |
+| 2 | 1, 2, 2 (average 1.67) | 2, 3, 3 (average 2.67) |
+| 3 | 2 | 3 |
+
+The stride skips each tile between its start and its end, as a run does.
+
 ### Inspect movement state (Python)
 
 ```python
 from systems.gameplay.movement import walk
 walk.is_running(char)        # True with run on
+walk.speed(char)             # tiles each tick, as a Fraction, with Nitro
 walk.current(char)           # the walk in progress, or None
 walk.walker_count()          # the characters that walk now
 ```

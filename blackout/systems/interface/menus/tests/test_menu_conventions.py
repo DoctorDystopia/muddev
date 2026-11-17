@@ -46,7 +46,6 @@ MENU_MODULE_PATHS = (
     "systems.interface.menus.profile_menu",
     "systems.interface.menus.skills_menu",
     "systems.interface.menus.summary_menu",
-    "world.npc_dialogues.oasis_lone_android",
     "world.npc_dialogues.shopkeep",
     "world.npc_dialogues.preceptor",
 )

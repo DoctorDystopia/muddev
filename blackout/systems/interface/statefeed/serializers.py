@@ -884,11 +884,16 @@ def _worn_record(entity) -> dict:
         None.
 
     Methodology:
-        character_figure.worn_items_of gives the item of each slot, and
+        character_figure.figure_items_of gives the item of each slot, and
         _classify names its art. The same routine names an item on the
         ground and an item in the bag. Thus, the figure wears the asset key
         that the item has everywhere else in the feed, and one worn look
         serves all three.
+
+        The record holds the held tool too (11/14/2026). A gatherer with an
+        axe in the bag holds that axe on the figure for as long as the
+        channel runs. The client needs no field for it: the axe is one more
+        asset key in its slot.
 
     Notes/References:
         DESIGN-0014 section 21. The client resolves each asset key through
@@ -899,7 +904,7 @@ def _worn_record(entity) -> dict:
     """
     worn = {}
 
-    for slot, item in character_figure.worn_items_of(entity).items():
+    for slot, item in character_figure.figure_items_of(entity).items():
         _kind, asset_key = _classify(item)
         worn[slot] = asset_key
 

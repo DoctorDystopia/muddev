@@ -162,6 +162,29 @@ class TestRows(_Fixture, EvenniaTest):
                 name=augment.name, power_level=aug_const.AUG_POWER_LEVEL_MIN + 1),
             row[feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY])
 
+    def test_a_ready_row_names_a_line_for_each_power_level(self):
+        augment = _first_augment()
+        expected = [
+            aug_const.AUG_IGNITE_POWER_LEVEL_TEMPLATE.format(
+                name=augment.name, power_level=power_level)
+            for power_level in range(aug_const.AUG_POWER_LEVEL_MIN,
+                                     aug_const.AUG_POWER_LEVELS + 1)
+        ]
+
+        row = self._row(augment.key)
+
+        self.assertEqual(expected, row[feed_const.ABILITY_POWER_LEVEL_COMMANDS_KEY])
+
+    def test_a_lit_row_names_no_line_for_its_own_power_level(self):
+        augment = _first_augment()
+        self._light(augment, aug_const.AUG_POWER_LEVEL_MIN)
+
+        lines = self._row(augment.key)[feed_const.ABILITY_POWER_LEVEL_COMMANDS_KEY]
+
+        self.assertEqual(aug_const.AUG_POWER_LEVELS, len(lines))
+        self.assertEqual("", lines[0])
+        self.assertTrue(all(lines[1:]), lines)
+
     def test_the_top_power_level_wraps_to_the_first(self):
         augment = _first_augment()
         self._light(augment, aug_const.AUG_POWER_LEVELS)
@@ -198,6 +221,8 @@ class TestRows(_Fixture, EvenniaTest):
         self.assertEqual(feed_const.ABILITY_STATE_LOCKED, row["state"])
         self.assertEqual("", row["command"])
         self.assertIn(str(augment.unlock_level), row["reason"])
+        self.assertEqual([""] * aug_const.AUG_POWER_LEVELS,
+                         row[feed_const.ABILITY_POWER_LEVEL_COMMANDS_KEY])
 
     def test_the_set_row_lights_the_set_when_nothing_burns(self):
         row = self._set_row()
@@ -270,6 +295,22 @@ class TestCommand(_Fixture, EvenniaCommandTest):
         self.assertEqual(
             aug_const.AUG_POWER_LEVEL_MIN + 1,
             get_augment_handler_for(self.char1).power_level_of(augment.key))
+
+    def test_each_power_level_line_reaches_its_power_level(self):
+        """The power level buttons of the client send these lines. An out
+        augment lights at the power level, and a lit one moves to it."""
+        augment = _first_augment()
+
+        for power_level in range(aug_const.AUG_POWER_LEVEL_MIN,
+                                 aug_const.AUG_POWER_LEVELS + 1):
+            with self.subTest(power_level=power_level):
+                lines = self._row(augment.key)[feed_const.ABILITY_POWER_LEVEL_COMMANDS_KEY]
+
+                self._send(lines[power_level - aug_const.AUG_POWER_LEVEL_MIN])
+
+                self.assertEqual(
+                    power_level,
+                    get_augment_handler_for(self.char1).power_level_of(augment.key))
 
     def test_the_set_command_lights_the_rig_and_then_puts_all_out(self):
         self._send(self._set_row()["command"])

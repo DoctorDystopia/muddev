@@ -37,6 +37,14 @@ SWING_TICKS: int = 4
 # and a second copy of 2.4 here goes stale the day the tick is retuned.
 SWING_SECONDS: float = SWING_TICKS * tick_constants.TICK_SECONDS
 
+# How long the figure keeps the tool in the hand after a swing ends the
+# channel (11/14/2026). The client plays the clip of that last swing, and the
+# clip must end with the tool in the hand. A clip fits in one cadence, or the
+# next swing would cut it. Thus, one cadence is enough, and the server needs
+# no clip length. A stop that no swing caused (a walk, a fight, `stop`) takes
+# the tool away at once.
+TOOL_HOLD_AFTER_STOP_SECONDS: float = SWING_SECONDS
+
 
 
 # ─── The roll ───────────────────────────────────────────────────────────────

@@ -2338,6 +2338,16 @@ Today, an axe gives `gather_one_hand_cutting`, which plays `cutting_chop`
 (`1H_Melee_Attack_Slice_Horizontal`). Bare hands at the rusty pole give
 `gather_unarmed_cutting`, which plays `punch`.
 
+The figure holds the tool of the channel (11/14/2026). An axe in the bag
+goes into the hand too, and the axe does not move. The server puts the
+held tool in its use slot of the worn record, over the worn items. A sword
+in the main hand gives way to the axe. Thus, the client needs no field and
+no edit: a change of the worn record builds the figure again, and the face
+event of the same tick comes after it. The first swing holds the tool. The
+tool leaves the hand one cadence after a swing ends the channel, so the
+clip of the last swing ends with the tool. A walk, a fight, or `stop`
+removes the tool at once. `character_figure.hold_tool` owns the rule.
+
 A two-handed clip holds one item. Its row in the clip list file has
 `"held_in": ["two_hands"]`. The clearance check then holds a probe in the
 bone of the `two_hands` slot only. Without the field, the probe of the off

@@ -13,14 +13,15 @@ from evennia import create_object
 from evennia.utils.ansi import strip_ansi
 from evennia.utils.test_resources import EvenniaTest
 
-from world.npc_dialogues import oasis_lone_android as guide
+from systems.gameplay.dialogue import constants as dialogue_const
+from systems.gameplay.dialogue.tests import helpers as dialogue
 from systems.gameplay.progression.skills import constants as skill_constants
 from systems.gameplay.progression.skills import xp_awards
 from systems.gameplay.progression.skills.logic import calculate_xp_needed
 from systems.gameplay.progression.tests import gathering_support
 from systems.gameplay.quests.content import quest_oasis_in_the_wastes
 from systems.gameplay.quests.loader import GLOBAL_QUEST_REGISTRY
-from typeclasses.spawners import SPAWNER_REGISTRY
+from typeclasses.spawners import SPAWNER_REGISTRY, load_all_spawners
 from world.npc_database import NPC_DB
 
 
@@ -141,10 +142,20 @@ class OasisBlueprintTests(EvenniaTest):
 # The npc key of the quest giver: its NpcDef key and its spawner key.
 _LONE_ANDROID_KEY: str = "lone_android"
 
+# The dialogue script of the quest giver, from its def (DESIGN-0017).
+_ANDROID_SCRIPT: str = NPC_DB[_LONE_ANDROID_KEY].dialogue_script
+
 
 
 class LoneAndroidSpawnerTests(EvenniaTest):
     """The quest giver must actually exist in the world."""
+
+    def setUp(self):
+        # The NPC spawners register when their module loads, as at server
+        # start. Until 11/12/2026 the Python dialogue module of the android
+        # loaded them by chance, through its imports.
+        super().setUp()
+        load_all_spawners()
 
     def test_a_spawner_is_registered_for_the_map_tile(self):
         """
@@ -160,15 +171,14 @@ class LoneAndroidSpawnerTests(EvenniaTest):
 
 
     def test_the_spawner_places_a_talkable_android(self):
-        from typeclasses.npcs import _dialogue_module_for
-        from world.npc_database import NPC_DB
+        from typeclasses.npcs import _dialogue_script_for
 
         android = SPAWNER_REGISTRY[_LONE_ANDROID_KEY](self.room1)
-        speaks_from = _dialogue_module_for(android)
+        speaks_from = _dialogue_script_for(android)
 
         self.assertIsNotNone(android)
-        self.assertEqual(speaks_from, NPC_DB[_LONE_ANDROID_KEY].dialogue_module())
-        self.assertEqual(speaks_from, guide.__name__)
+        self.assertTrue(speaks_from)
+        self.assertEqual(speaks_from, _ANDROID_SCRIPT)
         self.assertIn(android, self.room1.contents)
 
 
@@ -330,15 +340,17 @@ class OasisPlaythroughTests(EvenniaTest):
         None
 
     Methodology:
-        Drives the android's actual dialogue nodes and the actual progression
+        Drives the android's real dialogue script and the real progression
         hooks rather than calling update_progress directly. A quest can be
         perfectly correct in the blueprint and still be unfinishable because
-        no node fires one of its targets -- which is the failure mode this
+        no beat fires one of its targets -- which is the failure mode this
         whole audit was about.
 
     Notes/References:
-        Nodes take (caller, **kwargs); goto callables take
-        (caller, raw_string, **kwargs).
+        The conversation has no menu here. The dialogue runner is the one
+        that the menu uses. Each step gives a response by a keyword of its
+        label, as a player picks it. The script moved from a Python module
+        on 11/12/2026 (DESIGN-0017).
 
     Author: Nick Hobar
     Creation date: 08/25/2026
@@ -348,92 +360,123 @@ class OasisPlaythroughTests(EvenniaTest):
         return self.char1.quests.current_step_key(_QUEST_KEY)
 
 
+    def _talk(self, cue=dialogue_const.CUE_START):
+        """Open the android's script, as `talk` does, at a cue."""
+        return dialogue.talk(self.char1, _ANDROID_SCRIPT, cue=cue)
+
+
     def _accept(self):
-        guide._accept_oasis_quest(self.char1, "")
+        """Take the quest with no conversation. The quest sits on its
+        intro step until the android gives the brief."""
+        self.char1.quests.accept_quest(_QUEST_KEY)
+
+
+    def _brief(self):
+        """Talk to the android on the intro step: it gives the brief."""
+        return self._talk()
+
+
+    def _report(self, keyword):
+        """Report one stub chore in the chores beat."""
+        return dialogue.give(self._talk(), keyword)
+
+
+    def _open_to_the_analysis(self, opener):
+        """Get the android's attention, then use one of the three openers."""
+        conversation = self._talk()
+        dialogue.give(conversation, "tap")
+
+        return dialogue.give(conversation, opener)
 
 
     def test_the_opening_conversation_reaches_the_offer(self):
         # DCT.1 -> DCT.2 -> DCT.3, the android ignoring the player throughout.
-        text, options = guide.start(self.char1)
-        self.assertIn("does not look up", text)
+        conversation = self._talk()
+        self.assertIn("does not look up", conversation.beat.text)
 
-        text, options = guide.node_hello_once(self.char1)
-        self.assertIn("keeps writing", text)
+        beat = dialogue.give(conversation, '"Hello?"')
+        self.assertIn("keeps writing", beat.text)
 
-        text, options = guide.node_hello_twice(self.char1)
-        self.assertIn("stylus", text)
+        beat = dialogue.give(conversation, '"Hello?!"')
+        self.assertIn("stylus", beat.text)
 
-        text, options = guide.node_shoulder_tap(self.char1)
-        self.assertIn("looks at you", text)
+        beat = dialogue.give(conversation, "tap")
+        self.assertIn("looks at you", beat.text)
 
-        text, options = guide.node_analysis(self.char1)
-        self.assertIn("82% human", text)
+        beat = dialogue.give(conversation, "Excuse me")
+        self.assertIn("82% human", beat.text)
 
-        text, options = guide.node_customization(self.char1)
-        text, options = guide.node_who_are_you(self.char1)
-        text, options = guide.node_quest_offer(self.char1)
+        dialogue.give(conversation, "trouble remembering")
+        dialogue.give(conversation, "Where am I")
+        beat = dialogue.give(conversation, "get out of the desert")
 
-        self.assertIn("Oasis in the Wastes", text)
+        self.assertIn("Oasis in the Wastes", beat.text)
 
 
     def test_a_threatening_opener_lowers_the_confidence_reading(self):
-        text, _options = guide.node_analysis(self.char1, note="raider")
+        beat = self._open_to_the_analysis("Start explaining")
 
-        self.assertIn("72% human", text)
-        self.assertIn("mutant raider", text)
+        self.assertIn("72% human", beat.text)
+        self.assertIn("mutant raider", beat.text)
 
 
     def test_a_blank_stare_earns_a_brain_damage_caveat(self):
-        text, _options = guide.node_analysis(self.char1, note="damage")
+        beat = self._open_to_the_analysis("stare blankly")
 
-        self.assertIn("brain damage", text)
+        self.assertIn("brain damage", beat.text)
 
 
-    def test_accepting_starts_the_quest_on_the_intro_step(self):
-        self._accept()
+    def test_accepting_in_the_offer_starts_the_quest_and_gives_the_brief(self):
+        # The brief follows the accept in the same beat, so the player
+        # leaves the offer with step one already closed.
+        conversation = self._talk("quest_offer")
+
+        beat = dialogue.give(conversation, "Accept")
 
         self.assertTrue(self.char1.quests.is_active(_QUEST_KEY))
-        self.assertEqual(self._step(), quest_oasis_in_the_wastes.STEP_INTRO)
+        self.assertIn("Task one", beat.text)
+        self.assertEqual(self._step(), quest_oasis_in_the_wastes.STEP_MAINTENANCE)
 
 
     def test_the_briefing_closes_step_one(self):
         # talk:lone_android fires here -- not on the `talk` command, and not
         # on accepting.
         self._accept()
+        self.assertEqual(self._step(), quest_oasis_in_the_wastes.STEP_INTRO)
 
-        guide.node_step1_drainage_intro(self.char1)
+        self._brief()
 
         self.assertEqual(self._step(), quest_oasis_in_the_wastes.STEP_MAINTENANCE)
 
 
     def test_reporting_both_chores_closes_step_two(self):
         self._accept()
-        guide.node_step1_drainage_intro(self.char1)
+        self._brief()
 
-        guide._report_pipe(self.char1, "")
+        self._report("drainage")
         self.assertEqual(self._step(), quest_oasis_in_the_wastes.STEP_MAINTENANCE)
 
-        guide._report_soil(self.char1, "")
+        self._report("soil")
         self.assertEqual(self._step(), quest_oasis_in_the_wastes.STEP_APPRENTICESHIP)
 
 
     def test_a_reported_chore_stops_being_offered(self):
         self._accept()
-        guide.node_step1_drainage_intro(self.char1)
-        guide._report_pipe(self.char1, "")
+        self._brief()
+        self._report("drainage")
 
-        _text, options = guide.node_step2_chores(self.char1)
-        descriptions = " ".join(option["desc"] for option in options)
+        conversation = self._talk()
+        labels = " ".join(response.label for response in conversation.beat.responses)
 
-        self.assertNotIn("drainage", descriptions)
-        self.assertIn("soil", descriptions)
+        self.assertNotIn("drainage", labels)
+        self.assertIn("soil", labels)
 
 
     def test_entering_the_craft_step_hands_over_a_hammer(self):
         self._accept()
-        guide.node_step1_drainage_intro(self.char1)
-        guide._report_pipe(self.char1, "")
-        guide._report_soil(self.char1, "")
+        self._brief()
+        self._report("drainage")
+        self._report("soil")
 
         tools = [getattr(item.db, "tool_type", None)
                  for item in self.char1.contents]
@@ -443,9 +486,9 @@ class OasisPlaythroughTests(EvenniaTest):
 
     def test_the_hammer_is_not_handed_over_twice(self):
         self._accept()
-        guide.node_step1_drainage_intro(self.char1)
-        guide._report_pipe(self.char1, "")
-        guide._report_soil(self.char1, "")
+        self._brief()
+        self._report("drainage")
+        self._report("soil")
 
         # Re-running the hook is what an abandon-and-retake would do.
         step = self.char1.quests.current_step(_QUEST_KEY)
@@ -460,13 +503,13 @@ class OasisPlaythroughTests(EvenniaTest):
     def _advance_to(self, step_key):
         """Play the quest forward until it sits on step_key."""
         self._accept()
-        guide.node_step1_drainage_intro(self.char1)
+        self._brief()
 
         if step_key == quest_oasis_in_the_wastes.STEP_MAINTENANCE:
             return
 
-        guide._report_pipe(self.char1, "")
-        guide._report_soil(self.char1, "")
+        self._report("drainage")
+        self._report("soil")
 
         if step_key == quest_oasis_in_the_wastes.STEP_APPRENTICESHIP:
             return
@@ -502,13 +545,16 @@ class OasisPlaythroughTests(EvenniaTest):
         self._advance_to(quest_oasis_in_the_wastes.STEP_RESOLUTION)
         before = self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_METALSMITH)
 
-        text, _options = guide.node_step5_resolution(self.char1)
-        self.assertIn("Neo Cairo", text)
+        conversation = self._talk()
+        self.assertIn("Neo Cairo", conversation.beat.text)
+        # The last target fires under the response, not when the scene opens.
+        self.assertFalse(self.char1.quests.is_complete(_QUEST_KEY))
 
-        guide._finish_oasis_quest(self.char1, "")
+        beat = dialogue.give(conversation, "Thank you")
 
         self.assertTrue(self.char1.quests.is_complete(_QUEST_KEY))
         self.assertGreater(self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_METALSMITH), before)
+        self.assertIn("still here", beat.text)
 
 
     def test_the_conversation_resumes_on_the_right_step(self):
@@ -523,26 +569,26 @@ class OasisPlaythroughTests(EvenniaTest):
                 self.char1.__dict__.pop("quests", None)
 
                 self._advance_to(step_key)
-                text, _options = guide.start(self.char1)
+                conversation = self._talk()
 
-                self.assertNotIn("does not look up", text)
+                self.assertNotIn("does not look up", conversation.beat.text)
 
 
     def test_a_finished_player_gets_the_post_quest_scene(self):
         self._advance_to(quest_oasis_in_the_wastes.STEP_RESOLUTION)
-        guide._finish_oasis_quest(self.char1, "")
+        dialogue.give(self._talk(), "Thank you")
 
-        text, _options = guide.start(self.char1)
+        conversation = self._talk()
 
-        self.assertIn("still here", text)
+        self.assertIn("still here", conversation.beat.text)
 
 
     def test_the_quest_cannot_be_offered_twice(self):
         self._accept()
 
-        text, _options = guide.node_quest_offer(self.char1)
+        conversation = self._talk("quest_offer")
 
-        self.assertIn("already in progress", text)
+        self.assertIn("already in progress", conversation.beat.text)
 
 
 
@@ -558,9 +604,10 @@ class OasisKillHookTests(EvenniaTest):
         raider = NPC_DB["mutant_raider"].create(location=self.room1)
 
         self.char1.quests.accept_quest(_QUEST_KEY)
-        guide.node_step1_drainage_intro(self.char1)
-        guide._report_pipe(self.char1, "")
-        guide._report_soil(self.char1, "")
+        # The brief closes step one. Each later talk opens the chores beat.
+        dialogue.talk(self.char1, _ANDROID_SCRIPT)
+        dialogue.give(dialogue.talk(self.char1, _ANDROID_SCRIPT), "drainage")
+        dialogue.give(dialogue.talk(self.char1, _ANDROID_SCRIPT), "soil")
 
         for recipe in (quest_oasis_in_the_wastes.RECIPE_AXE, quest_oasis_in_the_wastes.RECIPE_DAGGER):
             self.char1.quests.notify("craft", recipe)

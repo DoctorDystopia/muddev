@@ -358,4 +358,21 @@ ITEMS = {
             ("mutant_giant_prime_cured_meat_sandwich", ITEM_FAMILY_FOOD),
         ],
     ),
+
+    "canopic_jar": ItemDef(
+        key="canopic_jar",
+        name="canopic jar",
+        desc=(
+            "mmm tasty."
+        ),
+        value=111,
+        weight=1.0,
+        tradeable=True,
+        stackable=False,
+        heal_amount=20,
+        tags=[
+            ("canopic_jar", "crafting_material"),
+            ("canopic_jar", ITEM_FAMILY_FOOD),
+        ],
+    ),
 }

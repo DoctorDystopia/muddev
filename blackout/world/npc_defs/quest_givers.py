@@ -5,8 +5,10 @@ Creation date: 10/09/2026
 Description: The NpcDef entries of the NPCs that give a quest and have no
              other role.
 
-             A quest giver is a TalkativeNPC. Its dialogue module gives the
-             quest, through the read and write API of QuestHandler.
+             A quest giver is a TalkativeNPC. Its dialogue gives the quest,
+             through the read and write API of QuestHandler. The Lone
+             Android speaks from the dialogue script
+             `godot/dialogue/oasis_lone_android.dialogue` (11/12/2026).
 """
 
 from world.npc_database import NPC_TYPECLASS_TALKATIVE, NpcDef
@@ -24,6 +26,6 @@ NPCS = {
             "the primer and one knee joint whines when it moves. It is bent "
             "over a datapad, writing, and does not appear to have noticed you."
         ),
-        dialogue="oasis_lone_android",
+        dialogue_script="oasis_lone_android",
     ),
 }

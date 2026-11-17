@@ -20,6 +20,12 @@
 			"stackable": false
 		},
 		{
+			"family": "food",
+			"key": "canopic_jar",
+			"name": "canopic jar",
+			"stackable": false
+		},
+		{
 			"family": "crafting_material",
 			"key": "copper_arrow",
 			"name": "copper arrow",

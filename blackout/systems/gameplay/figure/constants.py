@@ -36,6 +36,16 @@ CHARACTER_COLOR_ROLES: tuple = ("skin", "hair")
 # The value that gives a color role back to the palette.
 PALETTE_COLOR: str = ""
 
+# The ndb names of the held tool (11/14/2026). A gathering channel puts its
+# tool in the hand of the figure, also when the tool is in the bag. The first
+# name holds the id of the tool. Each hold adds one to the serial, and a late
+# release goes through only when no hold came after it.
+#
+# ndb, not db: the held tool is a fact of a channel that runs, and a reload
+# ends each channel. A reload thus also takes the tool out of the hand.
+HELD_TOOL_NDB: str = "figure_held_tool"
+HELD_SERIAL_NDB: str = "figure_held_serial"
+
 # The messages of the two writers. A moderator tool and a test read them.
 MSG_UNKNOWN_BODY_TYPE: str = (
     "{body_type} is not a body type. The body types are: {choices}."

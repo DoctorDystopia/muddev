@@ -40,6 +40,15 @@ A hop onto a transition ends the stride at the transition target, and it
 ends the walk. The walker gets the `transition` moment, and the client plays
 its sound.
 
+The speed and the tile carry
+----------------------------
+A lit Nitro adds its tile bonus to the walk or the run (Nick, 11/14/2026).
+The speed stops at the speed cap, `MAX_TILES_PER_TICK`. A power level below
+the top adds a part of a tile. The walker keeps that part as its tile carry.
+Each whole tile of carry adds one tile to the stride of that tick. Thus, a
+run with Nitro at power level 1 moves 2, 2, 3, 2, 2, 3 tiles. The stride
+skips each tile between its start and its end, as a run does.
+
 The pace of one walk
 --------------------
 A `goto/walk` or a `goto/run` sets the pace of its walk, with the run toggle
@@ -55,7 +64,9 @@ the feed must change. A `goto` walk shows the destination marker. A direction
 walk shows none, so the feed sends nothing for a held key.
 """
 
+import math
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 from evennia.utils import logger
 
@@ -132,10 +143,10 @@ def set_running(character, running: bool) -> None:
     feed.emit_walk(character)
 
 
-def tiles_per_tick(character, walk=None) -> int:
+def _base_tiles(character, walk=None) -> int:
     """
-    Return how many tiles the character moves each tick. The pace of `walk`
-    wins over the run toggle, if the walk has one.
+    Return the tiles of a walk or a run, with no tile bonus. The pace of
+    `walk` wins over the run toggle, if the walk has one.
     """
     running = is_running(character)
 
@@ -146,6 +157,74 @@ def tiles_per_tick(character, walk=None) -> int:
         return const.RUN_TILES_PER_TICK
 
     return const.WALK_TILES_PER_TICK
+
+
+def speed(character, walk=None) -> Fraction:
+    """
+    Purpose: The tiles that a character moves each tick, on average.
+
+    Entry:
+        character - a character.
+        walk      - its walk, or None. The pace of the walk wins over the
+                    run toggle.
+
+    Exit/Returns:
+        A Fraction in [WALK_TILES_PER_TICK, MAX_TILES_PER_TICK].
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The walk or the run, plus the tile bonus of the lit augments, up to
+        the speed cap. The routine imports the augmentation rules inside
+        its body, as hp_regen.py does. An import at module scope would load
+        the combat package with the walk.
+
+    Notes/References:
+        The module docstring, "The speed and the tile carry".
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    from systems.gameplay.augmentation.rules import tile_bonus
+
+    total = _base_tiles(character, walk) + tile_bonus(character)
+
+    return min(Fraction(const.MAX_TILES_PER_TICK), Fraction(total))
+
+
+def tiles_per_tick(character, walk=None) -> int:
+    """
+    Return the most tiles that the character moves in one tick: the speed,
+    rounded up. A direction command makes a line of this length.
+    """
+    return math.ceil(speed(character, walk))
+
+
+def _take_tiles(character, walk) -> int:
+    """
+    Return the tiles of this tick: the whole part of the speed, plus one tile
+    when the tile carry fills. A speed with no part of a tile clears the
+    carry, so an old carry never gives a tile later.
+    """
+    average = speed(character, walk)
+    whole = math.floor(average)
+    part = average - whole
+
+    if not part:
+        setattr(character.ndb, const.TILE_CARRY_NDB_ATTR, None)
+        return whole
+
+    carry = getattr(character.ndb, const.TILE_CARRY_NDB_ATTR) or Fraction(0)
+    carry += part
+
+    if carry >= 1:
+        whole += 1
+        carry -= 1
+
+    setattr(character.ndb, const.TILE_CARRY_NDB_ATTR, carry)
+
+    return whole
 
 
 # ─── The walk ────────────────────────────────────────────────────────────────
@@ -252,7 +331,7 @@ def start_direction(character, direction: str, session=None) -> str:
         None.
 
     Methodology:
-        1. Make the line of tiles for one tick: one, or two with run on.
+        1. Make the line of tiles for one tick: the speed, rounded up.
         2. A refused first hop tells the player why, and starts nothing.
         3. Else the line replaces the current walk. The tick moves it.
 
@@ -360,8 +439,9 @@ def advance(character) -> None:
         None.
 
     Methodology:
-        1. Take the next tiles of the path: one, or two with run on. The
-           pace of the walk wins over the toggle, if it has one.
+        1. Take the next tiles of the path: one, or two with run on. Add
+           the tile bonus and the tile carry. The pace of the walk wins
+           over the toggle, if it has one.
         2. Stop if the path does not start next to the walker.
         3. Move along them in one stride. A refused first hop stops the
            walk, and the player reads why.
@@ -382,7 +462,7 @@ def advance(character) -> None:
         return
 
     here = tile_travel.tile_of(character)
-    directions = _hops(here, walk.path[:tiles_per_tick(character, walk)])
+    directions = _hops(here, walk.path[:_take_tiles(character, walk)])
 
     if not directions:
         set_walk(character, None)

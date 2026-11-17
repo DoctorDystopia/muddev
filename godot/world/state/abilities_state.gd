@@ -44,9 +44,10 @@ var has_data := false
 
 ## The rows, in the order of the server. Each one is `{key, name, kind,
 ## state, command, reason, power_level, power_levels, power_level_command,
-## tip}`. `command` is empty on a locked row. `tip` is `{title, lines}`. A
-## row with no power level dial has 0 in `power_level` and `power_levels`,
-## and an empty `power_level_command`.
+## power_level_commands, tip}`. `command` is empty on a locked row. `tip`
+## is `{title, lines}`. A row with no power level dial has 0 in
+## `power_level` and `power_levels`, an empty `power_level_command`, and
+## no `power_level_commands`.
 var rows: Array = []
 
 
@@ -112,6 +113,20 @@ static func has_power_levels(row: Dictionary) -> bool:
 	return int(row.get("power_levels", 0)) > 0
 
 
+## The lines of the power level buttons, in the order of the server. A
+## value that is no list gives no buttons.
+static func _lines(raw: Variant) -> Array[String]:
+	var read: Array[String] = []
+
+	if typeof(raw) != TYPE_ARRAY:
+		return read
+
+	for line: Variant in raw:
+		read.append(str(line))
+
+	return read
+
+
 func _rows(raw: Variant) -> Array:
 	var read: Array = []
 
@@ -138,6 +153,11 @@ func _rows(raw: Variant) -> Array:
 			"power_levels": int(entry.get(_Const.ABILITY_POWER_LEVELS_KEY, 0)),
 			"power_level_command": str(
 				entry.get(_Const.ABILITY_POWER_LEVEL_COMMAND_KEY, "")),
+			# One line for each power level button, the lowest first
+			# (11/12/2026). "" is a button that sends nothing: the current
+			# power level, or a locked row.
+			"power_level_commands": _lines(
+				entry.get(_Const.ABILITY_POWER_LEVEL_COMMANDS_KEY, [])),
 			# The note after the name: the roll of Overclock (Phase 5). The
 			# server says the text, and "" draws nothing.
 			"note": str(entry.get(_Const.ABILITY_NOTE_KEY, "")),

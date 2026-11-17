@@ -5,8 +5,9 @@ Creation date: 10/30/2026
 Description: The Phase 5 mechanics of DESIGN-0015: the roll of Overclock,
              the guard augments on the defender side of the pipeline, the
              conflict group, Mend on the regen sweep, and Reach on the ring
-             of the lit aura. Every expectation is derived from the owner
-             of the number, never typed.
+             of the lit aura. Nitro and its tile bonus joined on
+             11/14/2026. Each test derives its expectation from the owner of
+             the number, and never types it.
 Run from blackout/:
     ../evenv/Scripts/evennia.exe test --settings test_settings.py systems.gameplay.augmentation
 """
@@ -359,13 +360,58 @@ class TestReach(_Lit, EvenniaTest):
         self.assertIn(self.aura_handler.radius_for(self.char1, self.aura), radii)
 
 
+class TestNitro(_Lit, EvenniaTest):
+    """Nitro adds tiles to each tick of a walk (Nick, 11/14/2026). The walk
+    tests in commands/tests/test_tile_movement.py prove the walk side."""
+
+    def setUp(self):
+        super().setUp()
+        self.nitro = _one(lambda augment: augment.modifies == aug_const.MODIFIES_SPEED, self)
+
+    def test_the_tiles_follow_the_power_level(self):
+        levels = range(aug_const.AUG_POWER_LEVEL_MIN, aug_const.AUG_POWER_LEVELS + 1)
+        tiles = [self.nitro.tiles_for(power_level) for power_level in levels]
+
+        self.assertEqual(sorted(tiles), tiles)
+        self.assertEqual(aug_const.AUG_NITRO_TILES, tiles[-1])
+        self.assertGreater(tiles[0], 0)
+
+    def test_each_power_level_adds_its_share_exactly(self):
+        # The walk adds the part to its carry. AUG_POWER_LEVELS ticks of the
+        # lowest part must make whole tiles, with no float left over.
+        lowest = self.nitro.tiles_for(aug_const.AUG_POWER_LEVEL_MIN)
+
+        self.assertEqual(aug_const.AUG_NITRO_TILES,
+                         lowest * aug_const.AUG_POWER_LEVELS)
+
+    def test_nothing_lit_adds_no_tiles(self):
+        self.assertEqual(0, rules.tile_bonus(self.char1))
+
+    def test_a_lit_nitro_adds_the_tiles_of_its_power_level(self):
+        for power_level in range(aug_const.AUG_POWER_LEVEL_MIN, aug_const.AUG_POWER_LEVELS + 1):
+            with self.subTest(power_level=power_level):
+                self._light(self.nitro, power_level)
+
+                self.assertEqual(self.nitro.tiles_for(power_level),
+                                 rules.tile_bonus(self.char1))
+
+    def test_a_put_out_drops_the_tiles(self):
+        self._light(self.nitro)
+        self.handler.put_out(self.nitro.key)
+
+        self.assertEqual(0, rules.tile_bonus(self.char1))
+
+    def test_an_entity_with_no_handler_adds_no_tiles(self):
+        self.assertEqual(0, rules.tile_bonus(object()))
+
+
 class TestModifierDefs(unittest.TestCase):
     """The shapes of the Phase 5 augments. No DB."""
 
     def test_a_modifier_names_what_it_changes(self):
         for augment in AUGMENT_REGISTRY.values():
             if augment.family in (aug_const.FAMILY_MODIFIER, aug_const.FAMILY_REGEN,
-                                  aug_const.FAMILY_AURA):
+                                  aug_const.FAMILY_AURA, aug_const.FAMILY_MOVEMENT):
                 with self.subTest(augment=augment.key):
                     self.assertTrue(augment.modifies)
 

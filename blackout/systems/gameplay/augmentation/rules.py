@@ -16,14 +16,17 @@ Description: The combat modifiers of the lit augments (DESIGN-0015, Phase
              strength modifier (Overclock) joins the bonus of every other
              lit augment, `reach_bonus` gives the aura handler its tiles,
              and `regen_interval_share` gives the regen sweep its share.
+             On 11/14/2026, `tile_bonus` gave the walk the tiles of Nitro.
 """
+
+from fractions import Fraction
 
 from systems.gameplay.combat import constants as combat_const
 from systems.gameplay.combat.rules.rule_defs.base_rules import BaseActionRules
 
 from . import constants as aug_const
 from . import pool
-from .handler import get_augment_handler_for, lit_augments_of
+from .handler import BlackoutAugmentHandler, get_augment_handler_for, lit_augments_of
 
 
 # The key prefix of an augment rules instance. The key names the augment,
@@ -194,6 +197,49 @@ def reach_bonus(entity) -> int:
 
     for augment, power_level in lit_augments_of(entity):
         if augment.modifies == aug_const.MODIFIES_REACH:
+            tiles += augment.tiles_for(power_level)
+
+    return tiles
+
+
+def tile_bonus(entity) -> Fraction:
+    """
+    Purpose: The tiles that the lit speed modifiers of an entity add to
+             each tick of its walk.
+
+    Entry:
+        entity is any object. It may have no handler.
+
+    Exit/Returns:
+        Returns a Fraction of at least 0. A part of a tile is the share of
+        a power level below the top.
+
+    Module Globals:
+        aug_const.MODIFIES_SPEED read.
+
+    Methodology:
+        1. Read the handler through the cached accessor of the entity, not
+           through a scan of its scripts. The walk asks on every tick for
+           every walker, and a scan is one database query.
+        2. Sum `tiles_for(power_level)` over the lit augments that modify
+           the speed.
+
+    Notes/References:
+        walk.speed reads it. The handler paths clear the accessor (see
+        tickable.ensure_handler and stop_handler), so the cache follows a
+        light and a put-out.
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    handler = getattr(entity, BlackoutAugmentHandler.ACCESSOR_NAME, None)
+    tiles = Fraction(0)
+
+    if handler is None:
+        return tiles
+
+    for augment, power_level in handler.lit_augments():
+        if augment.modifies == aug_const.MODIFIES_SPEED:
             tiles += augment.tiles_for(power_level)
 
     return tiles

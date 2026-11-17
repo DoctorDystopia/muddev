@@ -3,11 +3,13 @@ GNU License or generic module header.
 Author: Nick Hobar
 Creation date: 09/24/2026
 Description: Tests for movement on the tile world: the direction commands,
-             a transition, the `goto` walk, and the run. The world is two
-             chunks, built in memory. No tick engine runs: a test moves the
+             a transition, the `goto` walk, the run, and the speed with a
+             tile bonus (11/14/2026). The world is two chunks, built in
+             memory. No tick engine runs: a test moves the
              walkers with `walk.advance_all`, one call for each tick.
 """
 
+from fractions import Fraction
 from unittest import mock
 
 from evennia.utils.test_resources import EvenniaTest
@@ -16,10 +18,15 @@ from systems.core.tilegrid import chunkfile
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid import movement
 from systems.core.tilegrid.world import TileWorld, set_world
+from systems.gameplay.augmentation import constants as aug_const
+from systems.gameplay.augmentation import rules as augmentation_rules
+from systems.gameplay.augmentation.handler import ensure_augment_handler
+from systems.gameplay.augmentation.registry import augments_in_order
 from systems.gameplay.movement import constants as walk_const
 from systems.gameplay.movement import walk
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed_events
+from typeclasses.characters import Character as BlackoutCharacter
 from world import tile_text
 from world.object_kinds import OBJECT_KINDS
 
@@ -429,6 +436,175 @@ class WalkAndRunTests(EvenniaTest):
 
         self.assertIsNone(walk.current(self.char1))
         self.assertIn("usage", self._said())
+
+
+# The tile bonus of the speed tests: a third of a tile, as Nitro gives at
+# power level 1 of 3. The walk rule holds for any part, so the number is the
+# test's own, not a read of the augment.
+_PARTS = 3
+_PART_OF_A_TILE = Fraction(1, _PARTS)
+
+# Far more tiles than the speed cap, for the cap test.
+_A_HUGE_BONUS = Fraction(walk_const.MAX_TILES_PER_TICK * 2)
+
+
+class SpeedTests(EvenniaTest):
+    """
+    The tile bonus, the speed cap, and the tile carry (11/14/2026). The
+    tests patch the tile bonus of the augmentation rules, so they prove the
+    walk alone. NitroWalkTests lights a real Nitro.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.world = _world()
+        set_world(self.world)
+        movement.place(self.world.rooms, self.char1, *_START, quiet=True)
+        self.char1.msg = mock.Mock()
+        walk.set_running(self.char1, True)
+
+    def tearDown(self):
+        walk.forget_all()
+        set_world(None)
+        super().tearDown()
+
+    def _tile(self):
+        x, y, _z = self.char1.location.xyz
+
+        return (int(x), int(y))
+
+    def _west(self, tiles: int) -> tuple:
+        return (_START[0] - tiles, _START[1])
+
+    def _bonus(self, tiles):
+        return mock.patch.object(augmentation_rules, "tile_bonus", return_value=tiles)
+
+    def _held_west(self, ticks: int) -> list:
+        """Hold the west key for `ticks` ticks. Return the tile after each."""
+        tiles = []
+
+        for _ in range(ticks):
+            self.char1.execute_cmd("west")
+            _tick()
+            tiles.append(self._tile())
+
+        return tiles
+
+    def test_a_whole_bonus_adds_its_tiles_to_each_tick(self):
+        bonus = Fraction(1)
+        expected = min(walk_const.RUN_TILES_PER_TICK + bonus, walk_const.MAX_TILES_PER_TICK)
+
+        with self._bonus(bonus):
+            self.char1.execute_cmd("west")
+            _tick()
+
+        self.assertEqual(self._tile(), self._west(int(expected)))
+
+    def test_the_speed_stops_at_the_cap(self):
+        with self._bonus(_A_HUGE_BONUS):
+            self.assertEqual(walk.speed(self.char1), walk_const.MAX_TILES_PER_TICK)
+            tiles = self._held_west(1)
+
+        self.assertEqual(tiles, [self._west(walk_const.MAX_TILES_PER_TICK)])
+
+    def test_a_goto_takes_a_part_of_a_tile_as_a_whole_tile_later(self):
+        # A* can start with a diagonal, so this counts the tiles walked.
+        run = walk_const.RUN_TILES_PER_TICK
+        expected = [tick * run + tick // _PARTS for tick in range(1, _PARTS + 1)]
+
+        with self._bonus(_PART_OF_A_TILE):
+            self.char1.execute_cmd("goto (%d,%d)" % self._west(9))
+            start = len(walk.current(self.char1).path)
+            walked = []
+
+            for _ in range(_PARTS):
+                _tick()
+                walked.append(start - len(walk.current(self.char1).path))
+
+        self.assertEqual(walked, expected)
+
+    def test_a_held_key_keeps_the_carry_across_its_walks(self):
+        # A held key makes a new walk two times a tick. The carry lives on
+        # the character, so the part of a tile still adds up.
+        run = walk_const.RUN_TILES_PER_TICK
+        expected = [self._west(tick * run + tick // _PARTS) for tick in range(1, _PARTS + 1)]
+
+        with self._bonus(_PART_OF_A_TILE):
+            tiles = self._held_west(_PARTS)
+
+        self.assertEqual(tiles, expected)
+
+    def test_a_whole_speed_clears_the_carry(self):
+        # Fill the carry to one part short of a tile. A tick with no bonus
+        # clears it, so the next tick with the bonus gives no extra tile.
+        run = walk_const.RUN_TILES_PER_TICK
+
+        with self._bonus(_PART_OF_A_TILE):
+            self._held_west(_PARTS - 1)
+
+        with self._bonus(Fraction(0)):
+            self._held_west(1)
+
+        with self._bonus(_PART_OF_A_TILE):
+            tiles = self._held_west(1)
+
+        self.assertEqual(tiles, [self._west((_PARTS + 1) * run)])
+
+    def test_a_direction_line_covers_the_part_of_a_tile(self):
+        with self._bonus(_PART_OF_A_TILE):
+            self.char1.execute_cmd("west")
+
+        line = walk.current(self.char1).path
+
+        self.assertEqual(len(line), walk_const.RUN_TILES_PER_TICK + 1)
+
+
+class NitroWalkTests(EvenniaTest):
+    """A real Nitro, lit at the top power level, on a run (Nick, 11/14/2026)."""
+
+    character_typeclass = BlackoutCharacter
+
+    def setUp(self):
+        super().setUp()
+        self.world = _world()
+        set_world(self.world)
+        movement.place(self.world.rooms, self.char1, *_START, quiet=True)
+        self.char1.msg = mock.Mock()
+        self.handler = ensure_augment_handler(self.char1)
+        self.nitro = next(augment for augment in augments_in_order()
+                          if augment.modifies == aug_const.MODIFIES_SPEED)
+
+    def tearDown(self):
+        self.handler.stop_handler()
+        walk.forget_all()
+        set_world(None)
+        super().tearDown()
+
+    def _tile(self):
+        x, y, _z = self.char1.location.xyz
+
+        return (int(x), int(y))
+
+    def test_a_run_with_nitro_at_the_top_power_level_reaches_its_speed(self):
+        self.handler.light(self.nitro, aug_const.AUG_POWER_LEVELS)
+        walk.set_running(self.char1, True)
+        top = self.nitro.tiles_for(aug_const.AUG_POWER_LEVELS)
+        expected = min(walk_const.RUN_TILES_PER_TICK + top, walk_const.MAX_TILES_PER_TICK)
+
+        self.char1.execute_cmd("west")
+        _tick()
+
+        self.assertEqual(self._tile(), (_START[0] - int(expected), _START[1]))
+
+    def test_a_put_out_nitro_runs_at_run_speed_again(self):
+        self.handler.light(self.nitro, aug_const.AUG_POWER_LEVELS)
+        self.handler.put_out(self.nitro.key)
+        walk.set_running(self.char1, True)
+
+        self.char1.execute_cmd("west")
+        _tick()
+
+        self.assertEqual(self._tile(), (_START[0] - walk_const.RUN_TILES_PER_TICK, _START[1]))
 
 
 class TileLogoutTests(EvenniaTest):

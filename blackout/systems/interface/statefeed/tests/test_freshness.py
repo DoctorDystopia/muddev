@@ -579,3 +579,43 @@ class TestTheWornRecordFollowsTheGear(_FigureFeedTest):
 
         row = self._rows_for_observers()[-1]
         self.assertNotIn(const.ENTITY_WORN_KEY, row)
+
+    def _a_tool_in_the_bag(self) -> tuple:
+        """Put the first tool of the database with a use slot in the bag.
+
+        Returns (item, slot value, asset key). The database picks the tool,
+        as _equip_one_item picks the gear.
+        """
+        for key in sorted(ITEM_DB):
+            item_def = ITEM_DB[key]
+
+            if item_def.tool_type and item_def.use_slot is not None:
+                item = item_def.create(location=self.char1)
+                asset_key = serializers.serialize_entity(item)["asset"]
+
+                return item, item_def.use_slot.value, asset_key
+
+        self.skipTest("the database has no tool with a use slot")
+
+    def test_a_held_tool_reaches_the_owner_and_each_observer(self):
+        """A gathering channel holds its tool from the bag (11/14/2026)."""
+        tool, slot, asset_key = self._a_tool_in_the_bag()
+
+        character_figure.hold_tool(self.char1, tool)
+
+        avatar = self._bodies(const.CHANNEL_CHAR_AVATAR)[-1]
+        row = self._rows_for_observers()[-1]
+        self.assertEqual(avatar["worn"], {slot: asset_key})
+        self.assertEqual(row[const.ENTITY_WORN_KEY], {slot: asset_key})
+        self.assertIs(tool.location, self.char1)
+
+    def test_a_release_takes_the_held_tool_off_both_readers(self):
+        tool, _slot, _asset_key = self._a_tool_in_the_bag()
+
+        character_figure.hold_tool(self.char1, tool)
+        character_figure.release_tool(self.char1)
+
+        avatar = self._bodies(const.CHANNEL_CHAR_AVATAR)[-1]
+        row = self._rows_for_observers()[-1]
+        self.assertEqual(avatar["worn"], {})
+        self.assertNotIn(const.ENTITY_WORN_KEY, row)

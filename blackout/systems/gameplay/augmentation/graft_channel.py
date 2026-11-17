@@ -77,7 +77,12 @@ _REPORT_TOTAL: str = "total"
 # ─── Private helper routines ─────────────────────────────────────────────────
 
 def _refresh_popup(character) -> None:
-    """Mark an open pop-up out of date, for a change that moves no item.
+    """Send the bag again, for a change that moves no item.
+
+    Two panes read the channel. The Locus pop-up shows the count and the
+    Stop button, and the bag puts Stop on the row of the sample
+    (11/12/2026). emit_inventory marks an open pop-up out of date too, so
+    one send reaches both.
 
     The import is local: the pop-up registry imports the Locus pop-up, and
     that pop-up imports this module.
@@ -85,7 +90,7 @@ def _refresh_popup(character) -> None:
     from systems.interface.statefeed import events as feed
 
     try:
-        feed.refresh_popup(character)
+        feed.emit_inventory(character)
     except Exception:
         logger.log_trace()
 
@@ -519,6 +524,24 @@ def channel_report(character):
     report = handler.report()
 
     return report
+
+
+def running_sample(character) -> str:
+    """The group name of the sample that a running count grafts, or "".
+    The inventory pane reads it to put Stop on the row of that sample. A
+    channel that only waits runs no count, and gives ""."""
+    handler = get_graft_handler(character)
+
+    if handler is None:
+        return ""
+
+    handler.init_runtime_state()
+    report = handler.report()
+
+    if report is None:
+        return ""
+
+    return str(handler.ndb.sample_name or "")
 
 
 def end_grafting(character) -> None:

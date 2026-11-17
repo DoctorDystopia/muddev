@@ -44,6 +44,7 @@ func _ready() -> void:
 	_standing_still_keeps_the_yaw()
 	_a_teleport_keeps_the_yaw()
 	_every_run_step_turns_the_front_along_the_run()
+	_every_step_at_the_speed_cap_turns_the_front()
 	_a_bent_run_faces_along_its_slide()
 	_a_diagonal_splits_its_two_cardinals()
 	_a_far_entity_is_walked_to_first()
@@ -157,6 +158,21 @@ func _every_run_step_turns_the_front_along_the_run() -> void:
 
 		_expect(front.dot(run) > 0.999,
 			"a run %s turns the figure %s" % [direction, direction])
+
+
+## A run with Nitro at the top power level moves `MAX_TILES_PER_TICK` tiles in
+## one tick (11/14/2026). Each step of it must turn the figure as a run does.
+## Until 11/14/2026 the snap limit was 3.0, and a three-tile diagonal kept
+## the yaw.
+func _every_step_at_the_speed_cap_turns_the_front() -> void:
+	for direction: String in STEPS:
+		var delta: Vector2i = STEPS[direction] * Const.MAX_TILES_PER_TICK
+		var yaw := WorldView.yaw_towards(Vector2i.ZERO, delta, 0.0)
+		var front := AUTHORED_FRONT.rotated(Vector3.UP, yaw)
+		var move := Vector3(delta.x, 0.0, -delta.y).normalized()
+
+		_expect(front.dot(move) > 0.999,
+			"a step at the speed cap %s turns the figure %s" % [direction, direction])
 
 
 ## A run of two tiles can bend: east, then northeast. The slide draws the move

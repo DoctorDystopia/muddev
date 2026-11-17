@@ -53,6 +53,7 @@ import os as _os
 from systems.core.tick import constants as tick_const
 from systems.core.tilegrid import constants as tile_const
 from systems.gameplay.augmentation import constants as aug_const
+from systems.gameplay.movement import constants as walk_const
 from systems.interface.popups import constants as popup_const
 from world import areas as area_table
 from world import decor_kinds as decor_table
@@ -282,6 +283,7 @@ _SCALAR_EXPORTS: tuple = (
     ("ABILITY_POWER_LEVEL_KEY", const.ABILITY_POWER_LEVEL_KEY),
     ("ABILITY_POWER_LEVELS_KEY", const.ABILITY_POWER_LEVELS_KEY),
     ("ABILITY_POWER_LEVEL_COMMAND_KEY", const.ABILITY_POWER_LEVEL_COMMAND_KEY),
+    ("ABILITY_POWER_LEVEL_COMMANDS_KEY", const.ABILITY_POWER_LEVEL_COMMANDS_KEY),
     ("ABILITY_NOTE_KEY", const.ABILITY_NOTE_KEY),
     ("TIP_KEY", const.TIP_KEY),
     ("TIP_TITLE_KEY", const.TIP_TITLE_KEY),
@@ -401,8 +403,14 @@ _MESSAGE_TYPE_EXPORTS: tuple = (
 # takes any other time either arrives early and waits, or falls behind and
 # keeps falling. Typing 0.6 into GDScript is the hazard CLAUDE.md names: a
 # literal that already had a constant, on a number the server is free to retune.
+#
+# The speed cap rides with the clock for the same reason (11/14/2026). The
+# client slides a move of up to this many tiles in one tick. It snaps a
+# longer move. A cap typed into GDScript would snap each step of a Nitro run
+# on the day that the server raised it.
 _CLOCK_EXPORTS: tuple = (
     ("TICK_SECONDS", tick_const.TICK_SECONDS),
+    ("MAX_TILES_PER_TICK", walk_const.MAX_TILES_PER_TICK),
 )
 
 # The tile grid and its chunk file (DESIGN-0011 section 6.2). The owner is
@@ -807,8 +815,8 @@ def _render_body(syntax: dict, indent: str) -> str:
             _MOMENT_EXPORTS)
     section("Text routing -- what a line of game text is ABOUT. Which tab "
             "shows it is the client's own.", _MESSAGE_TYPE_EXPORTS)
-    section("The server clock. One tile per tick is walking speed.",
-            _CLOCK_EXPORTS)
+    section("The server clock. One tile per tick is walking speed. "
+            "MAX_TILES_PER_TICK is the speed cap.", _CLOCK_EXPORTS)
     section("The tile grid and its chunk file. DESIGN-0011 section 6.2.",
             _TILE_GRID_EXPORTS)
 

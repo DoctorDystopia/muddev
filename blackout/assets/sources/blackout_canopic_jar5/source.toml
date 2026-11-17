@@ -1,0 +1,9 @@
+title     = "canopic jar"
+author    = "Harsh Patel"
+url       = "https://playblackout.io"
+site      = "blackout"
+license   = "LicenseRef-Blackout-Owned"
+retrieved = 2026-11-15
+
+[files]
+"canopic_jar5.glb" = "sha256:11c08c59360fee7ed91054354aac6c1bf112b5e65b68749f22bdb268df8b321e"

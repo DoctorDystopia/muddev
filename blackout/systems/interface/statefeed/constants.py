@@ -196,6 +196,14 @@ ABILITY_POWER_LEVEL_KEY: str = "power_level"
 ABILITY_POWER_LEVELS_KEY: str = "power_levels"
 ABILITY_POWER_LEVEL_COMMAND_KEY: str = "power_level_command"
 
+# The power level buttons of an augment row (11/12/2026). A list of whole
+# lines, one for each power level, the lowest first: item 0 is power level
+# 1. A line lights the augment at that power level, or moves a lit one to
+# it. The line of the current power level is "", and so is each line of a
+# locked row. The client draws "" as a button that does nothing. A row
+# with no power level dial carries no list.
+ABILITY_POWER_LEVEL_COMMANDS_KEY: str = "power_level_commands"
+
 # A short mark after the name of a row: the roll of Overclock, "+14%"
 # (DESIGN-0015, Phase 5). The server says the text, and the client draws it
 # after the name. "" draws nothing. One field for every row kind, so a

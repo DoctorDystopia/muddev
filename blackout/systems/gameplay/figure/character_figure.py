@@ -19,12 +19,20 @@ Description: The one reader and the one writer of the figure of a
              each slot. The equipment handler owns that fact and calls
              publish on each change (DESIGN-0014 section 21).
 
+             The held tool is the fourth fact (11/14/2026). A gathering
+             channel puts its tool in the hand of the figure through
+             hold_tool, also when the tool is in the bag. release_tool
+             removes it. figure_items_of puts the held tool over the worn
+             items, and the client draws the worn record from it. The tool
+             stays in the bag. Only the figure holds it.
+
              No character creator exists yet (DESIGN-0014 decision 9). Today
              the moderator egg is the only caller of the two writers.
 """
 
 from evennia.utils import logger
 
+from items.equipment.constants import slots_displaced_by
 from systems.gameplay.figure import constants as const
 from systems.gameplay.figure import figure_files
 
@@ -59,7 +67,7 @@ def publish(character) -> None:
         Wrapped, because a feed send must never stop a write that already
         happened.
 
-        Three callers: the two writers of this module, and
+        Four callers: the two writers of this module, hold_tool, and
         EquipmentHandler._publish, because the worn record is on the same
         row (DESIGN-0014 section 21).
 
@@ -125,6 +133,180 @@ def worn_items_of(character) -> dict:
             worn[str(getattr(slot, "value", slot))] = item
 
     return worn
+
+
+def figure_items_of(character) -> dict:
+    """
+    Purpose: Give the item in each slot of the figure of a character: the
+             worn items, with the held tool over them.
+
+    Entry:
+        character - a character, or any object.
+
+    Exit/Returns:
+        Returns a new dict, slot value -> item, in the shape of
+        worn_items_of. With no held tool, the dict is the same as the
+        dict of worn_items_of.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        The held tool goes into its use slot. It empties each slot that an
+        equip of the tool empties (slots_displaced_by). Thus, the figure
+        holds an axe from the bag as it holds an equipped axe. A sword in
+        the main hand gives way to it.
+
+        A held tool with no use slot draws nowhere. The figure then draws
+        the worn items only.
+
+    Notes/References:
+        hold_tool writes the held tool. The statefeed reads this routine
+        for the worn record (serializers._worn_record).
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    worn = worn_items_of(character)
+    tool = held_tool_of(character, worn)
+    use_slot = getattr(tool, "inventory_use_slot", None)
+
+    if use_slot is None:
+        return worn
+
+    for slot in slots_displaced_by(use_slot):
+        worn.pop(slot.value, None)
+
+    worn[use_slot.value] = tool
+
+    return worn
+
+
+def held_tool_of(character, worn: dict = None):
+    """
+    Purpose: Give the tool that the figure of a character holds, or None.
+
+    Entry:
+        character - a character, or any object.
+        worn      - the dict of worn_items_of for the character, or None to
+                    read it here.
+
+    Exit/Returns:
+        Returns the held tool. Returns None when the figure holds no tool,
+        or when the character does not carry the tool now.
+
+    Module Globals:
+        const.HELD_TOOL_NDB read.
+
+    Methodology:
+        The ndb holds the id of the tool, not the object. This routine finds
+        the id in what the character carries: the worn items and the bag.
+        Thus, a tool that the player drops, sells, or banks leaves the hand
+        at the next send. None of those paths needs a hook.
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    tool_id = _ndb_value(character, const.HELD_TOOL_NDB)
+
+    if tool_id is None:
+        return None
+
+    if worn is None:
+        worn = worn_items_of(character)
+
+    carried = list(worn.values()) + list(getattr(character, "contents", None) or ())
+
+    for item in carried:
+        if getattr(item, "id", None) == tool_id:
+            return item
+
+    return None
+
+
+def hold_tool(character, tool) -> None:
+    """
+    Purpose: Put a tool in the hand of the figure of a character, also when
+             the tool is in the bag. A tool of None takes the held tool away.
+
+    Entry:
+        character - the character.
+        tool      - an item that the character carries, or None.
+
+    Exit/Returns:
+        No return value.
+
+    Module Globals:
+        const.HELD_TOOL_NDB read and written.
+
+    Methodology:
+        Each call adds one to the serial, also a call that changes nothing.
+        Thus, a hold cancels each late release that came before it
+        (release_tool).
+
+        The figure goes out again only when the held tool changes. The
+        gathering channel calls this before each swing, and a send for each
+        swing would rebuild the figure in each client for no change.
+
+    Notes/References:
+        GatheringHandler._hold_tool is the caller.
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    _next_serial(character)
+
+    tool_id = getattr(tool, "id", None)
+
+    if _ndb_value(character, const.HELD_TOOL_NDB) == tool_id:
+        return
+
+    setattr(character.ndb, const.HELD_TOOL_NDB, tool_id)
+    publish(character)
+
+
+def release_tool(character, delay: float = 0.0) -> None:
+    """
+    Purpose: Take the held tool out of the hand of the figure of a
+             character, now or after a delay.
+
+    Entry:
+        character - the character.
+        delay     - seconds from now. 0 means now.
+
+    Exit/Returns:
+        No return value. Never raises.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        A late release lets the clip of the last swing end with the tool in
+        the hand. The send of a release goes out before the face event of
+        the same tick. Thus, a release at once rebuilds the figure with
+        empty hands first. Then the last swing plays on that figure.
+
+        The late release keeps the serial of now. A hold that comes before
+        the release lands changes the serial, and the release then does
+        nothing. Thus, a new channel at once keeps its tool in the hand.
+
+        A reactor call, as buffer.mark_stale makes for a late mark. A reload
+        loses the call, and it also wipes the held tool.
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    try:
+        if delay <= 0:
+            hold_tool(character, None)
+            return
+
+        from twisted.internet import reactor
+
+        serial = _ndb_value(character, const.HELD_SERIAL_NDB)
+        reactor.callLater(delay, _release_if_unchanged, character, serial)
+    except Exception as exc:
+        logger.log_err(f"release_tool: {character} failed: {exc!r}")
 
 
 def body_type_of(character) -> str:
@@ -289,3 +471,55 @@ def set_figure_color(character, role: str, color: str) -> tuple:
     publish(character)
 
     return True, message
+
+
+# ─── Private helper routines ─────────────────────────────────────────────────
+
+def _ndb_value(character, name: str):
+    """Give one ndb value of a character, or None. An object with no ndb
+    handler gives None, because the statefeed reads each row through here."""
+    handler = getattr(character, "ndb", None)
+
+    return getattr(handler, name, None)
+
+
+def _next_serial(character) -> int:
+    """Add one to the held serial of a character, and give the new value."""
+    serial = (_ndb_value(character, const.HELD_SERIAL_NDB) or 0) + 1
+
+    setattr(character.ndb, const.HELD_SERIAL_NDB, serial)
+
+    return serial
+
+
+def _release_if_unchanged(character, serial) -> None:
+    """
+    Purpose: Land one late release of release_tool.
+
+    Entry:
+        character - the character of the release.
+        serial    - the held serial when the release started.
+
+    Exit/Returns:
+        No return value. Never raises: the reactor calls it.
+
+    Module Globals:
+        const.HELD_SERIAL_NDB read.
+
+    Methodology:
+        A character that is gone gets nothing. A hold after the start of the
+        release changed the serial, and that hold wins.
+
+    Author: Nick Hobar
+    Creation date: 11/14/2026
+    """
+    try:
+        if getattr(character, "pk", None) is None:
+            return
+
+        if _ndb_value(character, const.HELD_SERIAL_NDB) != serial:
+            return
+
+        hold_tool(character, None)
+    except Exception as exc:
+        logger.log_err(f"release_tool: {character} late release failed: {exc!r}")

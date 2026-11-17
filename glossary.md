@@ -200,7 +200,7 @@ working name is open to Nick. These are the nouns for prose about the code.
 | sample kind | the family of a sample: a biological sample (`bio_sample`) or a technological sample (`techno_sample`). The `sample_kind` field of the ItemDef, and a tag of the `sample` category | sample type, sample class |
 | conflict group | a set of augments of which one burns at a time. A light of one puts the other out. The guard augments share one | exclusion group, overhead |
 | guard augment | an augment that cuts a percentage of the incoming damage of one type, on the defender side | warden, protection prayer, block |
-| modifier | an augment that changes the other lit augments, or a fact outside the action, and boosts no channel of its own. Its `modifies` field names the fact: the strength (Overclock), the regen interval (Mend), or the aura radius (Reach) | meta augment, buff of buffs |
+| modifier | an augment that changes the other lit augments, or a fact outside the action, and boosts no channel of its own. Its `modifies` field names the fact: the strength (Overclock), the regen interval (Mend), the aura radius (Reach), or the speed (Nitro) | meta augment, buff of buffs |
 | roll | the strength that Overclock draws at each light, in the range of its level. The row shows it as its note | proc, random bonus |
 | note | the short mark after the name of a rail row, for example the roll | badge, label |
 
@@ -291,7 +291,8 @@ served place, and stand-in.
 | region | a named group of bones whose body parts a worn item can hide | body group, geoset, body slot |
 | part | one rigid mesh on one bone of a figure | piece, segment, attachment |
 | worn look | the file that says how one asset key dresses a figure | attach data, gear config, item model |
-| worn record | the map from slot to asset key that the server sends for one character | appearance block, outfit payload |
+| worn record | the map from slot to asset key that the server sends for one character. It holds the worn items, with the held tool over them | appearance block, outfit payload |
+| held tool | the tool that a gathering channel puts in the hand of the figure, in its use slot of the worn record. A tool in the bag counts. The tool does not move (`character_figure.hold_tool`, 11/14/2026) | prop, temp equip, visual equip, shown tool |
 | shape list | a part made of plain shapes in the workbench, in the vocabulary of `FamilyShapes` | primitive (the scenery noun), proxy mesh |
 | slot shape | the worn look that a slot draws for an item with no worn look | placeholder, default model |
 | item picture | the 3D picture of one item in a cell of the bag, the doll, or a pop-up. The served model of the item comes first. An item with no served model and with a worn look draws that look alone (`FigureLibrary.build_item`). Each other item draws its family model or its family shape | icon, thumbnail, inventory model |
@@ -465,6 +466,10 @@ The walk and the run, named on 09/29/2026 (`systems/gameplay/movement/`).
 | held key | a movement key that the player keeps down. The client sends its direction again every half tick | key repeat, hold-to-walk |
 | Run button | the toggle in the top-left corner of the minimap that sends `run` | run orb, run toggle button |
 | pace | the speed of one walk alone, walk or run, that `goto/walk` or `goto/run` sets with run on or off (10/20/2026). A Ctrl + left click sends it | speed override, temporary run |
+| speed | the tiles that a walker moves each tick, on average: the walk or the run, plus the tile bonus, up to the speed cap (`walk.speed`, 11/14/2026) | velocity, movement speed stat |
+| tile bonus | the tiles that the lit augments add to each tick of a walk or a run. A power level below the top adds a part of a tile (`rules.tile_bonus`) | speed buff, haste, extra steps |
+| tile carry | the part of a tile that a walker keeps from one tick to the next. A whole tile of carry adds one tile to the stride of that tick | speed remainder, partial step |
+| speed cap | the most tiles that a walker moves in one tick, with each tile bonus (`MAX_TILES_PER_TICK`). The client slides a move of this length and does not snap it | max speed, speed limit |
 
 ## Deploy
 

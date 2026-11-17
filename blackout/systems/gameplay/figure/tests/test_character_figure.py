@@ -17,11 +17,12 @@ Run from blackout/:
 
 import json
 import os
+import types
 import unittest
 from unittest import mock
 
 from assets.pipeline import paths
-from items.equipment.constants import WieldLocation
+from items.equipment.constants import WieldLocation, slots_displaced_by
 from systems.gameplay.figure import character_figure
 from systems.gameplay.figure import constants as const
 from systems.gameplay.figure import figure_files
@@ -194,3 +195,151 @@ class WornItemsTests(unittest.TestCase):
         worn = character_figure.worn_items_of(character)
 
         self.assertEqual(worn, {slot.value: items[slot] for slot in held})
+
+
+class _Item:
+    """A stand-in for an item: an id and the slot of an equip."""
+
+    def __init__(self, item_id, use_slot=None):
+        self.id = item_id
+        self.inventory_use_slot = use_slot
+
+
+def _gatherer(contents=(), slots=None) -> _Character:
+    """A stand-in character with an ndb handler, a bag, and gear."""
+    character = _Character()
+    character.pk = 1
+    character.ndb = types.SimpleNamespace()
+    character.contents = list(contents)
+    character.equipment = _Slots(slots or {})
+
+    return character
+
+
+@mock.patch.object(character_figure, "publish")
+class HeldToolTests(unittest.TestCase):
+    """hold_tool, release_tool, and figure_items_of (11/14/2026)."""
+
+    _USE_SLOT = WieldLocation.MAIN_HAND
+
+    def test_a_held_tool_from_the_bag_draws_in_its_use_slot(self, publish):
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+
+        self.assertEqual(character_figure.figure_items_of(character),
+                         {self._USE_SLOT.value: tool})
+        publish.assert_called_once_with(character)
+
+    def test_a_held_tool_empties_each_slot_that_an_equip_empties(self, publish):
+        tool = _Item(7, self._USE_SLOT)
+        gear = {slot: _Item(100 + index) for index, slot in enumerate(WieldLocation)}
+        character = _gatherer(contents=[tool], slots=gear)
+        displaced = {slot.value for slot in slots_displaced_by(self._USE_SLOT)}
+
+        character_figure.hold_tool(character, tool)
+        drawn = character_figure.figure_items_of(character)
+
+        self.assertIs(drawn[self._USE_SLOT.value], tool)
+
+        for slot, item in gear.items():
+            with self.subTest(slot=slot):
+                if slot.value in displaced:
+                    self.assertIsNot(drawn.get(slot.value), item)
+                else:
+                    self.assertIs(drawn[slot.value], item)
+
+    def test_the_worn_items_stay_as_the_gear_is(self, publish):
+        """The held tool reaches the figure only, never the equipment."""
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+
+        self.assertEqual(character_figure.worn_items_of(character), {})
+
+    def test_a_tool_that_leaves_the_bag_leaves_the_hand(self, publish):
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+        character.contents = []
+
+        self.assertIsNone(character_figure.held_tool_of(character))
+        self.assertEqual(character_figure.figure_items_of(character), {})
+
+    def test_a_held_tool_with_no_use_slot_draws_nowhere(self, publish):
+        tool = _Item(7)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+
+        self.assertEqual(character_figure.figure_items_of(character), {})
+
+    def test_the_figure_goes_out_only_when_the_tool_changes(self, publish):
+        """The channel holds before each swing. One swing sends nothing new."""
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        for _swing in range(3):
+            character_figure.hold_tool(character, tool)
+
+        publish.assert_called_once_with(character)
+
+    def test_a_release_now_takes_the_tool_away(self, publish):
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+        character_figure.release_tool(character)
+
+        self.assertIsNone(character_figure.held_tool_of(character))
+        self.assertEqual(publish.call_count, 2)
+
+    def _late_release(self, character, delay=1.0):
+        """Start a late release. Returns the call that the reactor would make."""
+        with mock.patch("twisted.internet.reactor.callLater") as later:
+            character_figure.release_tool(character, delay=delay)
+
+        later.assert_called_once()
+        self.assertEqual(later.call_args.args[0], delay)
+        callback, *arguments = later.call_args.args[1:]
+
+        return lambda: callback(*arguments)
+
+    def test_a_late_release_keeps_the_tool_until_it_lands(self, publish):
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+        land = self._late_release(character)
+
+        self.assertIs(character_figure.held_tool_of(character), tool)
+
+        land()
+
+        self.assertIsNone(character_figure.held_tool_of(character))
+
+    def test_a_hold_after_a_late_release_wins(self, publish):
+        """A new channel at once keeps its tool in the hand."""
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+        land = self._late_release(character)
+        character_figure.hold_tool(character, tool)
+        land()
+
+        self.assertIs(character_figure.held_tool_of(character), tool)
+
+    def test_a_late_release_of_a_character_that_is_gone_does_nothing(self, publish):
+        tool = _Item(7, self._USE_SLOT)
+        character = _gatherer(contents=[tool])
+
+        character_figure.hold_tool(character, tool)
+        land = self._late_release(character)
+        character.pk = None
+        land()
+
+        publish.assert_called_once_with(character)

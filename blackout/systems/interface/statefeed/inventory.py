@@ -162,6 +162,88 @@ def _commerce_actions(item, slot_number: int, equip_slot: str, context,
     return actions
 
 
+def _graft_actions(item, slot_number: int, equip_slot: str, units: int,
+                   grafting: str) -> list:
+    """
+    Purpose: Render the Graft group of one sample row, and Stop while its
+             count runs.
+
+    Entry:
+        item        - a live carried sample (graft.is_sample is True).
+        slot_number - its 1-based grid position.
+        equip_slot  - the WieldLocation value it would occupy, or "".
+        units       - the units of this sample that the character carries.
+        grafting    - the group name of the sample that a running count
+                      grafts, or "".
+
+    Exit/Returns:
+        A list of action dicts: Graft, or Graft 1 / X / All, then Stop
+        grafting when the running count grafts this sample.
+
+    Module Globals:
+        aug_const.INVENTORY_ACTION_GRAFT* read.
+
+    Methodology:
+        The group is _quantity_group, the shape of Sell and Deposit. Thus,
+        one sample offers one bare verb, and a stack offers the three. The
+        server names each whole line, and `graft` resolves the slot.
+
+    Notes/References:
+        The Locus pop-up sends `graft <sample key> <count>` instead. Both
+        lines reach one channel, so a count started in either place stops
+        in either place.
+
+    Author: Nick Hobar
+    Creation date: 11/12/2026
+    """
+    from systems.gameplay.augmentation import constants as aug_const
+    from systems.gameplay.augmentation import graft as graft_service
+
+    actions = _quantity_group(
+        item,
+        slot_number,
+        equip_slot,
+        units,
+        one=aug_const.INVENTORY_ACTION_GRAFT_ONE,
+        some_label=aug_const.INVENTORY_ACTION_GRAFT_SOME_LABEL,
+        some_template=aug_const.INVENTORY_GRAFT_SOME_TEMPLATE,
+        prompt=aug_const.LOCUS_GRAFT_PROMPT,
+        every=aug_const.INVENTORY_ACTION_GRAFT_ALL,
+        single=aug_const.INVENTORY_ACTION_GRAFT,
+    )
+    is_running = bool(grafting) and graft_service.group_name(item) == grafting
+
+    if is_running:
+        actions.append(dict(aug_const.INVENTORY_ACTION_GRAFT_STOP))
+
+    return actions
+
+
+def _grafting_sample(observer) -> str:
+    """The group name of the sample that the running count of the observer
+    grafts, or "". Never raises. The imports are local for the reason that
+    the package docstring of augmentation gives: the pool imports the
+    statefeed."""
+    if observer is None:
+        return ""
+
+    try:
+        from systems.gameplay.augmentation import graft_channel
+
+        return graft_channel.running_sample(observer)
+    except Exception:
+        logger.log_trace()
+        return ""
+
+
+def _is_sample(item) -> bool:
+    """Whether a carried object is a sample. graft.is_sample owns the
+    question, so the pane offers Graft on exactly what `graft` accepts."""
+    from systems.gameplay.augmentation import graft as graft_service
+
+    return graft_service.is_sample(item)
+
+
 def _quantity_group(item, slot_number, equip_slot, units, one, some_label,
                     some_template, prompt, every, single) -> list:
     """Render one verb as either a bare action or a 1 / X / All group.
@@ -389,7 +471,7 @@ def _units_by_key(occupied) -> dict:
     return totals
 
 
-def _serialize_carried(handler, context, lens=None) -> list:
+def _serialize_carried(handler, context, lens=None, observer=None) -> list:
     """Render every occupied slot in the 32-slot grid.
 
     Empty slots are OMITTED rather than sent as nulls. The client is told
@@ -409,10 +491,16 @@ def _serialize_carried(handler, context, lens=None) -> list:
 
     Each row also names its Drop action under INVENTORY_DROP_KEY, for the
     Shift + left click of the client.
+
+    A SAMPLE LEADS WITH GRAFT (11/12/2026), as food leads with Eat. Graft is
+    what a sample is FOR. `observer` is the owner of the bag. This routine
+    reads the graft channel one time, at the first sample. The read is a
+    script lookup, and most bags hold no sample.
     """
     rows = []
     occupied = handler.all_items()
     units_by_key = _units_by_key(occupied)
+    grafting = None
 
     for slot_index, item in occupied:
         if item is None:
@@ -437,6 +525,13 @@ def _serialize_carried(handler, context, lens=None) -> list:
         actions = list(led)
         actions.extend(_declared_item_actions(item))
         actions.extend(_build_actions(leading, item, slot_number, equip_slot))
+
+        if _is_sample(item):
+            if grafting is None:
+                grafting = _grafting_sample(observer)
+
+            actions.extend(
+                _graft_actions(item, slot_number, equip_slot, units, grafting))
 
         if not led:
             actions.extend(
@@ -593,7 +688,7 @@ def build_payload(observer, ignore=None):
     # the feed builds.
     context = commerce.build_context(observer)
     lens = _popup_lens(observer)
-    carried = _serialize_carried(inventory, context, lens)
+    carried = _serialize_carried(inventory, context, lens, observer)
     equipment = getattr(observer, "equipment", None)
     equipped = []
 

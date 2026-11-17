@@ -50,6 +50,51 @@ def _next_power_level(power_level: int) -> int:
     return power_level + 1
 
 
+def _power_level_commands(augment, power_level: int, allowed: bool) -> list:
+    """
+    Purpose: Name the line of each power level button of one augment row.
+
+    Entry:
+        augment     - the augment of the row.
+        power_level - the power level it burns at, 0 when it is out.
+        allowed     - what can_activate says of the holder.
+
+    Exit/Returns:
+        Returns a list with one str for each power level, the lowest first.
+        Item 0 is AUG_POWER_LEVEL_MIN.
+
+    Module Globals:
+        aug_const.AUG_POWER_LEVEL_MIN, AUG_POWER_LEVELS,
+        AUG_IGNITE_POWER_LEVEL_TEMPLATE read.
+
+    Methodology:
+        Each line is `aug <name> <power level>`: the line that lights an out
+        augment at that power level, and moves a lit one to it. The line of
+        the current power level is "", because it changes nothing. A holder
+        that `aug` refuses gets "" on every button.
+
+    Notes/References:
+        The client draws "" as a button that does nothing, the rule of an
+        empty `command`.
+
+    Author: Nick Hobar
+    Creation date: 11/12/2026
+    """
+    commands = []
+    first = aug_const.AUG_POWER_LEVEL_MIN
+    last = aug_const.AUG_POWER_LEVELS
+
+    for each in range(first, last + 1):
+        if not allowed or each == power_level:
+            commands.append("")
+            continue
+
+        commands.append(aug_const.AUG_IGNITE_POWER_LEVEL_TEMPLATE.format(
+            name=augment.name, power_level=each))
+
+    return commands
+
+
 def _note(roll: float) -> str:
     """The mark after the name: the roll of a lit roll augment, or ""."""
     if roll <= 0.0:
@@ -87,6 +132,8 @@ def _row(augment, holder, lit: dict, rolls: dict, level: int) -> dict:
         feed_const.ABILITY_POWER_LEVEL_KEY: power_level,
         feed_const.ABILITY_POWER_LEVELS_KEY: aug_const.AUG_POWER_LEVELS,
         feed_const.ABILITY_POWER_LEVEL_COMMAND_KEY: power_level_command,
+        feed_const.ABILITY_POWER_LEVEL_COMMANDS_KEY: _power_level_commands(
+            augment, power_level, allowed),
         feed_const.ABILITY_NOTE_KEY: _note(roll),
         feed_const.TIP_KEY: {
             feed_const.TIP_TITLE_KEY: str(augment.name),
@@ -152,8 +199,8 @@ def ability_rows(holder) -> list:
         Returns a list of rows, in the order of augments_in_order among the
         socketed augments, then the set row. Each augment row is `{key,
         name, kind, state, command, reason, power_level, power_levels,
-        power_level_command, note, tip}`. The set row has no power level
-        keys. Every value survives json.dumps.
+        power_level_command, power_level_commands, note, tip}`. The set row
+        has no power level keys. Every value survives json.dumps.
 
     Module Globals:
         None.

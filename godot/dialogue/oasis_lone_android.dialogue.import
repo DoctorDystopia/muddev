@@ -1,0 +1,16 @@
+[remap]
+
+importer="dialogue_manager"
+importer_version=18
+type="Resource"
+uid="uid://i38xv6ihyvgc"
+path="res://.godot/imported/oasis_lone_android.dialogue-eb8c64d8a2871880c8b45b7d495ef540.tres"
+
+[deps]
+
+source_file="res://dialogue/oasis_lone_android.dialogue"
+dest_files=["res://.godot/imported/oasis_lone_android.dialogue-eb8c64d8a2871880c8b45b7d495ef540.tres"]
+
+[params]
+
+defaults=true

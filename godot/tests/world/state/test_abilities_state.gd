@@ -67,12 +67,14 @@ static func payload_with_augments() -> Dictionary:
 		 "kind": "toggle", "state": "active", "command": "aug Reflex off",
 		 "reason": "", "power_level": 2.0, "power_levels": 3.0,
 		 "power_level_command": "aug Reflex 3",
+		 "power_level_commands": ["aug Reflex 1", "", "aug Reflex 3"],
 		 "tip": {"title": "Reflex", "lines": ["Sharpens your aim."]}})
 	snapshot["abilities"].append(
 		{"key": "overclock", "name": "Overclock",
 		 "kind": "toggle", "state": "active", "command": "aug Overclock off",
 		 "reason": "", "power_level": 3.0, "power_levels": 3.0,
 		 "power_level_command": "aug Overclock 1",
+		 "power_level_commands": ["aug Overclock 1", "aug Overclock 2", ""],
 		 "note": "+14%",
 		 "tip": {"title": "Overclock", "lines": ["Rolls its strength."]}})
 	snapshot["abilities"].append(
@@ -220,6 +222,9 @@ func _a_power_level_row_keeps_its_dial_and_a_plain_row_has_none() -> void:
 	_expect(state.row_at(3)["note"] == "+14%", "the note of a row is kept")
 	_expect(not AbilitiesState.has_power_levels(aura), "an aura row has no dial")
 	_expect(aura["power_level_command"].is_empty(), "and no power level line")
+	_expect(reflex["power_level_commands"] == ["aug Reflex 1", "", "aug Reflex 3"],
+		"an augment row keeps the line of each power level, in order")
+	_expect(aura["power_level_commands"].is_empty(), "an aura row has no such lines")
 
 
 func _the_set_row_is_found_by_its_kind() -> void:

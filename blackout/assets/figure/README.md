@@ -136,6 +136,10 @@ its loop box stays off. A clip list in `clips/` must build the clip. A clip
 file that you make in the Godot animation editor has no row, and the test
 refuses it.
 
+The figure holds the tool of the channel while the clip plays, also a tool
+from the bag. The worn look of the tool draws in the hand, as for an
+equipped tool. Thus, a new axe needs only its worn look or its served model.
+
 ## Check, save, and see it in the game
 
 1. On the **Check** tab, click **Check the figure files**. A finding is a

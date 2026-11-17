@@ -224,6 +224,29 @@ LOCUS_GRAFT_LABEL: str = "Graft"
 LOCUS_GRAFT_PROMPT: str = "Graft how many?"
 LOCUS_STOP_LABEL: str = "Stop grafting"
 
+# The Graft group of a sample in the bag (11/12/2026). Each sample row of
+# the inventory pane carries these, so a player grafts with a click away
+# from a Locus too. The (label, command template) shape and the `{slot}`
+# field of INVENTORY_ACTION_EAT. A slot, not a name, for the reason that
+# Eat gives: the pane cannot predict which of two equal names the server
+# takes. `graft {slot} <count>` and `graft {slot} all` parse through
+# split_item_and_count, as `sell {slot} all` does. The X template keeps
+# the amount field, and the client fills it in.
+GRAFT_SLOT_TEMPLATE: str = f"{GRAFT_COMMAND_KEY} {{slot}}"
+INVENTORY_ACTION_GRAFT: tuple = (LOCUS_GRAFT_LABEL, GRAFT_SLOT_TEMPLATE)
+INVENTORY_ACTION_GRAFT_ONE: tuple = ("Graft 1", f"{GRAFT_SLOT_TEMPLATE} 1")
+INVENTORY_ACTION_GRAFT_ALL: tuple = ("Graft All", f"{GRAFT_SLOT_TEMPLATE} all")
+INVENTORY_ACTION_GRAFT_SOME_LABEL: str = "Graft X"
+INVENTORY_GRAFT_SOME_TEMPLATE: str = f"{GRAFT_SLOT_TEMPLATE} {{amount}}"
+
+# While a count runs, the row of that sample also carries the Stop line, so
+# a count that started in the bag stops in the bag. At a Locus, the Stop
+# button of the pop-up sends the same line.
+INVENTORY_ACTION_GRAFT_STOP: dict = {
+    "label": LOCUS_STOP_LABEL,
+    "command": GRAFT_STOP_COMMAND,
+}
+
 
 # ─── The sockets and the rig (Phase 5) ───────────────────────────────────────
 # A socket is one place in the rig that holds one augment. The sockets are
@@ -359,6 +382,9 @@ FAMILY_REGEN: str = "regen"
 FAMILY_AURA: str = "aura"
 FAMILY_MODIFIER: str = "modifier"
 
+# A movement augment adds tiles to each tick of a walk (Nitro, 11/14/2026).
+FAMILY_MOVEMENT: str = "movement"
+
 # Every family. A registry test holds each augment to one of these.
 AUG_FAMILIES: tuple = (
     FAMILY_ACCURACY,
@@ -368,14 +394,17 @@ AUG_FAMILIES: tuple = (
     FAMILY_REGEN,
     FAMILY_AURA,
     FAMILY_MODIFIER,
+    FAMILY_MOVEMENT,
 )
 
 # What a modifier changes (section 4.4, "More modifiers, later"). The
 # handler and the rules read the field. Overclock changes the strength.
 # Mend changes the regen interval, and Reach changes the aura radius.
+# Nitro changes the walk speed.
 MODIFIES_STRENGTH: str = "strength"
 MODIFIES_REGEN: str = "regen"
 MODIFIES_REACH: str = "reach"
+MODIFIES_SPEED: str = "speed"
 
 # The roll of Overclock (section 4.5). On each light, the roll is uniform
 # in [low, AUG_ROLL_HIGH], and the level moves the low end up by
@@ -394,12 +423,22 @@ AUG_REACH_TILES: int = 3
 # 0.25 is four regen ticks for each one of today.
 AUG_REGEN_SHARE_FLOOR: float = 0.25
 
+# The tiles that Nitro adds to each tick of a walk or a run at the top power
+# level (Nick, 11/14/2026: 1). A lower power level adds its share of that
+# tile: power level 1 of 3 adds a third. The walk keeps the part of a tile as
+# its tile carry, so power level 1 adds one whole tile on each third tick.
+# A run at the top power level thus moves 3 tiles a tick, the speed cap.
+AUG_NITRO_TILES: int = 1
+
 # The tip lines of the Phase 5 rows.
 AUG_TIP_ROLL: str = "Rolls +{low:.0f}% to +{high:.0f}% when it comes online, and adds the roll to every lit augment."
 AUG_TIP_ROLL_NOW: str = "The roll now: +{percent:.0f}%."
 AUG_TIP_GUARD: str = "Cuts {percent:.1f}% from the {kind} damage you take at your level, at the top power level."
 AUG_TIP_REGEN: str = "Shortens the wait between HP regen ticks by {percent:.1f}% at your level, at the top power level."
 AUG_TIP_REACH: str = "Adds {tiles} tile(s) to the ring of your lit aura at the top power level."
+AUG_TIP_SPEED: str = (
+    "Adds {tiles} tile(s) to each tick of your walk or run at the top power level, "
+    "up to {cap} tiles a tick.")
 AUG_TIP_SOCKETS: str = "Fits: {fits}."
 AUG_TIP_CONFLICT: str = "Only one {group} augment burns at a time."
 AUG_ROLL_NOTE: str = "+{percent:.0f}%"

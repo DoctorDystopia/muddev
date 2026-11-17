@@ -10,9 +10,11 @@ Design lives in the Obsidian vault, not here:
     04_Content/Quests_and_Adventures/Full Quest List/
     Oasis in the Wastes (name TBD) [AI-EDITABLE].md
 
-The android's side of every beat is in
-world/npc_dialogues/oasis_lone_android.py. This module owns only what is
+The android's side of every beat is in the dialogue script
+godot/dialogue/oasis_lone_android.dialogue. This module owns only what is
 TRUE about the quest -- its phases, what satisfies them, and what it pays.
+The script types the quest key, the step keys, and the recipe names as
+literals. The server check refuses a literal that names nothing here.
 """
 
 
@@ -40,8 +42,9 @@ _MSG_QUEST = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_QUEST}
 QUEST_KEY = "oasis_in_the_wastes"
 QUEST_TITLE = "Oasis in the Wastes"
 
-# Step keys. The dialogue gates every node on these, so they are named here
-# and imported there rather than spelled twice.
+# Step keys. The dialogue script gates every cue on these. A script cannot
+# import, so it types each key, and the server check refuses a key that is
+# not here.
 STEP_INTRO = "intro"
 STEP_MAINTENANCE = "maintenance"
 STEP_APPRENTICESHIP = "apprenticeship"

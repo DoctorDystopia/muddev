@@ -42,6 +42,8 @@ const ACROSS_THE_MAP := Vector3(40.0, 0.0, -12.0)
 ## How long the animator takes to cross one tile: a tick plus its buffer.
 const CROSSING := TICK * StepAnimator.WALK_TICKS
 
+const Const := preload("res://autoload/blackout_constants.gd")
+
 var _failures := 0
 
 
@@ -51,6 +53,7 @@ func _ready() -> void:
 	_a_walk_never_stands_still()
 	_a_coalesced_pair_of_steps_is_walked()
 	_a_diagonal_is_still_one_step()
+	_a_diagonal_at_the_speed_cap_is_walked()
 	_the_walk_is_the_same_at_any_frame_rate()
 	_the_trail_is_never_more_than_one_crossing()
 	_a_jump_further_than_a_step_snaps()
@@ -183,6 +186,24 @@ func _a_diagonal_is_still_one_step() -> void:
 	animator.aim(ONE_NORTHEAST)
 
 	_expect(animator.is_travelling(), "a diagonal step is walked, not snapped")
+	_expect(animator.drawn() == ORIGIN,
+		"and it has not left the tile it started on yet")
+
+
+## The longest move of one tick: the speed cap of the server, on the diagonal.
+## A run with Nitro at the top power level moves this far (11/14/2026). The
+## cap comes from the generated constants, so a new cap moves this case with
+## it. Until 11/14/2026 the limit was 3.0, and a three-tile diagonal snapped.
+func _a_diagonal_at_the_speed_cap_is_walked() -> void:
+	var animator := _animator()
+	var cap := float(Const.MAX_TILES_PER_TICK)
+
+	animator.place(ORIGIN)
+	animator.aim(ONE_NORTHEAST * cap)
+
+	_expect(animator.is_travelling(),
+		"a diagonal of %d tiles in one tick is walked, not snapped"
+		% Const.MAX_TILES_PER_TICK)
 	_expect(animator.drawn() == ORIGIN,
 		"and it has not left the tile it started on yet")
 

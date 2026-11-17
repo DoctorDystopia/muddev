@@ -46,6 +46,7 @@ from systems.core.tick.tickable import (
     get_handler_for,
     register_tickable,
 )
+from systems.gameplay.figure import character_figure
 from systems.gameplay.progression.skills.skill_defs.gathering import (
     constants as gather_constants,
 )
@@ -144,12 +145,14 @@ class GatheringHandler(TickableHandler):
         return queued
 
 
-    def stop_gathering(self, reason: str) -> None:
+    def stop_gathering(self, reason: str, release_delay: float = 0.0) -> None:
         """
         Purpose: End this channel, tell the player why, and dismantle.
 
         Entry:
             reason is one of gather_constants' STOP_REASON_* values.
+            release_delay is the seconds that the figure keeps the tool in
+                the hand. 0 removes it now. Only _swing passes a delay.
 
         Exit/Returns:
             No conditions. Never raises: the engine drops a handler from its
@@ -169,6 +172,9 @@ class GatheringHandler(TickableHandler):
             its deleter raises, so a stale entry keeps handing out this
             deleted script for the rest of the session (CLAUDE.md gotcha 7).
 
+            The tool leaves the hand of the figure here (11/14/2026). See
+            _hold_tool for why it was there.
+
         Notes/References:
             systems/gameplay/combat/auras/aura_handler.py stop_aura.
 
@@ -179,6 +185,7 @@ class GatheringHandler(TickableHandler):
 
         if gatherer is not None:
             self._announce_stop(gatherer, reason)
+            character_figure.release_tool(gatherer, delay=release_delay)
             gatherer.__dict__.pop(self.ACCESSOR_NAME, None)
 
         try:
@@ -418,6 +425,11 @@ class GatheringHandler(TickableHandler):
             Each swing turns the gatherer to the node first (10/20/2026).
             See _face_node.
 
+            Each swing puts the tool of the swing in the hand of the figure
+            before the face event (11/14/2026). See _hold_tool. After a stop
+            that the swing gives, the tool stays in the hand for one more
+            cadence. Thus, the clip of the last swing ends with the tool.
+
         Notes/References:
             GatheringSkill.attempt_swing is the other half of this contract.
 
@@ -433,6 +445,7 @@ class GatheringHandler(TickableHandler):
 
         self.ndb.ticks_until_swing = max(0, gather_constants.SWING_TICKS - 1)
 
+        self._hold_tool(gatherer, skill)
         self._face_node(gatherer, node, skill)
 
         try:
@@ -446,10 +459,58 @@ class GatheringHandler(TickableHandler):
         self.dispatch(states.ActivityEvent.ACTION_RESOLVED)
 
         if stop_reason:
-            self.stop_gathering(stop_reason)
+            self.stop_gathering(
+                stop_reason,
+                release_delay=gather_constants.TOOL_HOLD_AFTER_STOP_SECONDS)
             return
 
         self.dispatch(states.ActivityEvent.COOLDOWN_EXPIRED)
+
+
+    def _hold_tool(self, gatherer, skill) -> None:
+        """
+        Purpose: Put the tool of this swing in the hand of the figure. A
+        tool in the bag goes into the hand too.
+
+        Entry:
+            gatherer is the owner of this handler, already checked.
+            skill is the skill of the channel.
+
+        Exit/Returns:
+            No conditions. Never raises.
+
+        Module Globals:
+            None.
+
+        Methodology:
+            The rule of Nick (11/14/2026): while the chop plays, the figure
+            shows the axe that the player uses. An axe in the bag counts.
+            find_tool picks the tool, as it does for the roll and for the
+            action of the clip. Thus, the hand, the clip, and the roll name
+            one tool. No tool takes the held tool away, and the hands stay
+            as the gear leaves them.
+
+            Each swing holds again, because the player can change the tool
+            in a channel. character_figure.hold_tool sends the figure only
+            when the tool changes.
+
+            Before the face event. A hold sends the entity row and the
+            avatar. Both reach the client before the face event of the same
+            tick (TRAILING_CHANNELS in the statefeed constants). Thus, the
+            client builds the figure with the tool first, and then it plays
+            the clip.
+
+            Guarded on its own, as _face_node is. The figure is a bystander
+            to the harvest.
+
+        Author: Nick Hobar
+        Creation date: 11/14/2026
+        """
+        try:
+            tool = skill.find_tool(gatherer)
+            character_figure.hold_tool(gatherer, tool)
+        except Exception as exc:
+            logger.log_err(f"GatheringHandler._hold_tool failed: {exc!r}")
 
 
     def _face_node(self, gatherer, node, skill) -> None:

@@ -26,6 +26,7 @@ from systems.gameplay.progression.skills.constants import SKILL_KEY_AUGMENTATION
 from systems.gameplay.quests import constants as quest_constants
 from systems.interface.statefeed import constants as feed_const
 from systems.interface.statefeed import events as feed_events
+from systems.interface.statefeed import inventory as feed_inventory
 from typeclasses import spawners
 from typeclasses.characters import Character as BlackoutCharacter
 from typeclasses.loci import AugmentationLocus, locus_here
@@ -172,6 +173,129 @@ class TestGraft(EvenniaCommandTest):
         response = self.call(CmdGraft(), "", caller=self.char1)
 
         self.assertIn("any samples", response.lower())
+
+
+class TestGraftInTheBag(EvenniaCommandTest):
+    """The Graft group of a sample row in the inventory pane (11/12/2026).
+    The pane offers Graft on exactly what `graft` accepts, and each line
+    that it names does what its label says."""
+
+    character_typeclass = BlackoutCharacter
+
+    def setUp(self):
+        super().setUp()
+        self.item_def = _first_sample()
+        self.addCleanup(graft_channel.end_grafting, self.char1)
+
+    def _give(self, quantity: int = 1):
+        """A stack in a real slot. create() moves the item in, so the bag
+        registers it, CLAUDE.md gotcha 5."""
+        return self.item_def.create(location=self.char1, quantity=quantity)
+
+    def _actions(self, name: str) -> list:
+        payload = feed_inventory.build_payload(self.char1)
+
+        for row in payload.items:
+            if row["name"] == name:
+                return row["actions"]
+
+        self.fail("no bag row for %s" % name)
+
+    def _labels(self, name: str) -> list:
+        return [action["label"] for action in self._actions(name)]
+
+    def _action(self, label: str) -> dict:
+        for action in self._actions(self.item_def.name):
+            if action["label"] == label:
+                return action
+
+        self.fail("no %s action on the sample row" % label)
+
+    def _send(self, command: str) -> str:
+        argument = command[len(CmdGraft.key):].strip()
+
+        return self.call(CmdGraft(), argument, caller=self.char1)
+
+    def _units(self) -> int:
+        return graft_service.units_carried(self.char1, self.item_def.name)
+
+    def test_one_sample_leads_with_one_graft(self):
+        self._give()
+
+        labels = self._labels(self.item_def.name)
+
+        self.assertEqual(aug_const.INVENTORY_ACTION_GRAFT[0], labels[0])
+        self.assertNotIn(aug_const.INVENTORY_ACTION_GRAFT_ALL[0], labels)
+
+    def test_a_stack_offers_one_some_and_all(self):
+        self._give(quantity=3)
+
+        labels = self._labels(self.item_def.name)
+
+        self.assertEqual(aug_const.INVENTORY_ACTION_GRAFT_ONE[0], labels[0])
+        self.assertIn(aug_const.INVENTORY_ACTION_GRAFT_SOME_LABEL, labels)
+        self.assertIn(aug_const.INVENTORY_ACTION_GRAFT_ALL[0], labels)
+
+    def test_an_item_that_is_no_sample_offers_no_graft(self):
+        other = ITEM_DB["rusty_metal_chunk"]
+        other.create(location=self.char1)
+        graft_labels = (
+            aug_const.INVENTORY_ACTION_GRAFT[0],
+            aug_const.INVENTORY_ACTION_GRAFT_ONE[0],
+            aug_const.INVENTORY_ACTION_GRAFT_ALL[0],
+        )
+
+        labels = self._labels(other.name)
+
+        for label in graft_labels:
+            self.assertNotIn(label, labels)
+
+    def test_the_graft_line_names_a_slot_and_grafts_one(self):
+        self._give(quantity=3)
+        command = self._action(aug_const.INVENTORY_ACTION_GRAFT_ONE[0])["command"]
+
+        self.assertTrue(command.split(" ")[1].isdigit(), command)
+
+        self._send(command)
+
+        self.assertEqual(2, self._units())
+
+    def test_the_x_line_carries_the_amount_field(self):
+        self._give(quantity=3)
+        action = self._action(aug_const.INVENTORY_ACTION_GRAFT_SOME_LABEL)
+
+        self.assertEqual("", action["command"])
+        self.assertIn(feed_const.ACTION_AMOUNT_PLACEHOLDER, action["template"])
+
+        self._send(action["template"].replace(feed_const.ACTION_AMOUNT_PLACEHOLDER, "2"))
+
+        self.assertEqual(2, graft_channel.channel_report(self.char1)["total"])
+
+    def test_the_all_line_queues_every_unit(self):
+        self._give(quantity=3)
+        command = self._action(aug_const.INVENTORY_ACTION_GRAFT_ALL[0])["command"]
+
+        self._send(command)
+
+        self.assertEqual(3, graft_channel.channel_report(self.char1)["total"])
+        self.assertEqual(2, self._units())
+
+    def test_no_count_puts_no_stop_on_the_row(self):
+        self._give(quantity=3)
+
+        labels = self._labels(self.item_def.name)
+
+        self.assertNotIn(aug_const.LOCUS_STOP_LABEL, labels)
+
+    def test_a_running_count_puts_stop_on_its_row_and_stop_ends_it(self):
+        self._give(quantity=3)
+        self._send(self._action(aug_const.INVENTORY_ACTION_GRAFT_ALL[0])["command"])
+
+        stop = self._action(aug_const.LOCUS_STOP_LABEL)
+        self._send(stop["command"])
+
+        self.assertIsNone(graft_channel.channel_report(self.char1))
+        self.assertNotIn(aug_const.LOCUS_STOP_LABEL, self._labels(self.item_def.name))
 
 
 class TestLocus(EvenniaCommandTest):
