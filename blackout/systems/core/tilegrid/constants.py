@@ -445,6 +445,12 @@ SIGHT_FIXED_POINT_BITS: int = 16
 # chunks, which one click must not cost.
 PATH_MAX_EXPANDED: int = CHUNK_SIZE * CHUNK_SIZE
 
+# How far from a goal that no walk reaches the nearest reached tile may be,
+# on each axis. A walk to a sealed goal ends on the nearest reached tile in
+# this square, 21 x 21 tiles as in OSRS (Nick, 11/16/2026). No such tile
+# means no walk. `pathfind.find_nearest_path` reads it.
+PATH_FALLBACK_RADIUS: int = 10
+
 # ─── Rooms ───────────────────────────────────────────────────────────────────
 # The Z of every tile room on the tile grid. The xyzgrid stores a map name in
 # Z. The tile grid is one world, so it has one name.

@@ -304,12 +304,15 @@ class WalkOnAPlaneTests(_PlaneTestBase):
 
         self.assertEqual(self._where(), (_CORRIDOR_END, _UPPER))
 
-    def test_goto_off_the_corridor_finds_no_way(self):
+    def test_goto_off_the_corridor_stays_on_the_nearest_tile(self):
+        # The OSRS rule (11/16/2026): no walk on the upper plane reaches
+        # _PLAIN. Of the corridor tiles, the ladder tile is the nearest, and
+        # the player stands on it already.
         self._go_up()
         self.char1.execute_cmd("goto (%d,%d)" % _PLAIN)
 
         self.assertEqual(self._where(), (_LADDER, _UPPER))
-        self.assertIn("cannot find a way", self._said())
+        self.assertIn("as close", self._said())
 
     def test_a_login_returns_to_the_plane(self):
         self._go_up()

@@ -45,6 +45,13 @@ _BLOCKED = (11, 10)
 _TRANSITION_TILE = (10, 12)
 _NAMED_TILE = (30, 30)
 
+# A tile 4 tiles east of _BLOCKED. A `goto` to _BLOCKED from here walks to
+# the nearest tile that a walk reaches, as in OSRS.
+_EAST_OF_BLOCKED = (_BLOCKED[0] + 4, _BLOCKED[1])
+
+# A tile so far off the world that the search reaches no tile near it.
+_FAR_OFF_GRID = (-_SIZE * 100, _START[1])
+
 _TRANSITION = next(key for key, kind in OBJECT_KINDS.items()
                    if kind.category == tile_const.OBJECT_CATEGORY_TRANSITION)
 _NAMED = next(key for key, kind in OBJECT_KINDS.items() if kind.name)
@@ -233,11 +240,46 @@ class TileMovementTests(EvenniaTest):
         self.assertEqual(self._tile(), _START)
         self.assertIn("no place", self._said())
 
-    def test_goto_a_tile_with_no_way_there_says_so(self):
-        self.char1.execute_cmd("goto (%d,%d)" % _BLOCKED)
+    def test_goto_a_tile_with_no_tile_near_it_says_so(self):
+        self.char1.execute_cmd("goto (%d,%d)" % _FAR_OFF_GRID)
 
         self.assertEqual(self._tile(), _START)
         self.assertIn("cannot find a way", self._said())
+
+    def test_goto_a_blocked_tile_walks_next_to_it(self):
+        # The OSRS rule: the walk ends on the nearest tile that it reaches.
+        movement.place(self.world.rooms, self.char1, *_EAST_OF_BLOCKED,
+                       quiet=True)
+        self.char1.execute_cmd("goto (%d,%d)" % _BLOCKED)
+        _walk_out()
+        here = self._tile()
+
+        self.assertEqual(max(abs(here[0] - _BLOCKED[0]),
+                             abs(here[1] - _BLOCKED[1])), 1)
+        self.assertIn("as close", self._said())
+        self.assertNotIn("reached", self._said())
+
+    def test_goto_a_blocked_tile_from_its_side_stays(self):
+        # _START is next to _BLOCKED and is the nearest reached tile.
+        self.char1.execute_cmd("goto (%d,%d)" % _BLOCKED)
+        _walk_out()
+
+        self.assertEqual(self._tile(), _START)
+        self.assertIn("as close", self._said())
+
+    def test_a_short_walk_skips_its_follow_up_and_says_so(self):
+        movement.place(self.world.rooms, self.char1, *_EAST_OF_BLOCKED,
+                       quiet=True)
+
+        with mock.patch.object(self.char1, "execute_cmd",
+                               wraps=self.char1.execute_cmd) as typed:
+            self.char1.execute_cmd("goto (%d,%d) then look" % _BLOCKED)
+            _walk_out()
+
+        lines = [call.args[0] for call in typed.call_args_list]
+        self.assertNotIn("look", lines)
+        self.assertIn("cannot reach", self._said())
+        self.assertNotEqual(self._tile(), _EAST_OF_BLOCKED)
 
 
 class WalkAndRunTests(EvenniaTest):

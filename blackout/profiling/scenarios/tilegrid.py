@@ -47,7 +47,7 @@ from evennia.utils.create import create_object
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid import movement
 from systems.core.tilegrid.grid import Chunk, TileGrid
-from systems.core.tilegrid.pathfind import find_path
+from systems.core.tilegrid.pathfind import find_nearest_path, find_path
 from systems.core.tilegrid.rooms import TileRooms
 from typeclasses.objects import Object
 
@@ -288,5 +288,32 @@ def path_to_unreachable(world):
 
     def work():
         find_path(grid, (0, 0), goal)
+
+    return work
+
+
+@scenario(name="tilegrid: a goto to water, nearest tile (OSRS rule)",
+          layer=const.LAYER_ENGINE,
+          repeat=_PATH_REPEAT,
+          notes="A click on a lake. The search expands every reachable tile "
+                "up to PATH_MAX_EXPANDED, then picks the nearest reached "
+                "tile in the square of PATH_FALLBACK_RADIUS.")
+def nearest_to_water(world):
+    """Measure the walk that a click on water costs since 11/16/2026."""
+    grid = _open_grid(_BLOCK_SIDE)
+    lake = (100, 100)
+    size = tile_const.CHUNK_SIZE
+    shore = tile_const.PATH_FALLBACK_RADIUS // 2
+
+    for x in range(lake[0] - shore, lake[0] + shore + 1):
+        for y in range(lake[1] - shore, lake[1] + shore + 1):
+            chunk = grid._chunks[(x // size, y // size)]
+            chunk.flags[(y % size) * size + (x % size)] = tile_const.FLAG_WATER
+
+    if find_nearest_path(grid, (0, 0), lake) is None:
+        raise RuntimeError("the lake has no shore in reach; change its size")
+
+    def work():
+        find_nearest_path(grid, (0, 0), lake)
 
     return work

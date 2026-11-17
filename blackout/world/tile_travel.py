@@ -166,7 +166,9 @@ def step_toward(mover, goal: tuple, distance) -> bool:
     Entry:
         mover    - an object on the tile world.
         goal     - the (x, y) tile to walk toward.
-        distance - `(tile, tile) -> int`, the measure of the caller.
+        distance - `(tile, tile) -> int`, the measure of the caller. It must
+                   not round: a rounded measure refuses a step that is
+                   closer by less than the rounding.
 
     Exit/Returns:
         True if the mover moved. False if no legal step brings it strictly

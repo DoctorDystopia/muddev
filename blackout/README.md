@@ -496,6 +496,12 @@ Every step moves on the **0.6 s tick**, as in OSRS. A held key, a click, and
 `goto` move at one speed: one tile each tick, or two tiles each tick with run
 on. `systems/gameplay/movement/walk.py` owns the walk.
 
+A `goto` to a tile that no walk reaches (a rock, water, a sealed room) walks
+to the nearest tile that a walk reaches, as in OSRS. That tile is in the
+21 x 21 square around the goal (`PATH_FALLBACK_RADIUS`). With no such tile,
+`goto` finds no way. A walk that ends short does not run its `then`
+command. `systems/core/tilegrid/pathfind.py` owns the rule.
+
 ### In-game commands
 
 ```bash

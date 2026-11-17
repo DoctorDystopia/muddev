@@ -178,7 +178,13 @@ func _a_far_tile_walks_by_the_server_template() -> void:
 	_expect(walk.get("command", "") == expected,
 		"a far walkable tile sends the walk the server spelled")
 	_expect(walk.get("kind", "") == _Const.KIND_WALK, "and it is a walk")
-	_expect(state.tile_action(_BLOCKED).is_empty(), "a blocked tile affords nothing")
+
+	# The server walks to the nearest tile that a walk reaches (OSRS).
+	var blocked_walk := _Const.TILE_WALK_TEMPLATE \
+		.replace("{x}", str(_BLOCKED.x)).replace("{y}", str(_BLOCKED.y))
+
+	_expect(state.tile_action(_BLOCKED).get("command", "") == blocked_walk,
+		"a blocked tile sends the walk too")
 	_expect(state.tile_action(Vector2i(-40, -40)).is_empty(),
 		"a tile with no chunk affords nothing")
 

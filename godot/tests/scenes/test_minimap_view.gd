@@ -31,7 +31,7 @@ func _ready() -> void:
 	_north_is_up_at_each_zoom()
 	_the_window_follows_the_player()
 	_a_click_on_a_far_tile_walks_there()
-	_a_blocked_or_missing_tile_sends_nothing()
+	_a_blocked_tile_walks_and_a_missing_tile_sends_nothing()
 	_a_blocked_tile_is_drawn_darker()
 	_the_pane_redraws_when_the_world_changes()
 	_the_zoom_steps_in_and_out_and_stops_at_the_ends()
@@ -155,17 +155,23 @@ func _a_click_on_a_far_tile_walks_there() -> void:
 		"the walk the server spelled reaches the console")
 
 
-func _a_blocked_or_missing_tile_sends_nothing() -> void:
+## A blocked tile sends the walk too (11/16/2026). The server walks to the
+## nearest tile that a walk reaches, as in OSRS.
+func _a_blocked_tile_walks_and_a_missing_tile_sends_nothing() -> void:
 	_fresh()
 
+	var expected := Const.TILE_WALK_TEMPLATE \
+		.replace("{x}", str(BLOCKED.x)).replace("{y}", str(BLOCKED.y))
 	var sent: Array[String] = []
 
 	_map.command_requested.connect(func(line): sent.append(line))
 	_map._walk_to(BLOCKED)
-	_expect(sent.is_empty(), "a blocked tile sends nothing")
+	_expect(sent.size() == 1 and sent[0] == expected,
+		"a blocked tile sends the walk the server spelled")
 
+	sent.clear()
 	_map._walk_to(Vector2i(-40, -40))
-	_expect(sent.is_empty(), "and neither does a tile with no chunk")
+	_expect(sent.is_empty(), "a tile with no chunk sends nothing")
 
 
 func _a_blocked_tile_is_drawn_darker() -> void:

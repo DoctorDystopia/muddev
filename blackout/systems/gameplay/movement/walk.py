@@ -57,6 +57,14 @@ pace that is not the toggle, as in OSRS. `TileWalk.running` holds it. A use
 of the run toggle during the walk ends that pace, because the newest command
 wins. The walk then follows the toggle, and the Run button tells the truth.
 
+A walk that ends short
+----------------------
+A `goto` to a tile that no walk reaches walks to the nearest tile that a
+walk reaches, as in OSRS (Nick, 11/16/2026). `TileWalk.reaches_goal` is
+False for that walk. It does not say "Target reached." It does not run its
+follow-up, because the follow-up acts at the goal. It says MSG_CANNOT_REACH.
+Thus, a follow-up runs only at the tile that it asked for.
+
 The walk feed
 -------------
 `set_walk` is the one writer of the walk, and it sends `blackout_walk` when
@@ -111,6 +119,8 @@ class TileWalk:
     one tile: a click on the next tile is a step, and it says nothing.
     `running` is the pace of this walk alone, or None to follow the run
     toggle. See "The pace of one walk" in the module docstring.
+    `reaches_goal` is False for a walk to the nearest tile of a goal that no
+    walk reaches. See "A walk that ends short".
     """
 
     path: list
@@ -119,6 +129,7 @@ class TileWalk:
     shown: bool = True
     announce: bool = True
     running: object = None
+    reaches_goal: bool = True
     session: object = field(default=None, repr=False)
 
 
@@ -360,14 +371,17 @@ def start_direction(character, direction: str, session=None) -> str:
 
 
 def start_path(character, path: list, goal: tuple, follow_up: str = "",
-               session=None, running=None) -> None:
+               session=None, running=None, reaches_goal: bool = True) -> None:
     """
     Start a walk along a path from A*. An empty path arrives at once, so the
     follow-up runs now. The first step goes on the next tick. `running` is
-    the pace of this walk, or None to follow the run toggle.
+    the pace of this walk, or None to follow the run toggle. `goal` is the
+    tile where the walk ends. `reaches_goal` is False when that tile is only
+    the nearest tile to the goal that the player asked for.
     """
     walk = TileWalk(path=list(path), goal=tuple(goal), follow_up=follow_up,
-                    announce=len(path) > 1, running=running, session=session)
+                    announce=len(path) > 1, running=running,
+                    reaches_goal=reaches_goal, session=session)
 
     if not walk.path:
         _arrive(character, walk)
@@ -377,8 +391,18 @@ def start_path(character, path: list, goal: tuple, follow_up: str = "",
 
 
 def _arrive(character, walk) -> None:
-    """End a walk at its goal, and run its follow-up line."""
+    """
+    End a walk at its goal, and run its follow-up line. A walk that ends
+    short says so in the place of both (module docstring, "A walk that ends
+    short").
+    """
     set_walk(character, None)
+
+    if not walk.reaches_goal:
+        if walk.follow_up:
+            character.msg(const.MSG_CANNOT_REACH)
+
+        return
 
     if walk.shown and walk.announce:
         character.msg(const.MSG_ARRIVED)

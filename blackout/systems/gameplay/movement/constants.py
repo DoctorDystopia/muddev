@@ -59,6 +59,9 @@ MSG_CORNER: str = "You cannot cut that corner."
 MSG_TOO_STEEP: str = "It is too steep to climb."
 MSG_WALK_BROKEN: str = "Your walk stops."
 MSG_ARRIVED: str = "Target reached."
+# A walk with a follow-up that ends short of its goal says this, in the
+# place of the follow-up. Placeholder words (Nick, 11/16/2026).
+MSG_CANNOT_REACH: str = "You cannot reach that."
 MSG_RUN_ON: str = "You will now run."
 MSG_RUN_OFF: str = "You will now walk."
 MSG_RUN_USAGE: str = "Usage: run, run on, or run off."

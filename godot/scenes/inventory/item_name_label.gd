@@ -16,6 +16,12 @@ extends Label
 ## one pixel. Without a floor, the VBoxContainer gives the name no rows at all.
 ## The floor is two lines of the theme's font, so every cell in a grid has the
 ## same height, with a one-line name or with no name.
+##
+## ## Why the name is centered
+##
+## The picture sits in the middle of the cell, so the name sits in the middle
+## too (11/16/2026). Every item cell uses this label: the bag, the equipment
+## doll, and each pop-up grid. The count stays in its corner.
 
 ## Lines a name may take before the engine cuts it.
 const MAX_LINES := 2
@@ -27,6 +33,7 @@ func _init() -> void:
 	autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	max_lines_visible = MAX_LINES
 	text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 ## Godot sends THEME_CHANGED when the label enters the tree, and again when the

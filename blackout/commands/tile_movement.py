@@ -28,6 +28,10 @@ the tile grid and walks the path. `BlackoutGotoCmd` in `commands/movement_cmds.p
 Since 10/20/2026 a switch sets the pace of one `goto` walk: `goto/walk`
 walks with run on, and `goto/run` runs with run off. A Ctrl + left click in
 the Godot client sends one of the two.
+
+Since 11/16/2026 a `goto` to a tile that no walk reaches walks to the nearest
+tile that a walk reaches, as in OSRS (`pathfind.find_nearest_path`). The
+lines that say so are placeholders for Nick.
 """
 
 import re
@@ -36,7 +40,7 @@ from evennia.commands.command import Command
 
 from systems.core.tilegrid import constants as tile_const
 from systems.core.tilegrid import movement
-from systems.core.tilegrid.pathfind import find_path
+from systems.core.tilegrid.pathfind import find_nearest_path
 from systems.core.tilegrid.world import get_world
 from systems.gameplay.movement import constants as walk_const
 from systems.gameplay.movement import walk
@@ -51,6 +55,11 @@ _MSG_STOPPED = "You stop walking."
 _MSG_UNKNOWN = "You know of no place called '{text}' here."
 _MSG_NO_PATH = "You cannot find a way there."
 _MSG_SET_OFF = "You set off toward {place}."
+# The lines for a goal that no walk reaches. The first starts a walk to the
+# nearest tile. The second is for a caller on that tile already. The words
+# are placeholders (Nick, 11/16/2026).
+_MSG_NEAR = "You cannot reach {place}. You head as close as you can."
+_MSG_NEAREST = "You cannot reach {place}. You are as close as you can get."
 _MSG_PACE_USAGE = "Usage: goto/walk <place> or goto/run <place>."
 
 # `goto (x,y)`, with or without the brackets and the spaces.
@@ -305,12 +314,16 @@ def run_goto(caller, text: str, follow_up: str = "", session=None,
     Methodology:
         1. A pace that is not known refuses, and nothing stops.
         2. An empty target stops the walk, or asks where to go.
-        3. Resolve the target, then search a path with A*.
-        4. A walker on the goal arrives at once, so the follow-up runs now.
-        5. Else start the walk. A new `goto` replaces an old walk.
+        3. Resolve the target, then search a path with A*. With no path,
+           the walk goes to the nearest tile that a walk reaches.
+        4. Tell the caller where the walk goes (`_announce_walk`).
+        5. A walker on the end tile arrives at once, so the follow-up runs
+           now. Else start the walk. A new `goto` replaces an old walk.
 
     Notes/References:
         `BlackoutGotoCmd.func` calls this. `walk.start_path` owns the rest.
+        The walk shows its END tile on the feed, which is the goal only if
+        a walk reaches the goal.
 
     Author: Nick Hobar
     Creation date: 09/24/2026
@@ -339,15 +352,37 @@ def run_goto(caller, text: str, follow_up: str = "", session=None,
         caller.msg(_MSG_UNKNOWN.format(text=text.strip()))
         return
 
-    path = find_path(view.grid, here, goal)
+    found = find_nearest_path(view.grid, here, goal)
 
-    if path is None:
+    if found is None:
         caller.msg(_MSG_NO_PATH)
         return
 
-    # A walk of one tile is a click on the next tile: a step, with no words.
-    if len(path) > 1:
-        caller.msg(_MSG_SET_OFF.format(place=place))
+    path, reached = found
+    end = path[-1] if path else here
+    _announce_walk(caller, place, path, reached, follow_up)
+    walk.start_path(caller, path, end, follow_up, session,
+                    running=_PACE_RUNS[pace], reaches_goal=reached)
 
-    walk.start_path(caller, path, goal, follow_up, session,
-                    running=_PACE_RUNS[pace])
+
+def _announce_walk(caller, place: str, path: list, reached: bool,
+                   follow_up: str) -> None:
+    """
+    Tell the caller where a `goto` walk goes. A walk of one tile is a click
+    on the next tile: a step, with no words. A walk that ends short says so
+    now, unless it has a follow-up. The arrival then says MSG_CANNOT_REACH
+    in the place of the follow-up (`walk._arrive`).
+    """
+    tiles = len(path)
+
+    if reached:
+        if tiles > 1:
+            caller.msg(_MSG_SET_OFF.format(place=place))
+
+        return
+
+    if follow_up:
+        return
+
+    message = _MSG_NEAR if tiles else _MSG_NEAREST
+    caller.msg(message.format(place=place))

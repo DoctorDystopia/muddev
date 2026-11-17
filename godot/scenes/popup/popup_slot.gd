@@ -139,6 +139,8 @@ func _init() -> void:
 	# The clip drops the minimum width of the label to zero. See the class notes.
 	_detail.clip_text = true
 	_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# Centered under the name. See [ItemNameLabel].
+	_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(_detail)
 
 	# AFTER the column, so the count draws over the art. See [StackCountLabel].

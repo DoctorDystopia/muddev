@@ -1,6 +1,18 @@
 {
 	"format": 1,
 	"pictures": {
+		"bit_blade": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
 		"blood_sword": {
 			"offset": [
 				0.0,
@@ -13,6 +25,18 @@
 			],
 			"zoom": 1.0
 		},
+		"broken_bit_blade": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
 		"canopic_jar": {
 			"offset": [
 				0.0,
@@ -22,6 +46,354 @@
 				0.0,
 				-90.0,
 				0.0
+			],
+			"zoom": 1.0
+		},
+		"copper_battleaxe": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"copper_dagger": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"copper_greatsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				37.5
+			],
+			"zoom": 1.0
+		},
+		"copper_scimitar": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"copper_shortsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"copper_spear": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"hammer": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"legendary_bit_blade": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"malfunctioning_gizmo": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"manganese_battleaxe": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"manganese_dagger": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"manganese_greatsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				37.5
+			],
+			"zoom": 1.0
+		},
+		"manganese_scimitar": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"manganese_shortsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"manganese_spear": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"mk2_bit_blade": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"rusty_scrap_battleaxe": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"rusty_scrap_dagger": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"rusty_scrap_greatsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				37.5
+			],
+			"zoom": 1.0
+		},
+		"rusty_scrap_scimitar": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"rusty_scrap_shortsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"rusty_scrap_spear": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"scrap_battleaxe": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"scrap_dagger": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"scrap_greatsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				37.5
+			],
+			"zoom": 1.0
+		},
+		"scrap_scimitar": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"scrap_shortsword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"scrap_spear": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
+			],
+			"zoom": 1.0
+		},
+		"toy_sword": {
+			"offset": [
+				0.0,
+				0.0
+			],
+			"turn": [
+				-19.5,
+				31.5,
+				19.5
 			],
 			"zoom": 1.0
 		}

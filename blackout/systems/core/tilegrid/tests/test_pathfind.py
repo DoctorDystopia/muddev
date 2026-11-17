@@ -11,7 +11,7 @@ from collections import deque
 
 from systems.core.tilegrid import constants as const
 from systems.core.tilegrid.grid import Chunk, TileGrid
-from systems.core.tilegrid.pathfind import find_path
+from systems.core.tilegrid.pathfind import find_nearest_path, find_path
 
 
 # ─── Private constant definitions ────────────────────────────────────────────
@@ -21,6 +21,11 @@ _SIZE = const.CHUNK_SIZE
 # The column of the wall in the detour case, and the one gap in it.
 _WALL_X = 20
 _GAP_Y = 50
+
+# The start of the box case, in the middle of the chunk, and the farthest
+# goal on each axis from it. Every tile of that square is a goal.
+_BOX_START = (_SIZE // 2, _SIZE // 2)
+_BOX_RADIUS = 6
 
 
 # ─── Private helper routines ─────────────────────────────────────────────────
@@ -42,6 +47,44 @@ def _block(grid, x: int, y: int) -> None:
 
 def _chebyshev(start, goal) -> int:
     return max(abs(goal[0] - start[0]), abs(goal[1] - start[1]))
+
+
+def _squared(tile, goal) -> int:
+    return (goal[0] - tile[0]) ** 2 + (goal[1] - tile[1]) ** 2
+
+
+def _block_ring(grid, centre, radius: int) -> None:
+    """Block every tile within `radius` of `centre`, but `centre` itself."""
+    for dx in range(-radius, radius + 1):
+        for dy in range(-radius, radius + 1):
+            if (dx, dy) != (0, 0):
+                _block(grid, centre[0] + dx, centre[1] + dy)
+
+
+def _steps_from(grid, start) -> dict:
+    """
+    The steps from `start` to every tile that a walk reaches, by a
+    breadth-first search that asks check_step about every step.
+    """
+    seen = {start: 0}
+    queue = deque([start])
+
+    while queue:
+        node = queue.popleft()
+
+        for dx, dy in const.DIRECTION_OFFSETS.values():
+            neighbour = (node[0] + dx, node[1] + dy)
+
+            if neighbour in seen:
+                continue
+
+            if grid.check_step(node, neighbour) != const.STEP_OK:
+                continue
+
+            seen[neighbour] = seen[node] + 1
+            queue.append(neighbour)
+
+    return seen
 
 
 # The flag bits that the random grid draws from, with no bit as the most
@@ -211,9 +254,106 @@ class FindPathTests(unittest.TestCase):
                         const.STEP_OK)
                     here = tile
 
+    def test_a_walk_on_open_ground_stays_in_its_box(self):
+        # The tent bug: a walk of 6 tiles east went 3 tiles north-east and 3
+        # tiles south-east. The length was correct, the shape was not. Each
+        # tile of a walk on open ground is in the box of its start and goal,
+        # so a straight goal gets a straight walk.
+        grid = _open_grid()
+        start_x, start_y = _BOX_START
+        span = range(-_BOX_RADIUS, _BOX_RADIUS + 1)
+        goals = [(start_x + dx, start_y + dy) for dx in span for dy in span]
+
+        for goal in goals:
+            low_x, high_x = sorted((start_x, goal[0]))
+            low_y, high_y = sorted((start_y, goal[1]))
+
+            with self.subTest(goal=goal):
+                path = find_path(grid, _BOX_START, goal)
+                outside = [(x, y) for x, y in path
+                           if not low_x <= x <= high_x
+                           or not low_y <= y <= high_y]
+
+                self.assertEqual(len(path), _chebyshev(_BOX_START, goal))
+                self.assertEqual(outside, [])
+
     def test_the_same_question_gets_the_same_path(self):
         grid = _open_grid()
         first = find_path(grid, (5, 5), (25, 9))
         second = find_path(grid, (5, 5), (25, 9))
+
+        self.assertEqual(first, second)
+
+
+class FindNearestPathTests(unittest.TestCase):
+    """The OSRS rule: a walk to a sealed goal ends on the nearest tile."""
+
+    _START = (1, 1)
+    _SEALED = (30, 30)
+
+    def assertLegalWalk(self, grid, start, path):
+        here = start
+
+        for tile in path:
+            with self.subTest(step_from=here, step_to=tile):
+                self.assertEqual(grid.check_step(here, tile), const.STEP_OK)
+
+            here = tile
+
+    def test_a_goal_that_a_walk_reaches_gives_the_find_path_walk(self):
+        grid = _open_grid()
+        goal = (20, 7)
+
+        self.assertEqual(find_nearest_path(grid, self._START, goal),
+                         (find_path(grid, self._START, goal), True))
+
+    def test_a_sealed_goal_walks_to_the_nearest_reached_tile(self):
+        # The expectation comes from a breadth-first search: of the reached
+        # tiles in the square, the lowest (squared distance, steps, x, y).
+        grid = _open_grid()
+        _block_ring(grid, self._SEALED, 1)
+        radius = const.PATH_FALLBACK_RADIUS
+        steps = _steps_from(grid, self._START)
+        square = [tile for tile in steps
+                  if _chebyshev(tile, self._SEALED) <= radius]
+        expected = min((_squared(tile, self._SEALED), steps[tile], tile)
+                       for tile in square)[-1]
+
+        path, reached = find_nearest_path(grid, self._START, self._SEALED)
+
+        self.assertFalse(reached)
+        self.assertEqual(path[-1], expected)
+        self.assertEqual(len(path), steps[expected])
+        self.assertLegalWalk(grid, self._START, path)
+
+    def test_a_blocked_goal_next_to_the_start_gives_an_empty_walk(self):
+        grid = _open_grid()
+        goal = (self._START[0] + 1, self._START[1])
+        _block(grid, *goal)
+
+        self.assertEqual(find_nearest_path(grid, self._START, goal),
+                         ([], False))
+
+    def test_the_radius_bounds_the_nearest_tile(self):
+        # The nearest open tile is one tile past the radius.
+        grid = _open_grid()
+        radius = const.PATH_FALLBACK_RADIUS
+        _block_ring(grid, self._SEALED, radius)
+
+        self.assertIsNone(find_nearest_path(grid, self._START, self._SEALED))
+        self.assertIsNotNone(find_nearest_path(grid, self._START, self._SEALED,
+                                               radius=radius + 1))
+
+    def test_a_goal_far_off_the_grid_has_no_walk(self):
+        grid = _open_grid()
+        goal = (-(const.PATH_FALLBACK_RADIUS + 1), self._START[1])
+
+        self.assertIsNone(find_nearest_path(grid, self._START, goal))
+
+    def test_the_same_question_gets_the_same_nearest_tile(self):
+        grid = _open_grid()
+        _block_ring(grid, self._SEALED, 1)
+        first = find_nearest_path(grid, self._START, self._SEALED)
+        second = find_nearest_path(grid, self._START, self._SEALED)
 
         self.assertEqual(first, second)

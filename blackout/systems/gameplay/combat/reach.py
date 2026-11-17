@@ -47,7 +47,7 @@ import math
 
 from evennia.utils import logger
 
-from systems.core.tilegrid.pathfind import find_path
+from systems.core.tilegrid.pathfind import find_nearest_path
 from systems.core.tilegrid.sight import has_line_of_sight
 from world import tile_travel
 
@@ -200,14 +200,28 @@ def room_distance(origin, destination):
 
 def _planar_distance(here, there) -> int:
     """
-    The straight-line tiles between two (x, y, ...) points, rounded. The one
-    measure that room_distance and the tile world chase both use.
+    The straight-line tiles between two (x, y, ...) points, rounded. The
+    measure that room_distance gives and that a refusal message quotes. The
+    tile world chase does not use it (see _squared_planar_distance).
+    """
+    distance = int(round(math.sqrt(_squared_planar_distance(here, there))))
+
+    return distance
+
+
+def _squared_planar_distance(here, there) -> int:
+    """
+    The square of the straight-line distance between two (x, y, ...) points.
+    The tile world chase compares with this, because a rounded distance hides
+    a step that is closer. Example: from (0,0) to (5,2) the distance is 5.39,
+    and from (0,1) it is 5.10. Both round to 5, so the step north looked
+    like no gain, and an NPC with a block to its east stood still
+    (11/16/2026). A square is exact, as in within_metric.
     """
     dx = there[0] - here[0]
     dy = there[1] - here[1]
-    distance = int(round(math.sqrt((dx * dx) + (dy * dy))))
 
-    return distance
+    return (dx * dx) + (dy * dy)
 
 
 def tile_distance(attacker, target):
@@ -551,8 +565,13 @@ def nearest_tile_in_reach(attacker, target, radius: int):
         until the wall no longer stands between the two (the vault rule,
         Combat_System.md, "Line of sight").
 
-        When no path exists, the answer is the tile of the target. Then
-        `goto` tells the player that it finds no way there.
+        When no path exists, the search walks toward the nearest tile that a
+        walk reaches, as `goto` does (Nick, 11/16/2026). A bow stops at the
+        first tile of that walk with reach and sight, so it shoots across
+        water. Else the walk goes to its end tile. There, `attack` runs
+        again. It gets an empty walk and thus None: the reach refusal. That
+        None ends the chain. A search that reaches no tile near the target
+        gives the tile of the target. Then `goto` finds no way there.
 
     Notes/References:
         Handoff debt 16. The version before DESIGN-0011 Phase 4b picked the
@@ -583,12 +602,34 @@ def nearest_tile_in_reach(attacker, target, radius: int):
     if _strikes_from(grid, here, there, radius):
         return here
 
-    path = find_path(grid, here, there)
+    found = find_nearest_path(grid, here, there)
 
-    if path is None:
+    if found is None:
         return there
 
-    return _first_tile_to_strike_from(grid, path, there, radius)
+    path, reached = found
+
+    if reached:
+        return _first_tile_to_strike_from(grid, path, there, radius)
+
+    return _stop_on_short_walk(grid, path, there, radius)
+
+
+def _stop_on_short_walk(grid, path: list, goal: tuple, radius: int):
+    """
+    Return the stop tile of a walk that ends short of `goal`. That is the
+    first tile of the walk that may strike `goal`, else the end tile. None
+    for an empty walk: the attacker stands on the nearest tile already, and
+    no walk can help.
+    """
+    for tile in path:
+        if _strikes_from(grid, tile, goal, radius):
+            return tile
+
+    if not path:
+        return None
+
+    return path[-1]
 
 
 def search_candidates(attacker, radius: int):
@@ -653,7 +694,8 @@ def _step_on_tile_world(mover, destination_room) -> bool:
     """
     The tile world branch of step_toward_room. A tile room has no exits, so
     the eight neighbour tiles take their place. The rule stays the same:
-    greedy, strictly closer, by the same measure. Never raises.
+    greedy and strictly closer. The measure is the exact square of the
+    distance, not the rounded tiles (_squared_planar_distance). Never raises.
     """
     there = _room_coordinates(destination_room)
     here = _room_coordinates(mover.location)
@@ -663,7 +705,7 @@ def _step_on_tile_world(mover, destination_room) -> bool:
 
     try:
         moved = tile_travel.step_toward(
-            mover, (int(there[0]), int(there[1])), _planar_distance)
+            mover, (int(there[0]), int(there[1])), _squared_planar_distance)
     except Exception:
         logger.log_trace()
         return False

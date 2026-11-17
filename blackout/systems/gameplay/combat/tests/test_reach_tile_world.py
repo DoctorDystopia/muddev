@@ -32,6 +32,13 @@ _GOAL = (15, 10)
 # East of the start. A transition here must not pull the NPC through.
 _EAST = (11, 10)
 
+# North of the start, and a goal 5 east and 2 north of the start. With _EAST
+# blocked, the corner rule also closes both eastern diagonals. The step to
+# _NORTH is then the only step closer to the goal: 5.10 tiles against 5.39.
+# Both round to 5, so the rounded measure hid it.
+_NORTH = (10, 11)
+_OFF_AXIS_GOAL = (15, 12)
+
 # A reach wider than the distance from _START to _GOAL, and narrower than the
 # distance from _START to _FAR_GOAL. Not a weapon value: a test number.
 _BOW_REACH = 7
@@ -44,6 +51,15 @@ _WALL_FLAGS = {(x, y): tile_const.FLAG_BLOCKED
 
 # A tile on the straight line from _START to _GOAL, for the sight cases.
 _BETWEEN = (13, 10)
+
+# An island: the target stands on _ISLAND, and water covers each tile within
+# _MOAT_WIDTH of it. Water stops a walk and not a shot.
+_ISLAND = (20, 10)
+_MOAT_WIDTH = 2
+_MOAT_FLAGS = {(_ISLAND[0] + dx, _ISLAND[1] + dy): tile_const.FLAG_WATER
+               for dx in range(-_MOAT_WIDTH, _MOAT_WIDTH + 1)
+               for dy in range(-_MOAT_WIDTH, _MOAT_WIDTH + 1)
+               if (dx, dy) != (0, 0)}
 
 _THING_TYPECLASS = "typeclasses.objects.Object"
 
@@ -79,11 +95,11 @@ class TileWorldChaseTests(EvenniaTest):
         set_world(None)
         super().tearDown()
 
-    def _start(self, flags=None, objects=()):
+    def _start(self, flags=None, objects=(), goal=_GOAL):
         world = _world(flags or {}, list(objects))
         set_world(world)
         movement.place(world.rooms, self.obj1, *_START, quiet=True)
-        goal_room = world.rooms.ensure_room(*_GOAL)
+        goal_room = world.rooms.ensure_room(*goal)
 
         return world, goal_room
 
@@ -109,6 +125,15 @@ class TileWorldChaseTests(EvenniaTest):
 
         self.assertFalse(reach.step_toward_room(self.obj1, goal_room))
         self.assertEqual(self._tile(), _START)
+
+    def test_a_step_closer_by_less_than_a_tile_still_goes(self):
+        # The rounding bug: the chase compared rounded tiles, so a step that
+        # gained less than the rounding looked like no gain at all.
+        _world_, goal_room = self._start({_EAST: tile_const.FLAG_BLOCKED},
+                                         goal=_OFF_AXIS_GOAL)
+
+        self.assertTrue(reach.step_toward_room(self.obj1, goal_room))
+        self.assertEqual(self._tile(), _NORTH)
 
     def test_a_transition_tile_is_never_a_step(self):
         placed = [chunkfile.ChunkObject(_TRANSITION, *_EAST)]
@@ -239,6 +264,34 @@ class NearestTileInReachTests(EvenniaTestCase):
             "typeclasses.rooms.Room", key="elsewhere")
 
         self.assertTrue(reach.has_sight(self.attacker, self.target))
+
+    def test_a_bow_across_water_stops_where_it_can_shoot(self):
+        # The OSRS rule: no walk reaches the island, so the walk goes toward
+        # the nearest tile, and the bow stops at its first tile with a shot.
+        world = self._stand(_START, _ISLAND, _MOAT_FLAGS)
+
+        destination = reach.nearest_tile_in_reach(
+            self.attacker, self.target, _BOW_REACH)
+
+        self.assertNotEqual(destination, _ISLAND)
+        self.assertIsNotNone(find_path(world.grid, _START, destination))
+        self.assertTrue(self._in_reach_from(destination, _BOW_REACH))
+        self.assertTrue(has_line_of_sight(world.grid, destination, _ISLAND))
+
+    def test_melee_across_water_walks_near_then_stops(self):
+        world = self._stand(_START, _ISLAND, _MOAT_FLAGS)
+        melee = combat_const.MELEE_REACH_TILES
+
+        near = reach.nearest_tile_in_reach(self.attacker, self.target, melee)
+
+        self.assertNotEqual(near, _ISLAND)
+        self.assertIsNotNone(find_path(world.grid, _START, near))
+
+        # From the nearest tile, no walk helps: the reach refusal, not a loop.
+        movement.place(world.rooms, self.attacker, *near, quiet=True)
+
+        self.assertIsNone(
+            reach.nearest_tile_in_reach(self.attacker, self.target, melee))
 
     def test_a_target_off_the_tile_world_has_no_tile(self):
         self._stand(_START, _GOAL)

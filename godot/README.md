@@ -50,7 +50,7 @@ where there is art, and the silhouette of the family where there is not.
 | Input | Does |
 |---|---|
 | **Hover** | Lights whatever a click would take — the entity, else the tile |
-| **Left-click a tile** | Walks there. Closes any open menu first — the server's menus stand aside for a walk, an exit or a click on a thing |
+| **Left-click a tile** | Walks there. A tile that no walk reaches (a rock, water) walks to the nearest tile that a walk reaches, as in OSRS. Closes any open menu first — the server's menus stand aside for a walk, an exit or a click on a thing |
 | **Left-click an entity** | Sends the entity's `interact` command, verbatim — `attack mutant raider`, `bank`, `craft`, `talk`, `cut`. On another tile, walks there first: `goto (4,7) then cut rusty pole` |
 | **Left-click a player** | Nothing — an empty `interact`, which the server decides and this pane does not |
 | **Drag an inventory cell** | Swaps two carried squares. The one command this client composes, because a drag knows two endpoints |
@@ -495,10 +495,11 @@ Four rules:
    parity bug between the two readers, and `WorldState.last_chunk_error`
    keeps the reason.
 3. **A far tile walks by the server template.** A near tile keeps the action
-   that `room_info` names. A far walkable tile sends `TILE_WALK_TEMPLATE`
-   with its coordinates. A chunk has 4,096 tiles, so the server spells the
-   command one time and the client fills in the tile. The chunk flags say
-   which tile is walkable. They are server facts.
+   that `room_info` names. A far tile sends `TILE_WALK_TEMPLATE` with its
+   coordinates. A chunk has 4,096 tiles, so the server spells the command
+   one time and the client fills in the tile. A blocked tile or water sends
+   the walk too (11/16/2026). The server walks to the nearest tile that a
+   walk reaches, as in OSRS. The client does not decide which tile.
 4. **No position is a guess.** `ground_y` gives null for a tile whose chunk
    has not landed. A figure there waits, and it stands when `chunks_changed`
    brings the ground.

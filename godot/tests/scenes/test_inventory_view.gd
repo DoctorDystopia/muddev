@@ -200,6 +200,8 @@ func _a_name_reserves_two_lines() -> void:
 	_expect(one_line > 1.0, "a line of the theme font has a height")
 	_expect(title.custom_minimum_size.y > one_line,
 		"the name reserves more than one line")
+	_expect(title.horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER,
+		"the name is centered under the picture")
 
 
 func _hovering_a_cell_names_it_in_the_bar() -> void:

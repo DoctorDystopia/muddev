@@ -283,16 +283,18 @@ func area_at(tile: Vector2i) -> String:
 ##
 ## 1. A near tile that the server listed gives its action. An empty command
 ##    gives {}.
-## 2. A far walkable tile of the tile world gives the walk to it. The server
-##    spells the command one time, in [constant _Const.TILE_WALK_TEMPLATE],
-##    and this fills in the tile. A chunk has 4,096 tiles, so no feed can list
-##    each one. [method WorldView.approach_command] fills an entity template
-##    in the same way.
-## 3. Anything else gives {}: a blocked tile, water, or a chunk not loaded.
+## 2. A far tile of the tile world gives the walk to it, blocked or not. The
+##    server spells the command one time, in
+##    [constant _Const.TILE_WALK_TEMPLATE], and this fills in the tile. A chunk
+##    has 4,096 tiles, so no feed can list each one. The method
+##    [method WorldView.approach_command] fills an entity template in the
+##    same way.
+## 3. Anything else gives {}: a chunk not loaded, or a room off the tile world.
 ##
-## The chunk flags say which tile is walkable. They are server facts: the
-## server reads the same chunk file. `goto` still refuses a walk that it cannot
-## find, in words, in the text pane.
+## A blocked tile or water also gives the walk (Nick, 11/16/2026). The server
+## walks to the nearest tile that a walk reaches, as in OSRS. The server
+## command `goto` refuses only when its search reaches no tile near the goal.
+## It says so in words, in the text pane.
 ##
 ## A walk to a far tile also carries its paced form, under
 ## [constant _Const.TILE_ACTION_PACED_KEY], from
@@ -312,9 +314,6 @@ func tile_action(cell: Vector2i) -> Dictionary:
 		return near
 
 	if not on_tile_world() or not chunks.has_tile(cell):
-		return {}
-
-	if chunks.get_flags(cell) & _Const.TILE_FLAGS_UNWALKABLE:
 		return {}
 
 	var command := _Const.TILE_WALK_TEMPLATE \
