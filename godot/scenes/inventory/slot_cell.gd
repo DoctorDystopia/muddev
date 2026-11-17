@@ -71,10 +71,11 @@ var _menu: PopupMenu
 ## True after this cell starts a drag. Its left-button release does not act.
 var _skip_left_release := false
 
-## The item's picture: one rectangle of [ItemStage]'s shared render target.
+## The picture of the item: one rectangle of the render target of [ItemStage].
+## Two cells that show one item hold the same rectangle.
 ##
-## A TextureRect and not a viewport of its own -- see [ItemStage] on why forty
-## render targets for forty thumbnails is the build to avoid.
+## A TextureRect, and not a viewport of its own. [ItemStage] tells why forty
+## render targets for forty thumbnails is the wrong build.
 var _art: TextureRect
 
 ## What the player set, or null. Read for two facts: how big they left the

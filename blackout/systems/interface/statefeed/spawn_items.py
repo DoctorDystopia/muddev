@@ -19,6 +19,9 @@ Description: The items that an item spawn may name, and the item list file
              (world/tests/test_tile_content.py), and the editor reads the
              file.
 
+             The picture editor of the Godot editor reads the file also
+             (11/16/2026): it lists each item with its item picture.
+
              The game client never reads the file. The web export leaves out
              the whole plugin directory.
 

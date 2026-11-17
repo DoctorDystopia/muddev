@@ -1,0 +1,8 @@
+{
+	"base": "rusty_scrap_platebody",
+	"colors": {
+		"metal": "copper"
+	},
+	"format": 1,
+	"key": "copper_platebody"
+}

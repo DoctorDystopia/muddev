@@ -134,6 +134,12 @@
 			"owner": "copper_hide_cape"
 		},
 		{
+			"key": "copper_platebody",
+			"kind": "armor",
+			"name": "copper platebody",
+			"owner": "copper_platebody"
+		},
+		{
 			"key": "copper_platelegs",
 			"kind": "armor",
 			"name": "copper platelegs",
@@ -312,6 +318,12 @@
 			"kind": "armor",
 			"name": "manganese hide cape",
 			"owner": "manganese_hide_cape"
+		},
+		{
+			"key": "manganese_platebody",
+			"kind": "armor",
+			"name": "manganese platebody",
+			"owner": "manganese_platebody"
 		},
 		{
 			"key": "manganese_platelegs",
@@ -776,6 +788,12 @@
 			"owner": "rusty_scrap_metal"
 		},
 		{
+			"key": "rusty_scrap_platebody",
+			"kind": "armor",
+			"name": "rusty scrap platebody",
+			"owner": "rusty_scrap_platebody"
+		},
+		{
 			"key": "rusty_scrap_platelegs",
 			"kind": "armor",
 			"name": "rusty scrap platelegs",
@@ -882,6 +900,12 @@
 			"kind": "crafting_material",
 			"name": "scrap metal",
 			"owner": "scrap_metal"
+		},
+		{
+			"key": "scrap_platebody",
+			"kind": "armor",
+			"name": "scrap platebody",
+			"owner": "scrap_platebody"
 		},
 		{
 			"key": "scrap_platelegs",

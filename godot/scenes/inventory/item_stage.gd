@@ -1,6 +1,6 @@
 class_name ItemStage
 extends SubViewport
-## Every inventory item, drawn in 3D, into ONE texture.
+## The picture of each item that one pane shows, drawn in 3D into ONE texture.
 ##
 ## The browser pane gives the inventory a whole second three.js scene, camera and
 ## renderer, and hit-tests meshes to work out what was clicked. This does the
@@ -17,16 +17,49 @@ extends SubViewport
 ##
 ## Instead every item is laid out on a GRID in one 3D scene under one
 ## orthographic camera, and each cell displays its own rectangle of the result
-## through an [AtlasTexture]. One render target, one camera, one pass — and the
-## slow spin below costs the same whether one item is on screen or forty.
+## through an [AtlasTexture]. One render target, one camera, one pass.
+##
+## ## One picture for each item, made one time (11/16/2026)
+##
+## The stage is a picture cache. [method picture] gives the rectangle of one
+## item. The key is the asset key and the family of the item, because those
+## two decide what the stage draws. The first request builds the model and
+## gives it a cell of the grid. Each later request gives the same rectangle
+## and builds nothing. Thus, two stacks of one item show one rectangle.
+##
+## Before this date the pane cleared the stage on each snapshot and built
+## each model again. A full bag cost 52 ms for each snapshot. A snapshot
+## arrives on each pickup, each craft, and each shot that uses ammunition.
+##
+## The stage never drops a picture. The number of pictures is at most the
+## number of different items in the game.
+##
+## ## The picture is static
+##
+## Each item stands at one fixed turn. The stage renders one time after a
+## picture changes, and then it stops. Before this date each item made a slow
+## spin, and the stage rendered on each frame: 225 draw calls for a full bag.
+##
+## ## The picture pose
+##
+## [PicturePose] gives the zoom, the offset, and the turn of each picture,
+## by its asset key. An item with no row in the look file gets the default
+## pose. The picture editor writes the look file. It calls
+## [method redraw] after each change, so the author sees the change at once.
+## The game reads the file at its start.
+##
+## ## The stage follows its sources
+##
+## A model that arrives late changes a picture. So does the figure set. The
+## stage hears [signal MeshResolver.refreshed] and
+## [signal FigureLibrary.changed], and it draws the item again in the same
+## cell. The rectangle of the cell does not change. Thus, no pane builds its
+## cells again for a picture.
 ##
 ## ## The layout is this file's, and only this file's
 ##
-## Cells are addressed by INDEX. [InventoryView] allocates indices — carried
-## slots first, then worn frames — and asks for the texture belonging to one.
-## Where index 19 sits in the 3D grid, and therefore which pixels it owns, is
-## decided here and nowhere else, so the two cannot disagree about which item a
-## cell is showing.
+## Where a picture sits in the 3D grid, and therefore which pixels it owns,
+## is decided here and nowhere else. A pane never names a cell of the grid.
 
 ## Pixels per cell in the render target. Small on purpose: this is drawn at
 ## thumbnail size, and the target is COLUMNS x rows of these.
@@ -36,23 +69,17 @@ const CELL_PIXELS := 96
 ## grid shows -- this is only how the render target is packed.
 const COLUMNS := 8
 
+## The rows that the render target gains when the grid is full. A new size
+## makes a new render target, so the stage grows by some rows at a time.
+const GROW_ROWS := 4
+
 ## One world unit per cell, so a cell's world position is its grid position.
 const CELL_WORLD := 1.0
 
-## How much of its cell one item fills, at the widest turn of its spin
-## (10/21/2026). The fit reads the outline of the item, not its longest side.
-## Two pixels a side stay empty, so the soft edge of the widest turn never
-## draws in the next cell. See [method _swept_outline].
+## How much of its cell one item fills, on the longer side of its outline,
+## at a zoom of 1. Two pixels a side stay empty, so the soft edge of an item
+## never draws in the next cell. See [method _seen_outline].
 const ITEM_FILL := 0.96
-
-## A fixed tilt is what makes a flat-on orthographic camera read as 3D. Matches
-## the browser, which tilts the ITEM and leaves the frame square because the
-## frame is what the player aims at.
-const ITEM_TILT_X := -0.34
-
-## Rotations per second. Very slow -- twelve and a half seconds per turn -- so it
-## reads as ambience rather than as animation.
-const SPIN_HZ := 0.08
 
 ## How far back the camera sits. Any value clear of the items works; it is
 ## orthographic, so this changes nothing about the framing.
@@ -63,11 +90,37 @@ const CAMERA_DISTANCE := 4.0
 const AMBIENT_ENERGY := 1.1
 const LIGHT_ENERGY := 1.4
 
+## Between the asset key and the family in a picture key. Neither one can
+## hold a line break.
+const KEY_SEPARATOR := "\n"
+
 var _camera: Camera3D
 var _root: Node3D
 
-## index -> the Node3D drawn for it, so a spin can turn them all.
+## Where meshes come from, or null. See [method bind_meshes].
+var _meshes: MeshResolver
+
+## The worn looks of the gear editor, or null. See [method bind_figures].
+var _figures: FigureLibrary
+
+## picture key -> the index of its cell.
+var _cells: Dictionary = {}
+
+## The `[asset, family]` of each cell, by index.
+var _sources: Array = []
+
+## The rectangle of each cell, by index. Each cell of a pane that shows one
+## item holds the same texture.
+var _textures: Array[AtlasTexture] = []
+
+## index -> the Node3D drawn for it. A cell whose item has no source yet has
+## no entry.
 var _items: Dictionary = {}
+
+## index -> the hull of each mesh of its node: a list of `[points,
+## transform]`. The outline of the node at a turn comes from these points,
+## so a new picture pose builds no hull again. See [method _hulls_of].
+var _hulls: Dictionary = {}
 
 ## How many cells the grid is currently sized for.
 var _capacity := 0
@@ -91,10 +144,8 @@ func _init() -> void:
 	# square wherever an item is not.
 	transparent_bg = true
 
-	# WHEN_VISIBLE and not ALWAYS: in text-only mode the whole 3D half is
-	# hidden, and a spinning inventory nobody can see should not cost a render
-	# pass per frame to keep spinning.
-	render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
+	# The stage renders only on request. See [method _render_soon].
+	render_target_update_mode = SubViewport.UPDATE_DISABLED
 
 	_root = Node3D.new()
 	add_child(_root)
@@ -118,66 +169,127 @@ func _init() -> void:
 	environment.environment = settings
 	_root.add_child(environment)
 
-	_resize(1)
+	_resize(COLUMNS * GROW_ROWS)
 
 
-## Make room for `count` cells, and forget everything currently drawn.
+## Take the source of the meshes, and follow it.
 ##
-## Called before a rebuild. The render target is resized to fit, so a bag that
-## grows costs more pixels rather than needing an edit here.
-func reserve(count: int) -> void:
-	_clear()
-	_resize(count)
+## A model that arrives later draws again each picture that it changes. Null
+## is a normal argument: the stage then draws only a worn look.
+func bind_meshes(resolver: MeshResolver) -> void:
+	_meshes = resolver
+
+	if _meshes != null:
+		_meshes.refreshed.connect(_on_model_arrived)
+
+	_draw_all()
 
 
-## Draw one item at one index. `asset` and `family` are the server's, untouched.
+## Take the figure library, and follow it.
+##
+## An item with no served model then draws its worn look (10/17/2026). The
+## arrival of the figure set, or of a model of a part, draws each picture
+## again.
+func bind_figures(library: FigureLibrary) -> void:
+	_figures = library
+
+	if _figures != null:
+		_figures.changed.connect(_draw_all)
+
+	_draw_all()
+
+
+## The picture of one item. `asset` and `family` are the server's, untouched.
 ##
 ## Three sources, in this order (10/17/2026):
 ##
-## 1. The served model of the asset key, from `resolver`.
-## 2. The worn look of the item, from `figures`: the look of the gear
-##    editor, which the hand holds also.
+## 1. The served model of the asset key, from the resolver.
+## 2. The worn look of the item, from the figure library: the look of the
+##    gear editor, which the hand holds also.
 ## 3. The rest of the mesh ladder: the family model, then the family shape.
 ##
 ## A served model that is not in hand yet starts its fetch. The worn look
 ## stands in until the file arrives.
-func place(index: int, asset: String, family: String,
-		resolver: MeshResolver, figures: FigureLibrary = null) -> void:
-	if index < 0 or index >= _capacity:
-		return
-
-	var node := _item_node(asset, family, resolver, figures)
-
-	if node == null:
-		return
-	# The fit reads the outline that the camera sees. Thus, a model that
-	# PRESENTATION shrinks for the world still fills its cell. A sword fills
-	# the height that its tilt leaves.
-	var outline := _swept_outline(node)
-	var longest := maxf(outline.size.x, outline.size.y)
-	var fill := ITEM_FILL * CELL_WORLD
-
-	if longest > ModelLoader.MIN_EXTENT:
-		fill /= longest
-
-	# The tilt moves the middle of the item off its origin. The lift puts the
-	# middle back on the cell centre. The spin turns about the vertical, so
-	# it keeps the lift.
-	var lift := outline.get_center().y * fill
-
-	node.scale = Vector3.ONE * fill
-	node.position = cell_centre(index) - Vector3(0.0, lift, 0.0)
-	node.rotation = Vector3(ITEM_TILT_X, 0.0, 0.0)
-
-	_root.add_child(node)
-	_items[index] = node
-
-
-## The picture belonging to one cell.
 ##
-## An [AtlasTexture] over this viewport's own texture, so every cell shares one
-## render target and none of them owns a copy of anything.
-func texture_for(index: int) -> AtlasTexture:
+## The first request for an item builds its model. Each later request gives
+## the same texture. An item with no source yet gets an empty rectangle,
+## which fills when its source arrives.
+func picture(asset: String, family: String) -> AtlasTexture:
+	var key := asset + KEY_SEPARATOR + family
+
+	if not _cells.has(key):
+		_cells[key] = _add_cell(asset, family)
+
+	var index: int = _cells[key]
+
+	return _textures[index]
+
+
+## How many pictures the stage holds. For tests.
+func picture_count() -> int:
+	return _sources.size()
+
+
+## Where cell `index` sits in the 3D grid, in world units.
+##
+## The first row is at the top and the grid grows down. Thus, a cell keeps
+## its place when the grid gains rows, and only the camera moves. Y is
+## negated because grid rows run DOWN the texture while world Y runs up.
+func cell_centre(index: int) -> Vector3:
+	var column := index % COLUMNS
+	@warning_ignore("integer_division")
+	var row := index / COLUMNS
+
+	return Vector3(
+		(float(column) + 0.5 - (float(COLUMNS) * 0.5)) * CELL_WORLD,
+		-(float(row) + 0.5) * CELL_WORLD,
+		0.0)
+
+
+## Give each picture of one asset key the picture pose of now. The
+## rectangle of each picture stays, and so does its model: only the place of
+## the model changes. For the picture editor, after a change of the pose.
+func redraw(asset: String) -> void:
+	var changed := false
+
+	for index: int in _sources.size():
+		if str(_sources[index][0]) == asset:
+			_place(index)
+			changed = true
+
+	if changed:
+		_render_soon()
+
+
+## Give every picture the picture pose of now. For the picture editor,
+## after it reads the look file again.
+func redraw_all() -> void:
+	for index: int in _sources.size():
+		_place(index)
+
+	_render_soon()
+
+
+# ─── Private ─────────────────────────────────────────────────────────────────
+
+## Give one new item the next cell of the grid, and draw it there.
+func _add_cell(asset: String, family: String) -> int:
+	var index := _sources.size()
+
+	if index >= _capacity:
+		_resize(_capacity + (COLUMNS * GROW_ROWS))
+
+	_sources.append([asset, family])
+	_textures.append(_texture_at(index))
+	_draw(index)
+	_render_soon()
+
+	return index
+
+
+## The rectangle of one cell: an [AtlasTexture] over the texture of this
+## viewport. Every cell shares one render target and none owns a copy.
+func _texture_at(index: int) -> AtlasTexture:
 	var atlas := AtlasTexture.new()
 
 	atlas.atlas = get_texture()
@@ -190,94 +302,163 @@ func texture_for(index: int) -> AtlasTexture:
 	return atlas
 
 
-## Where cell `index` sits in the 3D grid, in world units.
-##
-## Y is negated because grid rows run DOWN the texture while world Y runs up,
-## and the camera looks along -Z. Getting that backwards draws the last row at
-## the top and is invisible until the bag has two rows in it.
-func cell_centre(index: int) -> Vector3:
-	var column := index % COLUMNS
-	@warning_ignore("integer_division")
-	var row := index / COLUMNS
-	var rows := _row_count()
+## Build the node of one cell and fit it. A node from an earlier draw goes.
+func _draw(index: int) -> void:
+	_drop(index)
 
-	return Vector3(
-		(float(column) + 0.5 - (float(COLUMNS) * 0.5)) * CELL_WORLD,
-		((float(rows) * 0.5) - float(row) - 0.5) * CELL_WORLD,
-		0.0)
+	var source: Array = _sources[index]
+	var node := _item_node(str(source[0]), str(source[1]))
 
-
-func _process(delta: float) -> void:
-	if _items.is_empty():
+	if node == null:
 		return
 
-	var turn := TAU * SPIN_HZ * delta
-
-	for index: int in _items:
-		var node: Node3D = _items[index]
-
-		if is_instance_valid(node):
-			node.rotate_y(turn)
+	_hulls[index] = _hulls_of(node)
+	_root.add_child(node)
+	_items[index] = node
+	_place(index)
 
 
-# ─── Private ─────────────────────────────────────────────────────────────────
+## Put the node of one cell in its place. The picture pose of its item
+## gives the turn, the zoom of the fit, and the offset. A cell with no node
+## stays empty.
+func _place(index: int) -> void:
+	var node: Node3D = _items.get(index)
+
+	if not is_instance_valid(node):
+		return
+
+	var pose := PicturePose.file_row(str(_sources[index][0]))
+	var turn := PicturePose.basis_of(pose)
+
+	# The fit reads the outline that the camera sees, at the turn of the
+	# pose. Thus, a model that PRESENTATION shrinks still fills its cell.
+	# A zoom of 1 fills the cell at each turn.
+	var outline := _seen_outline(_hulls[index], turn)
+	var longest := maxf(outline.size.x, outline.size.y)
+	var side := ITEM_FILL * CELL_WORLD
+	var fill := side * PicturePose.zoom_of(pose)
+
+	if longest > ModelLoader.MIN_EXTENT:
+		fill /= longest
+
+	# The turn moves the middle of the item off its origin. The shift puts
+	# the middle of the outline back on the cell centre. The offset of the
+	# pose then moves the picture, and it stops at the edge of the cell.
+	var middle := outline.get_center()
+	var shift := Vector3(middle.x, middle.y, 0.0) * fill
+	var offset := PicturePose.placed_offset(pose, outline.size * fill, side)
+
+	node.transform = Transform3D(turn.scaled(Vector3.ONE * fill),
+		cell_centre(index) - shift + Vector3(offset.x, offset.y, 0.0))
+
+
+## Free the node of one cell, if the cell has one.
+func _drop(index: int) -> void:
+	var node: Node3D = _items.get(index)
+
+	_items.erase(index)
+	_hulls.erase(index)
+
+	if is_instance_valid(node):
+		_root.remove_child(node)
+		node.free()
+
+
+## Draw every picture again, each in its own cell.
+func _draw_all() -> void:
+	if _sources.is_empty():
+		return
+
+	for index: int in _sources.size():
+		_draw(index)
+
+	_render_soon()
+
+
+## Draw again each picture that the arrival of one model changes. The
+## resolver owns the mesh ladder, so it says which pictures those are.
+func _on_model_arrived(arrived_key: String) -> void:
+	var changed := false
+
+	for index: int in _sources.size():
+		var source: Array = _sources[index]
+		var redraws := _meshes.redraws_for(str(source[0]), str(source[1]), arrived_key)
+
+		if redraws:
+			_draw(index)
+			changed = true
+
+	if changed:
+		_render_soon()
+
+
+## Render the grid one time, at the next frame. The viewport then keeps its
+## texture and renders no more, until the next call.
+func _render_soon() -> void:
+	render_target_update_mode = SubViewport.UPDATE_ONCE
+
 
 ## The served model, else the worn look, else the rest of the mesh ladder.
 ## Null when the stage has no source.
-func _item_node(asset: String, family: String, resolver: MeshResolver,
-		figures: FigureLibrary) -> Node3D:
+func _item_node(asset: String, family: String) -> Node3D:
 	var node: Node3D = null
 
-	if resolver != null:
-		node = resolver.resolve_own_art(asset)
+	if _meshes != null:
+		node = _meshes.resolve_own_art(asset)
 
-	if node == null and figures != null:
-		node = figures.build_item(asset)
+	if node == null and _figures != null:
+		node = _figures.build_item(asset)
 
-	if node == null and resolver != null:
-		node = resolver.resolve_entity(asset, family)
+	if node == null and _meshes != null:
+		node = _meshes.resolve_entity(asset, family)
 
 	return node
 
 
-## The outline of a node over its whole spin, as the camera sees it, in the
-## units of the node. X is the horizontal and Y is the vertical.
+## The hull of each mesh of a node: a list of `[points, transform]`. The
+## transform takes a point of the hull into the units of the node.
 ##
-## The tilt comes first. The spin then turns the item about the vertical
-## through its origin. Thus, the widest reach of a point is its distance
-## from that axis. The spin does not change the height of a point.
-##
-## The hull of each mesh gives the same outline as all of its vertices. A
-## reach and a height are largest at a corner of the hull. A served model
+## The hull of each mesh gives the same outline as all of its vertices,
+## because the outline is largest at a corner of the hull. A served model
 ## has thousands of vertices and a hull of some hundreds.
-##
-## An empty rectangle for a node with no mesh.
-func _swept_outline(node: Node3D) -> Rect2:
-	var tilt := Transform3D(Basis.from_euler(Vector3(ITEM_TILT_X, 0.0, 0.0)))
-	var radius := 0.0
-	var low := INF
-	var high := -INF
+func _hulls_of(node: Node3D) -> Array:
+	var hulls := []
 
 	for part: Array in ModelLoader.mesh_parts(node):
 		var mesh: Mesh = part[0]
-		var to_camera: Transform3D = tilt * (part[1] as Transform3D)
 		var hull := mesh.create_convex_shape(true, false)
 
 		# Null when a surface gives no arrays. The mesh then adds nothing.
-		if hull == null:
-			continue
+		if hull != null:
+			hulls.append([hull.points, part[1]])
 
-		for point: Vector3 in hull.points:
+	return hulls
+
+
+## The outline of a node as the camera sees it at the turn `turn`, in the
+## units of the node. X is the horizontal and Y is the vertical. `hulls`
+## is the list of [method _hulls_of] for the node.
+##
+## An empty rectangle for a node with no mesh.
+func _seen_outline(hulls: Array, turn: Basis) -> Rect2:
+	var view := Transform3D(turn)
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
+
+	for hull: Array in hulls:
+		var to_camera: Transform3D = view * (hull[1] as Transform3D)
+
+		for point: Vector3 in (hull[0] as PackedVector3Array):
 			var seen := to_camera * point
+			var flat := Vector2(seen.x, seen.y)
 
-			radius = maxf(radius, Vector2(seen.x, seen.z).length())
-			low = minf(low, seen.y)
-			high = maxf(high, seen.y)
+			low = low.min(flat)
+			high = high.max(flat)
 
-	if high < low:
+	if high.x < low.x:
 		return Rect2()
 
-	return Rect2(-radius, low, radius * 2.0, high - low)
+	return Rect2(low, high - low)
 
 
 func _row_count() -> int:
@@ -296,16 +477,6 @@ func _resize(count: int) -> void:
 	# follows from the aspect ratio. Since the target is COLUMNS wide and `rows`
 	# tall in cells, framing `rows` vertically frames COLUMNS horizontally --
 	# which is what makes one world unit exactly one cell in both directions.
+	# The grid grows down from zero, so the camera stands at its middle row.
 	_camera.size = float(rows) * CELL_WORLD
-	_camera.position = Vector3(0.0, 0.0, CAMERA_DISTANCE)
-
-
-func _clear() -> void:
-	for index: int in _items:
-		var node: Node3D = _items[index]
-
-		if is_instance_valid(node):
-			_root.remove_child(node)
-			node.free()
-
-	_items.clear()
+	_camera.position = Vector3(0.0, -float(rows) * CELL_WORLD * 0.5, CAMERA_DISTANCE)

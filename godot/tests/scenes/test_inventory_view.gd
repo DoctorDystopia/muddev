@@ -48,6 +48,8 @@ func _ready() -> void:
 	_emitted_commands_reach_the_signal()
 	_only_occupied_cells_get_a_picture()
 	_every_cell_owns_a_different_rectangle()
+	_a_second_snapshot_builds_no_picture_again()
+	_two_stacks_of_one_item_share_one_picture()
 	_the_stage_does_not_share_the_game_world()
 	_a_name_is_never_cut_by_a_character_count()
 	_a_name_reserves_two_lines()
@@ -88,11 +90,12 @@ func _only_occupied_cells_get_a_picture() -> void:
 	_expect(empty > 0, "and has an empty square to compare against")
 
 
-## Two cells showing the same rectangle would show the same item.
+## Two cells that show the same rectangle show the same item. Each row of
+## the payload is a different item, so each cell has a rectangle of its own.
 ##
-## The stage packs every item into one render target and hands out sub-rects, so
-## an index allocated twice is not a crash -- it is two slots quietly drawing one
-## object, which is exactly the bug worth a test rather than a comment.
+## The stage packs every item into one render target and gives each item a
+## rectangle. A rectangle that two items share is no crash. It is two slots
+## that draw one object with no error.
 func _every_cell_owns_a_different_rectangle() -> void:
 	var seen: Array = []
 	var checked := 0
@@ -109,6 +112,47 @@ func _every_cell_owns_a_different_rectangle() -> void:
 		seen.append(texture.region)
 
 	_expect(checked > 1, "more than one cell was drawn, so this compares something")
+
+
+## The stage is a picture cache (11/16/2026). A snapshot that changes only a
+## count builds no model again. Each cell gets the node and the rectangle of
+## the snapshot before. Before this date, each snapshot built each model
+## again, and a full bag cost 52 ms.
+func _a_second_snapshot_builds_no_picture_again() -> void:
+	var stage := _view._stage
+	var pictures := stage.picture_count()
+	var nodes: Dictionary = stage._items.duplicate()
+	var before := _carried_cell(0).art_texture()
+	var payload := _payload()
+
+	payload["items"][1]["quantity"] = 7.0
+	_state.ingest(_Const.CH_CHAR_ITEMS, payload)
+
+	_expect(pictures > 0, "the stage holds a picture before the second snapshot")
+	_expect(stage.picture_count() == pictures,
+		"a second snapshot adds no picture")
+	_expect(stage._items == nodes, "and builds no model again")
+	_expect(_carried_cell(0).art_texture() == before,
+		"the new cell holds the picture of the old cell")
+
+
+## One item in two slots is one picture. The second slot builds nothing.
+func _two_stacks_of_one_item_share_one_picture() -> void:
+	var pictures := _view._stage.picture_count()
+	var payload := _payload()
+	var twin: Dictionary = (payload["items"][0] as Dictionary).duplicate()
+
+	twin["id"] = 107.0
+	twin["slot"] = 9.0
+	payload["items"].append(twin)
+	_state.ingest(_Const.CH_CHAR_ITEMS, payload)
+
+	_expect(_carried_cell(9).art_texture() != null
+		and _carried_cell(9).art_texture() == _carried_cell(0).art_texture(),
+		"two slots with one item hold one picture")
+	_expect(_view._stage.picture_count() == pictures,
+		"and the second slot adds no picture")
+	_state.ingest(_Const.CH_CHAR_ITEMS, _payload())
 
 
 ## The item meshes must not end up in the world the game is drawn in.

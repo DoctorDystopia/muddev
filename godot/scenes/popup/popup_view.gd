@@ -108,11 +108,6 @@ const DROP_ONTO_TAB := "onto_tab"
 const FIXED_COLUMNS_META := &"fixed_columns"
 
 var _state: PopupState
-var _meshes: MeshResolver
-
-## The worn looks of the gear editor, or null. A slot draws the look of its
-## item before the mesh ladder, as a cell of the bag does.
-var _figures: FigureLibrary
 
 var _status: Label
 var _grids: HBoxContainer
@@ -181,31 +176,28 @@ func _init() -> void:
 	_footer = HBoxContainer.new()
 	column.add_child(_footer)
 
-	# A child of this control, so it stops rendering whenever the box is
-	# hidden. See [ItemStage] on one render target for every slot.
+	# The picture of each item that a slot or a tab shows. The stage keeps a
+	# picture after the box closes. See [ItemStage].
 	_stage = ItemStage.new()
 	add_child(_stage)
 
 
 ## Bind to a model and a mesh source, and follow them.
+##
+## The stage takes the mesh source. A model that arrives later changes the
+## picture in its slot, and the box does not build its slots again.
 func bind(state: PopupState, resolver: MeshResolver) -> void:
 	_state = state
-	_meshes = resolver
 	_state.changed.connect(_rebuild)
-
-	if _meshes != null:
-		_meshes.refreshed.connect(func(_key: String): _rebuild())
-
+	_stage.bind_meshes(resolver)
 	_rebuild()
 
 
 ## Take the figure library. A slot and a tab then draw the worn look of
-## their item (10/17/2026). The arrival of the figure set or of a model of a
-## part draws the box again.
+## their item (10/17/2026). The stage follows the library, so the arrival of
+## the figure set changes each picture in its slot.
 func bind_figures(library: FigureLibrary) -> void:
-	_figures = library
-	_figures.changed.connect(_rebuild)
-	_rebuild()
+	_stage.bind_figures(library)
 
 
 ## The slot controls of one grid, in slot order. For tests.
@@ -465,7 +457,6 @@ func _clear_closed() -> void:
 	_clear(_menu_options)
 	_menu_text.text = ""
 	_scrollers = []
-	_stage.reserve(0)
 	_restore_hover([])
 	_timers.show_timers(_state)
 
@@ -473,31 +464,17 @@ func _clear_closed() -> void:
 ## One column per grid: a heading, the tab buttons, and a scrolling grid of
 ## slots.
 ##
-## Stage indices run across all grids in order, so no two slots claim the same
-## pixels of the one render target. A tab button with a mesh takes an index
-## too.
+## The stage gives each slot and each tab button the picture of its item.
+## See [method ItemStage.picture].
 func _build_grids() -> void:
 	_clear(_grids)
 	_scrollers = []
 	_tab_rows = []
 
-	var plans: Array = []
-	var total := 0
-
-	for grid_index: int in range(_state.grids.size()):
-		var plan := _plan(grid_index)
-		plans.append(plan)
-		total += _plan_size(plan)
-
-	_stage.reserve(total)
-
-	var first_index := 0
-
 	for grid_index: int in range(_state.grids.size()):
 		var entry: Dictionary = _state.grids[grid_index]
-		var plan: Dictionary = plans[grid_index]
-		_grids.add_child(_grid_column(grid_index, entry, plan, first_index))
-		first_index += _plan_size(plan)
+
+		_grids.add_child(_grid_column(grid_index, entry, _plan(grid_index)))
 
 
 ## What one grid draws now: its groups of rows, and its tab buttons.
@@ -522,18 +499,7 @@ func _plan(grid_index: int) -> Dictionary:
 	return {"groups": [rows] if not rows.is_empty() else [], "tabs": []}
 
 
-## How many stage indices one plan takes: one for each cell and each tab.
-static func _plan_size(plan: Dictionary) -> int:
-	var total := (plan["tabs"] as Array).size()
-
-	for group: Array in plan["groups"]:
-		total += group.size()
-
-	return total
-
-
-func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary,
-		first_index: int) -> Control:
+func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary) -> Control:
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.size_flags_stretch_ratio = WIDE_RATIO if grid_index == 0 else NARROW_RATIO
@@ -544,7 +510,7 @@ func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary,
 	column.add_child(heading)
 
 	var tabs: Array = plan["tabs"]
-	column.add_child(_tab_bar(grid_index, tabs, first_index))
+	column.add_child(_tab_bar(grid_index, tabs))
 
 	# SHOW_NEVER and not DISABLED. A disabled axis adds the width of the grid
 	# to the minimum of the scroll. A wide box gives the grid more columns, and
@@ -563,12 +529,11 @@ func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary,
 	scroller.resized.connect(_reflow.bind(scroller))
 
 	var doll := PopupLayout.rows_for(str(entry["layout"]))
-	var first_slot := first_index + tabs.size()
 
 	if doll.is_empty():
-		_fill_blocks(content, grid_index, plan["groups"], first_slot, scroller.size.x)
+		_fill_blocks(content, grid_index, plan["groups"], scroller.size.x)
 	else:
-		_fill_doll(content, grid_index, doll, plan["groups"], first_slot, scroller.size.x)
+		_fill_doll(content, grid_index, doll, plan["groups"], scroller.size.x)
 
 	return column
 
@@ -577,7 +542,7 @@ func _grid_column(grid_index: int, entry: Dictionary, plan: Dictionary,
 ## the label of the group, when it has one, over a block of slots. An empty
 ## plan says so in words.
 func _fill_blocks(content: VBoxContainer, grid_index: int, groups: Array,
-		first_index: int, width: float) -> void:
+		width: float) -> void:
 	if groups.is_empty():
 		var empty := Label.new()
 		empty.text = EMPTY_GRID_TEXT
@@ -606,7 +571,7 @@ func _fill_blocks(content: VBoxContainer, grid_index: int, groups: Array,
 		section.add_child(block)
 
 		for row: Dictionary in group:
-			block.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
+			block.add_child(_slot(grid_index, slot_position, row))
 			slot_position += 1
 
 
@@ -614,7 +579,7 @@ func _fill_blocks(content: VBoxContainer, grid_index: int, groups: Array,
 ## the doll does not place. The slot positions run through the doll in reading
 ## order and then through the block, the order of [method slots_in].
 func _fill_doll(content: VBoxContainer, grid_index: int, doll: Array,
-		groups: Array, first_index: int, width: float) -> void:
+		groups: Array, width: float) -> void:
 	var rows: Array = []
 
 	for group: Array in groups:
@@ -630,8 +595,7 @@ func _fill_doll(content: VBoxContainer, grid_index: int, doll: Array,
 	var slot_position := 0
 
 	for line: Array in doll:
-		slot_position = _doll_line(block, grid_index, line, by_place,
-			first_index, slot_position)
+		slot_position = _doll_line(block, grid_index, line, by_place, slot_position)
 
 	if spare.is_empty():
 		return
@@ -642,7 +606,7 @@ func _fill_doll(content: VBoxContainer, grid_index: int, doll: Array,
 	content.add_child(_section_of(rest))
 
 	for row: Dictionary in spare:
-		rest.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
+		rest.add_child(_slot(grid_index, slot_position, row))
 		slot_position += 1
 
 
@@ -671,7 +635,7 @@ static func _split_by_place(doll: Array, rows: Array) -> Array:
 ## for the rest. A line with none of its places sent is left out, as the
 ## paper doll leaves out an empty row. Returns the next slot position.
 func _doll_line(block: GridContainer, grid_index: int, line: Array,
-		by_place: Dictionary, first_index: int, slot_position: int) -> int:
+		by_place: Dictionary, slot_position: int) -> int:
 	if not line.any(func(place: String) -> bool: return by_place.has(place)):
 		return slot_position
 
@@ -683,7 +647,7 @@ func _doll_line(block: GridContainer, grid_index: int, line: Array,
 			continue
 
 		var row: Dictionary = by_place[place]
-		block.add_child(_slot(grid_index, slot_position, row, first_index + slot_position))
+		block.add_child(_slot(grid_index, slot_position, row))
 		slot_position += 1
 
 	return slot_position
@@ -743,13 +707,13 @@ static func _blocks_of(content: Node) -> Array:
 
 ## The tab buttons of one grid, wrapped onto more lines when the box is
 ## narrow. The vault has no limit on tabs. An empty grid gets an empty bar.
-func _tab_bar(grid_index: int, tabs: Array, first_index: int) -> Control:
+func _tab_bar(grid_index: int, tabs: Array) -> Control:
 	var bar := HFlowContainer.new()
 	var buttons: Array = []
 	bar.visible = not tabs.is_empty()
 
 	for tab_index: int in range(tabs.size()):
-		var button := _tab_button(grid_index, tabs[tab_index], first_index + tab_index)
+		var button := _tab_button(grid_index, tabs[tab_index])
 		bar.add_child(button)
 		buttons.append(button)
 
@@ -758,14 +722,13 @@ func _tab_bar(grid_index: int, tabs: Array, first_index: int) -> Control:
 	return bar
 
 
-func _tab_button(grid_index: int, tab: Dictionary, stage_index: int) -> PopupTabButton:
+func _tab_button(grid_index: int, tab: Dictionary) -> PopupTabButton:
 	var button := PopupTabButton.new()
 	var asset := str(tab.get("asset", ""))
 	var art: Texture2D = null
 
 	if not asset.is_empty():
-		_stage.place(stage_index, asset, str(tab.get("family", "")), _meshes, _figures)
-		art = _stage.texture_for(stage_index)
+		art = _stage.picture(asset, str(tab.get("family", "")))
 
 	button.bind(tab, art)
 	button.command_requested.connect(command_requested.emit)
@@ -796,7 +759,7 @@ func _reflow(scroller: ScrollContainer) -> void:
 
 ## One slot. `slot_position` is its place among the slots this grid draws
 ## now, and the hover key names it by that place.
-func _slot(grid_index: int, slot_position: int, row: Dictionary, stage_index: int) -> PopupSlot:
+func _slot(grid_index: int, slot_position: int, row: Dictionary) -> PopupSlot:
 	var cell := PopupSlot.new()
 	cell.bind_settings(_settings)
 	cell.bind(row)
@@ -813,9 +776,8 @@ func _slot(grid_index: int, slot_position: int, row: Dictionary, stage_index: in
 		cell.dropped_on.connect(_on_dropped.bind(grid_index, DROP_ONTO_SLOT))
 
 	if not row.is_empty():
-		_stage.place(stage_index, str(row.get("asset", "")),
-			str(row.get("family", "")), _meshes, _figures)
-		cell.show_art(_stage.texture_for(stage_index))
+		cell.show_art(_stage.picture(str(row.get("asset", "")),
+			str(row.get("family", ""))))
 
 	return cell
 

@@ -15,10 +15,19 @@ extends Node
 ## 5. A file whose key is not its name does not read.
 ## 6. A skeleton takes a changed rig in place.
 ## 7. Two body types share each bone name and each rest rotation.
+## 8. A turned copy turns a bone and its children on the origin of the
+##    bone. The rig itself does not change.
 
 const LIMB_SCALE := 0.9
 const SOCKET := "hand_r"
 const NEW_SOCKET := "knee_r"
+
+## The bone that case 8 turns, a child of it, a bone off its chain, and the
+## angle of the turn in radians.
+const TURNED_BONE := "LeftUpperArm"
+const TURNED_CHILD := "LeftLowerArm"
+const STILL_BONE := "Head"
+const TURN := 1.0
 
 var _failures := 0
 var _scratch := ""
@@ -35,6 +44,7 @@ func _ready() -> void:
 	_a_key_must_be_the_file_name()
 	_a_skeleton_takes_a_changed_rig_in_place()
 	_two_body_types_share_one_clip()
+	_a_turned_copy_turns_a_bone_and_its_children()
 	_remove_scratch(_scratch)
 
 	if _failures > 0:
@@ -242,6 +252,26 @@ func _two_body_types_share_one_clip() -> void:
 		first.global_rest_of("hand_l").basis), "the two hand sockets have the same axes")
 	_expect(first.global_rest_of(SOCKET).basis.y.is_equal_approx(Vector3.BACK),
 		"a held item points forward in the rest pose")
+
+
+func _a_turned_copy_turns_a_bone_and_its_children() -> void:
+	var rig := FigureEdits.rig_from_profile("body_1")
+	var before := rig.to_text()
+	var copy := rig.turned({TURNED_BONE: TURN})
+	var joint := rig.global_rest_of(TURNED_BONE).origin
+	var child := rig.global_rest_of(TURNED_CHILD).origin
+	var wanted := joint + Basis(Vector3.BACK, TURN) * (child - joint)
+
+	_expect(rig.to_text() == before, "a turn does not change the rig")
+	_expect(copy.error.is_empty(), "the turned copy reads: " + copy.error)
+	_expect(copy.global_rest_of(TURNED_BONE).origin.is_equal_approx(joint),
+		"the turned bone keeps its origin")
+	_expect(copy.global_rest_of(TURNED_CHILD).origin.is_equal_approx(wanted),
+		"the child turns about the origin of the turned bone")
+	_expect(copy.global_rest_of(STILL_BONE).is_equal_approx(rig.global_rest_of(STILL_BONE)),
+		"a bone off the chain does not move")
+	_expect(rig.turned({"no_such_bone": TURN}).to_text() == before,
+		"a bone that the rig does not have gets no turn")
 
 
 ## Delete the scratch tree of this test: files first, then directories.

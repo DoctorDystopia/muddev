@@ -225,6 +225,32 @@ func global_rest_of(bone_name: String) -> Transform3D:
 	return rest
 
 
+## A copy of this rig with some bones turned from the rest pose. This rig
+## does not change.
+##
+## `turns` is bone name -> an angle in radians. The bone turns by that angle
+## about the Z axis of the figure, which points at the viewer, on its own
+## origin. Each child of the bone follows it. The turns apply in the order
+## of the dictionary, so a turn of a child adds to the turn of its parent. A
+## bone that the rig does not have gets no turn.
+func turned(turns: Dictionary) -> FigureRig:
+	var copy := FigureRig.from_data(data.duplicate(true))
+
+	for bone_name: String in turns:
+		if not copy.has_bone(bone_name):
+			continue
+
+		var row := copy.bone(bone_name)
+		var parent := copy.global_rest_of(row["parent"]).basis
+		var rest := copy.global_rest_of(bone_name).basis
+		var turn := Basis(Vector3.BACK, float(turns[bone_name]))
+		var local := (parent.inverse() * turn * rest).get_rotation_quaternion()
+
+		row["rotation"] = [local.x, local.y, local.z, local.w]
+
+	return copy
+
+
 ## The bones that have `bone_name` as their parent.
 func children_of(bone_name: String) -> PackedStringArray:
 	var found := PackedStringArray()

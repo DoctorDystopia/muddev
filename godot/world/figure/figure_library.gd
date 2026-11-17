@@ -59,6 +59,11 @@ extends Node
 ## the bag, of the doll, and of a pop-up. [EntityPool] draws it on the
 ## ground. A served model of the asset key wins over the worn look. An item
 ## with neither draws its family model or its family shape, as before.
+##
+## The item stands on a rig with the arms down (11/16/2026). Thus, a body
+## armour hangs its sleeves at its sides, as a worn one does. [FigureOutfit]
+## keeps the rest pose for the box of a stand-in, because that box must fit
+## the figure.
 
 ## Emitted when the figure set arrives, or when a model of a part arrives.
 ## Each pane then builds its figures again.
@@ -85,6 +90,17 @@ const ITEM_HOLDER_NAME := "ItemHolder"
 ## The body type of the rig that an item stands on: none. An item has no
 ## wearer, so it gets the first rig, as an unknown body type does.
 const ITEM_BODY_TYPE := ""
+
+## How far each upper arm of the item rig turns down from the T pose of the
+## rest, in radians (Nick, 11/16/2026). The figure stand pictures use the
+## same angle. With the arms out, a body armour is as wide as the arm span,
+## and its torso is small in its cell.
+const ITEM_ARM_DOWN := 1.40
+
+## The turns of the item rig: bone -> the angle of [method FigureRig.turned].
+## The left arm turns down with a negative angle, and the right arm with a
+## positive angle.
+const ITEM_ARM_TURNS := {"LeftUpperArm": -ITEM_ARM_DOWN, "RightUpperArm": ITEM_ARM_DOWN}
 
 ## The meta of a holder of [method build].
 const HOLDER_META := "figure_holder"
@@ -121,6 +137,11 @@ var _url := ""
 
 ## The text of the figure set in hand.
 var _text := ""
+
+## The item rig with the arms down. See [method _item_rig].
+## The second variable holds the rig of the set that the copy comes from.
+var _arms_down_rig: FigureRig = null
+var _arms_down_source: FigureRig = null
 
 ## True when this figure set asked for the manifest again.
 var _manifest_asked := false
@@ -246,8 +267,7 @@ func build_item(asset_key: String) -> Node3D:
 
 	var looks: Dictionary = figure_set.looks
 	var look: FigureLook = looks[asset_key].resolved(looks)
-	var item := FigureBuilder.build_item(_rig_for(ITEM_BODY_TYPE), look, models,
-		figure_set.palette)
+	var item := FigureBuilder.build_item(_item_rig(), look, models, figure_set.palette)
 
 	if item.get_child_count() == 0:
 		item.free()
@@ -483,6 +503,23 @@ func _rig_for(body_type: String) -> FigureRig:
 	keys.sort()
 
 	return figure_set.rigs[keys[0]]
+
+
+## The rig of a picture: the rig of [constant ITEM_BODY_TYPE] with the
+## turns of [constant ITEM_ARM_TURNS]. A look on several bones keeps the
+## places of this rig, so a body armour hangs its arms down. A look on one
+## bone stands in the space of its bone, and the turn does not change it.
+##
+## The copy is made one time for each rig of the set. A new figure set
+## makes it again.
+func _item_rig() -> FigureRig:
+	var rig := _rig_for(ITEM_BODY_TYPE)
+
+	if rig != _arms_down_source:
+		_arms_down_source = rig
+		_arms_down_rig = rig.turned(ITEM_ARM_TURNS)
+
+	return _arms_down_rig
 
 
 ## The height of the tallest rig, in figure units.

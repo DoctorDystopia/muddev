@@ -18,6 +18,10 @@ extends RefCounted
 ## its family, as the client draws an item on the ground), and "Check world"
 ## ([method stacking]). The parity fixture of the checks has a short file of
 ## the same layout, so the test reads it with this class too.
+##
+## The picture editor (`addons/blackout_pictures`) reads the list of the
+## game also (11/16/2026). It reads the key, the name, and the family of
+## each item.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 

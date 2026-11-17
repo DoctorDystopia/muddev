@@ -69,20 +69,12 @@ var _bar: HoverBar
 ## because a rebuild frees every cell.
 var _hover_key: Array = []
 
-## Where every item's picture is drawn. One render target for the whole doll;
-## see [ItemStage].
+## The picture of each worn item. One render target for the whole doll, and
+## one picture for each item, made one time. See [ItemStage].
 var _stage: ItemStage
-
-## Where meshes come from. The CONSOLE owns it, so the room, the bag and the
-## doll share one model cache and a `.glb` is fetched once for all three.
-var _meshes: MeshResolver
 
 ## What the player set. Held only to hand to each cell. See [AmountPrompt].
 var _settings: ClientSettings
-
-## The worn looks of the gear editor, or null. A frame draws the look of its
-## item before the mesh ladder. The CONSOLE owns it.
-var _figures: FigureLibrary
 
 
 ## Built in _init, not _ready.
@@ -129,33 +121,28 @@ func _init() -> void:
 	_bar = HoverBar.new()
 	add_child(_bar)
 
-	# A child of this pane so it stops rendering when the pane is not the
-	# current tab. See [ItemStage].
+	# The stage renders only when a picture changes. See [ItemStage].
 	_stage = ItemStage.new()
 	add_child(_stage)
 
 
 ## Bind to a model and a mesh source, and follow them.
+##
+## The CONSOLE owns the mesh source. Thus, the room, the bag, and the doll
+## share one model cache. The stage takes the source. Art that arrives late
+## changes the picture in its frame. The doll does not build its frames again.
 func bind(state: InventoryState, resolver: MeshResolver) -> void:
 	_state = state
-	_meshes = resolver
 	_state.changed.connect(_rebuild)
-
-	# Art that arrives after the doll was drawn redraws it, the same way the
-	# world pane redraws a room when a model lands.
-	if _meshes != null:
-		_meshes.refreshed.connect(func(_key: String): _rebuild())
-
+	_stage.bind_meshes(resolver)
 	_rebuild()
 
 
 ## Take the figure library. A frame then draws the worn look of its item,
-## the look that the figure wears (10/17/2026). The arrival of the figure set
-## or of a model of a part draws the doll again.
+## the look that the figure wears (10/17/2026). The stage follows the
+## library. Thus, the arrival of the figure set changes each picture.
 func bind_figures(library: FigureLibrary) -> void:
-	_figures = library
-	_figures.changed.connect(_rebuild)
-	_rebuild()
+	_stage.bind_figures(library)
 
 
 ## Give the pane the player's settings, for the boxes its cells open.
@@ -212,9 +199,6 @@ func _rebuild() -> void:
 	var spare := _build_overflow()
 	var drawn: Array = placed + spare
 
-	# Indices are allocated here and the layout is the stage's, the same rule
-	# [InventoryView] follows: one index per cell, in the order they were made.
-	_stage.reserve(drawn.size())
 	_dress(drawn)
 	_restore_hover(hovered_key, drawn)
 
@@ -346,20 +330,19 @@ func _spacer() -> Control:
 	return spacer
 
 
-## Draw each occupied cell's item onto the stage and hand it its rectangle.
+## Give each occupied cell the picture of its item. The stage builds a
+## picture at the first request and keeps it. See [method ItemStage.picture].
 ##
-## An EMPTY cell is given no texture at all rather than a blank one.
+## An EMPTY cell gets no texture at all, because it shows no item.
 func _dress(cells_made: Array) -> void:
-	for index: int in cells_made.size():
-		var cell: InventorySlotCell = cells_made[index]
+	for cell: InventorySlotCell in cells_made:
 		var row := cell.row()
 
 		if row.is_empty():
 			continue
 
-		_stage.place(index, str(row.get("asset", "")),
-			str(row.get("family", "")), _meshes, _figures)
-		cell.show_art(_stage.texture_for(index))
+		cell.show_art(_stage.picture(str(row.get("asset", "")),
+			str(row.get("family", ""))))
 
 
 func _cell() -> InventorySlotCell:

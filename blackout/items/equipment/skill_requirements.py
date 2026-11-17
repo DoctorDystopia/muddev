@@ -76,6 +76,7 @@ ARMOR_SKILL_MAP: dict[str, str | None] = {
     # Armor categories, gated via the Defense skill. Every armor category the game emits must appear here. A value of None means "deliberately ungated"
     "helmet": SKILL_KEY_DEFENSE,
     "chainbody": SKILL_KEY_DEFENSE,
+    "platebody": SKILL_KEY_DEFENSE,
     "platelegs": SKILL_KEY_DEFENSE,
     "boots": SKILL_KEY_DEFENSE,
     "square_shield": SKILL_KEY_DEFENSE,

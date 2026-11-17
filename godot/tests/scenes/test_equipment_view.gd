@@ -161,8 +161,9 @@ func _the_heading_counts_what_is_worn() -> void:
 		"the heading counts the worn frames against every frame")
 
 
-## Two cells showing the same rectangle would show the same item. The stage
-## hands out sub-rects of one render target; see [ItemStage].
+## Two cells that show the same rectangle show the same item. Each worn row
+## of the payload is a different item. The stage gives each item a rectangle
+## of one render target. See [ItemStage].
 func _every_cell_owns_a_different_rectangle() -> void:
 	var seen: Array = []
 	var checked := 0

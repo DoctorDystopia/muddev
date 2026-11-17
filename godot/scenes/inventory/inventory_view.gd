@@ -59,22 +59,14 @@ var _hover_key: Array = []
 ## names the Drop that a Shift + left click sends. See [method _shift_after].
 var _shift_held := false
 
-## Where every item's picture is drawn. One render target for the whole bag;
-## see [ItemStage].
+## The picture of each item of the bag. One render target for the whole bag,
+## and one picture for each item, made one time. See [ItemStage].
 var _stage: ItemStage
-
-## Where meshes come from. The CONSOLE owns it, so the room and the bag share
-## one model cache and a `.glb` is fetched once for both.
-var _meshes: MeshResolver
 
 ## What the player set. Held only to hand to each cell. A cell reads two facts
 ## from it: the size of the amount box (see [AmountPrompt]), and the Shift
 ## option.
 var _settings: ClientSettings
-
-## The worn looks of the gear editor, or null. A cell draws the look of its
-## item before the mesh ladder. The CONSOLE owns it, as it owns the resolver.
-var _figures: FigureLibrary
 
 
 func _ready() -> void:
@@ -102,35 +94,30 @@ func _ready() -> void:
 	_bar = HoverBar.new()
 	add_child(_bar)
 
-	# A child of this pane so it is hidden with it -- the stage stops rendering
-	# when not visible, which is what makes text-only mode actually free.
+	# The stage renders only when a picture changes, so a bag that nobody
+	# sees costs no render pass.
 	_stage = ItemStage.new()
 	add_child(_stage)
 
 
 ## Bind to a model and a mesh source, and follow them.
+##
+## The CONSOLE owns the mesh source. Thus, the room and the bag share one
+## model cache, and one `.glb` needs one fetch. The stage takes the source.
+## Art that arrives late changes the picture in its cell. The bag does not
+## build its cells again.
 func bind(state: InventoryState, resolver: MeshResolver) -> void:
 	_state = state
-	_meshes = resolver
 	_state.changed.connect(_rebuild)
-
-	# Art that arrives after the bag was drawn redraws it, the same way the
-	# world pane redraws a room when a model lands. Without it an item fetched
-	# on the first snapshot would show its family shape until the bag next
-	# changed.
-	if _meshes != null:
-		_meshes.refreshed.connect(func(_key: String): _rebuild())
-
+	_stage.bind_meshes(resolver)
 	_rebuild()
 
 
 ## Take the figure library. A cell then draws the worn look of its item
-## (10/17/2026). The arrival of the figure set or of a model of a part draws
-## the bag again.
+## (10/17/2026). The stage follows the library. Thus, the arrival of the
+## figure set changes each picture in its cell.
 func bind_figures(library: FigureLibrary) -> void:
-	_figures = library
-	_figures.changed.connect(_rebuild)
-	_rebuild()
+	_stage.bind_figures(library)
 
 
 ## Give the pane the player's settings, for the boxes its cells open.
@@ -153,11 +140,8 @@ func _rebuild() -> void:
 	# _fill removes it, and that clears _hover_key.
 	var hovered_key := _hover_key
 
-	# Indices are allocated HERE and the layout is the stage's: one index per
-	# cell, in the order the cells were made.
 	var carried := _carried_cells()
 
-	_stage.reserve(carried.size())
 	_dress(carried)
 	_fill(_grid, carried)
 	_restore_hover(hovered_key, carried)
@@ -191,22 +175,19 @@ func _carried_cells() -> Array:
 	return cells
 
 
-## Draw each occupied cell's item onto the stage and hand it its rectangle.
+## Give each occupied cell the picture of its item. The stage builds a
+## picture at the first request and keeps it. See [method ItemStage.picture].
 ##
-## An EMPTY cell is given no texture at all rather than a blank one: the stage
-## has nothing at that index, so its rectangle is transparent either way, and
-## not asking says so.
+## An EMPTY cell gets no texture at all, because it shows no item.
 func _dress(cells: Array) -> void:
-	for index: int in cells.size():
-		var cell: InventorySlotCell = cells[index]
+	for cell: InventorySlotCell in cells:
 		var row := cell.row()
 
 		if row.is_empty():
 			continue
 
-		_stage.place(index, str(row.get("asset", "")),
-			str(row.get("family", "")), _meshes, _figures)
-		cell.show_art(_stage.texture_for(index))
+		cell.show_art(_stage.picture(str(row.get("asset", "")),
+			str(row.get("family", ""))))
 
 
 func _cell() -> InventorySlotCell:

@@ -26,9 +26,17 @@ extends Node
 ##     model part. The hit flash of one leaves the other.
 ## 11. The ground follows its facts: the figure set, the model of a part,
 ##     and the served model of the key.
-## 12. Each item fills its cell at the widest turn of its spin, and no turn
-##     draws past the edge of the cell: a worn look, a served model, and a
-##     family shape.
+## 12. Each item fills its cell at the turn of the default pose, and no
+##     picture draws past the edge of the cell: a worn look, a served
+##     model, and a family shape.
+## 13. A picture pose changes the picture of its item ([PicturePose]): the
+##     zoom, the offset, and the turn. No pose draws past the edge of the
+##     cell. A redraw keeps the rectangle of the picture.
+## 14. The picture of a look on an upper arm and a lower arm hangs the arm
+##     down (11/16/2026). In the rest of case 2, the two parts are level.
+##
+## Each case draws with no picture pose, except case 13. The picture file of
+## the repository holds the poses of an author, and they change at any time.
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -59,9 +67,14 @@ const MODEL_TREE_ROOT := "/"
 ## thousands of triangles, so two keep the case short.
 const SERVED_CELL_CASES := 2
 
-## The turns of the spin that the cell case measures, over half a turn. The
-## second half of a turn mirrors the first.
-const SPIN_SAMPLES := 24
+## The pose of case 13: half the cell, the full offset on each axis, and a
+## turn that differs from the default turn on each axis.
+const POSE_ZOOM := 0.5
+const POSE_TURN := Vector3(35.0, -120.0, 25.0)
+
+## The two bones of one arm of case 14.
+const UPPER_ARM := "LeftUpperArm"
+const LOWER_ARM := "LeftLowerArm"
 
 var _failures := 0
 var _text := ""
@@ -70,6 +83,7 @@ var _text := ""
 func _ready() -> void:
 	_text = FileAccess.get_file_as_string(
 		FigureStore.repo_models_directory().path_join(FigureSet.FILE_NAME))
+	LookFile.put(PicturePose.PATH, {})
 
 	_a_look_on_one_bone_stands_in_its_space()
 	_a_look_on_several_bones_keeps_the_rest()
@@ -83,6 +97,9 @@ func _ready() -> void:
 	_items_on_the_ground_own_their_materials()
 	_the_ground_follows_its_facts()
 	_each_item_fills_its_cell()
+	_a_pose_changes_its_picture()
+	_a_picture_hangs_its_arms_down()
+	LookFile.forget(PicturePose.PATH)
 
 	if _failures > 0:
 		printerr("FAIL: %d case(s)" % _failures)
@@ -219,6 +236,59 @@ func _a_look_on_several_bones_keeps_the_rest() -> void:
 			"the part %s of %s stands where the rest puts it" % [row["name"], look.key()])
 
 	item.free()
+	library.free()
+
+
+## The name of the first part of a look on one bone, or "".
+func _part_on(look: FigureLook, bone: String) -> String:
+	for row: Dictionary in look.parts():
+		if row["bone"] == bone:
+			return row["name"]
+
+	return ""
+
+
+## The height of the lower arm part under the upper arm part, in figure
+## units. The parts of an item stay in figure units below the scale of
+## [method ModelLoader.normalise].
+func _arm_drop(item: Node3D, look: FigureLook, upper: String, lower: String) -> float:
+	var upper_part := _part_of(item, look, upper)
+	var lower_part := _part_of(item, look, lower)
+
+	if upper_part == null or lower_part == null:
+		return 0.0
+
+	return upper_part.transform.origin.y - lower_part.transform.origin.y
+
+
+func _a_picture_hangs_its_arms_down() -> void:
+	var library := _library()
+	var rig := _item_rig(library)
+	var looks: Dictionary = library.figure_set.looks
+	var found := false
+
+	for key: String in _item_keys(library):
+		var look: FigureLook = looks[key].resolved(looks)
+		var upper := _part_on(look, UPPER_ARM)
+		var lower := _part_on(look, LOWER_ARM)
+
+		if upper.is_empty() or lower.is_empty():
+			continue
+
+		found = true
+
+		var holder := library.build_item(key)
+		var rest := FigureBuilder.build_item(rig, look, library.models,
+			library.figure_set.palette)
+		var picture := holder.get_child(0) as Node3D
+
+		_expect(_arm_drop(picture, look, upper, lower)
+			> _arm_drop(rest, look, upper, lower) + TOLERANCE,
+			"the picture of %s hangs its arm down" % key)
+		holder.free()
+		rest.free()
+
+	_expect(found, "the served set has a look on an upper arm and a lower arm")
 	library.free()
 
 
@@ -387,13 +457,17 @@ func _the_stage_draws_the_served_model_first() -> void:
 func _check_stage_order(library: FigureLibrary, resolver: MeshResolver,
 		model_key: String, look_key: String) -> void:
 	var stage := ItemStage.new()
+	var bare := ItemStage.new()
 
 	add_child(stage)
-	stage.reserve(4)
-	stage.place(0, model_key, _Const.FAMILY_GENERIC, resolver, library)
-	stage.place(1, look_key, _Const.FAMILY_GENERIC, resolver, library)
-	stage.place(2, NO_SUCH_ITEM, _Const.FAMILY_GENERIC, resolver, library)
-	stage.place(3, look_key, _Const.FAMILY_GENERIC, resolver)
+	add_child(bare)
+	stage.bind_meshes(resolver)
+	stage.bind_figures(library)
+	bare.bind_meshes(resolver)
+	stage.picture(model_key, _Const.FAMILY_GENERIC)
+	stage.picture(look_key, _Const.FAMILY_GENERIC)
+	stage.picture(NO_SUCH_ITEM, _Const.FAMILY_GENERIC)
+	bare.picture(look_key, _Const.FAMILY_GENERIC)
 
 	_expect(_drawn(stage, 0) != null
 		and _drawn(stage, 0).has_meta(ModelLoader.PRESENTATION_SCALE_META),
@@ -401,86 +475,178 @@ func _check_stage_order(library: FigureLibrary, resolver: MeshResolver,
 	_expect(_drawn_name(stage, 1) == FigureLibrary.ITEM_HOLDER_NAME,
 		"an item with a worn look and no model draws its look")
 	_expect(_is_ladder(_drawn(stage, 2)), "an item with no look draws through the mesh ladder")
-	_expect(_is_ladder(_drawn(stage, 3)), "a stage with no library draws through the mesh ladder")
+	_expect(_is_ladder(_drawn(bare, 0)), "a stage with no library draws through the mesh ladder")
 	remove_child(stage)
 	stage.free()
+	remove_child(bare)
+	bare.free()
 
 
-## The stage fits each item on its outline over the spin (10/21/2026). The
-## case reads each triangle of each mesh, not a hull, and it turns the item
-## as the stage does. Thus, it does not repeat the rule that it tests.
+## The stage fits each item on the outline that the camera sees, at the one
+## turn of the picture (11/16/2026). The case reads each triangle of each
+## mesh, not a hull. Thus, it does not repeat the rule that it tests.
 func _each_item_fills_its_cell() -> void:
 	var library := _library()
 	var served := _served_resolver()
 	var ladder := _resolver()
 	var keys := _item_keys(library)
 	var stage := ItemStage.new()
-	var half := ItemStage.CELL_WORLD * 0.5
-	# The widest turn can fall between two samples.
-	var slack := cos(PI / SPIN_SAMPLES * 0.5)
-	var fill := ItemStage.ITEM_FILL * ItemStage.CELL_WORLD * slack
+	var bare := ItemStage.new()
 
 	keys.append_array(_served_keys(served, SERVED_CELL_CASES))
 	add_child(stage)
-	stage.reserve(keys.size() + 1)
+	add_child(bare)
+	stage.bind_meshes(served)
+	stage.bind_figures(library)
+	bare.bind_meshes(ladder)
+
+	for key: String in keys:
+		stage.picture(key, _Const.FAMILY_GENERIC)
 
 	for index: int in keys.size():
-		stage.place(index, keys[index], _Const.FAMILY_GENERIC, served, library)
+		_check_cell_fill(stage, index, keys[index])
 
 	# The ladder has no model and no look, so it draws a family shape.
-	stage.place(keys.size(), NO_SUCH_ITEM, _Const.FAMILY_GENERIC, ladder)
-	keys.append(NO_SUCH_ITEM)
+	bare.picture(NO_SUCH_ITEM, _Const.FAMILY_GENERIC)
+	_check_cell_fill(bare, 0, NO_SUCH_ITEM)
 
-	for index: int in keys.size():
-		var node := _drawn(stage, index)
-
-		_expect(node != null, "the stage draws %s" % keys[index])
-
-		if node == null:
-			continue
-
-		var box := _swept_cell_box(node, stage.cell_centre(index))
-		var reach := maxf(box.end.x, maxf(-box.position.y, box.end.y))
-
-		_expect(reach <= half + TOLERANCE,
-			"no turn of %s draws past its cell" % keys[index])
-		_expect(maxf(box.size.x, box.size.y) >= fill - TOLERANCE,
-			"%s fills its cell at its widest turn" % keys[index])
-
+	# More pictures than the first grid holds. The grid then gains rows, and
+	# each earlier picture must keep its cell.
+	_expect(keys.size() > ItemStage.COLUMNS * ItemStage.GROW_ROWS,
+		"the case draws more pictures than the first grid holds")
 	remove_child(stage)
 	stage.free()
+	remove_child(bare)
+	bare.free()
 	served.free_models()
 	served.free()
 	ladder.free()
 	library.free()
 
 
-## The outline that one placed item sweeps over half a turn, from the
-## centre of its cell. The item turns as `_process` of the stage turns it.
-func _swept_cell_box(node: Node3D, centre: Vector3) -> Rect2:
-	var points := PackedVector3Array()
-	var reach := 0.0
-	var low := INF
-	var high := -INF
+## One picture stays inside its cell, and its longer side fills the cell.
+func _check_cell_fill(stage: ItemStage, index: int, key: String) -> void:
+	var node := _drawn(stage, index)
+	var half := ItemStage.CELL_WORLD * 0.5
+	var fill := ItemStage.ITEM_FILL * ItemStage.CELL_WORLD
+
+	_expect(node != null, "the stage draws %s" % key)
+
+	if node == null:
+		return
+
+	var box := _seen_cell_box(node, stage.cell_centre(index))
+	var reach := maxf(maxf(-box.position.x, box.end.x), maxf(-box.position.y, box.end.y))
+
+	_expect(reach <= half + TOLERANCE, "%s does not draw past its cell" % key)
+	_expect(maxf(box.size.x, box.size.y) >= fill - TOLERANCE,
+		"%s fills its cell on its longer side" % key)
+	_expect(box.get_center().length() < TOLERANCE,
+		"%s stands in the middle of its cell" % key)
+
+
+## A worn look and a family shape, each with a pose and each beside an item
+## with none. The pose asks for more offset than the cell has room for.
+func _a_pose_changes_its_picture() -> void:
+	var library := _library()
+	var ladder := _resolver()
+	var keys := _item_keys(library)
+	var stage := ItemStage.new()
+
+	_expect(keys.size() >= 2, "the served set has two item looks for the pose case")
+
+	if keys.size() < 2:
+		stage.free()
+		ladder.free()
+		library.free()
+		return
+
+	var posed := PackedStringArray([keys[0], NO_SUCH_ITEM])
+	var content := {}
+	var limit := PicturePose.OFFSET_LIMIT
+
+	for key: String in posed:
+		PicturePose.set_picture(content, key,
+			PicturePose.row_from(POSE_ZOOM, Vector2(limit, -limit), POSE_TURN))
+
+	add_child(stage)
+	stage.bind_meshes(ladder)
+	stage.bind_figures(library)
+
+	# Before the pose, so the case also proves that a redraw reads the pose.
+	for key: String in [keys[0], NO_SUCH_ITEM, keys[1]]:
+		stage.picture(key, _Const.FAMILY_GENERIC)
+
+	var plain := _seen_cell_box(_drawn(stage, 2), stage.cell_centre(2))
+	var texture := stage.picture(keys[0], _Const.FAMILY_GENERIC)
+
+	LookFile.put(PicturePose.PATH, content)
+
+	for key: String in posed:
+		stage.redraw(key)
+
+	for index: int in posed.size():
+		_check_posed_cell(stage, index, posed[index])
+
+	_expect(stage.picture(keys[0], _Const.FAMILY_GENERIC) == texture
+		and stage.picture_count() == 3, "a redraw keeps the rectangle of the picture")
+	_expect(_seen_cell_box(_drawn(stage, 2), stage.cell_centre(2)).is_equal_approx(plain),
+		"an item with no pose keeps its picture")
+	LookFile.put(PicturePose.PATH, {})
+	remove_child(stage)
+	stage.free()
+	ladder.free()
+	library.free()
+
+
+## One posed picture: the zoom gives its longer side, the offset moves it
+## down and to the right, the turn is the turn of the pose, and the picture
+## stays in its cell.
+func _check_posed_cell(stage: ItemStage, index: int, key: String) -> void:
+	var node := _drawn(stage, index)
+	var half := ItemStage.CELL_WORLD * 0.5
+	var side := ItemStage.ITEM_FILL * ItemStage.CELL_WORLD
+
+	_expect(node != null, "the stage draws %s with its pose" % key)
+
+	if node == null:
+		return
+
+	var box := _seen_cell_box(node, stage.cell_centre(index))
+	var reach := maxf(maxf(-box.position.x, box.end.x), maxf(-box.position.y, box.end.y))
+	var turn := Basis.from_euler(Vector3(deg_to_rad(POSE_TURN.x), deg_to_rad(POSE_TURN.y),
+		deg_to_rad(POSE_TURN.z)))
+
+	_expect(absf(maxf(box.size.x, box.size.y) - (side * POSE_ZOOM)) < TOLERANCE,
+		"the zoom of %s gives the longer side of its picture" % key)
+	_expect(node.basis.orthonormalized().is_equal_approx(turn),
+		"%s has the turn of its pose" % key)
+	_expect(box.get_center().x > TOLERANCE and box.get_center().y < -TOLERANCE,
+		"the offset moves %s to the right and down" % key)
+	_expect(reach <= half + TOLERANCE, "%s with its pose does not draw past its cell" % key)
+	_expect(absf(box.end.x - (side * 0.5)) < TOLERANCE
+		and absf(box.position.y + (side * 0.5)) < TOLERANCE,
+		"the offset of %s stops at the edge of the cell" % key)
+
+
+## The outline of one placed item as the camera sees it, from the centre of
+## its cell. The camera looks along -Z, so the outline is the X and the Y.
+func _seen_cell_box(node: Node3D, centre: Vector3) -> Rect2:
+	var low := Vector2(INF, INF)
+	var high := Vector2(-INF, -INF)
 
 	for part: Array in ModelLoader.mesh_parts(node):
 		var mesh: Mesh = part[0]
-		var to_node: Transform3D = part[1]
+		var to_cell: Transform3D = node.transform * (part[1] as Transform3D)
 
 		for point: Vector3 in mesh.get_faces():
-			points.append(to_node * point)
+			var seen := to_cell * point - centre
+			var flat := Vector2(seen.x, seen.y)
 
-	for _step in SPIN_SAMPLES:
-		node.rotate_y(PI / SPIN_SAMPLES)
+			low = low.min(flat)
+			high = high.max(flat)
 
-		for point: Vector3 in points:
-			var seen := node.transform * point - centre
-
-			reach = maxf(reach, absf(seen.x))
-			low = minf(low, seen.y)
-			high = maxf(high, seen.y)
-
-	return Rect2(-reach, low, reach * 2.0, high - low)
+	return Rect2(low, high - low)
 
 
 ## True for a node of the mesh ladder that is no served model and no
@@ -876,8 +1042,12 @@ func _mesh_count_of(root: Node, mesh: Mesh) -> int:
 	return count
 
 
-## The lowest point of each mesh box under `node`, in world space. The node
-## is in the tree, so each global transform holds.
+## The lowest vertex of each mesh under `node`, in world space. The node is
+## in the tree, so each global transform holds.
+##
+## The test reads the vertices, as [method ModelLoader.bounds_of] does. The
+## box of a turned mesh is larger than the mesh. A part on an arm of the item
+## rig turns 1.40 radians (11/16/2026), so its box goes below the tile.
 func _lowest_point(node: Node3D) -> float:
 	var lowest := INF
 	var stack: Array[Node] = [node]
@@ -887,9 +1057,12 @@ func _lowest_point(node: Node3D) -> float:
 		var instance := current as MeshInstance3D
 
 		if instance != null and instance.mesh != null:
-			var box := instance.global_transform * instance.get_aabb()
+			for surface: int in instance.mesh.get_surface_count():
+				var vertices: PackedVector3Array = \
+					instance.mesh.surface_get_arrays(surface)[Mesh.ARRAY_VERTEX]
 
-			lowest = minf(lowest, box.position.y)
+				for vertex: Vector3 in vertices:
+					lowest = minf(lowest, (instance.global_transform * vertex).y)
 
 		stack.append_array(current.get_children())
 

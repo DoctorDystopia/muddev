@@ -987,18 +987,43 @@ for each cell. With 32 carried slots and a dozen worn frames, that is about
 forty render targets for forty thumbnails a centimeter across. Instead, the
 stage puts every item on a grid in one 3D scene, under one orthographic camera.
 Each cell shows its own rectangle of the result through an `AtlasTexture`. The
-result is one target, one camera, and one pass, and the slow spin costs the
-same for one item on screen or forty.
+result is one target, one camera, and one pass.
 
-The view addresses cells by INDEX. It allocates them, and where an index sits
-in the 3D grid is the business of `item_stage.gd` alone. If two cells claimed
-one rectangle, they would quietly draw one object in two slots. For that
-reason, a test asserts that every cell owns a different region. **The bag and
-the doll are two panes with a stage each**, so neither pane has to know how
-many cells the other made.
+**The stage is a picture cache** (11/16/2026). A pane asks
+`ItemStage.picture(asset, family)` for the picture of one item. The first
+request builds the model and gives it a cell of the 3D grid. Each later request
+gives the same rectangle and builds nothing. Thus, two stacks of one item show
+one rectangle. Where a picture sits in the grid is the business of
+`item_stage.gd` alone. A pane never names a cell of the grid.
 
-The stage updates `WHEN_VISIBLE`, so text-only mode really does stop paying for
-it.
+Before this date, a pane cleared its stage on each snapshot and built each
+model again. A full bag cost 72 ms for each `char_items_list` snapshot, and
+52 ms of that was the models. A snapshot arrives on each pickup, each craft,
+and each shot that uses ammunition. The same snapshot now costs 25 ms, and
+that time is the cell controls.
+
+**The picture is static.** Each item stands at one fixed turn. The stage
+renders one time after a picture changes, and then it stops. Before this date
+each item made a slow spin, and the stage rendered on each frame: 225 draw
+calls for a full bag. A stage that nobody sees costs no render pass, so
+text-only mode does not pay for it.
+
+**Each item has a picture pose** (11/16/2026). The pose is the zoom, the
+offset, and the turn of the picture. `PicturePose` reads it from the look
+file `world/look/item_pictures.json`, by the asset key. An item with no row
+gets the default pose: the picture fills its cell, stands in the middle, and
+has the default turn (`PicturePose.DEFAULT_TURN`). The picture editor writes
+the file. See "The picture editor sets the pose of each item picture".
+
+**The stage follows its sources.** It hears `MeshResolver.refreshed` and
+`FigureLibrary.changed`, and it draws the item again in the same cell. The
+rectangle does not change. Thus, a model that arrives late changes the picture
+in its cell, and no pane builds its cells again.
+
+**The bag, the doll, and the pop-up are three panes with a stage each.** An
+item that two panes show has one picture in each stage. A stage never drops a
+picture. The number of pictures is at most the number of different items in
+the game.
 
 **An item with a worn look and no served model draws that look** (10/17/2026,
 DESIGN-0014 section 23). A cell takes the first of three sources:
@@ -1015,8 +1040,13 @@ cell, because it is the look of no item.
 
 - **A look on one bone stands in the space of that bone.** A hand item has
   its length along +Y of its grip, so a sword stands up in its cell.
-- **A look on several bones keeps the rest pose of the rig.** The two boots
-  stand as a pair, and a chainbody holds its arms out.
+- **A look on several bones keeps the rest pose of the rig, with the arms
+  down** (Nick, 11/16/2026). The two boots stand as a pair. A platebody
+  hangs its arms at its sides, so it fills its cell.
+  `FigureLibrary.ITEM_ARM_TURNS` turns each upper arm down 1.40 radians
+  from the T pose, the angle of the figure stand pictures.
+  `FigureRig.turned` makes the copy of the rig. `FigureOutfit` keeps the
+  rest pose for the box of a stand-in, because that box must fit the figure.
 - **A served model wins over the worn look** (Nick, 10/17/2026). Today only
   `rusty_scrap_shortsword` has both, so its cell shows the Sketchfab sword.
   The hand holds the same sword (see "The gear editor makes the worn look
@@ -2136,9 +2166,9 @@ To give an item a model from a modeler (Phase W4):
 2. On the **Body** tab, click **Export reference body**, and save the
    `.glb` file.
 3. Open the file in a modeler. Model the part where it sits on the body: a
-   helm over the head, a chainbody over the torso and the arms. Do not move
+   helm over the head, a platebody over the torso and the arms. Do not move
    the body. Keep the feet at the origin, +Y up, and the face to +Z.
-4. Make one object for each bone that the item must follow. A chainbody is a
+4. Make one object for each bone that the item must follow. A platebody is a
    torso object and two arm objects. Give each material the name of a color
    role: `metal`, `trim`, `cloth`.
 5. Export only the new objects, as one `.glb` file.
@@ -2153,7 +2183,7 @@ To give an item a model from a modeler (Phase W4):
    bone with the name of the object, or on the nearest bone. Change a bone
    there if it is wrong. The part stays where it is.
 8. Tick each region that the item covers in the **Hides** fold. A
-   chainbody hides `torso` and `arms`.
+   platebody hides `torso` and `arms`. A chainbody hides only `torso`.
 9. Select the other body type, and click **Fit from bone lengths**. Play
    each clip, and look at each body type.
 10. Press Ctrl+S.
@@ -2901,6 +2931,70 @@ Four rules:
 notes, the offer, the lookup, the end of a write, and one real run of the
 pipeline that writes nothing.
 
+## The picture editor sets the pose of each item picture
+
+Since 11/16/2026 the plugin `addons/blackout_pictures/` adds the
+**Pictures** tab to the main screen of the editor, beside 2D, 3D, and
+Script. The author picks an item and sets its picture pose: the zoom, the
+offset, and the turn of its item picture. The model is the inventory icon
+generator of OSRS. The tab needs no scene.
+
+To set a pose:
+
+1. Click **Pictures** at the top of the editor.
+2. Pick an item in the list. Type in the filter to find one.
+3. Change the six fields. As an alternative, use the mouse in the view.
+   Drag with the left button to move the picture. Drag with the right
+   button to turn it. Turn the wheel to zoom.
+4. Look at the three small pictures below the view. The first has the size
+   of the picture in a cell of the bag.
+5. Press Ctrl+S, or click **Save**.
+
+Six rules:
+
+- **The author sees the picture of the player.** The tab draws each
+  picture with an `ItemStage`, the class that draws the cells of the game.
+  The stage reads the served model tree and the figure set of the
+  repository from disk, as the figure workbench does. Thus, the three
+  sources of a picture have the order of the game.
+- **The pose is a look file.** `world/look/item_pictures.json` holds one
+  row for each item that an author changed, by its asset key. An item
+  with no row gets the default pose, so a new item needs no row. **Reset
+  pose** takes the row out. The Python guard in
+  `test_client_constants.py` checks that each key names an item.
+- **A zoom of 100% fills the cell at each angle.** The stage fits the
+  picture to its cell first, at the turn of the pose. The zoom is a share
+  of that fit.
+- **A picture stays in its cell.** Each picture of a pane is one rectangle
+  of one render target. A picture that leaves its cell draws in the cell
+  of the next item. Thus, the zoom stops at 100%, and the offset stops at
+  the edge of the cell. A smaller zoom gives the offset more room.
+- **A pose change moves the model. It builds nothing.** `ItemStage.redraw`
+  puts the model in its new place, from the hull that the stage kept. One
+  change costs 0.09 ms, so a drag is smooth.
+- **The game reads the file at its start.** A client that runs does not
+  follow a save. The web client gets the file with the next export.
+
+The list has each item of the item list of the terrain editor
+(`SpawnItems`): each item but a dev tool. The feed names an item by the key
+and the family of its row. A row gets its picture some rows at a time, so
+the tab is usable while the list fills. The second filter keeps the items
+with a pose of their own, or the items with the default pose.
+
+| File | What it holds |
+|---|---|
+| `addons/blackout_pictures/pictures_plugin.gd` | The plugin: the Pictures tab, the save on Ctrl+S, and the question about unsaved poses |
+| `addons/blackout_pictures/picture_editor.gd` | `PictureEditor`: the three zones, the stage, the content of the picture file, Save, and Revert |
+| `addons/blackout_pictures/picture_item_list.gd` | `PictureItemList`: the items with their pictures, and the two filters |
+| `addons/blackout_pictures/picture_viewer.gd` | `PictureViewer`: the large picture, the guides, and the mouse |
+| `addons/blackout_pictures/picture_fields.gd` | `PictureFields`: the six fields with their sliders, Reset, Copy, and Paste |
+| `world/look/picture_pose.gd` | `PicturePose`: the reader of the look file, the default pose, the ranges, and the rule that keeps a picture in its cell |
+
+`test_picture_editor.tscn` covers the fields, the mouse, Reset, Copy and
+Paste, Save, Revert, the filters, and a file that does not read.
+`test_picture_pose.tscn` covers the values of a pose and the form of the
+file. Case 13 of `test_item_look.tscn` covers the pose in the stage.
+
 ## The Fly field sets the speed of the free-look camera
 
 Since 11/10/2026 the plugin `addons/blackout_camera/` puts a **Fly** field
@@ -3352,6 +3446,17 @@ retry:
 
 ```bash
 "/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/figure/test_item_look.tscn
+```
+
+`test_picture_pose.tscn` and `test_picture_editor.tscn` need nothing running
+either. The second one reads the served model tree and the item list:
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/world/look/test_picture_pose.tscn
+```
+
+```bash
+"/c/Users/NickR/Games/Projects/Godot/Godot_v4.7.2-stable_win64.exe/Godot_v4.7.2-stable_win64_console.exe" --headless --path godot res://tests/addons/blackout_pictures/test_picture_editor.tscn
 ```
 
 `test_summary_state.tscn` needs nothing running either:
@@ -4352,6 +4457,7 @@ one directory owns.
 | `world/` root | `client_settings.gd` and `stable_hash.gd`. |
 | `addons/blackout_terrain/` | The terrain editor. `panels/` holds the dock and its tabs. `tools/` holds the brushes, the Build tools, and their input. `view/` holds what the editor draws. `checks/` holds the content rules. `data/` holds the tables, the versions, the session file, and the item list. The plugin script, the config, and the two scenes are at the root. |
 | `addons/blackout_figure/` | The figure workbench. `panels/` holds the dock and its tabs. `edits/` holds the rules, and `handlers/` holds the handlers of each tab. `clips/` holds the clip import. `checks/` holds the content rules. `data/` holds the figure store and the item catalog. `view/` holds what the workbench draws. The plugin scripts, the config, and the scene are at the root. |
+| `addons/blackout_pictures/` | The picture editor: the plugin script, the panel of the Pictures tab, and its three zones. See "The picture editor sets the pose of each item picture". |
 | `addons/blackout_dialogue/` | The script export of the dialogue scripts, the generated stub of the dialogue vocabulary, and the test scene of the Dialogue tab. See "A dialogue script is written here, and the server runs it". |
 | `dialogue/` | The dialogue scripts, one `.dialogue` file for each NPC that speaks from one, and the procedure for an author. |
 | `tests/` | The tests, in the shape of the source tree. See "Tests". |
@@ -4380,6 +4486,7 @@ one directory owns.
 | `scenes/inventory/slot_cell.gd` | One frame. Drag/drop is Godot's engine API, not hand-rolled. |
 | `scenes/inventory/stack_count_label.gd` | The stack count in the top-right corner of a slot. Shared by the bag and the pop-up. |
 | `scenes/inventory/item_stage.gd` | Every item in 3D, into ONE render target. Cells read sub-rects of it. |
+| `world/look/picture_pose.gd` | The picture pose of each item: the zoom, the offset, and the turn of its item picture. |
 | `scenes/inventory/amount_prompt.gd` | The box that asks for the amount of a prompted action. Shared by the inventory and the pop-up. |
 | `world/state/server_action.gd` | How to read one action the server named: send it whole, or fill in the amount. |
 | `world/state/popup_state.gd` | The pop-up the server holds open. Knows no pop-up, grid or verb. |

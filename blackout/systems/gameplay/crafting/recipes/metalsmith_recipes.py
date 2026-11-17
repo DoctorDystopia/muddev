@@ -303,6 +303,30 @@ class RustyScrapPlatelegsRecipe(BlackoutRecipe):
 
 
 
+# The platebody of each tier takes five sheets, as the OSRS platebody takes
+# five bars. Its level is one above the platelegs of its tier.
+class RustyScrapPlatebodyRecipe(BlackoutRecipe):
+    "Hammer five rusty scrap metal into a crude platebody at an anvil."
+
+    name = "rusty scrap platebody"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 14
+    xp_reward = 125
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["rusty_scrap_metal"] * 5
+    consumable_names = ["rusty scrap metal"] * 5
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["rusty_scrap_platebody"]
+
+    success_message = "You hammer the rusty scrap metal into a rough but serviceable platebody."
+
+
+
 # ---------------------------
 # --- SCRAP METAL RECIPES ---
 # ---------------------------
@@ -589,6 +613,28 @@ class ScrapPlatelegsRecipe(BlackoutRecipe):
     output_item_keys = ["scrap_platelegs"]
 
     success_message = "You hammer the scrap metal into a rough but serviceable platelegs."
+
+
+
+class ScrapPlatebodyRecipe(BlackoutRecipe):
+    "Hammer five scrap metal into a crude platebody at an anvil."
+
+    name = "scrap platebody"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 24
+    xp_reward = 175
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_metal"] * 5
+    consumable_names = ["scrap metal"] * 5
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["scrap_platebody"]
+
+    success_message = "You hammer the scrap metal into a rough but serviceable platebody."
 
 
 
@@ -890,6 +936,28 @@ class CopperPlatelegsRecipe(BlackoutRecipe):
 
 
 
+class CopperPlatebodyRecipe(BlackoutRecipe):
+    "Hammer five scrap copper sheets into a platebody at an anvil."
+
+    name = "copper platebody"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 34
+    xp_reward = 250
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_copper"] * 5
+    consumable_names = ["scrap copper"] * 5
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["copper_platebody"]
+
+    success_message = "You hammer the scrap copper into a clean, bright platebody."
+
+
+
 # -------------------------------
 # --- MANGANESE METAL RECIPES ---
 # -------------------------------
@@ -1186,3 +1254,25 @@ class ManganesePlatelegsRecipe(BlackoutRecipe):
     output_item_keys = ["manganese_platelegs"]
 
     success_message = "You hammer the scrap manganese into a pair of platelegs."
+
+
+
+class ManganesePlatebodyRecipe(BlackoutRecipe):
+    "Hammer five scrap manganese sheets into a platebody at an anvil."
+
+    name = "manganese platebody"
+    category = CRAFT_CATEGORY_METALSMITH
+    required_skill = skill_constants.SKILL_KEY_METALSMITH
+    required_level = 44
+    xp_reward = 350
+    skill_category = skill_constants.SKILL_CATEGORY_PRODUCTION
+
+    consumable_tags = ["scrap_manganese"] * 5
+    consumable_names = ["scrap manganese"] * 5
+
+    tool_tags = ["hammer", "anvil"]
+    tool_names = ["hammer", "anvil"]
+
+    output_item_keys = ["manganese_platebody"]
+
+    success_message = "You hammer the scrap manganese into a platebody."

@@ -93,6 +93,12 @@
 		},
 		{
 			"family": "armor",
+			"key": "copper_platebody",
+			"name": "copper platebody",
+			"stackable": false
+		},
+		{
+			"family": "armor",
 			"key": "copper_platelegs",
 			"name": "copper platelegs",
 			"stackable": false
@@ -227,6 +233,12 @@
 			"family": "armor",
 			"key": "manganese_hide_cape",
 			"name": "manganese hide cape",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "manganese_platebody",
+			"name": "manganese platebody",
 			"stackable": false
 		},
 		{
@@ -621,6 +633,12 @@
 		},
 		{
 			"family": "armor",
+			"key": "rusty_scrap_platebody",
+			"name": "rusty scrap platebody",
+			"stackable": false
+		},
+		{
+			"family": "armor",
 			"key": "rusty_scrap_platelegs",
 			"name": "rusty scrap platelegs",
 			"stackable": false
@@ -725,6 +743,12 @@
 			"family": "crafting_material",
 			"key": "scrap_metal",
 			"name": "scrap metal",
+			"stackable": false
+		},
+		{
+			"family": "armor",
+			"key": "scrap_platebody",
+			"name": "scrap platebody",
 			"stackable": false
 		},
 		{

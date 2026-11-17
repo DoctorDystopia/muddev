@@ -54,8 +54,8 @@ Run it from `blackout/`. A test fails while the catalog is stale.
    the selected part and the selected shape.
 4. Add a shape with one of the `+` buttons above the tree. Delete removes
    the selected row, and Ctrl+D copies it.
-5. Tick each region in the **Hides** fold. A chainbody hides `torso` and
-   `arms`.
+5. Tick each region in the **Hides** fold. A platebody hides `torso` and
+   `arms`. A chainbody hides only `torso`.
 6. Use the outfit bar to put items in the other slots. Play a clip. Look
    for a part that goes through another part. Then press Ctrl+S.
 
@@ -72,7 +72,7 @@ First, make the file:
 2. In the figure workbench, on the **Body** tab, click **Export reference
    body**. Save the `.glb`.
 3. In Blender, model the item on the body. Do not move the body. Make one
-   object for each bone that the item follows. A chainbody is a torso
+   object for each bone that the item follows. A platebody is a torso
    object and two arm objects.
 4. Give each object the name of its bone, for example `LeftUpperArm`. Give
    each material the name of a color role.

@@ -1004,6 +1004,14 @@ _HEX_COLOR = re.compile(r"^[0-9a-fA-F]{6}$")
 _FAMILIES_PATH = os.path.join(_LOOK_DIRECTORY, "families.json")
 _PRESENTATION_PATH = os.path.join(_LOOK_DIRECTORY, "presentation.json")
 
+# The picture pose of each item (11/16/2026): the zoom, the offset, and the
+# turn of its item picture. The picture editor writes the file.
+_ITEM_PICTURES_PATH = os.path.join(_LOOK_DIRECTORY, "item_pictures.json")
+
+# How many numbers the offset and the turn of a picture pose hold.
+_POSE_OFFSET_SIZE = 2
+_POSE_TURN_SIZE = 3
+
 # Each family that the server can send in the `family` field of an entity:
 # the item families, and the asset kinds that `_mesh_family` gives as they
 # are. The same list as `_sendable_families` in
@@ -1154,12 +1162,47 @@ class LookFileTests(unittest.TestCase):
                 if "scale" in row:
                     self.assertGreater(row["scale"], 0)
 
+    def test_the_item_pictures_name_real_items(self):
+        """
+        A picture pose for a key that no item has is a pose that nothing
+        draws. The feed names an item by its ItemDef key, so the keys come
+        from ITEM_DB. A file with no row is correct: an item with no row
+        gets the default pose.
+        """
+        from world.item_database import ITEM_DB
+
+        pictures = _read_look_file(_ITEM_PICTURES_PATH)
+
+        if pictures is None:
+            self.skipTest("no item pictures file")
+
+        self.assertIsInstance(pictures.get("pictures"), dict)
+
+        for asset_key, row in pictures["pictures"].items():
+            with self.subTest(asset_key=asset_key):
+                self.assertIn(asset_key, ITEM_DB)
+                self.assertIsInstance(row, dict)
+
+                if "zoom" in row:
+                    self.assertIsInstance(row["zoom"], (int, float))
+                    self.assertGreater(row["zoom"], 0)
+
+                for field, size in (("offset", _POSE_OFFSET_SIZE),
+                                    ("turn", _POSE_TURN_SIZE)):
+                    if field not in row:
+                        continue
+
+                    self.assertEqual(len(row[field]), size)
+
+                    for number in row[field]:
+                        self.assertIsInstance(number, (int, float))
+
     def test_the_look_files_are_here(self):
         """
         The vacuity guard. The checks above skip a file that is not here, so
         a moved directory would turn them green while they check nothing.
         """
         for path in (_TERRAIN_PALETTE_PATH, _AREA_LOOKS_PATH, _FAMILIES_PATH,
-                     _PRESENTATION_PATH, _LIGHTS_PATH):
+                     _PRESENTATION_PATH, _LIGHTS_PATH, _ITEM_PICTURES_PATH):
             with self.subTest(path=os.path.basename(path)):
                 self.assertTrue(os.path.exists(path), path)

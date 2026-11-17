@@ -117,6 +117,14 @@
 		},
 		{
 			"family": "armor",
+			"key": "copper_platebody",
+			"name": "copper platebody",
+			"slot": "body",
+			"tier": 2,
+			"tool_type": "platebody"
+		},
+		{
+			"family": "armor",
 			"key": "copper_platelegs",
 			"name": "copper platelegs",
 			"slot": "legs",
@@ -269,6 +277,14 @@
 		},
 		{
 			"family": "armor",
+			"key": "manganese_platebody",
+			"name": "manganese platebody",
+			"slot": "body",
+			"tier": 3,
+			"tool_type": "platebody"
+		},
+		{
+			"family": "armor",
 			"key": "manganese_platelegs",
 			"name": "manganese platelegs",
 			"slot": "legs",
@@ -405,6 +421,14 @@
 		},
 		{
 			"family": "armor",
+			"key": "rusty_scrap_platebody",
+			"name": "rusty scrap platebody",
+			"slot": "body",
+			"tier": 0,
+			"tool_type": "platebody"
+		},
+		{
+			"family": "armor",
 			"key": "rusty_scrap_platelegs",
 			"name": "rusty scrap platelegs",
 			"slot": "legs",
@@ -522,6 +546,14 @@
 			"slot": "back",
 			"tier": 1,
 			"tool_type": "cape"
+		},
+		{
+			"family": "armor",
+			"key": "scrap_platebody",
+			"name": "scrap platebody",
+			"slot": "body",
+			"tier": 1,
+			"tool_type": "platebody"
 		},
 		{
 			"family": "armor",
@@ -664,6 +696,7 @@
 		"greatsword",
 		"hammer",
 		"helmet",
+		"platebody",
 		"platelegs",
 		"scimitar",
 		"shortsword",
