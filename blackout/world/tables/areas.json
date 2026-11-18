@@ -36,6 +36,18 @@
 			"key": "wastes_desert",
 			"name": "Wastes",
 			"note": "default for desert area"
+		},
+		{
+			"desc": "wasted, but I sure can see far!",
+			"key": "western_wastes",
+			"name": "Western Wastes",
+			"note": "coast West of the Nile"
+		},
+		{
+			"desc": "How many eyes did that fish have?",
+			"key": "river_nile",
+			"name": "River Nile",
+			"note": "Nile river default"
 		}
 	]
 }

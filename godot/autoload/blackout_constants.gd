@@ -227,7 +227,7 @@ const TILE_CHECK_SPAWN_ITEM := "spawn_item"
 # the order of each table under world/.
 const TILE_FLOOR_TYPES := ["sand", "dirt", "gravel", "rubble", "asphalt", "concrete", "grass", "water_bed", "roof_sheet_metal", "roof_tile", "roof_concrete", "void", "tile", "rusty_sand"]
 const TILE_ROOF_FLOOR_TYPES := ["roof_sheet_metal", "roof_tile", "roof_concrete"]
-const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta", "rusty_shore", "wastes_desert"]
+const TILE_AREAS := ["oasis", "oasis_outskirts", "azm_plains", "al_wasta", "rusty_shore", "wastes_desert", "western_wastes", "river_nile"]
 const TILE_WALL_STYLES := ["plain", "concrete", "brick", "sheet_metal", "chain_link", "rubble"]
 const OBJECT_CATEGORIES := ["climb", "decor", "facility", "gathering", "item_spawn", "landmark", "npc", "sign", "transition"]
 const TILE_CHECK_RULES := ["unknown_kind", "object_unwalkable", "transition_landing", "climb_landing", "void_open", "respawn_count", "sign_text", "wall_on_void", "unreachable", "roof_walkable", "spawn_table", "spawn_item"]

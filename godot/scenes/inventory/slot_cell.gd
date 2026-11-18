@@ -53,11 +53,11 @@ const COLOR_FILLED := Color(1, 1, 1, 0.9)
 const HOVER_SEPARATOR := "  -  "
 
 ## How tall the item's picture is, in pixels.
-const ART_HEIGHT := 36
+const ART_HEIGHT := 46
 
 ## The cell's size, in pixels: a touch wider than tall, so a two-line name
 ## fits beside no count line. The count sits in the corner, over the art.
-const CELL_SIZE := Vector2(94, 0)
+const CELL_SIZE := Vector2(96, 0)
 
 var kind := KIND_CARRIED
 var key: Variant = 0

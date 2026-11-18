@@ -23,10 +23,9 @@ ambient_light_energy = 0.6
 [node name="TerrainWorld" type="Node3D" parent="." unique_id=1780708759]
 script = ExtResource("1_world")
 centre_chunk = Vector2i(1, 1)
-show_areas = true
 
 [node name="Sun" type="DirectionalLight3D" parent="." unique_id=1560652548]
-transform = Transform3D(0.8660249, -0.35355335, 0.35355365, 0, 0.70710695, 0.70710623, -0.50000006, -0.612372, 0.6123724, 0, 20, 0)
+transform = Transform3D(0.8660249, -0.3535534, 0.3535536, 0, 0.7071069, 0.7071063, -0.50000006, -0.612372, 0.6123723, 0, 20, 0)
 light_color = Color(1, 0.89, 0.69, 1)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=1698775386]

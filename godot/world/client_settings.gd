@@ -122,7 +122,7 @@ const SCREEN_SCALE_STEP := 0.25
 ## The range is a pick (10/29/2026), not a rule from the vault. Past 1.75 the
 ## darkest tones turn into visible steps.
 const DEFAULT_BRIGHTNESS := 1.0
-const MIN_BRIGHTNESS := 0.75
+const MIN_BRIGHTNESS := 0.50
 const MAX_BRIGHTNESS := 1.75
 
 ## Whether the 3D world and inventory panes are drawn at all.
@@ -198,7 +198,7 @@ const DEFAULT_SKILL_DETAIL := SKILL_DETAIL_BOTH
 ##
 ## Capped at 1.0 rather than allowing a boost: above the authored mix is where
 ## clips start to clip, and a louder game is the operating system's slider.
-const DEFAULT_SFX_VOLUME := 1.0
+const DEFAULT_SFX_VOLUME := 0.8
 const MIN_SFX_VOLUME := 0.0
 const MAX_SFX_VOLUME := 1.0
 
