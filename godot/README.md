@@ -841,6 +841,10 @@ The cap belongs to the server: 64 characters over 3 lines, enforced in
 `systems/interface/statefeed/labels.py`. The reason is that `label` rides the
 biggest payload that the statefeed sends.
 
+`LABEL_FONT` sets the face of every label. It is a bundled file in
+`ui/fonts/`, for the same reason as the font of the output pane. The labels
+of the terrain editor do not read it.
+
 ## Three kinds of words, three colours
 
 `label_kind` arrives beside every `label`, and the client's `LABEL_KIND_COLORS`

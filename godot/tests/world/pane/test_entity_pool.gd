@@ -1360,6 +1360,8 @@ func _a_label_is_drawn_over_the_thing_that_carries_it() -> void:
 	_expect(label.text == SIGN["label"],
 		"and it says exactly what the server said, not a rebuilt version of it")
 	_expect(label.position.y > 0.0, "sitting above the mesh rather than inside it")
+	_expect(label.font == EntityPool.LABEL_FONT,
+		"in the bundled label font, not the default font of the engine")
 
 	# Undone, not inherited. The mesh is scaled to ENTITY_SCALE and a child
 	# would be drawn at that scale too -- text half size on a small entity, and

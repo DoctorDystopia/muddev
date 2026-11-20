@@ -129,6 +129,14 @@ const LABEL_FONT_SIZE := 64
 const LABEL_PIXEL_SIZE := 0.0025
 const LABEL_WRAP_PIXELS := 800.0
 
+## The face of every label: a sign, a marker, and graffiti. It is a bundled
+## file, never a [SystemFont], because a Web export has no OS fonts to ask.
+## To try another face, put its file in `res://ui/fonts/` and change this
+## path. Three faces are on trial since 11/19/2026: `RobotoMono.ttf`,
+## `JetBrainsMono.ttf`, and `Asimovian-Regular.ttf`.
+# const LABEL_FONT := preload("res://ui/fonts/RobotoMono.ttf")
+const LABEL_FONT := preload("res://ui/fonts/Asimovian-Regular.ttf")
+
 ## A dark rim around every glyph, in font pixels. Not decoration: the world
 ## pane draws sand, steel and night sky behind these, and text with one colour
 ## and no outline is legible over roughly one of the three.
@@ -1440,6 +1448,7 @@ func _attach_label(node: Node3D, entity_data: Dictionary) -> void:
 
 	var label := Label3D.new()
 	label.text = text
+	label.font = LABEL_FONT
 	label.font_size = LABEL_FONT_SIZE
 	label.pixel_size = LABEL_PIXEL_SIZE
 	label.width = LABEL_WRAP_PIXELS

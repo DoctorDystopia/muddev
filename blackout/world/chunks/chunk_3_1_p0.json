@@ -344,7 +344,7 @@
     {"kind":"manganese_pole","x":17,"y":11,"rotation":0,"look":{"scale":200}},
     {"kind":"manganese_pole","x":16,"y":8,"rotation":0,"look":{"scale":200}},
     {"kind":"signpost","x":11,"y":6,"rotation":2,"text":"Rusty Shore (North-West)"},
-    {"kind":"signpost","x":11,"y":11,"rotation":2,"text":"WARNING: Leaving the relative safety of Hegemony colony Al Wasta"},
-    {"kind":"signpost","x":11,"y":7,"rotation":2,"text":"Neo Cairo (North)"}
+    {"kind":"signpost","x":11,"y":7,"rotation":2,"text":"Neo Cairo (North)"},
+    {"kind":"signpost","x":11,"y":11,"rotation":2,"text":"WARNING: Leaving relative safety. Thanks for visiting Al Wasta!"}
   ]
 }
