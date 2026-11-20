@@ -976,13 +976,13 @@
 		{
 			"key": "talkative_npc",
 			"kind": "npc",
-			"name": "NPC_AUG_CLINIC_1",
+			"name": "Doctor Heri",
 			"owner": "npc_aug_clinic_1"
 		},
 		{
 			"key": "talkative_npc",
 			"kind": "npc",
-			"name": "NPC_AUG_HOSPITAL_1",
+			"name": "Nurse Ana",
 			"owner": "npc_aug_hospital_1"
 		},
 		{

@@ -182,6 +182,28 @@ OBJECTIVE_INDENT: str = "  "
 LOG_TAG: str = "[DIALOGUE]"
 
 
+# ─── The dialogue memory ─────────────────────────────────────────────────────
+
+# The Attribute on a player character that holds its dialogue memory: one
+# dict of memory key -> value. memory.py is its one reader and writer.
+MEMORY_ATTRIBUTE: str = "dialogue_memory"
+
+# The two names of the memory vocabulary. The content check reads them to
+# find each recall of a key that no script remembers.
+MEMORY_REMEMBER: str = "memory.remember"
+MEMORY_RECALL: str = "memory.recall"
+
+# The position of the key in the arguments of the two names.
+MEMORY_KEY_ARGUMENT: int = 0
+
+# A memory key is snake_case, as a quest key is.
+MEMORY_KEY_PATTERN: re.Pattern = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# The types of value that the memory keeps: the literals that a script can
+# write. A game object is not a fact of a conversation.
+MEMORY_VALUE_TYPES: tuple = (str, int, float, bool)
+
+
 # ─── The content check ───────────────────────────────────────────────────────
 
 RULE_VERSION: str = "compiler_version"
@@ -196,11 +218,14 @@ RULE_NAME: str = "name"
 RULE_KIND: str = "kind"
 RULE_ARITY: str = "arity"
 RULE_ARGUMENT: str = "argument"
+# A recall of a memory key that no script of the game remembers. Only the
+# check of the whole game finds it (checks.memory_problems).
+RULE_MEMORY: str = "memory"
 
 CHECK_RULES: tuple = (
     RULE_VERSION, RULE_START_CUE, RULE_LINE_TYPE, RULE_FEATURE, RULE_MARKUP,
     RULE_TARGET, RULE_FALL_THROUGH, RULE_EXPRESSION, RULE_NAME, RULE_KIND,
-    RULE_ARITY, RULE_ARGUMENT,
+    RULE_ARITY, RULE_ARGUMENT, RULE_MEMORY,
 )
 
 # Inline markup of the addon that the runner does not read. Each entry is the

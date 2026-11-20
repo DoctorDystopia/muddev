@@ -1,62 +1,24 @@
 {
 	"compiler_version": 18,
 	"cues": {
-		"farewell": "66",
-		"offer": "24",
-		"post_quest": "62",
-		"recruit": "38",
-		"report": "53",
-		"start": "10",
-		"waiting": "45"
+		"farewell": "65",
+		"offer": "23",
+		"post_quest": "61",
+		"recruit": "37",
+		"report": "52",
+		"start": "9",
+		"waiting": "44"
 	},
 	"format": 1,
 	"lines": {
 		"10": {
-			"condition": {
-				"expression": [
-					{
-						"i": 3,
-						"type": "variable",
-						"value": "quest"
-					},
-					{
-						"i": 8,
-						"type": "dot"
-					},
-					{
-						"function": "is_complete",
-						"i": 9,
-						"type": "function",
-						"value": [
-							[
-								{
-									"i": 21,
-									"type": "string",
-									"value": "augmentation_intro"
-								},
-								{
-									"i": 41,
-									"type": "parens_close"
-								}
-							]
-						]
-					}
-				]
-			},
 			"id": "10",
-			"next_id": "11",
-			"next_id_after": "18",
-			"next_sibling_id": "12",
-			"type": "condition"
-		},
-		"11": {
-			"id": "11",
 			"is_snippet": false,
-			"next_id": "62",
+			"next_id": "61",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"12": {
+		"11": {
 			"condition": {
 				"expression": [
 					{
@@ -95,20 +57,20 @@
 					}
 				]
 			},
-			"id": "12",
-			"next_id": "13",
-			"next_id_after": "18",
-			"next_sibling_id": "14",
+			"id": "11",
+			"next_id": "12",
+			"next_id_after": "17",
+			"next_sibling_id": "13",
 			"type": "condition"
 		},
-		"13": {
-			"id": "13",
+		"12": {
+			"id": "12",
 			"is_snippet": false,
-			"next_id": "38",
+			"next_id": "37",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"14": {
+		"13": {
 			"condition": {
 				"expression": [
 					{
@@ -147,20 +109,20 @@
 					}
 				]
 			},
-			"id": "14",
-			"next_id": "15",
-			"next_id_after": "18",
-			"next_sibling_id": "16",
+			"id": "13",
+			"next_id": "14",
+			"next_id_after": "17",
+			"next_sibling_id": "15",
 			"type": "condition"
 		},
-		"15": {
-			"id": "15",
+		"14": {
+			"id": "14",
 			"is_snippet": false,
-			"next_id": "53",
+			"next_id": "52",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"16": {
+		"15": {
 			"condition": {
 				"expression": [
 					{
@@ -192,21 +154,21 @@
 					}
 				]
 			},
-			"id": "16",
-			"next_id": "17",
-			"next_id_after": "18",
+			"id": "15",
+			"next_id": "16",
+			"next_id_after": "17",
 			"type": "condition"
 		},
-		"17": {
-			"id": "17",
+		"16": {
+			"id": "16",
 			"is_snippet": false,
-			"next_id": "45",
+			"next_id": "44",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"18": {
-			"id": "18",
-			"next_id": "19",
+		"17": {
+			"id": "17",
+			"next_id": "18",
 			"static_id": "",
 			"text": "{{npc.header}}",
 			"text_replacements": [
@@ -232,7 +194,7 @@
 			],
 			"type": "dialogue"
 		},
-		"19": {
+		"18": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -255,10 +217,10 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "19",
-			"next_id": "20",
+			"id": "18",
+			"next_id": "19",
 			"static_id": "",
-			"text": "[Placeholder: {{npc.name}} greets the candidate and hints at a job.]",
+			"text": "[Placeholder: {{npc.name}} greets the player and hints at a job.]",
 			"text_replacements": [
 				{
 					"expression": [
@@ -282,37 +244,37 @@
 			],
 			"type": "dialogue"
 		},
-		"20": {
+		"19": {
 			"character": "Placeholder",
-			"id": "20",
-			"next_id": "24",
+			"id": "19",
+			"next_id": "23",
 			"responses": [
-				"20",
-				"21"
+				"19",
+				"20"
 			],
 			"static_id": "",
 			"text": "ask about the job.",
 			"type": "response"
 		},
-		"21": {
+		"20": {
 			"character": "Placeholder",
-			"id": "21",
+			"id": "20",
 			"next_id": "end",
 			"static_id": "",
 			"text": "leave.",
 			"type": "response"
 		},
+		"21": {
+			"id": "21",
+			"next_id": "22",
+			"type": ""
+		},
 		"22": {
 			"id": "22",
 			"next_id": "23",
-			"type": ""
-		},
-		"23": {
-			"id": "23",
-			"next_id": "24",
 			"type": "cue"
 		},
-		"24": {
+		"23": {
 			"condition": {
 				"expression": [
 					{
@@ -348,12 +310,12 @@
 					}
 				]
 			},
-			"id": "24",
-			"next_id": "25",
-			"next_id_after": "27",
+			"id": "23",
+			"next_id": "24",
+			"next_id_after": "26",
 			"type": "condition"
 		},
-		"25": {
+		"24": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -376,23 +338,23 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "25",
-			"next_id": "26",
+			"id": "24",
+			"next_id": "25",
 			"static_id": "",
 			"text": "[Placeholder: The job is already taken.]",
 			"type": "dialogue"
 		},
-		"26": {
-			"id": "26",
-			"next_id": "10",
+		"25": {
+			"id": "25",
+			"next_id": "9",
 			"responses": [
-				"26"
+				"25"
 			],
 			"static_id": "",
 			"text": "Right.",
 			"type": "response"
 		},
-		"27": {
+		"26": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -415,10 +377,10 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "27",
-			"next_id": "28",
+			"id": "26",
+			"next_id": "27",
 			"static_id": "",
-			"text": "[Placeholder: {{npc.name}} explains that augments go missing from the Clinic, and asks the candidate to find out who takes them.]",
+			"text": "[Placeholder: {{npc.name}} explains that augments go missing from the Clinic, and asks the player to find out who stole them.]",
 			"text_replacements": [
 				{
 					"expression": [
@@ -442,9 +404,9 @@
 			],
 			"type": "dialogue"
 		},
-		"28": {
-			"id": "28",
-			"next_id": "29",
+		"27": {
+			"id": "27",
+			"next_id": "28",
 			"static_id": "",
 			"text": "{{quest.accept_prompt(\"augmentation_intro\")}}",
 			"text_replacements": [
@@ -483,13 +445,13 @@
 			],
 			"type": "dialogue"
 		},
-		"29": {
+		"28": {
 			"character": "Accept",
-			"id": "29",
-			"next_id": "30",
+			"id": "28",
+			"next_id": "29",
 			"responses": [
-				"29",
-				"33"
+				"28",
+				"32"
 			],
 			"static_id": "",
 			"text": "{{quest.title(\"augmentation_intro\")}}",
@@ -529,8 +491,8 @@
 			],
 			"type": "response"
 		},
-		"30": {
-			"id": "30",
+		"29": {
+			"id": "29",
 			"mutation": {
 				"expression": [
 					{
@@ -563,11 +525,11 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "31",
+			"next_id": "30",
 			"type": "mutation"
 		},
-		"31": {
-			"id": "31",
+		"30": {
+			"id": "30",
 			"mutation": {
 				"expression": [
 					{
@@ -600,35 +562,35 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "32",
+			"next_id": "31",
 			"type": "mutation"
 		},
-		"32": {
-			"id": "32",
+		"31": {
+			"id": "31",
 			"is_snippet": false,
-			"next_id": "38",
+			"next_id": "37",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"33": {
-			"id": "33",
+		"32": {
+			"id": "32",
 			"next_id": "end",
 			"static_id": "",
 			"text": "Not yet.",
 			"type": "response"
 		},
+		"35": {
+			"id": "35",
+			"next_id": "36",
+			"type": ""
+		},
 		"36": {
 			"id": "36",
 			"next_id": "37",
-			"type": ""
+			"type": "cue"
 		},
 		"37": {
 			"id": "37",
-			"next_id": "38",
-			"type": "cue"
-		},
-		"38": {
-			"id": "38",
 			"mutation": {
 				"expression": [
 					{
@@ -668,10 +630,10 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "39",
+			"next_id": "38",
 			"type": "mutation"
 		},
-		"39": {
+		"38": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -694,8 +656,8 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "39",
-			"next_id": "40",
+			"id": "38",
+			"next_id": "39",
 			"static_id": "",
 			"text": "[Placeholder: {{npc.name}} gives the brief: the trail of the missing augments points at the Public Hospital.]",
 			"text_replacements": [
@@ -721,9 +683,9 @@
 			],
 			"type": "dialogue"
 		},
-		"40": {
-			"id": "40",
-			"next_id": "41",
+		"39": {
+			"id": "39",
+			"next_id": "40",
 			"static_id": "",
 			"text": "{{quest.objectives(\"augmentation_intro\")}}",
 			"text_replacements": [
@@ -762,28 +724,28 @@
 			],
 			"type": "dialogue"
 		},
-		"41": {
+		"40": {
 			"character": "Placeholder",
-			"id": "41",
+			"id": "40",
 			"next_id": "end",
 			"responses": [
-				"41"
+				"40"
 			],
 			"static_id": "",
 			"text": "agree and go.",
 			"type": "response"
 		},
+		"42": {
+			"id": "42",
+			"next_id": "43",
+			"type": ""
+		},
 		"43": {
 			"id": "43",
 			"next_id": "44",
-			"type": ""
-		},
-		"44": {
-			"id": "44",
-			"next_id": "45",
 			"type": "cue"
 		},
-		"45": {
+		"44": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -806,10 +768,10 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "45",
-			"next_id": "46",
+			"id": "44",
+			"next_id": "45",
 			"static_id": "",
-			"text": "[Placeholder: {{npc.name}} asks whether the candidate found the trail yet.]",
+			"text": "[Placeholder: {{npc.name}} asks whether the player has tracked down the missing augments yet.]",
 			"text_replacements": [
 				{
 					"expression": [
@@ -833,9 +795,9 @@
 			],
 			"type": "dialogue"
 		},
-		"46": {
-			"id": "46",
-			"next_id": "47",
+		"45": {
+			"id": "45",
+			"next_id": "46",
 			"static_id": "",
 			"text": "{{quest.objectives(\"augmentation_intro\")}}",
 			"text_replacements": [
@@ -874,28 +836,28 @@
 			],
 			"type": "dialogue"
 		},
-		"47": {
+		"46": {
 			"character": "Placeholder",
-			"id": "47",
+			"id": "46",
 			"next_id": "end",
 			"responses": [
-				"47"
+				"46"
 			],
 			"static_id": "",
 			"text": "not yet.",
 			"type": "response"
 		},
+		"50": {
+			"id": "50",
+			"next_id": "51",
+			"type": ""
+		},
 		"51": {
 			"id": "51",
 			"next_id": "52",
-			"type": ""
-		},
-		"52": {
-			"id": "52",
-			"next_id": "53",
 			"type": "cue"
 		},
-		"53": {
+		"52": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -918,8 +880,8 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "53",
-			"next_id": "54",
+			"id": "52",
+			"next_id": "53",
 			"static_id": "",
 			"text": "[Placeholder: {{npc.name}} asks for the report.]",
 			"text_replacements": [
@@ -945,20 +907,20 @@
 			],
 			"type": "dialogue"
 		},
-		"54": {
+		"53": {
 			"character": "Placeholder",
-			"id": "54",
-			"next_id": "55",
+			"id": "53",
+			"next_id": "54",
 			"responses": [
-				"54",
-				"57"
+				"53",
+				"56"
 			],
 			"static_id": "",
 			"text": "tell the truth about the Hospital.",
 			"type": "response"
 		},
-		"55": {
-			"id": "55",
+		"54": {
+			"id": "54",
 			"mutation": {
 				"expression": [
 					{
@@ -998,26 +960,26 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "56",
+			"next_id": "55",
 			"type": "mutation"
 		},
-		"56": {
-			"id": "56",
+		"55": {
+			"id": "55",
 			"is_snippet": false,
-			"next_id": "62",
+			"next_id": "61",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"57": {
+		"56": {
 			"character": "Placeholder",
-			"id": "57",
-			"next_id": "58",
+			"id": "56",
+			"next_id": "57",
 			"static_id": "",
 			"text": "give a cover story.",
 			"type": "response"
 		},
-		"58": {
-			"id": "58",
+		"57": {
+			"id": "57",
 			"mutation": {
 				"expression": [
 					{
@@ -1057,27 +1019,27 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "59",
+			"next_id": "58",
 			"type": "mutation"
+		},
+		"58": {
+			"id": "58",
+			"is_snippet": false,
+			"next_id": "61",
+			"next_id_after": "",
+			"type": "goto"
 		},
 		"59": {
 			"id": "59",
-			"is_snippet": false,
-			"next_id": "62",
-			"next_id_after": "",
-			"type": "goto"
+			"next_id": "60",
+			"type": ""
 		},
 		"60": {
 			"id": "60",
 			"next_id": "61",
-			"type": ""
-		},
-		"61": {
-			"id": "61",
-			"next_id": "62",
 			"type": "cue"
 		},
-		"62": {
+		"61": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -1100,10 +1062,10 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "62",
-			"next_id": "63",
+			"id": "61",
+			"next_id": "62",
 			"static_id": "",
-			"text": "[Placeholder: {{npc.name}} thanks the candidate, and points at the Locus.]",
+			"text": "[Placeholder: {{npc.name}} thanks the player, and mentions the AugBot and Locus.]",
 			"text_replacements": [
 				{
 					"expression": [
@@ -1127,28 +1089,28 @@
 			],
 			"type": "dialogue"
 		},
-		"63": {
+		"62": {
 			"character": "Placeholder",
-			"id": "63",
+			"id": "62",
 			"next_id": "end",
 			"responses": [
-				"63"
+				"62"
 			],
 			"static_id": "",
 			"text": "leave.",
 			"type": "response"
 		},
+		"63": {
+			"id": "63",
+			"next_id": "64",
+			"type": ""
+		},
 		"64": {
 			"id": "64",
 			"next_id": "65",
-			"type": ""
-		},
-		"65": {
-			"id": "65",
-			"next_id": "66",
 			"type": "cue"
 		},
-		"66": {
+		"65": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -1171,35 +1133,73 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "66",
-			"next_id": "68",
+			"id": "65",
+			"next_id": "67",
 			"static_id": "",
-			"text": "[Placeholder farewell of the Clinic recruiter.]",
+			"text": "[Placeholder farewell of the Clinic doctor.]",
 			"type": "dialogue"
+		},
+		"66": {
+			"id": "66",
+			"next_id": "67",
+			"type": ""
 		},
 		"67": {
 			"id": "67",
-			"next_id": "68",
-			"type": ""
-		},
-		"68": {
-			"id": "68",
 			"is_snippet": false,
 			"next_id": "end",
 			"next_id_after": "",
 			"type": "goto"
 		},
+		"7": {
+			"id": "7",
+			"next_id": "8",
+			"type": ""
+		},
 		"8": {
 			"id": "8",
 			"next_id": "9",
-			"type": ""
+			"type": "cue"
 		},
 		"9": {
+			"condition": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "quest"
+					},
+					{
+						"i": 8,
+						"type": "dot"
+					},
+					{
+						"function": "is_complete",
+						"i": 9,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 21,
+									"type": "string",
+									"value": "augmentation_intro"
+								},
+								{
+									"i": 41,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				]
+			},
 			"id": "9",
 			"next_id": "10",
-			"type": "cue"
+			"next_id_after": "17",
+			"next_sibling_id": "11",
+			"type": "condition"
 		}
 	},
 	"source": "aug_clinic_1.dialogue",
-	"source_sha256": "2e02aade7fd73692b8ab16677d1d73550011c68fe17073287d0a7e6b5cbf248f"
+	"source_sha256": "a34ad40b26becf9ecdb09eed6d25850272625820407be598abf46e9cc8b713c1"
 }

@@ -21,6 +21,11 @@ Description: The content rules of a compiled script (DESIGN-0017).
 
              A NEW RULE is one function in _RULES and one RULE_* name in
              constants.py.
+
+             ONE RULE READS EACH SCRIPT OF THE GAME. `memory_problems` finds
+             a recall of a memory key that no script remembers. A memory key
+             can go from one script to a different script. Thus, that rule
+             is not in _RULES. files.check_game runs it.
 """
 
 from dataclasses import dataclass
@@ -584,5 +589,104 @@ def script_problems(script: CompiledScript) -> list:
     for rule in _RULES:
         found = rule(script)
         problems.extend(found)
+
+    return problems
+
+
+def memory_uses(script: CompiledScript) -> tuple:
+    """
+    Purpose: List the memory keys that one script remembers and recalls.
+
+    Entry:
+        script is a CompiledScript.
+
+    Exit/Returns:
+        Returns (remembered, recalls). remembered is a set of keys. recalls
+        is a list of (line id, key), in the order of the script.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Read each expression of each line, as _check_expressions does.
+        2. Keep the literal key of each `memory.remember` and of each
+           `memory.recall`, also inside an argument of a different call.
+
+    Notes/References:
+        A call with no literal key is skipped. The argument check of the
+        name already refuses it.
+
+    Author: Nick Hobar
+    Creation date: 11/19/2026
+    """
+    remembered = set()
+    recalls = []
+
+    for line_id in sorted(script.lines, key=_line_order):
+        for _usage, tokens in _line_expressions(script.lines[line_id]):
+            references, _refused = expressions.inspect_tokens(tokens)
+
+            for reference in references:
+                arguments = reference.literal_arguments()
+
+                if not arguments:
+                    continue
+
+                key = arguments[dialogue_const.MEMORY_KEY_ARGUMENT]
+
+                if not isinstance(key, str):
+                    continue
+
+                if reference.name == dialogue_const.MEMORY_REMEMBER:
+                    remembered.add(key)
+                elif reference.name == dialogue_const.MEMORY_RECALL:
+                    recalls.append((line_id, key))
+
+    return remembered, recalls
+
+
+def memory_problems(scripts: list) -> list:
+    """
+    Purpose: Find each recall of a memory key that no script remembers.
+
+    Entry:
+        scripts is a list of CompiledScript: each script of the game.
+
+    Exit/Returns:
+        Returns a list of (script key, Problem), in the order of the
+        scripts. Empty if each recall has a remember.
+
+    Module Globals:
+        None.
+
+    Methodology:
+        1. Collect each key that some script of the game remembers.
+        2. A recall of a key outside that set is a problem.
+
+    Notes/References:
+        A recall of such a key always gives its default, and the server
+        shows no error. This is the only rule that reads more than one
+        script, so script_problems does not run it, and the loader does
+        not either. files.check_game and a test of the game run it.
+
+    Author: Nick Hobar
+    Creation date: 11/19/2026
+    """
+    uses = [(script.key, memory_uses(script)) for script in scripts]
+    remembered = set()
+    problems = []
+
+    for _key, (script_remembered, _recalls) in uses:
+        remembered.update(script_remembered)
+
+    for script_key, (_remembered, recalls) in uses:
+        for line_id, memory_key in recalls:
+            if memory_key in remembered:
+                continue
+
+            problems.append((script_key, Problem(
+                dialogue_const.RULE_MEMORY, line_id,
+                f"no script remembers the memory key '{memory_key}'. Add "
+                f"`do {dialogue_const.MEMORY_REMEMBER}(\"{memory_key}\", ...)`")))
 
     return problems

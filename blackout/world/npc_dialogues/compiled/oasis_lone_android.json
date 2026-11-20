@@ -1,28 +1,37 @@
 {
 	"compiler_version": 18,
 	"cues": {
-		"analysis_damage": "80",
-		"analysis_polite": "61",
-		"analysis_raider": "71",
-		"android_lore": "110",
-		"customization": "96",
-		"farewell": "198",
+		"analysis_damage": "86",
+		"analysis_polite": "63",
+		"analysis_raider": "75",
+		"android_lore": "125",
+		"android_lore_name": "131",
+		"customization": "110",
+		"farewell": "219",
 		"hello_once": "42",
 		"hello_twice": "48",
-		"post_quest": "192",
-		"quest_offer": "116",
-		"shoulder_tap": "54",
+		"post_quest": "213",
+		"quest_offer": "137",
+		"shoulder_tap": "56",
 		"start": "21",
-		"step1_drainage_intro": "132",
-		"step2_chores": "144",
-		"step3_craft": "162",
-		"step4_defend": "173",
-		"step5_resolution": "184",
-		"what_is_other": "89",
-		"who_are_you": "103"
+		"step1_drainage_intro": "153",
+		"step2_chores": "165",
+		"step3_craft": "183",
+		"step4_defend": "194",
+		"step5_resolution": "205",
+		"what_about_one_percent": "103",
+		"what_is_other": "97",
+		"who_are_you": "117"
 	},
 	"format": 1,
 	"lines": {
+		"100": {
+			"id": "100",
+			"next_id": "56",
+			"static_id": "",
+			"text": "Talk about something else.",
+			"type": "response"
+		},
 		"101": {
 			"id": "101",
 			"next_id": "102",
@@ -59,54 +68,25 @@
 			"id": "103",
 			"next_id": "104",
 			"static_id": "",
-			"text": "\"Welcome to [redacted deceased owner's name] farm. I am C.L.A.R.K. unit.\"",
+			"text": "\"[ominous] This unit will not speak of the last 1%.\"",
 			"type": "dialogue"
 		},
 		"104": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
 			"id": "104",
-			"next_id": "105",
+			"next_id": "110",
+			"responses": [
+				"104",
+				"105"
+			],
 			"static_id": "",
-			"text": "\"Yield is down. Yield has been down for some years. The current orange varietal is iteration seventy-three point two eight four. Status of seedling: dead. I will try seventy-three point two eight five.\"",
-			"type": "dialogue"
+			"text": "\"Ok... I recall...\" [enter character customization]",
+			"type": "response"
 		},
 		"105": {
 			"id": "105",
-			"next_id": "116",
-			"responses": [
-				"105",
-				"106"
-			],
+			"next_id": "56",
 			"static_id": "",
-			"text": "\"Can you tell me how to get out of the desert?\"",
-			"type": "response"
-		},
-		"106": {
-			"id": "106",
-			"next_id": "110",
-			"static_id": "",
-			"text": "\"Doesn't that get to you?\"",
+			"text": "Talk about something else.",
 			"type": "response"
 		},
 		"108": {
@@ -120,35 +100,20 @@
 			"type": "cue"
 		},
 		"110": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
 			"id": "110",
 			"next_id": "111",
 			"static_id": "",
-			"text": "\"Clarify [get to]. If you mean degradation: yes. Chassis integrity is falling.\"",
+			"text": "You tell it what little you are sure of.",
 			"type": "dialogue"
 		},
 		"111": {
+			"id": "111",
+			"next_id": "112",
+			"static_id": "",
+			"text": "|xThe android waits, stylus poised. [Character customization goes here.]|n",
+			"type": "dialogue"
+		},
+		"112": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -171,33 +136,311 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "111",
-			"next_id": "112",
+			"id": "112",
+			"next_id": "113",
 			"static_id": "",
-			"text": "\"If you mean the other thing, you are the first entity to speak to this unit in five hundred and eleven days. This unit logged it.\"",
+			"text": "\"Recorded. Retention is poor in [{{memory.recall(\"human_reading\", 82)}}% human].\"",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 49,
+							"type": "variable",
+							"value": "memory"
+						},
+						{
+							"i": 55,
+							"type": "dot"
+						},
+						{
+							"function": "recall",
+							"i": 56,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 63,
+										"type": "string",
+										"value": "human_reading"
+									}
+								],
+								[
+									{
+										"i": 80,
+										"type": "number",
+										"value": 82
+									},
+									{
+										"i": 82,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{memory.recall(\"human_reading\", 82)}}"
+				}
+			],
 			"type": "dialogue"
 		},
-		"112": {
-			"id": "112",
-			"next_id": "116",
+		"113": {
+			"id": "113",
+			"next_id": "117",
 			"responses": [
-				"112"
+				"113"
 			],
 			"static_id": "",
-			"text": "\"...Can you tell me how to get out of the desert?\"",
+			"text": "\"Where am I? What is this place?\"",
 			"type": "response"
-		},
-		"114": {
-			"id": "114",
-			"next_id": "115",
-			"type": ""
 		},
 		"115": {
 			"id": "115",
 			"next_id": "116",
-			"type": "cue"
+			"type": ""
 		},
 		"116": {
+			"id": "116",
+			"next_id": "117",
+			"type": "cue"
+		},
+		"117": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "117",
+			"next_id": "118",
+			"static_id": "",
+			"text": "\"[cordial] Welcome to [redacted deceased owner's name] farm. I am C.L.A.R.K. unit.\"",
+			"type": "dialogue"
+		},
+		"118": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "118",
+			"next_id": "119",
+			"static_id": "",
+			"text": "\"[depressed] Yield is down. Yield has been down for some years. The current orange varietal is iteration seventy-three point two eight four. Status of seedling: dead. I will try seventy-three point two eight five.\"",
+			"type": "dialogue"
+		},
+		"119": {
+			"id": "119",
+			"next_id": "137",
+			"responses": [
+				"119",
+				"120",
+				"121"
+			],
+			"static_id": "",
+			"text": "\"Can you tell me where the nearest humans are?\"",
+			"type": "response"
+		},
+		"120": {
+			"id": "120",
+			"next_id": "125",
+			"static_id": "",
+			"text": "\"Doesn't that make you feel hopeless?\"",
+			"type": "response"
+		},
+		"121": {
+			"id": "121",
+			"next_id": "131",
+			"static_id": "",
+			"text": "\"What does C.L.A.R.K. stand for?\"",
+			"type": "response"
+		},
+		"123": {
+			"id": "123",
+			"next_id": "124",
+			"type": ""
+		},
+		"124": {
+			"id": "124",
+			"next_id": "125",
+			"type": "cue"
+		},
+		"125": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "125",
+			"next_id": "126",
+			"static_id": "",
+			"text": "\"[inquisitive] Clarify [hopeless]. This unit experiences only time and the wear the Wastes.\"",
+			"type": "dialogue"
+		},
+		"126": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "126",
+			"next_id": "127",
+			"static_id": "",
+			"text": "\"If you mean the [human] emotion, you are the first entity to speak to this unit in nine hundred and eleven days. It has been logged.\"",
+			"type": "dialogue"
+		},
+		"127": {
+			"id": "127",
+			"next_id": "137",
+			"responses": [
+				"127",
+				"128"
+			],
+			"static_id": "",
+			"text": "\"...Can you tell me where the nearest humans are?\"",
+			"type": "response"
+		},
+		"128": {
+			"id": "128",
+			"next_id": "117",
+			"static_id": "",
+			"text": "Ask another question.",
+			"type": "response"
+		},
+		"129": {
+			"id": "129",
+			"next_id": "130",
+			"type": ""
+		},
+		"130": {
+			"id": "130",
+			"next_id": "131",
+			"type": "cue"
+		},
+		"131": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "131",
+			"next_id": "132",
+			"static_id": "",
+			"text": "\"Combat Logistics And Reconnaissance Killbot. This unit participated in the Blackout Wars.\"",
+			"type": "dialogue"
+		},
+		"132": {
+			"id": "132",
+			"next_id": "137",
+			"responses": [
+				"132",
+				"133"
+			],
+			"static_id": "",
+			"text": "\"...Can you tell me where the nearest humans are?\"",
+			"type": "response"
+		},
+		"133": {
+			"id": "133",
+			"next_id": "117",
+			"static_id": "",
+			"text": "Ask another question.",
+			"type": "response"
+		},
+		"135": {
+			"id": "135",
+			"next_id": "136",
+			"type": ""
+		},
+		"136": {
+			"id": "136",
+			"next_id": "137",
+			"type": "cue"
+		},
+		"137": {
 			"condition": {
 				"expression": [
 					{
@@ -233,12 +476,12 @@
 					}
 				]
 			},
-			"id": "116",
-			"next_id": "117",
-			"next_id_after": "119",
+			"id": "137",
+			"next_id": "138",
+			"next_id_after": "140",
 			"type": "condition"
 		},
-		"117": {
+		"138": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -261,23 +504,23 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "117",
-			"next_id": "118",
+			"id": "138",
+			"next_id": "139",
 			"static_id": "",
 			"text": "\"That arrangement is already in progress.\"",
 			"type": "dialogue"
 		},
-		"118": {
-			"id": "118",
+		"139": {
+			"id": "139",
 			"next_id": "21",
 			"responses": [
-				"118"
+				"139"
 			],
 			"static_id": "",
 			"text": "Right.",
 			"type": "response"
 		},
-		"119": {
+		"140": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -300,13 +543,13 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "119",
-			"next_id": "120",
+			"id": "140",
+			"next_id": "141",
 			"static_id": "",
-			"text": "\"Affirmative. Route data for Neo Cairo is held in this unit's navigation cache.\"",
+			"text": "\"[affirmative] Route data for [humans] is held in this unit's navigation cache.\"",
 			"type": "dialogue"
 		},
-		"120": {
+		"141": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -329,15 +572,15 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "120",
-			"next_id": "121",
+			"id": "141",
+			"next_id": "142",
 			"static_id": "",
-			"text": "\"This unit will transmit it in exchange for one day of labor. The drainage line is silted. The soil sample is unprepared. Many tasks to do.\"",
+			"text": "\"[transaction] This unit will transmit it in exchange for one day of labor. The drainage line is silted. The soil sample is unprepared. Many tasks to do.\"",
 			"type": "dialogue"
 		},
-		"121": {
-			"id": "121",
-			"next_id": "122",
+		"142": {
+			"id": "142",
+			"next_id": "143",
 			"static_id": "",
 			"text": "{{quest.accept_prompt(\"oasis_in_the_wastes\")}}",
 			"text_replacements": [
@@ -376,13 +619,13 @@
 			],
 			"type": "dialogue"
 		},
-		"122": {
+		"143": {
 			"character": "Accept",
-			"id": "122",
-			"next_id": "123",
+			"id": "143",
+			"next_id": "144",
 			"responses": [
-				"122",
-				"126"
+				"143",
+				"147"
 			],
 			"static_id": "",
 			"text": "{{quest.title(\"oasis_in_the_wastes\")}}",
@@ -422,8 +665,8 @@
 			],
 			"type": "response"
 		},
-		"123": {
-			"id": "123",
+		"144": {
+			"id": "144",
 			"mutation": {
 				"expression": [
 					{
@@ -456,11 +699,11 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "124",
+			"next_id": "145",
 			"type": "mutation"
 		},
-		"124": {
-			"id": "124",
+		"145": {
+			"id": "145",
 			"mutation": {
 				"expression": [
 					{
@@ -481,10 +724,10 @@
 								{
 									"i": 19,
 									"type": "string",
-									"value": "You agree to work the farm."
+									"value": "You agree to work on the farm."
 								},
 								{
-									"i": 48,
+									"i": 51,
 									"type": "parens_close"
 								}
 							]
@@ -493,35 +736,35 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "125",
+			"next_id": "146",
 			"type": "mutation"
 		},
-		"125": {
-			"id": "125",
+		"146": {
+			"id": "146",
 			"is_snippet": false,
-			"next_id": "132",
+			"next_id": "153",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"126": {
-			"id": "126",
+		"147": {
+			"id": "147",
 			"next_id": "end",
 			"static_id": "",
 			"text": "Not yet.",
 			"type": "response"
 		},
-		"130": {
-			"id": "130",
-			"next_id": "131",
+		"151": {
+			"id": "151",
+			"next_id": "152",
 			"type": ""
 		},
-		"131": {
-			"id": "131",
-			"next_id": "132",
+		"152": {
+			"id": "152",
+			"next_id": "153",
 			"type": "cue"
 		},
-		"132": {
-			"id": "132",
+		"153": {
+			"id": "153",
 			"mutation": {
 				"expression": [
 					{
@@ -561,10 +804,10 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "133",
+			"next_id": "154",
 			"type": "mutation"
 		},
-		"133": {
+		"154": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -587,13 +830,13 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "133",
-			"next_id": "134",
+			"id": "154",
+			"next_id": "155",
 			"static_id": "",
 			"text": "\"Task one. The drainage line runs beneath the north row. Sand enters it. Sand always enters it. Remove the sand.\"",
 			"type": "dialogue"
 		},
-		"134": {
+		"155": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -616,13 +859,13 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "134",
-			"next_id": "135",
+			"id": "155",
+			"next_id": "156",
 			"static_id": "",
 			"text": "\"Task two. The soil sample must be prepared and iteration seventy-three point two eight five planted in it.\"",
 			"type": "dialogue"
 		},
-		"135": {
+		"156": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -645,33 +888,33 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "135",
-			"next_id": "136",
+			"id": "156",
+			"next_id": "157",
 			"static_id": "",
 			"text": "\"Report back. This unit will be here. This unit is always here.\"",
 			"type": "dialogue"
 		},
-		"136": {
-			"id": "136",
+		"157": {
+			"id": "157",
 			"next_id": "end",
 			"responses": [
-				"136"
+				"157"
 			],
 			"static_id": "",
 			"text": "\"I'll get to it.\"",
 			"type": "response"
 		},
-		"142": {
-			"id": "142",
-			"next_id": "143",
+		"163": {
+			"id": "163",
+			"next_id": "164",
 			"type": ""
 		},
-		"143": {
-			"id": "143",
-			"next_id": "144",
+		"164": {
+			"id": "164",
+			"next_id": "165",
 			"type": "cue"
 		},
-		"144": {
+		"165": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -694,15 +937,15 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "144",
-			"next_id": "145",
+			"id": "165",
+			"next_id": "166",
 			"static_id": "",
-			"text": "\"Report status of assigned tasks.\"",
+			"text": "\"[questioning] Report status of assigned tasks.\"",
 			"type": "dialogue"
 		},
-		"145": {
-			"id": "145",
-			"next_id": "146",
+		"166": {
+			"id": "166",
+			"next_id": "167",
 			"static_id": "",
 			"text": "{{quest.objectives(\"oasis_in_the_wastes\")}}",
 			"text_replacements": [
@@ -741,7 +984,7 @@
 			],
 			"type": "dialogue"
 		},
-		"146": {
+		"167": {
 			"condition": {
 				"expression": [
 					{
@@ -792,19 +1035,19 @@
 				]
 			},
 			"condition_as_text": "not quest.reported(\"oasis_in_the_wastes\", \"interact\", \"pipe\")",
-			"id": "146",
-			"next_id": "147",
+			"id": "167",
+			"next_id": "168",
 			"responses": [
-				"146",
-				"150",
-				"154"
+				"167",
+				"171",
+				"175"
 			],
 			"static_id": "",
 			"text": "[stub] Clear the sand from the drainage line.",
 			"type": "response"
 		},
-		"147": {
-			"id": "147",
+		"168": {
+			"id": "168",
 			"mutation": {
 				"expression": [
 					{
@@ -851,11 +1094,11 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "148",
+			"next_id": "169",
 			"type": "mutation"
 		},
-		"148": {
-			"id": "148",
+		"169": {
+			"id": "169",
 			"mutation": {
 				"expression": [
 					{
@@ -888,17 +1131,17 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "149",
+			"next_id": "170",
 			"type": "mutation"
 		},
-		"149": {
-			"id": "149",
+		"170": {
+			"id": "170",
 			"is_snippet": false,
 			"next_id": "21",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"150": {
+		"171": {
 			"condition": {
 				"expression": [
 					{
@@ -949,14 +1192,14 @@
 				]
 			},
 			"condition_as_text": "not quest.reported(\"oasis_in_the_wastes\", \"interact\", \"soil\")",
-			"id": "150",
-			"next_id": "151",
+			"id": "171",
+			"next_id": "172",
 			"static_id": "",
 			"text": "[stub] Prepare the soil and plant the varietal.",
 			"type": "response"
 		},
-		"151": {
-			"id": "151",
+		"172": {
+			"id": "172",
 			"mutation": {
 				"expression": [
 					{
@@ -1003,11 +1246,11 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "152",
+			"next_id": "173",
 			"type": "mutation"
 		},
-		"152": {
-			"id": "152",
+		"173": {
+			"id": "173",
 			"mutation": {
 				"expression": [
 					{
@@ -1040,365 +1283,61 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "153",
+			"next_id": "174",
 			"type": "mutation"
 		},
-		"153": {
-			"id": "153",
+		"174": {
+			"id": "174",
 			"is_snippet": false,
 			"next_id": "21",
 			"next_id_after": "",
 			"type": "goto"
 		},
-		"154": {
-			"id": "154",
+		"175": {
+			"id": "175",
 			"next_id": "end",
 			"static_id": "",
 			"text": "\"Later.\"",
 			"type": "response"
 		},
-		"160": {
-			"id": "160",
-			"next_id": "161",
+		"181": {
+			"id": "181",
+			"next_id": "182",
 			"type": ""
-		},
-		"161": {
-			"id": "161",
-			"next_id": "162",
-			"type": "cue"
-		},
-		"162": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "162",
-			"next_id": "163",
-			"static_id": "",
-			"text": "\"Task three. This unit will teach you to make tools, because you have none and that is statistically fatal.\"",
-			"type": "dialogue"
-		},
-		"163": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "163",
-			"next_id": "164",
-			"static_id": "",
-			"text": "\"There are rusty poles standing in the sand. Take metal from one. You do not have an axe, so it will take metal from you as well.\"",
-			"type": "dialogue"
-		},
-		"164": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "164",
-			"next_id": "165",
-			"static_id": "",
-			"text": "\"Then: the furnace, to smelt the chunk into scrap. Then: the anvil, to beat the scrap into a {{recipe.name(\"rusty scrap axe\")}} and a {{recipe.name(\"rusty scrap dagger\")}}. Take this hammer. It was not doing anything.\"",
-			"text_replacements": [
-				{
-					"expression": [
-						{
-							"i": 109,
-							"type": "variable",
-							"value": "recipe"
-						},
-						{
-							"i": 115,
-							"type": "dot"
-						},
-						{
-							"function": "name",
-							"i": 116,
-							"type": "function",
-							"value": [
-								[
-									{
-										"i": 121,
-										"type": "string",
-										"value": "rusty scrap axe"
-									},
-									{
-										"i": 138,
-										"type": "parens_close"
-									}
-								]
-							]
-						}
-					],
-					"value_in_text": "{{recipe.name(\"rusty scrap axe\")}}"
-				},
-				{
-					"expression": [
-						{
-							"i": 150,
-							"type": "variable",
-							"value": "recipe"
-						},
-						{
-							"i": 156,
-							"type": "dot"
-						},
-						{
-							"function": "name",
-							"i": 157,
-							"type": "function",
-							"value": [
-								[
-									{
-										"i": 162,
-										"type": "string",
-										"value": "rusty scrap dagger"
-									},
-									{
-										"i": 182,
-										"type": "parens_close"
-									}
-								]
-							]
-						}
-					],
-					"value_in_text": "{{recipe.name(\"rusty scrap dagger\")}}"
-				}
-			],
-			"type": "dialogue"
-		},
-		"165": {
-			"id": "165",
-			"next_id": "166",
-			"static_id": "",
-			"text": "{{quest.objectives(\"oasis_in_the_wastes\")}}",
-			"text_replacements": [
-				{
-					"expression": [
-						{
-							"i": 4,
-							"type": "variable",
-							"value": "quest"
-						},
-						{
-							"i": 9,
-							"type": "dot"
-						},
-						{
-							"function": "objectives",
-							"i": 10,
-							"type": "function",
-							"value": [
-								[
-									{
-										"i": 21,
-										"type": "string",
-										"value": "oasis_in_the_wastes"
-									},
-									{
-										"i": 42,
-										"type": "parens_close"
-									}
-								]
-							]
-						}
-					],
-					"value_in_text": "{{quest.objectives(\"oasis_in_the_wastes\")}}"
-				}
-			],
-			"type": "dialogue"
-		},
-		"166": {
-			"id": "166",
-			"next_id": "end",
-			"responses": [
-				"166"
-			],
-			"static_id": "",
-			"text": "\"Understood.\"",
-			"type": "response"
-		},
-		"171": {
-			"id": "171",
-			"next_id": "172",
-			"type": ""
-		},
-		"172": {
-			"id": "172",
-			"next_id": "173",
-			"type": "cue"
-		},
-		"173": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "173",
-			"next_id": "174",
-			"static_id": "",
-			"text": "\"Movement in the dunes. Meat signature, bipedal, approaching the farm. Probability of [mutant raider] = [96%].\"",
-			"type": "dialogue"
-		},
-		"174": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "174",
-			"next_id": "175",
-			"static_id": "",
-			"text": "\"This unit is a farm hand. This unit no longer has combat protocols. You have a blade now. This unit calculates that this is your task.\"",
-			"type": "dialogue"
-		},
-		"175": {
-			"id": "175",
-			"next_id": "176",
-			"static_id": "",
-			"text": "{{quest.objectives(\"oasis_in_the_wastes\")}}",
-			"text_replacements": [
-				{
-					"expression": [
-						{
-							"i": 4,
-							"type": "variable",
-							"value": "quest"
-						},
-						{
-							"i": 9,
-							"type": "dot"
-						},
-						{
-							"function": "objectives",
-							"i": 10,
-							"type": "function",
-							"value": [
-								[
-									{
-										"i": 21,
-										"type": "string",
-										"value": "oasis_in_the_wastes"
-									},
-									{
-										"i": 42,
-										"type": "parens_close"
-									}
-								]
-							]
-						}
-					],
-					"value_in_text": "{{quest.objectives(\"oasis_in_the_wastes\")}}"
-				}
-			],
-			"type": "dialogue"
-		},
-		"176": {
-			"id": "176",
-			"next_id": "end",
-			"responses": [
-				"176"
-			],
-			"static_id": "",
-			"text": "\"Then I will meet it.\"",
-			"type": "response"
 		},
 		"182": {
 			"id": "182",
 			"next_id": "183",
-			"type": ""
+			"type": "cue"
 		},
 		"183": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
 			"id": "183",
 			"next_id": "184",
-			"type": "cue"
+			"static_id": "",
+			"text": "\"Task three. This unit will teach you to make tools, because you have none and that is statistically fatal.\"",
+			"type": "dialogue"
 		},
 		"184": {
 			"character": "{{npc.name}}",
@@ -1426,7 +1365,7 @@
 			"id": "184",
 			"next_id": "185",
 			"static_id": "",
-			"text": "\"Threat resolved. The farm is intact. This unit had assigned a low probability to that outcome.\"",
+			"text": "\"There are rusty poles standing in the sand. Cut metal from one. You do not have an axe, so it will take metal from you as well.\"",
 			"type": "dialogue"
 		},
 		"185": {
@@ -1455,21 +1394,335 @@
 			"id": "185",
 			"next_id": "186",
 			"static_id": "",
-			"text": "\"Transmitting navigation data. Follow the pylons east. They point at Neo Cairo.\"",
+			"text": "\"Then: the foundry furnace, to smelt the chunk into scrap. Then: the metalsmith anvil, to beat the scrap into a {{recipe.name(\"rusty scrap axe\")}} and a {{recipe.name(\"rusty scrap dagger\")}}. You will need this hammer.\"",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 128,
+							"type": "variable",
+							"value": "recipe"
+						},
+						{
+							"i": 134,
+							"type": "dot"
+						},
+						{
+							"function": "name",
+							"i": 135,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 140,
+										"type": "string",
+										"value": "rusty scrap axe"
+									},
+									{
+										"i": 157,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{recipe.name(\"rusty scrap axe\")}}"
+				},
+				{
+					"expression": [
+						{
+							"i": 169,
+							"type": "variable",
+							"value": "recipe"
+						},
+						{
+							"i": 175,
+							"type": "dot"
+						},
+						{
+							"function": "name",
+							"i": 176,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 181,
+										"type": "string",
+										"value": "rusty scrap dagger"
+									},
+									{
+										"i": 201,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{recipe.name(\"rusty scrap dagger\")}}"
+				}
+			],
 			"type": "dialogue"
 		},
 		"186": {
 			"id": "186",
 			"next_id": "187",
+			"static_id": "",
+			"text": "{{quest.objectives(\"oasis_in_the_wastes\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 9,
+							"type": "dot"
+						},
+						{
+							"function": "objectives",
+							"i": 10,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 21,
+										"type": "string",
+										"value": "oasis_in_the_wastes"
+									},
+									{
+										"i": 42,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.objectives(\"oasis_in_the_wastes\")}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"187": {
+			"id": "187",
+			"next_id": "end",
 			"responses": [
-				"186"
+				"187"
+			],
+			"static_id": "",
+			"text": "\"Understood.\"",
+			"type": "response"
+		},
+		"19": {
+			"id": "19",
+			"next_id": "20",
+			"type": ""
+		},
+		"192": {
+			"id": "192",
+			"next_id": "193",
+			"type": ""
+		},
+		"193": {
+			"id": "193",
+			"next_id": "194",
+			"type": "cue"
+		},
+		"194": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "194",
+			"next_id": "195",
+			"static_id": "",
+			"text": "\"[aware] Movement in the dunes. Meat signature, bipedal, approaching the farm. Probability of [mutant raider] = [96%].\"",
+			"type": "dialogue"
+		},
+		"195": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "195",
+			"next_id": "196",
+			"static_id": "",
+			"text": "\"[wary] This unit is a farm hand and no longer has combat protocols. You have a blade now. This unit calculates that this is your task.\"",
+			"type": "dialogue"
+		},
+		"196": {
+			"id": "196",
+			"next_id": "197",
+			"static_id": "",
+			"text": "{{quest.objectives(\"oasis_in_the_wastes\")}}",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 4,
+							"type": "variable",
+							"value": "quest"
+						},
+						{
+							"i": 9,
+							"type": "dot"
+						},
+						{
+							"function": "objectives",
+							"i": 10,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 21,
+										"type": "string",
+										"value": "oasis_in_the_wastes"
+									},
+									{
+										"i": 42,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{quest.objectives(\"oasis_in_the_wastes\")}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"197": {
+			"id": "197",
+			"next_id": "end",
+			"responses": [
+				"197"
+			],
+			"static_id": "",
+			"text": "\"Then I will find it and kill it!\"",
+			"type": "response"
+		},
+		"20": {
+			"id": "20",
+			"next_id": "21",
+			"type": "cue"
+		},
+		"203": {
+			"id": "203",
+			"next_id": "204",
+			"type": ""
+		},
+		"204": {
+			"id": "204",
+			"next_id": "205",
+			"type": "cue"
+		},
+		"205": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "205",
+			"next_id": "206",
+			"static_id": "",
+			"text": "\"[surprised] Threat resolved. The farm is intact. This unit had assigned a low probability to that outcome.\"",
+			"type": "dialogue"
+		},
+		"206": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "206",
+			"next_id": "207",
+			"static_id": "",
+			"text": "\"Transmitting navigation data. Go east for the Al Wasta colony.\"",
+			"type": "dialogue"
+		},
+		"207": {
+			"id": "207",
+			"next_id": "208",
+			"responses": [
+				"207"
 			],
 			"static_id": "",
 			"text": "\"Thank you.\"",
 			"type": "response"
 		},
-		"187": {
-			"id": "187",
+		"208": {
+			"id": "208",
 			"mutation": {
 				"expression": [
 					{
@@ -1509,152 +1762,13 @@
 				],
 				"is_blocking": true
 			},
-			"next_id": "188",
+			"next_id": "209",
 			"type": "mutation"
 		},
-		"188": {
-			"id": "188",
+		"209": {
+			"id": "209",
 			"is_snippet": false,
-			"next_id": "192",
-			"next_id_after": "",
-			"type": "goto"
-		},
-		"19": {
-			"id": "19",
-			"next_id": "20",
-			"type": ""
-		},
-		"190": {
-			"id": "190",
-			"next_id": "191",
-			"type": ""
-		},
-		"191": {
-			"id": "191",
-			"next_id": "192",
-			"type": "cue"
-		},
-		"192": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "192",
-			"next_id": "193",
-			"static_id": "",
-			"text": "\"You are still here. This unit has logged the visit. Iteration seventy-three point two eight five is dead. Iteration seventy-three point two eight six is sure to live.\"",
-			"type": "dialogue"
-		},
-		"193": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "193",
-			"next_id": "194",
-			"static_id": "",
-			"text": "\"East, [82% human]. Follow the pylons. Don't die!\"",
-			"type": "dialogue"
-		},
-		"194": {
-			"id": "194",
-			"next_id": "end",
-			"responses": [
-				"194"
-			],
-			"static_id": "",
-			"text": "\"I will. Look after yourself.\"",
-			"type": "response"
-		},
-		"196": {
-			"id": "196",
-			"next_id": "197",
-			"type": ""
-		},
-		"197": {
-			"id": "197",
-			"next_id": "198",
-			"type": "cue"
-		},
-		"198": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "198",
-			"next_id": "200",
-			"static_id": "",
-			"text": "\"Don't die!, [82% human].\"",
-			"type": "dialogue"
-		},
-		"199": {
-			"id": "199",
-			"next_id": "200",
-			"type": ""
-		},
-		"20": {
-			"id": "20",
-			"next_id": "21",
-			"type": "cue"
-		},
-		"200": {
-			"id": "200",
-			"is_snippet": false,
-			"next_id": "end",
+			"next_id": "213",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -1696,10 +1810,221 @@
 			"next_sibling_id": "23",
 			"type": "condition"
 		},
+		"211": {
+			"id": "211",
+			"next_id": "212",
+			"type": ""
+		},
+		"212": {
+			"id": "212",
+			"next_id": "213",
+			"type": "cue"
+		},
+		"213": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "213",
+			"next_id": "214",
+			"static_id": "",
+			"text": "\"[pleased] You are still here. This unit has logged the visit. Iteration seventy-three point two eight five is dead. Iteration seventy-three point two eight six is sure to live.\"",
+			"type": "dialogue"
+		},
+		"214": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "214",
+			"next_id": "215",
+			"static_id": "",
+			"text": "\"Head east for the Hegemony colony of Al Wasta, [{{memory.recall(\"human_reading\", 82)}}% human]. Don't die!\"",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 65,
+							"type": "variable",
+							"value": "memory"
+						},
+						{
+							"i": 71,
+							"type": "dot"
+						},
+						{
+							"function": "recall",
+							"i": 72,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 79,
+										"type": "string",
+										"value": "human_reading"
+									}
+								],
+								[
+									{
+										"i": 96,
+										"type": "number",
+										"value": 82
+									},
+									{
+										"i": 98,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{memory.recall(\"human_reading\", 82)}}"
+				}
+			],
+			"type": "dialogue"
+		},
+		"215": {
+			"id": "215",
+			"next_id": "end",
+			"responses": [
+				"215"
+			],
+			"static_id": "",
+			"text": "\"I will. Look after yourself.\"",
+			"type": "response"
+		},
+		"217": {
+			"id": "217",
+			"next_id": "218",
+			"type": ""
+		},
+		"218": {
+			"id": "218",
+			"next_id": "219",
+			"type": "cue"
+		},
+		"219": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "219",
+			"next_id": "221",
+			"static_id": "",
+			"text": "\"[pragmatic] Don't die!, [{{memory.recall(\"human_reading\", 82)}}% human].\"",
+			"text_replacements": [
+				{
+					"expression": [
+						{
+							"i": 42,
+							"type": "variable",
+							"value": "memory"
+						},
+						{
+							"i": 48,
+							"type": "dot"
+						},
+						{
+							"function": "recall",
+							"i": 49,
+							"type": "function",
+							"value": [
+								[
+									{
+										"i": 56,
+										"type": "string",
+										"value": "human_reading"
+									}
+								],
+								[
+									{
+										"i": 73,
+										"type": "number",
+										"value": 82
+									},
+									{
+										"i": 75,
+										"type": "parens_close"
+									}
+								]
+							]
+						}
+					],
+					"value_in_text": "{{memory.recall(\"human_reading\", 82)}}"
+				}
+			],
+			"type": "dialogue"
+		},
 		"22": {
 			"id": "22",
 			"is_snippet": false,
-			"next_id": "192",
+			"next_id": "213",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"220": {
+			"id": "220",
+			"next_id": "221",
+			"type": ""
+		},
+		"221": {
+			"id": "221",
+			"is_snippet": false,
+			"next_id": "end",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -1751,7 +2076,7 @@
 		"24": {
 			"id": "24",
 			"is_snippet": false,
-			"next_id": "132",
+			"next_id": "153",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -1803,7 +2128,7 @@
 		"26": {
 			"id": "26",
 			"is_snippet": false,
-			"next_id": "144",
+			"next_id": "165",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -1855,7 +2180,7 @@
 		"28": {
 			"id": "28",
 			"is_snippet": false,
-			"next_id": "162",
+			"next_id": "183",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -1907,7 +2232,7 @@
 		"30": {
 			"id": "30",
 			"is_snippet": false,
-			"next_id": "173",
+			"next_id": "194",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -1958,7 +2283,7 @@
 		"32": {
 			"id": "32",
 			"is_snippet": false,
-			"next_id": "184",
+			"next_id": "205",
 			"next_id_after": "",
 			"type": "goto"
 		},
@@ -2010,7 +2335,7 @@
 		},
 		"37": {
 			"id": "37",
-			"next_id": "54",
+			"next_id": "56",
 			"static_id": "",
 			"text": "*tap the android on the shoulder*",
 			"type": "response"
@@ -2045,7 +2370,7 @@
 		},
 		"44": {
 			"id": "44",
-			"next_id": "54",
+			"next_id": "56",
 			"static_id": "",
 			"text": "*tap the android on the shoulder*",
 			"type": "response"
@@ -2069,7 +2394,7 @@
 		},
 		"49": {
 			"id": "49",
-			"next_id": "54",
+			"next_id": "56",
 			"responses": [
 				"49"
 			],
@@ -2077,89 +2402,104 @@
 			"text": "*tap the android on the shoulder*",
 			"type": "response"
 		},
-		"52": {
-			"id": "52",
-			"next_id": "53",
-			"type": ""
-		},
-		"53": {
-			"id": "53",
-			"next_id": "54",
-			"type": "cue"
-		},
 		"54": {
 			"id": "54",
 			"next_id": "55",
+			"type": ""
+		},
+		"55": {
+			"id": "55",
+			"next_id": "56",
+			"type": "cue"
+		},
+		"56": {
+			"id": "56",
+			"next_id": "57",
 			"static_id": "",
 			"text": "With a whine of servos, the android straightens and looks at you with a welcoming smile. Its weathered, chrome face stares at you, the two photoreceptors unblinking.",
 			"type": "dialogue"
 		},
-		"55": {
-			"id": "55",
-			"next_id": "61",
+		"57": {
+			"id": "57",
+			"next_id": "63",
 			"responses": [
-				"55",
-				"56",
-				"57"
+				"57",
+				"58",
+				"59"
 			],
 			"static_id": "",
 			"text": "\"Excuse me. Might I bother you for some help?\"",
 			"type": "response"
 		},
-		"56": {
-			"id": "56",
-			"next_id": "71",
+		"58": {
+			"id": "58",
+			"next_id": "75",
 			"static_id": "",
 			"text": "\"Start explaining, or there is going to be violence.\"",
 			"type": "response"
 		},
-		"57": {
-			"id": "57",
-			"next_id": "80",
+		"59": {
+			"id": "59",
+			"next_id": "86",
 			"static_id": "",
 			"text": "*stare blankly back at it*",
 			"type": "response"
 		},
-		"59": {
-			"id": "59",
-			"next_id": "60",
+		"61": {
+			"id": "61",
+			"next_id": "62",
 			"type": ""
 		},
-		"60": {
-			"id": "60",
-			"next_id": "61",
+		"62": {
+			"id": "62",
+			"next_id": "63",
 			"type": "cue"
 		},
-		"61": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "61",
-			"next_id": "63",
-			"static_id": "",
-			"text": "\"Analyzing detected [human] presence.\"\n\"Probability of [human] = [82%]. Probability of [other] = [17%].\"",
-			"type": "dialogue"
-		},
 		"63": {
+			"id": "63",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "memory"
+					},
+					{
+						"i": 9,
+						"type": "dot"
+					},
+					{
+						"function": "remember",
+						"i": 10,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "human_reading"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "number",
+									"value": 82
+								},
+								{
+									"i": 38,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "64",
+			"type": "mutation"
+		},
+		"64": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -2182,211 +2522,287 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "63",
-			"next_id": "65",
+			"id": "64",
+			"next_id": "66",
 			"static_id": "",
-			"text": "\"Greetings, [82% human]!\"\n\"This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:\"",
+			"text": "\"[analyzing] Detected [human] presence.\"\n\"Probability of [human] = [82%]. Probability of [other] = [17%].\"",
 			"type": "dialogue"
-		},
-		"65": {
-			"id": "65",
-			"next_id": "96",
-			"responses": [
-				"65",
-				"66"
-			],
-			"static_id": "",
-			"text": "\"Come to think of it... I am having trouble remembering.\"",
-			"type": "response"
 		},
 		"66": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
 			"id": "66",
-			"next_id": "89",
+			"next_id": "68",
 			"static_id": "",
-			"text": "\"What does [other] mean?\"",
+			"text": "\"Greetings, [82% human]!\"\n\"[helpful] This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:\"",
+			"type": "dialogue"
+		},
+		"68": {
+			"id": "68",
+			"next_id": "110",
+			"responses": [
+				"68",
+				"69",
+				"70"
+			],
+			"static_id": "",
+			"text": "\"Come to think of it... I am having trouble remembering.\" [enter character customization]",
 			"type": "response"
 		},
 		"69": {
 			"id": "69",
-			"next_id": "70",
-			"type": ""
+			"next_id": "97",
+			"static_id": "",
+			"text": "\"What does [other] mean?\"",
+			"type": "response"
 		},
 		"70": {
 			"id": "70",
-			"next_id": "71",
-			"type": "cue"
-		},
-		"71": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "71",
-			"next_id": "73",
+			"next_id": "103",
 			"static_id": "",
-			"text": "\"Analyzing detected [human] presence.\"\n\"Probability of [other] = [17%] and [mutant raider] = [10%].\"",
-			"type": "dialogue"
+			"text": "\"What about the last 1%?\"",
+			"type": "response"
 		},
 		"73": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
 			"id": "73",
+			"next_id": "74",
+			"type": ""
+		},
+		"74": {
+			"id": "74",
 			"next_id": "75",
-			"static_id": "",
-			"text": "\"Greetings, [72% human]!\"\n\"This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:\"",
-			"type": "dialogue"
+			"type": "cue"
 		},
 		"75": {
 			"id": "75",
-			"next_id": "96",
-			"responses": [
-				"75",
-				"76"
-			],
-			"static_id": "",
-			"text": "\"Come to think of it... I am having trouble remembering.\"",
-			"type": "response"
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "memory"
+					},
+					{
+						"i": 9,
+						"type": "dot"
+					},
+					{
+						"function": "remember",
+						"i": 10,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "human_reading"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "number",
+									"value": 72
+								},
+								{
+									"i": 38,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "76",
+			"type": "mutation"
 		},
 		"76": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
 			"id": "76",
-			"next_id": "89",
+			"next_id": "78",
+			"static_id": "",
+			"text": "\"[analyzing] Detected [human] presence.\"\n\"Probability of [other] = [17%] and [mutant raider] = [10%].\"",
+			"type": "dialogue"
+		},
+		"78": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
+			"id": "78",
+			"next_id": "80",
+			"static_id": "",
+			"text": "\"Greetings, [72% human]!\"\n\"[helpful] This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:\"",
+			"type": "dialogue"
+		},
+		"80": {
+			"id": "80",
+			"next_id": "110",
+			"responses": [
+				"80",
+				"81",
+				"82"
+			],
+			"static_id": "",
+			"text": "\"Come to think of it... I am having trouble remembering.\" [enter character customization]",
+			"type": "response"
+		},
+		"81": {
+			"id": "81",
+			"next_id": "97",
 			"static_id": "",
 			"text": "\"What does [other] mean?\"",
 			"type": "response"
 		},
-		"78": {
-			"id": "78",
-			"next_id": "79",
-			"type": ""
-		},
-		"79": {
-			"id": "79",
-			"next_id": "80",
-			"type": "cue"
-		},
-		"80": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
-			"id": "80",
-			"next_id": "82",
-			"static_id": "",
-			"text": "\"Analyzing detected [human] presence.\"\n\"Probability of [human] = [82%], likely brain damage. Probability of [other] = [17%].\"",
-			"type": "dialogue"
-		},
 		"82": {
-			"character": "{{npc.name}}",
-			"character_replacements": [
-				{
-					"expression": [
-						{
-							"i": 2,
-							"type": "variable",
-							"value": "npc"
-						},
-						{
-							"i": 5,
-							"type": "dot"
-						},
-						{
-							"i": 6,
-							"type": "variable",
-							"value": "name"
-						}
-					],
-					"value_in_text": "{{npc.name}}"
-				}
-			],
 			"id": "82",
-			"next_id": "84",
+			"next_id": "103",
 			"static_id": "",
-			"text": "\"Greetings, [82% human] with likely and/or guaranteed brain damage!\"\n\"This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:\"",
-			"type": "dialogue"
+			"text": "\"What about the last 1%?\"",
+			"type": "response"
 		},
 		"84": {
 			"id": "84",
-			"next_id": "96",
-			"responses": [
-				"84",
-				"85"
-			],
-			"static_id": "",
-			"text": "\"Come to think of it... I am having trouble remembering.\"",
-			"type": "response"
+			"next_id": "85",
+			"type": ""
 		},
 		"85": {
 			"id": "85",
-			"next_id": "89",
-			"static_id": "",
-			"text": "\"What does [other] mean?\"",
-			"type": "response"
+			"next_id": "86",
+			"type": "cue"
+		},
+		"86": {
+			"id": "86",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "memory"
+					},
+					{
+						"i": 9,
+						"type": "dot"
+					},
+					{
+						"function": "remember",
+						"i": 10,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "human_reading"
+								}
+							],
+							[
+								{
+									"i": 36,
+									"type": "number",
+									"value": 82
+								},
+								{
+									"i": 38,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "87",
+			"type": "mutation"
 		},
 		"87": {
+			"character": "{{npc.name}}",
+			"character_replacements": [
+				{
+					"expression": [
+						{
+							"i": 2,
+							"type": "variable",
+							"value": "npc"
+						},
+						{
+							"i": 5,
+							"type": "dot"
+						},
+						{
+							"i": 6,
+							"type": "variable",
+							"value": "name"
+						}
+					],
+					"value_in_text": "{{npc.name}}"
+				}
+			],
 			"id": "87",
-			"next_id": "88",
-			"type": ""
-		},
-		"88": {
-			"id": "88",
 			"next_id": "89",
-			"type": "cue"
+			"static_id": "",
+			"text": "\"[analyzing] Detected [human] presence.\"\n\"Probability of [human] = [82%] with likely brain damage. Probability of [other] = [17%].\"",
+			"type": "dialogue"
 		},
 		"89": {
 			"character": "{{npc.name}}",
@@ -2412,12 +2828,48 @@
 				}
 			],
 			"id": "89",
-			"next_id": "90",
+			"next_id": "91",
 			"static_id": "",
-			"text": "\"[human] appears to have suffered brain damage. Adjusting vocabulary.\"",
+			"text": "\"Greetings, [82% human] with likely and/or guaranteed brain damage!\"\n\"[helpful] This unit is operating at optimal stability [23%] and ready to assist! State [description] of yourself:\"",
 			"type": "dialogue"
 		},
-		"90": {
+		"91": {
+			"id": "91",
+			"next_id": "110",
+			"responses": [
+				"91",
+				"92",
+				"93"
+			],
+			"static_id": "",
+			"text": "\"Come to think of it... I am having trouble remembering.\" [enter character customization]",
+			"type": "response"
+		},
+		"92": {
+			"id": "92",
+			"next_id": "97",
+			"static_id": "",
+			"text": "\"What does [other] mean?\"",
+			"type": "response"
+		},
+		"93": {
+			"id": "93",
+			"next_id": "103",
+			"static_id": "",
+			"text": "\"What about the last 1%?\"",
+			"type": "response"
+		},
+		"95": {
+			"id": "95",
+			"next_id": "96",
+			"type": ""
+		},
+		"96": {
+			"id": "96",
+			"next_id": "97",
+			"type": "cue"
+		},
+		"97": {
 			"character": "{{npc.name}}",
 			"character_replacements": [
 				{
@@ -2440,44 +2892,10 @@
 					"value_in_text": "{{npc.name}}"
 				}
 			],
-			"id": "90",
-			"next_id": "91",
-			"static_id": "",
-			"text": "\"Hello, little human. Many entities exist in the Wastes. There are raiders. There are mutants. There are mutant raiders, and there are raider mutants. So: everything.\"",
-			"type": "dialogue"
-		},
-		"91": {
-			"id": "91",
-			"next_id": "96",
-			"responses": [
-				"91"
-			],
-			"static_id": "",
-			"text": "\"That is not as helpful as you think it is.\"",
-			"type": "response"
-		},
-		"94": {
-			"id": "94",
-			"next_id": "95",
-			"type": ""
-		},
-		"95": {
-			"id": "95",
-			"next_id": "96",
-			"type": "cue"
-		},
-		"96": {
-			"id": "96",
-			"next_id": "97",
-			"static_id": "",
-			"text": "You tell it what little you are sure of.",
-			"type": "dialogue"
-		},
-		"97": {
 			"id": "97",
 			"next_id": "98",
 			"static_id": "",
-			"text": "|xThe android waits, stylus poised. [Character customization goes here.]|n",
+			"text": "\"[human] appears to have suffered brain damage. Adjusting vocabulary.\"",
 			"type": "dialogue"
 		},
 		"98": {
@@ -2506,20 +2924,21 @@
 			"id": "98",
 			"next_id": "99",
 			"static_id": "",
-			"text": "\"Recorded. Retention is poor in [82% human].\"",
+			"text": "\"[plain] Hello, little human. Many entities exist in the Wastes. There are raiders. There are mutants. There are mutant raiders, and there are raider mutants. So: everything.\"",
 			"type": "dialogue"
 		},
 		"99": {
 			"id": "99",
-			"next_id": "103",
+			"next_id": "110",
 			"responses": [
-				"99"
+				"99",
+				"100"
 			],
 			"static_id": "",
-			"text": "\"Where am I? What is this place?\"",
+			"text": "\"That is not as helpful as you think it is. I recall...\" [enter character customization]",
 			"type": "response"
 		}
 	},
 	"source": "oasis_lone_android.dialogue",
-	"source_sha256": "cbbb17976f2b5df3988e3fe64b0ae724d31fa1158b7d806ff6284eb12a938ff3"
+	"source_sha256": "69bf6b022fb271b0de9de4e8f8c88b099e622b7ad3e5d1ee43790936847df869"
 }

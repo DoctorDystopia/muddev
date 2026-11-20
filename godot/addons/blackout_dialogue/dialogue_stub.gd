@@ -15,8 +15,9 @@ extends RefCounted
 ## - The Dialogue tab reads this file for its list of names.
 ##
 ## No name here reads the game. A yes or no query gives the answer that the
-## author set in the test scene, and false before that. A text gives its
-## call in angle brackets. An action only records its call.
+## author set in the test scene, and false before that. A text, and each
+## other answer, gives its call in angle brackets. An action only records
+## its call.
 
 const KIND_FLAG := "flag"
 const KIND_TEXT := "text"
@@ -25,6 +26,8 @@ const KIND_ACTION := "action"
 
 ## How the stub answers each name of the vocabulary.
 const KINDS := {
+	"memory.recall": "other",
+	"memory.remember": "action",
 	"message.success": "action",
 	"npc.description": "text",
 	"npc.header": "text",
@@ -52,6 +55,7 @@ var answers: Dictionary = {}
 ## Each action that the script ran, as its call text, in order.
 var actions: Array[String] = []
 
+var memory := MemoryNames.new(answers, actions)
 var message := MessageNames.new(answers, actions)
 var npc := NpcNames.new(answers, actions)
 var player := PlayerNames.new(answers, actions)
@@ -91,11 +95,22 @@ class Names extends RefCounted:
 
 
 	func _other(asked: String) -> Variant:
-		return _answers.get(asked)
+		return _answers.get(asked, "<%s>" % asked)
 
 
 	func _do(asked: String) -> void:
 		_actions.append(asked)
+
+
+class MemoryNames extends Names:
+	## The value that the player keeps under a key, or the default if none.
+	func recall(key: Variant, default: Variant) -> Variant:
+		return _other(DialogueStub.call_text("memory.recall", [key, default]))
+
+
+	## Keep a value for the player under a key. A later cue or talk recalls it.
+	func remember(key: Variant, value: Variant) -> void:
+		_do(DialogueStub.call_text("memory.remember", [key, value]))
 
 
 class MessageNames extends Names:

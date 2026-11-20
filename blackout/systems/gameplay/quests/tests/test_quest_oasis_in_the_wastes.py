@@ -408,7 +408,7 @@ class OasisPlaythroughTests(EvenniaTest):
 
         dialogue.give(conversation, "trouble remembering")
         dialogue.give(conversation, "Where am I")
-        beat = dialogue.give(conversation, "get out of the desert")
+        beat = dialogue.give(conversation, "nearest humans")
 
         self.assertIn("Oasis in the Wastes", beat.text)
 
@@ -424,6 +424,33 @@ class OasisPlaythroughTests(EvenniaTest):
         beat = self._open_to_the_analysis("stare blankly")
 
         self.assertIn("brain damage", beat.text)
+
+
+    def test_the_reading_of_the_opener_follows_the_player(self):
+        # The android keeps its reading in the dialogue memory. The cues
+        # that each path shares say it again, in this talk and in a later
+        # talk, and the parting line says it too.
+        for opener, reading in (("Start explaining", "72% human"),
+                                ("Excuse me", "82% human"),
+                                ("stare blankly", "82% human")):
+            with self.subTest(opener=opener):
+                conversation = self._talk()
+                dialogue.give(conversation, "tap")
+                dialogue.give(conversation, opener)
+                customization = dialogue.give(conversation, "trouble remembering")
+                later = self._talk("post_quest")
+
+                self.assertIn(reading, customization.text)
+                self.assertIn(reading, later.beat.text)
+                self.assertIn(reading, later.farewell())
+
+
+    def test_a_player_with_no_reading_hears_the_default(self):
+        # A character that completed the quest before the android kept
+        # its reading.
+        later = self._talk("post_quest")
+
+        self.assertIn("82% human", later.beat.text)
 
 
     def test_accepting_in_the_offer_starts_the_quest_and_gives_the_brief(self):
@@ -546,7 +573,7 @@ class OasisPlaythroughTests(EvenniaTest):
         before = self.char1.skills.get_total_xp(skill_constants.SKILL_KEY_METALSMITH)
 
         conversation = self._talk()
-        self.assertIn("Neo Cairo", conversation.beat.text)
+        self.assertIn("Al Wasta", conversation.beat.text)
         # The last target fires under the response, not when the scene opens.
         self.assertFalse(self.char1.quests.is_complete(_QUEST_KEY))
 

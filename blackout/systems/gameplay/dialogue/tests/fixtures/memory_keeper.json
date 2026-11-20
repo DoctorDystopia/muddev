@@ -1,0 +1,92 @@
+{
+	"compiler_version": 18,
+	"cues": {
+		"start": "4"
+	},
+	"format": 1,
+	"lines": {
+		"2": {
+			"id": "2",
+			"next_id": "3",
+			"type": ""
+		},
+		"3": {
+			"id": "3",
+			"next_id": "4",
+			"type": "cue"
+		},
+		"4": {
+			"character": "Keeper",
+			"id": "4",
+			"next_id": "5",
+			"static_id": "",
+			"text": "I will keep this.",
+			"type": "dialogue"
+		},
+		"5": {
+			"id": "5",
+			"mutation": {
+				"expression": [
+					{
+						"i": 3,
+						"type": "variable",
+						"value": "memory"
+					},
+					{
+						"i": 9,
+						"type": "dot"
+					},
+					{
+						"function": "remember",
+						"i": 10,
+						"type": "function",
+						"value": [
+							[
+								{
+									"i": 19,
+									"type": "string",
+									"value": "kept_key"
+								}
+							],
+							[
+								{
+									"i": 31,
+									"type": "number",
+									"value": 72
+								},
+								{
+									"i": 33,
+									"type": "parens_close"
+								}
+							]
+						]
+					}
+				],
+				"is_blocking": true
+			},
+			"next_id": "6",
+			"type": "mutation"
+		},
+		"6": {
+			"id": "6",
+			"is_snippet": false,
+			"next_id": "end",
+			"next_id_after": "",
+			"type": "goto"
+		},
+		"7": {
+			"id": "7",
+			"next_id": "8",
+			"type": ""
+		},
+		"8": {
+			"id": "8",
+			"is_snippet": false,
+			"next_id": "end",
+			"next_id_after": "",
+			"type": "goto"
+		}
+	},
+	"source": "memory_keeper.dialogue",
+	"source_sha256": "c7dbebdf368a6f2ebc4ae871e26cd5a472e8ec641aa66ce14f10521f15f3a317"
+}

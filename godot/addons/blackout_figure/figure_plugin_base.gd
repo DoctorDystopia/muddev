@@ -459,6 +459,10 @@ func _show_job(lines: PackedStringArray) -> void:
 
 ## "Revert". The store drops each unsaved change, so the entries of the
 ## undo history have nothing to return to.
+##
+## The clear keeps the version of the scene history. A reload changes no
+## node that the scene saves, and a new version marks the scene changed.
+## Before 11/19/2026, a Revert with no edits showed the asterisk.
 func _on_reload() -> void:
 	if not _has_bench():
 		return
@@ -467,7 +471,7 @@ func _on_reload() -> void:
 	var dropped := _bench.unsaved_names()
 
 	_bench.reload()
-	history.clear_history(history.get_object_history_id(_bench))
+	history.clear_history(history.get_object_history_id(_bench), false)
 	_dock.set_status("Read each figure file again. Dropped %d unsaved file(s)." % dropped.size())
 
 

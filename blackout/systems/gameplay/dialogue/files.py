@@ -14,8 +14,9 @@ Description: The files of the dialogue scripts (DESIGN-0017): where the
              digest of its source. `pair_problems` compares the two, and a
              test fails on a difference.
 
-             `check_game` is the whole check of the game: the pairs, and
-             then the content rules of each compiled script. The test and
+             `check_game` is the whole check of the game: the pairs, the
+             content rules of each compiled script, and then the memory keys
+             of all the scripts together. The test and
              `python -m systems.gameplay.dialogue` both call it.
 """
 
@@ -156,6 +157,23 @@ def content_problems(key: str) -> list:
     return [f"{key}: {problem.describe()}" for problem in found]
 
 
+def memory_problems() -> list:
+    """Each recall of a memory key that no script of the game remembers.
+    Each text starts with the key of the script. This check skips a script
+    that does not load, because content_problems reports it."""
+    scripts = []
+
+    for key in loader.script_keys():
+        try:
+            scripts.append(load_script(loader.script_path(key)))
+        except DialogueScriptError:
+            continue
+
+    found = checks.memory_problems(scripts)
+
+    return [f"{key}: {problem.describe()}" for key, problem in found]
+
+
 def check_game() -> list:
     """
     Purpose: Check each dialogue script of the game.
@@ -173,6 +191,7 @@ def check_game() -> list:
     Methodology:
         1. Check each pair of a dialogue script and a compiled script.
         2. Check the content of each compiled script.
+        3. Check each recall of a memory key against each script.
 
     Notes/References:
         None.
@@ -184,5 +203,7 @@ def check_game() -> list:
 
     for key in loader.script_keys():
         problems.extend(content_problems(key))
+
+    problems.extend(memory_problems())
 
     return problems

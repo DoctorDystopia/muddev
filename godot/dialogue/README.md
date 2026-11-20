@@ -94,13 +94,43 @@ the server check.
 | `quest.accept_prompt(quest)` | query | The line that asks the player to take the quest |
 | `quest.objectives(quest)` | query | The objective lines, under a heading |
 | `recipe.name(recipe)` | query | The name of a recipe |
+| `memory.recall(key, default)` | query | The value that the player keeps under a memory key, or the default if none |
 | `quest.accept(quest)` | action | The player takes the quest |
 | `quest.talk(quest, target)` | action | Report a talk target to the quest |
 | `quest.report(quest, action, target)` | action | Report a target of any quest action, for example a chore with no system yet |
 | `message.success(text)` | action | Send one line to the log of the player, in the success colour |
+| `memory.remember(key, value)` | action | Keep a value for the player under a memory key |
 
 A value has no brackets. A query and an action have brackets. Only a `do`
 line can call an action.
+
+## Keep a choice of the player
+
+A script cannot change a variable. To keep what the player chose, write the
+value into the dialogue memory. A later cue or a later talk reads it back:
+
+```
+~ analysis_raider
+do memory.remember("human_reading", 72)
+...
+
+~ post_quest
+{{npc.name}}: "East, [{{memory.recall("human_reading", 82)}}% human]."
+```
+
+- **The server keeps the value on the player character.** It stays after a
+  logout.
+- **A memory key is snake_case.** Each script reads and writes the same
+  memory. Thus, a different NPC can recall a key that the android
+  remembered.
+- **Each argument is a literal:** a text, a number, or `true` / `false`.
+- **A recall gives its default** to a player with no value under the key,
+  for example a player who talked to the NPC before the script kept it.
+- **A second remember of the same key replaces the value.**
+- **A recall can choose a path too:** `if memory.recall("opener", "polite") == "raider"`,
+  or `match memory.recall("opener", "polite")`.
+- **The server check refuses a recall of a key that no script remembers.**
+  Such a recall always gives its default.
 
 A new name is one decorated function in
 `blackout/systems/gameplay/dialogue/vocab_defs/`. Add its row to this table.
@@ -116,9 +146,12 @@ difference and names the line:
 - A `while` loop, a random line (`%`), and `[[a|b]]` in a text
 - `[wait=1]`, `[speed=2]`, `[next]`, and `[if ...]` inside a text
 - A tag (`[#mood]`), a concurrent line (`| Name: text`), and an import
-- `set`, arithmetic, an array, and a dictionary in an expression
+- `set`, arithmetic, an array, and a dictionary in an expression. To keep
+  a value, use `memory.remember`
 - A jump to an expression (`=> {{...}}`)
 - A quest key, a step key, a quest target, or a recipe that names nothing
+- A memory key that is not snake_case, and a recall of a key that no script
+  remembers
 
 The order of `and` and `or` is the order of the addon: the server splits an
 expression at its last `and` or `or`. Thus, `a or b and c` is
@@ -135,7 +168,8 @@ it. It opens the test scene of this project
   its switch. The scene keeps the switches of each script between runs.
 - **Restart** starts the script again with the switches as they are.
 - **A text shows its call in angle brackets,** for example `<npc.name>`. The
-  scene knows no NPC and no quest.
+  scene knows no NPC, no quest, and no dialogue memory. A `memory.recall`
+  also shows its call.
 - **An action only goes into the list** at the bottom of the panel. It
   changes no switch. After `do quest.accept(...)`, set the switch yourself.
 

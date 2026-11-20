@@ -1,6 +1,5 @@
-# The dialogue of NPC_AUG_HOSPITAL_1, the contact at the Public Hospital
-# (DESIGN-0015, Phase 4). The contact admits the thefts and gives the player
-# one sample to try.
+# The dialogue of Nurse Ana, the contact at the Public Hospital.
+# The contact admits the thefts and gives the player one sample to try.
 #
 # EVERY LINE HERE IS A PLACEHOLDER. Nick owns the lore and the names.
 #
@@ -16,14 +15,15 @@ elif quest.on_step("augmentation_intro", "graft")
 elif quest.on_step("augmentation_intro", "report")
 	=> report
 {{npc.header}}
-{{npc.name}}: [Placeholder: {{npc.name}} is busy, and gives nothing away.]
+{{npc.name}}: [Placeholder: {{npc.name}} is busy dealing with other patients.]
 - Placeholder: leave. => END
 
 # The confession. The response fires the talk target. The graft step then
 # opens, and its on_enter hook gives the sample.
 ~ trail
 {{npc.name}}: [Placeholder: {{npc.name}} admits that the Hospital takes the augments, out of need, and asks the candidate to understand.]
-{{npc.name}}: [Placeholder: {{npc.name}} offers one sample, and tells the candidate how a body takes a graft.]
+{{npc.name}}: [Placeholder: {{npc.name}} asks the player to apply the graft to a patient.]
+{{npc.name}}: [Placeholder: {{npc.name}} offers one sample, and tells the player how to apply a graft to themselves.]
 - Placeholder: take the sample.
 	do quest.talk("augmentation_intro", "npc_aug_hospital_1")
 	=> graft
@@ -32,12 +32,12 @@ elif quest.on_step("augmentation_intro", "report")
 # The graft lesson. No target fires here: the graft command reports the
 # graft to the quest engine.
 ~ graft
-{{npc.name}}: [Placeholder: {{npc.name}} explains the graft, and that a Locus takes one deeper.]
+{{npc.name}}: [Placeholder: {{npc.name}} explains the graft, and that a Locus can apply it better for more XP.]
 {{quest.objectives("augmentation_intro")}}
 - Placeholder: try it. => END
 
 ~ report
-{{npc.name}}: [Placeholder: {{npc.name}} asks what the candidate will tell the Clinic.]
+{{npc.name}}: [Placeholder: {{npc.name}} asks what the player will tell the Clinic.]
 - Placeholder: leave. => END
 
 ~ farewell

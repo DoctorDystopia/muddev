@@ -30,6 +30,8 @@ extends Node
 ## 13. A colour change of the Look tab draws the block again over some
 ##     frames, in the nodes that each view has. It builds only the parts
 ##     that carry the colour (11/11/2026).
+## 14. A new world loads one time, at [member TerrainWorld.start_side]
+##     (11/19/2026).
 
 const _Const := preload("res://autoload/blackout_constants.gd")
 
@@ -72,6 +74,7 @@ func _ready() -> void:
 	_an_entity_kind_draws_its_model_turned(world)
 	_a_look_change_redraws_over_some_frames(world)
 	_a_new_chunk_takes_the_edge_of_a_saved_neighbour(world)
+	_a_new_world_loads_once_at_the_start_side()
 	_remove_scratch()
 
 	if _failures > 0:
@@ -621,6 +624,30 @@ func _a_new_chunk_takes_the_edge_of_a_saved_neighbour(world: TerrainWorld) -> vo
 	_expect(edge.heights[7 * side + size] == 60,
 		"a file outside the block gives its edge")
 	_expect(world.chunks.seam_mismatches().is_empty(), "plane 1 has no seam fault")
+
+
+## Case 14. The plugin sets the start side from the Side field before a
+## scene opens. The first load then reads the saved side, and the open
+## reads no default block first.
+func _a_new_world_loads_once_at_the_start_side() -> void:
+	var side := TerrainWorld.BLOCK_SIDE_DEFAULT - 1
+	var loads := [0]
+
+	TerrainWorld.start_side = side
+
+	var world := TerrainWorld.new()
+
+	world.chunk_directory = _scratch
+	world.block_loaded.connect(func() -> void: loads[0] += 1)
+	add_child(world)
+
+	_expect(loads[0] == 1, "a new world loads one time, found %d" % loads[0])
+	_expect(world.block_side == side and world.block_coords().size() == side * side,
+		"the first load reads the start side, found %d" % world.block_side)
+
+	TerrainWorld.start_side = TerrainWorld.BLOCK_SIDE_DEFAULT
+	remove_child(world)
+	world.free()
 
 
 func _path_on(chunk_coord: Vector2i, plane: int) -> String:

@@ -1,0 +1,8 @@
+# A test fixture: a script that recalls two memory keys. Only memory_keeper
+# remembers kept_key. No script remembers lost_key.
+
+~ start
+Reader: You are {{memory.recall("kept_key", 82)}}.
+if memory.recall("lost_key", false)
+	Reader: I found it.
+=> END

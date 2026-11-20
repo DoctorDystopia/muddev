@@ -39,6 +39,8 @@ the name.
 | beat | the text and the responses that the dialogue runner shows at one time. It is one EvMenu node | page, screen, dialogue node |
 | dialogue runner | the code that reads a compiled script and makes each beat (`systems/gameplay/dialogue/runner.py`) | dialogue engine, interpreter |
 | dialogue vocabulary | the names that a dialogue script can call, for example `quest.accept`. One name is a vocabulary entry | dialogue API, script functions |
+| dialogue memory | the values that the dialogue scripts keep for one player character, each under a memory key. `memory.remember` writes one, and `memory.recall` reads it (`systems/gameplay/dialogue/memory.py`) | dialogue variable, dialogue state, flag store |
+| memory key | the snake_case name of one value in the dialogue memory, for example `human_reading` | variable name, flag name |
 | ware | one item kind that a shop sells, one row of `get_buy_items` | good, product |
 | stock level | how many units of a ware a shop has now (`stock.level`) | inventory, supply |
 | restock | the return of one unit to a ware below its `max_stock` | refill, replenish |

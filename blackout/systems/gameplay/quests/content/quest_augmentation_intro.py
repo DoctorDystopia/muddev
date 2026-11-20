@@ -7,9 +7,9 @@ Description: The Augmentation intro quest (DESIGN-0015, Phase 4). It takes
              teaches the graft, and pays the first samples and the first
              levels.
 
-EVERY NAME AND EVERY LINE HERE IS A PLACEHOLDER. Nick owns the story, the
-lore, and the names (10/30/2026). The two NPCs are NPC_AUG_CLINIC_1 and
-NPC_AUG_HOSPITAL_1 until he names them. The outline is his, from the vault
+EVERY LINE HERE IS A PLACEHOLDER. Nick owns the story, the lore, and the
+names (10/30/2026). He named the two NPCs on 11/19/2026: Doctor Heri at the
+Clinic and Nurse Ana at the Hospital. The outline is his, from the vault
 note of the skill: the Clinic and the Hospital are small rivals, the Clinic
 gets the Hegemony funding, the Clinic recruits the player to find the
 missing augments, and the trail ends at the Hospital, which steals out of
@@ -44,13 +44,14 @@ _MSG_QUEST = {feed_const.MESSAGE_TYPE_KEY: feed_const.MESSAGE_TYPE_QUEST}
 QUEST_KEY = "augmentation_intro"
 QUEST_TITLE = "Augmentation Intro"
 
-# The two NPCs, as placeholders. The npc keys are the keys of the NpcDefs in
-# world/npc_defs/augmentation.py, and the dialogue modules import them from
-# here, so the three cannot spell a key differently.
+# The two NPCs. The npc keys are the keys of the NpcDefs in
+# world/npc_defs/augmentation.py. The dialogue modules import them from here.
+# Thus, the three cannot spell a key differently. Nick gave the names on
+# 11/19/2026. The keys stay as they are, because chunk files name them.
 NPC_CLINIC_KEY = "npc_aug_clinic_1"
-NPC_CLINIC_NAME = "NPC_AUG_CLINIC_1"
+NPC_CLINIC_NAME = "Doctor Heri"
 NPC_HOSPITAL_KEY = "npc_aug_hospital_1"
-NPC_HOSPITAL_NAME = "NPC_AUG_HOSPITAL_1"
+NPC_HOSPITAL_NAME = "Nurse Ana"
 
 # Step keys. The dialogues gate every node on these.
 STEP_RECRUIT = "recruit"
@@ -161,7 +162,7 @@ def award_rewards(character: object) -> None:
 
     character.msg((_hl(
         f"{NPC_CLINIC_NAME} pays you {REWARD_SAMPLE_COUNT} samples for the "
-        "report. Placeholder closing line."
+        "report. [Placeholder closing line.]"
     ), _MSG_QUEST))
     character.msg((xp_awards.format_xp_readout(awards), _MSG_QUEST))
 

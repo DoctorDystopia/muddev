@@ -1,6 +1,5 @@
-# The dialogue of NPC_AUG_CLINIC_1, the recruiter of the Augmentation Clinic
-# (DESIGN-0015, Phase 4). It gives the Augmentation intro quest and takes the
-# report at its end.
+# The dialogue of Doctor Heri, the doctor of the Augmentation Clinic.
+# It gives the Augmentation intro quest and takes the report at its end.
 #
 # EVERY LINE HERE IS A PLACEHOLDER. Nick owns the lore and the names. Each
 # line says what happens in the beat, as a stage direction, and nothing more.
@@ -17,7 +16,7 @@ elif quest.on_step("augmentation_intro", "report")
 elif quest.is_active("augmentation_intro")
 	=> waiting
 {{npc.header}}
-{{npc.name}}: [Placeholder: {{npc.name}} greets the candidate and hints at a job.]
+{{npc.name}}: [Placeholder: {{npc.name}} greets the player and hints at a job.]
 - Placeholder: ask about the job. => offer
 - Placeholder: leave. => END
 
@@ -25,7 +24,7 @@ elif quest.is_active("augmentation_intro")
 if not quest.is_available("augmentation_intro")
 	{{npc.name}}: [Placeholder: The job is already taken.]
 	- Right. => start
-{{npc.name}}: [Placeholder: {{npc.name}} explains that augments go missing from the Clinic, and asks the candidate to find out who takes them.]
+{{npc.name}}: [Placeholder: {{npc.name}} explains that augments go missing from the Clinic, and asks the player to find out who stole them.]
 {{quest.accept_prompt("augmentation_intro")}}
 - Accept: {{quest.title("augmentation_intro")}}
 	do quest.accept("augmentation_intro")
@@ -41,9 +40,9 @@ do quest.talk("augmentation_intro", "npc_aug_clinic_1")
 {{quest.objectives("augmentation_intro")}}
 - Placeholder: agree and go. => END
 
-# The recruiter waits for the report. No target fires here.
+# The Augmentation Clinic doctor waits for the report. No target fires here.
 ~ waiting
-{{npc.name}}: [Placeholder: {{npc.name}} asks whether the candidate found the trail yet.]
+{{npc.name}}: [Placeholder: {{npc.name}} asks whether the player has tracked down the missing augments yet.]
 {{quest.objectives("augmentation_intro")}}
 - Placeholder: not yet. => END
 
@@ -60,8 +59,8 @@ do quest.talk("augmentation_intro", "npc_aug_clinic_1")
 	=> post_quest
 
 ~ post_quest
-{{npc.name}}: [Placeholder: {{npc.name}} thanks the candidate, and points at the Locus.]
+{{npc.name}}: [Placeholder: {{npc.name}} thanks the player, and mentions the AugBot and Locus.]
 - Placeholder: leave. => END
 
 ~ farewell
-{{npc.name}}: [Placeholder farewell of the Clinic recruiter.]
+{{npc.name}}: [Placeholder farewell of the Clinic doctor.]

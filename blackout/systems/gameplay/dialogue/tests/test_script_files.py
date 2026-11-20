@@ -135,6 +135,9 @@ class GameScriptTests(EvenniaTestCase):
             with self.subTest(script=key):
                 self.assertEqual(files.content_problems(key), [])
 
+    def test_each_recall_has_a_remember_in_some_script(self):
+        self.assertEqual(files.memory_problems(), [])
+
     def test_each_def_names_a_script_that_loads(self):
         for npc_key, npc_def in NPC_DB.items():
             if not npc_def.dialogue_script:

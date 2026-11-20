@@ -1,0 +1,7 @@
+# A test fixture: a script that remembers one memory key. The memory check
+# reads it together with memory_reader.
+
+~ start
+Keeper: I will keep this.
+do memory.remember("kept_key", 72)
+=> END

@@ -148,7 +148,7 @@ class IntroPlaythroughTests(EvenniaCommandTest):
     def test_the_hospital_gives_nothing_away_before_the_trail(self):
         beat = self._hospital().beat
 
-        self.assertIn("nothing away", beat.text)
+        self.assertIn("busy", beat.text)
 
     def test_taking_the_sample_opens_the_graft_step_with_a_sample_in_hand(self):
         self._take_the_job()
@@ -199,7 +199,7 @@ class IntroPlaythroughTests(EvenniaCommandTest):
     def test_the_conversations_resume_on_the_right_step(self):
         self._take_the_job()
 
-        self.assertIn("trail", self._clinic().beat.text.lower())
+        self.assertIn("tracked down", self._clinic().beat.text.lower())
         self.assertIn("admits", self._hospital().beat.text)
 
     def test_a_finished_player_gets_the_post_quest_scene(self):

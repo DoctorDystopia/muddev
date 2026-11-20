@@ -6,10 +6,11 @@ Description: The NpcDef entries of the two NPCs of the Augmentation intro
              quest (DESIGN-0015, Phase 4): the recruiter at the Augmentation
              Clinic, and the contact at the Public Hospital.
 
-             EVERY NAME AND EVERY TEXT HERE IS A PLACEHOLDER. Nick owns the
-             lore and the names (10/30/2026). The keys and the names come
-             from the quest module, so the quest and the defs cannot spell
-             them differently.
+             EVERY TEXT HERE IS A PLACEHOLDER, except the two names. Nick
+             owns the lore and the names (10/30/2026), and he named the two
+             NPCs on 11/19/2026. The keys and the names come from the quest
+             module, so the quest and the defs cannot spell them
+             differently.
 
              Each of the two speaks from a dialogue script (DESIGN-0017,
              11/11/2026): `godot/dialogue/aug_clinic_1.dialogue` and
@@ -33,8 +34,7 @@ NPCS = {
         typeclass=NPC_TYPECLASS_TALKATIVE,
         asset_key=_FALLBACK_ASSET_KEY,
         desc=(
-            "Placeholder. The recruiter of the Augmentation Clinic, the one "
-            "who gives the Augmentation intro quest."
+            "The chief doctor of the Augmentation Clinic. Seems important."
         ),
         dialogue_script="aug_clinic_1",
     ),
@@ -44,8 +44,7 @@ NPCS = {
         typeclass=NPC_TYPECLASS_TALKATIVE,
         asset_key=_FALLBACK_ASSET_KEY,
         desc=(
-            "Placeholder. The contact at the Al Wasta Regional Public "
-            "Hospital, where the trail of the missing augments ends."
+            "Head of the Al Wasta Regional Public Hospital. Looks tired."
         ),
         dialogue_script="aug_hospital_1",
     ),

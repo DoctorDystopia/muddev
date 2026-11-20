@@ -166,8 +166,7 @@ def award_rewards(character: object) -> None:
     awards = list(REWARD_XP.items())
 
     character.msg((_hl(
-        "The android transmits a route east, out of the sand and toward the "
-        "lights. You leave knowing how to cut, to smelt, and to forge."
+        "The android tells you to go east, towards the Hegemonoy colony of Al Wasta."
     ), _MSG_QUEST))
     character.msg((xp_awards.format_xp_readout(awards), _MSG_QUEST))
 
@@ -179,11 +178,10 @@ QUEST_BLUEPRINT_OASIS_IN_THE_WASTES = QuestBlueprint(
     key=QUEST_KEY,
     title=QUEST_TITLE,
     description=(
-        "You woke in the Sahara with nothing -- no gear, no bearings, and no "
-        "clear memory of arriving. There is green ahead of you, which there "
-        "should not be: a farm, kept alive by one android that has been "
-        "tending it alone since the Blackout because nobody ever told it to "
-        "stop. It will trade you the road to Neo Cairo for a day's work."
+        "You awoke in the Wastes of the Sahara with nothing: no gear, no bearings, and no "
+        "clear memory of arriving. There is a small patch of green ahead of you: "
+        "a farm, kempt by one lone android since after the Blackout Wars. "
+        "It will show you crafting skills and the road to more humans in exchange for some work on the farm."
     ),
     steps=[
         QuestStep(
@@ -198,7 +196,7 @@ QUEST_BLUEPRINT_OASIS_IN_THE_WASTES = QuestBlueprint(
             key=STEP_MAINTENANCE,
             description=(
                 "Work the farm: clear the sand out of the drainage pipe and "
-                "get the new varietal into the soil."
+                "plant the new orange varietal into the soil."
             ),
             targets={
                 "interact:pipe": True,
@@ -212,8 +210,8 @@ QUEST_BLUEPRINT_OASIS_IN_THE_WASTES = QuestBlueprint(
         QuestStep(
             key=STEP_APPRENTICESHIP,
             description=(
-                "Learn the trade the hard way: tear scrap from a rusty pole, "
-                "smelt it at the furnace, and beat it into an axe and a "
+                "Learn to Cut the hard way: punching scrap loose from from a rusty pole. "
+                "Smelt it at the furnace, and hammer it into an axe and a "
                 "blade at the anvil."
             ),
             targets={
@@ -229,8 +227,7 @@ QUEST_BLUEPRINT_OASIS_IN_THE_WASTES = QuestBlueprint(
         QuestStep(
             key=STEP_DEFENSE,
             description=(
-                "Raiders have come for the farm. Put down the one that gets "
-                "through."
+                "Raiders are approaching the farm. Kill the one that gets in."
             ),
             targets={"kill:mutant_raider": 1},
             objectives={"kill:mutant_raider": "Mutant raiders repelled"},

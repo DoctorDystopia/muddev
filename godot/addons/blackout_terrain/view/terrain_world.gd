@@ -195,6 +195,12 @@ var block_side := BLOCK_SIDE_DEFAULT:
 	set(value):
 		resize_block(value)
 
+## The side of a new world, before its first load. The plugin sets it from
+## the Side field, so the first load of a scene reads the saved side. Before
+## 11/19/2026, each open read a 4 x 4 block and then the saved side. A test
+## that leaves it alone gets [constant BLOCK_SIDE_DEFAULT].
+static var start_side := BLOCK_SIDE_DEFAULT
+
 ## Where the chunk files are: an OS path, or a `user://` or `res://` path.
 ## Empty means the world chunk directory, `blackout/world/chunks/`. A test
 ## sets a scratch directory here. The structure workbench sets
@@ -303,7 +309,7 @@ var selected := {}
 
 var _centre := Vector2i.ZERO
 var _plane := 0
-var _side := BLOCK_SIDE_DEFAULT
+var _side := clampi(start_side, BLOCK_SIDE_MIN, BLOCK_SIDE_MAX)
 
 ## One [ChunkSet] for each plane, indexed by plane.
 var _planes: Array[ChunkSet] = []

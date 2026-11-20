@@ -151,6 +151,7 @@ var _table_report := ""
 
 func _enter_tree() -> void:
 	_dock = TerrainDock.new()
+	TerrainWorld.start_side = _dock.block_side()
 	_dock.load_requested.connect(_on_load_requested)
 	_dock.plane_requested.connect(_on_plane_requested)
 	_dock.block_side_requested.connect(_on_block_side_requested)
@@ -309,8 +310,11 @@ func _on_plane_requested(plane: int) -> void:
 
 ## The Side field of the block strip. The same rule as [method _move_block]
 ## for the dialog: a new side loads the block again and drops the undo
-## history. A No puts the old side back in the field.
+## history. A No puts the old side back in the field. The next scene that
+## opens loads at the side of the field.
 func _on_block_side_requested(side: int) -> void:
+	TerrainWorld.start_side = side
+
 	if _world == null:
 		return
 
@@ -320,6 +324,7 @@ func _on_block_side_requested(side: int) -> void:
 
 	var count := _world.unsaved_count()
 	var keep := func() -> void:
+		TerrainWorld.start_side = _world.block_side
 		_dock.set_block(_world.centre_chunk, _world.plane, _world.block_side)
 
 	_dock.confirm("Save %d changed chunk file(s) and drop the undo history? " % count
@@ -377,10 +382,15 @@ func _jump(tile: Vector2i, plane: int, then: String) -> void:
 
 ## Every load of a block: a move, or a jump or a link to another block. A
 ## ramp started in the old block ends here: its start corner is not loaded.
+##
+## The clear keeps the version of the scene history. A load changes no
+## property of the scene, and a new version marks the scene changed. With
+## a saved block side other than the default, each open of the scene then
+## showed the asterisk (11/19/2026).
 func _on_block_loaded() -> void:
 	var history := get_undo_redo()
 
-	history.clear_history(history.get_object_history_id(_world))
+	history.clear_history(history.get_object_history_id(_world), false)
 	_ramp_start = null
 	_refresh_dock()
 	_refresh_versions()

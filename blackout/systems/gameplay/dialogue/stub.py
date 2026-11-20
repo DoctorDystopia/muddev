@@ -17,8 +17,9 @@ Description: The editor stub of the dialogue vocabulary (DESIGN-0017): the
              in git is not that text. Never edit the stub by hand.
 
              THE STUB READS NO GAME. A yes or no query gives False until the
-             author sets it. A text gives its call in angle brackets, so the
-             author sees where each text goes. An action only records its
+             author sets it. A text, and each other answer, for example
+             `memory.recall`, gives its call in angle brackets. Thus, the
+             author sees where each answer goes. An action only records its
              call.
 
              The templates here indent with four spaces, as each Python
@@ -82,8 +83,9 @@ extends RefCounted
 ## - The Dialogue tab reads this file for its list of names.
 ##
 ## No name here reads the game. A yes or no query gives the answer that the
-## author set in the test scene, and false before that. A text gives its
-## call in angle brackets. An action only records its call.
+## author set in the test scene, and false before that. A text, and each
+## other answer, gives its call in angle brackets. An action only records
+## its call.
 
 const KIND_FLAG := "flag"
 const KIND_TEXT := "text"
@@ -137,7 +139,7 @@ class Names extends RefCounted:
 
 
     func _other(asked: String) -> Variant:
-        return _answers.get(asked)
+        return _answers.get(asked, "<%%s>" %% asked)
 
 
     func _do(asked: String) -> void:
